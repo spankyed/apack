@@ -81,6 +81,10 @@ export interface EarsDatabase {
   /** How many tokens have tracked reads filed, and how many keys and ranges they hold */
   trackStats(): { owners: number; keys: number; ranges: number };
   durable(): Promise<void>;
+  /** Exclusive same-handle maintenance; other async scopes cannot mutate until the owner settles. Reads continue. */
+  withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T>;
+  /** Observers must not inherit a maintenance caller's authority to mutate a database. */
+  withoutWriteAuthority<T>(operation: () => T): T;
   /** Resolves when all current index generations are ready. Call outside write units; rejects if indexing cannot complete. */
   indexesReady(): Promise<void>;
   /** Backend visibility changes after a derived generation commits; no new logical commit is invented. */
@@ -233,7 +237,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
   const listeners = new Set<(commit: Commit) => void>();
   let unlistenIndexes: (() => void) | undefined;
   /** Calls every commit listener; a listener's throw is reported, not handed to the writer */
-  const committed = (commit: Commit) => {
+  const committed = (commit: Commit) => database.withoutWriteAuthority(() => {
     for (const listener of listeners) {
       try {
         listener(commit);
@@ -241,7 +245,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
         queueMicrotask(() => { throw error; });
       }
     }
-  };
+  });
   const heard = (changes: { sequence: number; touched: number[] }) => {
     if (listeners.size > 0) committed({ sequence: changes.sequence, touched: new Set(changes.touched) });
   };

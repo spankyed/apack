@@ -1,3 +1,4 @@
+import { createWriteLease, withoutWriteAuthority } from '../write-lease.ts';
 // SQLite storage for the structured EARS port. Scalar columns own small values; MessagePack is limited
 // to composite persistence and canonical metadata.
 /// <reference types="node" />
@@ -61,6 +62,7 @@ export class SqliteDatabase implements EarsDatabase {
   readonly path: string;
   readonly readOnly: boolean;
   readonly sql: DatabaseSync;
+  private readonly writeLease = createWriteLease();
   private opened = true;
   private faulted?: Error;
   private active?: SqliteUnit;
@@ -261,6 +263,7 @@ export class SqliteDatabase implements EarsDatabase {
   }
   private writable() {
     this.assertOpen();
+    this.writeLease.assertWritable();
     if (this.readOnly) fail("READ_ONLY", "The database was open read-only");
   }
   statement(sql: string) {
@@ -1150,6 +1153,7 @@ export class SqliteDatabase implements EarsDatabase {
       this.indexBuilds.wake();
     }
   }
+  assertWriteAuthority() { this.writeLease.assertWritable(); }
   invalidateLayouts() { this.layouts.clear(); }
   private eachRow(fn: (row: Data, seq: number) => void) {
     let after = -1;
@@ -1183,7 +1187,7 @@ export class SqliteDatabase implements EarsDatabase {
   indexesChanged(type: string): void {
     const changes = { sequence: this.sequence, touched: this.touched(new Set([`rows:${type}`])) };
     for (const listener of this.indexListeners) {
-      try { listener(changes); } catch (error) { queueMicrotask(() => { throw error; }); }
+      try { withoutWriteAuthority(() => listener(changes)); } catch (error) { queueMicrotask(() => { throw error; }); }
     }
   }
   setSchema(schema: object): any[] {
@@ -1377,11 +1381,19 @@ export class SqliteDatabase implements EarsDatabase {
     } finally { incoming.close(); }
   }
 
+  withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T> {
+    this.assertOpen();
+    if (this.active) return Promise.reject(Object.assign(new Error('Commit or abort the open unit before maintenance'), { code: 'UNIT_OPEN' }));
+    return this.writeLease.run(operation);
+  }
+  withoutWriteAuthority<T>(operation: () => T): T { return withoutWriteAuthority(operation); }
+
   async durable() {
     this.assertOpen();
   }
   close() {
     if (!this.opened) return;
+    this.writeLease.assertWritable();
     this.indexBuilds.stop();
     if (this.active) this.active.abort();
     this.sql.close();
@@ -1414,6 +1426,7 @@ class SqliteUnit implements EarsUnit {
     this.open = false;
   }
   write(request: WriteRequest) {
+    this.db.assertWriteAuthority();
     if (!this.open) fail("CLOSED", "Unit has ended");
     return this.db.batch(request, this.changes);
   }
@@ -1422,6 +1435,7 @@ class SqliteUnit implements EarsUnit {
     return this.db.readSync(request);
   }
   savepoint() {
+    this.db.assertWriteAuthority();
     if (!this.open) fail("CLOSED", "Unit has ended");
     const n = this.depth + 1;
     try { this.db.sql.exec(`SAVEPOINT unit_${n}`); }
@@ -1431,6 +1445,7 @@ class SqliteUnit implements EarsUnit {
     return n;
   }
   rollbackTo(n: number) {
+    this.db.assertWriteAuthority();
     if (!this.open) fail("CLOSED", "Unit has ended");
     const index = this.savepoints.findIndex(point => point.depth === n);
     if (index < 0) fail("BATCH_INVALID", "No open savepoint has this depth");
@@ -1441,6 +1456,7 @@ class SqliteUnit implements EarsUnit {
     this.depth = n - 1;
   }
   release(n: number) {
+    this.db.assertWriteAuthority();
     if (!this.open) fail("CLOSED", "Unit has ended");
     const index = this.savepoints.findIndex(point => point.depth === n);
     if (index < 0) fail("BATCH_INVALID", "No open savepoint has this depth");
@@ -1451,10 +1467,12 @@ class SqliteUnit implements EarsUnit {
     this.depth = n - 1;
   }
   commit(_durable?: boolean | null) {
+    this.db.assertWriteAuthority();
     if (!this.open) fail("CLOSED", "Unit has ended");
     return this.db.finish(this, true);
   }
   abort() {
+    this.db.assertWriteAuthority();
     if (this.open) this.db.finish(this, false);
   }
 }

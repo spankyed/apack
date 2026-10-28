@@ -22,12 +22,15 @@ export interface SettingsStoreOptions {
   catalog: () => SettingsCatalog;
   /** Omit only for a fixed catalog, such as a one-shot validator. */
   onCatalogChanged?: (listener: () => void) => () => void;
+  /** Composition removes database maintenance authority before invoking subscribers. */
+  observe?: <T>(operation: () => T) => T;
 }
 export type SettingsStore = ReturnType<typeof createSettingsStore>;
 
-export function createSettingsStore({ ears, catalog, onCatalogChanged }: SettingsStoreOptions) {
+export function createSettingsStore({ ears, catalog, onCatalogChanged, observe = operation => operation() }: SettingsStoreOptions) {
   const listeners = new Set<(change: SettingsChange) => void>();
   let replacingData = 0;
+  let replacementFailure: unknown;
   let recovering = false;
   const replacement = new AsyncLocalStorage<{ active: boolean }>();
   let replacementSnapshot: Pick<SettingsSnapshot, 'values' | 'catalog'> | undefined;
@@ -57,6 +60,7 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
     return value as SettingsOverrides;
   }
   function effective(): SettingsDocument {
+    if (replacementFailure) throw replacementFailure;
     if (recovering) throw new SettingsRefusedError(['Settings require recovery. Reset the invalid values and restart.']);
     const base = defaults();
     const overrides = stored();
@@ -65,9 +69,11 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
   }
   /** In recovery the stored row is invalid, and only `recover()` may change it. */
   function refuseDuringRecovery(): void {
+    if (replacementFailure) throw replacementFailure;
     if (recovering) throw new SettingsRefusedError(['Settings require recovery. Reset the invalid values and restart.']);
   }
   function getRecovery(): SettingsRecovery | undefined {
+    if (replacementFailure) throw replacementFailure;
     if (!recovering) return undefined;
     declarations();
     return { version: { runId, revision }, problems: validation.inspect(rawStored()) };
@@ -135,6 +141,7 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
       write(next);
     },
     getSnapshot(): SettingsSnapshot {
+      if (replacementFailure) throw replacementFailure;
       const published = replacementSnapshot ?? { values: effective(), catalog: declarations() };
       return { runId, revision, status: replacingData ? 'replacing' : 'ready', ...structuredClone(published) };
     },
@@ -173,9 +180,10 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
       write({});
     },
     onChange(listener: (change: SettingsChange) => void): () => void {
-      listeners.add(listener);
-      const stopCatalog = onCatalogChanged?.(() => listener('written'));
-      return () => { listeners.delete(listener); stopCatalog?.(); };
+      const guarded = (change: SettingsChange) => observe(() => listener(change));
+      listeners.add(guarded);
+      const stopCatalog = onCatalogChanged?.(() => guarded('written'));
+      return () => { listeners.delete(guarded); stopCatalog?.(); };
     },
     async whileReplacingData<T>(replace: () => Promise<T>): Promise<T> {
       // Database hydration bypasses the writer. Readers retain the published view until replacement settles.
@@ -184,9 +192,13 @@ export function createSettingsStore({ ears, catalog, onCatalogChanged }: Setting
       // Host-owned initialization/migrations may write; unrelated async callers still wait.
       const scope = { active: true };
       try { return await replacement.run(scope, replace); }
-      finally {
+      catch (error) {
+        const code = (error as { code?: unknown })?.code;
+        if (code === 'COMMIT_UNKNOWN' || code === 'RECOVERY_REQUIRED') replacementFailure = error;
+        throw error;
+      } finally {
         scope.active = false;
-        if (--replacingData === 0) { replacementSnapshot = undefined; revision++; tell('replaced'); }
+        if (--replacingData === 0) { replacementSnapshot = undefined; revision++; if (!replacementFailure) tell('replaced'); }
       }
     },
   };

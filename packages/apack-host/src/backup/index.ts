@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
 import { createEarsEngine, type Ears, type EarsDatabase, type EarsEngine } from '@apackdev/ears';
 import { backupStorage, databaseStorage } from '../database/storage.ts';
+import { prepareImportRecovery } from './recovery.ts';
 import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 
 const logger = createLogger('database:backup');
@@ -31,6 +32,8 @@ export interface BackupStore {
   copyTo(targetDir: string): Promise<void>;
   /** Replaces the store's contents with those of the copy at `dir`, in one unit, while it stays open */
   replaceWith(dir: string): void;
+  /** Stop same-process writers while incumbent copies, replacement and rollback settle. */
+  withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T>;
 }
 
 /**
@@ -43,6 +46,7 @@ export function databaseBackupStore(database: EarsDatabase, engine?: EarsEngine)
     format: database.format,
     copyTo: async (targetDir) => database.backup(targetDir),
     replaceWith: (dir) => (engine ? engine.admin.replaceWith(dir) : database.replaceWith(dir)),
+    withExclusiveWrites: operation => database.withExclusiveWrites(operation),
   };
 }
 
@@ -179,11 +183,12 @@ export async function importDatabase(
       const store = stores[name];
       return store ? [{ name, store }] : [];
     });
-    return await withReplacement(async () => {
+    const replace = () => withReplacement(async () => {
       for (const { name, store } of restoring) await store.copyTo(path.join(rollback, name));
       const candidateMedia = path.join(candidate, 'media');
       const hasMedia = await fs.pathExists(candidateMedia);
       if (hasMedia && await fs.pathExists(mediaPath)) await fs.copy(mediaPath, path.join(rollback, 'media'));
+      prepareImportRecovery(temporary, restoring.map(({ name, store }) => ({ name, path: store.path, format: store.format })), hasMedia ? mediaPath : undefined);
       try {
         // Each store takes the backup's contents in one unit, open all the while: a reader sees the old or the new
         for (const { name, store } of restoring) {
@@ -200,6 +205,11 @@ export async function importDatabase(
         log.info('Import completed');
         return result;
       } catch (error) {
+        if ((error as { code?: unknown })?.code === 'COMMIT_UNKNOWN') {
+          preserveRollback = true;
+          throw Object.assign(new Error(`Import outcome is unknown; do not retry before recovery. Previous data is retained at ${rollback}`, { cause: error }),
+            { code: 'COMMIT_UNKNOWN', recoveryPath: rollback });
+        }
         try {
           for (const { name, store } of restoring) store.replaceWith(path.join(rollback, name));
           if (hasMedia) {
@@ -210,11 +220,14 @@ export async function importDatabase(
           await restored?.();
         } catch (restoreError) {
           preserveRollback = true;
-          throw new AggregateError([error, restoreError], `Import and rollback failed; previous data is retained at ${rollback}`);
+          throw Object.assign(new AggregateError([error, restoreError], `Import and rollback failed; previous data is retained at ${rollback}`, { cause: error }),
+            { code: (restoreError as { code?: unknown })?.code === 'COMMIT_UNKNOWN' ? 'COMMIT_UNKNOWN' : 'RECOVERY_REQUIRED', recoveryPath: rollback });
         }
         throw error;
       }
     });
+    const paused = restoring.reduceRight<() => Promise<DatabaseImportResult>>((operation, { store }) => () => store.withExclusiveWrites(operation), replace);
+    return await paused();
   } finally {
     if (!preserveRollback) await fs.remove(temporary);
   }

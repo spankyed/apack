@@ -11,9 +11,8 @@ import { runAppMigrations, runPackMigrations } from '../migrations/index.ts';
 import { createSettingsBackupValidator } from '../features/settings/be/backup.ts';
 
 /**
- * `onReplaced` runs after either operation has rebuilt the world, and after a failed one too: a failed import has
- * already put back what was there. What it does with that is the caller's — replacing the data is this service's
- * job, and telling the app is not.
+ * `onReplaced` runs after installation or successful rollback. An uncertain/failed recovery closes both stores
+ * and leaves the persistent import preparation for explicit recovery; it never announces settled replacement.
  */
 export function createAppData({ database, engine, history, registry, settings, onReplaced }: {
   database: EarsDatabase;
@@ -30,7 +29,7 @@ export function createAppData({ database, engine, history, registry, settings, o
     if (replacing) throw new Error('App data is already being replaced. Wait for it to finish.');
     if (!registry.claimAllPackOperations()) throw new Error('A pack is being installed or changed. Try again once it finishes.');
     replacing = true;
-    try { return await operation(); }
+    try { return await database.withExclusiveWrites(() => history.database.withExclusiveWrites(operation)); }
     finally {
       replacing = false;
       registry.releaseAllPackOperations();
@@ -38,8 +37,21 @@ export function createAppData({ database, engine, history, registry, settings, o
   }
 
   async function replaceData<T>(replace: () => Promise<T>): Promise<T> {
+    let settled = true;
     try { return await settings.whileReplacingData(replace); }
-    finally { onReplaced(); }
+    catch (error) {
+      const code = (error as { code?: unknown })?.code;
+      if (code === 'COMMIT_UNKNOWN' || code === 'RECOVERY_REQUIRED') {
+        settled = false;
+        const errors: unknown[] = [error];
+        for (const store of [database, history.database]) {
+          try { store.close(); } catch (cleanup) { errors.push(cleanup); }
+        }
+        if (errors.length > 1) throw Object.assign(new AggregateError(errors, 'Data replacement requires recovery and closing stores also failed', { cause: error }),
+          { code, recoveryPath: (error as { recoveryPath?: unknown }).recoveryPath });
+      }
+      throw error;
+    } finally { if (settled) onReplaced(); }
   }
 
   return {
@@ -57,7 +69,7 @@ export function createAppData({ database, engine, history, registry, settings, o
       }));
     },
     exportBackup: (targetPath, name, databases) =>
-      exportDatabase(stores, targetPath, { name, databases, mediaPath: _getMediaPath(), appVersion: getAppVersion() }),
+      exclusive(() => exportDatabase(stores, targetPath, { name, databases, mediaPath: _getMediaPath(), appVersion: getAppVersion() })),
     async importBackup(backupPath, options) {
       return exclusive(async () => {
         const entityTypes = registry.getRegisteredEntityTypes();

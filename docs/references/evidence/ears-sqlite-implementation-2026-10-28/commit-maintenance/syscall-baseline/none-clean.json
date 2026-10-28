@@ -1,0 +1,13 @@
+{
+  "mode": "none",
+  "exitMode": "clean",
+  "before": 2,
+  "returned": true,
+  "inTransaction": false,
+  "liveSequence": 3,
+  "liveIds": [
+    "Row-before",
+    "Row-candidate"
+  ],
+  "closed": true
+}

@@ -1,3 +1,4 @@
+import { assertNoImportRecovery } from '../backup/recovery.ts';
 // Opening an app's database: the one composition of the elmdb database and the engine, which the API's boot and tools
 // (apack db) share, so both open a data dir the same way
 import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears } from '@apackdev/ears';
@@ -33,6 +34,7 @@ export interface DatabaseStoreOptions {
  * while that pack registers. Nothing is installed.
  */
 export function openDatabaseStore({ path, schema, readOnly, warn, storageFormat = configuredDatabaseFormat() }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
+  if (!readOnly) assertNoImportRecovery(path);
   const database = databaseStorage(storageFormat).open({ path, readOnly });
   const engine = createEarsEngine({ database, warn });
   if (!readOnly) {
@@ -64,6 +66,7 @@ const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 
  * files and throws, as it does opened read-only.
  */
 export function openRunHistory(dir: string, { readOnly, storageFormat = configuredDatabaseFormat() }: { readOnly?: boolean; storageFormat?: string } = {}): RunsDatabase {
+  if (!readOnly) assertNoImportRecovery(dir);
   const open = (): RunsDatabase => {
     const database = databaseStorage(storageFormat).open({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) });
     return { database, engine: createEarsEngine({ database }) };
@@ -119,6 +122,7 @@ export async function openAppDatabase({ env, userDataDir, readOnly = false, sche
   const schema = readInstalledSchema(context, { schemaFrom });
   // The database is held to the schema the app last declared, which a tool doesn't change: the app declares what its
   // packs' code says (their required fields among it), and no manifest carries all of that
+  if (!readOnly) assertNoImportRecovery(paths.lmdb);
   const database = databaseStorage(storageFormat).open({ path: paths.lmdb, readOnly });
   if (!readOnly && database.schema === null) {
     database.close();

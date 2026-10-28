@@ -188,17 +188,33 @@ platform claims must identify their actual tested scope.
 
 The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for
 `session/ears-sqlite`. The last exact published green checkpoint is
-**a889531dd1f636178c9df8fbcde73c8cb4608087**: [strict run 40753623963](https://github.com/spankyed/apack/actions/runs/40753623963)
-completed successfully, all six jobs. The approved guarded helper advanced clean canonical
-`monorepo-worktrees.noindex/sqlite-evaluation` from a1356b64b1 to that exact checkpoint; its BASE is now a889531dd1.
-Detached integration `monorepo-worktrees.noindex/integration-FyE9XZ` tracks the published draft tip. No master merge,
-adoption or Mac build occurred; app master and the private native engine remain pinned to 98386b36a1 / 6ab2f69.
+**1a0f664d01bacb969ab48cd27aae1afd146de1cc**:
+[strict run 40783434078](https://github.com/spankyed/apack/actions/runs/40783434078) completed SUCCESS, all six jobs.
+The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation`
+from a889531dd1 to that exact checkpoint; its BASE is now 1a0f664d01. Detached integration
+`monorepo-worktrees.noindex/integration-FyE9XZ` and the remote draft branch still point to 1a0f664d01.
+No master merge, adoption or Mac build occurred; app master and the private native engine remain pinned
+to 98386b36a1 / 6ab2f69. Verify actual refs before another publication and gate each new exact tip.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; no Mac dependencies, native build or
-captured runtime are installed. Published draft tip is **1a0f664d01bacb969ab48cd27aae1afd146de1cc**;
-[strict run 40783434078](https://github.com/spankyed/apack/actions/runs/40783434078) is the single live exact gate.
-Poll that handle and inspect actual refs before any new publication; never dispatch duplicates or promote on a
-parent's success. Both published integration and remote branch point to that exact tip. Canonical stays a889531dd1.
+captured runtime are installed. New descendants require their own checks and strict run.
+
+The next checkpoint is commit-outcome and import-maintenance safety. Local committed source
+**8b7159e051d2fa261b7e61aa6613f7aceeba891b** quarantines ended COMMIT failures as `COMMIT_UNKNOWN`,
+preserves causes, avoids replay and captures fallible watch changes before COMMIT. The active checkout also
+contains a same-handle write lease, persisted import preparation, fail-closed host/settings handling and tests.
+The first exact dirty-source Linux snapshot passed five package builds, EARS/host types, 17 SQLite safety tests,
+5 native maintenance tests and 10 host import/runtime tests. See
+[commit/maintenance evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-maintenance/README.md).
+The second snapshot passed both typechecks, five builds, 69 host recovery/settings cases, 13 SQLite safety
+cases, 5 native maintenance cases and API generation. Disabling lease protection failed the intended tests.
+The final snapshot adds the real-store snapshot/rollback concurrency regression and generated API report.
+Its full backend suites, host/API checks and real WAL-sync faults run in owned container
+`ears-maintenance-final` (exec session 20415); poll the actual live handle. No broad validation claim applies
+until that exact run completes. Closing checks remain both backend suites, host/API composition, mutation
+controls, real syscall fault probes on current source, process-kill recovery and an exact integrated strict gate.
+Explicit recovery tooling, cross-process ownership and physical durability of retained files remain required;
+a recovery marker must never be deleted merely to bypass startup refusal.
 
 Previous **3f4651b009** / [40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) is terminal FAILURE.
 Producer and both native jobs passed; integration-1 and app/rest failed on undeclared API bundler inputs fixed

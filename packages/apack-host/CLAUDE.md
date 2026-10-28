@@ -37,6 +37,15 @@ A feature's halves sit together: `features/packs/be/system.ts` answers `features
 for what they hold, never for a layer — no `core/`, `shared/`, `lib/` or `utils/`, at any depth, as in the API and
 the renderer.
 
+Database import acquires same-handle write leases before copying incumbents and keeps them through acceptance
+or rollback. The app-data service also leases primary/history for reset and export. A preparation in the owned
+`.apack-import-*` directory precedes live replacement; an unknown commit preserves it and the incumbent copies
+without replay. Host composition closes affected stores and suppresses settled settings/data publication.
+`database/open.ts` refuses writable startup while a preparation exists; read-only forensic opens remain available.
+Recovery tooling and full crash/filesystem qualification remain requirements of the SQLite goal; never delete a
+preparation simply to bypass that refusal. These leases do not exclude a separate process or promise a single
+cross-store read snapshot.
+
 ## Module map (`src/`)
 
 | Subpath | Files | What it holds |

@@ -242,6 +242,8 @@ export interface EarsDatabase {
         ranges: number;
     };
     untrack(token: number): void;
+    withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T>;
+    withoutWriteAuthority<T>(operation: () => T): T;
     // (undocumented)
     write(batch: WriteRequest, durable?: boolean | null): WriteResult;
 }

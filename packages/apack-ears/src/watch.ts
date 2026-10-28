@@ -168,7 +168,7 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
     if (marked.length > 0) plan(!flushing);
   };
 
-  const run = (watch: Watch) => {
+  const run = (watch: Watch) => connection.database.withoutWriteAuthority(() => {
     // What the token held was the last run's: this run's reads replace it
     connection.untrack(watch.token);
     const started = clock.now();
@@ -195,7 +195,7 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
       watch.last = outcome;
       watch.observer.error?.(outcome.error, commit);
     }
-  };
+  });
 
   /** Notes a run that took more than the slice, warning once about a watch that keeps doing it */
   const charge = (watch: Watch) => {

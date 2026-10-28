@@ -1,3 +1,4 @@
+import { createWriteLease, withoutWriteAuthority } from '../write-lease.ts';
 // MessagePack belongs to the native boundary, not the engine's JavaScript call path.
 import { Packr, Unpackr } from 'msgpackr';
 import { DATABASE_FORMAT } from './format.ts';
@@ -49,27 +50,30 @@ interface BinaryUnit extends Omit<EarsUnit, 'read' | 'write' | 'commit'> {
   write(request: Uint8Array): Uint8Array;
   commit(durable?: boolean | null): Uint8Array;
 }
-export interface BinaryDatabase extends Omit<EarsDatabase, 'readSync' | 'write' | 'begin' | 'bulkLoad' | 'format' | 'indexesReady' | 'onIndexesChanged'> {
+export interface BinaryDatabase extends Omit<EarsDatabase, 'readSync' | 'write' | 'begin' | 'bulkLoad' | 'format' | 'indexesReady' | 'onIndexesChanged' | 'withExclusiveWrites' | 'withoutWriteAuthority'> {
   readSync(request: Uint8Array): Uint8Array;
   write(request: Uint8Array, durable?: boolean | null): Uint8Array;
   begin(): BinaryUnit;
   bulkLoad(loads: Uint8Array): void;
 }
 
-function adaptUnit(unit: BinaryUnit): EarsUnit {
+function adaptUnit(unit: BinaryUnit, assertWritable: () => void, ended: () => void): EarsUnit {
+  const mutate = <T>(operation: () => T): T => { assertWritable(); try { return operation(); } finally { if (!unit.isOpen) ended(); } };
   return {
     get isOpen() { return unit.isOpen; },
     read: (request) => unpackAnswers(unit.read(pack(request))),
-    write: (request) => unpackr.unpack(unit.write(pack(request))) as WriteResult,
-    savepoint: () => unit.savepoint(),
-    rollbackTo: (depth) => unit.rollbackTo(depth),
-    release: (depth) => unit.release(depth),
-    commit: (durable) => unpackr.unpack(unit.commit(durable)) as Changes,
-    abort: () => unit.abort(),
+    write: (request) => mutate(() => unpackr.unpack(unit.write(pack(request))) as WriteResult),
+    savepoint: () => mutate(() => unit.savepoint()),
+    rollbackTo: (depth) => mutate(() => unit.rollbackTo(depth)),
+    release: (depth) => mutate(() => unit.release(depth)),
+    commit: (durable) => mutate(() => unpackr.unpack(unit.commit(durable)) as Changes),
+    abort: () => mutate(() => unit.abort()),
   };
 }
 
 export function adaptDatabase(database: BinaryDatabase): EarsDatabase {
+  const lease = createWriteLease(), units = new Set<EarsUnit>();
+  const mutate = <T>(operation: () => T): T => { lease.assertWritable(); return operation(); };
   return {
     format: DATABASE_FORMAT,
     get path() { return database.path; },
@@ -78,18 +82,28 @@ export function adaptDatabase(database: BinaryDatabase): EarsDatabase {
     get schema() { return database.schema; },
     get sequence() { return database.sequence; },
     readSync: (request) => unpackAnswers(database.readSync(pack(request))),
-    write: (request, durable) => unpackr.unpack(database.write(pack(request), durable)) as WriteResult,
-    begin: () => adaptUnit(database.begin()),
-    setSchema: (schema) => database.setSchema(schema),
-    reset: () => database.reset(),
+    write: (request, durable) => mutate(() => unpackr.unpack(database.write(pack(request), durable)) as WriteResult),
+    begin: () => mutate(() => {
+      const native = database.begin();
+      const unit = adaptUnit(native, lease.assertWritable, () => { units.delete(unit); });
+      units.add(unit); return unit;
+    }),
+    setSchema: (schema) => mutate(() => database.setSchema(schema)),
+    reset: () => mutate(() => database.reset()),
     backup: (target) => database.backup(target),
-    replaceWith: (source) => database.replaceWith(source),
+    replaceWith: (source) => mutate(() => database.replaceWith(source)),
     stats: () => database.stats(),
-    bulkLoad: (loads) => database.bulkLoad(pack(loads)),
+    bulkLoad: (loads) => mutate(() => database.bulkLoad(pack(loads))),
     untrack: (token) => database.untrack(token),
     trackStats: () => database.trackStats(),
     durable: () => database.durable(),
     indexesReady: () => Promise.resolve(),
-    close: () => database.close(),
+    withExclusiveWrites: (operation) => {
+      if (!database.isOpen) return Promise.reject(Object.assign(new Error('The database is closed'), { code: 'CLOSED' }));
+      if ([...units].some(unit => unit.isOpen)) return Promise.reject(Object.assign(new Error('Commit or abort the open unit before maintenance'), { code: 'UNIT_OPEN' }));
+      return lease.run(operation);
+    },
+    withoutWriteAuthority,
+    close: () => mutate(() => database.close()),
   };
 }

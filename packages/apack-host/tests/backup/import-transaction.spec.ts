@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
+import { assertNoImportRecovery } from '../../src/backup/recovery.ts';
 import { importDatabase, type BackupStore } from '../../src/backup/index.ts';
 
 // Exercise the rollback's order without opening native databases: the backup reads as an empty database, and the
@@ -27,6 +28,7 @@ function fixture() {
   const store = {
     path: primary,
     format: 'elmdb/1',
+    withExclusiveWrites: <T>(operation: () => Promise<T>) => operation(),
     copyTo: (dest: string) => fs.copy(primary, dest),
     replaceWith: (dir: string) => fs.copySync(path.join(dir, 'data.mdb'), path.join(primary, 'data.mdb')),
   } satisfies BackupStore;
@@ -87,4 +89,27 @@ it('rolls back a replacement that committed before reporting failed sync', async
   expect(restored).toHaveBeenCalledOnce();
   expect(read()).toBe('incumbent');
   expect(fs.readdirSync(root).some(name => name.startsWith('.apack-import-'))).toBe(false);
+});
+
+it('retains a prepared recovery journal and never replays an uncertain replacement', async () => {
+  const { root, primary, backup, media, store } = fixture();
+  const cause = Object.assign(new Error('commit acknowledgement lost'), { code: 'COMMIT_UNKNOWN' });
+  const replaceWith = vi.fn((dir: string) => {
+    const session = fs.readdirSync(root).find(name => name.startsWith('.apack-import-'))!;
+    const marker = fs.readJsonSync(path.join(root, session, 'recovery.json'));
+    expect(marker).toMatchObject({ format: 'apack-import/1', state: 'prepared', stores: [{ name: 'lmdb', path: primary, format: 'elmdb/1' }] });
+    store.replaceWith(dir);
+    throw cause;
+  });
+  const accept = vi.fn(), restored = vi.fn();
+  let failure: unknown;
+  try { await importDatabase({ lmdb: { ...store, replaceWith } }, backup, media, { log, accept, restored }); }
+  catch (error) { failure = error; }
+  expect(failure).toMatchObject({ code: 'COMMIT_UNKNOWN', cause });
+  expect(replaceWith).toHaveBeenCalledOnce();
+  expect(accept).not.toHaveBeenCalled(); expect(restored).not.toHaveBeenCalled();
+  const recovery = (failure as Error & { recoveryPath: string }).recoveryPath;
+  expect(fs.readFileSync(path.join(recovery, 'lmdb/data.mdb'), 'utf8')).toBe('incumbent');
+  expect(fs.readFileSync(path.join(primary, 'data.mdb'), 'utf8')).toBe('candidate');
+  expect(() => assertNoImportRecovery(primary)).toThrow(expect.objectContaining({ code: 'RECOVERY_REQUIRED', recoveryPath: recovery }));
 });
