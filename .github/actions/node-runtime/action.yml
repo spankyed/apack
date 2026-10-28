@@ -1,0 +1,27 @@
+name: Node runtime
+description: Restore an exact Node toolchain before setup-node and retain it immediately for later jobs
+inputs:
+  node-version:
+    description: Exact Node version, including major, minor and patch
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Restore Node toolchain
+      id: toolchain
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.tool_cache }}/node/${{ inputs.node-version }}
+        key: node-toolchain-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.node-version }}
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+    # The complete version directory includes the architecture's .complete marker. Save before tests so a later
+    # test failure cannot discard a successful download, and consumers can restore the producer's exact runtime.
+    - name: Retain Node toolchain
+      if: steps.toolchain.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.tool_cache }}/node/${{ inputs.node-version }}
+        key: ${{ steps.toolchain.outputs.cache-primary-key }}

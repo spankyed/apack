@@ -15,7 +15,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite watch o
       expect(database.trackStats().owners).toBe(1);
       e.write(id).set('title', 'after');
       database.close();
-      await new Promise(resolve => setTimeout(resolve, 80));
+      await e.admin.watchesSettled();
       expect(e.admin.watchStats()).toEqual({ watches: 0, keys: 0, ranges: 0 });
       expect(database.trackStats()).toEqual({ owners: 0, keys: 0, ranges: 0 });
     } finally { temporary.disposeAll(); }

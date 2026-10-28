@@ -1,0 +1,34 @@
+{
+  "rows": [
+    {
+      "mode": "before",
+      "processMedianUs": [
+        220913.5810000007,
+        158144.70849999998,
+        262713.4415000001
+      ],
+      "medianOfProcessMediansUs": 220913.5810000007
+    },
+    {
+      "mode": "after",
+      "processMedianUs": [
+        60257.1910000006,
+        51677.11899999995,
+        56946.41549999869
+      ],
+      "medianOfProcessMediansUs": 56946.41549999869
+    },
+    {
+      "mode": "native",
+      "processMedianUs": [
+        8118.86050000021,
+        7736.3374999999905,
+        7105.481499999769
+      ],
+      "medianOfProcessMediansUs": 7736.3374999999905
+    }
+  ],
+  "speedupBeforeOverAfter": 3.879323730218029,
+  "afterOverNative": 7.3609011370042685,
+  "scope": "sync-disabled actual-facade fixture; three fresh processes per mode; five normalized batches per task; no app/recall/durability acceptance"
+}
