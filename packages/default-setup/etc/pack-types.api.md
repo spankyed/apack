@@ -1015,7 +1015,7 @@ declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
-    decision: 'cancelled' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'no' | 'retry_fallback' | 'yes';
+    decision: 'cancelled' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'no' | 'retry_fallback' | 'yes';
 };
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
@@ -1028,6 +1028,23 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         value: z.ZodEnum<{
             retry_fallback: "retry_fallback";
             edit_prompt: "edit_prompt";
+        }>;
+        label: z.ZodString;
+    }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"autocompact_offer">;
+    selectedTokens: z.ZodNumber;
+    canPrevious: z.ZodBoolean;
+    canNext: z.ZodBoolean;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<{
+            compact_accept: "compact_accept";
+            compact_keep: "compact_keep";
         }>;
         label: z.ZodString;
     }, z.core.$strip>>;
@@ -2972,9 +2989,9 @@ declare const CommandLifecycleLineSchema: z.ZodObject<{
     command_uuid: z.ZodString;
     state: z.ZodEnum<{
         completed: "completed";
-        cancelled: "cancelled";
         queued: "queued";
         started: "started";
+        cancelled: "cancelled";
         discarded: "discarded";
         refused: "refused";
     }>;
@@ -8993,8 +9010,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

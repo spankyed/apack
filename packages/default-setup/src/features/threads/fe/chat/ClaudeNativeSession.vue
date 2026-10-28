@@ -1,6 +1,6 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
-    <section v-if="!active && view?.state?.notice" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : view.state.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'goal_proposal' ? 'goal_decline' : view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+    <section v-if="!active && view?.state?.notice" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : view.state.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : view.state.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : view.state.notice.kind === 'goal_proposal' ? 'goal_decline' : view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <header v-if="view.state.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
           <h3>{{ view.state.notice.title }}</h3>
@@ -26,10 +26,16 @@
         </template>
       </div>
       <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
+      <div v-if="view.state.notice.kind === 'autocompact_offer'" class="native-notice__actions" role="group" aria-label="Autocompact size">
+        <button type="button" class="native-button" :disabled="noticePending || !view.state.notice.canPrevious" @click="answerNotice('compact_previous')">Smaller</button>
+        <output aria-label="Selected token limit">{{ view.state.notice.selectedTokens.toLocaleString() }} tokens</output>
+        <button type="button" class="native-button" :disabled="noticePending || !view.state.notice.canNext" @click="answerNotice('compact_next')">Larger</button>
+      </div>
       <div class="native-notice__actions">
         <template v-if="view.state.notice.kind !== 'auto_mode_server_fallback'">
           <button v-for="choice in view.state.notice.choices" :key="choice.value" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(choice.value)">{{ choice.label }}</button>
           <button v-if="view.state.notice.kind === 'refusal_fallback_prompt'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice('cancelled')">Cancel</button>
+          <button v-if="view.state.notice.kind === 'autocompact_offer'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice('compact_dismiss')">Not now</button>
         </template>
         <template v-else>
           <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice('interrupt')">Cancel</button>

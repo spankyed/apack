@@ -173,3 +173,21 @@ it('keeps a goal proposal nonblocking and routes decline/Escape with its exact n
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: undefined } }); await nextTick()
   expect(f.root.querySelector('[aria-label="Claude goal proposal"]')).toBeNull()
 })
+
+it('shows native autocompact sizes and routes step/keep/dismiss without writing settings', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
+  const notice = { id: 'offer', revision: 'offer-revision', sessionId: 'session', kind: 'autocompact_offer' as const, title: 'Autocompact sooner?', paragraphs: ['Original summary tradeoff', 'Will summarize on your next message'], selectedTokens: 400000, canPrevious: false, canNext: true, choices: [{ value: 'compact_keep' as const, label: 'Keep auto' }, { value: 'compact_accept' as const, label: 'Autocompact at 400k tokens' }] }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  const card = f.root.querySelector('[aria-label="Claude autocompact offer"]')!
+  expect(card.textContent).toContain('Will summarize on your next message')
+  expect(card.querySelector('[aria-label="Selected token limit"]')?.textContent).toContain('400,000')
+  const buttons = [...card.querySelectorAll<HTMLButtonElement>('button')]
+  expect(buttons.find(button => button.textContent === 'Smaller')!.disabled).toBe(true)
+  buttons.find(button => button.textContent === 'Larger')!.click()
+  expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('compact_next')
+  buttons.find(button => button.textContent === 'Keep auto')!.click()
+  expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('compact_keep')
+  card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({ id: 'offer', revision: 'offer-revision', sessionId: 'session', decision: 'compact_dismiss' })
+})
