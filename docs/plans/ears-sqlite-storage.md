@@ -210,3 +210,14 @@ startup reads. Partial store acquisition closes the primary if history/runtime c
 Installed/live pack flows, Electron ABI and failure/packaging evidence remain acceptance work; the Node
 proof does not qualify those flows. This selection is temporary evaluation machinery, to be removed or collapsed to
 the chosen backend at the final adoption decision.
+
+
+## Runtime index admission
+
+The composition supplies `PackRegistryOptions.indexesReady` from its owning database. Registration stays
+synchronous for installer acceptance; boot/reset and accepted activation/update/restore/reload await readiness
+before onInit, migrations, content and actor publication. Pack operation claims cover that wait. An index failure
+after acceptance retains published files and reports an unavailable runtime, rather than restoring obsolete
+bindings or starting actors on incomplete indexes. Backup acceptance waits for both restored stores before
+migrations. Declaration-only registries have no database work. This boundary does not make ordinary EARS reads
+asynchronous; search continues to refuse `INDEX_BUILDING` where a caller has not awaited readiness.

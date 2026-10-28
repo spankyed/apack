@@ -194,27 +194,35 @@ completed successfully, all six jobs. The approved guarded helper advanced clean
 Detached integration `monorepo-worktrees.noindex/integration-FyE9XZ` tracks the published draft tip. No master merge,
 adoption or Mac build occurred; app master and the private native engine remain pinned to 98386b36a1 / 6ab2f69.
 
-Active continuation remains `/private/tmp/ears-sqlite-diagnosis-evidence`, with no installed dependencies,
-native build or captured runtime. Published 460866c5c28a6cd40aeb9aa0c633c46023d33a6a failed
-[strict run 40761412029](https://github.com/spankyed/apack/actions/runs/40761412029): compiler build,
-worker repair and disabled-owner backup cases. Exact-source Linux compiler controls pass unchanged limits;
-their Mac causes remain unisolated. Local functional source 846dfb4ef99893cede83bc3cd5bf176e756ff018 adds
-isolated app/CLI selection, startup readiness, built API native-loader ownership, Node source support and
-narrow watcher repair. Two actual built API boots pass. Its final Linux suite passes 414 SQLite / 251 native
-cases and profile/build checks, but the unchanged aggregate scripts-typecheck exceeds 60 seconds with no
-captured diagnostic. A lockfile-corrected diagnostic passes all four constituent projects separately
-(36.03 seconds total); the aggregate timeout cause remains unisolated. Publish this evidence descendant
-and require its exact strict gate before promotion. See
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; no Mac dependencies, native build or
+captured runtime are installed. Published draft tip is **3f4651b009f4d211497b92ad47c7491adac506b6**.
+Its single exact [strict run 40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) has completed
+integration-1 and app/rest failures: API bundle probe reads its tsup config and build/build-metadata.ts without
+cache declarations. Other consumer jobs remain live; poll that handle, do not dispatch duplicates or promote.
+The producer passed, including the aggregate scripts typecheck; the earlier local 60-second timeout remains
+retained without a causal explanation. Failed predecessor 460866c5c2 / run 40761412029 is retained in evidence.
+
+Local functional lifecycle source **51d4e11d2961a342ca0f33e160a779d30d7bbc65** adds registry-owned index readiness
+and async startup/activation/update/restore/reload while preserving synchronous installer acceptance and claims.
+Permission-aware Linux validation passes 127 lifecycle cases, 4 SQLite API profile cases, three removal controls,
+restored cases, types/lint/imports, six reset/reopen parity cases per backend and two actual built Node API boots.
+See [live admission evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/live-pack-admission/README.md).
+The earlier 414 SQLite / 251 native contracts and compiled CLI regex/substring/vector proof remain in
 [profile/runtime evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/profile-runtime/README.md).
-The evidence descendant 3f4651b009f4d211497b92ad47c7491adac506b6 is now published on the existing draft;
-[strict run 40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) is the single active exact gate.
-Do not dispatch another run while this handle is live. Further plain-Node compiled CLI regex, substring and
-vector queries pass on the same functional source, including a missing-WASM refusal and restored success;
-[asset evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/profile-runtime/cli-assets/README.md)
-is a local documentation descendant until the current gate closes. Electron/platform qualification remains open.
-Inspect actual refs and PR #286 before dispatching another exact gate. Canonical remains a889531dd1;
-the approved helper requires clean pins and exact strict success before promotion. Never compile or run
-full checks on the daily Mac.
+
+Newer local **5e20fb5956cb0543d8934f34232d088d108818b1** fixes the cache declarations and API runtime dependency,
+preserves engine bundling and extends the native smoke to SQLite/FTS/regex/WASM/vectors. Packaging validation is
+running in owned Linux container `ears-packaging-corrected`, exec session **64161**; inspect its exact handle and results
+`/private/tmp/ears-packaging` before restarting anything. The first harness lacked Git metadata needed by the unchanged chain-input guard;
+the corrected harness initializes only a synthetic repository over the exact tracked archive. Pinned better-sqlite3 v13 uses Node-API; its existing
+Linux artifact opens under Electron 37 and loads sqlite-vec, so unnecessary Electron rebuild edits were removed.
+ASAR is disabled by the actual build configuration; verify real packaged files, signing and supported platforms.
+This in-place runtime smoke is not a packaged-distribution qualification.
+
+Canonical remains a889531dd1. The approved helper requires clean source/native pins and exact strict success
+before private promotion. Current continuation commits stay local while the published run is live. No master
+merge/adoption or daily-use profile conversion occurred. Continue complete lifecycle/platform and remaining
+search/performance/operational requirements; do not redefine completion around these smaller checks.
 
 Earlier strict 78eff95202 timed out in typecheck:scripts without a captured TypeScript diagnostic. Its exact command
 passed unchanged in two-core Linux within the original 60-second budget; the Mac cause is unisolated. The newer

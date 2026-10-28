@@ -3,9 +3,10 @@
 The backend process: a `node:http` + `ws` server exposing a tRPC router over WebSocket and the root event bus, the process boot, and the composition that opens the app's elmdb databases (`@apackdev/ears/lmdb`) for the EARS engines and binds the app. It holds nothing else: behaviour (systems, repositories, flows) lives in packs (`packages/default-setup`), and app runtime in `@apackdev/host`, including the pack runtime (`@apackdev/host/packs/runtime`: loading, lifecycle, reload, applying), the app bus (`createAppBus(registry)`, `@apackdev/host/bus`), the migrations runners (`@apackdev/host/migrations`) and the host services (`createHostRuntime()`, `@apackdev/host/services`); this package wires them together and serves them. `tests/source-layout.spec.ts` lists the files `src/` may hold. Environment variables and the manual boot command are in the root `CLAUDE.md` (App environment).
 
 The isolated SQLite candidate uses the host's `APACK_STORAGE_FORMAT` profile guard. Startup awaits index
-readiness initially and after pack registration, before lifecycle/migrations; this does not qualify live
-install/reload readiness. Keep `@apackdev/ears/sqlite` external in the API bundle so its native/vector/WASM
-assets retain package-relative ownership. `tests/runtime/sqlite-bundle.spec.ts` executes that actual boundary;
+readiness initially and after pack registration, before lifecycle/migrations. Live activation/reload also
+await the registry readiness port while retaining their operation claims. Full renderer lifecycle remains separate. Keep `@apackdev/ears/sqlite` external in the API bundle so its native/vector/WASM
+assets retain package-relative ownership. Declare EARS as a runtime dependency, and keep its shared root/lmdb
+engine entries bundled with the SDK bridge (`noExternal`). `tests/runtime/sqlite-bundle.spec.ts` executes that boundary;
 profile tests cover persistence and partial-open cleanup. Node boot evidence does not certify Electron ABI.
 
 ## Layout

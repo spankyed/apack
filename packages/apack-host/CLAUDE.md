@@ -8,7 +8,8 @@ children and symlink aliases before opening. Explicit `storageFormat` constructo
 The database port's format identity drives backup provenance and host-owned file/open descriptors.
 Import checks every destination format before validation/replacement. Recognized foreign storage refuses
 as `STORAGE_MISMATCH`, outside run-history corruption salvage. Real host/API/CLI workflow tests cover both
-implementations. Live pack readiness, physical recovery and platform qualification remain in the SQLite goal.
+implementations. Live startup awaits registry index readiness; full renderer lifecycle, physical recovery and
+platform qualification remain in the SQLite goal.
 
 ## Package basics
 
