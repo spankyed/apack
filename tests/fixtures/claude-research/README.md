@@ -63,6 +63,13 @@ rich/media restoration and other owner/window/policy/lifecycle combinations rema
 This profile requires the same locked, capped offline Linux boundary and read-only pinned binary;
 it does not authorize a CI dispatch or establish combined F1–F5 acceptance.
 
+The desktop custom-theme profile uses `CLAUDE_RESEARCH_THEME_CREATE_RESET=1` together with
+`CLAUDE_RESEARCH_THEME_DESKTOP=1`, kind `terminal-plan-app-theme`, through the same entry.
+It covers original create/fork/color edit, preview Cancel and token reset, colored swatches,
+normal/compact desktop controls, retained draft/selection and exact same-session recovery.
+Use the same locked offline Linux boundary, read-only pinned binary, 6 GiB memory/equal swap
+and two CPUs. Policy/write-error, other-owner/window/lifecycle and combined F1–F5 remain separate.
+
 The current runner includes Settings freshness observation and cloud-consent saved verification.
 Cloud-consent acceptance uses a private previously saved forwarding preference and leaves the native
 feature gates unchanged. Its profile requires the owned offline-container receipt at
