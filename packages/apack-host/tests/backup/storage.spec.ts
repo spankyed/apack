@@ -122,6 +122,17 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
     expect(validate).not.toHaveBeenCalled(); expect(replace).not.toHaveBeenCalled(); assertIncumbent(f);
   });
 
+  it('checks the second store format before validating or replacing the primary', async () => {
+    const f = await fixture(format), other = format === SQLITE ? ELMDB : SQLITE;
+    const source = storesAt(path.join(f.dir, 'other'), other, 'other');
+    fs.rmSync(path.join(f.backup, 'runHistory'), { recursive: true });
+    source.history.database.backup(path.join(f.backup, 'runHistory'));
+    const validate = vi.fn(), replace = vi.spyOn(f.live.database, 'replaceWith');
+    await expect(importDatabase(f.live.stores, f.backup, f.liveMedia, { validate, log }))
+      .rejects.toThrow(`Cannot import runHistory in ${other} into ${format}`);
+    expect(validate).not.toHaveBeenCalled(); expect(replace).not.toHaveBeenCalled(); assertIncumbent(f);
+  });
+
   it('refuses ambiguous physical files regardless of backup metadata', async () => {
     const f = await fixture(format), foreign = databaseStorage(format === SQLITE ? ELMDB : SQLITE).dataFile;
     fs.writeFileSync(path.join(f.backup, 'lmdb', foreign), 'not a database');
