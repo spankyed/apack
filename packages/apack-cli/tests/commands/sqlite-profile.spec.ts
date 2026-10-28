@@ -4,9 +4,10 @@ import * as path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { DATABASE_FORMAT } from '@apackdev/ears/sqlite';
 import { _appDataPaths } from '@apackdev/sdk/utils';
-import { _appDirOf } from '@apackdev/sdk/env';
+import { appDataDirFor, _appDirOf } from '@apackdev/sdk/env';
 import { findDatabaseWriter, openDatabaseStore, openRunHistory, readInstalledSchema } from '@apackdev/host/database';
 import { db } from '../../src/commands/db';
+import { parseDbArgs } from '../../src/commands/db/target';
 
 const roots: string[] = [];
 afterEach(() => { vi.unstubAllEnvs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
@@ -49,4 +50,10 @@ it('backs up, verifies, reads history and restores both stores using the named t
   const result = await command(['query', '--data-dir', f.dir, '--output', 'json', 'return getRow("Prompt-cli").label']);
   expect(JSON.parse(result.out)).toBe('before'); expect(fs.readFileSync(path.join(f.paths.media, 'asset'), 'utf8')).toBe('media');
   expect(findDatabaseWriter(f.dir)).toBeNull();
+});
+
+it('refuses default candidate storage during argument parsing before commands can take a write lock', () => {
+  vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_STORAGE_FORMAT', DATABASE_FORMAT);
+  vi.stubEnv('APACK_USER_DATA_DIR', undefined);
+  expect(() => parseDbArgs(['--data-dir', appDataDirFor('test')], {}, 'usage')).toThrow('isolated profile');
 });
