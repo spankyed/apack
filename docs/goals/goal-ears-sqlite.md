@@ -188,19 +188,19 @@ platform claims must identify their actual tested scope.
 
 The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for
 `session/ears-sqlite`. The last exact published green checkpoint is
-**a1356b64b1249b52f86d7ee79ee9bf824d883114**: [strict run 40733030134](https://github.com/spankyed/apack/actions/runs/40733030134)
-completed successfully, all six jobs on attempt 1. Canonical `monorepo-worktrees.noindex/sqlite-evaluation` is clean at that commit. Detached integration
-`monorepo-worktrees.noindex/integration-FyE9XZ` is clean at published evidence descendant a889531dd1. The guarded helper has privately
-fast-forwarded canonical from 194c72c77c; its next BASE is a1356b64b1. No master merge or adoption occurred.
+**a889531dd1f636178c9df8fbcde73c8cb4608087**: [strict run 40753623963](https://github.com/spankyed/apack/actions/runs/40753623963)
+completed successfully, all six jobs. The approved guarded helper advanced clean canonical
+`monorepo-worktrees.noindex/sqlite-evaluation` from a1356b64b1 to that exact checkpoint; its BASE is now a889531dd1.
+Detached integration `monorepo-worktrees.noindex/integration-FyE9XZ` tracks the published draft tip. No master merge,
+adoption or Mac build occurred; app master and the private native engine remain pinned to 98386b36a1 / 6ab2f69.
 
 Active continuation remains `/private/tmp/ears-sqlite-diagnosis-evidence`, with no installed dependencies,
-native build or captured runtime. Functional pin ac84b7d3fb is published through evidence descendant a889531dd1 on the existing draft branch.
-Its exact [strict run 40753623963](https://github.com/spankyed/apack/actions/runs/40753623963) is running;
-poll it before promotion or another publication. Local storage implementation b36c179fe2 and runtime-fixture/assertion descendants through b8231cb734 are newer and require their own exact gate after publication.
-Inspect actual refs/PR for the newest published head and exact CI handle; do not dispatch
-duplicates or promote a descendant on its parent's success. `/private/tmp/ears-promote-sqlite.py` verifies clean
-checkouts, remote tip, source/engine pins and exact strict success before private promotion. Never copy concurrent
-dirty files or compile/run full checks on the daily Mac.
+native build or captured runtime. Host implementation b36c179fe2 and runtime tests through b8231cb734 are newer
+than the green checkpoint. Their checked evidence descendant is the next publication and requires its own exact
+strict gate. Inspect actual refs and PR #286 for the latest head and run handle; do not dispatch duplicates or
+promote descendants on a parent's success. `/private/tmp/ears-promote-sqlite.py` verifies clean checkouts, remote
+tip, source/engine pins and exact strict success before private promotion. Never copy concurrent dirty files or
+compile/run full checks on the daily Mac.
 
 Earlier strict 78eff95202 timed out in typecheck:scripts without a captured TypeScript diagnostic. Its exact command
 passed unchanged in two-core Linux within the original 60-second budget; the Mac cause is unisolated. The newer
@@ -315,11 +315,11 @@ The four former data.mdb preflight failures now have real SQLite host-path cover
 app/CLI profile selection, full boot, live packs, logical conversion or physical failure qualification. See
 [host storage evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/host-storage/README.md).
 After that check closes, publish a usable descendant through the existing draft, with its own exact strict gate.
-First finish/poll the existing a889531dd1 gate and promote only on that exact success.
+The a889531dd1 gate is green and that exact checkpoint has been privately promoted; the newer host descendant needs its own gate.
 
 ### Next deliverables and full remaining scope
 
-Poll the existing exact strict gate at a889531dd1; promote only on its own success. The predeclared diagnostic
+Publish the checked host-storage evidence descendant and run one exact strict gate; canonical remains on green a889531dd1 until that newer gate succeeds. The predeclared diagnostic
 pair at 201a2c8cbb is complete: heartbeat checks and EARS types pass, but both 100k OFF diagnostics miss latency
 limits. Full-watch / query-watch-free heartbeat p99 is 97.40 / 44.73 ms; scalar lookup p99 38.03 / 20.46 ms.
 During cleanup scalar lookups consume 35.83 / 33.24 s, against 5.18 / 4.55 s inside background batches. Query
