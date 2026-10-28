@@ -31,6 +31,22 @@ export class SqliteValues {
       name TEXT NOT NULL COLLATE BINARY,UNIQUE(type_id,name))`);
     this.sql.run(`CREATE TABLE IF NOT EXISTS value_overflow(entity_id TEXT NOT NULL,field TEXT NOT NULL COLLATE BINARY,
       kind TEXT NOT NULL,value,PRIMARY KEY(entity_id,field)) WITHOUT ROWID`);
+    this.sql.run(`CREATE TABLE IF NOT EXISTS value_members(entity_id TEXT NOT NULL,field TEXT NOT NULL COLLATE BINARY,
+      kind TEXT NOT NULL,value NOT NULL,PRIMARY KEY(entity_id,field,kind,value)) WITHOUT ROWID`);
+  }
+
+  /** Removes primary values and derived list membership inside the caller's transaction. */
+  delete(layout: SqliteValueLayout, ids: readonly string[]): void {
+    const input = JSON.stringify(ids);
+    this.sql.run(`DELETE FROM ${layout.table} WHERE entity_id IN (SELECT value FROM json_each(?))`, [input]);
+    for (const table of ['value_overflow', 'value_members']) this.sql.run(
+      `DELETE FROM ${table} WHERE entity_id IN (SELECT value FROM json_each(?))`, [input]);
+  }
+
+  clear(): void {
+    for (const row of this.sql.all('SELECT id FROM value_types')) this.sql.run(`DELETE FROM values_t${Number(row.id)}`);
+    this.sql.run('DELETE FROM value_overflow');
+    this.sql.run('DELETE FROM value_members');
   }
 
   /** Reopens an admitted layout without DDL or writes, including on a read-only connection. */
@@ -64,14 +80,22 @@ export class SqliteValues {
   /** Patches only supplied fields; neither reads nor encodes unrelated values. Undefined fields are omitted. */
   set(layout: SqliteValueLayout, id: string, fields: Readonly<Record<string, unknown>>, removed: readonly string[] = []): void {
     const values = Object.entries(fields).filter(([name, value]) => name !== 'id' && name !== 'entityType' && value !== undefined);
-    const deleting = removed.filter(name => name !== 'id' && name !== 'entityType');
-    if (values.some(([name]) => deleting.includes(name))) refusal('VALUE_INVALID', 'A patch cannot set and remove the same field');
+    const deleting = new Set(removed.filter(name => name !== 'id' && name !== 'entityType'));
+    if (values.some(([name]) => deleting.has(name))) refusal('VALUE_INVALID', 'A patch cannot set and remove the same field');
     // Encode before making any SQL changes: a codec refusal must not leave half a field batch behind.
     const cells = values.map(([name, value]) => [name, this.cell(value)] as const);
     this.sql.run(`INSERT OR IGNORE INTO ${layout.table}(entity_id) VALUES (?)`, [id]);
     const changed = [...values.map(([name]) => name), ...deleting];
     if (changed.length) this.sql.run('DELETE FROM value_overflow WHERE entity_id=? AND field IN (SELECT value FROM json_each(?))',
       [id, JSON.stringify(changed)]);
+    if (changed.length) this.sql.run('DELETE FROM value_members WHERE entity_id=? AND field IN (SELECT value FROM json_each(?))',
+      [id, JSON.stringify(changed)]);
+    for (const [name, value] of values) if (Array.isArray(value)) for (const item of value) {
+      if (item !== null && !['string', 'number', 'boolean'].includes(typeof item)) continue;
+      const member = this.cell(item);
+      this.sql.run('INSERT OR IGNORE INTO value_members VALUES (?,?,?,?)',
+        [id, name, member.kind === 'zero' ? 'num' : member.kind, member.value ?? 0]);
+    }
     const assignments: string[] = [], parameters: unknown[] = [];
     for (const [name, cell] of cells) {
       const field = layout.fields.get(name);

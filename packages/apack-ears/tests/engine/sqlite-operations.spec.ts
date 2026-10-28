@@ -115,6 +115,45 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
       expect(e.getAttr(id, "extra")).toBe("unchecked");
     });
 
+    it("reads and updates a scalar through EARS without decoding or encoding its large neighbors", () => {
+      const db = open(), e = engine(db);
+      const body = "unrelated large body ".repeat(4096);
+      const id = e.create("Note", { title: "search stays", body, rank: 1, data: { nested: [1, 2] } }).id();
+      const pack = db.pack.bind(db), unpack = db.unpack.bind(db);
+      db.pack = value => {
+        expect(JSON.stringify(value)).not.toContain("unrelated large body");
+        return pack(value);
+      };
+      db.unpack = bytes => {
+        const value = unpack(bytes);
+        expect(JSON.stringify(value)).not.toContain("unrelated large body");
+        return value;
+      };
+      expect(e.getAttr(id, "rank")).toBe(1);
+      e.write(id).set("rank", 2);
+      expect(e.query("Note").pick(["rank"])).toEqual([{ id, rank: 2 }]);
+      expect(e.query("Note").search("stays").ids()).toEqual([id]);
+      db.pack = pack; db.unpack = unpack;
+      expect(e.getAttr(id, "body")).toBe(body);
+      expect(e.getAttr(id, "data")).toEqual({ nested: [1, 2] });
+      expect(db.all("PRAGMA table_info(entities)").map(row => row.name)).not.toContain("payload");
+      expect(db.all("PRAGMA table_info(entities)").map(row => row.name)).not.toContain("doc");
+    });
+
+    it("replaces logical values when the source and destination have different physical field slots", () => {
+      const source = open(), original = engine(source);
+      original.admin.declare({ types: { Note: { required: [], indexes: ["alpha", "beta"] } }, relations: {}, roles: [] });
+      const id = original.create("Note", { title: "original", alpha: 1, beta: "b", unknown: new Date(99) }).id();
+      const destination = open(), current = engine(destination);
+      current.admin.declare({ types: { Note: { required: [], indexes: ["beta", "alpha"] } }, relations: {}, roles: [] });
+      const old = current.create("Note", { title: "incumbent" }).id();
+      current.admin.replaceWith(source.path);
+      expect(current.getRow(old)).toBeUndefined();
+      expect(current.getRow(id)).toEqual(original.getRow(id));
+      expect(current.query("Note").where("alpha", 1).ids()).toEqual([id]);
+      expect(current.query("Note").where("beta", "b").ids()).toEqual([id]);
+    });
+
     it("reopens lossless payloads, FTS and embeddings, including read-only access", () => {
       const db = open(),
         e = engine(db);
@@ -272,7 +311,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
       const binding = createRequire(import.meta.url).resolve(
         "../../bench/sqlite/extensions/node_modules/better-sqlite3"
       );
-      const script = `const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('busy_timeout=25');let busy=false;try{d.exec('BEGIN IMMEDIATE');d.exec('ROLLBACK');}catch(e){busy=e.code==='SQLITE_BUSY';}console.log(JSON.stringify({title:d.prepare("SELECT json_extract(doc,'$.title') title FROM entities LIMIT 1").get().title,busy}));d.close();`;
+      const script = `const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('busy_timeout=25');let busy=false;try{d.exec('BEGIN IMMEDIATE');d.exec('ROLLBACK');}catch(e){busy=e.code==='SQLITE_BUSY';}console.log(JSON.stringify({title:d.prepare(${JSON.stringify("SELECT value title FROM (" + db.fieldSource("title", ["Note"]) + ") LIMIT 1")}).get().title,busy}));d.close();`;
       const child = () => {
         const p = spawnSync(
           process.execPath,

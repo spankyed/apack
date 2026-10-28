@@ -26,6 +26,7 @@ import { RESERVED_ATTRIBUTES } from "../../src/errors.ts";
 import { sameValue } from "../../src/watch.ts";
 import { executeQuery } from "./query.ts";
 import { SqliteSearch } from "./search.ts";
+import { SqliteValues, type SqliteValueLayout } from "../../src/sqlite/values.ts";
 
 type Data = Record<string, any>;
 type Track = { keys: Set<string>; ranges: Set<string> };
@@ -76,6 +77,8 @@ export class SqliteDatabase implements EarsDatabase {
   private schemaPresent: boolean;
   private counter = 0;
   readonly search: SqliteSearch;
+  readonly values: SqliteValues;
+  private readonly layouts = new Map<string, SqliteValueLayout>();
 
   constructor(options: {
     path: string;
@@ -106,7 +109,7 @@ export class SqliteDatabase implements EarsDatabase {
       };
         CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value BLOB NOT NULL);
         CREATE TABLE IF NOT EXISTS entities(id TEXT PRIMARY KEY, type TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE,
-          trashed INTEGER NOT NULL, payload BLOB NOT NULL, doc TEXT NOT NULL, short_code TEXT UNIQUE);
+          trashed INTEGER NOT NULL, short_code TEXT UNIQUE);
         CREATE INDEX IF NOT EXISTS entity_type ON entities(type,trashed,seq);
         CREATE TABLE IF NOT EXISTS relations(id TEXT PRIMARY KEY, kind TEXT NOT NULL, source TEXT NOT NULL,
           target TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE, info BLOB);
@@ -118,6 +121,8 @@ export class SqliteDatabase implements EarsDatabase {
         CREATE INDEX IF NOT EXISTS field_lookup ON field_index(type,field,value,seq);
       `);
     }
+    this.values = new SqliteValues(this, { encode: value => this.pack(value), decode: bytes => this.unpack(bytes) });
+    if (!this.readOnly) this.values.initialize();
     this.search = new SqliteSearch(this);
     this.heldSchema = this.meta("schema") ?? {
       types: {},
@@ -231,9 +236,54 @@ export class SqliteDatabase implements EarsDatabase {
     if (!has(this.heldSchema.roles ?? {}, role))
       fail("UNKNOWN_ROLE", `Unknown role "${role}"`);
   }
-  row(id: string): Data | undefined {
-    const r = this.get("SELECT payload FROM entities WHERE id=?", [id]);
-    return r ? this.unpack(r.payload) : undefined;
+  private valueLayout(type: string, create = false): SqliteValueLayout {
+    let layout = this.layouts.get(type);
+    if (!layout) {
+      layout = this.values.layout(type);
+      if (!layout && create) layout = this.values.declare(type,
+        ['createdAt', 'updatedAt', 'trashedAt', 'shortCode', 'role', ...Object.keys(this.heldSchema.types[type]?.fields ?? {})]);
+      if (!layout) return fail("CORRUPT", `Missing value layout for ${type}`);
+      this.layouts.set(type, layout);
+    }
+    return layout;
+  }
+  hydrate(records: Array<{ id: string; type: string }>, fields?: string[]): Data[] {
+    const groups = new Map<string, string[]>();
+    for (const row of records) {
+      const ids = groups.get(row.type) ?? [];
+      ids.push(row.id); groups.set(row.type, ids);
+    }
+    const hydrated = new Map<string, { rows: Data[]; next: number }>();
+    for (const [type, ids] of groups) {
+      const rows = this.values.read(this.valueLayout(type), ids, fields);
+      if (rows.some(row => !row)) fail("CORRUPT", "An entity is missing its authoritative values");
+      hydrated.set(type, { rows: rows as Data[], next: 0 });
+    }
+    return records.map(record => { const group = hydrated.get(record.type)!; return group.rows[group.next++]; });
+  }
+
+  rows(ids: string[], fields?: string[]): Data[] {
+    return this.hydrate(this.all(`SELECT e.id,e.type FROM json_each(?) seed JOIN entities e ON e.id=seed.value ORDER BY seed.key`,
+      [JSON.stringify(ids)]) as Array<{ id: string; type: string }>, fields);
+  }
+  row(id: string, fields?: string[]): Data | undefined {
+    return this.rows([id], fields)[0];
+  }
+  fieldSource(field: string, types?: readonly string[]): string {
+    if (field === 'id' || field === 'entityType') return `SELECT id,'text' kind,${field === 'id' ? 'id' : 'type'} value FROM entities`;
+    const text = (value: string) => "'" + value.replaceAll("'", "''") + "'";
+    const selected = types ?? this.all('SELECT name FROM value_types').map(row => row.name as string);
+    return selected.map(type => {
+      const layout = this.layouts.get(type) ?? this.values.layout(type);
+      if (layout) this.layouts.set(type, layout);
+      if (!layout) return "SELECT NULL id,NULL kind,NULL value WHERE 0";
+      const slot = layout.fields.get(field);
+      if (slot === undefined) return `SELECT o.entity_id id,o.kind,o.value FROM value_overflow o JOIN entities e
+        ON e.id=o.entity_id WHERE e.type=${text(type)} AND o.field=${text(field)}`;
+      return `SELECT v.entity_id id,CASE WHEN v.k${slot} IS NULL OR v.k${slot}='@' THEN o.kind ELSE v.k${slot} END kind,
+        CASE WHEN v.k${slot} IS NULL OR v.k${slot}='@' THEN o.value ELSE v.v${slot} END value
+        FROM ${layout.table} v LEFT JOIN value_overflow o ON o.entity_id=v.entity_id AND o.field=${text(field)}`;
+    }).join(' UNION ALL ') || 'SELECT NULL id,NULL kind,NULL value WHERE 0';
   }
   relation(id: string): Data | undefined {
     const r = this.get("SELECT * FROM relations WHERE id=?", [id]);
@@ -246,8 +296,20 @@ export class SqliteDatabase implements EarsDatabase {
     };
   }
 
-  entity(id: string): Data {
-    return this.row(id) ?? fail("NO_SUCH_ENTITY", `No entity "${id}"`);
+  entity(id: string, fields?: string[]): Data {
+    return this.row(id, fields) ?? fail("NO_SUCH_ENTITY", `No entity "${id}"`);
+  }
+  // The native wire codec omits undefined object properties. Do that per changed value here, without serializing
+  // a request or unrelated attributes. Undefined array positions remain invalid stored values.
+  private canonical(value: unknown, depth = 0): unknown {
+    if (depth > 64) fail('VALUE_INVALID', 'Invalid stored value');
+    if (Array.isArray(value)) return value.map(item => this.canonical(item, depth + 1));
+    if (value !== null && typeof value === 'object' &&
+        (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)) {
+      return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)
+        .map(([name, item]) => [name, this.canonical(item, depth + 1)]));
+    }
+    return value;
   }
   private validate(value: unknown, depth = 0): void {
     if (
@@ -346,26 +408,16 @@ export class SqliteDatabase implements EarsDatabase {
     this.validate(row);
     const record = this.get("SELECT seq FROM entities WHERE id=?", [row.id]);
     const seq = record?.seq ?? this.next("seq");
-    const doc = JSON.stringify(row, (_k, v) =>
-      v instanceof Uint8Array
-        ? { $binary: Buffer.from(v).toString("base64") }
-        : v
-    );
-    this.run(
-      `INSERT INTO entities VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
-      trashed=excluded.trashed,payload=excluded.payload,doc=excluded.doc,short_code=excluded.short_code`,
-      [
-        row.id,
-        row.entityType,
-        seq,
-        has(row, "trashedAt") ? 1 : 0,
-        this.pack(row),
-        doc,
-        row.shortCode ?? null,
-      ]
-    );
-    this.refile(row, seq);
-    this.search.refile(row, seq);
+    this.run(`INSERT INTO entities VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+      trashed=excluded.trashed,short_code=excluded.short_code`,
+      [row.id,row.entityType,seq,has(row, "trashedAt") ? 1 : 0,row.shortCode ?? null]);
+    const fields = Object.fromEntries(Object.entries(row).filter(([field, value]) => !before ||
+      !has(before, field) || !sameValue(before[field], value)));
+    this.values.set(this.valueLayout(row.entityType, true), row.id, fields,
+      before ? Object.keys(before).filter(field => !has(row, field)) : []);
+    const changed = before ? new Set([...Object.keys(fields), ...Object.keys(before).filter(field => !has(row, field))]) : undefined;
+    this.refile(row, seq, this.heldSchema, changed);
+    this.search.refile(row, seq, this.heldSchema, changed);
     changes.add(`entity:${row.id}`);
     changes.add(`rows:${row.entityType}`);
     if (!before || has(before, "trashedAt") !== has(row, "trashedAt")) {
@@ -387,8 +439,7 @@ export class SqliteDatabase implements EarsDatabase {
       }
     }
   }
-  private refile(row: Data, seq: number, schema = this.heldSchema) {
-    this.run("DELETE FROM field_index WHERE entity_id=?", [row.id]);
+  private refile(row: Data, seq: number, schema = this.heldSchema, changed?: ReadonlySet<string>) {
     const definition = schema.types[row.entityType] ?? {};
     const fields = new Set([
       "role",
@@ -397,7 +448,13 @@ export class SqliteDatabase implements EarsDatabase {
         d.kind === "value" ? d.fields : []
       ),
     ]);
-    for (const field of fields as Set<string>) {
+    const updating = [...fields as Set<string>].filter(field => !changed || changed.has(field));
+    if (changed) {
+      if (!updating.length) return;
+      this.run('DELETE FROM field_index WHERE entity_id=? AND field IN (SELECT value FROM json_each(?))',
+        [row.id, JSON.stringify(updating)]);
+    } else this.run('DELETE FROM field_index WHERE entity_id=?', [row.id]);
+    for (const field of updating) {
       const value = row[field];
       for (const item of Array.isArray(value) ? value : [value]) {
         const key = scalarKey(item);
@@ -424,18 +481,17 @@ export class SqliteDatabase implements EarsDatabase {
         : this.definition(type);
     const id = op.id ?? `${type}-${randomBytes(10).toString("hex")}`;
     if (typeOf(id) !== type) fail("TYPE_MISMATCH", `"${id}" isn't a ${type}`);
-    if (this.row(id) || this.relation(id))
+    if (this.get("SELECT 1 FROM entities WHERE id=? UNION ALL SELECT 1 FROM relations WHERE id=? LIMIT 1", [id,id]))
       fail("ID_IN_USE", `"${id}" is in use`);
     const row = {
       id,
       entityType: type,
-      createdAt: op.createdAt ?? now,
-      updatedAt: op.updatedAt ?? op.createdAt ?? now,
+      ...(!unchecked ? { createdAt: op.createdAt ?? now, updatedAt: op.updatedAt ?? op.createdAt ?? now } : {}),
     } as Data;
     for (const [k, v] of Object.entries(op.fields ?? {})) {
       if (!unchecked && (RESERVED_ATTRIBUTES as readonly string[]).includes(k))
         fail("RESERVED_FIELD", `"${k}" is reserved`);
-      own(row, k, v);
+      if (v !== undefined) own(row, k, this.canonical(v));
     }
     const prefix = def.shortCode?.prefix;
     if (!unchecked || op.shortCode !== undefined) {
@@ -465,6 +521,8 @@ export class SqliteDatabase implements EarsDatabase {
     return row;
   }
   private mutate(op: Data, now: number, changes: Set<string>): Data {
+    if (has(op, 'value')) op = { ...op, value: this.canonical(op.value) };
+    if (has(op, 'info')) op = { ...op, info: this.canonical(op.info) };
     const done = { kind: "done" };
     switch (op.op) {
       case "create": {
@@ -477,7 +535,7 @@ export class SqliteDatabase implements EarsDatabase {
         };
       }
       case "upsert": {
-        const row = this.row(op.id);
+        const row = this.row(op.id, ["shortCode"]);
         if (!row) return this.mutate({ ...op, op: "create" }, now, changes);
         if (row.entityType !== op.type)
           fail("TYPE_MISMATCH", "Upsert type differs from id");
@@ -497,15 +555,14 @@ export class SqliteDatabase implements EarsDatabase {
       case "delete":
       case "removeAt":
       case "removeValue": {
-        const before = this.entity(op.id),
-          row = this.clone(before);
-        const fields = op.op === "set" ? Object.keys(op.fields) : [op.field];
+        const fields = op.op === "set" ? Object.keys(op.fields).filter(field => op.fields[field] !== undefined) : [op.field];
+        const before = this.entity(op.id, [...fields, 'trashedAt', 'shortCode']), row = this.clone(before);
         for (const f of fields)
           if ((RESERVED_ATTRIBUTES as readonly string[]).includes(f))
             fail("RESERVED_FIELD", `${f} is reserved`);
-        if (op.op === "set")
-          for (const [f, v] of Object.entries(op.fields)) own(row, f, v);
-        else {
+        if (op.op === "set") {
+          for (const [f, v] of Object.entries(op.fields)) if (v !== undefined) own(row, f, this.canonical(v));
+        } else {
           const f = op.field,
             held = row[f];
           if (op.op === "delete") delete row[f];
@@ -570,7 +627,7 @@ export class SqliteDatabase implements EarsDatabase {
           for (const id of op.among ?? [])
             if (this.row(id))
               this.mutate({ op: "revoke", id, role: op.role }, now, changes);
-        const before = this.entity(op.id),
+        const before = this.entity(op.id, ["role", "trashedAt", "shortCode"]),
           row = this.clone(before);
         let roles: string[] = [...(row.role ?? [])];
         if (op.op === "revoke") roles = roles.filter((r) => r !== op.role);
@@ -582,7 +639,7 @@ export class SqliteDatabase implements EarsDatabase {
       }
       case "trash":
       case "restore": {
-        const before = this.entity(op.id),
+        const before = this.entity(op.id, ["trashedAt", "shortCode"]),
           row = this.clone(before);
         if (op.op === "trash") {
           if (!has(row, "trashedAt")) row.trashedAt = op.at ?? now;
@@ -591,7 +648,7 @@ export class SqliteDatabase implements EarsDatabase {
         return done;
       }
       case "destroy": {
-        const row = this.entity(op.id);
+        const row = this.entity(op.id, []);
         for (const r of this.all(
           "SELECT id FROM relations WHERE source=? OR target=?",
           [op.id, op.id]
@@ -599,6 +656,7 @@ export class SqliteDatabase implements EarsDatabase {
           this.mutate({ op: "removeRelation", relation: r.id }, now, changes);
         this.search.remove(op.id, row.entityType);
         this.run("DELETE FROM field_index WHERE entity_id=?", [op.id]);
+        this.values.delete(this.valueLayout(row.entityType), [op.id]);
         this.run("DELETE FROM entities WHERE id=?", [op.id]);
         changes.add(`entity:${op.id}`);
         changes.add(`exists:${op.id}`);
@@ -609,10 +667,8 @@ export class SqliteDatabase implements EarsDatabase {
       case "takeLabel": {
         this.definition(op.type);
         let highest = 0;
-        for (const r of this.all("SELECT payload FROM entities WHERE type=?", [
-          op.type,
-        ])) {
-          const label = this.unpack(r.payload).label;
+        for (const r of this.hydrate(this.all("SELECT id,type FROM entities WHERE type=?", [op.type]) as Array<{id:string;type:string}>, ["label"])) {
+          const label = r.label;
           if (typeof label === "string" && label.startsWith(op.base + " ")) {
             const n = Number(label.slice(op.base.length + 1));
             if (Number.isSafeInteger(n) && n > highest) highest = n;
@@ -628,9 +684,7 @@ export class SqliteDatabase implements EarsDatabase {
         let n = this.next(`label:${op.type}:${op.base}`),
           label = `${op.base} ${n}`;
         while (
-          this.all("SELECT payload FROM entities WHERE type=?", [op.type]).some(
-            (r) => this.unpack(r.payload).label === label
-          )
+          this.hydrate(this.all("SELECT id,type FROM entities WHERE type=?", [op.type]) as Array<{id:string;type:string}>, ["label"]).some(r => r.label === label)
         ) {
           n = this.next(`label:${op.type}:${op.base}`);
           label = `${op.base} ${n}`;
@@ -786,7 +840,7 @@ export class SqliteDatabase implements EarsDatabase {
         };
       case "field": {
         this.trackKey(`field:${read.id}:${read.field}`);
-        const row = this.row(read.id);
+        const row = this.row(read.id, [read.field]);
         return {
           kind: "field",
           present: !!row && has(row, read.field),
@@ -883,6 +937,7 @@ export class SqliteDatabase implements EarsDatabase {
       this.checkRevision();
     } catch (e) {
       this.sql.exec("ROLLBACK");
+      this.layouts.clear();
       throw e;
     }
     const unit = new SqliteUnit(this);
@@ -911,6 +966,7 @@ export class SqliteDatabase implements EarsDatabase {
       return { results };
     } catch (e) {
       this.sql.exec(`ROLLBACK TO ${name}; RELEASE ${name}`);
+      this.layouts.clear();
       throw e;
     }
   }
@@ -923,9 +979,9 @@ export class SqliteDatabase implements EarsDatabase {
           if (changed.startsWith("relation:")) {
             const r = this.relation(changed.slice(9));
             if (r) {
-              const missing = !this.row(r.source)
+              const missing = !this.get("SELECT 1 FROM entities WHERE id=?", [r.source])
                 ? r.source
-                : !this.row(r.target)
+                : !this.get("SELECT 1 FROM entities WHERE id=?", [r.target])
                 ? r.target
                 : undefined;
               if (missing)
@@ -941,31 +997,31 @@ export class SqliteDatabase implements EarsDatabase {
           }
         this.putMeta("commit", sequence);
         this.sql.exec("COMMIT");
-      } else this.sql.exec("ROLLBACK");
+      } else { this.sql.exec("ROLLBACK"); this.layouts.clear(); }
       return {
         sequence,
         touched: this.touched(unit.changes),
       };
     } catch (e) {
       this.sql.exec("ROLLBACK");
+      this.layouts.clear();
       throw e;
     } finally {
       this.active = undefined;
       unit.ended();
     }
   }
+  invalidateLayouts() { this.layouts.clear(); }
   private eachRow(fn: (row: Data, seq: number) => void) {
     let after = -1;
     for (;;) {
       const page = this.all(
-        "SELECT payload,seq FROM entities WHERE seq>? ORDER BY seq LIMIT 256",
+        "SELECT id,type,seq FROM entities WHERE seq>? ORDER BY seq LIMIT 256",
         [after]
       );
       if (!page.length) break;
-      for (const r of page) {
-        fn(this.unpack(r.payload), r.seq);
-        after = r.seq;
-      }
+      const rows = this.hydrate(page as Array<{id:string;type:string}>);
+      for (let i = 0; i < page.length; i++) { fn(rows[i], page[i].seq); after = page[i].seq; }
     }
   }
   setSchema(schema: object): any[] {
@@ -1006,6 +1062,8 @@ export class SqliteDatabase implements EarsDatabase {
     this.sql.exec("BEGIN IMMEDIATE");
     try {
       this.checkRevision();
+      for (const [type, definition] of Object.entries(next.types) as Array<[string, Data]>) this.layouts.set(type,
+        this.values.declare(type, ['createdAt','updatedAt','trashedAt','shortCode','role', ...Object.keys(definition.fields ?? {})]));
       this.search.ensure(next);
       this.sql.exec("DELETE FROM text_meta");
       this.putMeta("schema", next);
@@ -1022,6 +1080,7 @@ export class SqliteDatabase implements EarsDatabase {
       return report;
     } catch (e) {
       this.sql.exec("ROLLBACK");
+      this.layouts.clear();
       throw e;
     }
   }
@@ -1029,6 +1088,7 @@ export class SqliteDatabase implements EarsDatabase {
     const unit = this.begin();
     try {
       this.search.clear();
+      this.values.clear();
       this.sql.exec(
         "DELETE FROM field_index; DELETE FROM relations; DELETE FROM entities;"
       );
@@ -1056,7 +1116,7 @@ export class SqliteDatabase implements EarsDatabase {
             delete row.updatedAt;
           }
           const before = this.clone(row);
-          for (const [k, v] of Object.entries(load.fields)) own(row, k, v);
+          for (const [k, v] of Object.entries(load.fields)) if (v !== undefined) own(row, k, this.canonical(v));
           if (load.trashed && !has(row, "trashedAt")) row.trashedAt = 0;
           this.save(row, unit.changes, before);
         } else if (load.load === "sequence")
@@ -1127,33 +1187,43 @@ export class SqliteDatabase implements EarsDatabase {
     const sourceFile = join(resolve(source), "data.sqlite3");
     if (!existsSync(sourceFile))
       fail("NO_DATABASE", "Replacement source does not exist");
-    this.run("ATTACH DATABASE ? AS incoming", [sourceFile]);
+    const incoming = new SqliteDatabase({ path: source, readOnly: true });
     try {
+      incoming.sql.exec('BEGIN');
       const unit = this.begin();
       try {
-        this.search.clear();
-        this.sql
-          .exec(`DELETE FROM field_index; DELETE FROM relations; DELETE FROM entities;
-          INSERT INTO entities SELECT * FROM incoming.entities;
-          INSERT INTO relations SELECT * FROM incoming.relations;
-          DELETE FROM meta WHERE key NOT IN ('schema','commit','schemaRevision');
-          INSERT INTO meta SELECT key,value FROM incoming.meta WHERE key NOT IN ('schema','commit','schemaRevision');`);
-        this.eachRow((row, seq) => {
-          this.refile(row, seq);
-          this.search.refile(row, seq);
+        this.search.clear(); this.values.clear();
+        this.sql.exec("DELETE FROM field_index; DELETE FROM relations; DELETE FROM entities;");
+        this.sql.exec("DELETE FROM meta WHERE key NOT IN ('schema','commit','schemaRevision')");
+        for (const entry of incoming.all("SELECT key,value FROM meta WHERE key NOT IN ('schema','commit','schemaRevision')"))
+          this.run('INSERT INTO meta VALUES (?,?)', [entry.key,entry.value]);
+        incoming.eachRow((row, seq) => {
+          this.run('INSERT INTO entities VALUES (?,?,?,?,?)', [row.id,row.entityType,seq,has(row,'trashedAt') ? 1 : 0,row.shortCode ?? null]);
+          this.values.set(this.valueLayout(row.entityType, true), row.id, row);
+          this.refile(row, seq); this.search.refile(row, seq);
         });
-        this.sql.exec(
-          `UPDATE chunks SET embedding=(SELECT i.embedding FROM incoming.chunks i WHERE i.entity_id=chunks.entity_id AND i.index_name=chunks.index_name AND i.chunk=chunks.chunk AND i.hash=chunks.hash AND i.model=chunks.model AND i.dims=chunks.dims);`
-        );
-        unit.changes.add("all");
-        unit.commit();
-      } catch (e) {
-        if (unit.isOpen) unit.abort();
-        throw e;
-      }
-    } finally {
-      this.sql.exec("DETACH DATABASE incoming");
-    }
+        let after = -1;
+        for (;;) {
+          const batch = incoming.all('SELECT * FROM relations WHERE seq>? ORDER BY seq LIMIT 256', [after]);
+          if (!batch.length) break;
+          for (const row of batch) {
+            this.run('INSERT INTO relations VALUES (?,?,?,?,?,?)', [row.id,row.kind,row.source,row.target,row.seq,row.info]);
+            after = row.seq;
+          }
+        }
+        after = 0;
+        for (;;) {
+          const batch = incoming.all('SELECT rowid ordinal,* FROM chunks WHERE rowid>? ORDER BY rowid LIMIT 256', [after]);
+          if (!batch.length) break;
+          for (const row of batch) {
+            this.run(`UPDATE chunks SET embedding=? WHERE entity_id=? AND index_name=? AND chunk=? AND hash=? AND model=? AND dims=?`,
+              [row.embedding,row.entity_id,row.index_name,row.chunk,row.hash,row.model,row.dims]);
+            after = row.ordinal;
+          }
+        }
+        unit.changes.add('all'); unit.commit();
+      } catch (error) { if (unit.isOpen) unit.abort(); throw error; }
+    } finally { incoming.close(); }
   }
 
   async durable() {
@@ -1193,6 +1263,7 @@ class SqliteUnit implements EarsUnit {
   }
   rollbackTo(n: number) {
     this.db.sql.exec(`ROLLBACK TO unit_${n}; RELEASE unit_${n}`);
+    this.db.invalidateLayouts();
     this.depth = n - 1;
   }
   release(n: number) {

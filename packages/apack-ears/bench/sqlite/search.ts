@@ -93,10 +93,15 @@ export class SqliteSearch {
         }
       }
   }
-  refile(row: Data, seq: number, schema = this.db.schemaForQueries()) {
+  refile(row: Data, seq: number, schema = this.db.schemaForQueries(), changed?: ReadonlySet<string>) {
     for (const [name, index] of Object.entries(
       schema.types[row.entityType]?.indexes ?? {}
     ) as Array<[string, Data]>) {
+      if (changed && (index.kind === 'text' || index.kind === 'vector')) {
+        const inputs: string[] = index.kind === 'text' ? Object.keys(index.fields) : index.from;
+        if (!inputs.some(field => changed.has(field))) continue;
+        row = this.db.row(row.id, inputs)!;
+      }
       if (index.kind === "text") {
         const fields = Object.keys(index.fields).map((f) => textOf(row[f])),
           hash = digest(JSON.stringify(fields));
@@ -350,7 +355,7 @@ export class SqliteSearch {
     const rows = this.db.all(
       `SELECT f.entity_id id,-bm25(${table},${weights}) score${
         wantHits ? "," + highlights : ""
-      }${wantHits || options.recency ? ",e.payload" : ""} FROM ${table} f
+      } FROM ${table} f
       JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ? AND ${
         ids === null
           ? "e.trashed=0"
@@ -358,12 +363,14 @@ export class SqliteSearch {
       } ORDER BY score DESC,e.seq`,
       [match, ...(ids === null ? [] : [JSON.stringify(ids)])]
     );
+    const payloads = wantHits || options.recency ? new Map(this.db.rows(rows.map(row => row.id),
+      [...new Set([...fields, 'updatedAt', 'createdAt'])]).map(row => [row.id, row])) : undefined;
     return rows
       .map((r) => {
         const ranges: Data = {},
           found = new Set<string>();
         const payload =
-          wantHits || options.recency ? this.db.unpack(r.payload) : undefined;
+          payloads?.get(r.id);
         if (wantHits)
           fields.forEach((field, i) => {
             const marked = String(r["h" + i]);
@@ -380,7 +387,7 @@ export class SqliteSearch {
                 }
               } else clean += ch;
             }
-            const source = payload[field];
+            const source = payload![field];
             let adapted = places;
             if (Array.isArray(source)) {
               let base = 0;
@@ -416,7 +423,7 @@ export class SqliteSearch {
           });
         let score = r.score;
         if (options.recency) {
-          const row = payload,
+          const row = payload!,
             at = row[options.recency.field];
           if (typeof at === "number")
             score *= Math.pow(

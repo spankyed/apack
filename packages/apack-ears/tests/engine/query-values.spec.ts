@@ -51,3 +51,30 @@ describe.each([false, true])(
     });
   }
 );
+
+
+it('filters unchecked primary entities whose type is not currently declared', () => {
+  const e = freshEngine({ types: [], relationKinds: [], roles: [] });
+  const id = 'Uninstalled-held';
+  e.admin.putAttr(id, 'flag', true);
+  expect(e.getRow(id)).toMatchObject({ id, entityType: 'Uninstalled', flag: true });
+  expect(e.query.all().where('flag', true).ids()).toEqual([id]);
+  expect(e.query.ids(id).has('flag').ids()).toEqual([id]);
+  expect(e.query.all().where('flag', false).ids()).toEqual([]);
+});
+
+
+it('omits undefined object properties and refuses undefined list positions', () => {
+  const e = freshEngine({ types: ['Row'], relationKinds: [], roles: [] });
+  const id = e.create('Row', { omitted: undefined, data: { omitted: undefined, kept: 1 }, list: [null, 1] }).id();
+  expect(Object.hasOwn(e.getRow(id)!, 'omitted')).toBe(false);
+  expect(e.getAttr(id, 'data')).toEqual({ kept: 1 });
+  expect(e.getAttr(id, 'list')).toEqual([null, 1]);
+  e.write(id).set('data', { omitted: undefined, kept: 2 });
+  e.write(id).append('list', { omitted: undefined, kept: 3 });
+  expect(e.getAttr(id, 'data')).toEqual({ kept: 2 });
+  expect(e.getAttr(id, 'list')).toEqual([null, 1, { kept: 3 }]);
+  expect(e.query('Row').where('list', null).ids()).toEqual([id]);
+  expect(() => e.create('Row', { bad: [undefined] })).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+  expect(e.query('Row').count()).toBe(1);
+});

@@ -1,6 +1,6 @@
 # SQLite storage design for EARS
 
-Status: attribute component implemented; EARS integration and performance qualification pending, 2026-10-28. Execution and acceptance belong to
+Status: authoritative layout integrated through the candidate EARS facade; performance qualification pending, 2026-10-28. Execution and acceptance belong to
 [the SQLite goal](../goals/goal-ears-sqlite.md); [the contract matrix](ears-sqlite-contracts.md) defines required semantics.
 
 ## Direction
@@ -55,8 +55,15 @@ bounded starting policies, not measured optimal values. The focused 300-field ca
 component tests also prove a scalar patch neither reads nor encodes its neighboring large body, and a projected
 50-row page uses two SQL calls without decoding unrelated composites.
 
-The EARS prototype still uses its old authoritative layout. Integrating this component, removing that layout,
-compiling predicates/projections to the new storage and measuring the actual facade remain phase-2 requirements.
+The candidate now uses this layout through EARS. The entity catalog holds no whole-row payload or JSON document.
+Scalar predicates use native values; direct scalar list members have rebuildable per-field derived records. Page
+projection happens before overflow decoding, updates patch changed attributes and affected indexes, and backup
+replacement copies logical values from one source snapshot instead of copying incompatible physical slot IDs.
+
+Shared native/SQLite tests pin omitted undefined object properties and refused undefined list elements. Normalization
+is per changed value, preserving the structured transport. Undeclared primary types remain readable/filterable through
+all-entity or ID starts. Moving the remaining benchmark implementation into source ownership, production dependency
+composition, measured explain and actual-facade benchmarks remain phase-2 requirements.
 
 ## Indexes and queries
 

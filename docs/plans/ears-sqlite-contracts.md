@@ -60,3 +60,9 @@ Schema normalization and typed validation need one clear owner. Preserve the can
 made by EARS, but remove accidental dependence on an elmdb-only storage schema from the future SQLite public factory.
 The first slice must include an ordinary typed write, an intentionally unchecked repair load, selective read/page,
 nested rollback and committed watch notification so the boundary is tested on both sides of the checked/unchecked split.
+
+
+The authoritative-layout integration also pins two value boundaries in the shared query-value suite: unchecked
+primary entities remain filterable through all/ID starts even if their type is not declared, and undefined object
+properties are omitted while undefined list positions are refused. Native and SQLite both pass these cases.
+SQLite applies the omission per changed value rather than serializing a structured transport envelope.

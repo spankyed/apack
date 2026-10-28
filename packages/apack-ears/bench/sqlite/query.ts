@@ -7,7 +7,6 @@ const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
 };
 const literal = (s: string) => `'${s.replaceAll("'", "''")}'`;
-const path = (field: string) => literal(`$.${JSON.stringify(field)}`);
 
 export function executeQuery(
   db: SqliteDatabase,
@@ -21,6 +20,7 @@ export function executeQuery(
     scope === "withTrashed"
       ? "1"
       : `${alias}.trashed=${scope === "trashed" ? 1 : 0}`;
+  let specificTypes = plan.start.from === "types";
   let parameters: any[] = [];
   let sql: string;
   let types: string[] =
@@ -82,17 +82,15 @@ export function executeQuery(
         trackField(field);
         const key = scalarKey(value);
         const indexed = types.filter((t) => db.isIndexed(t, field));
-        const valuePath = path(field);
-        const raw =
-          value === null
-            ? `json_type(e.doc,${valuePath}) IS NULL OR json_type(e.doc,${valuePath})='null' OR (json_type(e.doc,${valuePath})='array' AND EXISTS(SELECT 1 FROM json_each(e.doc,${valuePath}) v WHERE v.type='null'))`
-            : `(json_type(e.doc,${valuePath})!='object' AND EXISTS(SELECT 1 FROM json_each(e.doc,${valuePath}) v WHERE v.value IS ? AND v.type IN (${
-                typeof value === "string"
-                  ? "'text'"
-                  : typeof value === "boolean"
-                  ? "'true','false'"
-                  : "'integer','real'"
-              })))`;
+        const source = db.fieldSource(field, specificTypes ? types : undefined);
+        const kinds = typeof value === 'string' ? "'text'" : typeof value === 'boolean' ? "'bool'" : "'num','zero'";
+        const raw = value === null
+          ? `(NOT EXISTS(SELECT 1 FROM (${source}) f WHERE f.id=e.id AND f.kind IS NOT NULL)
+              OR EXISTS(SELECT 1 FROM (${source}) f WHERE f.id=e.id AND f.kind='null')
+              OR EXISTS(SELECT 1 FROM value_members m WHERE m.entity_id=e.id AND m.field=${literal(field)} AND m.kind='null'))`
+          : `EXISTS(SELECT 1 FROM (SELECT ? value) probe WHERE
+              EXISTS(SELECT 1 FROM (${source}) f WHERE f.id=e.id AND f.kind IN (${kinds}) AND f.value IS probe.value)
+              OR EXISTS(SELECT 1 FROM value_members m WHERE m.entity_id=e.id AND m.field=${literal(field)} AND m.kind IN (${kinds}) AND m.value IS probe.value))`;
         if (key !== undefined && value !== null && indexed.length) {
           const list = indexed.map(literal).join(",");
           if (indexed.length === types.length) {
@@ -122,11 +120,7 @@ export function executeQuery(
       case "has":
       case "lacks":
         trackField(step.field);
-        filter(
-          `json_type(e.doc,${path(step.field)}) IS ${
-            step.step === "has" ? "NOT " : ""
-          }NULL`
-        );
+        filter(`${step.step === "lacks" ? "NOT " : ""}EXISTS(SELECT 1 FROM (${db.fieldSource(step.field, specificTypes ? types : undefined)}) f WHERE f.id=e.id AND f.kind IS NOT NULL)`);
         break;
       case "linkedWith":
       case "linkedTo":
@@ -188,6 +182,7 @@ export function executeQuery(
           db.trackRange(`kind:${k}`);
         }
         for (const t of step.types ?? []) db.definition(t);
+        specificTypes = step.types !== undefined;
         // An intermediate type can change reachability even when the final output is type-restricted.
         for (const type of Object.keys(schema.types)) db.trackRange(`members:${type}`);
         if (!deep) {
@@ -457,24 +452,14 @@ export function executeQuery(
   }
   if (["rows", "firstRow", "hits"].includes(terminal.answer)) {
     const chosen = db.all(
-      `SELECT e.payload FROM (${sql}) p JOIN entities e ON e.id=p.id ORDER BY p.major,p.ord${
-        terminal.answer === "firstRow" ? " LIMIT 1" : ""
-      }`,
+      `SELECT e.id,e.type FROM (${sql}) p JOIN entities e ON e.id=p.id ORDER BY p.major,p.ord${terminal.answer === "firstRow" ? " LIMIT 1" : ""}`,
       parameters
     );
-    const projected = (payload: Uint8Array) => {
-      const row = db.unpack(payload),
-        id = row.id;
-      db.trackKey(`entity:${id}`);
-      if (!terminal.fields) return row;
-      return Object.fromEntries([
-        ["id", id],
-        ...terminal.fields
-          .filter((f: string) => f !== "id" && Object.hasOwn(row, f))
-          .map((f: string) => [f, row[f]]),
-      ]);
-    };
-    const rows = chosen.map((r) => projected(r.payload));
+    const rows = db.hydrate(chosen as Array<{id:string;type:string}>, terminal.fields);
+    for (const row of rows) db.trackKey(`entity:${row.id}`);
+    if (terminal.fields) for (let i = 0; i < rows.length; i++) rows[i] = Object.fromEntries([
+      ["id", rows[i].id], ...terminal.fields.filter((field: string) => field !== 'id' && Object.hasOwn(rows[i], field))
+        .map((field: string) => [field, rows[i][field]])]);
     return terminal.answer === "firstRow"
       ? {
           kind: "row",

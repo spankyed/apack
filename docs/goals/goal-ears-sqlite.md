@@ -186,13 +186,14 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The implementation is prepared in `monorepo-worktrees.noindex/integration-ddxGkz`, currently based on the graph checkpoint
-`8b7e938f00` plus the storage component; remote `session/ears-sqlite` points there. The local `sqlite-evaluation` branch still holds the planning
+The implementation is prepared in `monorepo-worktrees.noindex/integration-ddxGkz`, currently based on storage checkpoint
+`9601b057f0` plus its authoritative-layout integration; remote `session/ears-sqlite` points there. The local `sqlite-evaluation` branch still holds the planning
 base and its owned prepared files. Accept the pinned integration there only after strict validation; preserve its
 owned files when advancing. Never copy the concurrent agent's dirty source. The committed integration input remains
 `a1b6603e5a`; the [contract matrix](../plans/ears-sqlite-contracts.md) maps that baseline to requirements.
 
-Strict run `40636458325` covers corrected integration `d93afe4190` and was last observed with producers running.
+Strict run `40636458325` covers corrected integration `d93afe4190`; producers and app-and-rest passed, with
+integration/native shards still running.
 Run `40637723256` covers structured transport `9659ceb389` and remains pending behind it. Poll these exact handles;
 neither is proof for the later graph/storage changes. Earlier failed/cancelled attempts are historical, not acceptance.
 
@@ -213,18 +214,25 @@ fixture cleanup. The graph checkpoint passed EARS typechecking and 21 shared rel
 API reports for the structured-port change were generated in Linux and reviewed. Raw results are retained in
 [implementation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/).
 
-The next storage checkpoint adds `src/sqlite/values.ts`: native declared scalar slots, out-of-row large/composite
-values, flexible undeclared data, explicit kind/presence and signed-zero handling, case-safe physical identifiers,
-two-call projected pages, and patch writes that never read/encode unrelated bodies. Eight focused component cases
-pass on macOS and disposable Linux, including read-only reopen, rollback, corruption, wide declarations and partial
-writes. Linux EARS typechecking also passes. A negative mutation inserting a full-row read makes the partial-write
-guard fail; the tested implementation was restored. Exact output is retained with the implementation evidence. The native-slot budget and
-inline threshold are provisional. This component is not yet connected to EARS and is not an app performance claim.
+The candidate now uses `src/sqlite/values.ts` as its authoritative attribute layout. Entity catalog rows no longer
+contain a whole-row payload or JSON document. Scalar predicates/projections read native slots and overflow values;
+direct scalar list membership is derived per field. Updates read only changed attributes plus required metadata,
+patch those values and maintain affected indexes. Search hit/recency hydration and pages fetch values in batches.
+Replacement copies logical values in bounded row batches under one source snapshot, independent of physical slot
+IDs, and rebuilds destination indexes while retaining matching embeddings. Source ownership and production
+composition of the remaining benchmark-directory adapter are still pending.
 
-Next: integrate the component as the authoritative value
-layout through EARS, replacing the prototype's whole-row MessagePack/JSON storage and per-row assembly. Refine
-structured operation/read types, deliver measured SQLite explain and the first source-owned SQL slice, then open
-the draft PR as phase 2 requires. The benchmark-directory prototype remains temporary. Do not silently retain its
-layout or declare phase 2 complete on component tests. All phase 3–7 requirements remain, including background
+Verification: final disposable Linux EARS typecheck passes; SQLite 249 passed with only the existing explain failure
+(250 total). The 16 operational cases include facade-level scalar updates beside a large body and replacement
+across different field-slot layouts. The partial-write guard fails when a full-row read/clone is restored. Four
+shared value cases pass against native elmdb, including undeclared primary types and undefined normalization:
+object properties are omitted, while undefined list elements are refused. SQLite normalizes only changed values,
+without transport serialization. Earlier intermediate failures are not acceptance; final raw output is retained in
+the implementation evidence. Native-slot/inline limits remain provisional, and no new app performance claim is made.
+
+Next: move the remaining SQLite adapter/query/search modules into source ownership with normal dependencies and
+an app-only entry, refine structured operation/read types, implement truthful measured SQLite explain, and record
+actual-facade comparisons including small updates beside large values. Open the draft PR with that working slice.
+Do not silently retain temporary adapter composition or declare phase 2 complete from component tests. All phase 3–7 requirements remain, including background
 index admission, useful search/realistic vectors, four host backup-format failures, complete app composition,
 operational/platform qualification and adoption budgets. Normal production still uses elmdb.

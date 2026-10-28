@@ -1,0 +1,47 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/query-values.spec.ts
+
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+
+ ❯ tests/engine/query-values.spec.ts (4 tests | 1 failed) 57ms
+   ✓ value comparisons with declared index=false > keeps null/missing/list membership and scalar types consistent 28ms
+   ✓ value comparisons with declared index=true > keeps null/missing/list membership and scalar types consistent 9ms
+   ✓ filters unchecked primary entities whose type is not currently declared 6ms
+   × omits undefined object properties and refuses undefined list positions 4ms
+     → Invalid stored value
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/query-values.spec.ts > omits undefined object properties and refuses undefined list positions
+EarsError: Invalid stored value
+ ❯ crossing src/database.ts:144:23
+    142|     const code = (error as { code?: unknown })?.code;
+    143|     const mapped = typeof code === 'string' ? CODES[code] : undefined;
+    144|     if (mapped) throw new EarsError(mapped, (error as Error).message);
+       |                       ^
+    145|     throw error;
+    146|   }
+ ❯ src/database.ts:384:24
+ ❯ counting src/database.ts:337:24
+ ❯ write src/database.ts:381:23
+ ❯ one src/write.ts:55:41
+ ❯ Object.create src/write.ts:165:20
+ ❯ tests/engine/query-values.spec.ts:69:16
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  02:04:37
+   Duration  462ms (transform 132ms, setup 11ms, collect 171ms, tests 57ms, environment 0ms, prepare 69ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/engine/query-values.spec.ts
