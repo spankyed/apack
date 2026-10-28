@@ -7987,6 +7987,12 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
         action: z.ZodLiteral<"preview">;
         value: z.ZodString;
     }, z.core.$strict>, z.ZodObject<{
+        action: z.ZodEnum<{
+            themeEdit: "themeEdit";
+            themeReset: "themeReset";
+        }>;
+        value: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
         action: z.ZodLiteral<"toggleSyntax">;
     }, z.core.$strict>, z.ZodObject<{
         action: z.ZodLiteral<"focusModel">;
@@ -8068,8 +8074,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -8180,6 +8186,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             description: z.ZodOptional<z.ZodString>;
             descriptionAnsi: z.ZodOptional<z.ZodString>;
             disabled: z.ZodBoolean;
+            canEdit: z.ZodOptional<z.ZodBoolean>;
+            canReset: z.ZodOptional<z.ZodBoolean>;
         }, z.core.$strict>>;
     }, z.core.$strict>, z.ZodObject<{
         kind: z.ZodLiteral<"group">;
@@ -8592,6 +8600,8 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
                     disabled: boolean;
                     description?: string | undefined;
                     descriptionAnsi?: string | undefined;
+                    canEdit?: boolean | undefined;
+                    canReset?: boolean | undefined;
                 }[];
                 description?: string | undefined;
                 consent?: {

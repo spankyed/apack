@@ -68,6 +68,46 @@ test('creates, validates, forks and resets original native custom themes', async
       return false
     }, { timeout: 25000, intervals: [250] }).toBe(true)
     const boundNativePid = (await context()).native.state.nativePid
+    if(process.env.CLAUDE_RESEARCH_THEME_DESKTOP==='1') {
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
+      const composer=card.locator('[contenteditable="true"]'),draft='Review the release notes with this theme.'
+      await composer.fill(draft)
+      const tools=card.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
+      const ready=card.locator('.native-inline-text').filter({hasText:/^Workspace ready$/})
+      const saved=await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))
+      const panel=appPage.getByRole('dialog',{name:'Claude Code theme',exact:true})
+      async function openTheme(){await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude themes',exact:true}).click();await expect(panel).toBeVisible();await expect(panel.locator('[data-native-settings-option="dark"]')).toBeVisible();await expect(panel.locator('.xterm')).toHaveCount(0)}
+      const themeDir=join(workspace!,'.claude/themes'),themeFile=(slug:string)=>join(themeDir,slug+'.json')
+      const files=()=>readdir(themeDir).then(rows=>rows.sort()),settings=async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
+      async function retained(){await expect(composer).toHaveText(draft);expect(await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))).toEqual(saved);expect((await context()).native.state.nativePid).toBe(boundNativePid)}
+      const captures:string[]=[]
+      async function capture(stage:string){for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width:width!,height:height!});await expect(panel).toBeInViewport({ratio:1});await retained();const path=testInfo.outputPath(`native-theme-desktop-${stage}-${width}.png`);await appPage.screenshot({path});captures.push(path)}}
+      await openTheme();await panel.locator('[data-native-settings-option="dark"]').click();await expect(panel).toHaveCount(0);await expect.poll(async()=>(await settings()).theme).toBe('dark');await retained()
+      await openTheme();const emptyNameFilesBefore=await files();await panel.locator('[data-native-settings-option="__new_custom_theme__"]').click()
+      const name=panel.locator('[data-native-setting-field="name"]');await expect(name).toBeVisible()
+      await panel.getByRole('button',{name:'Create theme',exact:true}).click();await expect(panel.getByRole('alert')).toContainText('not accepted');const emptyNameFilesAfter=await files();expect(emptyNameFilesAfter).toEqual(emptyNameFilesBefore)
+      await panel.getByRole('button',{name:'Refresh',exact:true}).click();await name.fill('Release Review');await expect(panel.getByRole('button',{name:'Create theme',exact:true})).toBeEnabled();await panel.getByRole('button',{name:'Create theme',exact:true}).click()
+      await expect.poll(async()=>JSON.parse(await readFile(themeFile('release-review'),'utf8').catch(()=>'{}'))).toMatchObject({name:'Release Review',base:'dark',overrides:{}})
+      await expect(panel.locator('[data-native-settings-option="success"]')).toBeVisible()
+      let createdBefore=await readFile(themeFile('release-review'),'utf8');await panel.locator('[data-native-settings-option="success"]').click()
+      const color=panel.locator('[data-native-setting-field="color"]');await expect(color).toBeVisible();await color.fill('not-a-color');await expect(panel.getByRole('button',{name:'Save color',exact:true})).toBeEnabled();await panel.getByRole('button',{name:'Save color',exact:true}).click();await expect(panel.getByRole('alert')).toContainText('not accepted')
+      const invalidFileBefore=createdBefore,invalidFileAfter=await readFile(themeFile('release-review'),'utf8');expect(invalidFileAfter).toBe(invalidFileBefore);await capture('invalid')
+      await panel.getByRole('button',{name:'Refresh',exact:true}).click();await color.fill('#66bb77');await panel.getByRole('button',{name:'Save color',exact:true}).click();await expect.poll(async()=>JSON.parse(await readFile(themeFile('release-review'),'utf8')).overrides.success).toBe('#66bb77');await expect(ready).toHaveCSS('color','rgb(102, 187, 119)');createdBefore=await readFile(themeFile('release-review'),'utf8');await expect(panel.locator('[data-native-settings-option="success"]')).toBeVisible();
+      await panel.locator('[data-native-settings-option="success"]').click();await color.fill('#abcdef');await expect(ready).toHaveCSS('color','rgb(171, 205, 239)');await panel.getByRole('button',{name:'Cancel',exact:true}).click();await expect(ready).toHaveCSS('color','rgb(102, 187, 119)');expect(await readFile(themeFile('release-review'),'utf8')).toBe(createdBefore);await panel.getByRole('button',{name:'Close theme selection',exact:true}).click();await expect(panel).toHaveCount(0)
+      await openTheme();const pluginFile=join(workspace!,'prompt-fixture/theme-packs/team.json'),pluginBefore=await readFile(pluginFile,'utf8')
+      await panel.getByRole('button',{name:'Edit Team Review',exact:true}).click();await expect(name).toBeVisible();await name.fill('Release Review');await panel.getByRole('button',{name:'Create theme',exact:true}).click()
+      await expect.poll(async()=>JSON.parse(await readFile(themeFile('release-review-2'),'utf8').catch(()=>'{}'))).toMatchObject({name:'Release Review',base:'dark',overrides:{success:'#55aa66',warning:'#cc9944'}})
+      await expect(panel.locator('[data-native-settings-option="success"]')).toBeVisible();await capture('fork')
+      await panel.getByRole('button',{name:'Reset success',exact:true}).click();await expect.poll(async()=>JSON.parse(await readFile(themeFile('release-review-2'),'utf8')).overrides).toEqual({warning:'#cc9944'})
+      const resetTheme=JSON.parse(await readFile(themeFile('release-review-2'),'utf8')),pluginAfter=await readFile(pluginFile,'utf8'),createdAfter=await readFile(themeFile('release-review'),'utf8');expect(pluginAfter).toBe(pluginBefore);expect(createdAfter).toBe(createdBefore)
+      await capture('reset');await panel.getByRole('button',{name:'Close theme selection',exact:true}).click();await expect(panel).toHaveCount(0);await retained()
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
+      const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+      await composer.fill('Continue the same session after theme editing.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
+      await writeFile(join(workspace!,'native-theme-create-reset-proof.json'),JSON.stringify({desktopControls:true,validColorWrite:true,cancelRestoresPalette:true,captures,saved,emptyNameFilesBefore,emptyNameFilesAfter,createdBefore,createdAfter,invalidFileBefore,invalidFileAfter,resetTheme,pluginBefore,pluginAfter}))
+      await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeThemeDesktop:true,nativeThemeCreateReset:true,nativeThemeEmptyName:true,nativeThemeInvalidRejected:true,nativeThemeFork:true,nativeThemeCollision:true,nativeThemeTokenReset:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
+    }
+
     const composer = card.locator('[contenteditable="true"]'), ready = card.locator('.native-inline-text').filter({ hasText: /^Workspace ready$/ })
     const files = () => readdir(join(workspace!, '.claude/themes')).then(values => values.sort())
     const themeFile = (slug: string) => join(workspace!, '.claude/themes', slug + '.json')

@@ -731,6 +731,7 @@ const leftButtons = computed<ActionButton[]>(() => {
   ]
   if (props.nativeSubmit && props.nativePrompt) buttons.push(
     { icon: Settings2, label: 'Claude settings', action: 'native-settings' },
+    { icon: Settings2, label: 'Claude themes', action: 'native-themes' },
     { icon: Cpu, label: 'Choose Claude model', action: 'native-model' },
     { icon: ListTodo, label: 'Claude tasks', action: 'native-tasks' },
     { icon: Plug, label: 'Claude MCP servers', action: 'native-mcp' },
@@ -763,6 +764,7 @@ watch(() => props.currentThread?.id, () => {
 const handleButtonClick = (action: string) => {
   if(action === 'claude-channels'){channelsOpen.value=true;return}
   if (action === 'native-model') { void openNativePanel('/model'); return }
+  if (action === 'native-themes') { void openNativePanel('/theme'); return }
   if (action === 'native-settings') { void openNativePanel('/config'); return }
   if (action === 'native-tasks') { void openNativePanel('/tasks'); return }
   if (action === 'native-mcp') { void openNativePanel('/mcp'); return }
@@ -842,8 +844,8 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
   return refs
 }
 
-async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp') {
-  const label = command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
+async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp' | '/theme') {
+  const label = command === '/theme' ? 'themes' : command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
   const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
   if (props.disabled || submitting.value || !editor || !bridge || !submit) return
   const epoch = composerEpoch, revision = bridge.revision

@@ -14,3 +14,17 @@ it('retains exact native values, prevents disabled selection and submits edited 
     state.pending=true;await nextTick();expect(input.disabled).toBe(true);[...root.querySelectorAll('button')].find(button=>button.textContent==='Cancel')!.click();expect(cancel).toHaveBeenCalledOnce()
   }finally{app.unmount();root.remove()}
 })
+
+
+it('exposes native custom-theme edit/reset actions and disables them while pending', async () => {
+  const state = reactive<{editor:ClaudeSettingsEditor;pending:boolean}>({editor:{kind:'choice',revision:'a'.repeat(64),title:'Theme',disabled:false,options:[{value:'custom:team',label:'Team Review',disabled:false,canEdit:true},{value:'success',label:'success',disabled:false,canReset:true}]},pending:false})
+  const edit=vi.fn(),reset=vi.fn(),root=document.createElement('div');document.body.append(root)
+  const app=createApp({render:()=>h(NativeSettingsEditor,{...state,onThemeEdit:edit,onThemeReset:reset})});app.mount(root)
+  try {
+    const editButton=root.querySelector<HTMLButtonElement>('[aria-label="Edit Team Review"]')!,resetButton=root.querySelector<HTMLButtonElement>('[aria-label="Reset success"]')!
+    editButton.click();resetButton.click();expect(edit).toHaveBeenCalledExactlyOnceWith('custom:team');expect(reset).toHaveBeenCalledExactlyOnceWith('success')
+    const filter=root.querySelector<HTMLInputElement>('[aria-label="Filter color tokens"]')!;filter.value='missing';filter.dispatchEvent(new Event('input'));await nextTick();expect(root.querySelector('[aria-label="Reset success"]')).toBeNull();filter.value='success';filter.dispatchEvent(new Event('input'));await nextTick()
+    state.pending=true;await nextTick();expect(editButton.disabled).toBe(true);expect(root.querySelector<HTMLButtonElement>('[aria-label="Reset success"]')!.disabled).toBe(true)
+    editButton.click();root.querySelector<HTMLButtonElement>('[aria-label="Reset success"]')!.click();expect(edit).toHaveBeenCalledOnce();expect(reset).toHaveBeenCalledOnce()
+  } finally {app.unmount();root.remove()}
+})

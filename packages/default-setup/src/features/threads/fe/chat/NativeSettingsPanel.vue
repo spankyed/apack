@@ -1,14 +1,14 @@
 <template>
   <section role="dialog" :aria-label="panelTitle" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#191919]" @keydown="handleKeydown">
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-      <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 break-words text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">{{ subject === 'model' ? state?.snapshot?.editor?.title || panelTitle : panelTitle }}</h2><p v-if="subject !== 'model'" class="mt-1 text-xs text-neutral-500">Changes are validated and saved by Claude Code.</p></div>
+      <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 break-words text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">{{ subject !== 'settings' ? state?.snapshot?.editor?.title || panelTitle : panelTitle }}</h2><p v-if="subject === 'settings'" class="mt-1 text-xs text-neutral-500">Changes are validated and saved by Claude Code.</p></div>
       <button type="button" :disabled="state?.snapshot?.dismissible === false" class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" @click="closePanel">{{ closeLabel }}</button>
     </header>
     <nav v-if="frame && !frame.hidden" aria-label="Claude Code settings tabs" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
       <button v-for="tab in frame.tabs" :key="tab" type="button" :aria-current="activeTab === tab ? 'page' : undefined" :disabled="pending" class="rounded-lg px-3 py-2 text-xs text-neutral-400 hover:bg-white/5 disabled:opacity-40" :class="activeTab === tab ? 'bg-white/10 text-white' : ''" @click="operate({kind:'tab',tab})">{{ tab }}</button>
     </nav>
-    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="editorPending" :reset-epoch="liveForm.resetEpoch.value" :submit-disabled="!!(state.snapshot.editor.kind === 'form' && state.snapshot.editor.live) && !liveForm.canSubmit.value" :preview-problem="state.status === 'error'" :preview-pending="liveForm.busy.value" :hide-header="subject === 'model'" :cancel-label="subject === 'model' && state.snapshot.refreshPending ? 'Cancel model change' : undefined" @set-group="(key, value) => editorCommand({action:'setGroup',key,value})" @select="editorCommand({action:'select',value:$event})" @focus-model="editorCommand({action:'focusModel',value:$event})" @adjust-effort="editorCommand({action:'adjustEffort',direction:$event})" @preview="editorCommand({action:'preview',value:$event})" @toggle-syntax="editorCommand({action:'toggleSyntax'})" @change="(formId,key,value) => editorCommand({action:'change',formId,key,value})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
-    <p v-else-if="subject === 'model'" role="status" class="min-h-0 flex-1 overflow-auto p-4 text-sm text-neutral-400">Loading model controls…</p>
+    <NativeSettingsEditor v-if="state?.snapshot?.editor" :editor="state.snapshot.editor" :pending="editorPending" :reset-epoch="liveForm.resetEpoch.value" :submit-disabled="!!(state.snapshot.editor.kind === 'form' && state.snapshot.editor.live) && !liveForm.canSubmit.value" :preview-problem="state.status === 'error'" :preview-pending="liveForm.busy.value" :hide-header="subject !== 'settings'" :cancel-label="subject === 'model' && state.snapshot.refreshPending ? 'Cancel model change' : undefined" @set-group="(key, value) => editorCommand({action:'setGroup',key,value})" @select="editorCommand({action:'select',value:$event})" @focus-model="editorCommand({action:'focusModel',value:$event})" @adjust-effort="editorCommand({action:'adjustEffort',direction:$event})" @preview="editorCommand({action:'preview',value:$event})" @theme-edit="editorCommand({action:'themeEdit',value:$event})" @theme-reset="editorCommand({action:'themeReset',value:$event})" @toggle-syntax="editorCommand({action:'toggleSyntax'})" @change="(formId,key,value) => editorCommand({action:'change',formId,key,value})" @save="editorCommand({action:'save',values:$event})" @cancel="editorCommand({action:'cancel'})" />
+    <p v-else-if="subject !== 'settings'" role="status" class="min-h-0 flex-1 overflow-auto p-4 text-sm text-neutral-400">Loading {{ subject === 'theme' ? 'theme' : 'model' }} controls…</p>
     <template v-else-if="activeTab === 'Config'">
     <div class="shrink-0 border-b border-white/5 px-4 py-3">
       <input ref="searchInput" v-model="search" aria-label="Search Claude Code settings" placeholder="Search settings…" class="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-neutral-200 outline-none focus:border-blue-400" />
@@ -77,15 +77,15 @@ import NativeSettingsStats from './NativeSettingsStats.vue'
 import NativeSettingsEditor from './NativeSettingsEditor.vue'
 import { useNativeSettingsForm } from './native-settings-form.ts'
 import type { ClaudeSettingsOperation, ClaudeSettingsView, ClaudeSettingValue } from '#features/code/common/native-settings.ts'
-const props = withDefaults(defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string; subject?: 'settings' | 'model' }>(), {subject:'settings'})
-const panelTitle = computed(() => props.subject === 'model' ? 'Claude Code model' : 'Claude Code settings')
+const props = withDefaults(defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string; subject?: 'settings' | 'model' | 'theme' }>(), {subject:'settings'})
+const panelTitle = computed(() => props.subject === 'model' ? 'Claude Code model' : props.subject === 'theme' ? 'Claude Code theme' : 'Claude Code settings')
 const closeLabel = computed(() => {
-  if(props.subject!=='model')return 'Close settings'
+  if(props.subject==='settings')return 'Close settings'
   const snapshot=props.state?.snapshot,editor=snapshot?.editor
   if(snapshot?.dismissible===false)return 'Close'
   if(snapshot?.refreshPending)return 'Cancel model change'
   if(editor?.kind==='form'||editor?.kind==='choice'&&editor.consent)return editor.consent?.cancelLabel||'Cancel'
-  return 'Close model selection'
+  return props.subject==='theme'?'Close theme selection':'Close model selection'
 })
 const emit = defineEmits<{ operate: [action: ClaudeSettingsOperation]; close: [] }>()
 const search = ref(''), searchInput = ref<HTMLInputElement>(), drafts = ref<Record<string, string>>({})
@@ -101,6 +101,7 @@ const pending = computed(() => props.state?.status === 'pending' || props.state?
 const editorPending=computed(()=>pending.value&&!liveForm.editing.value)
 const footerStatus=computed(()=>{
   if(pending.value||props.state?.snapshot?.refreshPending)return 'Waiting for Claude Code…'
+  if(props.subject==='theme')return undefined
   if(props.subject==='model'){const editor=props.state?.snapshot?.editor;return editor?.kind==='choice'&&editor.model?'Choose a model':undefined}
   if(props.state?.savedKey)return 'Saved by Claude Code'
   return activeTab.value==='Config'?`${rows.value.length} settings`:activeTab.value
@@ -116,7 +117,7 @@ function editorCommand(command: Extract<ClaudeSettingsOperation,{kind:'editor'}>
 }
 function closePanel() {
   if(props.state?.snapshot?.dismissible===false)return
-  if (props.subject === 'model' && props.state?.snapshot?.editor) editorCommand({action:'cancel'})
+  if (props.subject !== 'settings' && props.state?.snapshot?.editor) editorCommand({action:'cancel'})
   else emit('close')
 }
 function handleKeydown(event: KeyboardEvent) {

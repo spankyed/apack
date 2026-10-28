@@ -8,8 +8,11 @@
       <p v-if="editor.description" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-300">{{ editor.description }}</p>
       <p v-if="editor.consent" class="whitespace-pre-wrap break-words text-sm leading-relaxed text-neutral-200"><NativeConsentDisclosure :text="editor.consent.description" :links="editor.consent.links" /></p>
       <p v-if="editor.model" class="whitespace-pre-wrap break-words text-xs text-neutral-400">{{ editor.model.description }}</p>
-      <div v-for="option in editor.options" :key="option.value" class="flex items-start gap-2">
+      <input v-if="editor.options.some(option => option.canReset)" v-model="themeSearch" aria-label="Filter color tokens" placeholder="Filter color tokens…" class="w-full rounded-lg border border-white/10 bg-neutral-900 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" />
+      <div v-for="option in visibleOptions" :key="option.value" class="flex items-start gap-2">
       <button type="button" :disabled="pending || editor.disabled || option.disabled" :data-native-settings-option="option.value" :aria-pressed="editor.value === option.value" class="block min-w-0 flex-1 w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-40" :class="editor.value === option.value ? 'bg-blue-500/10' : ''" @click="emit('select', option.value)"><span class="block">{{ option.label }}</span><span v-if="option.description" class="mt-1 block text-xs leading-relaxed text-neutral-400"><NativePermissionText :text="option.description" :ansi="option.descriptionAnsi" /></span></button>
+        <button v-if="option.canEdit" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-label="`Edit ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('theme-edit', option.value)">Edit</button>
+        <button v-if="option.canReset" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-label="`Reset ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('theme-reset', option.value)">Reset</button>
         <button v-if="editor.model" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.model.focusValue === option.value" :aria-label="`Details for ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" :class="editor.model.focusValue === option.value ? 'bg-blue-500/10' : ''" @click="showModelDetails(option.value)">Details</button>
         <button v-if="editor.canPreview" type="button" :disabled="pending || editor.disabled || option.disabled" :aria-pressed="editor.previewValue === option.value" :aria-label="`Preview ${option.label}`" class="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-xs text-neutral-300 disabled:opacity-40" @click="emit('preview', option.value)">Preview</button>
       </div>
@@ -55,7 +58,7 @@ import NativeConsentDisclosure from './NativeConsentDisclosure.vue'
 import NativePermissionText from './NativePermissionText.vue'
 import type { ClaudeSettingsEditor } from '#features/code/common/native-settings.ts'
 const props = defineProps<{ editor: ClaudeSettingsEditor; pending: boolean; cancelLabel?: string; hideHeader?: boolean; resetEpoch?: number; submitDisabled?: boolean; previewProblem?: boolean; previewPending?: boolean }>()
-const emit = defineEmits<{ change:[formId:string,key:string,value:string]; 'set-group': [key: string, value: boolean | string]; select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
+const emit = defineEmits<{ 'theme-edit': [value: string]; 'theme-reset': [value: string]; change:[formId:string,key:string,value:string]; 'set-group': [key: string, value: boolean | string]; select: [value: string]; preview: [value: string]; 'focus-model': [value: string]; 'adjust-effort': [direction: 'left' | 'right']; 'toggle-syntax': []; save: [values: Record<string, string>]; cancel: [] }>()
 const drafts = ref<Record<string, string>>({}),dirty=reactive(new Set<string>()),composing=reactive(new Set<string>()),lastEmitted=new Map<string,string>()
 const previewDirty=computed(()=>dirty.size>0||composing.size>0)
 const editorRoot = ref<HTMLElement>()
@@ -68,6 +71,8 @@ watch(() => props.editor.kind === 'choice' && !!props.editor.model, value => {
     button?.focus({preventScroll:true});button?.scrollIntoView?.({block:'nearest'})
   })
 },{immediate:true})
+const themeSearch = ref('')
+const visibleOptions = computed(() => props.editor.kind === 'choice' ? props.editor.options.filter(option => !option.canReset || option.label.toLowerCase().includes(themeSearch.value.toLowerCase())) : [])
 const modelDetails = ref<HTMLElement>()
 const modelLabel = computed(() => { const editor=props.editor; if(editor.kind!=='choice')return; const focus=editor.model?.focusValue; return editor.options.find(option=>option.value===focus)?.label })
 function showModelDetails(value: string) { emit('focus-model', value); void nextTick(() => { modelDetails.value?.scrollIntoView?.({ block: 'nearest' }); modelDetails.value?.focus({ preventScroll: true }) }) }
