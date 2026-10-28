@@ -2,6 +2,7 @@ import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
+import { stripVTControlCharacters } from 'node:util'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
@@ -42,8 +43,13 @@ test('creates, validates, forks and resets original native custom themes', async
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator('textarea.xterm-helper-textarea')
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
-  const dimensions = () => input.evaluate(element => { const root = element.closest('.xterm')!, box = root.querySelector('.xterm-screen')!.getBoundingClientRect(), font = getComputedStyle(root.querySelector('.xterm-char-measure-element')!), canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`; return Math.round(box.width / context.measureText('W').width) })
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const dimensions = async () => {
+    const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return 0
+    const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'))
+    const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1)
+    return Number(row?.match(/columns:\s*(\d+)/)?.[1]??0)
+  }
   await expect.poll(dimensions).toBeGreaterThan(1)
   const terminal = new Terminal({ cols: await dimensions(), rows: 200, allowProposedApi: true })
   let lastSequence = 0, lastScreen = ''
