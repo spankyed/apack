@@ -297,3 +297,22 @@ it('persists original retirements, removes only matching assistant rows and refu
   await (second.beforeRelease as ReturnType<typeof vi.fn>).mock.calls[0]![0]()
   expect(fake.messages.map(message=>message.id)).toEqual(['foreign','human'])
 })
+
+it('persists original rewound human identities and refuses their replay under a new owner', async () => {
+  const session='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',uuid='cccccccc-cccc-4ccc-8ccc-cccccccccccc',humanUuid='dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+  const row={sessionId:session,uuid,type:'assistant',message:{content:[{type:'text',text:'Retired original response'}]}}
+  const base={sessionId:session,cwd:directory,status:'live' as const,busy:false,tasks:[],ownerId:'owned',messageRetirements:[{sessionId:session,uuids:[uuid],rewoundUserUuids:[humanUuid]}]}
+  fake.thread.context={claudeCode:{sessionId:session}}
+  fake.messages.push({id:'owned',sender:'assistant',text:'Retired original response',context:{cliUuid:uuid,claudeTerminalMessage:{uuid,sessionId:session}}},{id:'foreign',sender:'assistant',text:'Other session response',context:{cliUuid:uuid,claudeTerminalMessage:{uuid,sessionId:other}}},{id:'human',sender:'user',text:'Keep the human draft',context:{cliUuid:humanUuid,claudeTerminalMessage:{uuid:humanUuid,sessionId:session}}})
+  const makeOwner=()=>({state:base,busy:false,refreshNotice:async()=>{},readJournal:async()=>({entries:[{sessionId:session,row},{sessionId:session,row:{type:'user',uuid:humanUuid,message:{content:[{type:'text',text:'Original restored prompt'}]}}}],pending:false,problems:[]}),refreshMcpInput:async()=>{},getGenericToolPermissionDialogs:async()=>[],getToolPermissionDialogs:async()=>[],getWorkflowDialogs:async()=>[],getFileDialogs:async()=>[],getBashDialogs:async()=>[],getQuestionDialogs:async()=>[],getPlanDialogs:async()=>[],beforeRelease:vi.fn()} as unknown as ClaudeNativeTerminalOwner)
+  const {syncClaudeTerminalThread}=await import('#features/threads/be/claude-terminal-sync.ts')
+  let current=true;const first=makeOwner();syncClaudeTerminalThread('thread' as EntityId,first,()=>current,readLaunch)
+  await vi.waitFor(()=>expect(fake.messages.some(message=>message.id==='owned')).toBe(false))
+  expect(fake.messages.map(message=>message.id)).toEqual(['foreign'])
+  expect((fake.thread.context.claudeCode as any).retiredNativeMessages).toEqual([{sessionId:session,uuids:[uuid],rewoundUserUuids:[humanUuid]}])
+  current=false;await (first.beforeRelease as ReturnType<typeof vi.fn>).mock.calls[0]![0]()
+  const second=makeOwner();second.state.messageRetirements=[]
+  syncClaudeTerminalThread('thread' as EntityId,second,()=>true,readLaunch)
+  await (second.beforeRelease as ReturnType<typeof vi.fn>).mock.calls[0]![0]()
+  expect(fake.messages.map(message=>message.id)).toEqual(['foreign'])
+})

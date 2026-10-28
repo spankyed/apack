@@ -130,7 +130,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   function prepareDraft(input: Extract<ClaudePromptHostRequest, { kind: 'fill' }>['input'], expectedRevision: number) {
     if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision) return
     const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
-    if (!snapshot) return
+    if (!snapshot || input.ifEmpty && snapshot.text !== '') return
     const offset = input.mode === 'replace' ? 0 : input.mode === 'append' ? snapshot.text.length : snapshot.cursor
     const text = input.mode === 'replace' ? input.text : snapshot.text.slice(0, offset) + input.text + snapshot.text.slice(offset)
     const cursor = offset + input.text.length

@@ -711,3 +711,13 @@ it('resets native lines over the chat-admitted underline mark with HTML input di
   expect(editor.state.doc.eq(doc)).toBe(true);expect(editor.state.selection.eq(selection)).toBe(true)
   bridge.dispose()
 })
+
+
+it('restores the original draft only while the current editor is still empty',()=>{
+ const bridge=bindClaudePromptEditor(editor,()=>{},()=>{});
+ try{
+  editor.commands.setContent('A newer draft');const document=editor.state.doc.toJSON();
+  expect(bridge.fillDraft({mode:'replace',text:'Original prompt',ifEmpty:true},bridge.revision)).toBe(false);expect(editor.state.doc.toJSON()).toEqual(document);
+  editor.commands.clearContent();expect(bridge.fillDraft({mode:'replace',text:'Original prompt',ifEmpty:true},bridge.revision)).toBe(true);expect(bridge.readDraft()).toEqual({text:'Original prompt',cursor:15});
+ }finally{bridge.dispose();}
+});

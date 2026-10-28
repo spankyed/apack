@@ -89,6 +89,8 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const notice = section.getByRole('region', { name: 'Claude model fallback', exact: true })
   await expect(notice).toBeVisible({ timeout: 15000 })
+  const originalHumanUuid=(await context()).messages.find((message:any)=>message.sender==='user'&&message.text===prompt)?.context?.cliUuid
+  expect(originalHumanUuid).toBeTruthy()
   const shown = (await context()).native.state.notice
   expect(shown.kind).toBe('refusal_fallback_prompt'); expect(shown.originalModel).toBe('claude-opus-5'); expect(shown.fallbackModel).toBe('claude-opus-4-8')
   expect(shown.choices.map((choice: any) => choice.value)).toEqual(['retry_fallback', 'edit_prompt'])
@@ -127,7 +129,11 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   await expect(notice).toBeHidden(); await expect.poll(async () => (await context()).native.state.busy).toBe(false)
   await expect.poll(hasRetired).toBe(false)
   // Native refusal edit restores only an empty editor; never overwrite the draft typed while deciding.
-  if (emptyDraft) await expect(composer).toHaveText(prompt)
+  if (emptyDraft) {
+    await expect(composer).toHaveText(prompt)
+    await expect.poll(async()=>(await context()).messages.some((message:any)=>message.context?.claudeTerminalMessage?.sessionId===sessionId&&message.context?.cliUuid===originalHumanUuid)).toBe(false)
+    for(const [width,height] of [[1100,900],[680,600]]) {await appPage.setViewportSize({width,height});await expect(composer).toHaveText(prompt);await expect(composer).toBeInViewport({ratio:1});await capture('restored',width,height)}
+  }
   else expect(await editor()).toEqual(retained)
   const afterDecisionContext = await context()
   const afterDecision = await editor(), beforeContinue = (await context()).turns
@@ -157,7 +163,8 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   expect(await hasRetired()).toBe(false)
   const persistedRetirements=(await context()).claude.retiredNativeMessages
   expect(persistedRetirements?.find((item: any) => item.sessionId === sessionId)?.uuids ?? []).toEqual(expect.arrayContaining(retiredIds))
-  await writeFile(join(workspace!, 'native-refusal-app.json'), JSON.stringify({ decision, emptyDraft, afterDecisionContext, shown, prompt, retiredIds, persistedRetirements, captures, geometry, retained, afterDecision, recoveryRetained, sameSessionRecovery: true, sessionId, boundNativePid }, null, 2))
+  if(emptyDraft) expect(persistedRetirements.find((item:any)=>item.sessionId===sessionId).rewoundUserUuids).toContain(originalHumanUuid)
+  await writeFile(join(workspace!, 'native-refusal-app.json'), JSON.stringify({ decision, emptyDraft, originalHumanUuid, afterDecisionContext, shown, prompt, retiredIds, persistedRetirements, captures, geometry, retained, afterDecision, recoveryRetained, sameSessionRecovery: true, sessionId, boundNativePid }, null, 2))
   await writeFile(join(workspace!, 'native-refusal-recovery.json'), JSON.stringify(await context(), null, 2))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeRefusalNotice: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })

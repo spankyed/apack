@@ -167,3 +167,9 @@ it('withdraws unavailable reverse APIs and refuses raced requests without losing
   expect(f.answer()).toMatchObject({ response: { response: { text: 'draft 👋' } } })
   f.hosts.close()
 })
+
+
+it('preserves the atomic empty-editor condition for native restoration and rejects invalid guards',async()=>{
+ const f=fixture();const request=fill();Object.assign(request.request,{ifEmpty:true});f.hosts.receive(request);await flush();expect(f.host.fill).toHaveBeenCalledWith(expect.objectContaining({ifEmpty:true}),expect.any(AbortSignal),expect.any(Number));
+ f.hosts.receive({...fill('invalid'),request:{...fill().request,ifEmpty:false}});await flush();expect(f.host.fill).toHaveBeenCalledOnce();expect(f.answer()).toMatchObject({response:{response:{filled:false}}});f.hosts.close();
+});

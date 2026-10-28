@@ -8,7 +8,7 @@ const decoration = z.object({ _apackThemeColor: z.string().regex(/^[A-Za-z][A-Za
   color: z.string().optional(), backgroundColor: z.string().optional(), dimColor: z.boolean().optional(),
   bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(), strikethrough: z.boolean().optional(),
 }).strict()
-const fill = z.object({ text: z.string().max(1000000), mode: z.enum(['replace', 'append', 'insert']), decorations: z.array(decoration).max(8192).optional() }).strict()
+const fill = z.object({ text: z.string().max(1000000), mode: z.enum(['replace', 'append', 'insert']), ifEmpty: z.literal(true).optional(), decorations: z.array(decoration).max(8192).optional() }).strict()
   .superRefine((value, context) => {
     let end = 0
     for (const run of value.decorations ?? []) {
@@ -63,7 +63,7 @@ export function createClaudePromptHosts(write: (value: unknown) => boolean, pain
       seen.add(line.request_id)
       const parsed = request.safeParse(line.request)
       const host = parsed.success && parsed.data.surface === 'desktop' ? hosts.get(parsed.data.client_id) : undefined
-      const input = !filling ? undefined : fill.safeParse({ text: line.request.text, mode: line.request.mode, ...(line.request.decorations !== undefined ? { decorations: line.request.decorations } : {}) })
+      const input = !filling ? undefined : fill.safeParse({ text: line.request.text, mode: line.request.mode, ...(line.request.ifEmpty!==undefined?{ifEmpty:line.request.ifEmpty}:{}), ...(line.request.decorations !== undefined ? { decorations: line.request.decorations } : {}) })
       const fillInput = input?.success ? input.data : undefined
       const textInput = !read && !filling && !selecting ? z.string().max(1000000).safeParse(line.request.text) : undefined
       const requestText = textInput?.success && (copying || textInput.data.trim()) ? textInput.data : undefined

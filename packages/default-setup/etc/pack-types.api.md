@@ -1008,6 +1008,7 @@ type ClaudeNativeMessageRetirements = z.infer<typeof ClaudeNativeMessageRetireme
 declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
     sessionId: z.ZodString;
     uuids: z.ZodArray<z.ZodString>;
+    rewoundUserUuids: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>>;
 
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
@@ -8970,6 +8971,7 @@ declare const fill: z.ZodObject<{
         append: "append";
         insert: "insert";
     }>;
+    ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
         _apackThemeColor: z.ZodOptional<z.ZodString>;
         _apackThemeBackgroundColor: z.ZodOptional<z.ZodString>;

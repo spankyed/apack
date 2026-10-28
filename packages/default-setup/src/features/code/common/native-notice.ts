@@ -17,5 +17,5 @@ export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decisio
 }
 
 /** Original dialog settlement identities, scoped to their native conversation. */
-export const ClaudeNativeMessageRetirementsSchema = z.array(z.object({ sessionId: z.string().uuid(), uuids: z.array(z.string().uuid()) }))
+export const ClaudeNativeMessageRetirementsSchema = z.array(z.object({ sessionId: z.string().uuid(), uuids: z.array(z.string().uuid()), rewoundUserUuids: z.array(z.string().uuid()).optional() }))
 export type ClaudeNativeMessageRetirements = z.infer<typeof ClaudeNativeMessageRetirementsSchema>

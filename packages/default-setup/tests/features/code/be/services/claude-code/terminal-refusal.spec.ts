@@ -14,12 +14,13 @@ function fixture() {
   const row = Array<unknown>(48); row[9] = control.options; row[17] = 'Session paused'; row[21] = '<b>Original explanation</b>'; row[22] = 'Original provider guidance'
   const root = { type: UCe, memoizedProps: { payload, wouldTakeAnswer: () => true }, updateQueue: { memoCache: { data: [row] } }, child: { type: Xe, memoizedProps: control } }
   const store = { getState: () => ({ open }), subscribe: () => () => {}, onClosed: (listener: typeof closed[number]) => { closed.push(listener); return () => {} } }
-  const binding = { surface: 'terminal', toolContext: () => ({ dialogStore: store }) }
-  const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) }, questionOptions: { q: () => sessionId } }
+  const humanUuid=randomUUID(),users=[{type:'user',uuid:humanUuid,origin:{kind:'human'}}];let turn:{turnId:string}|undefined={turnId:randomUUID()},draft={text:'',cursor:0};const askHost=vi.fn(async()=>({filled:true}));
+  const binding = { messages:()=>users,composer:{read:async()=>draft},surface: 'terminal', toolContext: () => ({ dialogStore: store,getAppState:()=>({viewingAgentTaskId:undefined}) }) }
+  const n = { runtime:{lpe:()=>turn,ey:()=>binding},roster:{Kw:{list:()=>[{clientId:'desktop',answers:['ui_prompt_fill']}]}},themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) }, questionOptions: { q: () => sessionId } }
   const format = vi.fn(async (_n: unknown, value: unknown) => value || '')
-  const runtime = vm.runInNewContext(rewriteClaudeNativePlatformSelectors(claudeTerminalRefusalRuntime) + ';({read:nativeRefusal,project:projectNativeRefusal,answer:answerNativeRefusal})', { originalContext: binding, AbortController, process: { stdout: undefined }, composerFunctionHashes: new WeakMap(), createHash, nativeFunctionName: (name: string) => name, nativeFunctionHash: (hash: string) => hashes.get(hash), readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'private', randomUUID, dialogRevisions: new Map(), nativeGenericPermissionText: format })
+  const runtime = vm.runInNewContext(rewriteClaudeNativePlatformSelectors(claudeTerminalRefusalRuntime) + ';({read:nativeRefusal,project:projectNativeRefusal,answer:answerNativeRefusal,restore:restoreNativeRefusalDraft})', { originalContext: binding, clients:new Set(['desktop']),clientViewCurrent:()=>true,askHost,AbortController, process: { stdout: undefined }, composerFunctionHashes: new WeakMap(), createHash, nativeFunctionName: (name: string) => name, nativeFunctionHash: (hash: string) => hashes.get(hash), readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'private', randomUUID, dialogRevisions: new Map(), nativeGenericPermissionText: format })
   const request = () => { const d = runtime.read(n); return { id: d.item.id, revision: d.revision, session_id: d.sessionId } }
-  return { runtime, n, root, row, control, open, item, payload, onChange, onCancel, request, format, settle, sessionId, closed }
+  return { runtime, n, root, row, control, open, item, payload,store,humanUuid,users,askHost,finishRewind(){turn=undefined;users.length=0;draft={text:'Original native draft',cursor:21}},replaceTurn(){turn={turnId:randomUUID()}}, onChange, onCancel, request, format, settle, sessionId, closed }
 }
 it.each(['retry_fallback', 'edit_prompt', 'cancelled'])('settles %s only through the current original callback', async decision => {
   const f = fixture(), shown = await f.runtime.project(f.n, f.runtime.read(f.n)), request = { ...f.request(), decision }
@@ -90,3 +91,16 @@ it('retires only original identities after original settlement, including native
   f.settle('cancelled')
   expect(f.runtime.read(f.n).retirements).toEqual([{sessionId:f.sessionId,uuids:f.payload.retractedMessageUuids}])
 })
+
+
+it('waits for the original Edit rewind, mirrors its removed human identity and fills only an empty host once',async()=>{
+ const f=fixture();f.runtime.answer(f.n,{...f.request(),decision:'edit_prompt'});
+ await f.runtime.restore(f.n,f.store);expect(f.askHost).not.toHaveBeenCalled();
+ f.finishRewind();await f.runtime.restore(f.n,f.store);
+ expect(f.askHost).toHaveBeenCalledExactlyOnceWith('ui_prompt_fill',{clientId:'desktop',text:'Original native draft',mode:'replace',ifEmpty:true});
+ expect(f.runtime.read(f.n).retirements).toEqual([{sessionId:f.sessionId,uuids:f.payload.retractedMessageUuids,rewoundUserUuids:[f.humanUuid]}]);
+ await f.runtime.restore(f.n,f.store);expect(f.askHost).toHaveBeenCalledOnce();
+});
+it('never restores a previous Edit across a replacement turn',async()=>{
+ const f=fixture();f.runtime.answer(f.n,{...f.request(),decision:'edit_prompt'});f.replaceTurn();await f.runtime.restore(f.n,f.store);f.finishRewind();await f.runtime.restore(f.n,f.store);expect(f.askHost).not.toHaveBeenCalled();
+});

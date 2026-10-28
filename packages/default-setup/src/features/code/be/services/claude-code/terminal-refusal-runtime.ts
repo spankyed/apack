@@ -5,22 +5,44 @@ function nativeRefusalRetirements(n,store){
  let state=nativeRefusalRetirementStores.get(store);
  if(!state){
   if(typeof store.subscribe!=='function'||typeof store.onClosed!=='function')throw Error('Native refusal lifetime changed');
-  state={pending:new Map(),retired:new Map(),problem:undefined};nativeRefusalRetirementStores.set(store,state);
+  state={pending:new Map(),retired:new Map(),rewound:new Map(),problem:undefined};nativeRefusalRetirementStores.set(store,state);
   const capture=()=>{try{for(const item of store.getState().open){
    if(item.kind!=='refusal_fallback_prompt')continue;
    const sessionId=String(n.questionOptions.q()),uuids=item.payload?.retractedMessageUuids??[];
    if(!/^[a-f0-9-]{36}$/i.test(sessionId)||!Array.isArray(uuids)||uuids.some(id=>typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id)))throw Error('Invalid original refusal retirement');
-   state.pending.set(item.id,{sessionId,uuids:[...new Set(uuids)]});
+   const binding=originalContext??n.runtime.ey(),turn=n.runtime.lpe();
+   state.pending.set(item.id,{sessionId,uuids:[...new Set(uuids)],binding,turnId:turn?.turnId,users:(binding.messages?.()??[]).filter(row=>row.type==='user'&&!row.isMeta&&(!row.origin||row.origin.kind==='human')).map(row=>row.uuid)});
   }}catch(error){state.problem=String(error)}};
   capture();store.subscribe(capture);
   store.onClosed(event=>{
    const pending=state.pending.get(event.id);if(!pending)return;state.pending.delete(event.id);
    let retired=state.retired.get(pending.sessionId);if(!retired){retired=new Set();state.retired.set(pending.sessionId,retired);}
    for(const uuid of pending.uuids)retired.add(uuid);
+   if(event.type==='answered'&&event.result==='edit_prompt'&&pending.turnId)state.restoration=pending;
   });
  }
  if(state.problem)throw Error(state.problem);
- return [...state.retired].map(([sessionId,uuids])=>({sessionId,uuids:[...uuids]}));
+ return [...new Set([...state.retired.keys(),...state.rewound.keys()])].map(sessionId=>({sessionId,uuids:[...(state.retired.get(sessionId)??[])],...(state.rewound.has(sessionId)?{rewoundUserUuids:[...state.rewound.get(sessionId)]}:{})}));
+}
+// Read the result of the original rewind; a closed Edit dialog alone is insufficient.
+async function restoreNativeRefusalDraft(n,store){
+ const state=nativeRefusalRetirementStores.get(store),pending=state?.restoration;
+ if(!pending||state.restoring)return;
+ const turn=n.runtime.lpe();if(turn?.turnId===pending.turnId)return;
+ if(turn||String(n.questionOptions.q())!==pending.sessionId||(originalContext??n.runtime.ey())!==pending.binding){state.restoration=undefined;return;}
+ state.restoring=true;
+ try{
+  const box=await pending.binding.composer.read();
+  if(n.runtime.lpe()||String(n.questionOptions.q())!==pending.sessionId||(originalContext??n.runtime.ey())!==pending.binding)return;
+  state.restoration=undefined;
+  const current=new Set((pending.binding.messages?.()??[]).map(row=>row.uuid)),removed=pending.users.filter(uuid=>!current.has(uuid));
+  if(!removed.length||typeof box.text!=='string'||!box.text)return;
+  let rewound=state.rewound.get(pending.sessionId);if(!rewound){rewound=new Set();state.rewound.set(pending.sessionId,rewound);}for(const uuid of removed)rewound.add(uuid);
+  if(pending.binding.toolContext(new AbortController()).getAppState().viewingAgentTaskId!==undefined)return;
+  // Match the original first eligible prompt host, then let its editor check emptiness atomically.
+  const client=n.roster.Kw.list().find(value=>clients.has(value.clientId)&&clientViewCurrent(n,value.clientId)&&value.answers?.includes('ui_prompt_fill'));
+  if(client)await askHost('ui_prompt_fill',{clientId:client.clientId,text:box.text,mode:'replace',ifEmpty:true});
+ }finally{state.restoring=false;}
 }
 function nativeRefusalControl(n,item){
  const pending=[n.themeRoots.ai().get(process.stdout)?.container?.current],seen=new Set(),matches=[];
