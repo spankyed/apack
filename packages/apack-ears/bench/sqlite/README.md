@@ -127,3 +127,16 @@ or latency miss; preserve the failed sample and leave later trials unrun. No rer
 and no relaxed target. Each process uses the same source/fixture; include cold per-process matcher loading and
 all original heartbeat/resource limits. A first FULL miss leaves FULL qualification open rather than scheduling
 more durable trials without a remedy. These counts are set before the larger cohort runs.
+
+
+### Cleanup diagnostic controls
+
+After the corrected cohort's third 100k OFF process missed the unchanged heartbeat target, run exactly one
+fresh 100k OFF process with `--search --progress --diagnostic`, then one with the additional
+`--no-query-watches`. Keep the same 50 point watches, foreground writes/scalar lookups, seed and retirement
+work in both. The control removes the three scalar-query watches and three build-only substring watches;
+it is a diagnostic variant, never a replacement qualification fixture. Both retain exact heartbeat timestamps
+and spans for watched reads, foreground operations/lookups and background batches. Measurement overhead and
+watch scheduling can change; neither outcome qualifies the original workload. Preserve both outcomes and
+correlate overdue timer intervals with spans before attributing stalls or changing production scheduling.
+No FULL retry, batch tuning, target change or reduced-size replacement is part of this diagnostic pair.

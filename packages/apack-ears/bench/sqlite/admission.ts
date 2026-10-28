@@ -13,6 +13,17 @@ import { searchTable } from '../../src/sqlite/index-builds.ts';
 const n = Number(process.argv[2] ?? 10000);
 const durable = process.argv.includes('--durable');
 const search = process.argv.includes('--search');
+const diagnostic = process.argv.includes('--diagnostic');
+const noQueryWatches = process.argv.includes('--no-query-watches');
+assert(!noQueryWatches || diagnostic, 'The watch control is diagnostic only');
+const spans: Array<{ kind: string; phase: string; start: number; end: number }> = [];
+const heartbeatSamples: Array<{ phase: string; at: number; delayMs: number }> = [];
+let phase = 'seed';
+function measured<T>(kind: string, read: () => T): T {
+  if (!diagnostic) return read();
+  const start = performance.now();
+  try { return read(); } finally { spans.push({ kind, phase, start, end: performance.now() }); }
+}
 const needle = search ? 'bucket-7-value' : 'bucket-7';
 const progress = (stage: string) => { if (process.argv.includes('--progress')) writeSync(2, JSON.stringify({ stage, at: performance.now() }) + '\n'); };
 assert(Number.isInteger(n) && n >= 1000 && n <= 100000);
@@ -46,20 +57,20 @@ try {
   progress('seed-end');
   for (let i = 0; i < 50; i++) {
     const watched = id(n - 1 - i);
-    watches.push(e.watch(() => e.getAttr(watched, 'counter'), { next: value => heard.set(watched, value), error: error => errors.push(String(error)) }));
+    watches.push(e.watch(() => measured('watch-point', () => e.getAttr(watched, 'counter')), { next: value => heard.set(watched, value), error: error => errors.push(String(error)) }));
   }
   const expected = Array.from({ length: 10 }, (_, i) => id(7 + i * 100));
-  for (let i = 0; i < 3; i++) watches.push(e.watch(() => e.query('Row').where('slug', needle).limit(10).ids(), {
+  for (let i = 0; i < (noQueryWatches ? 0 : 3); i++) watches.push(e.watch(() => measured('watch-query', () => e.query('Row').where('slug', needle).limit(10).ids()), {
     next: value => assert.deepEqual(value, expected), error: error => errors.push(String(error)),
   }));
   await e.admin.watchesSettled();
   const before = files();
   let maxObservedBytes = total(before), maxObservedWal = before['data.sqlite3-wal'] ?? 0;
   const batchSamples: Array<{ phase: string; outcome: string; ms: number }> = [];
-  let phase = 'build';
+  phase = 'build';
   const step = db.indexBuilds.step.bind(db.indexBuilds);
-  db.indexBuilds.step = () => { const start = performance.now(); const outcome = step(); batchSamples.push({ phase, outcome, ms: performance.now() - start }); return outcome; };
-  heartbeat = startHeartbeat();
+  db.indexBuilds.step = () => { const start = performance.now(); const outcome = measured('background', step); batchSamples.push({ phase, outcome, ms: performance.now() - start }); return outcome; };
+  heartbeat = startHeartbeat(8, diagnostic ? (at, delayMs) => heartbeatSamples.push({ phase, at, delayMs }) : undefined);
   const admitted = performance.now();
   const read = db.values.read.bind(db.values); let admissionReads = 0;
   db.values.read = (...args) => { admissionReads++; return read(...args); };
@@ -73,7 +84,7 @@ try {
   const operations: number[] = [], turnWaits: number[] = [], lookup: number[] = [];
   const searchLookups: Array<{ state: 'building' | 'ready'; ms: number }> = [];
   let indexingErrors = 0;
-  const searchWatches = search ? Array.from({ length: 3 }, () => e.watch(() => e.query('Row').containing(needle).limit(10).ids(), {
+  const searchWatches = search && !noQueryWatches ? Array.from({ length: 3 }, () => e.watch(() => measured('watch-search', () => e.query('Row').containing(needle).limit(10).ids()), {
     next: value => assert.deepEqual(value, expected),
     error: error => { if ((error as { code?: unknown })?.code === 'INDEX_BUILDING') indexingErrors++; else errors.push(String(error)); },
   })) : [];
@@ -89,9 +100,11 @@ try {
     }, { durable });
     assert.equal(e.getAttr(id(index), 'counter'), writes);
     operations.push(performance.now() - started);
+    if (diagnostic) spans.push({ kind: 'foreground-write', phase, start: started, end: performance.now() });
     const query = performance.now();
     assert.deepEqual(e.query('Row').where('slug', needle).limit(10).ids(), expected);
     lookup.push(performance.now() - query);
+    if (diagnostic) spans.push({ kind: 'foreground-lookup', phase, start: query, end: performance.now() });
     if (search && phase === 'build') {
       const at = performance.now(); let state: 'building' | 'ready' = 'ready';
       try { assert.deepEqual(e.query('Row').containing(needle).limit(10).ids(), expected); }
@@ -153,7 +166,7 @@ try {
     maxObservedFilesBytes: { actual: maxObservedBytes, limit: total(before) * 2 + 16 * 1024 * 1024 },
   };
   const passed = Object.values(budgets).every(budget => budget.actual <= budget.limit);
-  console.log(JSON.stringify({ n, indexKind: search ? 'text/vector/trigram' : 'value', admissionReads, searchLookups, indexingErrors, node: process.version, platform: process.platform, arch: process.arch, syncs: durable,
+  console.log(JSON.stringify({ ...(diagnostic ? { diagnostic: { noQueryWatches, spans, heartbeatSamples, qualification: false } } : {}), n, indexKind: search ? 'text/vector/trigram' : 'value', admissionReads, searchLookups, indexingErrors, node: process.version, platform: process.platform, arch: process.arch, syncs: durable,
     sqlite: db.get('SELECT sqlite_version() version')!.version, admissionMs, buildMs, gcMs, writes,
     operationMs: summary(operations), lookupMs: summary(lookup), turnWaitMs: summary(turnWaits), heartbeatIntervalMs: heartbeat.intervalMs, heartbeatDelayMs: summary(heartbeat.delaysMs), batchSamples, nativeBindings,
     samples: { operations, lookup, turnWaits, heartbeatDelays: heartbeat.delaysMs }, files: { before, afterBuild, afterGc }, maxObservedBytes, maxObservedWal,

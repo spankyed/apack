@@ -2,13 +2,15 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 /** A periodic deadline independent of where the workload yields, including its final blocking operation. */
-export function startHeartbeat(intervalMs = 8) {
+export function startHeartbeat(intervalMs = 8, onSample?: (at: number, delayMs: number) => void) {
   const delaysMs: number[] = [];
   let expected = performance.now() + intervalMs;
   let stopped = false;
   const sample = () => {
     const now = performance.now();
-    delaysMs.push(Math.max(0, now - expected));
+    const delayMs = Math.max(0, now - expected);
+    delaysMs.push(delayMs);
+    onSample?.(now, delayMs);
     expected = now + intervalMs;
   };
   const timer = setInterval(sample, intervalMs).unref();
