@@ -92,12 +92,13 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   const shown = (await context()).native.state.notice
   expect(shown.kind).toBe('refusal_fallback_prompt'); expect(shown.originalModel).toBe('claude-opus-5'); expect(shown.fallbackModel).toBe('claude-opus-4-8')
   expect(shown.choices.map((choice: any) => choice.value)).toEqual(['retry_fallback', 'edit_prompt'])
+  const emptyDraft = process.env.CLAUDE_RESEARCH_REFUSAL_EMPTY_DRAFT === '1'
   const original = JSON.parse(await readFile(join(workspace!, 'native-dialog-shapes.json'), 'utf8')).events.flatMap((event: any) => event.value?.open ?? []).find((item: any) => item.id === shown.id && item.kind === shown.kind)
   const retiredIds: string[] = original.payload.retractedMessageUuids
-  expect(retiredIds.length).toBeGreaterThan(0)
+  if(emptyDraft) expect(retiredIds).toEqual([])
+  else expect(retiredIds.length).toBeGreaterThan(0)
   const hasRetired = async () => (await context()).messages.some((message: any) => message.context?.claudeTerminalMessage?.sessionId === sessionId && retiredIds.includes(message.context?.cliUuid))
   if(process.env.CLAUDE_RESEARCH_REFUSAL_EMPTY_DRAFT !== '1') await expect.poll(hasRetired).toBe(true)
-  const emptyDraft = process.env.CLAUDE_RESEARCH_REFUSAL_EMPTY_DRAFT === '1'
   expect(!emptyDraft || decision === 'edit_prompt').toBe(true)
   const draft = emptyDraft ? '' : 'Keep the release review draft.'
   await composer.focus(); await composer.press('Control+a'); await composer.pressSequentially(draft)
@@ -155,7 +156,7 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
   expect(await hasRetired()).toBe(false)
   const persistedRetirements=(await context()).claude.retiredNativeMessages
-  expect(persistedRetirements.find((item: any) => item.sessionId === sessionId).uuids).toEqual(expect.arrayContaining(retiredIds))
+  expect(persistedRetirements?.find((item: any) => item.sessionId === sessionId)?.uuids ?? []).toEqual(expect.arrayContaining(retiredIds))
   await writeFile(join(workspace!, 'native-refusal-app.json'), JSON.stringify({ decision, emptyDraft, afterDecisionContext, shown, prompt, retiredIds, persistedRetirements, captures, geometry, retained, afterDecision, recoveryRetained, sameSessionRecovery: true, sessionId, boundNativePid }, null, 2))
   await writeFile(join(workspace!, 'native-refusal-recovery.json'), JSON.stringify(await context(), null, 2))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeRefusalNotice: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
