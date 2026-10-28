@@ -77,3 +77,19 @@ The prototype is intentionally unfinished: its schema validator and error transl
 is synchronous; fuzzy expansion scans the vocabulary; vector queries use exact scalar scans; backup publication,
 OS I/O failure semantics, permissions, migration and cross-platform packaging are not qualified. It is not a
 second production backend. A passing EARS suite is a feasibility signal, not complete elmdb feature parity.
+
+## Admission load
+
+`run-admission.py` runs fresh-process 10k/100k fixtures with 53 watches, foreground writes/reads, index backfill and
+retired-generation cleanup. Run it in the disposable runner, sequentially:
+
+```sh
+npm run test:linux -- python3 packages/apack-ears/bench/sqlite/run-admission.py .temp/value-index-sync-off
+npm run test:linux -- python3 packages/apack-ears/bench/sqlite/run-admission.py .temp/value-index-durable --durable
+```
+
+The storage plan records targets before qualification. Every report retains all timing samples, complete batch
+spans, correctness/commit checks, file/WAL observations and pass/fail budgets. A failed budget is saved before the
+runner stops. Source/native fingerprints are collected before the cohort. Preserve results before another Linux
+sync, which replaces untracked volume content. This qualifies a synthetic same-connection slice; text/vector
+admission, full app budgets and platform durability qualification remain separate requirements.

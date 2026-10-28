@@ -30,6 +30,7 @@ export function executeQuery(
     db.definition(type);
     db.trackRange(`members:${type}`);
   }
+  let multipleGroups = plan.start.from === 'types' && plan.start.types.length > 1;
   if (plan.start.from === "ids") {
     const ids = plan.start.ids;
     for (const id of ids) db.trackKey(`exists:${id}`);
@@ -38,20 +39,26 @@ export function executeQuery(
     )}`;
     parameters.push(JSON.stringify(ids));
   } else if (plan.start.from === "types") {
-    const order = types.map((t, i) => `WHEN ${literal(t)} THEN ${i}`).join(" ");
-    sql = `SELECT e.id,CASE e.type ${
-      order || "WHEN '' THEN 0"
-    } END major,e.seq ord FROM entities e WHERE e.type IN (SELECT value FROM json_each(?)) AND ${reachable(
-      "e"
-    )}`;
-    parameters.push(JSON.stringify(types));
+    if (types.length === 1) {
+      sql = `SELECT e.id,0 major,e.seq ord FROM entities e WHERE e.type=? AND ${reachable('e')}`;
+      parameters.push(types[0]);
+    } else {
+      const typeOrder = types.map((t, i) => `WHEN ${literal(t)} THEN ${i}`).join(" ");
+      sql = `SELECT e.id,CASE e.type ${typeOrder || "WHEN '' THEN 0"} END major,e.seq ord
+        FROM entities e WHERE e.type IN (SELECT value FROM json_each(?)) AND ${reachable('e')}`;
+      parameters.push(JSON.stringify(types));
+    }
   } else
     sql = `SELECT e.id,0 major,e.seq ord FROM entities e WHERE ${reachable(
       "e"
     )}`;
-  const ordered = () => `SELECT p.id FROM (${sql}) p ORDER BY p.major,p.ord`;
+  // A constant group key must not force a temp sort before LIMIT. For one type, the type/sequence indexes can
+  // stream in insertion order; explicit multi-type starts still keep their requested group order.
+  const order = () => multipleGroups ? 'p.major,p.ord' : 'p.ord';
+  const ordered = () => `SELECT p.id FROM (${sql}) p ORDER BY ${order()}`;
   const idsNow = () => db.all(ordered(), parameters).map((r) => r.id as string);
   const restart = (ids: string[]) => {
+    multipleGroups = false;
     sql = `SELECT value id,0 major,key ord FROM json_each(?)`;
     parameters = [JSON.stringify(ids)];
   };
@@ -94,14 +101,18 @@ export function executeQuery(
               OR EXISTS(SELECT 1 FROM value_members m WHERE m.entity_id=e.id AND m.field=${literal(field)} AND m.kind IN (${kinds}) AND m.value IS probe.value))`;
         if (key !== undefined && value !== null && indexed.length) {
           const list = indexed.map(literal).join(",");
-          if (indexed.length === types.length) {
+          if (specificTypes && indexed.length === types.length) {
             // Drive an indexed equality from its selective lookup, then resolve only matching entities.
             // CROSS JOIN makes this access path explicit rather than scanning the type's candidate rows.
-            sql = `SELECT p.* FROM field_index x CROSS JOIN (${sql}) p WHERE x.entity_id=p.id AND x.type IN (${list}) AND x.field=? AND x.value=?`;
+            sql = `SELECT p.* FROM value_index_builds b CROSS JOIN field_index x CROSS JOIN (${sql}) p
+              WHERE b.type IN (${list}) AND b.field=? AND b.state='ready'
+              AND x.type=b.type AND x.field=b.field AND x.generation=b.generation AND x.value=? AND x.entity_id=p.id`;
             parameters.push(field, key);
           } else
             filter(
-              `((e.type IN (${list}) AND e.id IN (SELECT entity_id FROM field_index WHERE type IN (${list}) AND field=? AND value=?)) OR (e.type NOT IN (${list}) AND (${raw})))`,
+              `((e.type IN (${list}) AND e.id IN (SELECT x.entity_id FROM value_index_builds b JOIN field_index x
+                ON x.type=b.type AND x.field=b.field AND x.generation=b.generation
+                WHERE b.type IN (${list}) AND b.field=? AND b.state='ready' AND x.value=?)) OR (e.type NOT IN (${list}) AND (${raw})))`,
               [field, key, typeof value === "boolean" ? Number(value) : value]
             );
         } else {
@@ -200,6 +211,7 @@ export function executeQuery(
           ) WHERE encounter=1`;
           parameters.push(JSON.stringify(kinds), ...(step.types ? [JSON.stringify(step.types)] : []));
           types = step.types ?? Object.keys(schema.types);
+          multipleGroups = false;
           break;
         }
         const seeds = idsNow(),
@@ -230,7 +242,7 @@ export function executeQuery(
         break;
       }
       case "limit":
-        sql = `SELECT p.* FROM (${sql}) p ORDER BY p.major,p.ord LIMIT ?`;
+        sql = `SELECT p.* FROM (${sql}) p ORDER BY ${order()} LIMIT ?`;
         parameters.push(Math.max(0, Math.floor(step.n)));
         break;
       case "after": {
@@ -453,7 +465,7 @@ export function executeQuery(
   }
   if ((terminal.answer === "rows" || terminal.answer === "firstRow")) {
     const chosen = db.all(
-      `SELECT e.id,e.type FROM (${sql}) p JOIN entities e ON e.id=p.id ORDER BY p.major,p.ord${terminal.answer === "firstRow" ? " LIMIT 1" : ""}`,
+      `SELECT e.id,e.type FROM (${sql}) p JOIN entities e ON e.id=p.id ORDER BY ${order()}${terminal.answer === "firstRow" ? " LIMIT 1" : ""}`,
       parameters
     );
     const rows = db.hydrate(chosen as Array<{id:string;type:string}>, terminal.fields);

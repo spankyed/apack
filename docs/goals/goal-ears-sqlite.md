@@ -271,7 +271,26 @@ deltas. Linux passes 260 SQLite cases and 231 native cases (29 SQLite-only skips
 assertions. The change avoids copying all accumulated outer changes on each write. Future benchmark runs now
 fingerprint the binaries actually loaded, including v13 prebuilds; its zero-trial provenance self-check passed.
 
-Next: continue phase 3 with background index admission and foreground ownership/stall qualification. Strict run `40655434334` is live on typed checkpoint
-`5985709142`; it does not cover the later overflow layout or later work. All phase 3–7 requirements remain,
-including useful search/realistic vectors, four host backup-format failures, complete app composition,
-operational/platform qualification and adoption budgets. Normal production still uses elmdb.
+The first background-admission slice now covers value indexes. Persistent generations/cursors advance in yielding
+transactions on the owning foreground connection. Ordinary writes maintain the admitted generation; incomplete
+and failed indexes use authoritative-value fallbacks. Removed generations receive bounded indexed cleanup.
+Read-only reopen, busy writers, stale owners, failed batches and real killed-process recovery are covered. Cache
+state is prepared before schema commit and accepted afterward without IO; rollback failure stops the builder.
+Single-type fallback pages now stream in sequence order rather than sorting a constant group key. Mixed indexed
+queries retain primary entities whose types are not currently declared.
+
+Disposable Linux passes EARS typechecking, 270 SQLite cases and 232 native cases (38 SQLite-only skips). Four
+mutations fail the intended readiness, intervening-write, premature-publication and atomic-rollback assertions.
+The preliminary 10k/53-watch sample improved from 9.07 ms to 1.50 ms fallback lookup p99 after removing its global
+sort; timer-stall p99 fell from 9.95 ms to 2.80 ms. These smoke samples precede the final error-hardening checkpoint
+and are not the pinned qualification cohorts. The harness now runs separate sync-disabled and FULL/durable loads
+at 10k/100k; targets were recorded before those measurements in the storage plan. Current candidate files follow
+the format-one policy; use fresh/copied logical fixtures rather than treating previous SQLite trial files as stable.
+
+Next: record pinned three-trial 10k/100k admission cohorts, including foreground/watch and WAL/file budgets, then
+complete background text/vector admission and schema validation. The product preference for explicit “indexing”
+versus a potentially slow complete search fallback was asked asynchronously; value-index work does not depend on
+that answer. Strict run `40655434334` remains tied to typed checkpoint `5985709142`, not later implementation.
+All phase 3–7 requirements remain where not explicitly evidenced, including useful search/realistic vectors,
+four host backup-format failures, complete app composition, operational/platform qualification and adoption budgets.
+Normal production still uses elmdb.

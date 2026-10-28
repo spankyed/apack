@@ -78,3 +78,11 @@ it('omits undefined object properties and refuses undefined list positions', () 
   expect(() => e.create('Row', { bad: [undefined] })).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
   expect(e.query('Row').count()).toBe(1);
 });
+
+it('keeps undeclared primary types when a declared type indexes the same field', () => {
+  const e = freshEngine({ types: ['Row'], relationKinds: [], roles: [], rowRules: { Row: { required: [], indexes: ['flag'] } } });
+  e.admin.putAttr('Uninstalled-held', 'flag', true);
+  const declared = e.create('Row', { flag: true }).id();
+  expect(e.query.all().where('flag', true).ids()).toEqual(['Uninstalled-held', declared]);
+  expect(e.query.ids(['Uninstalled-held', declared]).where('flag', true).ids()).toEqual(['Uninstalled-held', declared]);
+});

@@ -80,6 +80,38 @@ protocol must preserve correctness during background builds. SQLite CREATE INDEX
 writer lock; bounded backfill into derived structures, foreground priority and atomic readiness need a concrete
 implementation. A worker thread by itself is not the solution.
 
+The first admission slice implements value indexes. One owning foreground connection advances persistent index
+jobs between synchronous calls with unreferenced immediates; no worker holds a separate long writer transaction.
+A job has a generation, building/ready/failed state and committed sequence cursor. Writes maintain its active
+generation even while building. Reads use authoritative scalar/list values until readiness and all backfill writes
+commit together. Retained indexes keep their generation across unrelated declarations. Removed generations enter
+bounded indexed cleanup; an interrupted or failed build resumes its committed cursor on writable reopen. A stale
+owner stops rather than changing the newer owner's job. Read-only handles use the same safe fallback.
+
+Working qualification targets, set before the load measurements: no primary-row hydration during value-only
+admission; admission below 100 ms for the 10k/100k synthetic fixtures; at most 32 records per backfill transaction
+with a 4 ms cooperative work target; observed foreground operation and timer-stall p99 below 16 ms in sync-disabled
+fixtures. Apply the same targets to separate FULL/durable runs before calling this slice qualified; these have not
+yet been measured. Transaction begin/commit and an indivisible large value can exceed the work target; report full batch
+and foreground latency rather than presenting 4 ms as a hard wall-clock bound. Background work pauses while a unit
+is open and resumes when it ends. Competing writers fail promptly (SQLite busy timeout zero); only the background
+queue retries busy batches after a yielding delay. Measure WAL/file growth and post-build old-generation cleanup: observed WAL at most 16 MiB (or initial WAL plus
+4 MiB if larger), and database-side files at most twice the seeded baseline plus 16 MiB. Require zero retired-generation
+entries after cleanup; freed pages may remain allocated for reuse.
+These are development qualification targets, not the phase-7 app budgets or platform durability qualification.
+
+SQLite's [transaction rules](https://www.sqlite.org/lang_transaction.html) underpin the single-writer and snapshot
+policy. Some I/O/resource errors can end a transaction automatically, so cleanup consults the driver's transaction
+state. If rollback itself fails, the builder stops until reopen, retaining both errors. Readiness cache state is
+prepared before the schema commit; accepting it afterward performs no IO. The [WAL documentation](https://www.sqlite.org/wal.html)
+describes checkpoint/reader interactions; long readers, host filesystem support and real IO failure outcomes remain
+phase-6 qualification, not guarantees inferred from these sync-disabled fixtures.
+
+Text/vector admission still uses a synchronous backfill when its definition changes. Unchanged search definitions
+are retained during value-only declarations. Completing background text/vector readiness and full search/vector
+semantics remains required; this first slice does not declare phase 3 complete. Same-connection watches still hear
+only logical commits made through their connection; cross-process reactive ownership remains to be qualified.
+
 Query diagnostics must distinguish SQLite plans and measured SQL work from the legacy native engine's stage/key
 counts. Never synthesize physical SQLite counters just to satisfy a backend-specific assertion. Preserve logical
 warning and call-count meaning, and update diagnostics consumers/types where the reported information differs.

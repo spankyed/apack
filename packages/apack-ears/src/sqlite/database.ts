@@ -11,6 +11,7 @@ interface StatementSync {
   };
 }
 interface DatabaseSync {
+  readonly inTransaction: boolean;
   prepare(sql: string): StatementSync;
   exec(sql: string): unknown;
   loadExtension(path: string): unknown;
@@ -26,6 +27,7 @@ import type { SqliteStatement } from "../runtime.ts";
 import { RESERVED_ATTRIBUTES } from "../errors.ts";
 import { sameValue } from "../utils.ts";
 import { executeQuery } from "./query.ts";
+import { SqliteIndexBuilds, type SqliteValueIndex } from "./index-builds.ts";
 import { SqliteSearch } from "./search.ts";
 import { SqliteValues, type SqliteValueLayout } from "./values.ts";
 
@@ -79,6 +81,7 @@ export class SqliteDatabase implements EarsDatabase {
   private counter = 0;
   readonly search: SqliteSearch;
   readonly values: SqliteValues;
+  readonly indexBuilds: SqliteIndexBuilds;
   private readonly layouts = new Map<string, SqliteValueLayout>();
   private explaining?: { statements: SqliteStatement[]; count: number };
 
@@ -101,7 +104,7 @@ export class SqliteDatabase implements EarsDatabase {
       fail("NO_DATABASE", `No SQLite database at ${file}`);
     this.sql = new NativeDatabase(file, { readonly: this.readOnly });
     try {
-      this.sql.exec("PRAGMA busy_timeout=5000; PRAGMA cache_size=-65536;");
+      this.sql.exec("PRAGMA busy_timeout=0; PRAGMA cache_size=-65536;");
       if (!this.readOnly) {
         this.sql
           .exec(`PRAGMA journal_mode=WAL; PRAGMA fullfsync=ON; PRAGMA checkpoint_fullfsync=ON; PRAGMA synchronous=${
@@ -111,14 +114,15 @@ export class SqliteDatabase implements EarsDatabase {
           CREATE TABLE IF NOT EXISTS entities(id TEXT PRIMARY KEY, type TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE,
             trashed INTEGER NOT NULL, short_code TEXT UNIQUE);
           CREATE INDEX IF NOT EXISTS entity_type ON entities(type,trashed,seq);
+          CREATE INDEX IF NOT EXISTS entity_admission ON entities(type,seq);
           CREATE TABLE IF NOT EXISTS relations(id TEXT PRIMARY KEY, kind TEXT NOT NULL, source TEXT NOT NULL,
             target TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE, info BLOB);
           CREATE INDEX IF NOT EXISTS relations_source ON relations(source,kind,seq);
           CREATE INDEX IF NOT EXISTS relations_target ON relations(target,kind,seq);
           CREATE INDEX IF NOT EXISTS relations_kind ON relations(kind,seq);
           CREATE TABLE IF NOT EXISTS field_index(entity_id TEXT NOT NULL, type TEXT NOT NULL, field TEXT NOT NULL,
-            value TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY(entity_id,field,value));
-          CREATE INDEX IF NOT EXISTS field_lookup ON field_index(type,field,value,seq);
+            value TEXT NOT NULL, seq INTEGER NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(entity_id,field,value,generation));
+          CREATE INDEX IF NOT EXISTS field_lookup ON field_index(type,field,generation,value,seq);
         `);
       }
       this.values = new SqliteValues(this, { encode: value => this.pack(value), decode: bytes => this.unpack(bytes) });
@@ -133,7 +137,14 @@ export class SqliteDatabase implements EarsDatabase {
       this.heldRevision = Number(this.meta("schemaRevision") ?? 0);
       if (!this.readOnly) this.search.ensure(this.heldSchema);
       else this.search.loadVectors(this.heldSchema);
+      this.indexBuilds = new SqliteIndexBuilds(this, () => !this.active, () => this.checkRevision(),
+        (id, type, seq, field, generation) => {
+          const row = this.values.read(this.valueLayout(type), [id], [field])[0];
+          if (!row) fail('CORRUPT', 'Index backfill found an entity without authoritative values');
+          this.refileValue(row!, seq, field, generation);
+        });
       if (options.schema) this.setSchema(options.schema);
+      this.indexBuilds.resume();
     } catch (error) {
       this.opened = false;
       try { this.sql.close(); }
@@ -254,13 +265,8 @@ export class SqliteDatabase implements EarsDatabase {
     return this.heldSchema;
   }
   isIndexed(type: string, field: string): boolean {
-    return (
-      field === "role" ||
-      field === "shortCode" ||
-      Object.values(this.definition(type).indexes ?? {}).some(
-        (d: any) => d.kind === "value" && d.fields[0] === field
-      )
-    );
+    this.definition(type);
+    return this.indexBuilds.ready(type, field);
   }
   definition(type: string): Data {
     if (type === "Relation") fail("RESERVED_TYPE", "Relation is reserved");
@@ -496,20 +502,20 @@ export class SqliteDatabase implements EarsDatabase {
         [row.id, JSON.stringify(updating)]);
     } else this.run('DELETE FROM field_index WHERE entity_id=?', [row.id]);
     for (const field of updating) {
-      const value = row[field];
-      for (const item of Array.isArray(value) ? value : [value]) {
-        const key = scalarKey(item);
-        if (key !== undefined)
-          this.run("INSERT OR IGNORE INTO field_index VALUES (?,?,?,?,?)", [
-            row.id,
-            row.entityType,
-            field,
-            key,
-            seq,
-          ]);
-      }
+      const generation = this.indexBuilds.generation(row.entityType, field);
+      if (generation !== undefined) this.refileValue(row, seq, field, generation, false);
     }
   }
+  private refileValue(row: Data, seq: number, field: string, generation: number, replace = true) {
+    if (replace) this.run('DELETE FROM field_index WHERE entity_id=? AND field=? AND generation=?', [row.id, field, generation]);
+    const value = row[field];
+    for (const item of Array.isArray(value) ? value : [value]) {
+      const key = scalarKey(item);
+      if (key !== undefined) this.run('INSERT OR IGNORE INTO field_index VALUES (?,?,?,?,?,?)',
+        [row.id, row.entityType, field, key, seq, generation]);
+    }
+  }
+
   private newRow(
     op: Data,
     now: number,
@@ -1054,6 +1060,7 @@ export class SqliteDatabase implements EarsDatabase {
     } finally {
       this.active = undefined;
       unit.ended();
+      this.indexBuilds.wake();
     }
   }
   invalidateLayouts() { this.layouts.clear(); }
@@ -1110,18 +1117,35 @@ export class SqliteDatabase implements EarsDatabase {
       for (const [type, definition] of Object.entries(next.types) as Array<[string, Data]>) this.layouts.set(type,
         this.values.declare(type, ['createdAt','updatedAt','trashedAt','shortCode','role', ...Object.keys(definition.fields ?? {})]));
       this.search.ensure(next);
-      this.sql.exec("DELETE FROM text_meta");
+      const indexes: SqliteValueIndex[] = [];
+      for (const [type, definition] of Object.entries(next.types) as Array<[string, Data]>) {
+        const fields = new Set<string>(['role', 'shortCode']);
+        for (const index of Object.values(definition.indexes ?? {}) as Data[]) if (index.kind === 'value') {
+          if (!Array.isArray(index.fields) || index.fields.length !== 1 || typeof index.fields[0] !== 'string' || index.unique)
+            fail('SCHEMA_INVALID', 'SQLite value indexes require one field and do not declare uniqueness');
+          fields.add(index.fields[0]);
+        }
+        for (const field of fields) indexes.push({ type, field });
+      }
+      this.indexBuilds.admit(indexes, this.heldRevision + 1);
       this.putMeta("schema", next);
       this.putMeta("schemaRevision", this.heldRevision + 1);
-      this.eachRow((row, seq) => {
-        this.refile(row, seq, next);
-        this.search.refile(row, seq, next);
-      });
+      const searchDefinitions = (definition: Data | undefined) => Object.fromEntries(
+        Object.entries(definition?.indexes ?? {}).filter(([, index]) => (index as Data).kind !== 'value'));
+      const changedSearch = new Set(Object.keys(next.types).filter(type =>
+        !sameValue(searchDefinitions(this.heldSchema.types[type]), searchDefinitions(next.types[type]))));
+      if (changedSearch.size) {
+        for (const type of changedSearch) this.run('DELETE FROM text_meta WHERE entity_id IN (SELECT id FROM entities WHERE type=?)', [type]);
+        this.eachRow((row, seq) => { if (changedSearch.has(row.entityType)) this.search.refile(row, seq, next); });
+      }
       this.putMeta("commit", this.sequence + 1);
+      const indexState = this.indexBuilds.readState();
       this.sql.exec("COMMIT");
       this.heldSchema = next;
       this.schemaPresent = true;
       this.heldRevision++;
+      this.indexBuilds.acceptState(indexState);
+      this.indexBuilds.wake();
       return report;
     } catch (e) {
       this.sql.exec("ROLLBACK");
@@ -1194,6 +1218,7 @@ export class SqliteDatabase implements EarsDatabase {
       this.sql.exec("COMMIT");
       this.active = undefined;
       unit.ended();
+      this.indexBuilds.wake();
     } catch (e) {
       if (unit.isOpen) unit.abort();
       throw e;
@@ -1276,6 +1301,7 @@ export class SqliteDatabase implements EarsDatabase {
   }
   close() {
     if (!this.opened) return;
+    this.indexBuilds.stop();
     if (this.active) this.active.abort();
     this.sql.close();
     this.opened = false;
