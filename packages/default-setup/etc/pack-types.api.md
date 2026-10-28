@@ -8067,8 +8067,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -8972,6 +8972,7 @@ declare const fill: z.ZodObject<{
         insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
+    focus: z.ZodOptional<z.ZodLiteral<true>>;
     decorations: z.ZodOptional<z.ZodArray<z.ZodObject<{
         _apackThemeColor: z.ZodOptional<z.ZodString>;
         _apackThemeBackgroundColor: z.ZodOptional<z.ZodString>;

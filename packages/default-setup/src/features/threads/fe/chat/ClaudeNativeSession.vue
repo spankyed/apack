@@ -2,7 +2,12 @@
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
     <section v-if="!active && view?.state?.notice" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
-        <h3>{{ view.state.notice.title }}</h3>
+        <header v-if="view.state.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
+          <h3>{{ view.state.notice.title }}</h3>
+          <a v-if="view.state.notice.helpUrl" :href="view.state.notice.helpUrl" target="_blank" rel="noopener noreferrer">Learn more</a>
+          <button type="button" class="native-button native-button--launch" :disabled="inputPending" @click="open"><span aria-hidden="true" class="native-command">›_</span> Use native interface</button>
+        </header>
+        <h3 v-else>{{ view.state.notice.title }}</h3>
         <template v-if="view.state.notice.kind === 'plugin_hint' || view.state.notice.kind === 'lsp_recommendation'">
           <p class="native-notice__identity">{{ view.state.notice.pluginName }} · {{ view.state.notice.marketplaceName }}</p>
           <PopoverRoot :key="view.state.notice.revision">
@@ -17,7 +22,6 @@
         </template>
         <template v-else>
           <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
-          <p v-if="view.state.notice.kind === 'refusal_fallback_prompt' && view.state.notice.helpUrl"><a :href="view.state.notice.helpUrl" target="_blank" rel="noopener noreferrer">Learn more</a></p>
           <p v-if="view.state.notice.kind === 'auto_mode_server_fallback'" class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
         </template>
       </div>
@@ -33,7 +37,7 @@
         </template>
       </div>
     </section>
-    <div v-if="!active" class="native-launch__actions">
+    <div v-if="!active && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" class="native-launch__actions">
       <span v-if="launchProblem" role="status" class="native-problem">{{ launchProblem }}</span>
       <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
@@ -191,6 +195,12 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 .native-notice__url { color: #9f9a92; font-size: 11px; }
 .native-notice--recommendation { padding: 8px 12px; }
 .native-notice--recommendation h3, .native-notice--recommendation p { margin-bottom: 4px; }
+.native-notice__header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 4px; }
+.native-notice__header h3 { flex: 1; margin: 0; }
+.native-notice__header a { font-size: 11px; color: #c9c5bf; text-underline-offset: 3px; }
+.native-notice__header a:hover { text-decoration: underline; }
+.native-notice__header a:focus-visible { outline: 1px solid #8eadd3; outline-offset: 3px; }
+.native-notice__header .native-button { padding: 3px 6px; font-size: 11px; }
 .native-notice__identity { overflow-wrap: anywhere; }
 .native-notice__details { padding: 0; border: 0; background: none; color: #aaa59e; font-size: 11px; cursor: pointer; }
 .native-notice__details:focus-visible { outline: 1px solid #8eadd3; outline-offset: 3px; }

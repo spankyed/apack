@@ -734,3 +734,13 @@ it('maps Select All over the app empty paragraph and accepts its native restorat
   expect(bridge.fillDraft({mode:'replace',text:'Original prompt',ifEmpty:true},bridge.revision)).toBe(true);expect(bridge.readDraft()).toEqual({text:'Original prompt',cursor:15});
  }finally{bridge.dispose();spelling.mockRestore();}
 });
+
+
+it('returns focus from a dismissed notice after restoration without stealing another control',()=>{
+ const focused=vi.spyOn(document,'hasFocus').mockReturnValue(true),target=document.createElement('input');document.body.append(target);
+ const bridge=bindClaudePromptEditor(editor,()=>{},()=>{}),focus=vi.spyOn(editor.view,'focus');
+ try{
+  target.focus();expect(bridge.fillDraft({mode:'replace',text:'Original',ifEmpty:true,focus:true},bridge.revision)).toBe(true);expect(focus).not.toHaveBeenCalled();expect(document.activeElement).toBe(target);
+  editor.commands.clearContent();target.blur();expect(bridge.fillDraft({mode:'replace',text:'Original',ifEmpty:true,focus:true},bridge.revision)).toBe(true);expect(focus).toHaveBeenCalledOnce();
+ }finally{bridge.dispose();target.remove();focused.mockRestore();}
+});

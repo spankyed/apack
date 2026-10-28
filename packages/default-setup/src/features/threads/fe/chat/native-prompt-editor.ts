@@ -177,6 +177,11 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     if (next.doc.firstChild?.type.name === 'claudePromptSource' && dom.ownerDocument.hasFocus()) tr.scrollIntoView()
     editor.view.dispatch(tr)
     if (fillPaint?.revision === revision) fillPaint = { ...fillPaint, text: serialize(editor.state.doc), drawn: decorations.key.getState(editor.state) ?? drawn }
+    if (input.focus && origin === 'app' && dom.ownerDocument.hasFocus()) {
+      const active = dom.ownerDocument.activeElement
+      // A restored prompt may reclaim the dismissed notice, never a newly selected control.
+      if (active === dom.ownerDocument.body || active === dom || active?.closest('[data-native-notice="refusal_fallback_prompt"]')) editor.view.focus()
+    }
     return true
   }
   function dismissSuggestion() {

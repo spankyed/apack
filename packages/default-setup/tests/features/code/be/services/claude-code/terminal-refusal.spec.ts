@@ -97,7 +97,7 @@ it('waits for the original Edit rewind, mirrors its removed human identity and f
  const f=fixture();f.runtime.answer(f.n,{...f.request(),decision:'edit_prompt'});
  await f.runtime.restore(f.n,f.store);expect(f.askHost).not.toHaveBeenCalled();
  f.finishRewind();await f.runtime.restore(f.n,f.store);
- expect(f.askHost).toHaveBeenCalledExactlyOnceWith('ui_prompt_fill',{clientId:'desktop',text:'Original native draft',mode:'replace',ifEmpty:true});
+ expect(f.askHost).toHaveBeenCalledExactlyOnceWith('ui_prompt_fill',{clientId:'desktop',text:'Original native draft',mode:'replace',ifEmpty:true,focus:true});
  expect(f.runtime.read(f.n).retirements).toEqual([{sessionId:f.sessionId,uuids:f.payload.retractedMessageUuids,rewoundUserUuids:[f.humanUuid]}]);
  await f.runtime.restore(f.n,f.store);expect(f.askHost).toHaveBeenCalledOnce();
 });

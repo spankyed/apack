@@ -379,7 +379,7 @@ async function askHost(subtype,args){
    let bytes=0;const chunks=[];response.on('data',chunk=>{bytes+=chunk.length;if(bytes>2*1048576)response.destroy();else chunks.push(chunk);});
    response.on('error',()=>resolve(undefined));response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString());resolve(response.statusCode===200&&value.request_id===id&&value.pid===process.pid&&value.sessionId===current.sessionId?value.result:undefined);}catch{resolve(undefined);}});
   });request.on('error',()=>resolve(undefined));request.on('timeout',()=>request.destroy());
-  request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,request_id:id,sequence:++hostSequence,request:{subtype,surface:'desktop',client_id:args.clientId,...(args.text!==undefined?{text:args.text}:{}),...(args.mode!==undefined?{mode:args.mode}:{}),...(args.ifEmpty===true?{ifEmpty:true}:{}),...(args.decorations!==undefined?{decorations:args.decorations}:{})}}));
+  request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,request_id:id,sequence:++hostSequence,request:{subtype,surface:'desktop',client_id:args.clientId,...(args.text!==undefined?{text:args.text}:{}),...(args.mode!==undefined?{mode:args.mode}:{}),...(args.ifEmpty===true?{ifEmpty:true}:{}),...(args.focus===true?{focus:true}:{}),...(args.decorations!==undefined?{decorations:args.decorations}:{})}}));
  });
 }
 function restoreHosts(n){

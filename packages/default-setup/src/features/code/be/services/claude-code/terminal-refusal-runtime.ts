@@ -41,7 +41,7 @@ async function restoreNativeRefusalDraft(n,store){
   if(pending.binding.toolContext(new AbortController()).getAppState().viewingAgentTaskId!==undefined)return;
   // Match the original first eligible prompt host, then let its editor check emptiness atomically.
   const client=n.roster.Kw.list().find(value=>clients.has(value.clientId)&&clientViewCurrent(n,value.clientId)&&value.answers?.includes('ui_prompt_fill'));
-  if(client)await askHost('ui_prompt_fill',{clientId:client.clientId,text:box.text,mode:'replace',ifEmpty:true});
+  if(client)await askHost('ui_prompt_fill',{clientId:client.clientId,text:box.text,mode:'replace',ifEmpty:true,focus:true});
  }finally{state.restoring=false;}
 }
 function nativeRefusalControl(n,item){

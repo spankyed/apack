@@ -173,3 +173,9 @@ it('preserves the atomic empty-editor condition for native restoration and rejec
  const f=fixture();const request=fill();Object.assign(request.request,{ifEmpty:true});f.hosts.receive(request);await flush();expect(f.host.fill).toHaveBeenCalledWith(expect.objectContaining({ifEmpty:true}),expect.any(AbortSignal),expect.any(Number));
  f.hosts.receive({...fill('invalid'),request:{...fill().request,ifEmpty:false}});await flush();expect(f.host.fill).toHaveBeenCalledOnce();expect(f.answer()).toMatchObject({response:{response:{filled:false}}});f.hosts.close();
 });
+
+
+it('accepts restoration focus only with empty-only replacement',async()=>{
+ const f=fixture();f.hosts.receive({...fill('focus'),request:{...fill().request,mode:'replace',ifEmpty:true,focus:true}});await flush();expect(f.host.fill).toHaveBeenCalledWith(expect.objectContaining({ifEmpty:true,focus:true}),expect.any(AbortSignal),expect.any(Number));
+ f.hosts.receive({...fill('invalid-focus'),request:{...fill().request,focus:true}});await flush();expect(f.host.fill).toHaveBeenCalledOnce();expect(f.answer()).toMatchObject({response:{response:{filled:false}}});f.hosts.close();
+});
