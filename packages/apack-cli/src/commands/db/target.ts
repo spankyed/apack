@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { resolveAppEnvironment, APP_ENVS, type AppEnvironment, type AppEnv } from '@apackdev/sdk/env';
-import { findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
+import { configuredDatabaseFormat, findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
 import { consoleEars, type ConsoleScope } from '@apackdev/sdk/database-console';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { cliDirs } from '../../app/pack-host';
@@ -64,6 +64,8 @@ export function parseDbArgs<O extends NonNullable<ParseArgsConfig['options']>>(a
     : profile !== undefined ? resolveStoredProfile(cliDirs(), profile)
     : undefined;
   const context = resolveAppEnvironment({ env, ...(userDataDir !== undefined && { userDataDir }) });
+  // Candidate isolation is checked before commands reserve backup paths or take a profile write lock.
+  configuredDatabaseFormat(context.userDataDir);
   const target: DbTarget = {
     env, userDataDir: context.userDataDir, apiPortFile: context.apiPortFile, named: named.length === 1,
     ...(schemaFrom !== undefined && { schemaFrom: path.resolve(schemaFrom) }),
