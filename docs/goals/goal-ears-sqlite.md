@@ -301,13 +301,15 @@ the Mac timeout's cause is still not isolated. Node version and compiler/test bu
 
 The approved helper verified clean source, engine pin, remote head and exact strict success, then privately
 fast-forwarded canonical to `683e1d5912` and changed its vendor link to private 6ab2f69. No master merge, normal
-app adoption or daily-Mac native build occurred. The continuation's newer scalar sorting, limit pushdown and
-schema race fix still require their own exact strict gate before a further canonical fast-forward.
+app adoption or daily-Mac native build occurred. The continuation was then published as **`194c72c77c`** on the existing draft branch; detached integration
+is clean at that commit. Its exact [strict run 40703362139](https://github.com/spankyed/apack/actions/runs/40703362139)
+is confirmed in progress. The newer scalar sorting, limit pushdown and schema race fix require this gate before
+a further canonical fast-forward. PR #286 remains a draft at this source. Do not start a duplicate run.
 
 ### Next deliverables and full remaining scope
 
-Publish the committed continuation to the existing draft branch and run its exact strict gate; preserve the
-canonical green checkpoint until that succeeds. Scalar-limit statement profiles reduce work but the earlier
+Poll exact strict run `40703362139` at `194c72c77c`; preserve the canonical `683e1d5912` green checkpoint
+until it succeeds. The approved helper now expects that checkpoint as its starting base. Scalar-limit statement profiles reduce work but the earlier
 paired cohort showed no overall scalar-sort win. Continue balanced performance qualification and general top-k,
 complete atomic schema validation and background text/vector/trigram admission, and qualify IO/ownership under
 the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
