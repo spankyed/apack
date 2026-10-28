@@ -1,13 +1,10 @@
 // The watch scheduler's guarantees under any write rate (G14 of elmdb's goal-elmdb-next.md), on a clock the spec
 // moves: a read's cost is what it advances the clock by, so a run is as cheap or as expensive as a case says, on any
 // machine. Commits are real ones, to a real database; turns of the event loop are real too.
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { createConnection, type Connection } from '../../src/database.ts';
 import { createWatches, WATCH_SCHEDULE, type WatchClock, type Watches } from '../../src/watch.ts';
-import { createTemporaryDatabases } from '../../src/lmdb/index.ts';
-
-const databases = createTemporaryDatabases();
-afterAll(() => databases.disposeAll());
+import { openTestDatabase } from './engine-under-test.ts';
 
 /** A clock that moves only when told, firing the timers it passes */
 function fakeClock() {
@@ -87,7 +84,7 @@ const settledNow = async () => {
 };
 
 beforeEach(() => {
-  const { database } = databases.open({ types: { Row: { required: [] } }, relations: {}, roles: [] });
+  const database = openTestDatabase({ types: { Row: { required: [] } }, relations: {}, roles: [] });
   connection = createConnection(database);
   time = fakeClock();
   warnings = [];

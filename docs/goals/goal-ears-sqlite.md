@@ -200,9 +200,12 @@ checkout `elmdb-worktrees.noindex/sqlite-baseline`; source/hash provenance is re
 [implementation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/). No Rust target was copied
 or compiled locally. Original worktree dependencies and compiled outputs remain private.
 
+Corrected checkpoint `d93afe4190` is under strict validation in run `40636458325`; the earlier run is terminal,
+with both native shards and integration-2 passing and only the two diagnosed shards failing.
+
 Targeted checks on the current integrated API: default elmdb 221 passed with 12 opt-in cases skipped; SQLite
-232 passed with one known `explain` gap. Eight scheduler cases still instantiate elmdb directly and must move to
-the shared fixture before they count as SQLite coverage. EARS typechecking and the refined static guard pass.
+232 passed with one known `explain` gap. The eight scheduler cases now select the backend through the shared database fixture and pass on both
+SQLite and the pinned elmdb baseline; this closes the earlier coverage gap without changing their assertions. EARS typechecking and the refined static guard pass.
 Native-oracle probes exposed and fixed null-list membership and the prototype's incorrect retroactive schema
 refusal; ordinary typed writes now validate only changed fields, while unchecked repair remains possible.
 
