@@ -40,9 +40,9 @@ function declaredType(field: FieldType, declared: ReadonlySet<string>): FieldTyp
   return field;
 }
 
-/** Whether a text or vector index can read a field of this type: text, a list of it, or anything */
+/** Whether a text, vector or trigram index can read a field of this type, as elmdb holds it: text, a list of text, or anything */
 const holdsText = (field: FieldType) =>
-  field.type === 'string' || field.type === 'any' || (field.type === 'list' && (field.of.type === 'string' || field.of.type === 'any'));
+  field.type === 'string' || field.type === 'any' || (field.type === 'list' && field.of.type === 'string');
 
 /**
  * The elmdb schema of `schema`. A type's fields are those its rules type (`RowRules.fields`, read off its shape), each as
@@ -59,7 +59,7 @@ export function toElmdbSchema(schema: EngineSchema): object {
   for (const [type, rules] of Object.entries(schema.types)) {
     const fields: Record<string, object> = {};
     const indexes: Record<string, object> = {};
-    const textRead = new Set([...Object.keys(rules.search?.fields ?? {}), ...(rules.embed?.from ?? [])]);
+    const textRead = new Set([...Object.keys(rules.search?.fields ?? {}), ...(rules.embed?.from ?? []), ...(rules.substrings ?? [])]);
     for (const [field, rule] of Object.entries(rules.fields ?? {}) as Array<[string, FieldRule]>) {
       if (isEngineField(field)) continue;
       const { optional, nullable, ...held } = rule;
@@ -98,6 +98,14 @@ export function toElmdbSchema(schema: EngineSchema): object {
       const { from, chunk = 'whole', model, dims } = rules.embed;
       if (Object.prototype.hasOwnProperty.call(indexes, 'embedding')) throw new Error(`${type}: a field named "embedding" is indexed, and the vector index has that name`);
       setField(indexes, 'embedding', { kind: 'vector', from: [...from], chunk, dims, metric: 'cosine', precision: 'f32', model });
+    }
+    // The trigram index (`substrings`), over fields read as the text index reads them
+    if (rules.substrings?.length) {
+      for (const field of rules.substrings) {
+        if (!Object.prototype.hasOwnProperty.call(fields, field)) setField(fields, field, { type: 'any', optional: true, nullable: true });
+      }
+      if (Object.prototype.hasOwnProperty.call(indexes, 'substrings')) throw new Error(`${type}: a field named "substrings" is indexed, and the trigram index has that name`);
+      setField(indexes, 'substrings', { kind: 'trigram', fields: [...rules.substrings] });
     }
     setField(types, type, {
       ...(rules.shortCode !== undefined && { shortCode: { prefix: rules.shortCode } }),

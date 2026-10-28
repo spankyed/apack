@@ -21,7 +21,9 @@ export type QueryStep =
   | { step: 'near'; vector: number[]; index?: string; k?: number }
   | { step: 'like'; id: string; index?: string; k?: number }
   | { step: 'hybrid'; query: string; vector: number[]; textIndex?: string; vectorIndex?: string; k?: number; options?: SearchOptions }
-  | { step: 'search'; query: string; index?: string; options?: SearchOptions };
+  | { step: 'search'; query: string; index?: string; options?: SearchOptions }
+  | { step: 'containing'; text: string; caseInsensitive?: boolean }
+  | { step: 'matching'; pattern: string };
 export type QueryTerminal =
   | { answer: 'ids' | 'count' | 'first' | 'last' | 'exists' }
   | { answer: 'rows' | 'firstRow'; fields?: string[] }

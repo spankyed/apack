@@ -241,6 +241,15 @@ export interface MemoEntity {
       .rejects.toThrow(`Entity "Memo": its indexes name "staus", which src/memo.ts#MemoEntity doesn't declare`);
   });
 
+  it("declares the trigram index's fields, and refuses one its shape doesn't", async () => {
+    write('src/memo.ts', 'export interface MemoEntity { text: string }\n');
+    const files = await generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity', substrings: ['text'] }, Chunk: { substrings: ['body'] } } } });
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"],"substrings":["text"],"fields":');
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Chunk":{"required":[],"substrings":["body"]}');
+    await expect(generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity', substrings: ['txt'] } } } }))
+      .rejects.toThrow(`Entity "Memo": its substrings names "txt", which src/memo.ts#MemoEntity doesn't declare`);
+  });
+
   it('names the declared entities and passes them to the typed helpers, with the writes', async () => {
     write('src/memo.ts', 'export interface MemoEntity { text: string }\n');
     const ears = (await generate({ data: { entities: { Memo: { shape: "src/memo.ts#MemoEntity" }, Tag: {} } }, }))['src/__generated__/ears.ts'];

@@ -20,7 +20,7 @@ EARS, the entity-attribute-relation graph store behind apack's data: the engine,
 | `storage.ts` | Backend-neutral discriminated mutations, loads, reads, query plans and answers; no runtime codec or persistence dependency |
 | `query.ts` | `createQuery`: the query entry points (`query(type)`, `query.ids`, `query.all`, `query.withTrashed`, `query.trashed`) and the builder, a recipe each terminal compiles to one of elmdb's plans (`elmdb/docs/architecture/engine.md`, Reads: plans); `b64Encode`/`b64Decode` |
 | `write.ts` | `createWrites`: `create`, `upsert`, `write` and the write builder, each call one of elmdb's batch operations (`elmdb/docs/architecture/engine.md`, Writes: batches and units) |
-| `schema.ts` | `EngineSchema` (each type's `RowRules`, each relation kind's `RelationRules`, the roles) and `toElmdbSchema`, the elmdb schema it becomes: required and indexed fields declared, every other field allowed, each index a value index of one field; `withDeclarations`, which `admin.declare` merges with |
+| `schema.ts` | `EngineSchema` (each type's `RowRules`, each relation kind's `RelationRules`, the roles) and `toElmdbSchema`, the elmdb schema it becomes: each field the rules type declared as its type, required and indexed fields declared, every other field allowed; a value index per indexed field, and the text (`search`), vector (`embedding`) and trigram (`substrings`) indexes, a field they read held to text or anything; `withDeclarations`, which `admin.declare` merges with |
 | `errors.ts` | `EarsError` and its codes, `RESERVED_ATTRIBUTES`, which every attribute write refuses, and `RESERVED_ENTITY_TYPES`, the names the engine's own ids are written with (`Relation-…`, `Sequence-…`), which the SDK's manifest schema refuses as a pack's entity type |
 | `names.ts` | `createNameChecks`: the refusal of a relation kind (`UNKNOWN_RELATION_KIND`) or a role (`UNKNOWN_ROLE`) the schema doesn't declare, which links, role writes, reads and walks call |
 | `ids.ts`, `utils.ts` | `newId`, `entityTypeOf` (the one reader of an id's type), `setField` (a field written as an own property, `__proto__` included); `isPlainObject`, `idSuffix`, `sameValue` |
@@ -103,6 +103,12 @@ Held by the types and the engine specs, which say more than a rule over names co
   counting `stale` each whose chunk changed since. `near(vector, { k })`, `like(id, { k })` and `hybrid(text, vector,
   { k, ...searchOptions })` are plan steps that `hits()` ends as it does `search`; a pending chunk is found by none of
   them. The engine never calls a model: the SDK's `embedPending` does (`@apackdev/sdk/services`).
+- **Substrings and patterns.** A type whose row rules declare `substrings` (fields) has an elmdb trigram index named
+  `substrings` over them (`schema.ts`). `containing(text, { caseInsensitive? })` and `matching(pattern)` (Rust's
+  `regex` syntax; `PATTERN_INVALID` for look-around or backreferences) are plan steps that filter without ranking:
+  after a type start they read the index's candidates and check each, after other steps they filter what was reached
+  (`elmdb/docs/architecture/search.md`, Substrings and patterns as built). A type with none refuses them
+  (`UNKNOWN_INDEX`).
 - **Watches.** `watch(read, observer)` runs `read` and delivers its result, then runs it again after every commit that
   wrote into what it read, delivering each result that differs from the last, with the commit's sequence
   (`lastCommit()`: elmdb's, one per commit, increasing for as long as the database exists). Tracking is elmdb's

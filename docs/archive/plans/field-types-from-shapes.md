@@ -17,7 +17,7 @@ shape, including the writes the compiler never sees.
 - **One source, derived everywhere.** The shapes generate the typed facades, the row rules and the manifest's checks; the
   schema joins them as one more derivation, so a field's type is written once. The other directions were weighed and
   set aside: generating the shapes from elmdb's schema makes two sources while the move happens and gives up the
-  shapes' TypeScript (elmdb's `docs/roadmap/typed-schema.md`), and slimming elmdb's schema to what apack sends today
+  shapes' TypeScript (elmdb's `docs/archive/roadmap/typed-schema.md`), and slimming elmdb's schema to what apack sends today
   removes the checks this plan puts to use.
 - **The mismatches stop.** D25 and D26 in elmdb's goal were the schema and the shapes disagreeing — entity names elmdb
   can't hold, and text indexes that had to read `any` fields because no type reached the schema.

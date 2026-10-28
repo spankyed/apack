@@ -36,7 +36,7 @@
       "description": "Converse with assistants and manage threads, messages and artifacts.",
       "entities": {
         "Thread": { "shape": "src/features/threads/be/types.ts#ThreadShape", "shortCode": "THR", "indexes": ["pinned"] },
-        "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity", "search": { "fields": { "text": 1 } } },
+        "Message": { "shape": "src/features/threads/be/types.ts#MessageEntity", "search": { "fields": { "text": 1 } }, "substrings": ["text"] },
         "Artifact": { "shape": "src/features/threads/be/types.ts#ArtifactEntity" }
       },
       "designation": "threads",

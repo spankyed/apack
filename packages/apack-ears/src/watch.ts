@@ -98,7 +98,12 @@ const later = (fn: () => void) => {
 
 const PROCESS_CLOCK: WatchClock = {
   now: () => performance.now(),
-  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  // A re-run waiting out its gap is no reason for a process to stay alive
+  setTimeout: (fn, ms) => {
+    const handle = setTimeout(fn, ms);
+    (handle as { unref?: () => void }).unref?.();
+    return handle;
+  },
   clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
@@ -142,6 +147,7 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
       at: earliest,
       handle: clock.setTimeout(() => {
         timer = undefined;
+        if (closed()) return;
         plan(true);
         settleWaiting();
       }, earliest - now),
@@ -205,8 +211,29 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
     }
   };
 
+  /**
+   * Whether the database was closed under the watches: its owner closes it, never the engine, so the scheduler learns
+   * of it the next time it would run one. It then stops them all, as each one's `stop` would, delivering nothing
+   */
+  function closed(): boolean {
+    if (connection.database.isOpen) return false;
+    for (const watch of open.values()) watch.stopped = true;
+    open.clear();
+    dirty.clear();
+    unlisten?.();
+    unlisten = undefined;
+    if (timer) {
+      clock.clearTimeout(timer.handle);
+      timer = undefined;
+    }
+    queued = false;
+    settleWaiting();
+    return true;
+  }
+
   function flush() {
     queued = false;
+    if (closed()) return;
     flushing = true;
     const started = clock.now();
     // Commits the runs make mark the next set, so nothing marked here runs twice in this flush
@@ -226,18 +253,20 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
           continue;
         }
         ranOne = true;
+        // A commit an earlier run in this flush made is one this run reads: it needn't run again for it
+        if (dirty.delete(watch)) connection.tally()?.watchSkipped(watch.label);
         try {
           run(watch);
+          charge(watch);
         } catch (error) {
-          // An observer's own throw: reported, without stopping the other watches' deliveries
+          // An observer's (or a warning's) own throw: reported, without stopping the other watches' deliveries
           queueMicrotask(() => { throw error; });
         }
-        charge(watch);
       }
     } finally {
       flushing = false;
-      // Those left over run first next time, then those this flush's commits marked
-      dirty = new Set([...left, ...dirty]);
+      // Those left over run first next time, then those this flush's commits marked; one stopped meanwhile doesn't
+      dirty = new Set([...left.filter((watch) => !watch.stopped), ...dirty]);
     }
     if (dirty.size > 0) plan(false);
     settleWaiting();
@@ -289,7 +318,8 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
       };
     },
     settled() {
-      if (!queued && !timer && dirty.size === 0) return Promise.resolve();
+      // A flush under way still holds watches it hasn't run, which it settles when it ends
+      if (!flushing && !queued && !timer && dirty.size === 0) return Promise.resolve();
       return new Promise((resolve) => { waiting.push(resolve); });
     },
     stats: () => {

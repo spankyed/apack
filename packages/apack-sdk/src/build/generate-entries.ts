@@ -2133,6 +2133,7 @@ export type { ImportMode } from '@apackdev/sdk/utils';
     const indexed = new Map(entities.flatMap(({ name, indexes }) => (indexes ? [[name, indexes] as const] : [])));
     const searched = new Map(entities.flatMap(({ name, search }) => (search ? [[name, search] as const] : [])));
     const embedded = new Map(entities.flatMap(({ name, embed }) => (embed ? [[name, embed] as const] : [])));
+    const substringed = new Map(entities.flatMap(({ name, substrings }) => (substrings ? [[name, substrings] as const] : [])));
     // A prefix numbers one type across the app, so a dependency's are taken as the SDK's are: a collision fails the
     // build here, rather than the install at the host registry. A dependency's snapshot carries its manifest whole
     const taken = new Map<string, string>();
@@ -2172,7 +2173,8 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       // A text index reads fields the shape declares, as an index does
       const search = searched.get(entity);
       const embed = embedded.get(entity);
-      for (const [index, named] of [['search', Object.keys(search?.fields ?? {})], ['embed', embed?.from ?? []]] as const) {
+      const substrings = substringed.get(entity);
+      for (const [index, named] of [['search', Object.keys(search?.fields ?? {})], ['embed', embed?.from ?? []], ['substrings', substrings ?? []]] as const) {
         const unread = named.filter((field) => !fields.includes(field));
         if (unread.length > 0) {
           throw new Error(`Entity "${entity}": its ${index} names ${unread.map((field) => `"${field}"`).join(', ')}, which ${source}#${exportName} doesn't declare`);
@@ -2180,12 +2182,15 @@ export type { ImportMode } from '@apackdev/sdk/utils';
       }
       rules[entity] = {
         required, ...(declared !== undefined && { shortCode: declared }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
-        ...(Object.keys(types).length > 0 && { fields: types }),
+        ...(substrings && { substrings }), ...(Object.keys(types).length > 0 && { fields: types }),
       };
     }
-    for (const { name: entity, shortCode, indexes, search, embed } of entities) {
-      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined)) continue;
-      rules[entity] = { required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }) };
+    for (const { name: entity, shortCode, indexes, search, embed, substrings } of entities) {
+      if (shaped.has(entity) || (shortCode === undefined && indexes === undefined && search === undefined && embed === undefined && substrings === undefined)) continue;
+      rules[entity] = {
+        required: [], ...(shortCode !== undefined && { shortCode }), ...(indexes && { indexes }), ...(search && { search }), ...(embed && { embed }),
+        ...(substrings && { substrings }),
+      };
     }
     return dataLiteral(rules);
   }

@@ -173,6 +173,11 @@ describe('parseManifest', () => {
     expect(refused({ embed: { ...embed, from: ['body', 'id'] } })).toContain('"id" is written by the engine');
     expect(refused({ embed: { ...embed, dims: 4097 } })).not.toBe('');
     expect(refused({ embed: { ...embed, dims: 4096 } })).toBe('');
+    expect(refused({ indexes: ['substrings'], substrings: ['body'] })).toContain('"substrings" names this entity\'s trigram index');
+    expect(refused({ substrings: ['body', 'shortCode'] })).toContain('"shortCode" is written by the engine');
+    expect(refused({ substrings: ['body', 'body'] })).not.toBe('');
+    expect(refused({ substrings: [] })).not.toBe('');
+    expect(refused({ substrings: ['body'] })).toBe('');
   });
 
   it.each(['memo', 'memo_entry', 'Memo-entry', '_Memo', '__proto__', ''])
