@@ -191,3 +191,23 @@ it('shows native autocompact sizes and routes step/keep/dismiss without writing 
   card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({ id: 'offer', revision: 'offer-revision', sessionId: 'session', decision: 'compact_dismiss' })
 })
+
+it('refuses an old rendered managed-policy click when the owner already has a replacement review', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
+  const notice = { id: 'policy', revision: 'old', sessionId: 'session', kind: 'managed_settings_security' as const, title: 'Managed settings require approval', paragraphs: ['Original policy', 'Changes', 'Advice', 'Risk'], paragraphsAnsi: ['Original policy', 'Changes', 'Advice', 'Risk'], preferredChoice: 'policy_reject' as const, choices: [{ value: 'policy_reject' as const, label: 'No, exit Claude Code' }, { value: 'policy_approve' as const, label: 'Yes, I trust these settings' }] }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  const button = document.querySelector<HTMLButtonElement>('[data-policy-decision="policy_approve"]')!
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: { ...notice, revision: 'new' } } })
+  const before = actor.send.mock.calls.length; button.click(); expect(actor.send.mock.calls.length).toBe(before)
+  await nextTick(); document.querySelector<HTMLButtonElement>('[data-policy-decision="policy_approve"]')!.click()
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_NOTICE', notice: { id: 'policy', revision: 'new', sessionId: 'session', decision: 'policy_approve' } }))
+})
+
+it('keeps managed-policy review available while the native console is selected', async () => {
+  const f = await fixture()
+  const notice = { id: 'policy', revision: 'current', sessionId: 'session', kind: 'managed_settings_security' as const, title: 'Managed settings require approval', paragraphs: ['Introduction', 'Changes', 'Advice', 'Risk'], paragraphsAnsi: ['Introduction', 'Changes', 'Advice', 'Risk'], preferredChoice: 'policy_reject' as const, choices: [{ value: 'policy_reject' as const, label: 'No, exit Claude Code' }, { value: 'policy_approve' as const, label: 'Yes, I trust these settings' }] }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain('Managed settings require approval')
+  expect(f.active).toHaveBeenLastCalledWith(true)
+})
