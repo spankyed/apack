@@ -1,6 +1,7 @@
 # SQLite feasibility evaluation for EARS
 
-Status: feasibility checkpoint documented, 2026-10-27. App baseline: `5838145675`; elmdb baseline: `9359949`.
+Status: feasibility checkpoint documented, 2026-10-27. Execution has moved to the
+[SQLite implementation goal](../goals/goal-ears-sqlite.md); this plan preserves the completed evaluation scope. App baseline: `5838145675`; elmdb baseline: `9359949`.
 Branch/worktree: `session/sqlite-evaluation`, `monorepo-worktrees.noindex/sqlite-evaluation`.
 Production retains elmdb. The active agent's app and engine checkouts were not edited.
 
@@ -52,13 +53,11 @@ EARS-only and static. This checkpoint does not claim a complete local gate or CI
 
 ## Current handoff
 
-Deliverable: isolated prototype, repeatable benchmarks, saved raw evidence and the dated recommendation.
-Final EARS-only checks passed: SQLite 212/212; default elmdb 200 passed with 12 opt-in tests skipped; EARS
-typecheck passed; five disposable negative proofs detected their mutations. The local checkpoint is ready for review.
-Production adoption is not authorized here.
+The prototype checkpoint is complete at `4a3fe698f8`, preserved on `session/sqlite-evaluation`.
+Final EARS-only checks passed: SQLite 212/212; default elmdb 200 passed with 12 opt-in tests skipped;
+EARS typecheck passed; five disposable negative proofs detected their mutations.
 
-Before any adoption decision, the evaluation owner must close or obtain an explicit product decision for every
-missing capability in the dated matrix. In particular: complete backup import through a real storage descriptor;
-resolve search semantics and ANN recall; remove avoidable codec/materialization costs; finish schema/error/outcome
-handling and background admission; qualify crash/I/O failures, backup publication, Electron and other platforms.
-Choose one supported backend after that evidence. Do not maintain two production implementations by default.
+The user authorized a full SQLite draft attempt and flexibility in search scoring/ranking subject to usefulness
+and explicit feature requirements. Continue implementation through the [new goal](../goals/goal-ears-sqlite.md)
+on `session/ears-sqlite`. The historical evidence remains unchanged; adoption still follows a complete candidate
+and a recorded decision. All missing capabilities transfer to the new goal rather than becoming exclusions.
