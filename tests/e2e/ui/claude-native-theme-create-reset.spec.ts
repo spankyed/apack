@@ -6,7 +6,7 @@ import { stripVTControlCharacters } from 'node:util'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testInfo.expectedStatus && !appPage.isClosed()) await appPage.screenshot({ path: testInfo.outputPath('native-theme-create-reset-failure.png') }).catch(() => {}) })
+test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testInfo.expectedStatus && appPage && !appPage.isClosed()) await appPage.screenshot({ path: testInfo.outputPath('native-theme-create-reset-failure.png') }).catch(() => {}) })
 test('creates, validates, forks and resets original native custom themes', async ({ app, appPage }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
