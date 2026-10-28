@@ -1,7 +1,7 @@
 // The engine's queries: a builder chain compiled to one of elmdb's plans (`elmdb/docs/architecture/engine.md`, Reads: plans), which a
 // terminal sends and decodes the answer of.
 import type { EARS } from './entities.ts';
-import type { QueryBuilder, RelationEdge } from './runtime.ts';
+import type { QueryBuilder, QueryStage, RelationEdge } from './runtime.ts';
 import { EarsError } from './errors.ts';
 import type { Answer } from './database.ts';
 import type { TypeName } from './write.ts';
@@ -260,6 +260,9 @@ export function createQuery({ read, isEntityType, indexed, names, warn }: QueryS
       groupBy: (field: string) => new Map(run(recipe, { answer: 'groupBy', field }).groups as Array<[unknown, EARS.EntityId[]]>),
 
       search: (text: string, options: Record<string, unknown> = {}) => next({ step: 'search', query: text, options }),
+      containing: (text: string, { caseInsensitive = false }: { caseInsensitive?: boolean } = {}) =>
+        next({ step: 'containing', text, caseInsensitive }),
+      matching: (pattern: string) => next({ step: 'matching', pattern }),
       after: (id: EARS.EntityId) => next({ step: 'after', id }),
       near: (vector: readonly number[], { k = 10 }: { k?: number } = {}) => next({ step: 'near', vector: [...vector], k }),
       like: (id: EARS.EntityId, { k = 10 }: { k?: number } = {}) => next({ step: 'like', id, k }),
@@ -280,6 +283,14 @@ export function createQuery({ read, isEntityType, indexed, names, warn }: QueryS
       },
 
       ids,
+      explain: () => {
+        if (recipe.steps.some((p) => !('step' in p))) {
+          throw new EarsError('NOT_EXPLAINABLE', 'explain() answers the plan the database runs, and a where(...) given a function runs outside it: explain the query up to that where');
+        }
+        const plan = { scope: recipe.scope, start: recipe.start, steps: recipe.steps.map((p) => (p as { step: Step }).step), terminal: { answer: 'ids' } };
+        const [explained] = read([{ read: 'query', plan, explain: true }]) as Array<Answer & { answer: Answer; visited: number; ms: number; stages: QueryStage[] }>;
+        return { ids: explained!.answer.ids as EARS.EntityId[], visited: explained!.visited, ms: explained!.ms, stages: explained!.stages };
+      },
       count: () => run(recipe, { answer: 'count' }).n as number,
       first: () => (run(recipe, { answer: 'first' }).id as EARS.EntityId | null) ?? undefined,
       last: () => (run(recipe, { answer: 'last' }).id as EARS.EntityId | null) ?? undefined,

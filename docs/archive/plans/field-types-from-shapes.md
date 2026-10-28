@@ -1,6 +1,6 @@
 # Field types from shapes
 
-Status: planned, 2026-10-25. Not started.
+Status: done, 2026-10-27, as Phase 5 of elmdb's `goal-elmdb-next.md` (Outcome, below).
 
 A pack's shapes stay the one place a row's fields are described. Codegen already reads each shape with the TypeScript
 checker to write its row rules (`rowRulesOf`, `packages/apack-sdk/src/build/module-exports.ts`); it goes on to read each
@@ -17,7 +17,7 @@ shape, including the writes the compiler never sees.
 - **One source, derived everywhere.** The shapes generate the typed facades, the row rules and the manifest's checks; the
   schema joins them as one more derivation, so a field's type is written once. The other directions were weighed and
   set aside: generating the shapes from elmdb's schema makes two sources while the move happens and gives up the
-  shapes' TypeScript (elmdb's `docs/roadmap/typed-schema.md`), and slimming elmdb's schema to what apack sends today
+  shapes' TypeScript (elmdb's `docs/archive/roadmap/typed-schema.md`), and slimming elmdb's schema to what apack sends today
   removes the checks this plan puts to use.
 - **The mismatches stop.** D25 and D26 in elmdb's goal were the schema and the shapes disagreeing — entity names elmdb
   can't hold, and text indexes that had to read `any` fields because no type reached the schema.
@@ -70,3 +70,27 @@ checked.
 - Slimming elmdb's schema. What apack still doesn't use after this — relation endpoints, cardinalities other than
   many-to-many, compound value indexes — is decided separately, once this shows what is left.
 - Field-level checks a type can't say (ranges, formats): the shapes don't hold them either.
+
+## Outcome
+
+Built as the steps say, with what building them found:
+
+- **The mapping** (`rowRulesOf`, `packages/apack-sdk/src/build/module-exports.ts`) answers each field's `FieldRule`,
+  which codegen writes into the pack's `rowRules` (`RowRules.fields`, `@apackdev/ears`). Two things the table didn't say:
+  a pack that doesn't check nulls (no `strictNullChecks`) has its `| null` erased, so every one of its fields is held
+  nullable rather than refusing a write its own types allow; and a shape names its ids' types through the pack's
+  `#generated/ears`, which codegen writes after reading the shapes and which a clean checkout doesn't have, so the shape
+  reader is handed the one the run will write. Without it a first build typed every id `any` and a second `ref`.
+- **The schema** (`toElmdbSchema`): a `ref` names only the types the schema declares, and one left with none is a
+  string; a field a text or vector index reads is held to text or anything; `FIELD_TYPE` is an `EarsErrorCode`. The
+  SDK's own entity types keep their hand-written row rules and are not typed by this change.
+- **The audit**, on a copy of G8's production-shaped data (elmdb's `docs/evidence/next-phase-5.md`): no derived
+  differences; the 17 duplicate short codes G8 recorded; 280 Notes without `hideCompletedChildren` and 154 Messages
+  holding `forkable: null`. A Note is created with the field since `a86972a9d6`, after the backup; no writer in apack's
+  history wrote a `null` forkable, and each writes a boolean today. The data is not migrated.
+- **The writers the compiler can't see**, run through their specs and the chain: the notes system cleared a note's
+  saved order by writing `null`, which its shape doesn't hold, and now removes the field; forking a thread copied a
+  stored `null` across, and now copies only what the shape holds; and the onboarding action ended onboarding by clearing
+  its thread's `forcedMode` with `null`, which stalled onboarding once refused (the external pack's onboarding E2E),
+  so the threads repository's `update` takes a `null` as clearing the field, none of the shape's fields holding one.
+

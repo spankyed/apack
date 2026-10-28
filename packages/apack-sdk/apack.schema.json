@@ -222,10 +222,19 @@
                 ],
                 "additionalProperties": false,
                 "description": "A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity's chunks pending until embedPending embeds them. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
+              },
+              "substrings": {
+                "description": "A trigram index over these fields: what query(type).containing(...) and matching(...) find, as text is written (error messages, ids, paths, code), unranked. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][A-Za-z0-9]*$"
+                }
               }
             },
             "additionalProperties": false,
-            "description": "One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity)."
+            "description": "One entity type: its shape, its short code prefix, its indexes, its text index, its vector index and its trigram index, each optional ({} for an untyped, unnumbered entity)."
           },
           "description": "Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity."
         },
@@ -416,10 +425,19 @@
                   ],
                   "additionalProperties": false,
                   "description": "A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity's chunks pending until embedPending embeds them. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings."
+                },
+                "substrings": {
+                  "description": "A trigram index over these fields: what query(type).containing(...) and matching(...) find, as text is written (error messages, ids, paths, code), unranked. A shaped entity's fields must be ones its shape declares, holding a string or a list of strings.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][A-Za-z0-9]*$"
+                  }
                 }
               },
               "additionalProperties": false,
-              "description": "One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity)."
+              "description": "One entity type: its shape, its short code prefix, its indexes, its text index, its vector index and its trigram index, each optional ({} for an untyped, unnumbered entity)."
             },
             "description": "Entity wire names owned by this feature, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity. Placement does not change wire names."
           },

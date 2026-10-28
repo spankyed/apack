@@ -26,8 +26,11 @@ describe('a contract is a type, not a value with phantoms', () => {
     expect(read('framework/system-utils.ts')).not.toMatch(/spec:\s*Pick</);
   });
 
-  it('the reader reads no `_`-prefixed property', () => {
+  // But `__entity`: the brand `EARS.EntityId<'T'>` declares (`apack-ears/src/entities.ts`), a property of the id's
+  // type rather than a phantom of a value, which is how the field-type reader knows which entity types an id names
+  it('the reader reads no `_`-prefixed property but the id brand', () => {
     const source = read('build/module-exports.ts');
-    expect([...source.matchAll(/propertyType\([^,]+,\s*'(_\w+)'/g)].map((m) => m[1])).toEqual([]);
+    const names = [...source.matchAll(/propertyType\([^,]+,\s*'(_\w+)'/g)].map((m) => m[1]);
+    expect(names.filter((name) => name !== '__entity')).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 // The one port between the SDK and the app it runs in: the resources a running app owns, bound once per
 // process. Behaviour over them (sends, logging, error reports, `services`) is SDK code.
-import { type Ears } from '@apackdev/ears';
+import type { CallReport, Ears } from '@apackdev/ears';
 import { _bindEars } from '../ears/index.ts';
 import { setSecretValueMatcher } from '../utils/redact.ts';
 import type { RootEvents } from './root-events.ts';
@@ -43,6 +43,27 @@ export interface SecretRedaction {
   matchesSecret(text: string, from: number, to: number): boolean;
 }
 
+/** What each of the app's databases was asked while counting ran: the app's data, and the run history */
+export interface HostCallReports {
+  app: CallReport;
+  runHistory: CallReport;
+}
+
+/**
+ * Counting the calls the app's engines make to their databases (`EarsAdmin.calls`, one count per engine): started,
+ * then read while it runs or stopped
+ */
+export interface HostCallCounting {
+  start(): void;
+  report(): HostCallReports;
+  stop(): HostCallReports;
+}
+
+/** What a development app offers for measuring its own work; no other runtime has it */
+export interface HostDiagnostics {
+  calls: HostCallCounting;
+}
+
 /** The running app, as the SDK reaches it in a backend process */
 export interface HostRuntime {
   /** The app's event bus */
@@ -57,6 +78,8 @@ export interface HostRuntime {
   services: HostRuntimeServices;
   /** What redaction masks in logs; absent in a runtime with no secrets of its own (tests, tooling) */
   redaction?: SecretRedaction;
+  /** Measuring the app's own work; a development app's only */
+  diagnostics?: HostDiagnostics;
 }
 
 let bound: HostRuntime | undefined;

@@ -16,6 +16,8 @@ import { _declarationRevision } from '../../../src/build/declaration-revision.ts
 // faster when fewer projects run beside them — measured 2026-10-06, this file was at the low end in a
 // two-project run and the high end in an eleven-project one. Which is why the count is the durable
 // figure here and a per-case millisecond is not.
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { transformSync } from 'esbuild';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -154,7 +156,41 @@ describe('generated EARS facade', () => {
     write('src/memo.ts', 'export interface MemoEntity { text: string; pinned: boolean | null; note?: string; createdAt: number }\n');
     const entry = (await generate({ data: { entities: { Memo: { shape: "src/memo.ts#MemoEntity" }, Tag: {} } } }))['src/__generated__/pack-entry.ts'];
     // Optional fields and the engine's own are not required; an unshaped entity is held to nothing
-    expect(entry).toContain('rowRules: {"Memo":{"required":["pinned","text"]}}');
+    expect(entry).toContain('rowRules: {"Memo":{"required":["pinned","text"],"fields":{"note":{"type":"string","optional":true,"nullable":true},"pinned":{"type":"boolean","nullable":true},"text":{"type":"string","nullable":true}}}}');
+    // This pack checks no nulls (it has no tsconfig), so its `| null` is erased and every field takes null
+  });
+
+  it("types each field from its shape, as the database holds it, and holds what it can't map as anything", async () => {
+    // Its ids are typed through #generated/ears, which no build has written yet: the reader is handed the one this
+    // generation writes, so a clean tree types them as a built one does
+    write('tsconfig.json', JSON.stringify({ compilerOptions: {
+      strict: true, module: 'esnext', moduleResolution: 'bundler', allowImportingTsExtensions: true, noEmit: true,
+      paths: { '#generated/*': ['./src/__generated__/*'] },
+    } }));
+    write('src/tag.ts', 'export interface TagEntity { label: string }\n');
+    // An id's type is the engine's, which a pack reads from its installed @apackdev/ears
+    fs.mkdirSync(path.join(root, 'node_modules', '@apackdev'), { recursive: true });
+    fs.symlinkSync(path.resolve(import.meta.dirname, '../../../../apack-ears'), path.join(root, 'node_modules', '@apackdev', 'ears'), 'dir');
+    write('src/memo.ts', `import type { EARS } from '#generated/ears.ts';
+export interface MemoEntity {
+  title: string; count: number; done: boolean; stage: 'draft' | 'final'; kind: 'note';
+  owner: EARS.EntityId<'Memo'>; either: EARS.EntityId<'Memo' | 'Tag'>; plain: EARS.EntityId;
+  tags: string[]; frozen: readonly number[]; mixed: (string | null)[];
+  icon: string | null; note?: string; loose?: boolean | null;
+  meta: { at: number }; record: Record<string, string>; unknown: unknown; when: Date; numberOrText: string | number;
+  createdAt: number;
+}
+`);
+    const entry = (await generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity' }, Tag: { shape: 'src/tag.ts#TagEntity' } } } }))['src/__generated__/pack-entry.ts'];
+    const rules = JSON.parse(/rowRules: (\{.*\}),\n/.exec(entry)![1]!);
+    expect(rules.Memo.fields).toEqual({
+      title: { type: 'string' }, count: { type: 'number' }, done: { type: 'boolean' },
+      stage: { type: 'enum', values: ['draft', 'final'] }, kind: { type: 'enum', values: ['note'] },
+      owner: { type: 'ref', to: ['Memo'] }, either: { type: 'ref', to: ['Memo', 'Tag'] }, plain: { type: 'string' },
+      tags: { type: 'list', of: { type: 'string' } }, frozen: { type: 'list', of: { type: 'number' } }, mixed: { type: 'list', of: { type: 'any' } },
+      icon: { type: 'string', nullable: true }, note: { type: 'string', optional: true }, loose: { type: 'boolean', optional: true, nullable: true },
+      meta: { type: 'any' }, record: { type: 'any' }, unknown: { type: 'any' }, when: { type: 'any' }, numberOrText: { type: 'any' },
+    });
   });
 
   it("numbers an entity with the prefix its manifest entry declares, and types its rows' code from it", async () => {
@@ -162,7 +198,7 @@ describe('generated EARS facade', () => {
     const files = await generate({ data: {
       entities: { Memo: { shape: 'src/memo.ts#MemoEntity', shortCode: 'MEM' }, Tag: { shortCode: 'TAG' } },
     } });
-    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"],"shortCode":"MEM"}');
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"],"shortCode":"MEM","fields":{"text":{"type":"string","nullable":true}}}');
     // An unshaped entity is numbered too, held to nothing else
     expect(files['src/__generated__/pack-entry.ts']).toContain('"Tag":{"required":[],"shortCode":"TAG"}');
     // The shape declares no short code: the generated shapes add it from the entry, and ShortCodeOf reads it back
@@ -190,7 +226,7 @@ describe('generated EARS facade', () => {
     await expect(generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity' } } } }))
       .rejects.toThrow(`Entity "Memo": src/memo.ts#MemoEntity requires "due_at", which the database can't hold as a required field`);
     const files = await generate({ data: { entities: { Memo: { shape: 'src/memo.ts#LooseEntity' } } } });
-    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"]}');
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"],"fields":{"due_at":{"type":"number","optional":true,"nullable":true},"text":{"type":"string","nullable":true}}}');
   });
 
   it("indexes the fields an entity's entry declares, and refuses one its shape doesn't", async () => {
@@ -198,11 +234,20 @@ describe('generated EARS facade', () => {
     const files = await generate({ data: {
       entities: { Memo: { shape: 'src/memo.ts#MemoEntity', indexes: ['status'] }, Chunk: { indexes: ['indexId'] } },
     } });
-    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"],"indexes":["status"]}');
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"],"indexes":["status"],"fields":{"status":{"type":"string","optional":true,"nullable":true},"text":{"type":"string","nullable":true}}}');
     // An unshaped entity has no fields to check its indexes against
     expect(files['src/__generated__/pack-entry.ts']).toContain('"Chunk":{"required":[],"indexes":["indexId"]}');
     await expect(generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity', indexes: ['status', 'staus'] } } } }))
       .rejects.toThrow(`Entity "Memo": its indexes name "staus", which src/memo.ts#MemoEntity doesn't declare`);
+  });
+
+  it("declares the trigram index's fields, and refuses one its shape doesn't", async () => {
+    write('src/memo.ts', 'export interface MemoEntity { text: string }\n');
+    const files = await generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity', substrings: ['text'] }, Chunk: { substrings: ['body'] } } } });
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Memo":{"required":["text"],"substrings":["text"],"fields":');
+    expect(files['src/__generated__/pack-entry.ts']).toContain('"Chunk":{"required":[],"substrings":["body"]}');
+    await expect(generate({ data: { entities: { Memo: { shape: 'src/memo.ts#MemoEntity', substrings: ['txt'] } } } }))
+      .rejects.toThrow(`Entity "Memo": its substrings names "txt", which src/memo.ts#MemoEntity doesn't declare`);
   });
 
   it('names the declared entities and passes them to the typed helpers, with the writes', async () => {

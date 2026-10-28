@@ -14,16 +14,18 @@ startTestRuntime();
 beforeEach(() => resetTestData());
 
 const scope = { EARS: { Entity: { Flow: 'Flow' }, RelKind: {} } };
+/** Every helper is an operation, but `engineCalls`, which holds three */
+const typeOf = (helper: string) => (helper === 'engineCalls' ? 'object' : 'function');
 
 describe('the helpers console code sees', () => {
   // Spelled out, so adding or moving one is a deliberate change: the Database console, the `query` flow step and
   // `apack db query`/`exec` all rest on what a query can and cannot reach
   it('gives a query these, and nothing that writes', async () => {
     expect([...READ_HELPER_NAMES].sort()).toEqual([
-      'findRelations', 'getAttr', 'getRelation', 'getRoles', 'getRow', 'getSchemaStats', 'query',
+      'engineCalls', 'findRelations', 'getAttr', 'getRelation', 'getRoles', 'getRow', 'getSchemaStats', 'query',
     ]);
     for (const name of READ_HELPER_NAMES) {
-      await expect(runQueryCode(`return typeof ${name}`, scope), name).resolves.toBe('function');
+      await expect(runQueryCode(`return typeof ${name}`, scope), name).resolves.toBe(typeOf(name));
     }
   });
 
@@ -32,7 +34,7 @@ describe('the helpers console code sees', () => {
       'create', 'removeRelation', 'upsert', 'write',
     ]);
     for (const name of [...READ_HELPER_NAMES, ...WRITE_HELPER_NAMES]) {
-      await expect(runTransactionCode(`return typeof ${name}`, scope), name).resolves.toBe('function');
+      await expect(runTransactionCode(`return typeof ${name}`, scope), name).resolves.toBe(typeOf(name));
     }
   });
 });
@@ -88,6 +90,13 @@ describe('runTransactionCode', () => {
       .toThrow(/What it wrote before its first await was undone; what it writes after that runs outside the transaction and is kept/);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(untypedQuery('Flow').pick(['label']).map((row) => row.label)).toEqual(['Kept']);
+  });
+});
+
+describe('engineCalls', () => {
+  it("refuses in an app that doesn't count its calls, naming what it is for", async () => {
+    // The test runtime is no development app: it binds no diagnostics
+    await expect(runQueryCode('return engineCalls.report()', scope)).rejects.toThrow(/development app/);
   });
 });
 

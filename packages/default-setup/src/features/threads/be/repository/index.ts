@@ -185,9 +185,14 @@ export const threadCommands = {
 
     const { linkedThreads, ...fieldUpdates } = updates;
 
-    // Update fields (including tags as a direct field)
-    if (Object.keys(fieldUpdates).length > 0) {
-      write(id).setMany(fieldUpdates);
+    // Update fields (including tags as a direct field). The shape holds no field as null, so a null clears one: an
+    // action, which no compiler checks, clears forcedMode that way
+    const cleared = Object.entries(fieldUpdates).filter(([, value]) => value === null).map(([field]) => field);
+    const set = Object.fromEntries(Object.entries(fieldUpdates).filter(([, value]) => value !== null));
+    if (Object.keys(set).length > 0) write(id).setMany(set);
+    const held = cleared.length ? query.ids(id).pickOne(cleared as never[]) as Record<string, unknown> | undefined : undefined;
+    for (const field of cleared) {
+      if (held && Object.prototype.hasOwnProperty.call(held, field)) write(id).delete(field as never);
     }
 
     // Update linked threads
@@ -796,8 +801,9 @@ export const chatCommands = {
 
     for (const msg of sourceMessages) {
       const optional: Record<string, any> = {};
+      // A null is no value of these fields' shapes: a row older code wrote with one is copied without it
       for (const key of copyableKeys) {
-        if (msg[key] !== undefined) optional[key] = msg[key];
+        if (msg[key] != null) optional[key] = msg[key];
       }
 
       chatCommands.addMessage({
