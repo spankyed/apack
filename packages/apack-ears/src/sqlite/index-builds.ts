@@ -267,11 +267,12 @@ export class SqliteIndexBuilds {
           this.pending = this.hasWork();
           if (job.kind !== 'value') this.db.indexesChanged(job.type);
         } catch (report) {
+          let reportingFailure = report;
           if (this.db.sql.inTransaction && (report as { code?: unknown })?.code !== 'COMMIT_UNKNOWN') {
-            try { this.db.sql.exec('ROLLBACK'); } catch (rollback) { report = new AggregateError([report, rollback], 'Index failure recording and rollback failed', { cause: report }); }
+            try { this.db.sql.exec('ROLLBACK'); } catch (rollback) { reportingFailure = new AggregateError([report, rollback], 'Index failure recording and rollback failed', { cause: report }); }
           }
-          this.lastError = Object.assign(new AggregateError([error, report], 'Index batch failed and its failure could not be recorded', { cause: error }),
-            { code: (report as { code?: unknown })?.code === 'COMMIT_UNKNOWN' ? 'COMMIT_UNKNOWN' : (error as { code?: unknown })?.code });
+          this.lastError = Object.assign(new AggregateError([error, reportingFailure], 'Index batch failed and its failure could not be recorded', { cause: error }),
+            { code: (reportingFailure as { code?: unknown })?.code === 'COMMIT_UNKNOWN' ? 'COMMIT_UNKNOWN' : (error as { code?: unknown })?.code });
           this.pending = false; this.stop(); return 'failed';
         }
       }

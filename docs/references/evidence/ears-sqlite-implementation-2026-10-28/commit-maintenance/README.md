@@ -52,3 +52,23 @@ It passed five builds, both typechecks, API generation (only the two intended co
 Disabling the lease check caused the maintenance suite to fail as required; protection was restored before
 native validation. The generated API report was transferred as text with the repository's existing LF endings.
 The later real-store snapshot/rollback concurrency case and final integrated checks remain unqualified here.
+
+
+## Final source checkpoint and retained lint failure
+
+`maintenance-final-source.json` pins the executed archive; `maintenance-final-commit-comparison.json`
+proves all 2,491 package source/test/API files in it match committed `8f23caf3dc`.
+The final run passed five builds, EARS/host/API typechecks, 75 host tests (including a real incumbent-copy/
+streaming-write/rollback race), 431 SQLite contracts, 256 native contracts and all three EARS API reports.
+It then failed lint on assigning to a catch parameter in the background index failure recorder. The raw
+failure is retained under `maintenance-final-lint-failure/`; import checks and real syscall probes did not run.
+This entire run is failed, even though the preceding suites passed.
+
+The correction preserves the caught exception and uses a separate `reportingFailure` local for aggregation;
+it changes no failure policy or test deadline. `maintenance-lint-fixed/` records the separate successful run: five builds, EARS types, 17 focused
+storage safety cases, lint/imports and all six real before/after-WAL-sync EIO probes. Its source/archive
+comparison is retained separately. Faults return COMMIT_UNKNOWN with SQLITE_IOERR_FSYNC as cause, refuse
+further data reads and reopen at the incumbent sequence; both no-fault controls retain the candidate.
+`outcomes-verified.json.gz` records independent assertions over all six reports. After-sync faults again prove
+the underlying sync succeeded before EIO. These results do not establish physically ambiguous persistence
+or power-loss correctness. The caught-exception local is the only package source change since the full suites. No unchanged full suite was retried to turn the failed run green.

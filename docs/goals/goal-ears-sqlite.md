@@ -199,20 +199,22 @@ to 98386b36a1 / 6ab2f69. Verify actual refs before another publication and gate 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; no Mac dependencies, native build or
 captured runtime are installed. New descendants require their own checks and strict run.
 
-The next checkpoint is commit-outcome and import-maintenance safety. Local committed source
+The next checkpoint is commit-outcome and import-maintenance safety. Committed source
 **8b7159e051d2fa261b7e61aa6613f7aceeba891b** quarantines ended COMMIT failures as `COMMIT_UNKNOWN`,
-preserves causes, avoids replay and captures fallible watch changes before COMMIT. The active checkout also
-contains a same-handle write lease, persisted import preparation, fail-closed host/settings handling and tests.
-The first exact dirty-source Linux snapshot passed five package builds, EARS/host types, 17 SQLite safety tests,
-5 native maintenance tests and 10 host import/runtime tests. See
-[commit/maintenance evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-maintenance/README.md).
-The second snapshot passed both typechecks, five builds, 69 host recovery/settings cases, 13 SQLite safety
-cases, 5 native maintenance cases and API generation. Disabling lease protection failed the intended tests.
-The final snapshot adds the real-store snapshot/rollback concurrency regression and generated API report.
-Its full backend suites, host/API checks and real WAL-sync faults run in owned container
-`ears-maintenance-final` (exec session 20415); poll the actual live handle. No broad validation claim applies
-until that exact run completes. Closing checks remain both backend suites, host/API composition, mutation
-controls, real syscall fault probes on current source, process-kill recovery and an exact integrated strict gate.
+preserves causes, avoids replay and captures fallible watch changes before COMMIT. Local checkpoint
+**8f23caf3dc** adds same-handle write leases, persisted import preparation, fail-closed host/settings handling,
+shared backend contracts, real-store import concurrency and the intentional two-method EARS construction API.
+See [commit/maintenance evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-maintenance/README.md).
+Two focused permission-aware Linux snapshots passed types, package builds, maintenance/commit/host tests and
+a lease-removal control. The final archive matches 2,491 committed package source/test/API files and passed
+five builds, EARS/host/API types, 75 host cases, 431 SQLite cases, 256 native cases and EARS API reports.
+It is terminal FAILURE because lint refused catch-parameter reassignment in index failure reporting;
+the failure is retained, and import checks/syscall probes had not executed. A mechanical separate-local fix is
+validated successfully in `ears-maintenance-lint-fixed`: five builds, EARS types, 17 focused safety tests,
+lint/imports and all six actual WAL-sync fault probes. All fault cases conservatively refuse data access as
+COMMIT_UNKNOWN and independently reopen at the incumbent sequence; no ambiguous persisted commit was
+observed. The separate-local change is the only package source delta since the full-suite source. Keep the
+failed predecessor disposition; a new exact CI tip is still required. Closing checks also include process-kill recovery and a new exact integrated strict gate.
 Explicit recovery tooling, cross-process ownership and physical durability of retained files remain required;
 a recovery marker must never be deleted merely to bypass startup refusal.
 
