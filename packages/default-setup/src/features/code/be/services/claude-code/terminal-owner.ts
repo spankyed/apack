@@ -322,6 +322,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native notice session expired')
         const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native notice was not acknowledged')
+        if (response.decision === 'compact_previous' || response.decision === 'compact_next') { await this.refreshNotice(); return }
         if (notice?.id === response.id && notice.revision === response.revision) { notice = undefined; changed() }
       },
       async readJournal() {
