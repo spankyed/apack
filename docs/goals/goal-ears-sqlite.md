@@ -191,13 +191,16 @@ The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the 
 **1a0f664d01bacb969ab48cd27aae1afd146de1cc**:
 [strict run 40783434078](https://github.com/spankyed/apack/actions/runs/40783434078) completed SUCCESS, all six jobs.
 The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation`
-from a889531dd1 to that exact checkpoint; its BASE is now 1a0f664d01. Detached integration
-`monorepo-worktrees.noindex/integration-FyE9XZ` and the remote draft branch still point to 1a0f664d01.
+from a889531dd1 to that exact checkpoint; its BASE is now 1a0f664d01.
 No master merge, adoption or Mac build occurred; app master and the private native engine remain pinned
 to 98386b36a1 / 6ab2f69. Verify actual refs before another publication and gate each new exact tip.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; no Mac dependencies, native build or
-captured runtime are installed. New descendants require their own checks and strict run.
+captured runtime are installed. New descendants require their own checks and strict run. Published integration and remote draft tip are now
+**585dcafccf5da62ea50f2e5d37294d9de8a11b9f**. Its single exact
+[strict run 40790543472](https://github.com/spankyed/apack/actions/runs/40790543472) is confirmed live
+(producer job 123174397259); poll that handle, do not dispatch duplicates or advance canonical before success.
+Canonical remains clean 1a0f664d01. Local continuation may contain documentation beyond the published tip.
 
 The next checkpoint is commit-outcome and import-maintenance safety. Committed source
 **8b7159e051d2fa261b7e61aa6613f7aceeba891b** quarantines ended COMMIT failures as `COMMIT_UNKNOWN`,
@@ -214,7 +217,7 @@ validated successfully in `ears-maintenance-lint-fixed`: five builds, EARS types
 lint/imports and all six actual WAL-sync fault probes. All fault cases conservatively refuse data access as
 COMMIT_UNKNOWN and independently reopen at the incumbent sequence; no ambiguous persisted commit was
 observed. The separate-local change is the only package source delta since the full-suite source. Keep the
-failed predecessor disposition; a new exact CI tip is still required. Closing checks also include process-kill recovery and a new exact integrated strict gate.
+failed predecessor disposition; the new exact 585dcafccf strict gate above is now running. Closing checks also include process-kill recovery and a new exact integrated strict gate.
 Explicit recovery tooling, cross-process ownership and physical durability of retained files remain required;
 a recovery marker must never be deleted merely to bypass startup refusal.
 
