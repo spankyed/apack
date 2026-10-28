@@ -8,7 +8,7 @@ import { createTRPCUntypedClient, createWSClient, wsLink } from '@trpc/client';
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { test, expect } from '@apackdev/testing';
-import { acceptedRuntime, frontendAccepted } from './_support/pack-frontend.ts';
+import { acceptedRuntime, frontendAccepted, frontendUnloaded } from './_support/pack-frontend.ts';
 
 const companion = fileURLToPath(new URL('../../../bundled-ui-pack/', import.meta.url));
 test('backup import restores all settings owners and updates an open window', async ({ app, appPage, electronApp }) => {
@@ -63,6 +63,8 @@ test('backup import restores all settings owners and updates an open window', as
     const other = second.getByTestId('memos-list-title');
     await expect(other).toHaveValue('Saved Memos');
     await toggleCompanion();
+    // Capture a disabled settings owner after its runtime has retired, not while teardown still owns the API.
+    await frontendUnloaded(appPage, 'bundled-ui-fixture');
     await app.navigate('default-setup/database');
     await appPage.evaluate(targetPath => {
       const actor = (window as any).applicationState.system.get('default-setup/database');
