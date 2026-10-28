@@ -64,3 +64,26 @@ it('preserves both failures and the durable recovery path if the restored data i
   expect(path.dirname(path.dirname(recovery))).toBe(root);
   expect(fs.readFileSync(path.join(recovery, 'lmdb/data.mdb'), 'utf8')).toBe('incumbent');
 });
+
+it('rolls back a replacement that committed before reporting failed sync', async () => {
+  const { root, primary, backup, media, store } = fixture();
+  const read = () => fs.readFileSync(path.join(primary, 'data.mdb'), 'utf8');
+  const failure = Object.assign(new Error('replacement committed but sync failed'), { code: 'NOT_DURABLE' });
+  let replacements = 0;
+  const committedError: BackupStore = {
+    ...store,
+    replaceWith(dir) {
+      store.replaceWith(dir);
+      if (++replacements === 1) {
+        expect(read()).toBe('candidate');
+        throw failure;
+      }
+    },
+  };
+  const restored = vi.fn(async () => { expect(read()).toBe('incumbent'); });
+  await expect(importDatabase({ lmdb: committedError }, backup, media, { log, restored })).rejects.toBe(failure);
+  expect(replacements).toBe(2);
+  expect(restored).toHaveBeenCalledOnce();
+  expect(read()).toBe('incumbent');
+  expect(fs.readdirSync(root).some(name => name.startsWith('.apack-import-'))).toBe(false);
+});

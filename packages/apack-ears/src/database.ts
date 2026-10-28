@@ -166,6 +166,28 @@ export function crossing<T>(fn: () => T): T {
   }
 }
 
+/** Reports committed state before returning or rethrowing a failed sync. A refusal before commit does not notify.
+ * A failed refresh after NOT_DURABLE preserves both errors and the committed-outcome code; ordinary refresh errors
+ * propagate without being mistaken for operation failures. */
+export function runCommitted<T>(operation: () => T, notify: () => void): T {
+  let result: T;
+  try {
+    result = operation();
+  } catch (error) {
+    if ((error as { code?: unknown })?.code === 'NOT_DURABLE') {
+      try { notify(); }
+      catch (notification) {
+        throw Object.assign(new AggregateError([error, notification],
+          'The operation committed but failed to sync, and refreshing committed state also failed', { cause: error }),
+        { code: 'NOT_DURABLE' });
+      }
+    }
+    throw error;
+  }
+  notify();
+  return result;
+}
+
 /** One batch operation, as elmdb's protocol takes it (`elmdb/protocol/Op.ts`) */
 export type Op = { op: string } & Record<string, unknown>;
 /** One answer of a batch */
@@ -313,8 +335,10 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       return written.results;
     },
     load(loads) {
-      crossing(() => database.bulkLoad(pack(loads)));
-      committed({ sequence: database.sequence, touched: 'all' });
+      runCommitted(
+        () => crossing(() => database.bulkLoad(pack(loads))),
+        () => committed({ sequence: database.sequence, touched: 'all' }),
+      );
     },
     transact,
     get inUnit() { return levels.length > 0; },

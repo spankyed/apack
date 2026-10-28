@@ -133,11 +133,19 @@ Held by the types and the engine specs, which say more than a rule over names co
 - **The database is elmdb's.** `openDatabase({ path, schema?, readOnly?, syncs? })` (`@apackdev/ears/lmdb`) opens the
   database at `path`, giving it `schema` (an `EngineSchema`; a schema that differs from the one it holds changes it,
   as `setSchema` would) or keeping the one it holds. `readOnly` opens existing files without writing: every write is
-  refused, and a database this user can't write is read without LMDB's lock file. Nothing opens on import.
+  refused. Reading still requires access to LMDB's lock file for reader registration; a permission failure refuses the
+  open rather than disabling locking. Nothing opens on import.
 - **A unit is visible as it commits, and durable within the window.** elmdb commits each unit without a sync and
   syncs on group commit, so a commit is on disk within a second; `durable()` resolves once every unit committed before
   it is, and `transact(fn, { durable: true })` commits with the sync (`elmdb/docs/architecture/engine.md`, Durability). `syncs:
   false` turns syncing off, for a temporary database a crash can't matter to.
+- **`NOT_DURABLE` means committed.** A durable unit or admin/schema operation whose sync fails leaves its committed
+  data in place. The connection notifies views and refreshes schema declarations before rethrowing this code. A caller
+  must not retry it as an uncommitted refusal; `lastCommit()` reports the current sequence without parsing an error
+  message. A failure before commit leaves data/declarations unchanged and emits no commit notification.
+- **`SCHEMA_CHANGED` is an uncommitted refusal.** Another process changed the stored declaration after this handle
+  opened. The code propagates without commit notifications or adopting the refused declaration. Close the database,
+  reopen it and create a new engine to use the stored schema; `schema()` on the earlier handle is its cached one.
 - **A backup is elmdb's compacted copy** (`backup`), and a restore its `replaceWith`, the database staying open: both
   run through `@apackdev/host/backup`'s `databaseBackupStore`. `DATABASE_FORMAT` (`elmdb/1`) is what a backup records
   of where its files came from; opening them is what decides whether they are readable. The format stays 1, changed in

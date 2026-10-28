@@ -183,16 +183,40 @@ describe('apack db query', () => {
     expect(out).toBe('Alpha');
   });
 
-  it('reads data whose files it may not write', async () => {
+  it('reads nonwritable data while preserving writable reader registration', async () => {
     const dir = await appDataDir();
     const { lmdb } = _appDataPaths(dir);
-    const files = [lmdb].flatMap((db) => fs.readdirSync(db).map((file) => path.join(db, file)));
-    for (const file of files) fs.chmodSync(file, 0o444);
+    const data = path.join(lmdb, 'data.mdb');
+    fs.chmodSync(data, 0o444);
     try {
       const { out } = await ok(['query', "return getRow('Note-a')?.title", '--data-dir', dir]);
       expect(out).toBe('Alpha');
     } finally {
-      for (const file of files) fs.chmodSync(file, 0o644);
+      fs.chmodSync(data, 0o644);
+    }
+  });
+
+  it('reports how to restore reader registration when the lock file cannot be written', async () => {
+    const dir = await appDataDir();
+    const { lmdb } = _appDataPaths(dir);
+    const lock = path.join(lmdb, 'lock.mdb');
+    fs.chmodSync(lock, 0o444);
+    try {
+      let writable = true;
+      try { fs.accessSync(lock, fs.constants.W_OK); } catch { writable = false; }
+      const result = await run(['query', "return getRow('Note-a')?.title", '--data-dir', dir]);
+      if (writable) {
+        // An elevated process may retain actual access despite the permission bits.
+        expect(result.error).toBeUndefined();
+        expect(result.out).toBe('Alpha');
+      } else {
+        expect((result.error as Error & { code?: string })?.code).toBe('IO');
+        expect(result.error?.message).toMatch(/reader registration/);
+        expect(result.error?.message).toContain('write access to lock.mdb');
+        expect(result.out).toBe('');
+      }
+    } finally {
+      fs.chmodSync(lock, 0o644);
     }
   });
 
@@ -879,7 +903,7 @@ describe('apack db clear-settings', () => {
 });
 
 describe('a dry run of a command that changes data', () => {
-  it('reads, so it works while an app runs on the data dir and against files it may not write', async () => {
+  it('reads, so it works while an app runs on the data dir and against nonwritable data with reader registration', async () => {
     const running = await appDataDir();
     publishApi(running);
     const listed = await ok(['reset', '--data-dir', running]);
@@ -890,14 +914,14 @@ describe('a dry run of a command that changes data', () => {
 
     const copy = await appDataDir();
     const { lmdb } = _appDataPaths(copy);
-    const files = [lmdb].flatMap((db) => fs.readdirSync(db).map((file) => path.join(db, file)));
-    for (const file of files) fs.chmodSync(file, 0o444);
+    const data = path.join(lmdb, 'data.mdb');
+    fs.chmodSync(data, 0o444);
     try {
       expect((await ok(['clear-settings', '--data-dir', copy])).out).toContain('Would destroy 1 Settings row(s)');
       const backup = await backupOf(copy);
       expect((await ok(['import', backup, '--data-dir', copy])).out).toContain('Would replace the current database');
     } finally {
-      for (const file of files) fs.chmodSync(file, 0o644);
+      fs.chmodSync(data, 0o644);
     }
   });
 
