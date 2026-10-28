@@ -36,7 +36,9 @@ changing their bytes; scripts are retained alongside them.
 - The final run on 846dfb4e passes 414 SQLite / 251 native tests, host/API/CLI profile
   cases, compiler build/repair cases, package types, API checks, lint and import checks.
   It FAILS the unchanged aggregate scripts-typecheck 60-second limit without capturing
-  a diagnostic. This is unresolved; no exact green descendant or promotion is claimed.
+  a diagnostic. A lockfile-corrected diagnostic passes all four constituent projects separately (36.03 seconds total),
+  without TypeScript errors. The aggregate timeout cause remains unisolated; no exact green descendant
+  or promotion is claimed.
 
 Node source syntax, bundled API native ownership and missing-ancestor invalidation each
 have a removal/mutation control that fails for the intended reason. Runtime files and

@@ -202,7 +202,9 @@ their Mac causes remain unisolated. Local functional source 846dfb4ef99893cede83
 isolated app/CLI selection, startup readiness, built API native-loader ownership, Node source support and
 narrow watcher repair. Two actual built API boots pass. Its final Linux suite passes 414 SQLite / 251 native
 cases and profile/build checks, but the unchanged aggregate scripts-typecheck exceeds 60 seconds with no
-captured diagnostic. Diagnose that failure before claiming a checked publication. See
+captured diagnostic. A lockfile-corrected diagnostic passes all four constituent projects separately
+(36.03 seconds total); the aggregate timeout cause remains unisolated. Publish this evidence descendant
+and require its exact strict gate before promotion. See
 [profile/runtime evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/profile-runtime/README.md).
 Inspect actual refs and PR #286 before dispatching another exact gate. Canonical remains a889531dd1;
 the approved helper requires clean pins and exact strict success before promotion. Never compile or run
@@ -325,7 +327,7 @@ The a889531dd1 gate is green and that exact checkpoint has been privately promot
 
 ### Next deliverables and full remaining scope
 
-Resolve the current scripts-typecheck failure, publish its checked evidence descendant and run one exact strict gate; canonical remains on green a889531dd1 until that newer gate succeeds. The predeclared diagnostic
+Publish the current evidence descendant and run one exact strict gate, retaining the unresolved aggregate timeout; canonical remains on green a889531dd1 until that newer gate succeeds. The predeclared diagnostic
 pair at 201a2c8cbb is complete: heartbeat checks and EARS types pass, but both 100k OFF diagnostics miss latency
 limits. Full-watch / query-watch-free heartbeat p99 is 97.40 / 44.73 ms; scalar lookup p99 38.03 / 20.46 ms.
 During cleanup scalar lookups consume 35.83 / 33.24 s, against 5.18 / 4.55 s inside background batches. Query
