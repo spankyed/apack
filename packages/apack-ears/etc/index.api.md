@@ -210,6 +210,7 @@ export interface EarsDatabase {
     close(): void;
     // (undocumented)
     durable(): Promise<void>;
+    readonly format: string;
     indexesReady(): Promise<void>;
     // (undocumented)
     readonly isOpen: boolean;

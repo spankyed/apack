@@ -3,6 +3,10 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { _appDataPaths } from '@apackdev/sdk/utils';
+import { testRootEvents } from '@apackdev/sdk/testing';
+import { createHostRuntime } from '../../src/services/index.ts';
+import { createNativePackTestRegistry } from '../../src/testing/pack-registry.ts';
 import type { EarsDatabase, EARS } from '@apackdev/ears';
 import { DATABASE_FORMAT as ELMDB } from '@apackdev/ears/lmdb';
 import { DATABASE_FORMAT as SQLITE } from '@apackdev/ears/sqlite';
@@ -14,32 +18,35 @@ import { createRunHistory } from '../../src/services/run-history.ts';
 const roots: string[] = [], opened: EarsDatabase[] = [];
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   for (const db of opened.splice(0)) db.close();
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 const log = { info() {}, warn() {} };
 const id = (s: string) => s as EARS.EntityId;
 const schema = {
-  getRegisteredEntityTypes: () => new Set(['Note']),
+  getRegisteredEntityTypes: () => new Set(['Note', 'Settings']),
   getRegisteredRelationKinds: () => new Set<string>(),
   getRegisteredRoles: () => new Set<string>(),
 };
 function root() { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-backup-storage-')); roots.push(dir); return dir; }
 function storesAt(dir: string, storageFormat: string, label: string) {
-  const primary = openDatabaseStore({ path: path.join(dir, 'lmdb'), schema, storageFormat });
-  const history = openRunHistory(path.join(dir, 'runs'), { storageFormat });
+  const paths = _appDataPaths(dir);
+  const primary = openDatabaseStore({ path: paths.lmdb, schema, storageFormat });
+  const history = openRunHistory(paths.runHistory, { storageFormat });
   opened.push(primary.database, history.database);
   primary.engine.create('Note', { id: id('Note-' + label), title: label });
   const node = createRunHistory(history.engine).start({ kind: 'flow', label });
   const stores = { lmdb: databaseBackupStore(primary.database, primary.engine), runHistory: databaseBackupStore(history.database, history.engine) };
   return { ...primary, history, node, stores };
 }
-async function fixture(format: string) {
+async function fixture(format: string, settings: unknown = {}) {
   const dir = root(), source = storesAt(path.join(dir, 'source'), format, 'candidate');
-  const media = path.join(dir, 'source-media'); fs.mkdirSync(media); fs.writeFileSync(path.join(media, 'asset'), 'candidate');
+  source.engine.create('Settings', { id: id('Settings-app'), data: settings });
+  const media = _appDataPaths(path.join(dir, 'source')).media; fs.mkdirSync(media, { recursive: true }); fs.writeFileSync(path.join(media, 'asset'), 'candidate');
   const backup = await exportDatabase(source.stores, path.join(dir, 'backups'), { name: 'candidate', databases: ['lmdb', 'runHistory'], mediaPath: media, log });
   const live = storesAt(path.join(dir, 'live'), format, 'incumbent');
-  const liveMedia = path.join(dir, 'live-media'); fs.mkdirSync(liveMedia); fs.writeFileSync(path.join(liveMedia, 'asset'), 'incumbent');
+  const liveMedia = _appDataPaths(path.join(dir, 'live')).media; fs.mkdirSync(liveMedia, { recursive: true }); fs.writeFileSync(path.join(liveMedia, 'asset'), 'incumbent');
   return { dir, source, backup, live, liveMedia };
 }
 function assertIncumbent(f: Awaited<ReturnType<typeof fixture>>) {
@@ -118,8 +125,10 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
     const source = storesAt(path.join(f.dir, 'other'), other, 'other');
     const backup = await exportDatabase(source.stores, path.join(f.dir, 'other-backups'), { name: 'other', databases: ['lmdb', 'runHistory'], mediaPath: path.join(f.dir, 'none'), log });
     const validate = vi.fn(), replace = vi.spyOn(f.live.database, 'replaceWith');
-    await expect(importDatabase(f.live.stores, backup, f.liveMedia, { validate, log })).rejects.toThrow('convert an explicit copy first');
+    let refusal: unknown;
+    try { await importDatabase(f.live.stores, backup, f.liveMedia, { validate, log }); } catch (error) { refusal = error; }
     expect(validate).not.toHaveBeenCalled(); expect(replace).not.toHaveBeenCalled(); assertIncumbent(f);
+    expect(refusal).toEqual(expect.objectContaining({ message: expect.stringContaining('convert an explicit copy first') }));
   });
 
   it('checks the second store format before validating or replacing the primary', async () => {
@@ -128,9 +137,30 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
     fs.rmSync(path.join(f.backup, 'runHistory'), { recursive: true });
     source.history.database.backup(path.join(f.backup, 'runHistory'));
     const validate = vi.fn(), replace = vi.spyOn(f.live.database, 'replaceWith');
-    await expect(importDatabase(f.live.stores, f.backup, f.liveMedia, { validate, log }))
-      .rejects.toThrow(`Cannot import runHistory in ${other} into ${format}`);
+    let refusal: unknown;
+    try { await importDatabase(f.live.stores, f.backup, f.liveMedia, { validate, log }); } catch (error) { refusal = error; }
     expect(validate).not.toHaveBeenCalled(); expect(replace).not.toHaveBeenCalled(); assertIncumbent(f);
+    expect(refusal).toEqual(expect.objectContaining({ message: expect.stringContaining(`Cannot import runHistory in ${other} into ${format}`) }));
+  });
+
+  it('imports through the actual appData service and refreshes the accepted settings', async () => {
+    const f = await fixture(format);
+    vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_USER_DATA_DIR', path.join(f.dir, 'live'));
+    const runtime = createHostRuntime({ database: f.live.database, engine: f.live.engine, runHistory: f.live.history,
+      packs: createNativePackTestRegistry(), appVersion: 'test', transport: { rootEvents: testRootEvents } });
+    await runtime.services.appData.importBackup(f.backup);
+    expect(f.live.engine.query('Note').ids()).toEqual(['Note-candidate']);
+    expect(fs.readFileSync(path.join(f.liveMedia, 'asset'), 'utf8')).toBe('candidate');
+  });
+
+  it('refuses invalid settings through appData before replacing either live store', async () => {
+    const f = await fixture(format, { app: { projects: 'invalid' } });
+    vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_USER_DATA_DIR', path.join(f.dir, 'live'));
+    const runtime = createHostRuntime({ database: f.live.database, engine: f.live.engine, runHistory: f.live.history,
+      packs: createNativePackTestRegistry(), appVersion: 'test', transport: { rootEvents: testRootEvents } });
+    const replace = vi.spyOn(f.live.database, 'replaceWith');
+    await expect(runtime.services.appData.importBackup(f.backup)).rejects.toThrow();
+    expect(replace).not.toHaveBeenCalled(); assertIncumbent(f);
   });
 
   it('refuses ambiguous physical files regardless of backup metadata', async () => {
