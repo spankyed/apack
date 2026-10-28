@@ -297,6 +297,23 @@ need audit/rebuild. Same-handle readiness invalidation does not promise cross-ha
 - Older CI timeout, fixture and prerequisite failures remain historical evidence. One targeted identical-source
   retry made the 683 gate green; its Mac CLI timeout cause remains unisolated. No timeout or compiler budget changed.
 
+### Real host storage checkpoint
+
+Functional pin b36c179fe2 implements format identity and host-owned file/open descriptors, explicit constructor
+selection and preflight of all destination formats before validation/replacement. Wrong backend selection refuses
+as STORAGE_MISMATCH outside run-history corruption salvage. Backup metadata remains provenance; actual files
+are opened. Ordinary production composition remains elmdb. The alias-only probe is removed.
+
+Pinned Linux checks pass 41 real host cases, two negative safeguards and restoration, 413 SQLite / 250 native
+cases, five package builds, EARS/SDK API checks, host/SDK/CLI types and import rules. One reviewed EARS root API
+line adds readonly format; SDK API reports are unchanged. Additional appData success cases initially exposed an
+unbound test fixture, retained as failure evidence; 1d7b7a9930 corrects actual host binding and installed declarations.
+The corrected check is live in container ears-host-storage-bound, exec session 61795, results
+/private/tmp/ears-host-storage-bound. Poll it; do not repeat for elapsed observation. See
+[host storage evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/host-storage/README.md).
+After that check closes, publish a usable descendant through the existing draft, with its own exact strict gate.
+First finish/poll the existing a889531dd1 gate and promote only on that exact success.
+
 ### Next deliverables and full remaining scope
 
 Poll the existing exact strict gate at a889531dd1; promote only on its own success. The predeclared diagnostic
