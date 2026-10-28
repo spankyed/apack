@@ -45,6 +45,13 @@ Use `verifyNativeRecommendationLayoutAppEvidence` from the same module for compa
 space and original defer/expiry recovery. Other notice kinds, arbitrary reader anchors and whole-screen
 polish remain separate. This is scoped app acceptance, not full parity.
 
+The optional `CLAUDE_RESEARCH_BASH_ADMISSION_TRACE=1` plugin-recommendation profile records original
+Bash admission, projection and control replies without retries or pre-click waits. Use
+`verifyNativeBashChoiceAppEvidence` and `verifyNativeBashStandingAppEvidence` from
+`src/protocol/native-bash-choice-proof.mjs` for the corresponding saved app evidence;
+`reconstructBashPrefixTokenFailure` preserves the old snapshot comparison and its missing-error limit.
+Bash responses use the selected choice's token; the parent token tracks presentation refresh only.
+
 The current runner includes Settings freshness observation and cloud-consent saved verification.
 Cloud-consent acceptance uses a private previously saved forwarding preference and leaves the native
 feature gates unchanged. Its profile requires the owned offline-container receipt at
