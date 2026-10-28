@@ -1,6 +1,7 @@
 // SQL selection and traversal; explicit application fallbacks preserve ICU ordering and deep-value semantics.
 import type { SqliteDatabase } from "./database.ts";
 import { scalarKey } from "./database.ts";
+import { orderNumericIds } from "./numeric-order.ts";
 import type { QueryPlan, QueryStep, QueryAnswer, StoredHit } from "../storage.ts";
 import { sameValue } from "../utils.ts";
 type Data = Record<string, any>;
@@ -274,6 +275,9 @@ export function executeQuery(
           schema.collation?.locale ?? "en",
           schema.collation?.options ?? {}
         );
+        const native = orderNumericIds(db, { sql, parameters, order: order(), field: step.field,
+          descending: step.descending });
+        if (native !== undefined) { restart(native); break; }
         const ids = idsNow(),
           values = new Map(db.rows(ids, [step.field]).map(row => [row.id, row[step.field]]));
         const rank = (v: any) =>

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createEarsEngine, type EngineSchema } from '../../src/index.ts';
+import { createEarsEngine, type EngineSchema, type EARS } from '../../src/index.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
 
@@ -13,7 +13,7 @@ afterEach(() => {
 });
 const schema: EngineSchema = {
   types: {
-    Row: { required: [], fields: { rank: { type: 'number' }, body: { type: 'string' } } },
+    Row: { required: [], fields: { rank: { type: 'number' }, body: { type: 'string' }, sortText: { type: 'string', optional: true } } },
     Other: { required: [], fields: { body: { type: 'string' }, rank: { type: 'number' } } },
   }, relations: {}, roles: [],
 };
@@ -25,16 +25,17 @@ function open() {
 }
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite ordering work', () => {
-  it('orders a small field without loading unrelated bodies or issuing per-entity SQL', () => {
+  it.each(['rank', 'sortText'] as const)('orders %s without loading unrelated bodies or issuing per-entity SQL', field => {
     const { db, e } = open();
     e.transact(() => {
-      for (let i = 0; i < 256; i++) e.create('Row', { id: `Row-${i}`, rank: 255 - i, body: 'large body '.repeat(1600) });
+      for (let i = 0; i < 256; i++) e.create('Row', { id: `Row-${i}`, rank: 255 - i, sortText: String(255 - i).padStart(4, '0'), body: 'large body '.repeat(1600) });
     });
     const read = vi.spyOn(db.values, 'read');
-    const explained = e.query('Row').orderBy('rank').limit(10).explain();
+    const explained = e.query('Row').orderBy(field).limit(10).explain();
     expect(explained.ids).toEqual(Array.from({ length: 10 }, (_, i) => `Row-${255 - i}`));
     expect(explained.backend).toBe('sqlite');
     if (explained.backend === 'sqlite') expect(explained.statementCount).toBeLessThanOrEqual(16);
+    if (field === 'rank') expect(read).not.toHaveBeenCalled();
     expect(read.mock.calls.every(call => call[2] !== undefined && !call[2].includes('body'))).toBe(true);
   });
 
@@ -46,8 +47,128 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
       e.create('Other', { id: 'Other-a', rank: 1, body: 'other' });
       e.create('Other', { id: 'Other-b', rank: 2, body: 'other' });
     });
+    expect(e.query(['Row', 'Row']).orderBy('rank').ids()).toEqual(['Row-b', 'Row-a']);
     const ids = ['Other-b', 'Row-b', 'Other-a', 'Row-a', 'Row-b'] as const;
     expect(e.query.ids(ids).orderBy('rank').ids()).toEqual(['Row-b', 'Other-a', 'Row-b', 'Other-b', 'Row-a']);
     expect(e.query.ids(ids).orderBy('rank', 'desc').ids()).toEqual(['Other-b', 'Row-a', 'Row-b', 'Other-a', 'Row-b']);
   });
+
+  it('orders actual scalar kinds from unchecked imports, with stable null and signed-zero ties', () => {
+    const { db, e } = open();
+    const id = (name: string) => `Row-${name}` as EARS.EntityId;
+    const cells: Array<[string, unknown]> = [['null', null], ['date1', new Date(1)], ['zero', 0], ['true', true],
+      ['negative', -12], ['date0', new Date(0)], ['false', false], ['minus0', -0], ['positive', 12]];
+    for (const [name, value] of cells) e.admin.bulkLoadAttr(id(name), 'rank', value);
+    e.admin.bulkLoadAttr(id('missing'), 'body', 'no rank');
+    const read = vi.spyOn(db.values, 'read');
+    expect(e.query('Row').orderBy('rank').ids()).toEqual(
+      ['false', 'true', 'negative', 'zero', 'minus0', 'positive', 'date0', 'date1', 'null', 'missing'].map(id));
+    expect(e.query('Row').orderBy('rank', 'desc').ids()).toEqual(
+      ['null', 'missing', 'date1', 'date0', 'positive', 'zero', 'minus0', 'negative', 'true', 'false'].map(id));
+    expect(read).not.toHaveBeenCalled();
+    e.admin.bulkLoadAttr(id('text'), 'rank', 'Éclair');
+    read.mockClear();
+    expect(e.query('Row').orderBy('rank').ids()).toEqual(
+      ['false', 'true', 'negative', 'zero', 'minus0', 'positive', 'date0', 'date1', 'text', 'null', 'missing'].map(id));
+    expect(read).toHaveBeenCalled();
+  });
+
+  it('retains pipeline scope and prior ordering on ties', () => {
+    const { e } = open();
+    e.transact(() => {
+      for (let i = 0; i < 8; i++) e.create('Row', { id: `Row-${i}`, rank: i % 2, body: String(i) });
+    });
+    expect(e.query('Row').limit(4).orderBy('rank', 'desc').ids()).toEqual(['Row-1', 'Row-3', 'Row-0', 'Row-2']);
+    expect(e.query('Row').orderBy('body', 'desc').orderBy('rank').limit(4).ids()).toEqual(['Row-6', 'Row-4', 'Row-2', 'Row-0']);
+  });
+
+  it.each([{ side: 'max', a: '9223372036854775807', b: '9223372036854775806' },
+    { side: 'min', a: '-9223372036854775807', b: '-9223372036854775808' }])('preserves decoder rounding of large integer ties ($side)', ({ a, b }) => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-a', rank: 0, body: 'a' });
+    e.create('Row', { id: 'Row-b', rank: 0, body: 'b' });
+    const layout = db.values.layout('Row')!, slot = layout.fields.get('rank')!;
+    db.sql.exec(`UPDATE ${layout.table} SET v${slot}=CASE entity_id WHEN 'Row-a' THEN ${a} ELSE ${b} END`);
+    expect(e.getAttr('Row-a', 'rank')).toBe(e.getAttr('Row-b', 'rank'));
+    expect(e.query('Row').orderBy('rank').ids()).toEqual(['Row-a', 'Row-b']);
+  });
+
+  it.each(['invalid cell', 'missing primary'] as const)('preserves corruption refusal: %s', damage => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-a', rank: 1, body: 'a' });
+    const layout = db.values.layout('Row')!, slot = layout.fields.get('rank')!;
+    if (damage === 'invalid cell') db.run(`UPDATE ${layout.table} SET v${slot}=?`, ['not a number']);
+    else db.sql.exec(`DELETE FROM ${layout.table}`);
+    expect(() => e.query('Row').orderBy('rank').ids()).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+  });
+
+  it('keeps a fallback for embedded-NUL field names', () => {
+    const { e } = open();
+    const field = 'order\0key';
+    e.admin.bulkLoadAttr('Row-a', field, 2);
+    e.admin.bulkLoadAttr('Row-b', field, 1);
+    expect(e.query('Row').orderBy(field).ids()).toEqual(['Row-b', 'Row-a']);
+  });
+
+
+  it('keeps sparse flexible keys and undeclared repair types in native scalar ordering', () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-missing', rank: 0, body: 'missing loose' });
+    e.admin.bulkLoadAttr('Row-loose', 'loose', 2);
+    e.admin.bulkLoadAttr('Orphan-loose', 'loose', 1);
+    const read = vi.spyOn(db.values, 'read');
+    expect(e.query.all().orderBy('loose').ids()).toEqual(['Orphan-loose', 'Row-loose', 'Row-missing']);
+    expect(e.query.all().orderBy('loose', 'desc').ids()).toEqual(['Row-missing', 'Row-loose', 'Orphan-loose']);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('falls back to decoder date clipping for fractional stored timestamps', () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-a', rank: 0, body: 'a' });
+    e.create('Row', { id: 'Row-b', rank: 0, body: 'b' });
+    const layout = db.values.layout('Row')!, slot = layout.fields.get('rank')!;
+    db.sql.exec(`UPDATE ${layout.table} SET k${slot}='date',v${slot}=CASE entity_id WHEN 'Row-a' THEN 0.9 ELSE 0.1 END`);
+    expect(e.getAttr('Row-a', 'rank')).toEqual(new Date(0));
+    expect(e.query('Row').orderBy('rank').ids()).toEqual(['Row-a', 'Row-b']);
+  });
+
+
+  it.each(['asc', 'desc'] as const)('matches the ICU fallback on a mixed scalar corpus (%s)', direction => {
+    const { e } = open();
+    const ids: EARS.EntityId[] = [];
+    for (let i = 0; i < 48; i++) {
+      const id = `${i % 2 ? 'Other' : 'Row'}-corpus${i}` as EARS.EntityId;
+      ids.push(id);
+      const value = [i - 25, -i, i % 4 === 0, new Date(i - 24), null, undefined][i % 6];
+      e.admin.bulkLoadAttr(id, value === undefined ? 'body' : 'rank', value === undefined ? 'missing' : value);
+    }
+    ids.reverse(); ids.push(ids[0]!);
+    const native = e.query.ids(ids).orderBy('rank', direction).ids();
+    e.admin.bulkLoadAttr('Row-sentinel', 'rank', 'force ICU fallback');
+    expect(e.query.ids([...ids, 'Row-sentinel']).orderBy('rank', direction).ids()
+      .filter(id => id !== 'Row-sentinel')).toEqual(native);
+  });
+
+  it("ignores another type table's stray row but refuses a missing actual primary row", () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-a', rank: 1, body: 'a' });
+    e.create('Other', { id: 'Other-b', rank: 2, body: 'b' });
+    const other = db.values.layout('Other')!, slot = other.fields.get('rank')!;
+    db.sql.exec(`INSERT INTO ${other.table}(entity_id,k${slot},v${slot}) VALUES ('Row-a','num',100)`);
+    expect(e.query.all().orderBy('rank').ids()).toEqual(['Row-a', 'Other-b']);
+    db.sql.exec(`DELETE FROM ${db.values.layout('Row')!.table}`);
+    expect(() => e.query.all().orderBy('rank').ids()).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+  });
+
+
+  it("does not inspect another type's missing physical table for a selected or empty candidate set", () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-a', rank: 1, body: 'a' });
+    db.sql.exec(`DROP TABLE ${db.values.layout('Other')!.table}`);
+    let ids: string[] = [];
+    expect(() => { ids = e.query.ids('Row-a').orderBy('rank').ids(); }).not.toThrow();
+    expect(ids).toEqual(['Row-a']);
+    expect(e.query('Other').limit(0).orderBy('rank').ids()).toEqual([]);
+  });
+
 });

@@ -316,7 +316,7 @@ export class SqliteDatabase implements EarsDatabase {
   row(id: string, fields?: string[]): Data | undefined {
     return this.rows([id], fields)[0];
   }
-  fieldSource(field: string, types?: readonly string[]): string {
+  fieldSource(field: string, types?: readonly string[], includeMissing = false): string {
     if (field === 'id' || field === 'entityType') return `SELECT id,'text' kind,${field === 'id' ? 'id' : 'type'} value FROM entities`;
     const text = (value: string) => "'" + value.replaceAll("'", "''") + "'";
     const selected = types ?? this.all('SELECT name FROM value_types').map(row => row.name as string);
@@ -325,11 +325,17 @@ export class SqliteDatabase implements EarsDatabase {
       if (layout) this.layouts.set(type, layout);
       if (!layout) return "SELECT NULL id,NULL kind,NULL value WHERE 0";
       const slot = layout.fields.get(field);
-      if (slot === undefined) return `SELECT o.entity_id id,o.kind,o.value FROM value_overflow o JOIN entities e
-        ON e.id=o.entity_id WHERE e.type=${text(type)} AND o.field=${text(field)}`;
+      if (slot === undefined) {
+        if (includeMissing) return `SELECT v.entity_id id,o.kind,o.value FROM ${layout.table} v
+          JOIN entities e ON e.id=v.entity_id AND e.type=${text(type)}
+          LEFT JOIN value_overflow o ON o.entity_id=v.entity_id AND o.field=${text(field)}`;
+        return `SELECT o.entity_id id,o.kind,o.value FROM value_overflow o JOIN entities e
+          ON e.id=o.entity_id WHERE e.type=${text(type)} AND o.field=${text(field)}`;
+      }
       return `SELECT v.entity_id id,CASE WHEN v.k${slot} IS NULL OR v.k${slot}='@' THEN o.kind ELSE v.k${slot} END kind,
         CASE WHEN v.k${slot} IS NULL OR v.k${slot}='@' THEN o.value ELSE v.v${slot} END value
-        FROM ${layout.table} v LEFT JOIN value_overflow o ON o.entity_id=v.entity_id AND o.field=${text(field)}`;
+        FROM ${layout.table} v LEFT JOIN value_overflow o ON o.entity_id=v.entity_id AND o.field=${text(field)}
+        ${includeMissing ? `JOIN entities e ON e.id=v.entity_id AND e.type=${text(type)}` : ''}`;
     }).join(' UNION ALL ') || 'SELECT NULL id,NULL kind,NULL value WHERE 0';
   }
   relation(id: string): StoredRelation | undefined {

@@ -238,6 +238,14 @@ production still uses elmdb; there is no SQLite adoption or master merge authori
   **220.91 → 56.95 ms (3.88×)**, but remains **7.36×** current native's 7.74 ms. Comparison still uses JS and
   retains all keys; native typed sorting/top-k remains unfinished.
 
+The next local descendant now orders boolean/numeric/date/null keys in SQLite after checking actual scalar
+cells and candidate types. Unsupported/invalid cells keep the existing decoder/ICU fallback. It preserves stable
+null/zero/int64 ties, date clipping, prior limits/order and actual-primary integrity; selected or empty queries
+avoid unrelated type tables. EARS types and 48 focused cases pass; full SQLite passes 294 with the same three
+open search failures. Seven independent mutations fail meaningful assertions.
+[Scalar-order evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-scalar-ordering/README.md)
+retains complete results. It still materializes sorted IDs; top-k and latency qualification remain open.
+
 ### Unqualified results and current CI
 
 The earlier [actual-facade slice](../references/evidence/ears-sqlite-implementation-2026-10-28/facade-slice.md)
@@ -262,24 +270,27 @@ emits correctness-checked data but fails lookup/turn/heartbeat budgets (**31.82/
 not retried until green. [Measurement evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/load-metrics-correction/README.md)
 records exact source/sample counts and the successful final assertion refinement without repeating the load.
 
-Strict run **40676231748** on `6c29f083f3` is terminal **failure**. Producers, native-1/2 and integration-2 pass.
-App-and-rest fails the new lifecycle test's arbitrary 80 ms wait (5,960 other host cases pass). Integration-1 reaches
-its 60-minute job limit after about 30 minutes downloading Node; GitHub's annotation confirms the timeout.
-The lifecycle test now awaits actual settlement: four lifecycle cases and the repository wait guard's four cases
-pass, including its normal five-package build pretest. An initial private preparation omitted workspace-local
-Ajv and failed before the guard; the complete dependency copy fixes preparation without SDK changes.
-[CI evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/watch-wait-ci/README.md) retains both attempts.
+Strict run `40676231748` at `6c29f083f3` is terminal failure (the now-fixed bare wait, and a confirmed
+60-minute integration-1 timeout after a 30-minute Node download). The lifecycle wait fix passes its four cases
+and the repository's four-case wait guard, through normal five-package build preparation. Earlier fully green
+runs cover older inputs; cancelled `40655434334` is not a green gate.
 
-Strict-chain now restores/saves the exact Node version directory through a composite keyed by OS/architecture/
-version. Node stays 23.11.1, npm caching and job/test budgets are unchanged. YAML and official action interfaces
-are checked; actual cold-save/warm-restore behavior and all jobs need a fresh gate on the corrected tip. Do not
-retry obsolete `6c29f083f3` as acceptance. Earlier fully green runs `40636458325`/`40637723256` cover older inputs;
-cancelled `40655434334` is not green. Poll exact live handles; never restart on an observation timeout alone.
+Current strict run **40688661462**, attempt 1 at exact published candidate `683e1d5912`, passes five jobs but
+integration-1 fails three existing CLI deadlines. All three targets pass unchanged in the owned Linux runner
+(**36 cases**) with original budgets. Only the terminal failed shard was retried once on identical source;
+**attempt 2 is live**. [Timeout investigation](../references/evidence/ears-sqlite-implementation-2026-10-28/ci683-integration-timeouts/README.md)
+retains failures, exact reproduction and verified warm toolchain restore (about 4.7 s for 36 MiB; Node 23.11.1).
+This proves the cache operation but not the Mac timeout's cause. Do not repeatedly retry or raise deadlines if
+it fails again. Poll this run; don't dispatch duplicates or restart for elapsed observation time.
+
+Node version, npm caching and compiler/test budgets remain unchanged. The detached integration and remote draft
+are clean at `683e1d5912`; canonical is still `9c339d89a4`. The private continuation contains the scalar-ordering
+descendant; no source under the active CI run was changed. Promote only the exact successful gated candidate.
 
 ### Next deliverables and full remaining scope
 
-Commit/push the wait/cache correction plus retained paired trials, advance the detached candidate and run a fresh
-strict gate; only then promote canonical. Next implementation work should move suitable sorting into native SQL,
+Finish the single targeted CI retry and promote the exact candidate only if green. Commit/measure the guarded
+scalar-ordering descendant, then publish it with appropriate gates. Next implementation work should finish top-k,
 complete atomic schema validation and background text/vector/trigram admission, and qualify IO/ownership under
 the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
 unanswered; value-index work does not depend on it.
