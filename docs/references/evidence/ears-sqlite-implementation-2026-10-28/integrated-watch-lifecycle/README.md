@@ -22,3 +22,9 @@ Only the revised failing mutation logs are included. The fixed suite was rerun a
 A local attempt to include the shared native-importing watch suite failed at module loading because this private
 6ab2f69 checkout intentionally has no Mac binding. No local Rust build was run. Shared/native validation runs in
 Linux, where the correct source is built. This report does not establish the full strict gate or SQLite adoption.
+
+The subsequent terminal Linux run passes EARS/SDK/host/CLI/testing types, all EARS/SDK API reports (3/30), and
+37 shared watch/scheduler cases on each backend. Its initial process test snapshot contains three cases; a final
+refresh runs all four committed process cases successfully, after comparing watch/database implementation files
+byte-for-byte with the committed source. `shared-watch-linux.txt` and `final-processes-linux.txt` preserve both
+terminal results. Strict run `40676231748` on `6c29f083f3` remains a separate pending gate.

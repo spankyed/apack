@@ -305,12 +305,25 @@ The follow-on watch checkpoint fixes a retained dependency key after SQLite clos
 explicit settlement wait. Four SQLite process cases pass locally, including waiting during delivery and idle exit;
 independent removals of each timer-ref path fail their targeted assertions. The sources and proof logs are in
 [the lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/integrated-watch-lifecycle/README.md).
-Shared/native watch suites, five consumer types and API checks are running in the integration's disposable Linux
-checkout; this is not yet a completed gate. A local attempt to include native-importing shared tests stopped at
+Disposable Linux passes 37 shared watch/scheduler cases on each backend, all four final SQLite process cases,
+five consumer typechecks and the EARS/SDK API checks (3/30 reports). Strict CI is a separate pending gate. A local attempt to include native-importing shared tests stopped at
 missing Mac binding; no local Rust build was attempted. The focused SQLite-only process suite passes.
 
-Next: finish and retain this exact validation, push the integrated draft and run a fresh strict gate before
-canonical promotion; then implement the inherited substring/regex contracts and complete background text/vector
+The integrated draft is pushed; strict run `40676231748` covers exact implementation `6c29f083f3`. Producers
+have passed and all five consumer jobs are live. Poll this existing run; do not restart it for elapsed time.
+Canonical promotion awaits that gate. A source-only evidence checkout at `/private/tmp/ears-sqlite-diagnosis-evidence`
+retains the terminal lifecycle checks and new diagnostic evidence without changing the clean implementation
+under CI. It has no dependencies, native build or captured runtime. After gated promotion, include its descendant
+documentation/evidence commit before further source work.
+
+[Durable diagnosis](../references/evidence/ears-sqlite-implementation-2026-10-28/durable-admission-diagnosis/README.md)
+adds three SQLite idle controls, three build/cleanup trials and three later native idle controls, all with fresh
+10k/53-watch fixtures. SQLite write-COMMIT accounts for nearly all current durable write latency; both backends
+miss 16 ms here. Ordering/host variability prevents a backend ranking or a claim about the earlier sample's cause.
+The existing timer metric also omits foreground blocking: add an independent heartbeat (same 16 ms p99 target)
+and reusable actual-native provenance before qualification. Original failures and targets remain intact.
+
+Next: finish the exact strict gate and promote; strengthen the maintained load harness and qualify IO/ownership; then implement the inherited substring/regex contracts and complete background text/vector
 admission, schema validation and durable-load qualification. The preference for explicit “indexing” versus a
 potentially slow complete search fallback was asked asynchronously and remains unanswered. Value-index work
 does not depend on it. Strict run `40655434334` on obsolete typed checkpoint `5985709142` was externally cancelled;

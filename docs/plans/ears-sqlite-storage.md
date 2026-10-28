@@ -91,13 +91,21 @@ owner stops rather than changing the newer owner's job. Read-only handles use th
 Working qualification targets, set before the load measurements: no primary-row hydration during value-only
 admission; admission below 100 ms for the 10k/100k synthetic fixtures; at most 32 records per backfill transaction
 with a 4 ms cooperative work target; observed foreground operation and timer-stall p99 below 16 ms in sync-disabled
-fixtures. Apply the same targets to separate FULL/durable runs before calling this slice qualified; these have not
-yet been measured. Transaction begin/commit and an indivisible large value can exceed the work target; report full batch
+fixtures. Apply the same targets to separate FULL/durable runs before calling this slice qualified. The first
+pinned FULL run misses its foreground and turn-wait targets; the goal links its retained raw evidence. Transaction begin/commit and an indivisible large value can exceed the work target; report full batch
 and foreground latency rather than presenting 4 ms as a hard wall-clock bound. Background work pauses while a unit
 is open and resumes when it ends. Competing writers fail promptly (SQLite busy timeout zero); only the background
 queue retries busy batches after a yielding delay. Measure WAL/file growth and post-build old-generation cleanup: observed WAL at most 16 MiB (or initial WAL plus
 4 MiB if larger), and database-side files at most twice the seeded baseline plus 16 MiB. Require zero retired-generation
 entries after cleanup; freed pages may remain allocated for reuse.
+The original timer metric measures a setImmediate turn between foreground operations, not delay during the
+operation itself. Add an independent periodic heartbeat and report its delay before claiming total event-loop
+responsiveness. Keep the original operation, turn-wait and resource targets; periodic-heartbeat p99 must also be
+below 16 ms in the same fixtures. This requirement is set before its first maintained-harness measurements.
+[Controlled diagnosis](../references/evidence/ears-sqlite-implementation-2026-10-28/durable-admission-diagnosis/README.md)
+shows that synchronous durable COMMIT alone can exceed the operation target on the current host, including
+without background work. Both native and SQLite controls miss it here. Separate environment/IO limits from
+builder processing and qualify the remedy without weakening durable acknowledgments.
 These are development qualification targets, not the phase-7 app budgets or platform durability qualification.
 
 SQLite's [transaction rules](https://www.sqlite.org/lang_transaction.html) underpin the single-writer and snapshot
