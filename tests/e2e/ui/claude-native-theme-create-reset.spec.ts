@@ -194,5 +194,11 @@ test('creates, validates, forks and resets original native custom themes', async
     await expect.poll(async () => (await context()).claude.chatState).toBe('success')
     expect((await context()).sessionId).toBe(sessionId); expect(errors).toEqual([])
     await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeThemeCreateReset: true, nativeThemeEmptyName: true, nativeThemeInvalidRejected: true, nativeThemeFork: true, nativeThemeCollision: true, nativeThemeTokenReset: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
+  } catch(error) {
+    if(!appPage.isClosed()) {
+      await appPage.screenshot({path:testInfo.outputPath('native-theme-desktop-failure.png')}).catch(()=>{})
+      await writeFile(join(workspace!,'native-theme-desktop-failure.json'),JSON.stringify({context:await context().catch(()=>null),panels:await appPage.getByRole('dialog').allTextContents().catch(()=>[]),ui:await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return Object.values(c.nativeUiViews).map((v:any)=>({state:v.state,prompt:v.prompt}))}).catch(()=>null),browserErrors:errors},null,2))
+    }
+    throw error
   } finally { await writeFile(join(workspace!, 'native-theme-create-reset-screen.txt'), lastScreen); terminal.dispose() }
 })
