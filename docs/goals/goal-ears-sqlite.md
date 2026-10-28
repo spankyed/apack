@@ -187,27 +187,24 @@ platform claims must identify their actual tested scope.
 ## Current handoff
 
 The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for
-`session/ears-sqlite`. The next candidate includes verified recovery checkpoint **dc058cbada**, following
-**78eff952020f813d7a25642aa4740a394ed71a5e**. Record the exact newly pushed head and single strict-run ID in
-the PR, and inspect actual refs before continuing; a documentation descendant does not change the tested
-functional source. Before publication, detached integration is clean at 78eff95202 and the active worktree
-contains the recovery/diagnosis continuation.
+`session/ears-sqlite`. The last exact published green checkpoint is
+**a1356b64b1249b52f86d7ee79ee9bf824d883114**: [strict run 40733030134](https://github.com/spankyed/apack/actions/runs/40733030134)
+completed successfully, all six jobs on attempt 1. Detached integration
+`monorepo-worktrees.noindex/integration-FyE9XZ` and canonical
+`monorepo-worktrees.noindex/sqlite-evaluation` are clean at that commit. The guarded helper has privately
+fast-forwarded canonical from 194c72c77c; its next BASE is a1356b64b1. No master merge or adoption occurred.
 
-[Strict run 40728583374](https://github.com/spankyed/apack/actions/runs/40728583374) at 78eff95202 is terminal
-failure: producers' `typecheck:scripts` exceeded its 60-second budget, with no captured TypeScript diagnostic;
-consumers were skipped. The exact unchanged command passes in 38.6 seconds under the same 60-second budget
-in two-core Linux after normal package preparation. This does not establish the macOS timeout cause. Retain
-[diagnosis evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/ci78-producer-timeout/README.md),
-publish the newer recovery candidate and run its exact strict gate. Do not rerun superseded 78eff95202 or
-relax timeouts. The earlier 6794ab1d4a gate's installed-package assertion was fixed at 78eff95202 with an exact
-runtime whitelist and installed matcher execution; no failure was waived.
+Active continuation remains `/private/tmp/ears-sqlite-diagnosis-evidence`, with no installed dependencies,
+native build or captured runtime. This shared-search-generation checkpoint is newer than the green CI and needs
+its own complete gate. Inspect actual refs/PR for the newest published head and exact CI handle; do not dispatch
+duplicates or promote a descendant on its parent's success. `/private/tmp/ears-promote-sqlite.py` verifies clean
+checkouts, remote tip, source/engine pins and exact strict success before private promotion. Never copy concurrent
+dirty files or compile/run full checks on the daily Mac.
 
-Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains clean at **`194c72c77c`**, the last exact
-all-six-job green gate ([40703362139](https://github.com/spankyed/apack/actions/runs/40703362139)).
-Promote only an exact successful candidate through `/private/tmp/ears-promote-sqlite.py`, which verifies
-clean checkouts, remote tip, source/engine pins and strict success before a private fast-forward.
-Active implementation is `/private/tmp/ears-sqlite-diagnosis-evidence`; it has no installed dependencies,
-native build or captured runtime. The verified recovery checkpoint is ready for the next integration/push; advance only committed inputs. Never copy dirty concurrent source or run compiler/full validation on the daily Mac.
+Earlier strict 78eff95202 timed out in typecheck:scripts without a captured TypeScript diagnostic. Its exact command
+passed unchanged in two-core Linux within the original 60-second budget; the Mac cause is unisolated. The newer
+a1356b64b1 gate passed without changing budgets or rerunning superseded 78eff95202. See
+[timeout evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/ci78-producer-timeout/README.md).
 
 The pinned integration combines app master **98386b36a18d244c19ffb501830b990ed49f7653** through merge
 4af1b513e3 and private native source **6ab2f69fa13289ed4f02952253c58b4d41922c98**, held immutable in
@@ -226,7 +223,7 @@ production still uses elmdb; this goal authorizes neither master merge nor SQLit
 - Persistent yielding value-index generations, authoritative fallbacks, intervening writes, bounded retirement,
   rollback/busy/stale/read-only and killed-process recovery. See
   [admission evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/value-index-admission-8220a11d70/README.md).
-  Text/vector/trigram admission remains synchronous and does not meet the final background-admission requirement.
+  The continuation below extends this scheduler to text/vector/trigram; full admission resource/IO qualification remains required.
 - Ajv declaration validation, explicit semantic refusals, stored-schema CORRUPT refusal, locale propagation and
   incumbent prefix checks under writer ownership. See
   [schema evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/schema-validation/README.md) and
@@ -244,23 +241,37 @@ production still uses elmdb; this goal authorizes neither master merge nor SQLit
   70 build-input/document-link cases, lint/import/publishing types and source/staged/npm-tarball loading pass in
   disposable Linux. See [filtering evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/trigram-filtering/README.md).
 
-### Current recovery checkpoint
+### Current shared-search-generation checkpoint
 
-A writable open previously recreated missing derived search storage empty and could silently omit matches.
-The continuation identifies incomplete physical groups, resets a partially present FTS group and reconstructs
-it from affected types/search fields under writer ownership. Read-only opens refuse incomplete storage as
-CORRUPT. Healthy opens avoid writer ownership and can read another writer's committed state. Repair preserves logical commit identity and intact embeddings; lost chunks become pending again.
-The recovery continuation passes EARS types, 90 focused cases before/after seven safeguard mutations,
-**392 full SQLite cases**, five package builds, three unchanged API reports, 64 build-input cases and lint/import
-checks in disposable Linux. It covers missing tables/indexes/triggers/shadow tables, stale postings, repair and
-rollback failures, healthy concurrent opens and selective hydration.
-[Recovery evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-recovery/README.md)
-retains exact source/commands and the earlier refused destructive fixture. This continuation is not covered by
-78eff95202's CI; the newly published descendant requires its own strict gate.
+One persistent catalog/scheduler now owns value, text, trigram and vector generations. Admission creates empty
+private generations without corpus hydration; foreground writes reconcile them; each batch commits cursor,
+postings and readiness together. Value reads keep primary fallbacks; search explicitly reports INDEX_BUILDING
+or INDEX_FAILED. Owners can await database.indexesReady(); watches retry after visibility changes without a
+new logical commit. Timers stay unreferenced except during explicit waits. Retirement alternates with building;
+valid embeddings reuse matching content/model/dimensions, and the latest complete predecessor is retained until
+replacement readiness. Failed deferred cleanup does not spin. Physical recovery now queues fresh generations
+instead of synchronous full backfill and advances the ownership epoch so cached old owners refuse writes.
 
-This repair is atomic and paged in memory, but still synchronous. It is an integrity correction, not completion
-of phase 3: yielding generations/readiness, bounded foreground work and retired search-table cleanup remain
-required. Existing but corrupt postings need the separate audit/rebuild and real-corruption qualification.
+An intermediate source passes 407 SQLite cases, 250 native cases, twelve safeguard mutations, five package builds,
+3 EARS/30 SDK API reports, static checks and scripts typecheck (21.3s / original 60s). After stale-owner and access-path
+corrections, the pinning checkpoint passes EARS types and 71 adjacent cases. Final full checks, new guard mutations
+and exact CI on the committed source remain required. The reviewed public API adds indexesReady(), optional derived
+visibility subscription, and the two explicit index error codes; the pack-facing operation signatures are unchanged.
+[Search-generation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-generations/README.md)
+retains source hashes, mutations, actual process-kill/lifetime checks and the initial fixture/expectation failures.
+
+The first 1k OFF short-string smoke and all three 10k OFF trials pass their prewritten limits. The first 100k OFF
+process timed out at its 240s safety bound before a final report; later trials were stopped and FULL was not run.
+The exact timed source is reconstructable from a1356b64b1 plus the retained patch, with all 31 hashes verified.
+Review found quadratic per-entity deletion by an unindexed FTS column. The pin uses rowid point deletion and
+selective generation cleanup indexes, with actual plan guards. The pending-vector index is partial so it does
+not duplicate embedding BLOBs. Optional sparse stage markers now preserve diagnosis if a later process times out.
+Do not relabel old metrics as post-fix measurements; qualify the committed pin under unchanged budgets.
+
+This is not completion of phase 3. Qualify realistic declarations/read/write/watch load, large fields, FULL
+commits, WAL/disk growth and ownership/recovery. Physical presence is not a postings checksum; static secondary
+index recreation on populated damaged profiles can still block, and orphaned entries after catalog corruption
+need audit/rebuild. Same-handle readiness invalidation does not promise cross-handle/process reactivity.
 
 ### Unqualified results and failures
 
@@ -283,10 +294,10 @@ required. Existing but corrupt postings need the separate audit/rebuild and real
 
 ### Next deliverables and full remaining scope
 
-Qualify live declarations and implement background
-text/vector/trigram generations/readiness/recovery/cleanup with the original foreground and WAL budgets.
-The optional preference for explicit indexing versus a slow complete search fallback remains unanswered;
-do not silently publish partial answers or claim that synchronous backfill meets the background requirement.
+Pin and finish full checks on the shared search-generation source, then measure the corrected 10k/100k load
+cohort and FULL policy without relaxing original targets. Diagnose and retain the first miss instead of retrying
+until green. The candidate explicitly chooses INDEX_BUILDING over a slow foreground search scan; complete app
+composition must handle that state and await readiness where required before adoption.
 
 All unmet phase 3–7 requirements remain: native lazy substring/regex refusal ordering with mixed types/later zero
 limits (qualify or explicitly decide); realistic multilingual/identifier/typo relevance, correct full-text list/phrase

@@ -98,3 +98,32 @@ and each admission process records its actually loaded native addon. The facade 
 helper and explicitly includes the loaded vector extension. Preserve results before another Linux
 sync, which replaces untracked volume content. This qualifies a synthetic same-connection slice; text/vector
 admission, full app budgets and platform durability qualification remain separate requirements.
+
+
+### Background search admission qualification
+
+`node --import tsx packages/apack-ears/bench/sqlite/admission.ts 1000 --search` is the first disposable smoke
+for shared text/vector/trigram admission. The fixture indexes the short string `slug`, with 100 deterministic
+buckets, while unrelated primary payloads stay outside the indexes. It retains the existing 53 primary watches
+and adds three substring watches during building. Foreground writes update counters and periodically change
+indexed slugs; scalar reads stay complete, substring reads explicitly refuse while building and are checked
+against known answers when ready. The output tags those refused versus ready search calls. Retirement is
+checked separately; no retired physical tables/chunks may remain. Vector chunks remain pending: this does not
+evaluate embedding recall or large-text indexing.
+
+Before the first search smoke: retain the existing 100 ms admission ceiling, 16 ms p99 foreground/lookup/turn
+and independent 8 ms heartbeat-delay targets, 16 MiB (or incumbent + 4 MiB) observed WAL ceiling and baseline
+file bytes * 2 + 16 MiB observed-file ceiling. Apply 16 ms also to the tagged substring calls. Admission must
+hydrate zero primary rows. Start with one fresh 1k sync-disabled process; preserve its first failure rather than
+retrying until green. Larger 10k/100k and FULL runs remain required after diagnosis. Do not infer byte-memory or
+application budgets from this short-string synthetic, or fairness between native and SQLite from this single
+backend fixture. Fingerprint the loaded SQLite binding and vector extension after sampling stops so provenance
+collection does not perturb the measured heartbeat.
+
+
+After the passing first 1k smoke, predeclare the next cohort: three fresh sync-disabled processes each at 10k
+then 100k, followed only if all six pass by one first 10k FULL process. Stop at the first correctness, resource
+or latency miss; preserve the failed sample and leave later trials unrun. No rerun of an identical failed sample
+and no relaxed target. Each process uses the same source/fixture; include cold per-process matcher loading and
+all original heartbeat/resource limits. A first FULL miss leaves FULL qualification open rather than scheduling
+more durable trials without a remedy. These counts are set before the larger cohort runs.

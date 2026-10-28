@@ -1,9 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { SqliteDatabase } from './database.ts';
+import { searchTable, type SqliteIndexJob } from './index-builds.ts';
 import type { SqliteSearchStructure } from './search-structures.ts';
 import { createRegexCompiler, type SqlitePattern } from './regex.ts';
 type Data = Record<string, any>;
-type Definition = { type: string; fields: string[]; table: string };
+type Definition = { type: string; name: string; fields: string[]; table: string };
 const fail = (code: string, message: string): never => { throw Object.assign(new Error(message), { code }); };
 
 /** FTS5 narrows candidates; exact Rust matching verifies one original string at a time. */
@@ -16,19 +17,23 @@ export class SqliteTrigrams {
     return Object.entries(schema.types[type]?.indexes ?? {}).flatMap(([name, value]) => {
       const index = value as Data;
       if (index.kind !== 'trigram') return [];
-      const hash = createHash('sha256').update(JSON.stringify([type, name, index.fields])).digest('hex').slice(0, 24);
-      return [{ type, fields: index.fields, table: 'tri_' + hash }];
+      return [{ type, name, fields: index.fields, table: searchTable(this.db.indexBuilds.index(type, 'trigram', name)) }];
     });
   }
-  structures(schema: Data): SqliteSearchStructure[] {
-    return Object.keys(schema.types).flatMap(type => this.definitions(type, schema).map(({ table }) => ({
-      types: [type],
+  structure(job: SqliteIndexJob): SqliteSearchStructure {
+    const table = searchTable(job);
+    return {
+      types: [job.type], indexes: [job],
       objects: [['table', table], ...['data', 'idx', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const),
         ['table', table + '_docs'], ['index', table + '_docs_entity'],
-        ...['ai', 'ad', 'au'].map(suffix => ['trigger', table + '_docs_' + suffix] as const)] as SqliteSearchStructure['objects'],
+        ...['ai', 'ad', 'au'].map(suffix => ['trigger', table + '_docs_' + suffix] as const)],
       reset: ['ai', 'ad', 'au'].map(suffix => `DROP TRIGGER IF EXISTS ${table}_docs_${suffix};`).join('') +
         `DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;`,
-    })));
+    };
+  }
+  structures(schema: Data): SqliteSearchStructure[] {
+    return Object.keys(schema.types).flatMap(type => this.definitions(type, schema).map(({ name }) =>
+      this.structure(this.db.indexBuilds.index(type, 'trigram', name))));
   }
   ensure(schema: Data) {
     for (const type of Object.keys(schema.types)) for (const { table } of this.definitions(type, schema)) {
@@ -46,14 +51,16 @@ export class SqliteTrigrams {
   refile(row: Data, schema: Data, changed?: ReadonlySet<string>) {
     for (const definition of this.definitions(row.entityType, schema)) {
       if (changed && !definition.fields.some(field => changed.has(field))) continue;
-      const selected = this.db.row(row.id, definition.fields)!;
-      this.db.run(`DELETE FROM ${definition.table}_docs WHERE entity_id=?`, [row.id]);
-      for (const field of definition.fields) {
-        const value = selected[field];
-        const strings: string[] = typeof value === 'string' ? [value] : Array.isArray(value) ? value.filter(v => typeof v === 'string') : [];
-        for (const text of strings) this.db.run(`INSERT INTO ${definition.table}_docs(entity_id,raw,folded) VALUES(?,?,?)`,
-          [row.id, text, this.compiler.fold(text)]);
-      }
+      this.writeFields(this.db.row(row.id, definition.fields)!, definition.fields, definition.table);
+    }
+  }
+  refileIndex(row: Data, job: SqliteIndexJob): void { this.writeFields(row, job.definition.fields, searchTable(job)); }
+  private writeFields(row: Data, fields: string[], table: string): void {
+    this.db.run(`DELETE FROM ${table}_docs WHERE entity_id=?`, [row.id]);
+    for (const field of fields) {
+      const value = row[field];
+      const strings: string[] = typeof value === 'string' ? [value] : Array.isArray(value) ? value.filter(v => typeof v === 'string') : [];
+      for (const text of strings) this.db.run(`INSERT INTO ${table}_docs(entity_id,raw,folded) VALUES(?,?,?)`, [row.id, text, this.compiler.fold(text)]);
     }
   }
   remove(id: string, type: string, schema: Data) {
@@ -74,7 +81,10 @@ export class SqliteTrigrams {
         const found = this.definitions(type, schema);
         if (found.length > 1) fail('UNKNOWN_INDEX', `${step.step}: ${type} has several trigram indexes; name the one to read`);
         if (!found.length && input.direct) fail('UNKNOWN_INDEX', `${step.step}: ${type} has no trigram index`);
-        if (found.length) definitions.push(found[0]);
+        if (found.length) {
+          this.db.indexBuilds.requireReady(type, 'trigram', found[0].name);
+          definitions.push(found[0]);
+        }
         this.db.trackRange(`rows:${type}`);
       }
       if (!this.installed) {

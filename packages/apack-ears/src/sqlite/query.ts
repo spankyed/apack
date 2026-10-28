@@ -111,15 +111,15 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
           if (specificTypes && indexed.length === types.length) {
             // Drive an indexed equality from its selective lookup, then resolve only matching entities.
             // CROSS JOIN makes this access path explicit rather than scanning the type's candidate rows.
-            sql = `SELECT p.* FROM value_index_builds b CROSS JOIN field_index x CROSS JOIN (${sql}) p
-              WHERE b.type IN (${list}) AND b.field=? AND b.state='ready'
-              AND x.type=b.type AND x.field=b.field AND x.generation=b.generation AND x.value=? AND x.entity_id=p.id`;
+            sql = `SELECT p.* FROM index_builds b CROSS JOIN field_index x CROSS JOIN (${sql}) p
+              WHERE b.type IN (${list}) AND b.name=? AND b.kind='value' AND b.state='ready'
+              AND x.type=b.type AND x.field=b.name AND x.generation=b.generation AND x.value=? AND x.entity_id=p.id`;
             parameters.push(field, key);
           } else
             filter(
-              `((e.type IN (${list}) AND e.id IN (SELECT x.entity_id FROM value_index_builds b JOIN field_index x
-                ON x.type=b.type AND x.field=b.field AND x.generation=b.generation
-                WHERE b.type IN (${list}) AND b.field=? AND b.state='ready' AND x.value=?)) OR (e.type NOT IN (${list}) AND (${raw})))`,
+              `((e.type IN (${list}) AND e.id IN (SELECT x.entity_id FROM index_builds b JOIN field_index x
+                ON x.type=b.type AND x.field=b.name AND x.generation=b.generation
+                WHERE b.type IN (${list}) AND b.name=? AND b.kind='value' AND b.state='ready' AND x.value=?)) OR (e.type NOT IN (${list}) AND (${raw})))`,
               [field, key, typeof value === "boolean" ? Number(value) : value]
             );
         } else {

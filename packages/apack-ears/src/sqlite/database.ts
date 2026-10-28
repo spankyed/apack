@@ -29,7 +29,7 @@ import type { SqliteStatement } from "../runtime.ts";
 import { RESERVED_ATTRIBUTES } from "../errors.ts";
 import { sameValue } from "../utils.ts";
 import { executeQuery } from "./query.ts";
-import { SqliteIndexBuilds, type SqliteValueIndex } from "./index-builds.ts";
+import { SqliteIndexBuilds, type SqliteIndexSpec } from "./index-builds.ts";
 import { SqliteSearch } from "./search.ts";
 import { SqliteValues, type SqliteValueLayout } from "./values.ts";
 import { createSchemaValidator } from "./schema-validation.ts";
@@ -84,6 +84,7 @@ export class SqliteDatabase implements EarsDatabase {
     int64AsType: "number",
   });
   private readonly tracks = new Map<number, Track>();
+  private readonly indexListeners = new Set<(changes: Changes) => void>();
   private recording?: Track;
   private heldSchema: Data;
   private heldRevision: number;
@@ -152,33 +153,43 @@ export class SqliteDatabase implements EarsDatabase {
           throw Object.assign(new Error('Stored SQLite declaration is invalid', { cause: error }), { code: 'CORRUPT' });
         }
       }
-      if (this.readOnly) this.search.validateStructures(this.heldSchema);
-      if (this.readOnly || !this.search.needsRepair(this.heldSchema)) {
-        this.search.loadVectors(this.heldSchema);
-      } else {
-        // Recheck physical structures and the declaration under writer ownership before any reconstruction.
-        this.sql.exec('BEGIN IMMEDIATE');
-        try {
-          this.checkRevision();
-          this.repairSearch(this.search.ensure(this.heldSchema), this.heldSchema);
-          this.sql.exec('COMMIT');
-        } catch (error) {
-          if (this.sql.inTransaction) {
-            try { this.sql.exec('ROLLBACK'); }
-            catch (rollback) {
-              throw Object.assign(new AggregateError([error, rollback], 'Search repair and rollback failed', { cause: error }),
-                { code: (error as { code?: unknown })?.code });
-            }
-          }
-          throw error;
-        }
-      }
       this.indexBuilds = new SqliteIndexBuilds(this, () => !this.active, () => this.checkRevision(),
         (id, type, seq, field, generation) => {
           const row = this.values.read(this.valueLayout(type), [id], [field])[0];
           if (!row) fail('CORRUPT', 'Index backfill found an entity without authoritative values');
           this.refileValue(row!, seq, field, generation);
         });
+      const specs = this.indexSpecs(this.heldSchema);
+      if (this.readOnly) {
+        if (!this.indexBuilds.matches(specs)) fail('CORRUPT', 'Index declarations do not match stored generations');
+        this.search.validateStructures(this.heldSchema);
+        this.search.loadVectors(this.heldSchema);
+      } else if (!this.indexBuilds.matches(specs) || this.search.needsRepair(this.heldSchema)) {
+        this.sql.exec('BEGIN IMMEDIATE');
+        try {
+          this.checkRevision();
+          const incumbent = new Set(this.indexBuilds.jobs().map(job => job.generation));
+          this.indexBuilds.admit(specs);
+          this.indexBuilds.restart(this.search.missingIndexes(this.heldSchema).filter(job => incumbent.has(job.generation)));
+          this.search.ensure(this.heldSchema);
+          const state = this.indexBuilds.readState();
+          // Other owners may cache value generations. Invalidate them when physical recovery changes the
+          // catalog, while preserving the logical data commit identity and the declaration itself.
+          if (this.schemaPresent) this.putMeta('schemaRevision', this.heldRevision + 1);
+          this.sql.exec('COMMIT');
+          if (this.schemaPresent) this.heldRevision++;
+          this.indexBuilds.acceptState(state);
+        } catch (error) {
+          if (this.sql.inTransaction) {
+            try { this.sql.exec('ROLLBACK'); }
+            catch (rollback) {
+              throw Object.assign(new AggregateError([error, rollback], 'Search admission and rollback failed', { cause: error }),
+                { code: (error as { code?: unknown })?.code });
+            }
+          }
+          throw error;
+        }
+      } else this.search.loadVectors(this.heldSchema);
       if (options.schema) this.setSchema(options.schema);
       this.indexBuilds.resume();
     } catch (error) {
@@ -990,7 +1001,7 @@ export class SqliteDatabase implements EarsDatabase {
     if (Number(this.meta("schemaRevision") ?? 0) !== this.heldRevision)
       fail(
         "SCHEMA_CHANGED",
-        "Another handle changed the schema; reopen this handle"
+        "The schema or its index generations changed in another handle; reopen this handle"
       );
   }
   readSync(request: ReadRequest): Answer[] {
@@ -1118,18 +1129,27 @@ export class SqliteDatabase implements EarsDatabase {
       for (let i = 0; i < page.length; i++) { fn(rows[i], page[i].seq); after = page[i].seq; }
     }
   }
-  /** Repair only affected types and search inputs; unrelated large attributes never enter this backfill. */
-  private repairSearch(types: ReadonlySet<string>, schema: Data): void {
-    for (const type of types) {
-      this.run('DELETE FROM text_meta WHERE entity_id IN (SELECT id FROM entities WHERE type=?)', [type]);
-      const fields = this.search.fields(type, schema);
-      let after = -1;
-      for (;;) {
-        const page = this.all('SELECT id,type,seq FROM entities WHERE type=? AND seq>? ORDER BY seq LIMIT 256', [type, after]);
-        if (!page.length) break;
-        const rows = this.hydrate(page as Array<{ id: string; type: string }>, fields);
-        for (let i = 0; i < page.length; i++) { this.search.refile(rows[i], page[i].seq, schema); after = page[i].seq; }
+  private indexSpecs(schema: Data): SqliteIndexSpec[] {
+    const indexes: SqliteIndexSpec[] = [];
+    for (const [type, definition] of Object.entries(schema.types) as Array<[string, Data]>) {
+      const fields = new Set<string>(['role', 'shortCode']);
+      for (const [name, index] of Object.entries(definition.indexes ?? {}) as Array<[string, Data]>) {
+        if (index.kind === 'value') fields.add(index.fields[0]);
+        else indexes.push({ type, name, kind: index.kind, definition: index });
       }
+      for (const field of fields) indexes.push({ type, name: field, kind: 'value', definition: { field } });
+    }
+    return indexes;
+  }
+  indexesReady(): Promise<void> { return this.indexBuilds.indexesReady(); }
+  onIndexesChanged(listener: (changes: Changes) => void): () => void {
+    this.indexListeners.add(listener); return () => { this.indexListeners.delete(listener); };
+  }
+  /** A derived visibility transition reuses the current logical commit identity. */
+  indexesChanged(type: string): void {
+    const changes = { sequence: this.sequence, touched: this.touched(new Set([`rows:${type}`])) };
+    for (const listener of this.indexListeners) {
+      try { listener(changes); } catch (error) { queueMicrotask(() => { throw error; }); }
     }
   }
   setSchema(schema: object): any[] {
@@ -1163,26 +1183,10 @@ export class SqliteDatabase implements EarsDatabase {
       }
       for (const [type, definition] of Object.entries(next.types) as Array<[string, Data]>) this.layouts.set(type,
         this.values.declare(type, ['createdAt','updatedAt','trashedAt','shortCode','role', ...Object.keys(definition.fields ?? {})]));
-      const missingSearch = this.search.ensure(next);
-      const indexes: SqliteValueIndex[] = [];
-      for (const [type, definition] of Object.entries(next.types) as Array<[string, Data]>) {
-        const fields = new Set<string>(['role', 'shortCode']);
-        for (const index of Object.values(definition.indexes ?? {}) as Data[]) if (index.kind === 'value') {
-          if (!Array.isArray(index.fields) || index.fields.length !== 1 || typeof index.fields[0] !== 'string' || index.unique)
-            fail('SCHEMA_INVALID', 'SQLite value indexes require one field and do not declare uniqueness');
-          fields.add(index.fields[0]);
-        }
-        for (const field of fields) indexes.push({ type, field });
-      }
-      this.indexBuilds.admit(indexes, this.heldRevision + 1);
+      this.indexBuilds.admit(this.indexSpecs(next));
+      this.search.ensure(next);
       this.putMeta("schema", next);
       this.putMeta("schemaRevision", this.heldRevision + 1);
-      const searchDefinitions = (definition: Data | undefined) => Object.fromEntries(
-        Object.entries(definition?.indexes ?? {}).filter(([, index]) => (index as Data).kind !== 'value'));
-      const changedSearch = new Set(Object.keys(next.types).filter(type =>
-        !sameValue(searchDefinitions(this.heldSchema.types[type]), searchDefinitions(next.types[type]))));
-      for (const type of missingSearch) changedSearch.add(type);
-      this.repairSearch(changedSearch, next);
       this.putMeta("commit", this.sequence + 1);
       const indexState = this.indexBuilds.readState();
       this.sql.exec("COMMIT");
@@ -1328,12 +1332,14 @@ export class SqliteDatabase implements EarsDatabase {
         }
         after = 0;
         for (;;) {
-          const batch = incoming.all('SELECT rowid ordinal,* FROM chunks WHERE rowid>? ORDER BY rowid LIMIT 256', [after]);
+          const batch = incoming.all("SELECT c.rowid ordinal,c.* FROM chunks c JOIN index_builds b ON b.type=c.type AND b.name=c.index_name AND b.kind='vector' AND b.generation=c.generation WHERE c.rowid>? ORDER BY c.rowid LIMIT 256", [after]);
           if (!batch.length) break;
           for (const row of batch) {
-            this.run(`UPDATE chunks SET embedding=? WHERE entity_id=? AND index_name=? AND chunk=? AND hash=? AND model=? AND dims=?`,
-              [row.embedding,row.entity_id,row.index_name,row.chunk,row.hash,row.model,row.dims]);
             after = row.ordinal;
+            if (this.heldSchema.types[row.type]?.indexes?.[row.index_name]?.kind !== 'vector') continue;
+            const generation = this.indexBuilds.index(row.type, 'vector', row.index_name).generation;
+            this.run(`UPDATE chunks SET embedding=? WHERE entity_id=? AND index_name=? AND generation=? AND chunk=? AND hash=? AND model=? AND dims=?`,
+              [row.embedding,row.entity_id,row.index_name,generation,row.chunk,row.hash,row.model,row.dims]);
           }
         }
         unit.changes.add('all'); unit.commit();
@@ -1351,6 +1357,7 @@ export class SqliteDatabase implements EarsDatabase {
     this.sql.close();
     this.opened = false;
     this.tracks.clear();
+    this.indexListeners.clear();
     this.statements.clear();
     this.layouts.clear();
   }

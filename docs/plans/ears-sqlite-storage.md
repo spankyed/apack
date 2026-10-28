@@ -80,13 +80,32 @@ protocol must preserve correctness during background builds. SQLite CREATE INDEX
 writer lock; bounded backfill into derived structures, foreground priority and atomic readiness need a concrete
 implementation. A worker thread by itself is not the solution.
 
-The first admission slice implements value indexes. One owning foreground connection advances persistent index
-jobs between synchronous calls with unreferenced immediates; no worker holds a separate long writer transaction.
-A job has a generation, building/ready/failed state and committed sequence cursor. Writes maintain its active
-generation even while building. Reads use authoritative scalar/list values until readiness and all backfill writes
-commit together. Retained indexes keep their generation across unrelated declarations. Removed generations enter
-bounded indexed cleanup; an interrupted or failed build resumes its committed cursor on writable reopen. A stale
-owner stops rather than changing the newer owner's job. Read-only handles use the same safe fallback.
+One owning foreground connection advances persistent value/text/trigram/vector jobs between synchronous
+calls. A single `index_builds` catalog and scheduler owns generations, cursors, busy retry, stop/reopen behavior
+and readiness. No second worker holds a long writer transaction. Admission creates an empty private generation
+without hydrating the corpus; unchanged definitions keep their generation. Primary writes maintain every active
+generation even while it is building. Each batch reads only its index inputs and atomically commits postings,
+cursor and eventual readiness. Cancellation retires its generation rather than clearing a live index in admission.
+
+Value reads use authoritative scalar/list fallbacks before readiness. Search reads instead refuse explicitly with
+`INDEX_BUILDING`; failed builds report `INDEX_FAILED`. This candidate chooses explicit indexing over an unbounded
+foreground corpus scan. `database.indexesReady()` waits for all current generations, not retired-table cleanup.
+It keeps scheduled work alive while explicitly waiting, rejects open write-unit waits, read-only unfinished work,
+failed builds and stopped/closed owners. Native's pinned synchronous schema admission is already ready.
+
+A committed search readiness/failure transition invalidates matching tracked reads through the owning database
+handle. Watches can observe the indexing error and later retry; an existing watch may coalesce the transient state
+inside its normal scheduler gap. Visibility notification reuses the current logical commit identity. The backend
+subscription is detached with the last watch. Ordinary background work remains unreferenced so a CLI can exit;
+an explicit readiness wait refs its timer. Cross-handle/process reactive invalidation remains unsupported, as for
+ordinary commits made outside that connection.
+
+Text/trigram physical tables and vector chunks belong to a generation. Retirement alternates with build work,
+removing bounded row batches before virtual-table destruction. A replacement vector build reuses embeddings only
+when entity/index/chunk, content hash, model and dimensions agree. Cleanup retains the latest complete predecessor
+until its replacement is ready; older or partial generations remain collectable. A failed replacement does not spin
+on deferred cleanup. Unchanged vector/text/trigram definitions remain independently ready when a different index
+changes. A fresh writable owner resumes failed or interrupted work from its last committed cursor.
 
 Working qualification targets, set before the load measurements: no primary-row hydration during value-only
 admission; admission below 100 ms for the 10k/100k synthetic fixtures; at most 32 records per backfill transaction
@@ -115,10 +134,11 @@ prepared before the schema commit; accepting it afterward performs no IO. The [W
 describes checkpoint/reader interactions; long readers, host filesystem support and real IO failure outcomes remain
 phase-6 qualification, not guarantees inferred from these sync-disabled fixtures.
 
-Text/vector admission still uses a synchronous backfill when its definition changes. Unchanged search definitions
-are retained during value-only declarations. Completing background text/vector readiness and full search/vector
-semantics remains required; this first slice does not declare phase 3 complete. Same-connection watches still hear
-only logical commits made through their connection; cross-process reactive ownership remains to be qualified.
+The shared search-generation implementation is not resource qualification. Preserve the prewritten admission,
+foreground, independent-heartbeat, WAL and disk targets for the search fixtures, and report misses before tuning.
+Cold matcher loading, whole-field decoding/tokenization, transaction COMMIT and final virtual-table destruction
+can exceed the cooperative work target. Same-process ownership and real I/O/crash/checkpoint qualification, full
+application handling of the explicit indexing state and realistic search/vector acceptance remain in the goal.
 
 Query diagnostics must distinguish SQLite plans and measured SQL work from the legacy native engine's stage/key
 counts. Never synthesize physical SQLite counters just to satisfy a backend-specific assertion. Preserve logical
@@ -126,13 +146,13 @@ warning and call-count meaning, and update diagnostics consumers/types where the
 
 ## Missing derived search storage
 
-Primary values remain authoritative when a search group is missing. On open, inspect the declared physical
-text/trigram/vector structures. A read-only open refuses incomplete storage as `CORRUPT`; it must not quietly
-create empty indexes or return an incomplete search answer. A writable owner resets an incomplete FTS group
-through SQLite's virtual-table DDL and reconstructs affected types from projected search inputs in one
-transaction. A failed reconstruction rolls back recreated tables and postings; the logical commit identity does
-not change. Existing vector chunks retain embeddings when their text/model/dimensions agree. If the chunks
-table itself was lost, derive pending chunks again so the embedding service can recompute them.
+Primary values remain authoritative when a search group is missing. A read-only open refuses missing physical
+storage as `CORRUPT`; an existing incomplete generation instead reports `INDEX_BUILDING` when searched. A writable
+owner admits a fresh private generation under writer ownership, then backfills it in ordinary bounded batches.
+A failed batch rolls back its postings and cursor; incomplete data never becomes searchable. Logical commit
+identity does not change. Intact unrelated generations and embeddings survive. If chunk storage itself was lost,
+derive pending chunks again so the embedding service can recompute vectors. A missing secondary chunk index
+can be recreated without discarding vectors.
 
 The object inventory includes the pinned FTS5 configuration's shadow tables. These are inspected by name;
 normal repair drops/recreates the virtual table through SQLite, rather than editing shadow content or
@@ -140,13 +160,12 @@ normal repair drops/recreates the virtual table through SQLite, rather than edit
 describes which content/docsize tables exist for this configuration. Destructive fault fixtures explicitly
 turn off SQLite's defensive mode only on disposable test databases; production keeps it enabled.
 
-Repair pages at most 256 affected entities at once and selects only current search inputs. A healthy reopen
-hydrates no primary entity rows and avoids taking writer ownership, so another handle's open write unit does not
-prevent it from reading committed data. This bounds the page count in memory, not a single field's
-size, total repair memory, or foreground duration. Current repair/backfill remains synchronous. Phase 3 must
-replace the long owner transaction with persistent generations, yielding work, write reconciliation and
-explicit read/readiness semantics before adoption. Existing but corrupt postings still need audit/rebuild and
-real-corruption qualification; physical-object presence is not an integrity checksum.
+Repair uses the scheduler's at-most-32-row batches and projects only the current index inputs. A healthy
+reopen hydrates no primary entities and avoids writer ownership, so another handle's open write unit does not
+prevent committed reads. This bounds row count per page, not an individual field's size or peak bytes. Existing
+but corrupt postings still require audit/rebuild and real-corruption qualification; physical presence is not a
+checksum. Storage format 1 changes in place: disposable developer profiles use the current physical layout;
+this does not introduce a legacy upgrade path.
 
 ## Required slice measurements
 

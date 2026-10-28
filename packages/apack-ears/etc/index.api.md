@@ -210,8 +210,10 @@ export interface EarsDatabase {
     close(): void;
     // (undocumented)
     durable(): Promise<void>;
+    indexesReady(): Promise<void>;
     // (undocumented)
     readonly isOpen: boolean;
+    onIndexesChanged?(listener: (changes: Changes) => void): () => void;
     // (undocumented)
     readonly path: string;
     // (undocumented)
@@ -301,6 +303,10 @@ export type EarsErrorCode =
 * index (no `substrings`)
 */
 | 'UNKNOWN_INDEX'
+/** A declared search index has not finished its current generation; await the owning database's indexesReady(). */
+| 'INDEX_BUILDING'
+/** A background index build failed; the writable owner must recover it before indexed reads resume. */
+| 'INDEX_FAILED'
 /** `hits()` was asked of a query with no `search`, `near`, `like` or `hybrid`, or with a `where` given a function after it */
 | 'NO_SEARCH'
 /** `explain()` was asked of a query with a `where` given a function, which runs outside the plan the database explains */

@@ -48,7 +48,7 @@ interface BinaryUnit extends Omit<EarsUnit, 'read' | 'write' | 'commit'> {
   write(request: Uint8Array): Uint8Array;
   commit(durable?: boolean | null): Uint8Array;
 }
-export interface BinaryDatabase extends Omit<EarsDatabase, 'readSync' | 'write' | 'begin' | 'bulkLoad'> {
+export interface BinaryDatabase extends Omit<EarsDatabase, 'readSync' | 'write' | 'begin' | 'bulkLoad' | 'indexesReady' | 'onIndexesChanged'> {
   readSync(request: Uint8Array): Uint8Array;
   write(request: Uint8Array, durable?: boolean | null): Uint8Array;
   begin(): BinaryUnit;
@@ -87,6 +87,7 @@ export function adaptDatabase(database: BinaryDatabase): EarsDatabase {
     untrack: (token) => database.untrack(token),
     trackStats: () => database.trackStats(),
     durable: () => database.durable(),
+    indexesReady: () => Promise.resolve(),
     close: () => database.close(),
   };
 }

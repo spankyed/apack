@@ -79,6 +79,10 @@ export interface EarsDatabase {
   /** How many tokens have tracked reads filed, and how many keys and ranges they hold */
   trackStats(): { owners: number; keys: number; ranges: number };
   durable(): Promise<void>;
+  /** Resolves when all current index generations are ready. Call outside write units; rejects if indexing cannot complete. */
+  indexesReady(): Promise<void>;
+  /** Backend visibility changes after a derived generation commits; no new logical commit is invented. */
+  onIndexesChanged?(listener: (changes: Changes) => void): () => void;
   close(): void;
 }
 
@@ -109,7 +113,7 @@ function freezeValues(answer: Answer): Answer {
   return answer;
 }
 
-/** elmdb's codes that are one of the engine's own, under the engine's name for it */
+/** Backend refusal codes that the engine names as an EarsError. */
 const CODES: Record<string, EarsErrorCode> = {
   UNKNOWN_TYPE: 'UNKNOWN_ENTITY_TYPE',
   RESERVED_FIELD: 'RESERVED_ATTRIBUTE',
@@ -128,6 +132,8 @@ const CODES: Record<string, EarsErrorCode> = {
   CYCLE: 'CYCLE',
   VALUE_INVALID: 'VALUE_INVALID',
   UNKNOWN_INDEX: 'UNKNOWN_INDEX',
+  INDEX_BUILDING: 'INDEX_BUILDING',
+  INDEX_FAILED: 'INDEX_FAILED',
   FIELD_TYPE: 'FIELD_TYPE',
   PATTERN_INVALID: 'PATTERN_INVALID',
 };
@@ -197,8 +203,8 @@ export interface Connection {
   untrack(token: number): void;
   trackStats(): { keys: number; ranges: number };
   /**
-   * Calls `listener` after each commit, outside the call that made it, with what it touched. Returns the
-   * unregistration
+   * Calls `listener` for logical commits and committed derived-index visibility changes, with affected tokens.
+   * Derived visibility reuses the current logical sequence. Returns the unregistration.
    */
   onCommit(listener: (commit: Commit) => void): () => void;
   /** Tells the commit listeners of a commit made past the connection, whose writes aren't known key by key */
@@ -223,6 +229,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
   /** The token the reads being made are tracked under, while `track` runs */
   let tracking: number | undefined;
   const listeners = new Set<(commit: Commit) => void>();
+  let unlistenIndexes: (() => void) | undefined;
   /** Calls every commit listener; a listener's throw is reported, not handed to the writer */
   const committed = (commit: Commit) => {
     for (const listener of listeners) {
@@ -413,8 +420,12 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       return { keys, ranges };
     },
     onCommit(listener) {
+      if (!listeners.size) unlistenIndexes = database.onIndexesChanged?.(heard);
       listeners.add(listener);
-      return () => { listeners.delete(listener); };
+      return () => {
+        listeners.delete(listener);
+        if (!listeners.size) { unlistenIndexes?.(); unlistenIndexes = undefined; }
+      };
     },
     committedEverything: () => committed({ sequence: database.sequence, touched: 'all' }),
     lastCommit: () => database.sequence,
