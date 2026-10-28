@@ -195,13 +195,16 @@ Detached integration `monorepo-worktrees.noindex/integration-FyE9XZ` tracks the 
 adoption or Mac build occurred; app master and the private native engine remain pinned to 98386b36a1 / 6ab2f69.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; no Mac dependencies, native build or
-captured runtime are installed. Published draft tip is **3f4651b009f4d211497b92ad47c7491adac506b6**.
-Its single exact [strict run 40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) has completed
-integration-1 and app/rest failures: API bundle probe reads its tsup config and build/build-metadata.ts without
-cache declarations. The run is now terminal FAILURE; both native jobs and the producer passed. Integration-2
-also failed with an unhandled Vitest RPC timeout despite 538 passing tests; its cause remains unisolated.
-The producer passed, including the aggregate scripts typecheck; the earlier local 60-second timeout remains
-retained without a causal explanation. Failed predecessor 460866c5c2 / run 40761412029 is retained in evidence.
+captured runtime are installed. Published draft tip is **1a0f664d01bacb969ab48cd27aae1afd146de1cc**;
+[strict run 40783434078](https://github.com/spankyed/apack/actions/runs/40783434078) is the single live exact gate.
+Poll that handle and inspect actual refs before any new publication; never dispatch duplicates or promote on a
+parent's success. Both published integration and remote branch point to that exact tip. Canonical stays a889531dd1.
+
+Previous **3f4651b009** / [40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) is terminal FAILURE.
+Producer and both native jobs passed; integration-1 and app/rest failed on undeclared API bundler inputs fixed
+in the new descendant. Integration-2 failed with an unhandled Vitest RPC timeout despite 538 passing tests;
+its cause remains unisolated and its failed status stands. The earlier local scripts timeout is retained; later
+unchanged 60-second scripts checks pass. Failed predecessor 460866c5c2 / run 40761412029 is also retained.
 
 Local functional lifecycle source **51d4e11d2961a342ca0f33e160a779d30d7bbc65** adds registry-owned index readiness
 and async startup/activation/update/restore/reload while preserving synchronous installer acceptance and claims.
@@ -231,8 +234,8 @@ native cases**, types/API checks, source Node, lint/imports pass. See
 Ambiguous COMMIT IOERR outcomes and physical durability remain open; this is not a general commit-outcome proof.
 
 Canonical remains a889531dd1. The approved helper requires clean source/native pins and exact strict success
-before private promotion. The corrected evidence descendant is ready for one new publication/gate now that the
-previous run is terminal. No master merge/adoption or daily-use profile conversion occurred. Keep the full goal.
+before private promotion. The corrected evidence descendant is published and its single exact gate is live;
+leave that tip unchanged while it runs. Further work stays local until a deliberate checked checkpoint. No master merge/adoption or daily-use profile conversion occurred. Keep the full goal.
 
 Earlier strict 78eff95202 timed out in typecheck:scripts without a captured TypeScript diagnostic. Its exact command
 passed unchanged in two-core Linux within the original 60-second budget; the Mac cause is unisolated. The newer
