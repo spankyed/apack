@@ -2,7 +2,7 @@ import type { SqliteDatabase } from './database.ts';
 
 /** SQL ordering is equivalent only for these scalar cells; ICU text and deep values use the JS comparator. */
 export function orderNumericIds(db: SqliteDatabase, input: {
-  sql: string; parameters: unknown[]; order: string; field: string; descending?: boolean;
+  sql: string; parameters: unknown[]; order: string; field: string; descending?: boolean; limit?: number;
 }): string[] | undefined {
   if (input.field === 'id' || input.field === 'entityType' || input.field.includes('\0')) return undefined;
   const types = [...new Set(db.all(`SELECT DISTINCT e.type FROM (${input.sql}) p
@@ -26,6 +26,10 @@ export function orderNumericIds(db: SqliteDatabase, input: {
   const rank = `CASE p._sort_kind WHEN 'bool' THEN 0 WHEN 'num' THEN 1 WHEN 'zero' THEN 1 WHEN 'date' THEN 2 ELSE 5 END`;
   const direction = input.descending ? 'DESC' : 'ASC';
   // The driver returns JS numbers, including rounding large SQLite integers to doubles. Preserve those ties.
+  // Only an immediately following limit is safe here: filtering or another ordering step before the limit
+  // would change which prefix survives. Eligibility still checks every candidate, including outside this prefix.
+  const limited = input.limit !== undefined;
   return db.all(`SELECT p.id FROM (${joined}) p ORDER BY ${rank} ${direction},
-    CAST(p._sort_value AS REAL) ${direction},${input.order}`, input.parameters).map(row => String(row.id));
+    CAST(p._sort_value AS REAL) ${direction},${input.order}${limited ? ' LIMIT ?' : ''}`,
+    limited ? [...input.parameters, input.limit] : input.parameters).map(row => String(row.id));
 }

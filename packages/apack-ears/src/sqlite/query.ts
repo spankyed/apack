@@ -74,7 +74,7 @@ export function executeQuery(
   let searchHits: Map<string, Data> | undefined;
   let visited: number | undefined;
   let scanSource: { sql: string; parameters: any[] } | undefined;
-  for (const step of steps) {
+  for (const [stepIndex, step] of steps.entries()) {
     switch (step.step) {
       case "ofType":
         filter("e.type=?", [step.type]);
@@ -275,8 +275,10 @@ export function executeQuery(
           schema.collation?.locale ?? "en",
           schema.collation?.options ?? {}
         );
+        const next = steps[stepIndex + 1];
         const native = orderNumericIds(db, { sql, parameters, order: order(), field: step.field,
-          descending: step.descending });
+          descending: step.descending,
+          limit: next?.step === 'limit' ? Math.max(0, Math.floor(next.n)) : undefined });
         if (native !== undefined) { restart(native); break; }
         const ids = idsNow(),
           values = new Map(db.rows(ids, [step.field]).map(row => [row.id, row[step.field]]));

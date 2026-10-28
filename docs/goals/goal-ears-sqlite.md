@@ -246,7 +246,12 @@ open search failures. Seven independent mutations fail meaningful assertions.
 [Scalar-order evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-scalar-ordering/README.md)
 retains complete results. The paired nine-process cohort does not show an overall speedup: median sort is
 38.24 ms before, 41.21 ms after and 5.89 ms native (7.7% slower; substantial process variability).
-It still materializes sorted IDs; probe/query costs, top-k and latency qualification remain open.
+A subsequent isolated change pushes an immediately following limit into SQL, returning only that prefix of IDs.
+Private Linux passes types, 50 focused cases, nine safeguard mutations and 296 full SQLite cases, with the same
+three open search failures. Sequential statement profiles reduce instrumented numeric-page time from
+33.57 to 28.90 ms flexible and 31.52 to 26.33 ms typed, but do not replace balanced qualification. Full candidate
+validation still scans all rows; general ordering/pagination and latency qualification remain open.
+[Limit-pushdown evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-limit-pushdown/README.md)
 
 ### Unqualified results and current CI
 

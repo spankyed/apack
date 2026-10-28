@@ -39,6 +39,35 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     expect(read.mock.calls.every(call => call[2] !== undefined && !call[2].includes('body'))).toBe(true);
   });
 
+  it('returns only an adjacent limit from the SQL sort, preserving filters and earlier prefixes', () => {
+    const { e } = open();
+    e.transact(() => {
+      for (let i = 0; i < 512; i++) e.create('Row', { id: `Row-${i}`, rank: 511 - i, body: i % 2 ? 'odd' : 'even' });
+    });
+    const explained = e.query('Row').orderBy('rank').limit(7).explain();
+    expect(explained.ids).toEqual(Array.from({ length: 7 }, (_, i) => `Row-${511 - i}`));
+    if (explained.backend !== 'sqlite') throw new Error('Expected SQLite diagnostics');
+    const sorted = explained.statements.filter(s => s.sql.includes('ORDER BY CASE p._sort_kind'));
+    expect(sorted).toHaveLength(1);
+    expect(sorted[0].returnedRows).toBe(7);
+    expect(sorted[0].sql).toMatch(/LIMIT \?$/);
+    expect(e.query('Row').orderBy('rank').where('body', 'even').limit(7).ids()).toEqual(
+      Array.from({ length: 7 }, (_, i) => `Row-${510 - i * 2}`));
+    expect(e.query('Row').limit(12).orderBy('rank').limit(3).ids()).toEqual(['Row-11', 'Row-10', 'Row-9']);
+    expect(e.query('Row').orderBy('rank').limit(0).ids()).toEqual([]);
+    expect(e.query('Row').orderBy('rank').limit(7).count()).toBe(7);
+  });
+
+  it('validates scalar cells outside a pushed sort prefix', () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-first', rank: 1, body: 'a' });
+    e.create('Row', { id: 'Row-last', rank: 2, body: 'b' });
+    const layout = db.values.layout('Row')!, slot = layout.fields.get('rank')!;
+    db.run(`UPDATE ${layout.table} SET v${slot}=? WHERE entity_id=?`, ['invalid', 'Row-last']);
+    expect(() => e.query('Row').orderBy('rank').limit(1).ids()).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+    expect(() => e.query('Row').orderBy('rank').limit(0).ids()).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+  });
+
   it('preserves stable input order and duplicate ids across different physical type layouts', () => {
     const { e } = open();
     e.transact(() => {
