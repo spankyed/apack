@@ -218,8 +218,8 @@ original 60-second scripts types, lint/imports, and the actual SQLite smoke bloc
 The same pinned v13 Node-API addon loads across ABI 131 / 136; unnecessary rebuild-list changes were removed.
 See [runtime packaging evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/packaging-runtime/README.md).
 This proves probe logic against built workspace packages, not complete packaged/signed distributions. ASAR is disabled.
-The published run also has an integration-2 unhandled Vitest RPC timeout despite 538 passing tests; cause remains
-unisolated and its failed status stands. Poll the exact run for remaining native jobs before another publication.
+The terminal published run also has an integration-2 unhandled Vitest RPC timeout despite 538 passing tests;
+its cause remains unisolated and its failed status stands. Both native jobs passed.
 
 Latest qualified storage source **479e6bc333c82020ceb66a61dd84882aab396a5f** fixes error masking when SQLite
 rolls back a transaction itself after SQLITE_FULL. Actual 4 MiB tmpfs controls trigger write-spill and COMMIT
