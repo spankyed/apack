@@ -4,6 +4,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { _appDataPaths } from '@apackdev/sdk/utils';
+import { bindHost } from '@apackdev/sdk/runtime';
+import { unbindHost } from '@apackdev/sdk/runtime/internals';
+import { readInstalledSchema } from '../../src/database/schema.ts';
+import { schemaContext, schemaWith } from '../database/fixtures.ts';
 import { testRootEvents } from '@apackdev/sdk/testing';
 import { createHostRuntime } from '../../src/services/index.ts';
 import { createNativePackTestRegistry } from '../../src/testing/pack-registry.ts';
@@ -17,6 +21,7 @@ import { createRunHistory } from '../../src/services/run-history.ts';
 
 const roots: string[] = [], opened: EarsDatabase[] = [];
 afterEach(() => {
+  unbindHost();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   for (const db of opened.splice(0)) db.close();
@@ -24,15 +29,11 @@ afterEach(() => {
 });
 const log = { info() {}, warn() {} };
 const id = (s: string) => s as EARS.EntityId;
-const schema = {
-  getRegisteredEntityTypes: () => new Set(['Note', 'Settings']),
-  getRegisteredRelationKinds: () => new Set<string>(),
-  getRegisteredRoles: () => new Set<string>(),
-};
+const schemaFor = (dir: string) => schemaWith(readInstalledSchema(schemaContext(dir)), ['Note']);
 function root() { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-backup-storage-')); roots.push(dir); return dir; }
 function storesAt(dir: string, storageFormat: string, label: string) {
   const paths = _appDataPaths(dir);
-  const primary = openDatabaseStore({ path: paths.lmdb, schema, storageFormat });
+  const primary = openDatabaseStore({ path: paths.lmdb, schema: schemaFor(dir), storageFormat });
   const history = openRunHistory(paths.runHistory, { storageFormat });
   opened.push(primary.database, history.database);
   primary.engine.create('Note', { id: id('Note-' + label), title: label });
@@ -147,7 +148,8 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
     const f = await fixture(format);
     vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_USER_DATA_DIR', path.join(f.dir, 'live'));
     const runtime = createHostRuntime({ database: f.live.database, engine: f.live.engine, runHistory: f.live.history,
-      packs: createNativePackTestRegistry(), appVersion: 'test', transport: { rootEvents: testRootEvents } });
+      packs: createNativePackTestRegistry(), appVersion: '1.0.0', transport: { rootEvents: testRootEvents } });
+    bindHost(runtime);
     await runtime.services.appData.importBackup(f.backup);
     expect(f.live.engine.query('Note').ids()).toEqual(['Note-candidate']);
     expect(fs.readFileSync(path.join(f.liveMedia, 'asset'), 'utf8')).toBe('candidate');
@@ -157,7 +159,8 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
     const f = await fixture(format, { app: { projects: 'invalid' } });
     vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_USER_DATA_DIR', path.join(f.dir, 'live'));
     const runtime = createHostRuntime({ database: f.live.database, engine: f.live.engine, runHistory: f.live.history,
-      packs: createNativePackTestRegistry(), appVersion: 'test', transport: { rootEvents: testRootEvents } });
+      packs: createNativePackTestRegistry(), appVersion: '1.0.0', transport: { rootEvents: testRootEvents } });
+    bindHost(runtime);
     const replace = vi.spyOn(f.live.database, 'replaceWith');
     await expect(runtime.services.appData.importBackup(f.backup)).rejects.toThrow();
     expect(replace).not.toHaveBeenCalled(); assertIncumbent(f);
@@ -172,8 +175,8 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
 });
 
 it('does not create an elmdb database over a SQLite host directory', () => {
-  const dir = root(); const store = openDatabaseStore({ path: dir, schema, storageFormat: SQLITE }); opened.push(store.database);
-  expect(() => openDatabaseStore({ path: dir, schema })).toThrow(expect.objectContaining({ code: 'STORAGE_MISMATCH' }));
+  const dir = root(); const store = openDatabaseStore({ path: dir, schema: schemaFor(dir), storageFormat: SQLITE }); opened.push(store.database);
+  expect(() => openDatabaseStore({ path: dir, schema: schemaFor(dir) })).toThrow(expect.objectContaining({ code: 'STORAGE_MISMATCH' }));
   expect(fs.existsSync(path.join(dir, 'data.mdb'))).toBe(false);
 });
 
