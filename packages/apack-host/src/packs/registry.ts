@@ -217,6 +217,8 @@ export interface PackRegistry extends PackRegistryView {
    * is what `getPackRegistration` answers by then. Returns the unsubscribe.
    */
   onRegistrationChanged(listener: (packId: string) => void): () => void;
+  /** Wait for declared indexes before lifecycle hooks, migrations or actors read them. */
+  indexesReady(): Promise<void>;
   /**
    * Notes why an installed pack isn't running: the loader skipped it, or its registration was refused. The Packs
    * view shows it in place of the pack's enabled state. Cleared when the pack registers or is torn down.
@@ -369,6 +371,8 @@ function buildContributionTables(packs: Iterable<AdmittedPackContributions>) {
 
 /** A new, empty registry */
 export interface PackRegistryOptions {
+  /** Composition supplies the owning database's readiness; declaration-only registries have no build work. */
+  indexesReady?: () => Promise<void>;
   /** Native data is admitted before executable registration and survives runtime unload. */
   nativeDeclarations?: readonly import('@apackdev/sdk/framework').NativePackDeclaration[];
   /**
@@ -385,7 +389,7 @@ export interface PackRegistryOptions {
   serviceOverrides?: ReadonlyMap<string, unknown>;
 }
 
-export function createPackRegistry({ installedPacksDir, appPackSourcesDir, settingsForPack, serviceOverrides, nativeDeclarations = [] }: PackRegistryOptions = {}): PackRegistry {
+export function createPackRegistry({ indexesReady = () => Promise.resolve(), installedPacksDir, appPackSourcesDir, settingsForPack, serviceOverrides, nativeDeclarations = [] }: PackRegistryOptions = {}): PackRegistry {
   let registrations = new Map<string, PackRegistration>();
   /** Where each registered pack came from. Same keys as `registrations`, so it comes and goes with them */
   let origins = new Map<string, PackOrigin>();
@@ -811,6 +815,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     }),
     registerContentRuntime,
     unregisterPack,
+    indexesReady,
     onRegistrationChanged(listener) {
       registrationListeners.add(listener);
       return () => { registrationListeners.delete(listener); };

@@ -198,14 +198,14 @@ describe('createHostRuntime', () => {
 });
 
 describe('startPacks', () => {
-  it("runs no pack migration or apply when the app's migrations failed", () => {
+  it("runs no pack migration or apply when the app's migrations failed", async () => {
     order.length = 0;
     appMigrations.succeed = false;
     const packs = createNativePackTestRegistry();
     packs.registerPack({ id: 'late-written-pack' });
     packs.registerPack({ id: 'late-pack' }, externalOrigin('late-pack', 'Late'));
     try {
-      startPacks(packs);
+      await startPacks(packs);
     } finally {
       appMigrations.succeed = true;
       packs.unregisterPack('late-written-pack');

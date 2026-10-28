@@ -94,6 +94,7 @@ export function openAppStore(): AppStore {
   let runtime: HostRuntime;
   const packs = createPackRegistry({
     nativeDeclarations: [hostDeclaration],
+    indexesReady: () => database.indexesReady(),
     installedPacksDir: () => resolveAppEnvironment().packsDir,
     appPackSourcesDir: () => process.env.SHIPPED_PACKS_DIR,
     settingsForPack: (packId) => runtime.services.settings.forPack(packId),
@@ -218,7 +219,7 @@ export async function setupBackend(): Promise<void> {
   logger.info(bootReading());
 
   // ── Start the packs: each one's onInit, the migrations (the app's, then external packs'), the content
-  if (!recoveringSettings) startPacks(packs);
+  if (!recoveringSettings) await startPacks(packs);
 
   // ── Start backend actor ──────────────────────────────────────────────
   backendActor = createActor(createAppBus(packs, appClaims), {

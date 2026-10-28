@@ -50,3 +50,14 @@ it('closes the primary if the run-history backend refuses and leaves no host bou
   expect(() => boundHost()).toThrow('No host is bound');
   expect(fs.readdirSync(path.dirname(_appDataPaths(dir).runHistory)).some(name => name.includes('.unreadable-'))).toBe(false);
 });
+
+
+it('waits for real populated search admission through the live registry readiness port', async () => {
+  profile(); const app = open();
+  app.engine.admin.declare({ types: { AdmissionRow: { required: [] } }, relations: {}, roles: [] });
+  for (let i = 0; i < 150; i++) app.engine.create('AdmissionRow', { id: `AdmissionRow-${i}`, title: `marker ${i}` });
+  app.engine.admin.declare({ types: { AdmissionRow: { required: [], substrings: ['title'] } }, relations: {}, roles: [] });
+  expect(() => app.engine.query('AdmissionRow').matching('marker').count()).toThrow(expect.objectContaining({ code: 'INDEX_BUILDING' }));
+  await app.packs.indexesReady();
+  expect(app.engine.query('AdmissionRow').matching('marker').count()).toBe(150);
+});

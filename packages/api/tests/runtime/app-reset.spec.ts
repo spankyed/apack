@@ -49,7 +49,7 @@ beforeAll(async () => {
   // The app installs the packs it ships, then loads every installed pack
   await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
   loadAppPacks(packs);
-  startPacks(packs);
+  await startPacks(packs);
   fresh = { settings: storedSettings(), flows: flows() };
 });
 

@@ -53,7 +53,7 @@ export function createAppData({ database, engine, history, registry, settings, o
         history.database.reset();
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
-        startPacks(registry);
+        await startPacks(registry);
       }));
     },
     exportBackup: (targetPath, name, databases) =>
@@ -68,6 +68,7 @@ export function createAppData({ database, engine, history, registry, settings, o
           accept: async () => {
             // What a restored history left running can't be running now
             history.service.stopActive();
+            await Promise.all([database.indexesReady(), history.database.indexesReady()]);
             // Run declared versioned data changes after restore, before notifying consumers.
             if (runAppMigrations(registry)) runPackMigrations(registry.packMigrationTargets('pack'));
           },
