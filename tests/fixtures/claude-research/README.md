@@ -52,6 +52,17 @@ Bash admission, projection and control replies without retries or pre-click wait
 `reconstructBashPrefixTokenFailure` preserves the old snapshot comparison and its missing-error limit.
 Bash responses use the selected choice's token; the parent token tracks presentation refresh only.
 
+The refusal profile uses `CLAUDE_RESEARCH_REFUSAL_NOTICE` (`retry_fallback`, `edit_prompt`,
+`cancelled`) with kind `terminal-plan-app-theme` through the same `probeApackControls` entry.
+Set `CLAUDE_RESEARCH_REFUSAL_EMPTY_DRAFT=1` only with `edit_prompt` to exercise the original
+no-substantive-reply restoration gate, empty-editor Select All, the original human-history rewind,
+and normal/compact restored-prompt captures. Other refusal profiles preserve the typed draft.
+The original model route, dialog callbacks and retraction identities remain native-owned.
+The accepted scopes include same-session recovery; help navigation, immediate focus/typing,
+rich/media restoration and other owner/window/policy/lifecycle combinations remain separate.
+This profile requires the same locked, capped offline Linux boundary and read-only pinned binary;
+it does not authorize a CI dispatch or establish combined F1–F5 acceptance.
+
 The current runner includes Settings freshness observation and cloud-consent saved verification.
 Cloud-consent acceptance uses a private previously saved forwarding preference and leaves the native
 feature gates unchanged. Its profile requires the owned offline-container receipt at
