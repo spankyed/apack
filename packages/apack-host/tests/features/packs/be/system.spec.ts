@@ -372,7 +372,7 @@ describe('pack information without activation', () => {
     return (event!.packs as InstalledPackSummary[]).find(pack => pack.id === PACK_ID)!;
   };
 
-  it.each(['disabled', 'activation-failed'])('lists %s declarations without activating backend or frontend code', kind => {
+  it.each(['disabled', 'activation-failed'])('lists %s declarations without activating backend or frontend code', async kind => {
     const dir = path.join(resolveAppEnvironment().packsDir, PACK_ID);
     const manifest = { id: PACK_ID, name: 'Declared pack', version: '1.0.0',
       data: { relations: { parent: {} } },
