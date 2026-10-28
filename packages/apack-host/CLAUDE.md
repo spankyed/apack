@@ -2,12 +2,13 @@
 
 Host-only modules shared by the API, the renderer, the Electron main process, the CLI and `@apackdev/testing`. This package is the app runtime: the app's own state (`AppState`), pack registration, discovery, install and update, the pack runtime the app runs (loading, lifecycle, reload, writing), the backend bus, the migrations runners, the user's API keys, host service implementations and the one place the app's `HostRuntime` is assembled, backups and build-time helpers. The API (`packages/api`) keeps only transport, process boot and composition, and calls into it. Packs never import it, and it never imports transport (`fastify`, `@trpc/*`, `ws`) or `virtual:*` modules: the CLI and the pack test harness run it without a server. The root `CLAUDE.md` ("SDK packages") lists the subpaths and their one-line roles. This file covers how each area works. For the pack runtime (loader, `SDK_BRIDGE`, lifecycle, reload, writing, boot sequence), see [`src/packs/runtime/CLAUDE.md`](src/packs/runtime/CLAUDE.md).
 
-The candidate SQLite path is selected explicitly with `storageFormat` on host database constructors; omission
-keeps elmdb. The database port's format identity drives backup provenance and host-owned file/open descriptors
-in `database/storage.ts`. Backup reads inspect and open actual files; import checks all destination formats before
-validation/replacement. Recognized foreign storage refuses as `STORAGE_MISMATCH`, never run-history corruption
-salvage. Tests in `tests/backup/storage.spec.ts` exercise both implementations without aliases. Full app/CLI
-selection and operational/platform qualification remain in the SQLite goal.
+The candidate uses `APACK_STORAGE_FORMAT=sqlite/1` with an explicit isolated absolute app profile or a
+resolved named CLI target; omission preserves elmdb. `database/storage.ts` rejects default profile paths,
+children and symlink aliases before opening. Explicit `storageFormat` constructor options also serve fixtures.
+The database port's format identity drives backup provenance and host-owned file/open descriptors.
+Import checks every destination format before validation/replacement. Recognized foreign storage refuses
+as `STORAGE_MISMATCH`, outside run-history corruption salvage. Real host/API/CLI workflow tests cover both
+implementations. Live pack readiness, physical recovery and platform qualification remain in the SQLite goal.
 
 ## Package basics
 

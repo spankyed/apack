@@ -180,7 +180,7 @@ repeated-body case alone.
 
 The database port reports its storage `format`; both adapters own that constant without changing the native ABI.
 The host's `database/storage.ts` owns the finite format-to-open/data-file descriptors. Host constructors accept
-an explicit `storageFormat`; omission preserves elmdb. Selecting the other backend over recognized existing files
+an explicit `storageFormat`; otherwise the isolated process selector below applies (default elmdb). Selecting the other backend over recognized existing files
 refuses as `STORAGE_MISMATCH`, outside run-history corruption salvage. This is essential: selecting the wrong
 candidate backend must not move an incumbent aside or create an apparently empty replacement profile.
 
@@ -191,8 +191,8 @@ existing coordinated incumbent-copy/media/acceptance rollback. Cross-format impo
 conversion on a copy; it is not an implicit physical conversion. Primary data and run history may be inspected
 through their actual descriptors independently.
 
-This closes a host-boundary prerequisite, not app adoption. Explicit app/CLI profile selection, readiness handling,
-settings/media acceptance through the complete runtime, SDK composition, logical maintenance/conversion, recovery
+This closes a host-boundary prerequisite, not app adoption. Live pack readiness,
+settings/media acceptance through the complete runtime, logical maintenance/conversion, recovery
 under real IO faults and platform packaging remain required by the goal. Normal production composition stays elmdb.
 
 ## Isolated candidate process selection
@@ -206,7 +206,7 @@ re-reading an unrelated parent profile. Physical cross-format import remains a r
 
 The API waits for initial index readiness and again after executable pack registration, before lifecycle hooks
 and migrations. This preserves synchronous EARS operations while keeping asynchronous index admission out of
-startup reads. Partial store acquisition closes the primary if history/runtime construction refuses. Full server
-boot, installed/live pack flows and failure/packaging evidence remain acceptance work; constructor/restart tests
-alone do not qualify those flows. This selection is temporary evaluation machinery, to be removed or collapsed to
+startup reads. Partial store acquisition closes the primary if history/runtime construction refuses. Two actual built Node server boots with shipped-pack/SDK/settings operations pass in isolated Linux.
+Installed/live pack flows, Electron ABI and failure/packaging evidence remain acceptance work; the Node
+proof does not qualify those flows. This selection is temporary evaluation machinery, to be removed or collapsed to
 the chosen backend at the final adoption decision.

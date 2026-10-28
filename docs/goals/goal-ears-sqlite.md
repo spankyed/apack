@@ -195,12 +195,18 @@ Detached integration `monorepo-worktrees.noindex/integration-FyE9XZ` tracks the 
 adoption or Mac build occurred; app master and the private native engine remain pinned to 98386b36a1 / 6ab2f69.
 
 Active continuation remains `/private/tmp/ears-sqlite-diagnosis-evidence`, with no installed dependencies,
-native build or captured runtime. Host implementation b36c179fe2 and runtime tests through b8231cb734 are newer
-than the green checkpoint. Their checked evidence descendant is the next publication and requires its own exact
-strict gate. Inspect actual refs and PR #286 for the latest head and run handle; do not dispatch duplicates or
-promote descendants on a parent's success. `/private/tmp/ears-promote-sqlite.py` verifies clean checkouts, remote
-tip, source/engine pins and exact strict success before private promotion. Never copy concurrent dirty files or
-compile/run full checks on the daily Mac.
+native build or captured runtime. Published 460866c5c28a6cd40aeb9aa0c633c46023d33a6a failed
+[strict run 40761412029](https://github.com/spankyed/apack/actions/runs/40761412029): compiler build,
+worker repair and disabled-owner backup cases. Exact-source Linux compiler controls pass unchanged limits;
+their Mac causes remain unisolated. Local functional source 846dfb4ef99893cede83bc3cd5bf176e756ff018 adds
+isolated app/CLI selection, startup readiness, built API native-loader ownership, Node source support and
+narrow watcher repair. Two actual built API boots pass. Its final Linux suite passes 414 SQLite / 251 native
+cases and profile/build checks, but the unchanged aggregate scripts-typecheck exceeds 60 seconds with no
+captured diagnostic. Diagnose that failure before claiming a checked publication. See
+[profile/runtime evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/profile-runtime/README.md).
+Inspect actual refs and PR #286 before dispatching another exact gate. Canonical remains a889531dd1;
+the approved helper requires clean pins and exact strict success before promotion. Never compile or run
+full checks on the daily Mac.
 
 Earlier strict 78eff95202 timed out in typecheck:scripts without a captured TypeScript diagnostic. Its exact command
 passed unchanged in two-core Linux within the original 60-second budget; the Mac cause is unisolated. The newer
@@ -319,7 +325,7 @@ The a889531dd1 gate is green and that exact checkpoint has been privately promot
 
 ### Next deliverables and full remaining scope
 
-Publish the checked host-storage evidence descendant and run one exact strict gate; canonical remains on green a889531dd1 until that newer gate succeeds. The predeclared diagnostic
+Resolve the current scripts-typecheck failure, publish its checked evidence descendant and run one exact strict gate; canonical remains on green a889531dd1 until that newer gate succeeds. The predeclared diagnostic
 pair at 201a2c8cbb is complete: heartbeat checks and EARS types pass, but both 100k OFF diagnostics miss latency
 limits. Full-watch / query-watch-free heartbeat p99 is 97.40 / 44.73 ms; scalar lookup p99 38.03 / 20.46 ms.
 During cleanup scalar lookups consume 35.83 / 33.24 s, against 5.18 / 4.55 s inside background batches. Query

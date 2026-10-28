@@ -60,8 +60,8 @@ npm run test:linux -- npm test -w @apackdev/host -- tests/backup/storage.spec.ts
 
 The host owns actual data-file/open descriptors, checks both destination formats before replacement, and exercises
 populated primary/run-history restore, media/acceptance rollback and retained recovery copies. The former alias
-probe is removed; current evidence must come from the real path. Explicit constructor selection is implemented;
-complete app/CLI profile selection, readiness and lifecycle/platform qualification remain in the goal.
+probe is removed; current evidence must come from the real path. Isolated app/CLI profile selection and startup readiness are implemented, with built Node boot evidence;
+live pack admission and complete lifecycle/platform qualification remain in the goal.
 
 ## Implementation boundaries
 
