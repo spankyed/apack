@@ -203,6 +203,8 @@ export async function setupBackend(): Promise<void> {
 
   // Recovery starts only host actors; no executable external pack is imported.
   const loadedPacks = recoveringSettings ? [] : loadAppPacks(packs).loaded;
+  // Runtime registration can admit new index definitions. Lifecycle hooks and migrations read only after readiness.
+  await database.indexesReady();
 
   console.log(`[app] apack v${APP_VERSION} startupId=${process.env.APACK_STARTUP_ID ?? 'unknown'}`);
 

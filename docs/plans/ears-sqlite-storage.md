@@ -194,3 +194,19 @@ through their actual descriptors independently.
 This closes a host-boundary prerequisite, not app adoption. Explicit app/CLI profile selection, readiness handling,
 settings/media acceptance through the complete runtime, SDK composition, logical maintenance/conversion, recovery
 under real IO faults and platform packaging remain required by the goal. Normal production composition stays elmdb.
+
+## Isolated candidate process selection
+
+`APACK_STORAGE_FORMAT=sqlite/1` selects the candidate through the normal host constructors. App boot requires an
+explicit absolute `APACK_USER_DATA_DIR`; named CLI targets supply their resolved profile instead. The selector
+canonicalizes symlink aliases and refuses every default app directory and its children. Omission keeps elmdb;
+unknown formats refuse before opening. Explicit constructor options remain available to owned fixtures.
+History, backup, import preflight and offline settings reads carry the selected target's format rather than
+re-reading an unrelated parent profile. Physical cross-format import remains a refused operation.
+
+The API waits for initial index readiness and again after executable pack registration, before lifecycle hooks
+and migrations. This preserves synchronous EARS operations while keeping asynchronous index admission out of
+startup reads. Partial store acquisition closes the primary if history/runtime construction refuses. Full server
+boot, installed/live pack flows and failure/packaging evidence remain acceptance work; constructor/restart tests
+alone do not qualify those flows. This selection is temporary evaluation machinery, to be removed or collapsed to
+the chosen backend at the final adoption decision.
