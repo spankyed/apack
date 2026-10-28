@@ -198,7 +198,8 @@ Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; no Mac dep
 captured runtime are installed. Published draft tip is **3f4651b009f4d211497b92ad47c7491adac506b6**.
 Its single exact [strict run 40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) has completed
 integration-1 and app/rest failures: API bundle probe reads its tsup config and build/build-metadata.ts without
-cache declarations. Other consumer jobs remain live; poll that handle, do not dispatch duplicates or promote.
+cache declarations. The run is now terminal FAILURE; both native jobs and the producer passed. Integration-2
+also failed with an unhandled Vitest RPC timeout despite 538 passing tests; its cause remains unisolated.
 The producer passed, including the aggregate scripts typecheck; the earlier local 60-second timeout remains
 retained without a causal explanation. Failed predecessor 460866c5c2 / run 40761412029 is retained in evidence.
 
@@ -220,10 +221,18 @@ This proves probe logic against built workspace packages, not complete packaged/
 The published run also has an integration-2 unhandled Vitest RPC timeout despite 538 passing tests; cause remains
 unisolated and its failed status stands. Poll the exact run for remaining native jobs before another publication.
 
+Latest qualified storage source **479e6bc333c82020ceb66a61dd84882aab396a5f** fixes error masking when SQLite
+rolls back a transaction itself after SQLITE_FULL. Actual 4 MiB tmpfs controls trigger write-spill and COMMIT
+failures; both now retain SQLITE_FULL, preserve incumbent data/sequence/watches and recover after capacity is freed.
+Units cannot resume after automatic rollback. Rollback failure retains both errors and blocks connection reuse
+while allowing close/reopen. Four regression cases and their pre-fix removal control pass; full **418 SQLite / 251
+native cases**, types/API checks, source Node, lint/imports pass. See
+[storage exhaustion evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/storage-exhaustion/README.md).
+Ambiguous COMMIT IOERR outcomes and physical durability remain open; this is not a general commit-outcome proof.
+
 Canonical remains a889531dd1. The approved helper requires clean source/native pins and exact strict success
-before private promotion. Current continuation commits stay local while the published run is live. No master
-merge/adoption or daily-use profile conversion occurred. Continue complete lifecycle/platform and remaining
-search/performance/operational requirements; do not redefine completion around these smaller checks.
+before private promotion. The corrected evidence descendant is ready for one new publication/gate now that the
+previous run is terminal. No master merge/adoption or daily-use profile conversion occurred. Keep the full goal.
 
 Earlier strict 78eff95202 timed out in typecheck:scripts without a captured TypeScript diagnostic. Its exact command
 passed unchanged in two-core Linux within the original 60-second budget; the Mac cause is unisolated. The newer

@@ -221,3 +221,17 @@ after acceptance retains published files and reports an unavailable runtime, rat
 bindings or starting actors on incomplete indexes. Backup acceptance waits for both restored stores before
 migrations. Declaration-only registries have no database work. This boundary does not make ordinary EARS reads
 asynchronous; search continues to refuse `INDEX_BUILDING` where a caller has not awaited readiness.
+
+
+## Storage refusal cleanup
+
+SQLite may roll back an entire transaction itself after a storage failure. Cleanup checks `inTransaction`, keeps
+the original error, invalidates rolled-back layout state and ends the corresponding unit. Catching that error
+inside a unit cannot resume it as a new implicit transaction. If rollback itself fails, retain both errors and
+refuse connection reuse while allowing explicit close/reopen. Actual Linux tmpfs spill/COMMIT exhaustion and an
+allocator control preserve SQLITE_FULL, incumbent data/sequence/watch state and recovery after capacity returns.
+These controls do not settle arbitrary COMMIT IOERR ambiguity or physical durability; those retain phase 6 scope.
+
+Readiness currently waits on the entire database's active generation catalog. Qualification must also cover an
+unrelated failed retained index while another pack starts: avoiding unnecessary global availability failures
+belongs to complete live-pack admission, not a completed consequence of the new async startup boundary.
