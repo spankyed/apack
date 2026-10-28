@@ -4,6 +4,8 @@
 
 ```ts
 
+import type { CallReport } from '@apackdev/ears';
+
 // @public
 export function consoleEars(names: EarsNames, input?: {
     hint?: string;
@@ -14,6 +16,13 @@ export interface ConsoleScope {
     // (undocumented)
     EARS: object;
 }
+
+// @public
+export const engineCalls: {
+    start: () => void;
+    report: () => HostCallReports;
+    stop: () => HostCallReports;
+};
 
 // @public
 export function installedEars(): ConsoleScope['EARS'];
@@ -29,7 +38,5 @@ export function runTransactionCode(code: string, scope: ConsoleScope): Promise<u
 
 // @public
 export const WRITE_HELPER_NAMES: readonly string[];
-
-// (No @packageDocumentation comment for this package)
 
 ```

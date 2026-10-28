@@ -148,6 +148,17 @@ describe('Type inference — typed EARS helpers', () => {
       query.ids(noteId).out('contians');
       // @ts-expect-error and in a filter
       query(EARS.Entity.Note).linkedTo('refrences', otherId);
+      // @ts-expect-error and in the graph walks
+      query.ids(noteId).both('contians');
+      // @ts-expect-error a path's kinds too
+      query.ids(noteId).pathTo(otherId, 'refrences');
+      // @ts-expect-error and a count of edges
+      query.ids(noteId).degrees('refrences');
+      // @ts-expect-error a direction is out, in or both
+      query.ids(noteId).pathTo(otherId, 'references', { direction: 'up' });
+      expectTypeOf(query.ids(noteId).both(EARS.RelKind.CONTAINS, EARS.Entity.Message).ids()).toEqualTypeOf<EARS.EntityId<'Message'>[]>();
+      expectTypeOf(query.ids(noteId).descendants('contains', EARS.Entity.Note, { depth: 2 }).ids()).toEqualTypeOf<EARS.EntityId<'Note'>[]>();
+      expectTypeOf(query.ids(noteId).degrees('references')).toEqualTypeOf<Map<EARS.EntityId<'Note'>, number>>();
       // @ts-expect-error a kind that arrives as data is narrowed first
       write(noteId).link(fromData, otherId);
       if (EARS.isRelKind(fromData)) write(noteId).link(fromData, otherId);

@@ -67,7 +67,27 @@ export interface RowRules {
   search?: SearchDeclaration;
   /** The fields its vector index embeds, and the model it embeds them with: what `near`, `like` and `hybrid` rank by */
   embed?: EmbedDeclaration;
+  /** The fields its trigram index reads, strings or lists of strings: what `containing` and `matching` find */
+  substrings?: readonly string[];
+  /**
+   * The type of each field the shape declares, as its TypeScript type maps to one of elmdb's (`FieldRule`): what the
+   * database holds every write to, from every writer. A field the shape doesn't declare is still taken
+   */
+  fields?: Readonly<Record<string, FieldRule>>;
 }
+
+/**
+ * A field's type as the database holds a write to it, read off a shape's property: text, a finite number, a boolean,
+ * one of listed strings, an id of listed entity types, a list of one of these, or `any` for what maps to none of them
+ */
+export type FieldType =
+  | { readonly type: 'string' | 'number' | 'boolean' | 'any' }
+  | { readonly type: 'enum'; readonly values: readonly string[] }
+  | { readonly type: 'ref'; readonly to: readonly string[] }
+  | { readonly type: 'list'; readonly of: FieldType };
+
+/** A field's type, and whether the row may lack it (`?`) and whether it may hold `null` (`| null`) */
+export type FieldRule = FieldType & { readonly optional?: boolean; readonly nullable?: boolean };
 
 /** A type's text index, as its manifest entry declares it (`search`) */
 export interface SearchDeclaration {
@@ -139,6 +159,33 @@ export interface SearchHit<E extends string = string> {
   terms: string[];
   /** With `highlights`, where the matched words are in each field */
   highlights?: SearchHighlights;
+}
+
+/** Which of an entity's edges a walk follows (`pathTo`, `degrees`): those out of it, those into it, or both */
+export type EdgeDirection = 'out' | 'in' | 'both';
+
+/** One stage of a query's plan as the database ran it: its start, a step or its terminal (`explain()`) */
+export interface QueryStage {
+  /** The stage's name: `types`, `ids` or `all` for the start, a step's (`where`, `orderBy`, …), the terminal's */
+  stage: string;
+  /** The value index it read, or `none: walks the type` for a lookup no built index covers */
+  index?: string;
+  /** What the stage before handed it, and what it read from the store itself */
+  visited: number;
+  /** What it handed on; for the terminal, what it answers */
+  kept: number;
+  /** Milliseconds spent in the stage's own work */
+  ms: number;
+}
+
+/** A query's ids, and how the database found them: every stage of its plan, the entities it read, and its time */
+export interface QueryExplanation<E extends string = string> {
+  ids: EARS.EntityId<E>[];
+  /** Entities the plan read from the store, its index entries included */
+  visited: number;
+  /** Milliseconds the read took in the database */
+  ms: number;
+  stages: QueryStage[];
 }
 
 /**
@@ -229,24 +276,39 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     type: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[] | undefined,
   ): QueryBuilder<T, D>;
   in(kinds: D['relKinds'] | readonly D['relKinds'][], type?: undefined): QueryBuilder<string, D>;
+  /** Walks the entities' edges of the kinds both ways, out and in, to the entities at their other end, each once */
+  both<T extends string>(
+    kinds: D['relKinds'] | readonly D['relKinds'][],
+    type: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[] | undefined,
+  ): QueryBuilder<T, D>;
+  both(kinds: D['relKinds'] | readonly D['relKinds'][], type?: undefined): QueryBuilder<string, D>;
   /**
-   * Every entity the set reaches through outgoing edges of the kinds, any number deep: a subtree, nearest first,
-   * each once, never an entity of the set itself. `type` keeps the reached entities of the types.
+   * Every entity the set reaches through outgoing edges of the kinds, any number deep or at most `depth`: a subtree,
+   * nearest first, each once, never an entity of the set itself. `type` keeps the reached entities of the types.
    */
   descendants<T extends string>(
     kinds: D['relKinds'] | readonly D['relKinds'][],
     type: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[] | undefined,
+    options?: { depth?: number },
   ): QueryBuilder<T, D>;
-  descendants(kinds: D['relKinds'] | readonly D['relKinds'][], type?: undefined): QueryBuilder<string, D>;
+  descendants(kinds: D['relKinds'] | readonly D['relKinds'][], type?: undefined, options?: { depth?: number }): QueryBuilder<string, D>;
   /**
-   * Every entity that reaches the set through edges of the kinds, any number deep: in a tree, the parent first
-   * and the root last, each once, never an entity of the set itself. `type` keeps the reached entities of the types.
+   * Every entity that reaches the set through edges of the kinds, any number deep or at most `depth`: in a tree, the
+   * parent first and the root last, each once, never an entity of the set itself. `type` keeps the reached entities
+   * of the types.
    */
   ancestors<T extends string>(
     kinds: D['relKinds'] | readonly D['relKinds'][],
     type: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[] | undefined,
+    options?: { depth?: number },
   ): QueryBuilder<T, D>;
-  ancestors(kinds: D['relKinds'] | readonly D['relKinds'][], type?: undefined): QueryBuilder<string, D>;
+  ancestors(kinds: D['relKinds'] | readonly D['relKinds'][], type?: undefined, options?: { depth?: number }): QueryBuilder<string, D>;
+  /**
+   * A shortest path through edges of the kinds from an entity of the set to `to`: its entities in order, both ends
+   * included, or none when there is no path (of at most `depth` edges, when given). Edges are followed `out` unless
+   * `direction` says `in` or `both`; of paths as short, the first found. Its entities may be of any type.
+   */
+  pathTo(to: EARS.EntityId, kinds: D['relKinds'] | readonly D['relKinds'][], options?: { direction?: EdgeDirection; depth?: number }): QueryBuilder<string, D>;
   /**
    * Each outgoing edge of the kinds whose target this query could reach (of `type`, when given): its relation row,
    * `findRelations`' shape, one per edge
@@ -254,6 +316,15 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
   outEdges<K extends D['relKinds'], T extends string = string>(kinds: K | readonly K[], type?: EntityNameArg<D['names'], T> | EntityNameArg<D['names'], T>[]): Array<RelationEdge<K, E, NoInferType<T>>>;
   /** Each incoming edge of the kinds whose source this query could reach: its relation row */
   inEdges<K extends D['relKinds'], T extends string = string>(kinds: K | readonly K[], type?: EntityNameArg<D['names'], T> | EntityNameArg<D['names'], T>[]): Array<RelationEdge<K, NoInferType<T>, E>>;
+  /**
+   * Each entity's number of edges of the kinds, in query order, `0` included: those `outEdges` (or with `direction`,
+   * `inEdges`, or both) would answer, so only edges whose other end this query could reach, of `type` when given
+   */
+  degrees<T extends string = string>(
+    kinds: D['relKinds'] | readonly D['relKinds'][],
+    type?: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[],
+    options?: { direction?: EdgeDirection },
+  ): Map<EARS.EntityId<E>, number>;
   pick<A extends readonly (keyof ShapeOf<D['shapes'], E> & string)[]>(
     fields: A,
   ): ({ id: EARS.EntityId<E> } & Pick<ShapeOf<D['shapes'], E>, A[number]>)[];
@@ -276,6 +347,18 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
    * steps it searches among the entities they reached
    */
   search(query: string, options?: SearchOptions<keyof ShapeOf<D['shapes'], E> & string>): QueryBuilder<E, D>;
+  /**
+   * The entities whose text, in a field of the type's trigram index (its manifest entry's `substrings`), holds `text`
+   * as it is written, or with `caseInsensitive` in any case: an error message, an id, a path. Unranked: the query keeps
+   * its order, and after other steps it filters the entities they reached
+   */
+  containing(text: string, options?: { caseInsensitive?: boolean }): QueryBuilder<E, D>;
+  /**
+   * The entities whose text, in a field of the type's trigram index, matches `pattern`, in Rust's `regex` syntax
+   * (`(?i)` ignores case), which has no look-around or backreferences: a pattern using them is refused
+   * (`PATTERN_INVALID`). Unranked, as `containing` is
+   */
+  matching(pattern: string): QueryBuilder<E, D>;
   /**
    * The `k` entities (10 unless given) whose embeddings in the type's vector index (its manifest entry's `embed`) are
    * nearest `vector`, nearest first, each scored `1 / (1 + distance)` by its nearest chunk; after other steps, among the
@@ -300,6 +383,12 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
   ): Array<SearchHit<E> & { row: { id: EARS.EntityId<E> } & Pick<ShapeOf<D['shapes'], E>, A[number]> }>;
   hits(options?: { highlights?: boolean }): SearchHit<E>[];
   ids(): EARS.EntityId<E>[];
+  /**
+   * The query's ids, with how the database found them: each stage of its plan — the index it read, the entities it
+   * visited and kept, its time. Refused (`NOT_EXPLAINABLE`) for a query with a `where` given a function, which runs
+   * outside the database's plan
+   */
+  explain(): QueryExplanation<E>;
   count(): number;
   /** The first entity's id, or undefined when the query reaches none */
   first(): EARS.EntityId<E> | undefined;

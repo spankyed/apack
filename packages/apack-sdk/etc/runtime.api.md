@@ -7,6 +7,7 @@
 import type { AnyActorRef } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyStateMachine } from 'xstate';
+import type { CallReport } from '@apackdev/ears';
 import type { Component } from 'vue';
 import type { DeepPartial } from 'ai';
 import { Ears } from '@apackdev/ears';
@@ -77,8 +78,33 @@ export interface FePackRegistryView extends PackExtensionsView {
 }
 
 // @public
+export interface HostCallCounting {
+    // (undocumented)
+    report(): HostCallReports;
+    // (undocumented)
+    start(): void;
+    // (undocumented)
+    stop(): HostCallReports;
+}
+
+// @public
+export interface HostCallReports {
+    // (undocumented)
+    app: CallReport;
+    // (undocumented)
+    runHistory: CallReport;
+}
+
+// @public
+export interface HostDiagnostics {
+    // (undocumented)
+    calls: HostCallCounting;
+}
+
+// @public
 export interface HostRuntime {
     appVersion: string;
+    diagnostics?: HostDiagnostics;
     ears: Ears;
     packs: PackRegistryView;
     redaction?: SecretRedaction;

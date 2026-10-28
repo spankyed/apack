@@ -14,6 +14,8 @@ export interface PackEntityDeclaration {
   readonly search?: PackSearchDeclaration;
   /** Its vector index: the fields whose text is embedded, and the model `services.inference` embeds it with */
   readonly embed?: PackEmbedDeclaration;
+  /** Its trigram index: the fields `containing` and `matching` read */
+  readonly substrings?: readonly string[];
 }
 
 /** A vector index as a manifest declares it: the engine's `EmbedDeclaration`, its model one `services.inference` runs */
@@ -65,6 +67,8 @@ export interface _PackEntityDeclaration {
   search?: SearchDeclaration;
   /** Its vector index, when its entry declares one */
   embed?: EmbedDeclaration;
+  /** The fields its trigram index reads, when its entry declares one */
+  substrings?: readonly string[];
 }
 
 /**
@@ -88,7 +92,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
     for (const [name, entry] of Object.entries(block?.entities ?? {})) {
       const previous = result.get(name);
       if (previous) throw new Error(`Entity "${name}" is declared by both "${previous.owner}" and "${owner}"`);
-      const { shape, shortCode, indexes, search, embed } = entry ?? {};
+      const { shape, shortCode, indexes, search, embed, substrings } = entry ?? {};
       if (shortCode !== undefined) {
         if (!_SHORT_CODE_PATTERN.test(shortCode)) throw new Error(`The short code prefix of "${name}" is "${shortCode}": a prefix is three uppercase letters`);
         const taken = prefixOwners.get(shortCode);
@@ -98,6 +102,7 @@ export function _packEntities(declaration: PackDataDeclarations): _PackEntityDec
       result.set(name, {
         name, owner, shape: shape ?? null,
         ...(shortCode !== undefined && { shortCode }), ...(indexes?.length && { indexes }), ...(search && { search }), ...(embed && { embed }),
+        ...(substrings?.length && { substrings }),
       });
     }
   }

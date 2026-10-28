@@ -58,10 +58,11 @@ export function collectionOfDocument(documentId: EARS.EntityId): EARS.EntityId |
 
 /** A folder's names from the root down to it */
 export function collectionPath(collectionId: EARS.EntityId): string[] {
-  return [collectionId, ...query.ids(collectionId).ancestors(EARS.RelKind.PARENT_OF).ids()].reverse().flatMap((id) => {
-    const [row] = query.ids(id).pickAll() as Array<Record<string, unknown>>;
-    return row ? [String(row.name)] : [];
-  });
+  const names = (rows: Array<Record<string, unknown>>) => rows.map((row) => String(row.name));
+  return [
+    ...names(query.ids(collectionId).ancestors(EARS.RelKind.PARENT_OF).pick(['name'])).reverse(),
+    ...names(query.ids(collectionId).pick(['name'])),
+  ];
 }
 
 /**

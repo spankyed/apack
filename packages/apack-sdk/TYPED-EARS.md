@@ -94,7 +94,11 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
   TypeScript checker (`rowRulesOf`) and each type's prefix from the manifest into its registration
   (`PackEARS.rowRules`), the SDK lists its own (`SDK_ROW_RULES`, its prefixes from `SDK_SHORT_CODES`, compiler-checked
   against its shapes), and `create` numbers a short code, refuses a row without a required field and `delete` one of
-  them (`REQUIRED_FIELD`) — the untyped twins, content writers and the console included.
+  them (`REQUIRED_FIELD`) — the untyped twins, content writers and the console included. Codegen reads each field's
+  type off the shape too (`RowRules.fields`: `string`, `number`, `boolean`, a union of string literals as `enum`, a tagged
+  id as `ref`, a list of one of these, `| null` as `nullable`, anything else `any`), and the database refuses a value
+  of another type from every writer (`FIELD_TYPE`); a field the shape doesn't declare is still taken. A pack that
+  doesn't check nulls holds every field nullable, its `| null` being erased.
 - `delete` takes only an optional field (`OptionalField`): removing a required one would leave a row its shape
   misdescribes, so a required field is replaced with `set`. `removeAt` and `removeValue` edit a list and remove
   no field, so they take any writable one.

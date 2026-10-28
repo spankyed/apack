@@ -293,9 +293,11 @@ export function createFlowApplier(options: FlowApplierOptions = {}): ContentAppl
         const record = ctx.applied;
         if (!record) return;
         const prefix = `${contentKeyPrefix(packId)}flows/`;
+        const flowIds = new Map(sdkEntities.query(EARS.Entity.Flow).ids().map((id) => [contentKeyOf(id), id]));
         for (const itemKey of [...record.before.keys()].filter((k) => k.startsWith(prefix) && !record.defined.has(k))) {
           const item = record.before.get(itemKey)!;
-          const flow = sdkEntities.query(EARS.Entity.Flow).pickAll().find((f) => contentKeyOf(f.id) === itemKey);
+          const flowId = flowIds.get(itemKey);
+          const flow = flowId === undefined ? undefined : sdkEntities.query.ids(flowId).pickOne();
           const { resolution, parts, offer } = resolveRemoval({
             applied: item,
             ...(flow !== undefined && { live: { contentHash: flow.contentHash } as LiveEntity }),

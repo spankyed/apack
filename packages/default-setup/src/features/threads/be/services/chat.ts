@@ -250,7 +250,7 @@ export function createMarkerMessage(params: {
   return { messageId: result.id, compactedMessageIds: result.compactedMessageIds };
 }
 
-/** Add several messages to a thread at once, leaving queued messages where they are (a bulk import) */
+/** Add several messages to a thread at once (a bulk import), moving its queued messages after them once */
 export function addMessagesToThread(params: {
   threadId: EARS.EntityId;
   messages: Array<{
@@ -260,13 +260,13 @@ export function addMessagesToThread(params: {
     context?: Record<string, unknown>;
   }>;
 }): void {
-  for (const msg of params.messages) {
+  params.messages.forEach((msg, at) => {
     repository.chatCommands.addMessage({
       threadId: params.threadId,
       ...msg,
-      skipRelink: true,
+      skipRelink: at < params.messages.length - 1,
     });
-  }
+  });
 }
 
 /**

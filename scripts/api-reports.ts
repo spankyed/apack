@@ -73,6 +73,8 @@ function configFor(key: string, declaration: string): ExtractorConfig {
     configObject: {
       projectFolder: pkgDir,
       mainEntryPointFilePath: declaration,
+      // The committed reports end lines with LF; API Extractor's default is CRLF, which rewrites every line of a report
+      newlineKind: 'lf',
       compiler: { tsconfigFilePath: path.join(pkgDir, 'tsconfig.api-extractor.json') },
       apiReport: { enabled: true, reportFolder, reportFileName, reportTempFolder: path.join(pkgDir, '.temp') },
       docModel: { enabled: false },

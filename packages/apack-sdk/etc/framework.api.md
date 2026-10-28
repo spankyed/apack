@@ -435,6 +435,7 @@ export interface PackEntityDeclaration {
     readonly search?: PackSearchDeclaration;
     readonly shape?: string;
     readonly shortCode?: string;
+    readonly substrings?: readonly string[];
 }
 
 // @internal
@@ -449,6 +450,7 @@ export interface _PackEntityDeclaration {
     // (undocumented)
     shape: string | null;
     shortCode?: string;
+    substrings?: readonly string[];
 }
 
 // @internal

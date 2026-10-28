@@ -11,6 +11,7 @@ export type { BaseEntity, QueryBuilder, RelationMatch, RelationRow, RelationStat
 export { query, getAttr } from '#generated/ears.ts';
 export { getRow, getRoles, getRelation, findRelations } from '@apackdev/sdk/ears';
 export { getSchemaStats } from '@apackdev/sdk/ears';
+export { engineCalls } from '@apackdev/sdk/database-console';
 
 // Write: only a transaction gets these; a query naming one fails with "<name> is not defined"
 export { create, upsert, write } from '#generated/ears.ts';

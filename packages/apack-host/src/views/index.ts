@@ -87,7 +87,7 @@ export function createViewHost({ ears, packs }: ViewHostOptions): ViewHost {
     const watching = ears().watch(() => (read as (args: unknown) => unknown)(args), {
       next: (value, commit) => deliver(shared, { ok: true, value, commit }),
       error: (error, commit) => deliver(shared, { ok: false, error: errorMessage(error), commit }),
-    });
+    }, { label: `${shared.request.ref} · ${shared.request.view}` });
     shared.stop = () => watching.stop();
   };
 

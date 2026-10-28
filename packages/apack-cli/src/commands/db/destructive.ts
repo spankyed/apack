@@ -74,7 +74,8 @@ export async function dbReset(args: string[], io: DbIo): Promise<void> {
   const force = values.force as boolean;
   const keepKeys = values['keep-keys'] as boolean;
 
-  // Without --force nothing is changed, so the database opens read-only: a copy the user may not write is listed too
+  // Without --force the database opens read-only. data.mdb may be read-only, but lock.mdb still needs
+  // writable reader registration.
   const db = await openTarget(target, { write: force, command: 'reset' }, io);
   const done = await withDatabase(db, async () => {
     const secrets = secretsStoreAt(db);

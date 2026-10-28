@@ -18,6 +18,8 @@ const THE_OPERATION: Record<string, string> = {
   query: 'the operation itself (`Ears.query`, `TypedEars.query`)',
   Query: 'its type',
   QueryBuilder: 'what it returns',
+  QueryExplanation: 'what its `explain()` answers: how the database ran it',
+  QueryStage: 'one stage of its plan, in that explanation',
   TypedQuery: 'its type, checked against a pack\'s entities',
   untypedQuery: 'the bound engine\'s, unchecked',
   runQueryCode: 'runs console code that may only query',
