@@ -305,7 +305,12 @@ limits. Full-watch / query-watch-free heartbeat p99 is 97.40 / 44.73 ms; scalar 
 During cleanup scalar lookups consume 35.83 / 33.24 s, against 5.18 / 4.55 s inside background batches. Query
 watches add substantial measured work but removing them does not resolve the miss. Sequential order and
 instrumentation prevent causal or qualification claims. See [raw diagnostic evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/cleanup-diagnostic/README.md).
-Inspect actual unindexed lookup SQL/plans and profile execution separately from background work before tuning. Complete
+The [independent scalar probe](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-lookup-probe/README.md)
+captures actual SQL/plans without watches or background work: facade / generated-SQL medians 1.335 / 1.225 ms,
+p99 17.82 / 14.34 ms. Its native driver call holds 1,092 of 1,176 CPU-profile samples. The generated fallback
+repeats entity, scalar/overflow and list-membership probes per candidate; no temporary sort appears. Compare
+targeted predicate variants, then implement a measured simplification with independent mixed-value and cost guards
+before tuning watch/batch scheduling. Declared scalar types cannot exclude unchecked imported array values. Complete
 large-text and FULL qualification under unchanged targets; do not rerun the same failed qualification until green. The candidate explicitly chooses INDEX_BUILDING over a slow foreground search scan; complete app
 composition must handle that state and await readiness where required before adoption.
 

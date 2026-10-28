@@ -1,0 +1,140 @@
+{
+  "facade": {
+    "count": 500,
+    "p50Ms": 1.3345049999988987,
+    "p99Ms": 17.81944300000032,
+    "maxMs": 94.40810800000145
+  },
+  "sql": {
+    "count": 500,
+    "p50Ms": 1.2245459999994637,
+    "p99Ms": 14.339304000000993,
+    "maxMs": 53.655745000000024
+  },
+  "profile": {
+    "samples": 1176,
+    "dominantNativeLeafSamples": 1092,
+    "ancestry": [
+      {
+        "functionName": "",
+        "scriptId": "0",
+        "url": "",
+        "lineNumber": -1,
+        "columnNumber": -1
+      },
+      {
+        "functionName": "all",
+        "scriptId": "208",
+        "url": "file:///metrics/packages/apack-ears/src/sqlite/database.ts",
+        "lineNumber": 14,
+        "columnNumber": 2921
+      },
+      {
+        "functionName": "",
+        "scriptId": "226",
+        "url": "file:///metrics/packages/apack-ears/src/sqlite/query.ts",
+        "lineNumber": 1,
+        "columnNumber": 394
+      },
+      {
+        "functionName": "executeScopedQuery",
+        "scriptId": "226",
+        "url": "file:///metrics/packages/apack-ears/src/sqlite/query.ts",
+        "lineNumber": 0,
+        "columnNumber": 632
+      },
+      {
+        "functionName": "executeQuery",
+        "scriptId": "226",
+        "url": "file:///metrics/packages/apack-ears/src/sqlite/query.ts",
+        "lineNumber": 0,
+        "columnNumber": 411
+      },
+      {
+        "functionName": "answer",
+        "scriptId": "208",
+        "url": "file:///metrics/packages/apack-ears/src/sqlite/database.ts",
+        "lineNumber": 21,
+        "columnNumber": 11431
+      },
+      {
+        "functionName": "",
+        "scriptId": "208",
+        "url": "file:///metrics/packages/apack-ears/src/sqlite/database.ts",
+        "lineNumber": 21,
+        "columnNumber": 13466
+      },
+      {
+        "functionName": "readSync",
+        "scriptId": "208",
+        "url": "file:///metrics/packages/apack-ears/src/sqlite/database.ts",
+        "lineNumber": 21,
+        "columnNumber": 13139
+      },
+      {
+        "functionName": "",
+        "scriptId": "231",
+        "url": "file:///metrics/packages/apack-ears/src/database.ts",
+        "lineNumber": 0,
+        "columnNumber": 5366
+      },
+      {
+        "functionName": "counting",
+        "scriptId": "231",
+        "url": "file:///metrics/packages/apack-ears/src/database.ts",
+        "lineNumber": 0,
+        "columnNumber": 4664
+      },
+      {
+        "functionName": "read",
+        "scriptId": "231",
+        "url": "file:///metrics/packages/apack-ears/src/database.ts",
+        "lineNumber": 0,
+        "columnNumber": 5322
+      },
+      {
+        "functionName": "",
+        "scriptId": "214",
+        "url": "file:///metrics/packages/apack-ears/src/query.ts",
+        "lineNumber": 0,
+        "columnNumber": 2623
+      },
+      {
+        "functionName": "",
+        "scriptId": "214",
+        "url": "file:///metrics/packages/apack-ears/src/query.ts",
+        "lineNumber": 0,
+        "columnNumber": 2496
+      },
+      {
+        "functionName": "",
+        "scriptId": "214",
+        "url": "file:///metrics/packages/apack-ears/src/query.ts",
+        "lineNumber": 0,
+        "columnNumber": 4290
+      },
+      {
+        "functionName": "",
+        "scriptId": "196",
+        "url": "file:///metrics/lookup-probe.ts",
+        "lineNumber": 0,
+        "columnNumber": 1931
+      },
+      {
+        "functionName": "",
+        "scriptId": "196",
+        "url": "file:///metrics/lookup-probe.ts",
+        "lineNumber": -1,
+        "columnNumber": -1
+      },
+      {
+        "functionName": "(root)",
+        "scriptId": "0",
+        "url": "",
+        "lineNumber": -1,
+        "columnNumber": -1
+      }
+    ],
+    "scope": "sampled driver native .all call, not SQL VM versus binding marshalling separation"
+  }
+}
