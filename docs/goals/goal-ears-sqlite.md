@@ -308,9 +308,12 @@ instrumentation prevent causal or qualification claims. See [raw diagnostic evid
 The [independent scalar probe](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-lookup-probe/README.md)
 captures actual SQL/plans without watches or background work: facade / generated-SQL medians 1.335 / 1.225 ms,
 p99 17.82 / 14.34 ms. Its native driver call holds 1,092 of 1,176 CPU-profile samples. The generated fallback
-repeats entity, scalar/overflow and list-membership probes per candidate; no temporary sort appears. Compare
-targeted predicate variants, then implement a measured simplification with independent mixed-value and cost guards
-before tuning watch/batch scheduling. Declared scalar types cannot exclude unchecked imported array values. Complete
+repeats entity, scalar/overflow and list-membership probes per candidate; no temporary sort appears. The [four-way predicate diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-predicate-variants/README.md)
+finds no compelling median improvement; retain the varying tails and do not select the best p99 as acceptance.
+No production predicate change was made. A fixed-work CPU sentinel / SQL / facade diagnostic is now running
+in owned container `ears-scalar-cpu-control-e236`, exec session 78353, results `/private/tmp/ears-scalar-cpu-control`.
+Poll that exact handle; do not restart on observation timeout. Use its result before attributing outliers or
+changing scheduling. Declared scalar types cannot exclude unchecked imported array values. Complete
 large-text and FULL qualification under unchanged targets; do not rerun the same failed qualification until green. The candidate explicitly chooses INDEX_BUILDING over a slow foreground search scan; complete app
 composition must handle that state and await readiness where required before adoption.
 
