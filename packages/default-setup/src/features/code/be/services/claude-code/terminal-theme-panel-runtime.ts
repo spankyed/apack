@@ -38,12 +38,12 @@ async function readNativeThemePanel(n,entry,signal){
    if(input.value.length>16384||!isName&&typeof cache[98]?.props?.children!=='string')throw Error('Native theme field changed');
    const field=isName?'name':'color',title=isName?'Name custom theme':'Edit '+cache[98].props.children;
    let form=entry.themeForm;if(!form||!sameNativeSettingsFiber(form.fiber,fiber)||form.field!==field){form={fiber,field,id:randomUUID()};entry.themeForm=form;}
-   editor={kind:'form',title,live:{id:form.id},description:isName?'Create a personal theme. Themes supplied by extensions are forked before editing.':'Accepts rgb(r,g,b), #rrggbb, ansi256(n), or ansi:name. Preview follows the original theme editor.',submitLabel:isName?'Create theme':'Save color',fields:[{key:field,label:isName?'Theme name':'Color value',value:input.value}]};
+   editor={kind:'form',title,live:{id:form.id},description:isName?'Create a personal theme. Themes supplied by extensions are forked before editing.':'Accepts rgb(r,g,b), #rrggbb, ansi256(n), or ansi:name. Changes preview as you type; Cancel restores the saved color.',submitLabel:isName?'Create theme':'Save color',fields:[{key:field,label:isName?'Theme name':'Color value',value:input.value}]};
    controls={input,field,cancel:input.onExit,valid:isName?cache[56]?.length>0:cache[91]===true};
   }else if(!inputs.length&&lists.length===1){
    delete entry.themeForm;const list=lists[0].memoizedProps;
    if(list.items.length>256||typeof list.renderPreview!=='function'||typeof list.onTab?.handler!=='function'||typeof list.title!=='string')throw Error('Native theme token controls changed');
-   const options=[];for(const key of list.items){signal?.throwIfAborted();if(typeof key!=='string'||key.length>16384)throw Error('Native theme token changed');const description=await awaitNativeSettingsReading(nativeGenericPermissionText(n,list.renderPreview(key)),signal);if(typeof description!=='string'||description.length>65536)throw Error('Native theme token preview exceeded bound');options.push({value:key,label:key,description,disabled:false,canReset:true});}
+   const options=[];for(const key of list.items){signal?.throwIfAborted();if(typeof key!=='string'||key.length>16384)throw Error('Native theme token changed');const descriptionAnsi=await awaitNativeSettingsReading(nativeGenericPermissionText(n,list.renderPreview(key),true),signal);if(typeof descriptionAnsi!=='string'||descriptionAnsi.length>65536)throw Error('Native theme token preview exceeded bound');options.push({value:key,label:key,description:stripVTControlCharacters(descriptionAnsi),descriptionAnsi,disabled:false,canReset:true});}
    editor={kind:'choice',title:list.title,description:'Choose a color token to edit. Reset restores that token to the original preset.',disabled:false,options};controls={select:list.onSelect,reset:list.onTab.handler,cancel:list.onCancel};
   }else throw Error('Native theme editor controls are not ready');
  }

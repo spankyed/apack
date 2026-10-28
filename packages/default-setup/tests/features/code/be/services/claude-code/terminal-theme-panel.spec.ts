@@ -1,5 +1,6 @@
 import vm from 'node:vm'
 import { createHash, randomUUID } from 'node:crypto'
+import { stripVTControlCharacters } from 'node:util'
 import { claudeTerminalThemePanelRuntime } from '#features/code/be/services/claude-code/terminal-theme-panel-runtime.ts'
 
 function setup(custom = true) {
@@ -16,7 +17,7 @@ function setup(custom = true) {
   const detail = vi.fn(async () => ({value:'Original theme preview'}))
   const walk = (root: any): any[] => root ? [root, ...walk(root.child), ...walk(root.sibling)] : []
   const api = vm.runInNewContext(claudeTerminalThemePanelRuntime + ';({readNativeThemePanel,nativeThemePanel})', {
-    createHash, randomUUID, process: { stdout: undefined }, setTimeout,
+    createHash, randomUUID, stripVTControlCharacters, process: { stdout: undefined }, setTimeout,
     nativeModelFunctionHash: (fn: any) => fn === Root ? hashes.root : fn === Picker ? hashes.picker : fn === Editor ? hashes.editor : undefined,
     nativeModelFibers: walk, sameNativeSettingsFiber: (a: any, b: any) => a === b,
     currentNativeSettingsFiber: (root: any, target: any) => { if (!walk(root).includes(target)) throw Error('retired'); return target },
@@ -125,4 +126,13 @@ it('retries a palette-transition read without repeating original preview or edit
   s.edit.mockImplementation(()=>{s.entry.closed=true})
   await s.act({action:'themeEdit',value:'custom:team'})
   expect(transient).toBe(true);expect(s.preview).toHaveBeenCalledExactlyOnceWith(1);expect(s.edit).toHaveBeenCalledExactlyOnceWith()
+})
+
+it('preserves original ANSI token swatches alongside readable color descriptions',async()=>{
+  const s=setup(),cache:any[]=Array(152),ansi='current: \x1b[38;2;85;170;102m██\x1b[39m #55aa66'
+  const list={placeholder:'Filter color tokens…',title:'My theme',items:['success'],onSelect:vi.fn(),onCancel:vi.fn(),onTab:{handler:vi.fn()},renderPreview:()=>ansi};cache[151]={props:list}
+  s.owner.child={type:s.Editor,memoizedProps:{},updateQueue:{memoCache:{data:[cache]}},child:{memoizedProps:list}}
+  const view=await s.api.readNativeThemePanel(s.n,s.entry,s.abort.signal)
+  expect(view.snapshot.editor.options[0].descriptionAnsi).toBe(ansi)
+  expect(view.snapshot.editor.options[0].description).toBe('current: ██ #55aa66')
 })
