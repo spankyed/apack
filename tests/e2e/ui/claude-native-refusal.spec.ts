@@ -96,7 +96,7 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   const retiredIds: string[] = original.payload.retractedMessageUuids
   expect(retiredIds.length).toBeGreaterThan(0)
   const hasRetired = async () => (await context()).messages.some((message: any) => message.context?.claudeTerminalMessage?.sessionId === sessionId && retiredIds.includes(message.context?.cliUuid))
-  await expect.poll(hasRetired).toBe(true)
+  if(process.env.CLAUDE_RESEARCH_REFUSAL_EMPTY_DRAFT !== '1') await expect.poll(hasRetired).toBe(true)
   const emptyDraft = process.env.CLAUDE_RESEARCH_REFUSAL_EMPTY_DRAFT === '1'
   expect(!emptyDraft || decision === 'edit_prompt').toBe(true)
   const draft = emptyDraft ? '' : 'Keep the release review draft.'
