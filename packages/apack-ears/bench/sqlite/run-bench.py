@@ -16,18 +16,20 @@ engine_files=sorted((engine/'crates').rglob('*.rs'))+sorted((engine/'crates').gl
 # than assuming the binding lives in build/Release (v13 ships platform prebuilds).
 node_probe = """
 import {createRequire} from 'node:module';
+import {loadedNativeBindings} from './packages/apack-ears/bench/sqlite/load-metrics.ts';
 const require=createRequire(new URL('./packages/apack-ears/src/sqlite/database.ts',import.meta.url));
 const driverPackage=require.resolve('better-sqlite3/package.json');
 const extension=require('sqlite-vec');
 const extensionPath=extension.getLoadablePath();
 const db=new (require('better-sqlite3'))(':memory:');
 extension.load(db);
-const files=process.report.getReport().sharedObjects.filter(path=>path.endsWith('.node')||path===extensionPath);
+const bindings=loadedNativeBindings([extensionPath]);
+const files=bindings.map(binding=>binding.path);
 if(!files.some(path=>path.endsWith('.node')))throw new Error('No loaded SQLite binding reported');
 db.close();
-console.log(JSON.stringify({driverPackage,driverVersion:require(driverPackage).version,extensionPath,files}));
+console.log(JSON.stringify({driverPackage,driverVersion:require(driverPackage).version,extensionPath,files,bindings}));
 """
-sqlite_native=json.loads(subprocess.check_output(['node','--input-type=module','-e',node_probe],cwd=repo,text=True))
+sqlite_native=json.loads(subprocess.check_output(['node','--experimental-strip-types','--input-type=module','-e',node_probe],cwd=repo,text=True))
 bindings=list((engine/'crates/elmdb-node').glob('*.node'))+[pathlib.Path(path) for path in sqlite_native['files']]
 provenance = {
     'commit': subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),

@@ -8,6 +8,7 @@ parser.add_argument('--sizes',type=int,nargs='+',default=[10000,100000])
 args=parser.parse_args()
 repo=pathlib.Path(__file__).resolve().parents[4]
 args.output.mkdir(parents=True,exist_ok=True)
+subprocess.run(['node','--experimental-strip-types','--test','packages/apack-ears/bench/sqlite/load-metrics.check.ts'],cwd=repo,check=True)
 subprocess.run(['python3','packages/apack-ears/bench/sqlite/run-bench.py',str(args.output/'source'),'--trials','0']+(['--durable'] if args.durable else []),cwd=repo,check=True)
 for trial in range(1,args.trials+1):
  for n in (args.sizes if trial%2 else list(reversed(args.sizes))):

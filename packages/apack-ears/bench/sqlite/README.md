@@ -73,8 +73,7 @@ traversal retains a JavaScript seen set with batched SQL frontiers.
 `src/sqlite/search.ts` adapts native FTS5 and sqlite-vec distance functions to EARS text, embedding and hybrid operations.
 Existing EARS builders, transactions, typed facades and observers are reused.
 
-The prototype is intentionally unfinished: its schema validator and error translation are partial; index admission
-is synchronous; fuzzy expansion scans the vocabulary; vector queries use exact scalar scans; backup publication,
+The prototype is intentionally unfinished: its schema validator and error translation are partial; value-index admission yields in persistent batches while text/vector admission remains synchronous; fuzzy expansion scans the vocabulary; vector queries use exact scalar scans; backup publication,
 OS I/O failure semantics, permissions, migration and cross-platform packaging are not qualified. It is not a
 second production backend. A passing EARS suite is a feasibility signal, not complete elmdb feature parity.
 
@@ -90,6 +89,12 @@ npm run test:linux -- python3 packages/apack-ears/bench/sqlite/run-admission.py 
 
 The storage plan records targets before qualification. Every report retains all timing samples, complete batch
 spans, correctness/commit checks, file/WAL observations and pass/fail budgets. A failed budget is saved before the
-runner stops. Source/native fingerprints are collected before the cohort. Preserve results before another Linux
+runner stops. An independent 8 ms heartbeat records scheduling delays during foreground work as well as background batches;
+`turnWaitMs` separately times setImmediate waits between operations. Raw samples and both 16 ms p99 targets are
+retained; the older archived `timerStallMs` measured only those turn waits. The heartbeat captures an overdue final
+operation on stop and does not keep the process alive. `load-metrics.check.ts` verifies those behaviors and generic
+native prebuild fingerprints before cohorts start. Source/native fingerprints are collected before the cohort,
+and each admission process records its actually loaded native addon. The facade provenance probe uses the same
+helper and explicitly includes the loaded vector extension. Preserve results before another Linux
 sync, which replaces untracked volume content. This qualifies a synthetic same-connection slice; text/vector
 admission, full app budgets and platform durability qualification remain separate requirements.

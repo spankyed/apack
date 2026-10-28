@@ -1,5 +1,6 @@
 // Run in a disposable environment. Every process owns a fresh synthetic profile; no application data is opened.
 import assert from 'node:assert/strict';
+import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
 import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,7 +28,10 @@ const files = () => Object.fromEntries(readdirSync(path).map(name => [name, stat
 const total = (values: Record<string, number>) => Object.values(values).reduce((a, b) => a + b, 0);
 const heard = new Map<string, unknown>(), errors: unknown[] = [];
 const watches: Array<{ stop(): void }> = [];
+let heartbeat: ReturnType<typeof startHeartbeat> | undefined;
 try {
+  const nativeBindings = loadedNativeBindings();
+  assert(nativeBindings.some(binding => binding.path.replaceAll('\\', '/').includes('/better-sqlite3/')), 'No loaded SQLite binding reported');
   for (let offset = 0; offset < n; offset += 256) e.transact(() => {
     for (let i = offset; i < Math.min(n, offset + 256); i++) e.create('Row', {
       id: id(i), slug: `bucket-${i % 100}`, payload: i % 128 === 0 ? 'large body '.repeat(1500) : 'body '.repeat(100),
@@ -48,14 +52,15 @@ try {
   let phase = 'build';
   const step = db.indexBuilds.step.bind(db.indexBuilds);
   db.indexBuilds.step = () => { const start = performance.now(); const outcome = step(); batchSamples.push({ phase, outcome, ms: performance.now() - start }); return outcome; };
+  heartbeat = startHeartbeat();
   const admitted = performance.now();
   e.admin.setSchema({ ...schema, types: { Row: { ...schema.types.Row!, indexes: ['slug'] } } });
   const admissionMs = performance.now() - admitted;
   const sequenceAfterAdmission = db.sequence;
-  const operations: number[] = [], stalls: number[] = [], lookup: number[] = [];
+  const operations: number[] = [], turnWaits: number[] = [], lookup: number[] = [];
   let writes = 0;
   async function foreground(): Promise<void> {
-    const waiting = performance.now(); await turn(); stalls.push(performance.now() - waiting);
+    const waiting = performance.now(); await turn(); turnWaits.push(performance.now() - waiting);
     const index = n - 1 - writes % 50;
     const started = performance.now();
     e.transact(() => {
@@ -94,23 +99,27 @@ try {
   const afterGc = files();
   maxObservedBytes = Math.max(maxObservedBytes, total(afterBuild), total(afterGc));
   maxObservedWal = Math.max(maxObservedWal, afterBuild['data.sqlite3-wal'] ?? 0, afterGc['data.sqlite3-wal'] ?? 0);
+  heartbeat.stop();
+  assert(heartbeat.delaysMs.length > 0, 'No independent heartbeat samples captured');
   const budgets = {
     admissionMs: { actual: admissionMs, limit: 100 },
     operationP99Ms: { actual: quantile(operations, .99), limit: 16 },
     lookupP99Ms: { actual: quantile(lookup, .99), limit: 16 },
-    timerStallP99Ms: { actual: quantile(stalls, .99), limit: 16 },
+    turnWaitP99Ms: { actual: quantile(turnWaits, .99), limit: 16 },
+    heartbeatDelayP99Ms: { actual: quantile(heartbeat.delaysMs, .99), limit: 16 },
     maxObservedWalBytes: { actual: maxObservedWal, limit: Math.max(16 * 1024 * 1024, (before['data.sqlite3-wal'] ?? 0) + 4 * 1024 * 1024) },
     maxObservedFilesBytes: { actual: maxObservedBytes, limit: total(before) * 2 + 16 * 1024 * 1024 },
   };
   const passed = Object.values(budgets).every(budget => budget.actual <= budget.limit);
   console.log(JSON.stringify({ n, node: process.version, platform: process.platform, arch: process.arch, syncs: durable,
     sqlite: db.get('SELECT sqlite_version() version')!.version, admissionMs, buildMs, gcMs, writes,
-    operationMs: summary(operations), lookupMs: summary(lookup), timerStallMs: summary(stalls), batchSamples,
-    samples: { operations, lookup, stalls }, files: { before, afterBuild, afterGc }, maxObservedBytes, maxObservedWal,
+    operationMs: summary(operations), lookupMs: summary(lookup), turnWaitMs: summary(turnWaits), heartbeatIntervalMs: heartbeat.intervalMs, heartbeatDelayMs: summary(heartbeat.delaysMs), batchSamples, nativeBindings,
+    samples: { operations, lookup, turnWaits, heartbeatDelays: heartbeat.delaysMs }, files: { before, afterBuild, afterGc }, maxObservedBytes, maxObservedWal,
     freelistPagesAfterGc: db.get('PRAGMA freelist_count'), resourceUsage: process.resourceUsage(), memory: process.memoryUsage(),
     budgets, passed, scope: 'synthetic same-connection value-index admission with foreground reads/writes and 53 watches; not complete app or durability qualification' }));
   if (!passed) process.exitCode = 1;
 } finally {
+  heartbeat?.stop();
   for (const watch of watches) watch.stop();
   db.close(); rmSync(path, { recursive: true, force: true });
 }

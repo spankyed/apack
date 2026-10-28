@@ -309,12 +309,13 @@ Disposable Linux passes 37 shared watch/scheduler cases on each backend, all fou
 five consumer typechecks and the EARS/SDK API checks (3/30 reports). Strict CI is a separate pending gate. A local attempt to include native-importing shared tests stopped at
 missing Mac binding; no local Rust build was attempted. The focused SQLite-only process suite passes.
 
-The integrated draft is pushed; strict run `40676231748` covers exact implementation `6c29f083f3`. Producers
-have passed and all five consumer jobs are live. Poll this existing run; do not restart it for elapsed time.
+The integrated draft is pushed; strict run `40676231748` covers exact implementation `6c29f083f3`. Producers, both native shards and integration-2 have passed. Integration-1 and app-and-rest remain live in
+actions/setup-node before tests. Poll this existing run; do not restart it for elapsed time.
 Canonical promotion awaits that gate. A source-only evidence checkout at `/private/tmp/ears-sqlite-diagnosis-evidence`
 retains the terminal lifecycle checks and new diagnostic evidence without changing the clean implementation
-under CI. It has no dependencies, native build or captured runtime. After gated promotion, include its descendant
-documentation/evidence commit before further source work.
+under CI. It has no installed dependencies, native build or captured runtime. After gated promotion, include its descendant
+evidence and measurement-correction commits. Each ephemeral measurement-validation checkout owns its dependency
+copy and outputs; no mutable node_modules or generated files are shared.
 
 [Durable diagnosis](../references/evidence/ears-sqlite-implementation-2026-10-28/durable-admission-diagnosis/README.md)
 adds three SQLite idle controls, three build/cleanup trials and three later native idle controls, all with fresh
@@ -323,7 +324,15 @@ miss 16 ms here. Ordering/host variability prevents a backend ranking or a claim
 The existing timer metric also omits foreground blocking: add an independent heartbeat (same 16 ms p99 target)
 and reusable actual-native provenance before qualification. Original failures and targets remain intact.
 
-Next: finish the exact strict gate and promote; strengthen the maintained load harness and qualify IO/ownership; then implement the inherited substring/regex contracts and complete background text/vector
+The maintained load harness now includes independent heartbeat samples and a shared actual-native binding helper,
+with four behavior checks before cohorts. EARS types, helper checks and zero-trial provenance pass in private
+Linux checkouts; three independent mutations fail the intended safeguards. The first 1k sync-disabled smoke emits
+correctness-checked data but fails lookup/turn/heartbeat budgets (31.82/19.53/34.41 ms). It is retained, not rerun
+until green; the later metadata assertion refinement passes final types/helper/provenance checks without repeating
+the load. [Measurement evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/load-metrics-correction/README.md)
+records its exact source, sample counts and scope. This does not qualify responsiveness or finish phase 3.
+
+Next: finish the exact strict gate and promote; diagnose and fix ownership/query/IO costs under the strengthened harness; then implement the inherited substring/regex contracts and complete background text/vector
 admission, schema validation and durable-load qualification. The preference for explicit “indexing” versus a
 potentially slow complete search fallback was asked asynchronously and remains unanswered. Value-index work
 does not depend on it. Strict run `40655434334` on obsolete typed checkpoint `5985709142` was externally cancelled;
