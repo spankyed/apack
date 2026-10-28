@@ -1,0 +1,52 @@
+{
+  "sql": "SELECT e.payload FROM (SELECT p.* FROM field_index x CROSS JOIN (SELECT e.id,CASE e.type WHEN 'Note' THEN 0 END major,e.seq ord FROM entities e WHERE e.type IN (SELECT value FROM json_each(?)) AND e.trashed=0) p WHERE x.entity_id=p.id AND x.type IN ('Note') AND x.field=? AND x.value=?) p JOIN entities e ON e.id=p.id ORDER BY p.major,p.ord LIMIT 1",
+  "parameters": [
+    "[\"Note\"]",
+    "slug",
+    "string:key"
+  ],
+  "plan": [
+    {
+      "id": 10,
+      "parent": 0,
+      "notused": 61,
+      "detail": "SEARCH x USING INDEX field_lookup (type=? AND field=? AND value=?)"
+    },
+    {
+      "id": 20,
+      "parent": 0,
+      "notused": 46,
+      "detail": "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)"
+    },
+    {
+      "id": 28,
+      "parent": 0,
+      "notused": 0,
+      "detail": "LIST SUBQUERY 1"
+    },
+    {
+      "id": 31,
+      "parent": 28,
+      "notused": 0,
+      "detail": "SCAN json_each VIRTUAL TABLE INDEX 1:"
+    },
+    {
+      "id": 40,
+      "parent": 28,
+      "notused": 0,
+      "detail": "CREATE BLOOM FILTER"
+    },
+    {
+      "id": 50,
+      "parent": 0,
+      "notused": 46,
+      "detail": "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)"
+    },
+    {
+      "id": 75,
+      "parent": 0,
+      "notused": 0,
+      "detail": "USE TEMP B-TREE FOR ORDER BY"
+    }
+  ]
+}

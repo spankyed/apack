@@ -1,0 +1,274 @@
+{
+  "api": {
+    "elmdb": {
+      "field": {
+        "medianUs": 5.352437499999951,
+        "processMedianMinUs": 5.244291999999859,
+        "processMedianMaxUs": 5.397062499999947
+      },
+      "row": {
+        "medianUs": 9.965249999999742,
+        "processMedianMinUs": 9.922499999999673,
+        "processMedianMaxUs": 9.966667000000143
+      },
+      "unique": {
+        "medianUs": 34.366528333333314,
+        "processMedianMinUs": 34.18659833333322,
+        "processMedianMaxUs": 34.71048500000014
+      },
+      "page50": {
+        "medianUs": 298.76125,
+        "processMedianMinUs": 298.72082999999975,
+        "processMedianMaxUs": 309.4425000000001
+      },
+      "all10k": {
+        "medianUs": 36993.59733333343,
+        "processMedianMinUs": 36757.69466666664,
+        "processMedianMaxUs": 39261.79166666664
+      },
+      "sort10k": {
+        "medianUs": 7826.208500000121,
+        "processMedianMinUs": 7505.166500000087,
+        "processMedianMaxUs": 7828.021000000035
+      },
+      "edges50": {
+        "medianUs": 270.0700000000006,
+        "processMedianMinUs": 265.1329199999964,
+        "processMedianMaxUs": 293.623749999997
+      },
+      "walk299": {
+        "medianUs": 550.7500000000013,
+        "processMedianMinUs": 543.6236000000008,
+        "processMedianMaxUs": 565.1347333333282
+      },
+      "text": {
+        "medianUs": 304.1652833333349,
+        "processMedianMinUs": 302.22916666666606,
+        "processMedianMaxUs": 315.86318333333645
+      },
+      "vector1k256": {
+        "medianUs": 164.99720000000102,
+        "processMedianMinUs": 160.02220000000307,
+        "processMedianMaxUs": 167.0985999999933
+      },
+      "write": {
+        "medianUs": 71.98646000000053,
+        "processMedianMinUs": 70.3841650000004,
+        "processMedianMaxUs": 75.41812500000106
+      },
+      "writeBatch100": {
+        "medianUs": 2631.8291000000045,
+        "processMedianMinUs": 2516.533299999992,
+        "processMedianMaxUs": 2708.5749999999734
+      },
+      "watch20": {
+        "medianUs": 96.59332000000177,
+        "processMedianMinUs": 91.7633399999977,
+        "processMedianMaxUs": 111.4325000000008
+      }
+    },
+    "sqlite": {
+      "field": {
+        "medianUs": 13.5625,
+        "processMedianMinUs": 12.929291999999805,
+        "processMedianMaxUs": 13.831271000000015
+      },
+      "row": {
+        "medianUs": 15.551041999999143,
+        "processMedianMinUs": 15.390959000000294,
+        "processMedianMaxUs": 16.79150000000118
+      },
+      "unique": {
+        "medianUs": 54.06437500000114,
+        "processMedianMinUs": 53.73826333333151,
+        "processMedianMaxUs": 55.46743000000182
+      },
+      "page50": {
+        "medianUs": 418.5870799999975,
+        "processMedianMinUs": 410.4254199999923,
+        "processMedianMaxUs": 428.16625000003114
+      },
+      "all10k": {
+        "medianUs": 46239.54166666651,
+        "processMedianMinUs": 45959.360999999866,
+        "processMedianMaxUs": 47693.722333333426
+      },
+      "sort10k": {
+        "medianUs": 39257.416999999805,
+        "processMedianMinUs": 39054.83350000031,
+        "processMedianMaxUs": 40275.83349999986
+      },
+      "edges50": {
+        "medianUs": 329.9920799999927,
+        "processMedianMinUs": 318.75707999999577,
+        "processMedianMaxUs": 331.5795799999978
+      },
+      "walk299": {
+        "medianUs": 1580.5847000000238,
+        "processMedianMinUs": 1564.9444333333424,
+        "processMedianMaxUs": 1664.3541666666351
+      },
+      "text": {
+        "medianUs": 319.75694999997967,
+        "processMedianMinUs": 312.3895833333336,
+        "processMedianMaxUs": 321.3374999999966
+      },
+      "vector1k256": {
+        "medianUs": 2768.0902666666348,
+        "processMedianMinUs": 2734.8708333333584,
+        "processMedianMaxUs": 3083.159733333317
+      },
+      "write": {
+        "medianUs": 213.41646000000765,
+        "processMedianMinUs": 184.88792000000103,
+        "processMedianMaxUs": 222.54375000000437
+      },
+      "writeBatch100": {
+        "medianUs": 8936.724999999933,
+        "processMedianMinUs": 8233.708300000035,
+        "processMedianMaxUs": 9110.054200000013
+      },
+      "watch20": {
+        "medianUs": 232.13999999999942,
+        "processMedianMinUs": 226.05250000000524,
+        "processMedianMaxUs": 248.8291599999502
+      }
+    }
+  },
+  "durable": {
+    "elmdb": {
+      "field": {
+        "medianUs": 5.017708500000026,
+        "processMedianMinUs": 5.013270999999804,
+        "processMedianMaxUs": 5.2417709999999715
+      },
+      "row": {
+        "medianUs": 9.7846669999999,
+        "processMedianMinUs": 9.749625000000151,
+        "processMedianMaxUs": 10.033833999999842
+      },
+      "unique": {
+        "medianUs": 33.82222166666679,
+        "processMedianMinUs": 33.618749999999785,
+        "processMedianMaxUs": 34.39895833333367
+      },
+      "page50": {
+        "medianUs": 292.31459000000086,
+        "processMedianMinUs": 289.04333999999835,
+        "processMedianMaxUs": 294.71209000000044
+      },
+      "all10k": {
+        "medianUs": 36695.61133333339,
+        "processMedianMinUs": 36193.847,
+        "processMedianMaxUs": 36919.87500000005
+      },
+      "sort10k": {
+        "medianUs": 7365.853999999899,
+        "processMedianMinUs": 7279.937500000187,
+        "processMedianMaxUs": 7608.312500000011
+      },
+      "edges50": {
+        "medianUs": 264.29415999999947,
+        "processMedianMinUs": 263.6175000000003,
+        "processMedianMaxUs": 266.7945800000007
+      },
+      "walk299": {
+        "medianUs": 531.7833333333359,
+        "processMedianMinUs": 521.4180333333388,
+        "processMedianMaxUs": 533.140266666669
+      },
+      "text": {
+        "medianUs": 297.79166666666777,
+        "processMedianMinUs": 296.2402666666624,
+        "processMedianMaxUs": 298.1999999999971
+      },
+      "vector1k256": {
+        "medianUs": 159.06943333332796,
+        "processMedianMinUs": 158.61110000000735,
+        "processMedianMaxUs": 160.35693333333256
+      },
+      "write": {
+        "medianUs": 4421.1020999999955,
+        "processMedianMinUs": 4306.230199999993,
+        "processMedianMaxUs": 5526.352075000005
+      },
+      "writeBatch100": {
+        "medianUs": 9625.575000000026,
+        "processMedianMinUs": 9334.000000000015,
+        "processMedianMaxUs": 11059.508399999959
+      },
+      "watch20": {
+        "medianUs": 87.33749999999418,
+        "processMedianMinUs": 85.45416000000841,
+        "processMedianMaxUs": 89.45331999999325
+      }
+    },
+    "sqlite": {
+      "field": {
+        "medianUs": 13.510749999999462,
+        "processMedianMinUs": 13.363000000000284,
+        "processMedianMaxUs": 13.545791499999723
+      },
+      "row": {
+        "medianUs": 15.784208000000945,
+        "processMedianMinUs": 15.71612500000083,
+        "processMedianMaxUs": 16.27129199999945
+      },
+      "unique": {
+        "medianUs": 54.52743000000131,
+        "processMedianMinUs": 54.489653333333386,
+        "processMedianMaxUs": 55.843750000000604
+      },
+      "page50": {
+        "medianUs": 416.6100000000006,
+        "processMedianMinUs": 410.16083000000435,
+        "processMedianMaxUs": 418.7604099999953
+      },
+      "all10k": {
+        "medianUs": 44545.37499999969,
+        "processMedianMinUs": 44524.15266666625,
+        "processMedianMaxUs": 45441.37499999973
+      },
+      "sort10k": {
+        "medianUs": 38173.95850000048,
+        "processMedianMinUs": 38053.68749999889,
+        "processMedianMaxUs": 39280.916499999876
+      },
+      "edges50": {
+        "medianUs": 320.4058400000031,
+        "processMedianMinUs": 318.97125000001324,
+        "processMedianMaxUs": 321.04208000000654
+      },
+      "walk299": {
+        "medianUs": 1589.627766666672,
+        "processMedianMinUs": 1553.4152666667069,
+        "processMedianMaxUs": 1654.786099999971
+      },
+      "text": {
+        "medianUs": 1253.7243000000065,
+        "processMedianMinUs": 1247.892366666656,
+        "processMedianMaxUs": 1298.8264000000224
+      },
+      "vector1k256": {
+        "medianUs": 2709.047233333331,
+        "processMedianMinUs": 2680.143066666642,
+        "processMedianMaxUs": 2923.190266666643
+      },
+      "write": {
+        "medianUs": 4975.783324999975,
+        "processMedianMinUs": 4563.5041750000255,
+        "processMedianMaxUs": 5616.681249999965
+      },
+      "writeBatch100": {
+        "medianUs": 16684.375,
+        "processMedianMinUs": 15426.416600000084,
+        "processMedianMaxUs": 19909.224999999788
+      },
+      "watch20": {
+        "medianUs": 4613.2208399999945,
+        "processMedianMinUs": 4407.163340000006,
+        "processMedianMaxUs": 5593.824999999998
+      }
+    }
+  }
+}

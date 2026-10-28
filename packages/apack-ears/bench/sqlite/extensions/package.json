@@ -1,0 +1,9 @@
+{
+  "name": "ears-sqlite-extension-evaluation",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "sqlite-vec": "0.1.9"
+  }
+}
