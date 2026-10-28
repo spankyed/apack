@@ -117,8 +117,8 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   const selected = shown.choices.find((choice: any) => choice.value === decision)
   await notice.getByRole('button', { name: decision === 'cancelled' ? 'Cancel' : selected.label, exact: true }).click()
   await expect(notice).toBeHidden(); await expect.poll(async () => (await context()).native.state.busy).toBe(false)
-  if (decision === 'edit_prompt') await expect(composer).toHaveText(prompt)
-  else expect(await editor()).toEqual(retained)
+  // Native refusal edit restores only an empty editor; never overwrite the draft typed while deciding.
+  expect(await editor()).toEqual(retained)
   const afterDecision = await editor(), beforeContinue = (await context()).turns
   await composer.focus(); await composer.press('Control+a'); await composer.pressSequentially('Summarize the accepted migration scope.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
