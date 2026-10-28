@@ -323,6 +323,13 @@ is clean at that commit. Its exact [strict run 40703362139](https://github.com/s
 is confirmed in progress. The newer scalar sorting, limit pushdown and schema race fix require this gate before
 a further canonical fast-forward. PR #286 remains a draft at this source. Do not start a duplicate run.
 
+The next regex dependency screen tests rregex 1.13.1 in isolated Linux. Tested Rust syntax works, but repeated
+compile/free controls grow WASM memory through 3,000 instances even with explicit free and GC. The stock
+artifact is not adopted. [Regex-screen evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/rust-regex-wasm-screen/README.md)
+retains exact artifact hashes, syntax checks and memory controls. Evaluate an allocator-controlled rebuild or
+another wrapper before integrating SQLite trigram narrowing and bounded Rust-compatible matching. The three
+search failures remain open; passing this small syntax probe would not have closed their production requirement.
+
 ### Next deliverables and full remaining scope
 
 Poll exact strict run `40703362139` at `194c72c77c`; preserve the canonical `683e1d5912` green checkpoint
