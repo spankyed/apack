@@ -52,7 +52,7 @@ async function readNativeThemePanel(n,entry,signal){
  const revision=createHash('sha256').update(JSON.stringify(editor)).digest('hex');return {snapshot:{revision,rows:[],editor:{...editor,revision}},owner,fiber:live,props:p,controls,identity};
 }
 async function waitForNativeThemePanel(n,entry,signal){
- const deadline=Date.now()+1500;while(true){try{return await readNativeThemePanel(n,entry,signal);}catch(error){signal?.throwIfAborted();entry.current();if(entry.closed||Date.now()>=deadline||!['Native theme panel is not uniquely mounted','Native theme controls are not ready','Native theme editor controls are not ready','Native theme changed while reading'].includes(error.message))throw error;await new Promise(resolve=>setTimeout(resolve,20));}}
+ const deadline=Date.now()+1500;while(true){try{return await readNativeThemePanel(n,entry,signal);}catch(error){signal?.throwIfAborted();entry.current();if(entry.closed||Date.now()>=deadline||!['Native theme panel is not uniquely mounted','Native theme controls are not ready','Native theme editor controls are not ready','Native theme changed while reading','Native generic permission theme changed while formatting'].includes(error.message))throw error;await new Promise(resolve=>setTimeout(resolve,20));}}
 }
 async function nativeThemePanel(n,entry,request,abort){
  if(request.operation!=='read'&&entry.themeOperation)throw Error('A native theme action is pending');
@@ -78,7 +78,7 @@ async function nativeThemePanel(n,entry,request,abort){
    if(!before.controls.valid)throw Error('Claude Code has not accepted this theme value');callback=before.controls.input.onSubmit;
   }
   if(typeof callback!=='function')throw Error('Native theme action is unavailable');
-  abort.signal.throwIfAborted();const checked=await readNativeThemePanel(n,entry,abort.signal);if(checked.snapshot.revision!==before.snapshot.revision)throw Error('Native theme changed before action');const owner=nativeThemeCommandFrame(n,entry),live=currentNativeSettingsFiber(owner,before.fiber);
+  abort.signal.throwIfAborted();const checked=await waitForNativeThemePanel(n,entry,abort.signal);if(checked.snapshot.revision!==before.snapshot.revision)throw Error('Native theme changed before action');const owner=nativeThemeCommandFrame(n,entry),live=currentNativeSettingsFiber(owner,before.fiber);
   if(!sameNativeSettingsFiber(owner,before.owner)||live.memoizedProps!==before.props)throw Error('Native theme changed before action');
   await awaitNativeSettingsReading(callback(...args),abort.signal);
   const deadline=Date.now()+500;while(!entry.closed){try{const after=await readNativeThemePanel(n,entry,abort.signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline)return {snapshot:after.snapshot};}catch(error){abort.signal.throwIfAborted();if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}

@@ -13,12 +13,15 @@ function setup(custom = true) {
   const owner: any = { type: Root, memoizedProps: { onDone }, child: picker, updateQueue: { memoCache: { data: [rootCache] } } }
   const entry: any = { commandName: 'theme', originalType: Root, originalProps: { onDone }, current: vi.fn(), closed: false }
   const hashes = { root: '661b2d361cc5c8225f327b4aa6f302f7b2695af564c0205efe51eb7e284539ba', editor: 'f9135fea064bf5bd257a0413951940263c2393909867f58a00439ac0cda548ca', picker: '0333a3f408c68ec72bd8c5d0777f46e5e145c460013adb5a0ff665bbf7162ae7' }
+  const detail = vi.fn(async () => ({value:'Original theme preview'}))
   const walk = (root: any): any[] => root ? [root, ...walk(root.child), ...walk(root.sibling)] : []
   const api = vm.runInNewContext(claudeTerminalThemePanelRuntime + ';({readNativeThemePanel,nativeThemePanel})', {
     createHash, randomUUID, process: { stdout: undefined }, setTimeout,
     nativeModelFunctionHash: (fn: any) => fn === Root ? hashes.root : fn === Picker ? hashes.picker : fn === Editor ? hashes.editor : undefined,
     nativeModelFibers: walk, sameNativeSettingsFiber: (a: any, b: any) => a === b,
     currentNativeSettingsFiber: (root: any, target: any) => { if (!walk(root).includes(target)) throw Error('retired'); return target },
+    nativeThemePalette: () => ({text:'#ffffff',inverseText:'#000000'}),
+    nativeGenericPermissionDetail: detail,
     nativeGenericPermissionText: (_n: any, value: any) => value,
     awaitNativeSettingsReading: async (value: any) => value,
   })
@@ -28,7 +31,7 @@ function setup(custom = true) {
     const before = await api.readNativeThemePanel(n, entry, abort.signal)
     return api.nativeThemePanel(n, entry, { operation: 'editor', revision: revision ?? before.snapshot.revision, editor_revision: before.snapshot.editor.revision, command }, abort)
   }
-  return { api, n, entry, abort, act, owner, Editor, select, preview, edit, cancel, toggle, cache, picker, props }
+  return { api, n, entry, abort, act, owner, Editor, detail, select, preview, edit, cancel, toggle, cache, picker, props }
 }
 
 it('projects only original theme options and preserves native safe-mode editing admission', async () => {
@@ -112,4 +115,14 @@ it('uses the original theme input when TextInput forwards the same callbacks to 
   const view = await s.api.readNativeThemePanel(s.n, s.entry, s.abort.signal)
   expect(view.snapshot.editor.kind).toBe('form')
   expect(view.snapshot.editor.fields).toEqual([{key:'name',label:'Theme name',value:'My theme'}])
+})
+
+it('retries a palette-transition read without repeating original preview or edit actions', async () => {
+  const s=setup();s.cache[77]={lines:[' function greet() {',' }']};s.cache[84]={};s.cache[81]='Original syntax caption'
+  let transient=false
+  s.detail.mockImplementation(async()=>{if(s.cache[54]==='custom:team'&&!transient){transient=true;throw Error('Native generic permission theme changed while formatting')}return{value:'Original theme preview'}})
+  s.preview.mockImplementation((index:number)=>{s.cache[54]=s.cache[30][index].value})
+  s.edit.mockImplementation(()=>{s.entry.closed=true})
+  await s.act({action:'themeEdit',value:'custom:team'})
+  expect(transient).toBe(true);expect(s.preview).toHaveBeenCalledExactlyOnceWith(1);expect(s.edit).toHaveBeenCalledExactlyOnceWith()
 })
