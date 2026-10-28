@@ -275,7 +275,7 @@ export function executeQuery(
           schema.collation?.options ?? {}
         );
         const ids = idsNow(),
-          values = new Map(ids.map((id) => [id, db.row(id)?.[step.field]]));
+          values = new Map(db.rows(ids, [step.field]).map(row => [row.id, row[step.field]]));
         const rank = (v: any) =>
           v == null
             ? 5

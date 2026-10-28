@@ -332,7 +332,13 @@ until green; the later metadata assertion refinement passes final types/helper/p
 the load. [Measurement evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/load-metrics-correction/README.md)
 records its exact source, sample counts and scope. This does not qualify responsiveness or finish phase 3.
 
-Next: finish the exact strict gate and promote; diagnose and fix ownership/query/IO costs under the strengthened harness; then implement the inherited substring/regex contracts and complete background text/vector
+Ordering now obtains comparison keys through grouped projected reads rather than loading each candidate's full
+row separately. EARS types and 34 focused cases pass in private Linux; full SQLite passes 280 with the same three
+open substring/regex cases. Independent mutations fail per-entity SQL count and unrelated-body hydration guards;
+stable ties/duplicates across physical layouts pass. [Ordering evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/batched-ordering/README.md)
+records the work bound, remaining JS comparator/memory costs and outstanding latency measurement.
+
+Next: finish the exact strict gate and promote; measure the ordering change and fix ownership/query/IO costs under the strengthened harness; then implement the inherited substring/regex contracts and complete background text/vector
 admission, schema validation and durable-load qualification. The preference for explicit “indexing” versus a
 potentially slow complete search fallback was asked asynchronously and remains unanswered. Value-index work
 does not depend on it. Strict run `40655434334` on obsolete typed checkpoint `5985709142` was externally cancelled;
