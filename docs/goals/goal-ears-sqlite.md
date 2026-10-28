@@ -15,7 +15,7 @@ recorded on pinned source in disposable environments, and a draft PR is ready fo
 an adoption decision. Commit usable checkpoints. Do not silently drop requirements.
 ```
 
-Status: implementation authorized; architecture and sequencing proposed, 2026-10-28.
+Status: active contract integration and storage implementation, 2026-10-28.
 Branch: `session/ears-sqlite`. Checkout: `monorepo-worktrees.noindex/sqlite-evaluation`.
 The original `session/sqlite-evaluation` branch preserves the experiment at `4a3fe698f8`.
 
@@ -71,7 +71,8 @@ not a legacy compatibility layer in normal boot.
 ### 1 Reconcile contracts and pin the integration base
 
 Inventory changes since the prototype and map each current EARS/host requirement to its owning test and backend
-responsibility. Include typed-field enforcement for every writer/import, explain diagnostics, call counting,
+responsibility. Include typed-field enforcement for every ordinary writer and the deliberate unchecked repair/import contract,
+explain diagnostics, call counting,
 watch scheduling/settlement and ongoing search/schema changes. Preserve useful prototype operational cases and
 remove accidental protocol/implementation assumptions from shared assertions only through explicit decisions.
 
@@ -185,10 +186,31 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-Implementation branch created from the clean prototype checkpoint `4a3fe698f8`; original experiment preserved.
-No backend source refactor or concurrent-branch merge has been performed in this planning checkpoint.
+The [current contract matrix](../plans/ears-sqlite-contracts.md) surveys committed `a1b6603e5a` against prototype
+`4a3fe698f8`. The detached integration checkout is `monorepo-worktrees.noindex/integration-ddxGkz`; neither original
+source branch has accepted the merge yet. The prepared candidate is published only on our remote `session/ears-sqlite`.
 
-The concurrent committed tip inspected is `a1b6603e5a`; its working tree also contains active search/schema edits.
-Next deliverable: the current contract matrix and pinned integration baseline, then the structured CRUD/query slice
-and its draft PR. The old 212 SQLite tests establish only the prototype baseline. Its four host backup-format
-failures and all unqualified capabilities remain requirements of phases 3 through 6.
+The first strict run (`40630566649`, candidate `3f4c54b7a9`) exposed an evaluation-config upward dependency and an
+over-broad inherited phantom-contract guard. Both are repaired in the prepared candidate. The obsolete pending
+config-only retry (`40633142965`, `c33ab07ef7`) was cancelled/superseded; use authoritative GitHub status for the
+latest corrected run. Let remaining live jobs finish and do not infer completion from one successful shard.
+
+A matching `933aa19` macOS arm64 addon was extracted from the producer artifact into the private detached engine
+checkout `elmdb-worktrees.noindex/sqlite-baseline`; source/hash provenance is recorded in
+[implementation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/). No Rust target was copied
+or compiled locally. Original worktree dependencies and compiled outputs remain private.
+
+Targeted checks on the current integrated API: default elmdb 221 passed with 12 opt-in cases skipped; SQLite
+232 passed with one known `explain` gap. Eight scheduler cases still instantiate elmdb directly and must move to
+the shared fixture before they count as SQLite coverage. EARS typechecking and the refined static guard pass.
+Native-oracle probes exposed and fixed null-list membership and the prototype's incorrect retroactive schema
+refusal; ordinary typed writes now validate only changed fields, while unchecked repair remains possible.
+
+The [storage direction](../plans/ears-sqlite-storage.md) uses native scalar columns plus separate large/flexible
+values, pending real EARS slice measurements. The four-layout diagnostic, exact samples and contract proofs are
+saved with the evidence. These storage primitives are not application performance claims.
+
+Next: accept only the corrected pinned integration after the disposable strict gate passes, advance the isolated
+implementation branch, then deliver the structured backend/elmdb adapter and native SQLite slice. Open the draft
+PR with that working slice. The four host backup-format failures, measured explain, true SQLite scheduler coverage
+and all later phase requirements remain open. Do not mark the goal complete at this checkpoint.

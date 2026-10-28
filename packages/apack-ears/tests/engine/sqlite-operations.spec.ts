@@ -242,21 +242,22 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
       unit.commit();
       expect(child()).toEqual({ title: "after", busy: false });
     });
-    it("refuses a required field added over incompatible incumbent data", () => {
+    it("admits required fields over old data and checks only changed fields", () => {
       const db = open(),
         e = engine(db),
         id = e.create("Note", { title: "before" }).id();
-      const before = db.schema;
-      expect(() =>
-        db.setSchema(
-          toElmdbSchema({
-            ...schema,
-            types: { Note: { required: ["missing"] } },
-          })
-        )
-      ).toThrow(expect.objectContaining({ code: "SCHEMA_CHANGE_REFUSED" }));
-      expect(db.schema).toEqual(before);
-      expect(e.getAttr(id, "title")).toBe("before");
+      const next = toElmdbSchema({
+        ...schema,
+        types: { Note: { required: ["missing"] } },
+      });
+      expect(() => db.setSchema(next)).not.toThrow();
+      expect(db.schema).toEqual(next);
+      expect(() => e.write(id).set("title", "after")).not.toThrow();
+      expect(e.getAttr(id, "title")).toBe("after");
+      expect(e.getAttr(id, "missing")).toBeUndefined();
+      expect(() => e.create("Note", { title: "new" })).toThrow(
+        expect.objectContaining({ code: "REQUIRED_FIELD" })
+      );
     });
     it("refuses an elmdb directory without creating SQLite files beside it", () => {
       const path = join(root, "wrong-format");

@@ -272,13 +272,76 @@ export class SqliteDatabase implements EarsDatabase {
       for (const item of Object.values(value as object))
         this.validate(item, depth + 1);
   }
+  private checkFields(row: Data, names: Iterable<string>) {
+    const fields = this.definition(row.entityType).fields ?? {};
+    const takes = (rule: Data, value: unknown): boolean => {
+      switch (rule.type) {
+        case "any":
+          return true;
+        case "string":
+          return typeof value === "string";
+        case "number":
+          return typeof value === "number" && Number.isFinite(value);
+        case "integer":
+          return (
+            typeof value === "number" &&
+            Number.isInteger(value) &&
+            Math.abs(value) <= 9_007_199_254_740_992
+          );
+        case "boolean":
+          return typeof value === "boolean";
+        case "bytes":
+          return value instanceof Uint8Array;
+        case "object":
+          return (
+            value !== null &&
+            typeof value === "object" &&
+            !Array.isArray(value) &&
+            !(value instanceof Date) &&
+            !(value instanceof Uint8Array)
+          );
+        case "enum":
+          return typeof value === "string" && rule.values.includes(value);
+        case "ref":
+          return (
+            typeof value === "string" &&
+            (Array.isArray(rule.to) ? rule.to : [rule.to]).includes(
+              value.split("-")[0]
+            )
+          );
+        case "list":
+          return (
+            Array.isArray(value) && value.every((item) => takes(rule.of, item))
+          );
+        default:
+          return fail("SCHEMA_INVALID", `Unknown field type ${rule.type}`);
+      }
+    };
+    for (const name of names) {
+      if (!has(fields, name)) continue;
+      const rule = fields[name];
+      if (!has(row, name)) {
+        if (!rule.optional)
+          fail("REQUIRED_FIELD", `${row.entityType} requires "${name}"`);
+        continue;
+      }
+      const value = row[name];
+      this.validate(value);
+      if (value === null && (rule.nullable || rule.type === "any")) continue;
+      if (!takes(rule, value))
+        fail(
+          "FIELD_TYPE",
+          `${row.entityType}.${name} is a ${rule.type}: it got ${
+            value === null ? "null" : typeof value
+          }`
+        );
+    }
+  }
   private required(row: Data) {
-    const definition = this.definition(row.entityType);
-    for (const [name, field] of Object.entries(
-      definition.fields ?? {}
-    ) as Array<[string, Data]>)
-      if (!field.optional && !has(row, name))
-        fail("REQUIRED_FIELD", `${row.entityType} requires "${name}"`);
+    this.checkFields(
+      row,
+      Object.keys(this.definition(row.entityType).fields ?? {})
+    );
   }
   private save(row: Data, changes: Set<string>, before?: Data) {
     this.validate(row);
@@ -490,7 +553,7 @@ export class SqliteDatabase implements EarsDatabase {
             if (has(row, f)) own(row, f, items);
           }
         }
-        this.required(row);
+        this.checkFields(row, fields);
         if (op.touch !== false) row.updatedAt = now;
         this.save(row, changes, before);
         for (const f of fields) {
@@ -951,11 +1014,6 @@ export class SqliteDatabase implements EarsDatabase {
       this.putMeta("schema", next);
       this.putMeta("schemaRevision", this.heldRevision + 1);
       this.eachRow((row, seq) => {
-        for (const [field, rule] of Object.entries(
-          next.types[row.entityType]?.fields ?? {}
-        ) as Array<[string, Data]>)
-          if (!rule.optional && !has(row, field))
-            fail("SCHEMA_CHANGE_REFUSED", `${row.id} lacks required ${field}`);
         this.refile(row, seq, next);
         this.search.refile(row, seq, next);
       });

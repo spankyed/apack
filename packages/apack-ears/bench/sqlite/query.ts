@@ -85,7 +85,7 @@ export function executeQuery(
         const valuePath = path(field);
         const raw =
           value === null
-            ? `json_type(e.doc,${valuePath}) IS NULL OR json_type(e.doc,${valuePath})='null'`
+            ? `json_type(e.doc,${valuePath}) IS NULL OR json_type(e.doc,${valuePath})='null' OR (json_type(e.doc,${valuePath})='array' AND EXISTS(SELECT 1 FROM json_each(e.doc,${valuePath}) v WHERE v.type='null'))`
             : `(json_type(e.doc,${valuePath})!='object' AND EXISTS(SELECT 1 FROM json_each(e.doc,${valuePath}) v WHERE v.value IS ? AND v.type IN (${
                 typeof value === "string"
                   ? "'text'"
