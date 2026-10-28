@@ -29,8 +29,10 @@ export class SqliteValues {
     this.sql.run(`CREATE TABLE IF NOT EXISTS value_types(id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE COLLATE BINARY)`);
     this.sql.run(`CREATE TABLE IF NOT EXISTS value_fields(id INTEGER PRIMARY KEY,type_id INTEGER NOT NULL,
       name TEXT NOT NULL COLLATE BINARY,UNIQUE(type_id,name))`);
+    // Keep large payloads out of the primary-key B-tree. WITHOUT ROWID makes key traversal expensive when a
+    // neighboring attribute carries a large value, even for a projection that never returns that attribute.
     this.sql.run(`CREATE TABLE IF NOT EXISTS value_overflow(entity_id TEXT NOT NULL,field TEXT NOT NULL COLLATE BINARY,
-      kind TEXT NOT NULL,value,PRIMARY KEY(entity_id,field)) WITHOUT ROWID`);
+      kind TEXT NOT NULL,value,PRIMARY KEY(entity_id,field))`);
     this.sql.run(`CREATE TABLE IF NOT EXISTS value_members(entity_id TEXT NOT NULL,field TEXT NOT NULL COLLATE BINARY,
       kind TEXT NOT NULL,value NOT NULL,PRIMARY KEY(entity_id,field,kind,value)) WITHOUT ROWID`);
   }
