@@ -186,16 +186,20 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-Canonical branch `session/ears-sqlite` remains at `9c339d89a4` in
-`monorepo-worktrees.noindex/sqlite-evaluation`, pending a successful combined gate. Detached integration
-`monorepo-worktrees.noindex/integration-FyE9XZ` combines that exact input with app master
+Canonical branch `session/ears-sqlite` is clean at **`683e1d5912`** in
+`monorepo-worktrees.noindex/sqlite-evaluation`, privately fast-forwarded only after exact strict run
+`40688661462` completed successfully (all six jobs, attempt 2). Its vendor link now uses the immutable private
+6ab2f69 engine. Detached integration `monorepo-worktrees.noindex/integration-FyE9XZ` combines the original
+`9c339d89a4` input with app master
 `98386b36a18d244c19ffb501830b990ed49f7653` through merge `4af1b513e3`. Native source is immutable private
 `elmdb-worktrees.noindex/sqlite-baseline-6ab2f69` at `6ab2f69fa13289ed4f02952253c58b4d41922c98`.
 Remote/local master still match this app input. No dirty concurrent source was copied.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, descended from integration `6c29f083f3`:
 `cab5f1c42c` retains the durable diagnosis, `59395aea0f` corrects load measurements, and `31300a9532` batches
-projected ordering keys. It has no installed dependencies, native build or captured runtime. Each disposable Linux
+projected ordering keys. Later `9f0cd225be` adds guarded SQL scalar sorting, `a82813ee38` retains its paired
+no-overall-win result, `78ef9b979b` pushes adjacent limits, and `503b8aba9d` closes issued-prefix admission's
+writer race. It has no installed dependencies, native build or captured runtime. Each disposable Linux
 validation owns a private dependency/output copy, including workspace-local modules. Before the next gate,
 fast-forward the detached integration to the committed continuation and push the existing draft branch. Canonical
 promotion stays conditional on that exact gate. `/private/tmp/ears-promote-sqlite.py` checks source/engine pins,
@@ -288,22 +292,23 @@ Strict run `40676231748` at `6c29f083f3` is terminal failure (the now-fixed bare
 and the repository's four-case wait guard, through normal five-package build preparation. Earlier fully green
 runs cover older inputs; cancelled `40655434334` is not a green gate.
 
-Current strict run **40688661462**, attempt 1 at exact published candidate `683e1d5912`, passes five jobs but
-integration-1 fails three existing CLI deadlines. All three targets pass unchanged in the owned Linux runner
-(**36 cases**) with original budgets. Only the terminal failed shard was retried once on identical source;
-**attempt 2 is live**. [Timeout investigation](../references/evidence/ears-sqlite-implementation-2026-10-28/ci683-integration-timeouts/README.md)
-retains failures, exact reproduction and verified warm toolchain restore (about 4.7 s for 36 MiB; Node 23.11.1).
-This proves the cache operation but not the Mac timeout's cause. Do not repeatedly retry or raise deadlines if
-it fails again. Poll this run; don't dispatch duplicates or restart for elapsed observation time.
+Strict run **40688661462**, attempt 1 at `683e1d5912`, passed five jobs but failed three existing CLI deadlines
+in integration-1. All three targets passed unchanged in the owned Linux runner (**36 cases**) with original
+budgets. The single targeted retry on identical source, **attempt 2, is now completed/success**; all six jobs
+pass. [Timeout investigation](../references/evidence/ears-sqlite-implementation-2026-10-28/ci683-integration-timeouts/README.md)
+retains failures, reproduction, verified warm toolchain restore and exact final CI JSON. The source gate is green;
+the Mac timeout's cause is still not isolated. Node version and compiler/test budgets were unchanged.
 
-Node version, npm caching and compiler/test budgets remain unchanged. The detached integration and remote draft
-are clean at `683e1d5912`; canonical is still `9c339d89a4`. The private continuation contains the scalar-ordering
-descendant; no source under the active CI run was changed. Promote only the exact successful gated candidate.
+The approved helper verified clean source, engine pin, remote head and exact strict success, then privately
+fast-forwarded canonical to `683e1d5912` and changed its vendor link to private 6ab2f69. No master merge, normal
+app adoption or daily-Mac native build occurred. The continuation's newer scalar sorting, limit pushdown and
+schema race fix still require their own exact strict gate before a further canonical fast-forward.
 
 ### Next deliverables and full remaining scope
 
-Finish the single targeted CI retry and promote the exact candidate only if green. Profile the guarded scalar-ordering descendant
-(the paired measurement shows no overall win), then publish an appropriately gated disposition. Next implementation work should finish top-k,
+Publish the committed continuation to the existing draft branch and run its exact strict gate; preserve the
+canonical green checkpoint until that succeeds. Scalar-limit statement profiles reduce work but the earlier
+paired cohort showed no overall scalar-sort win. Continue balanced performance qualification and general top-k,
 complete atomic schema validation and background text/vector/trigram admission, and qualify IO/ownership under
 the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
 unanswered; value-index work does not depend on it.

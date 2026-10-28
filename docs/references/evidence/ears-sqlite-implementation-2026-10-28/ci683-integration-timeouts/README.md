@@ -19,3 +19,7 @@ The new Node toolchain cache works on the consumer: a ~36 MiB restore completes 
 reports Node 23.11.1 found in the restored tool cache. The retained log excerpt proves actual warm restoration,
 not only YAML validity. This removes the earlier direct-download delay; it does not explain or excuse the later
 compiler-test deadlines.
+
+The single identical-source retry completed successfully on 2026-10-28: all six jobs are green at exact
+`683e1d5912f802fcd715a10bb8d1271dc11c1ea1`. `attempt2-success.json` retains the authoritative run/job state.
+That permits the private canonical fast-forward; it does not establish the root cause of attempt 1's Mac timeouts.
