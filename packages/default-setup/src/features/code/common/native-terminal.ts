@@ -29,6 +29,8 @@ export interface ClaudeNativeFocusProjection {
 }
 
 export interface ClaudeNativeTerminalState {
+  /** Available after the native dialog store has been observed; retained through owned shutdown. */
+  messageRetirements?: import('./native-notice.ts').ClaudeNativeMessageRetirements
   mcpUrl?: import('./native-mcp-url.ts').ClaudeNativeMcpUrl
   mcpForm?: import('./native-mcp-form.ts').ClaudeNativeMcpForm
   notice?: import('./native-notice.ts').ClaudeNativeNotice

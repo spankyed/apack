@@ -6,17 +6,20 @@ import { ClaudeNativeNoticeSchema, isClaudeNativeNoticeDecision } from '#feature
 function fixture() {
   const sessionId = randomUUID(), payload = { originalModel: 'Opus 5', fallbackModel: 'Opus 4.8', retractedMessageUuids: [randomUUID()] }
   const item = { id: randomUUID(), kind: 'refusal_fallback_prompt', payload }, open = [item]
-  const onChange = vi.fn(() => { open.splice(0) }), onCancel = vi.fn(() => { open.splice(0) })
+  const closed: ((event: {id:string;type:string;result:string})=>void)[] = []
+  const settle = (result:string) => { const current=open.shift();if(current)for(const listener of closed)listener({id:current.id,type:'answered',result}) }
+  const onChange = vi.fn((decision:string) => settle(decision)), onCancel = vi.fn(() => settle('cancelled'))
   const control = { options: [{ value: 'retry_fallback', label: 'Retry on Opus 4.8' }, { value: 'edit_prompt', label: 'Edit prompt' }], onChange, onCancel, isDisabled: false }
   const UCe = () => {}, Xe = () => {}, hashes = new Map([['5c0cdd900e2aff12b223358a8e67a3e0757edda8dba0e7aed14c02b45480a331', createHash('sha256').update(UCe.toString()).digest('hex')], ['e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5', createHash('sha256').update(Xe.toString()).digest('hex')]])
   const row = Array<unknown>(48); row[9] = control.options; row[17] = 'Session paused'; row[21] = '<b>Original explanation</b>'; row[22] = 'Original provider guidance'
   const root = { type: UCe, memoizedProps: { payload, wouldTakeAnswer: () => true }, updateQueue: { memoCache: { data: [row] } }, child: { type: Xe, memoizedProps: control } }
-  const binding = { surface: 'terminal', toolContext: () => ({ dialogStore: { getState: () => ({ open }) } }) }
+  const store = { getState: () => ({ open }), subscribe: () => () => {}, onClosed: (listener: typeof closed[number]) => { closed.push(listener); return () => {} } }
+  const binding = { surface: 'terminal', toolContext: () => ({ dialogStore: store }) }
   const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) }, questionOptions: { q: () => sessionId } }
   const format = vi.fn(async (_n: unknown, value: unknown) => value || '')
   const runtime = vm.runInNewContext(rewriteClaudeNativePlatformSelectors(claudeTerminalRefusalRuntime) + ';({read:nativeRefusal,project:projectNativeRefusal,answer:answerNativeRefusal})', { originalContext: binding, AbortController, process: { stdout: undefined }, composerFunctionHashes: new WeakMap(), createHash, nativeFunctionName: (name: string) => name, nativeFunctionHash: (hash: string) => hashes.get(hash), readFileSync: () => JSON.stringify({ sessionId }), configUrl: 'private', randomUUID, dialogRevisions: new Map(), nativeGenericPermissionText: format })
   const request = () => { const d = runtime.read(n); return { id: d.item.id, revision: d.revision, session_id: d.sessionId } }
-  return { runtime, n, root, row, control, open, item, payload, onChange, onCancel, request, format }
+  return { runtime, n, root, row, control, open, item, payload, onChange, onCancel, request, format, settle, sessionId, closed }
 }
 it.each(['retry_fallback', 'edit_prompt', 'cancelled'])('settles %s only through the current original callback', async decision => {
   const f = fixture(), shown = await f.runtime.project(f.n, f.runtime.read(f.n)), request = { ...f.request(), decision }
@@ -74,4 +77,16 @@ it('keeps the help URL from the original rich text instead of losing it during t
   const parsed = ClaudeNativeNoticeSchema.parse(notice)
   if (parsed.kind !== 'refusal_fallback_prompt') throw Error('Expected refusal notice')
   expect(parsed.helpUrl).toBe(helpUrl)
+})
+
+it('retires only original identities after original settlement, including native cancellation outside the app', () => {
+  const f=fixture(), request=f.request()
+  expect(f.runtime.read(f.n).retirements).toEqual([])
+  f.root.memoizedProps.wouldTakeAnswer=()=>false
+  expect(()=>f.runtime.answer(f.n,{...request,decision:'cancelled'})).toThrow()
+  expect(f.runtime.read(f.n).retirements).toEqual([])
+  for(const listener of f.closed)listener({id:'foreign',type:'answered',result:'cancelled'})
+  expect(f.runtime.read(f.n).retirements).toEqual([])
+  f.settle('cancelled')
+  expect(f.runtime.read(f.n).retirements).toEqual([{sessionId:f.sessionId,uuids:f.payload.retractedMessageUuids}])
 })

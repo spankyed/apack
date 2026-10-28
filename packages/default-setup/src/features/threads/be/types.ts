@@ -178,6 +178,7 @@ export interface MessageEntity extends BaseEntity {
  */
 export interface ThreadContext {
   claudeCode?: {
+    retiredNativeMessages?: import('#features/code/common/native-notice.ts').ClaudeNativeMessageRetirements
     sessionId?: string;
     lastTurnAt?: number;
     cwd?: string;

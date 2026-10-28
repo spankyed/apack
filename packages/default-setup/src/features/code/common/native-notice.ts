@@ -15,3 +15,7 @@ export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decisio
   if (notice.kind === 'refusal_fallback_prompt') return decision === 'cancelled' || notice.choices.some(choice => choice.value === decision)
   return notice.kind === 'lsp_recommendation' || notice.kind === 'plugin_hint' ? notice.choices.some(choice => choice.value === decision) : decision === 'continue' || decision === 'interrupt'
 }
+
+/** Original dialog settlement identities, scoped to their native conversation. */
+export const ClaudeNativeMessageRetirementsSchema = z.array(z.object({ sessionId: z.string().uuid(), uuids: z.array(z.string().uuid()) }))
+export type ClaudeNativeMessageRetirements = z.infer<typeof ClaudeNativeMessageRetirementsSchema>

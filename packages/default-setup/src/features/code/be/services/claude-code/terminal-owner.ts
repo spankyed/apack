@@ -1,3 +1,4 @@
+import { ClaudeNativeMessageRetirementsSchema, type ClaudeNativeMessageRetirements } from '../../../common/native-notice.ts'
 import { copyClaudeChannelSelection } from '../../../common/native-channels.ts'
 import { ClaudeNativeMcpUrlSchema, ClaudeNativeMcpUrlOperationSchema, type ClaudeNativeMcpUrl, type ClaudeNativeMcpUrlRequest } from '../../../common/native-mcp-url.ts'
 import { ClaudeNativeMcpFormSchema, ClaudeNativeMcpFormOperationSchema, type ClaudeNativeMcpFormRequest } from '../../../common/native-mcp-form.ts'
@@ -246,6 +247,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     let operatingMcpForm = false, mcpFormEpoch = 0, cancellingMcpForm = false
     let mcpFormIdle = Promise.resolve()
     let notice: ClaudeNativeNotice | undefined
+    let messageRetirements: ClaudeNativeMessageRetirements | undefined
     let changingView = false, preparingParent = false, planRestorationChecked = false
     async function applyMcpInput(request: ClaudeNativeMcpFormRequest | ClaudeNativeMcpUrlRequest, kind: 'form' | 'url', retiring = false) {
       const shown = kind === 'form' ? mcpForm : mcpUrl
@@ -268,7 +270,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       } finally { operatingMcpForm = false; finish() }
     }
     return {
-      get state() { return { mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return bridge.session.metadata?.modelSelection ?? modelSelection },
       get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
@@ -307,8 +309,11 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       async refreshNotice() {
         if (closed || !bridge.ready) return
         const sessionId = bridge.projection.sessionId
-        const result = await bridge.uiTransport.request({ subtype: 'apack_native_notice' }) as { notice?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_native_notice' }) as { notice?: unknown; retirements?: unknown }
         if (closed || sessionId !== bridge.projection.sessionId) return
+        const retired = ClaudeNativeMessageRetirementsSchema.parse(result.retirements)
+        if (retired.some(item => item.sessionId !== sessionId && !bridge.transcripts.some(transcript => transcript.sessionId === item.sessionId))) throw new Error('Native retirement session is not owned')
+        if (JSON.stringify(retired) !== JSON.stringify(messageRetirements)) { messageRetirements = retired; changed() }
         const next = result.notice == null ? undefined : ClaudeNativeNoticeSchema.parse(result.notice)
         if (next && next.sessionId !== sessionId) throw new Error('Native notice session changed')
         if (JSON.stringify(next) !== JSON.stringify(notice)) { notice = next; changed() }

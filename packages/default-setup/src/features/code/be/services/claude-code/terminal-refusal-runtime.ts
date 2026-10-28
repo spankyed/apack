@@ -1,5 +1,27 @@
 /** Present only the original mounted refusal choices; native owns routing, retractions and settlement. */
 export const claudeTerminalRefusalRuntime = String.raw`
+const nativeRefusalRetirementStores=new WeakMap();
+function nativeRefusalRetirements(n,store){
+ let state=nativeRefusalRetirementStores.get(store);
+ if(!state){
+  if(typeof store.subscribe!=='function'||typeof store.onClosed!=='function')throw Error('Native refusal lifetime changed');
+  state={pending:new Map(),retired:new Map(),problem:undefined};nativeRefusalRetirementStores.set(store,state);
+  const capture=()=>{try{for(const item of store.getState().open){
+   if(item.kind!=='refusal_fallback_prompt')continue;
+   const sessionId=String(n.questionOptions.q()),uuids=item.payload?.retractedMessageUuids??[];
+   if(!/^[a-f0-9-]{36}$/i.test(sessionId)||!Array.isArray(uuids)||uuids.some(id=>typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id)))throw Error('Invalid original refusal retirement');
+   state.pending.set(item.id,{sessionId,uuids:[...new Set(uuids)]});
+  }}catch(error){state.problem=String(error)}};
+  capture();store.subscribe(capture);
+  store.onClosed(event=>{
+   const pending=state.pending.get(event.id);if(!pending)return;state.pending.delete(event.id);
+   let retired=state.retired.get(pending.sessionId);if(!retired){retired=new Set();state.retired.set(pending.sessionId,retired);}
+   for(const uuid of pending.uuids)retired.add(uuid);
+  });
+ }
+ if(state.problem)throw Error(state.problem);
+ return [...state.retired].map(([sessionId,uuids])=>({sessionId,uuids:[...uuids]}));
+}
 function nativeRefusalControl(n,item){
  const pending=[n.themeRoots.ai().get(process.stdout)?.container?.current],seen=new Set(),matches=[];
  const checked=(fn,hash)=>{let actual=composerFunctionHashes.get(fn);if(!actual){actual=createHash('sha256').update(Function.prototype.toString.call(fn)).digest('hex');composerFunctionHashes.set(fn,actual);}if(actual!==hash)throw Error('Native refusal producer changed');};
@@ -30,13 +52,13 @@ function nativeRefusal(n){
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native refusal is not ready');
  const sessionId=JSON.parse(readFileSync(configUrl,'utf8')).sessionId;
  if(String(n.questionOptions.q())!==sessionId)throw Error('Native refusal session changed');
- const store=binding.toolContext(new AbortController()).dialogStore,open=store.getState().open,item=open.length===1?open[0]:undefined,payload=item?.payload,kind='refusal_fallback_prompt';
- if(item?.kind!==kind||!['originalModel','fallbackModel'].every(key=>typeof payload?.[key]==='string'&&payload[key].length>0&&payload[key].length<=16000)){dialogRevisions.delete(kind);return {store,sessionId};}
- const source=nativeRefusalControl(n,item);if(!source)return {store,sessionId};
+ const store=binding.toolContext(new AbortController()).dialogStore,retirements=nativeRefusalRetirements(n,store),open=store.getState().open,item=open.length===1?open[0]:undefined,payload=item?.payload,kind='refusal_fallback_prompt';
+ if(item?.kind!==kind||!['originalModel','fallbackModel'].every(key=>typeof payload?.[key]==='string'&&payload[key].length>0&&payload[key].length<=16000)){dialogRevisions.delete(kind);return {store,sessionId,retirements};}
+ const source=nativeRefusalControl(n,item);if(!source)return {store,sessionId,retirements};
  const fingerprint=JSON.stringify([payload,source.control.options.map(option=>[option.value,option.label])]);if(fingerprint.length>200000)throw Error('Native refusal payload exceeded bound');
  let revision=dialogRevisions.get(kind);
  if(revision?.item!==item||revision?.payload!==payload||revision?.fingerprint!==fingerprint||revision?.sessionId!==sessionId)revision={item,payload,fingerprint,sessionId,revision:randomUUID()};
- dialogRevisions.set(kind,revision);return {store,...revision,source};
+ dialogRevisions.set(kind,revision);return {store,...revision,source,retirements};
 }
 async function projectNativeRefusal(n,d){
  const paragraphs=[];for(const node of [d.source.row[21],d.source.row[22]]){const text=await nativeGenericPermissionText(n,node);if(text)paragraphs.push(text);}

@@ -1002,6 +1002,14 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
     warnings: z.ZodArray<z.ZodString>;
 }, z.core.$strip>;
 
+type ClaudeNativeMessageRetirements = z.infer<typeof ClaudeNativeMessageRetirementsSchema>;
+
+/** Original dialog settlement identities, scoped to their native conversation. */
+declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
+    sessionId: z.ZodString;
+    uuids: z.ZodArray<z.ZodString>;
+}, z.core.$strip>>;
+
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
@@ -1425,6 +1433,8 @@ interface ClaudeNativeTerminalRecord {
 }
 
 interface ClaudeNativeTerminalState {
+    /** Available after the native dialog store has been observed; retained through owned shutdown. */
+    messageRetirements?: ClaudeNativeMessageRetirements;
     mcpUrl?: ClaudeNativeMcpUrl;
     mcpForm?: ClaudeNativeMcpForm;
     notice?: ClaudeNativeNotice;
@@ -6937,6 +6947,7 @@ declare const ThinkingSchema: z.ZodEnum<{
  */
 interface ThreadContext {
     claudeCode?: {
+        retiredNativeMessages?: ClaudeNativeMessageRetirements;
         sessionId?: string;
         lastTurnAt?: number;
         cwd?: string;

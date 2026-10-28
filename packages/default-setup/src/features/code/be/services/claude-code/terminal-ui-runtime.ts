@@ -774,10 +774,10 @@ async function control(request,abort){
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
  if(request.subtype==='apack_native_notice'){
-  const refusal=nativeRefusal(n);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal)};
-  const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint)};
-  const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation)};
-  const d=nativeBillingNotice(n);return {notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
+  const refusal=nativeRefusal(n);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal),retirements:refusal.retirements};
+  const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
+  const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
+  const d=nativeBillingNotice(n);return {retirements:refusal.retirements,notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
  }
  if(request.subtype==='apack_answer_native_notice'){
   abort.signal.throwIfAborted();

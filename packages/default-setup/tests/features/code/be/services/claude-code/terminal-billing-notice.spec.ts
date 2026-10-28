@@ -1,3 +1,4 @@
+import { claudeTerminalRefusalRuntime } from '#features/code/be/services/claude-code/terminal-refusal-runtime.ts'
 import vm from 'node:vm'
 import { randomUUID } from 'node:crypto'
 import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/terminal-ui-runtime.ts'
@@ -5,11 +6,11 @@ import { claudeTerminalUiRuntime } from '#features/code/be/services/claude-code/
 function fixture() {
   const sessionId = randomUUID(), payload = { title: 'Original notice', paragraphs: ['Original gateway explanation'], helpUrl: 'https://code.claude.com/docs/en/auto-mode-classifier-billing' }
   const item = { id: randomUUID(), kind: 'auto_mode_server_fallback', payload }, open = [item], answer = vi.fn()
-  const store = { getState: () => ({ open }), answer }, binding = { surface: 'terminal', toolContext: () => ({ dialogStore: store }) }
+  const store = { getState: () => ({ open }), answer, subscribe: () => () => {}, onClosed: () => () => {} }, binding = { surface: 'terminal', toolContext: () => ({ dialogStore: store }) }
   const n = { runtime: { ey: () => binding }, questionOptions: { q: () => sessionId } }
   const helper = claudeTerminalUiRuntime.slice(claudeTerminalUiRuntime.indexOf('function nativeBillingNotice('), claudeTerminalUiRuntime.indexOf('function nativeDialog('))
   const handlers = claudeTerminalUiRuntime.slice(claudeTerminalUiRuntime.indexOf(" if(request.subtype==='apack_native_notice')"), claudeTerminalUiRuntime.indexOf(" if(request.subtype==='apack_workflow_dialogs')"))
-  const run = vm.runInNewContext(helper + ';(async request=>{' + handlers + '})', { nativePluginHint: () => ({}), nativeLspRecommendation: () => ({}), answerNativeLspRecommendation: () => { throw Error('Wrong notice kind') }, AbortController, n, originalContext: binding, configUrl: 'private', readFileSync: () => JSON.stringify({ sessionId }), randomUUID, dialogRevisions: new Map(), abort: { signal: new AbortController().signal } })
+  const run = vm.runInNewContext(claudeTerminalRefusalRuntime + helper + ';(async request=>{' + handlers + '})', { nativePluginHint: () => ({}), nativeLspRecommendation: () => ({}), answerNativeLspRecommendation: () => { throw Error('Wrong notice kind') }, AbortController, n, originalContext: binding, configUrl: 'private', readFileSync: () => JSON.stringify({ sessionId }), randomUUID, dialogRevisions: new Map(), abort: { signal: new AbortController().signal } })
   return { run, open, item, payload, answer, sessionId }
 }
 it('preserves the original notice and exact continue/interrupt results without a tool permission envelope', async () => {
