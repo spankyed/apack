@@ -76,7 +76,7 @@ test('creates, validates, forks and resets original native custom themes', async
     const boundNativePid = (await context()).native.state.nativePid
     if(process.env.CLAUDE_RESEARCH_THEME_DESKTOP==='1') {
       await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
-      const composer=card.locator('[contenteditable="true"]'),draft='Review the release notes with this theme.'
+      const composer=card.locator('.composer-document'),draft='Review the release notes with this theme.'
       await composer.fill(draft)
       const tools=card.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
       const ready=card.locator('.native-inline-text').filter({hasText:/^Workspace ready$/})
@@ -100,6 +100,8 @@ test('creates, validates, forks and resets original native custom themes', async
       const invalidFileBefore=createdBefore,invalidFileAfter=await readFile(themeFile('release-review'),'utf8');expect(invalidFileAfter).toBe(invalidFileBefore);await capture('invalid')
       await panel.getByRole('button',{name:'Refresh',exact:true}).click();await color.fill('#66bb77');await panel.getByRole('button',{name:'Save color',exact:true}).click();await expect.poll(async()=>JSON.parse(await readFile(themeFile('release-review'),'utf8')).overrides.success).toBe('#66bb77');await expect(ready).toHaveCSS('color','rgb(102, 187, 119)');createdBefore=await readFile(themeFile('release-review'),'utf8');await expect(panel.locator('[data-native-settings-option="success"]')).toBeVisible();
       await panel.locator('[data-native-settings-option="success"]').click();await color.fill('#abcdef');await expect(ready).toHaveCSS('color','rgb(171, 205, 239)');await panel.getByRole('button',{name:'Cancel',exact:true}).click();await expect(ready).toHaveCSS('color','rgb(102, 187, 119)');expect(await readFile(themeFile('release-review'),'utf8')).toBe(createdBefore);await panel.getByRole('button',{name:'Close theme selection',exact:true}).click();await expect(panel).toHaveCount(0)
+      await expect(composer).toBeVisible();await expect(ready).toBeVisible();await expect(ready).toHaveCSS('color','rgb(102, 187, 119)')
+      for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width:width!,height:height!});await retained();await expect(composer).toBeInViewport({ratio:1});const path=testInfo.outputPath(`native-theme-desktop-saved-${width}.png`);await appPage.screenshot({path});captures.push(path)}
       await openTheme();const pluginFile=join(workspace!,'prompt-fixture/theme-packs/team.json'),pluginBefore=await readFile(pluginFile,'utf8')
       await panel.getByRole('button',{name:'Edit Team Review',exact:true}).click();await expect(name).toBeVisible();await name.fill('Release Review');await panel.getByRole('button',{name:'Create theme',exact:true}).click()
       await expect.poll(async()=>JSON.parse(await readFile(themeFile('release-review-2'),'utf8').catch(()=>'{}'))).toMatchObject({name:'Release Review',base:'dark',overrides:{success:'#55aa66',warning:'#cc9944'}})
