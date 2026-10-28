@@ -436,6 +436,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             dims: number;
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
+        substrings?: readonly string[] | undefined;
     }>, Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -450,6 +451,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             dims: number;
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
+        substrings?: readonly string[] | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -464,6 +466,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             dims: number;
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
+        substrings?: readonly string[] | undefined;
     }>, Record<string, {
         shape?: string | undefined;
         shortCode?: string | undefined;
@@ -478,6 +481,7 @@ export const FeatureEntrySchema: z.ZodObject<{
             dims: number;
             chunk?: "whole" | "paragraph" | "heading" | undefined;
         } | undefined;
+        substrings?: readonly string[] | undefined;
     }>>>>;
     designation: z.ZodOptional<z.ZodString>;
     settings: z.ZodOptional<z.ZodPreprocess<z.ZodObject<{
@@ -617,6 +621,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -631,6 +636,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -645,6 +651,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -659,6 +666,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
@@ -691,6 +699,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -730,6 +739,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -762,6 +772,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -801,6 +812,7 @@ export const ManifestSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1406,6 +1418,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1420,6 +1433,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1434,6 +1448,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>, Record<string, {
             shape?: string | undefined;
             shortCode?: string | undefined;
@@ -1448,6 +1463,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
@@ -1780,6 +1796,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1810,6 +1827,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1833,6 +1851,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: {
@@ -1863,6 +1882,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
                 dims: number;
                 chunk?: "whole" | "paragraph" | "heading" | undefined;
             } | undefined;
+            substrings?: readonly string[] | undefined;
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
@@ -1981,6 +2001,7 @@ export interface PackEntityDeclaration {
     readonly search?: PackSearchDeclaration;
     readonly shape?: string;
     readonly shortCode?: string;
+    readonly substrings?: readonly string[];
 }
 
 // @internal
@@ -1995,6 +2016,7 @@ export interface _PackEntityDeclaration {
     // (undocumented)
     shape: string | null;
     shortCode?: string;
+    substrings?: readonly string[];
 }
 
 // @internal

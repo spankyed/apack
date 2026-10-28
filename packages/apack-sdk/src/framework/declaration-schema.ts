@@ -119,6 +119,9 @@ const EntityDeclarationSchema = z.object({
     dims: z.number().int().positive().max(4096).describe('The numbers in each of the model\'s embeddings, at most 4096.'),
   }).strict()
     .describe('A vector index: what query(type).near(...), like(...) and hybrid(...) rank by. A write to its fields leaves the entity\'s chunks pending until embedPending embeds them. A shaped entity\'s fields must be ones its shape declares, holding a string or a list of strings.').optional(),
+  substrings: z.array(z.string().regex(_FIELD_NAME_PATTERN, 'Must be a lowerCamelCase field name')).min(1)
+    .refine((fields) => new Set(fields).size === fields.length, 'Must not repeat a field').readonly()
+    .describe('A trigram index over these fields: what query(type).containing(...) and matching(...) find, as text is written (error messages, ids, paths, code), unranked. A shaped entity\'s fields must be ones its shape declares, holding a string or a list of strings.').optional(),
 }).strict().superRefine((entity, ctx) => {
   // Text is read from a row's own fields, never the engine's
   const reserved: readonly string[] = RESERVED_ATTRIBUTES;
@@ -128,12 +131,17 @@ const EntityDeclarationSchema = z.object({
   for (const [at, field] of (entity.embed?.from ?? []).entries()) {
     if (reserved.includes(field)) ctx.addIssue({ code: 'custom', path: ['embed', 'from', at], message: `"${field}" is written by the engine and holds no text to embed` });
   }
-  // The text and vector indexes are named `search` and `embedding`, beside the value indexes named after their fields
-  for (const [name, declared] of [['search', entity.search], ['embedding', entity.embed]] as const) {
-    const at = entity.indexes?.indexOf(name) ?? -1;
-    if (declared && at >= 0) ctx.addIssue({ code: 'custom', path: ['indexes', at], message: `"${name}" names this entity's ${name === 'search' ? 'text' : 'vector'} index: a field indexed for where() can't have that name too` });
+  for (const [at, field] of (entity.substrings ?? []).entries()) {
+    if (reserved.includes(field)) ctx.addIssue({ code: 'custom', path: ['substrings', at], message: `"${field}" is written by the engine and holds no text to find` });
   }
-}).describe('One entity type: its shape, its short code prefix, its indexes, its text index and its vector index, each optional ({} for an untyped, unnumbered entity).');
+  // The text, vector and trigram indexes are named `search`, `embedding` and `substrings`, beside the value indexes
+  // named after their fields
+  const named = { search: 'text', embedding: 'vector', substrings: 'trigram' } as const;
+  for (const [name, declared] of [['search', entity.search], ['embedding', entity.embed], ['substrings', entity.substrings]] as const) {
+    const at = entity.indexes?.indexOf(name) ?? -1;
+    if (declared && at >= 0) ctx.addIssue({ code: 'custom', path: ['indexes', at], message: `"${name}" names this entity's ${named[name]} index: a field indexed for where() can't have that name too` });
+  }
+}).describe('One entity type: its shape, its short code prefix, its indexes, its text index, its vector index and its trigram index, each optional ({} for an untyped, unnumbered entity).');
 const EntitiesSchema = declarationRecord(z.string().regex(_ENTITY_NAME_PATTERN, 'Must be a PascalCase entity wire name'), EntityDeclarationSchema)
   .describe('Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity.');
 const RelationDeclarationSchema = z.object({
