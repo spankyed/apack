@@ -23,6 +23,9 @@ export default defineConfig((options) => {
     dts: !isDev,
     shims: true,
     minify: !isDev,
+    // The development app's stacks name source files, which is what the engine's call count attributes calls by
+    // (`@apackdev/ears`'s `calls.ts`); the app runs this build with `--enable-source-maps`
+    sourcemap: isDev,
     external: ['typescript', 'esbuild'],
     // Bundled CommonJS dependencies require Node builtins (yaml requires 'process'); ESM output has no
     // require, so give it one, as the CLI bundle does
