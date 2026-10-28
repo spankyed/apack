@@ -125,6 +125,8 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   await expect.poll(async () => (await context()).turns).toBeGreaterThan(beforeContinue)
   await expect.poll(async () => (await context()).native.state.busy).toBe(false)
   expect((await context()).sessionId).toBe(sessionId); expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  expect((await context()).claude.sessionError).toBeUndefined()
+  expect((await context()).claude.chatState).toBe('success')
   const recoveryDraft = 'Keep the final migration notes unsent.'
   await composer.focus(); await composer.press('Control+a'); await composer.pressSequentially(recoveryDraft)
   const recoveryRetained = await editor()

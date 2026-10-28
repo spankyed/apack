@@ -63,3 +63,23 @@ it('reports a truncated trailing row only after process exit', async () => {
   expect((await read(scope)).problems).toEqual([])
   expect((await read(scope, { final: true })).problems).toEqual(['Native transcript ended with an incomplete row'])
 })
+it('restarts when a transcript is rewritten and regrows beyond its prior cursor', async () => {
+  const path = join(directory, session + '.jsonl'), read = createClaudeNativeJournalReader(), scope = [{ sessionId: session, path }]
+  const row = (text: string) => JSON.stringify({ sessionId: session, text }) + '\n'
+  const before = row('old first') + row('old second')
+  await writeFile(path, before); await read(scope)
+  await writeFile(path, row('replacement with a different row boundary') + row('new continuation '.repeat(40)))
+  const batch = await read(scope)
+  expect(batch.problems).toEqual([])
+  expect(batch.entries.map(entry => entry.row.text)).toEqual(['replacement with a different row boundary', 'new continuation '.repeat(40)])
+  expect((await read(scope)).entries).toEqual([])
+})
+it('drops partial UTF-8 bytes from a replaced native transcript before reading its continuation', async () => {
+  const path = join(directory, session + '.jsonl'), read = createClaudeNativeJournalReader(), scope = [{ sessionId: session, path }]
+  const original = Buffer.from(JSON.stringify({ sessionId: session, text: 'original 🙂' }) + '\n')
+  await writeFile(path, original.subarray(0, original.indexOf(Buffer.from('🙂')) + 2)); await read(scope)
+  const text = 'replacement 中🙂 '.repeat(30)
+  await writeFile(path, JSON.stringify({ sessionId: session, text }) + '\n')
+  const batch = await read(scope)
+  expect(batch.problems).toEqual([]); expect(batch.entries.map(entry => entry.row.text)).toEqual([text])
+})
