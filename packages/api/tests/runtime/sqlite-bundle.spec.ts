@@ -12,8 +12,16 @@ it('runs the API bundler’s SQLite entry with its package-owned native loader',
   try {
     const entry = join(dir, 'probe.ts');
     writeFileSync(entry, `import {openDatabase} from '@apackdev/ears/sqlite';
-      const db=openDatabase({path:process.argv[2]!,syncs:false});
-      try{process.stdout.write(db.format);}finally{db.close();}`);
+      import {createEarsEngine} from '@apackdev/ears';import assert from 'node:assert/strict';
+      const db=openDatabase({path:process.argv[2]!,syncs:false,schema:{types:{Row:{required:[],
+        substrings:['title'],search:{fields:{title:1}},embed:{from:['title'],model:'probe',dims:3}}},relations:{},roles:[]}});
+      try{const e=createEarsEngine({database:db});e.create('Row',{id:'Row-probe',title:'alpha marker'});
+        const {model,chunks}=e.pendingEmbeddings('Row');e.embed(chunks.map(chunk=>({...chunk,model,vector:[1,0,0]})));
+        assert.deepEqual(e.query('Row').matching('^alpha').ids(),['Row-probe']);
+        assert.deepEqual(e.query('Row').search('alpha',{fuzzy:false}).ids(),['Row-probe']);
+        assert.deepEqual(e.query('Row').near([1,0,0],{k:1}).ids(),['Row-probe']);
+        process.stdout.write(db.format);
+      }finally{db.close();}`);
     const options = typeof configure === 'function' ? await configure({ env: { NODE_ENV: 'development' } }) : configure;
     if (Array.isArray(options)) throw new Error('Expected one API build configuration');
     await build({ ...options, config: false, entry: [entry], outDir: join(dir, 'out'), format: ['esm'],

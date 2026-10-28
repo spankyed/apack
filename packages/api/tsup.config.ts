@@ -28,6 +28,8 @@ export default defineConfig((options) => {
     sourcemap: isDev,
     // Native/vector/WASM loaders must retain the owning EARS package's paths.
     external: ['typescript', 'esbuild', '@apackdev/ears/sqlite'],
+    // EARS is also a runtime dependency for the external SQLite entry; keep the shared engine in this bundle.
+    noExternal: [/^@apackdev\/ears(?:\/lmdb)?$/],
     // Bundled CommonJS dependencies require Node builtins (yaml requires 'process'); ESM output has no
     // require, so give it one, as the CLI bundle does
     banner: ({ format }) => (format === 'esm'

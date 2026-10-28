@@ -128,7 +128,7 @@ export default /** @type import('electron-builder').Configuration */
   },
   
   // Native modules configuration
-  npmRebuild: false, // Selective rebuild in build.sh (elmdb is N-API, only node-pty needs rebuild)
+  npmRebuild: false, // Selective rebuild in build.sh (elmdb is N-API, node-pty and better-sqlite3 need rebuild)
   nodeGypRebuild: false, // Use npmRebuild instead
   
   // Files configuration

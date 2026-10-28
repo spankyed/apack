@@ -8,6 +8,7 @@
 // It runs a probe in the app's own executable as Node (ELECTRON_RUN_AS_NODE=1, as the app starts its API),
 // resolving each module from packages/api as the API does:
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
+//   EARS SQLite       writes/reopens and queries FTS, Rust regex/WASM and native vector assets
 //   node-pty          spawns a shell and waits for it to exit
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 import fs from 'node:fs';
@@ -52,6 +53,8 @@ const { createRequire } = require('node:module');
 const path = require('node:path');
 const [appDir, dataDir] = process.argv.slice(2);
 const load = createRequire(path.join(appDir, 'packages', 'api', 'package.json'));
+const { pathToFileURL } = require('node:url');
+const assert = require('node:assert/strict');
 
 async function main() {
   const { Database } = load('elmdb');
@@ -64,6 +67,31 @@ async function main() {
   db.close();
   if (!read?.types?.Smoke) throw new Error('elmdb read back the schema ' + JSON.stringify(read) + ' after reopening');
   console.log('elmdb: wrote, closed, reopened and read back');
+
+  const { openDatabase } = await import(pathToFileURL(load.resolve('@apackdev/ears/sqlite')).href);
+  const { createEarsEngine } = await import(pathToFileURL(load.resolve('@apackdev/ears')).href);
+  const sqlitePath = path.join(dataDir, 'sqlite');
+  const schema = { types: { Smoke: { required: [], substrings: ['title'], search: { fields: { title: 1 } },
+    embed: { from: ['title'], model: 'smoke', dims: 3 } } }, relations: {}, roles: [] };
+  let sqlite = openDatabase({ path: sqlitePath, schema, syncs: false });
+  const verifySqlite = () => {
+    const engine = createEarsEngine({ database: sqlite });
+    assert.deepEqual(engine.query('Smoke').matching('^alpha').ids(), ['Smoke-alpha']);
+    assert.deepEqual(engine.query('Smoke').containing('beta').ids(), ['Smoke-beta']);
+    assert.deepEqual(engine.query('Smoke').search('alpha', { fuzzy: false }).ids(), ['Smoke-alpha']);
+    assert.deepEqual(engine.query('Smoke').near([1, 0, 0], { k: 1 }).ids(), ['Smoke-alpha']);
+  };
+  try {
+    const engine = createEarsEngine({ database: sqlite });
+    engine.create('Smoke', { id: 'Smoke-alpha', title: 'alpha marker' });
+    engine.create('Smoke', { id: 'Smoke-beta', title: 'beta marker' });
+    const { model, chunks } = engine.pendingEmbeddings('Smoke');
+    engine.embed(chunks.map(chunk => ({ ...chunk, model, vector: chunk.id === 'Smoke-alpha' ? [1, 0, 0] : [0, 1, 0] })));
+    verifySqlite();
+  } finally { sqlite.close(); }
+  sqlite = openDatabase({ path: sqlitePath, readOnly: true });
+  try { verifySqlite(); } finally { sqlite.close(); }
+  console.log('EARS SQLite: wrote, reopened read-only, verified FTS, regex/WASM and native vectors');
 
   const pty = load('node-pty');
   const [shell, args] = process.platform === 'win32' ? ['cmd.exe', ['/c', 'exit 0']] : ['/bin/sh', ['-c', 'exit 0']];
