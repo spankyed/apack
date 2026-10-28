@@ -141,6 +141,7 @@ it('shows native refusal text and exact retry/edit/cancel decisions without plug
   const notice = { id: 'refusal', revision: 'revision', sessionId: 'session', kind: 'refusal_fallback_prompt' as const, originalModel: 'Opus 5', fallbackModel: 'Opus 4.8', title: 'Session paused', paragraphs: ['Original <b>refusal</b> explanation'], choices: [{ value: 'retry_fallback' as const, label: 'Retry on Opus 4.8' }, { value: 'edit_prompt' as const, label: 'Edit prompt' }] }
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
   const card = f.root.querySelector('[aria-label="Claude model fallback"]')!
+  expect(f.root.querySelector('.native-header')).toBeNull()
   expect(card.textContent).toContain('Original <b>refusal</b> explanation'); expect(card.querySelector('b')).toBeNull()
   expect(card.textContent).not.toContain('About this plugin')
   const buttons = [...card.querySelectorAll<HTMLButtonElement>('.native-notice__actions button')]

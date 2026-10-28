@@ -37,7 +37,7 @@
         </template>
       </div>
     </section>
-    <div v-if="!active && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" class="native-launch__actions">
+    <div v-if="!active" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt'" class="native-launch__actions">
       <span v-if="launchProblem" role="status" class="native-problem">{{ launchProblem }}</span>
       <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
