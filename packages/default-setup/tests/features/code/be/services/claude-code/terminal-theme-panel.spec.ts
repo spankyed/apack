@@ -72,6 +72,7 @@ it('rejects expired owners even if a former theme snapshot remains available', a
 function fieldEditor(s: ReturnType<typeof setup>, field: 'name' | 'color', valid = true) {
   const cache: any[] = Array(152); cache[56] = 'My theme'; cache[91] = valid; cache[98] = { props: { children: 'success' } }
   const input = { value: field === 'name' ? 'My theme' : '#55aa66', placeholder: field === 'name' ? 'my-theme' : 'rgb(r,g,b)', focus: true, onChange: vi.fn(), onSubmit: vi.fn(), onExit: vi.fn() }
+  cache[field === 'name' ? 73 : 113] = { props: { children: [null, { props: input }] } }
   s.owner.child = { type: s.Editor, memoizedProps: {}, updateQueue: { memoCache: { data: [cache] } }, child: { memoizedProps: input } }
   return input
 }
@@ -99,7 +100,16 @@ it('rejects edits from a previous native form identity', async () => {
 it('resets only an offered native token with the original reset callback', async () => {
   const s = setup(), reset = vi.fn(() => { s.entry.closed = true }), cache: any[] = Array(152)
   const list = { placeholder: 'Filter color tokens…', title: 'My theme', items: ['success'], onSelect: vi.fn(), onCancel: vi.fn(), onTab: { handler: reset }, renderPreview: () => 'current: #55aa66; preset: #ffffff' }
+  cache[151] = { props: list }
   s.owner.child = { type: s.Editor, memoizedProps: {}, updateQueue: { memoCache: { data: [cache] } }, child: { memoizedProps: list } }
   await expect(s.act({ action: 'themeReset', value: 'missing' })).rejects.toThrow('unavailable')
   await s.act({ action: 'themeReset', value: 'success' }); expect(reset).toHaveBeenCalledExactlyOnceWith('success')
+})
+
+it('uses the original theme input when TextInput forwards the same callbacks to its rendering child', async () => {
+  const s = setup(), input = fieldEditor(s, 'name')
+  s.owner.child.child.child = { memoizedProps: { ...input, inputState: {} } }
+  const view = await s.api.readNativeThemePanel(s.n, s.entry, s.abort.signal)
+  expect(view.snapshot.editor.kind).toBe('form')
+  expect(view.snapshot.editor.fields).toEqual([{key:'name',label:'Theme name',value:'My theme'}])
 })

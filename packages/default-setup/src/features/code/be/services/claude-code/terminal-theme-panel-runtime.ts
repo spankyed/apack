@@ -29,8 +29,10 @@ async function readNativeThemePanel(n,entry,signal){
  }else{
   const cache=nativeThemeCache(fiber,152);identity=cache;cacheStamp=[...cache];
   // Inspect only the original editor's mounted controls, never another terminal input.
-  const descendants=nativeModelFibers(fiber).slice(1),inputs=descendants.filter(child=>typeof child.memoizedProps?.value==='string'&&typeof child.memoizedProps.onChange==='function'&&typeof child.memoizedProps.onSubmit==='function'&&typeof child.memoizedProps.onExit==='function'&&child.memoizedProps.focus===true);
-  const lists=descendants.filter(child=>child.memoizedProps?.placeholder==='Filter color tokens…'&&typeof child.memoizedProps.onSelect==='function'&&typeof child.memoizedProps.onCancel==='function'&&Array.isArray(child.memoizedProps.items));
+  const descendants=nativeModelFibers(fiber).slice(1),ownedInputs=[cache[73]?.props?.children?.[1]?.props,cache[113]?.props?.children?.[1]?.props].filter(Boolean);
+  // TextInput forwards callbacks to its rendering child. Bind only the element created by this hash-pinned editor.
+  const inputs=descendants.filter(child=>ownedInputs.includes(child.memoizedProps)&&typeof child.memoizedProps?.value==='string'&&typeof child.memoizedProps.onChange==='function'&&typeof child.memoizedProps.onSubmit==='function'&&typeof child.memoizedProps.onExit==='function'&&child.memoizedProps.focus===true);
+  const lists=descendants.filter(child=>child.memoizedProps===cache[151]?.props&&child.memoizedProps?.placeholder==='Filter color tokens…'&&typeof child.memoizedProps.onSelect==='function'&&typeof child.memoizedProps.onCancel==='function'&&Array.isArray(child.memoizedProps.items));
   if(inputs.length===1&&!lists.length){
    const input=inputs[0].memoizedProps,isName=input.placeholder==='my-theme';
    if(input.value.length>16384||!isName&&typeof cache[98]?.props?.children!=='string')throw Error('Native theme field changed');
