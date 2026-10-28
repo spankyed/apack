@@ -210,14 +210,15 @@ See [live admission evidence](../references/evidence/ears-sqlite-implementation-
 The earlier 414 SQLite / 251 native contracts and compiled CLI regex/substring/vector proof remain in
 [profile/runtime evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/profile-runtime/README.md).
 
-Newer local **5e20fb5956cb0543d8934f34232d088d108818b1** fixes the cache declarations and API runtime dependency,
-preserves engine bundling and extends the native smoke to SQLite/FTS/regex/WASM/vectors. Packaging validation is
-running in owned Linux container `ears-packaging-corrected`, exec session **64161**; inspect its exact handle and results
-`/private/tmp/ears-packaging` before restarting anything. The first harness lacked Git metadata needed by the unchanged chain-input guard;
-the corrected harness initializes only a synthetic repository over the exact tracked archive. Pinned better-sqlite3 v13 uses Node-API; its existing
-Linux artifact opens under Electron 37 and loads sqlite-vec, so unnecessary Electron rebuild edits were removed.
-ASAR is disabled by the actual build configuration; verify real packaged files, signing and supported platforms.
-This in-place runtime smoke is not a packaged-distribution qualification.
+Local **5e20fb5956cb0543d8934f34232d088d108818b1** fixes cache declarations, API runtime dependency and bundling,
+and extends the native smoke to SQLite/FTS/regex/WASM/vectors. Its packaging validation is terminal SUCCESS:
+five builds, unchanged lockfile, API types, 78 cache guards, populated API compiler-read coverage, removal controls,
+original 60-second scripts types, lint/imports, and the actual SQLite smoke block under both Node and Electron.
+The same pinned v13 Node-API addon loads across ABI 131 / 136; unnecessary rebuild-list changes were removed.
+See [runtime packaging evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/packaging-runtime/README.md).
+This proves probe logic against built workspace packages, not complete packaged/signed distributions. ASAR is disabled.
+The published run also has an integration-2 unhandled Vitest RPC timeout despite 538 passing tests; cause remains
+unisolated and its failed status stands. Poll the exact run for remaining native jobs before another publication.
 
 Canonical remains a889531dd1. The approved helper requires clean source/native pins and exact strict success
 before private promotion. Current continuation commits stay local while the published run is live. No master
