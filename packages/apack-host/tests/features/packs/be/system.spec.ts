@@ -605,6 +605,31 @@ describe('a pack that is gone', () => {
 
 describe('installing over a pack that is already running', () => {
 
+  it.each([
+    ['runtime import', 'throw new Error("candidate import refused");'],
+    ['runtime binding', 'module.exports.registration.bindServices = () => { throw new Error("candidate binding refused"); };'],
+  ])('preserves the incumbent and build after refused %s', async (_kind, runtime) => {
+    const installed = await installPackFromLocal(packSource('1.0.0'));
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    const previous = registry.getPackRuntime(PACK_ID);
+    const registration = registry.getPackRegistration(PACK_ID);
+    const build = readPackBuild(installed.dir);
+    const records = readInstalledPacks();
+    const system = runPacksSystem();
+    try {
+      system.send({ type: 'INSTALL_PACK', packSlug: packSource('2.0.0', { runtime }), sourceKind: 'local' });
+      await vi.waitFor(() => expect(emitted(system.sent).map(e => e.type)).toContain('PACK_INSTALL_FAILED'));
+      expect(registry.getPackRegistration(PACK_ID)).toBe(registration);
+      expect(registry.getPackRuntime(PACK_ID)).toEqual(previous);
+      expect(readPackBuild(installed.dir)).toEqual(build);
+      expect(readInstalledPacks()).toEqual(records);
+      expect(emitted(system.sent).map(e => e.type)).not.toContain('PACK_DEACTIVATED');
+      expect(system.sent.map(e => e.type)).not.toContain('TEARDOWN_PACK');
+      expect(system.sent.map(e => e.type)).not.toContain('RELOAD_PACK');
+      expect(registry.loadProblem(PACK_ID)).toBeUndefined();
+    } finally { system.stop(); }
+  });
+
   it('reserves the resolved owner across installs from different sources', async () => {
     const a = path.join(tmpDir, 'source-a');
     const b = path.join(tmpDir, 'source-b');
