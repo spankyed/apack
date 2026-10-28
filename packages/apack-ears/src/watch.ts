@@ -98,7 +98,7 @@ const later = (fn: () => void) => {
 
 const PROCESS_CLOCK: WatchClock = {
   now: () => performance.now(),
-  // A re-run waiting out its gap is no reason for a process to stay alive
+  // Idle re-runs do not keep a process alive; an explicit settlement wait refs its timer.
   setTimeout: (fn, ms) => {
     const handle = setTimeout(fn, ms);
     (handle as { unref?: () => void }).unref?.();
@@ -152,6 +152,7 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
         settleWaiting();
       }, earliest - now),
     };
+    if (waiting.length) (timer.handle as { ref?: () => void })?.ref?.();
   };
 
   const onCommit = (commit: Commit) => {
@@ -320,7 +321,10 @@ export function createWatches(connection: Connection, { clock = PROCESS_CLOCK, s
     settled() {
       // A flush under way still holds watches it hasn't run, which it settles when it ends
       if (!flushing && !queued && !timer && dirty.size === 0) return Promise.resolve();
-      return new Promise((resolve) => { waiting.push(resolve); });
+      return new Promise((resolve) => {
+        waiting.push(resolve);
+        (timer?.handle as { ref?: () => void } | undefined)?.ref?.();
+      });
     },
     stats: () => {
       const { keys, ranges } = connection.trackStats();

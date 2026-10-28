@@ -1305,6 +1305,9 @@ export class SqliteDatabase implements EarsDatabase {
     if (this.active) this.active.abort();
     this.sql.close();
     this.opened = false;
+    this.tracks.clear();
+    this.statements.clear();
+    this.layouts.clear();
   }
 }
 

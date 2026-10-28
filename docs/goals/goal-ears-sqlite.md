@@ -186,11 +186,13 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The canonical isolated `session/ears-sqlite` checkout is `monorepo-worktrees.noindex/sqlite-evaluation`, advanced
-through source-entry checkpoint `03770eca67`, with the measured explain checkpoint following it. Saved prepared
-files were byte-identical to `d93afe4190` and backed up under
-`/private/tmp/ears-sqlite-primary-preintegration-c8glycsk` before advancing. No concurrent agent's dirty source was
-copied. The committed integration input remains `a1b6603e5a`; the contract matrix maps that baseline.
+The canonical isolated `session/ears-sqlite` checkout is `monorepo-worktrees.noindex/sqlite-evaluation`
+at `9c339d89a4`. Active implementation is its detached integration
+`monorepo-worktrees.noindex/integration-FyE9XZ`, whose merge checkpoint `4af1b513e3` combines that exact source
+with committed master `98386b36a18d244c19ffb501830b990ed49f7653`. The integration owns its dependencies and
+links immutable native checkout `sqlite-baseline-6ab2f69` at `6ab2f69fa13289ed4f02952253c58b4d41922c98`.
+No concurrent agent's dirty source was copied. Canonical has not yet advanced; require a fresh pinned strict
+gate before accepting the integration. The contract matrix records these inputs and the newly inherited contracts.
 
 Strict run `40636458325` passed every shard on corrected integration `d93afe4190`. Run `40637723256` covers structured
 transport `9659ceb389`; its sole failed shard stopped during setup-node download before tests. Only that failed
@@ -294,15 +296,26 @@ The first durable/FULL 10k trial fails the 16 ms foreground-operation and timer-
 The runner saved it and stopped; remaining durable trials were not run. Targets were not relaxed. The durable
 schedule/IO/checkpoint cause still needs diagnosis and a real fix or approved disposition before qualification.
 
-A deliberate survey found concurrent work merged into master at `98386b36a18d244c19ffb501830b990ed49f7653`, beyond
-the previously integrated `a1b6603e5a`: substring/regex query contracts and schemas, watch settlement/close fixes,
-a list-of-any coercion fix and native pin `6ab2f69fa13289ed4f02952253c58b4d41922c98`. No dirty files were copied.
-Next: combine that exact committed snapshot through a detached integration and disposable gates, reconcile its
-new contracts, then complete background text/vector admission, schema validation and durable-load qualification. The product preference for explicit “indexing”
-versus a potentially slow complete search fallback was asked asynchronously; value-index work does not depend on
-that answer. Strict run `40655434334` on typed checkpoint `5985709142` was externally cancelled after producers,
-integration-1/2 and native-1 passed; app-and-rest/native-2 were cancelled. It is not a completed green gate and
-will not be restarted as acceptance for obsolete inputs. Run a fresh pinned gate for the integrated source.
+Master `98386b36a1` is combined through detached merge `4af1b513e3`, preserving both the structured port and
+new substring/regex schema/query contracts, watch fixes, list-of-any coercion and native pin `6ab2f69`.
+The initial disposable integration passes five consumer typechecks and all 239 native cases (38 skips). SQLite
+passes 274/277, with exactly three newly inherited substring/regex cases failing; those requirements remain open.
+
+The follow-on watch checkpoint fixes a retained dependency key after SQLite close and Node exit during an
+explicit settlement wait. Four SQLite process cases pass locally, including waiting during delivery and idle exit;
+independent removals of each timer-ref path fail their targeted assertions. The sources and proof logs are in
+[the lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/integrated-watch-lifecycle/README.md).
+Shared/native watch suites, five consumer types and API checks are running in the integration's disposable Linux
+checkout; this is not yet a completed gate. A local attempt to include native-importing shared tests stopped at
+missing Mac binding; no local Rust build was attempted. The focused SQLite-only process suite passes.
+
+Next: finish and retain this exact validation, push the integrated draft and run a fresh strict gate before
+canonical promotion; then implement the inherited substring/regex contracts and complete background text/vector
+admission, schema validation and durable-load qualification. The preference for explicit “indexing” versus a
+potentially slow complete search fallback was asked asynchronously and remains unanswered. Value-index work
+does not depend on it. Strict run `40655434334` on obsolete typed checkpoint `5985709142` was externally cancelled;
+it does not count as a green gate and will not be restarted as acceptance for newer inputs.
+
 All phase 3–7 requirements remain where not explicitly evidenced, including useful search/realistic vectors,
 four host backup-format failures, complete app composition, operational/platform qualification and adoption budgets.
 Normal production still uses elmdb.

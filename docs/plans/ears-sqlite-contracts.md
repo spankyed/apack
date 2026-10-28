@@ -1,9 +1,10 @@
 # EARS backend contracts for SQLite
 
-Survey: committed app `a1b6603e5ae628ccbb90ea125a9822b7f178931f`, merged with prototype/planning checkpoint
-`8a1bf789d3468effbea500cb92f1437636729d1c` in detached candidate `3f4c54b7a92c47aafd9d661fc551b6393b1f7765`.
+Current integration inputs: committed app master `98386b36a18d244c19ffb501830b990ed49f7653` and SQLite
+checkpoint `9c339d89a44e8c1c29bd83ef0dbb5aeb37930083`, combined in detached merge `4af1b513e3`.
 Execution belongs to [the SQLite goal](../goals/goal-ears-sqlite.md). This matrix preserves requirements while the
-private binary port is replaced by structured requests/results.
+private binary port is replaced by structured requests/results. Older benchmark evidence remains pinned to its
+own recorded source and native artifact; it is not reclassified as evidence for this integration.
 
 ## Ownership and acceptance
 
@@ -18,13 +19,14 @@ Paths in the test column are relative to `packages/apack-ears/tests/` unless pre
 | Entity identity, reserved attributes, roles and numbering | `write.ts`, `engine/writes.spec.ts`, `relations.spec.ts`, `vocabulary.spec.ts` | Atomic refusals, non-reused numbering, engine-owned timestamps/roles/trash, unregistered-name refusal, relation/entity distinction. |
 | Value fidelity and ownership | `database.ts` codecs/freezing; `engine/writes.spec.ts`, `search.spec.ts`, prototype operational cases | Preserve Date, binary, missing versus null, arrays/maps and own `__proto__`. Structured reads return independent values. Frozen reads preserve existing semantics. |
 | Query starts, filtering and order | `query.ts`; `engine/queries.spec.ts`, independent `_harness` model | Scope/trash, caller ID order and duplicates, type/creation order, scalar/list membership, null/missing rules, filter ordering, limits/cursors and first/last semantics. SQL optimizations must preserve the pipeline. |
+| Substring and regex filters | `schema.ts` `substrings`; `query.ts` `containing`/`matching`; `engine/search.spec.ts` | Preserve pipeline order, per-element matching, case folding, write freshness, `UNKNOWN_INDEX` and `PATTERN_INVALID`. Native Rust regex syntax and bounded execution require a qualified implementation; JavaScript backtracking regex is not an equivalent replacement. The integrated SQLite suite currently has three explicit failures here. |
 | Sorting, distinct and groups | `engine/queries.spec.ts` mixed-value ordering and group cases | Native SQL for supported declared types; documented canonical ordering/fallback for heterogeneous values. Eliminate quadratic prototype algorithms where corpus growth makes them unsafe. |
 | Relations and traversal | `engine/relations.spec.ts`, model-based suite | Deferred endpoint checks, unique/acyclic rules, adjacency filtering, BFS order/deduplication and trash handling. Walk each source in requested-kind order, then insertion order. Explicit relation-end filters match even a trashed or missing end; unconstrained adjacency requires a reachable end. Prefer batched/native SQL to per-node crossings without changing order. |
 | Units and savepoints | `database.ts` connection; `engine/transact.spec.ts` and model suite | Lazy write unit, own writes, savepoint rollback/release, atomic refusals, no unit/commit for read-only work, synchronous body contract and one commit for nested successful writes. |
 | Commit identity | `engine/sqlite-operations.spec.ts` immediate following writer regression | Capture own sequence before unlocking; never reread a later writer's sequence as the completed unit's identity. |
 | Commit-outcome errors | `runCommitted`, connection and admin paths; `engine/watch.spec.ts` committed-error cases; host import tests | `NOT_DURABLE` means known committed; `SCHEMA_CHANGED` means uncommitted/stale. Real SQLite I/O failure mapping needs evidence, not just proxy tests. Preserve original errors during refresh/recovery. |
 | Dependency tracking and watch delivery | `watch.ts`, `engine/watch.spec.ts`, model watch harness | Precisely track keys/ranges, invalidate successful writes and same-value write intent as contracted, freeze/compare results correctly, dispose safely and deliver errors without losing future state. |
-| Watch scheduler added after the prototype | `watch.ts`; `engine/watch-schedule.spec.ts` | Preserve bounded reruns, coalescing/skipped states, clock/timer rules and settlement. This suite currently creates elmdb directly: move its database fixture behind the shared backend selector before claiming SQLite coverage. |
+| Watch scheduler added after the prototype | `watch.ts`; `engine/watch-schedule.spec.ts` | Preserve bounded reruns, coalescing/skipped states, clock/timer rules and settlement. Pending unawaited watches permit exit; explicit settlement waits retain their delivery timer. Closing the database releases tracked dependencies and cancels delivery. Its database fixture uses the shared backend selector; retain coverage for both drivers. |
 | Call counting added after the prototype | `calls.ts`, connection; `engine/calls.spec.ts` | Count semantic reads/writes/units, sites, watch reruns and measured duration across either backend. Report physical SQL binding calls separately if added; do not silently change existing call-count meaning. |
 | Query explain added after the prototype | `query.ts` `explain`, `runtime.ts` QueryExplanation/QueryStage; `engine/queries.spec.ts` explain cases | Actual SQLite plans/timing and correctly defined work metrics. Preserve useful diagnostics and update consumers where backend-specific fields differ; no fabricated native-key or VM counters. |
 | Text search | `engine/search.spec.ts`, source search declarations and SDK language choices | Preserve important identifier matching, fields, phrases, list boundaries, highlights and supported language decisions. Relevance corpus governs scoring/ranking changes. Shared assertion changes need an explicit behavior decision. |
@@ -37,13 +39,13 @@ Paths in the test column are relative to `packages/apack-ears/tests/` unless pre
 
 ## Integration boundaries
 
-The pinned native engine is `933aa19f04355784412cadf4938f9b49e35e564d`, which includes compressed larger field values
-and field-write improvements absent from the experiment's `9359949` addon. Compare SQLite against a matching
-artifact from disposable validation; do not reuse the old binary as if it proved the new baseline.
+The current native engine is `6ab2f69fa13289ed4f02952253c58b4d41922c98`, including the committed substring/regex,
+schema and watch changes in master `98386b36a1`. Its source and Linux binding are isolated from the other agent.
+The earlier actual-facade/admission measurements use `933aa19f04355784412cadf4938f9b49e35e564d` where their
+provenance says so. Compare new qualification runs against the matching new artifact; do not relabel old results.
 
-The other agent's working tree contains additional uncommitted search/schema/manifest changes. They are not part
-of this contract snapshot and must not be copied. Reconcile relevant committed changes at the next explicit
-integration checkpoint. Original prototype test counts do not establish parity with this snapshot.
+Only committed inputs enter an integration. Relevant later committed changes require another pinned integration
+and gate; neither dirty source nor a moving reference establishes acceptance.
 
 ## Structured backend boundary
 
