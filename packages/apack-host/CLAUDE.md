@@ -2,6 +2,13 @@
 
 Host-only modules shared by the API, the renderer, the Electron main process, the CLI and `@apackdev/testing`. This package is the app runtime: the app's own state (`AppState`), pack registration, discovery, install and update, the pack runtime the app runs (loading, lifecycle, reload, writing), the backend bus, the migrations runners, the user's API keys, host service implementations and the one place the app's `HostRuntime` is assembled, backups and build-time helpers. The API (`packages/api`) keeps only transport, process boot and composition, and calls into it. Packs never import it, and it never imports transport (`fastify`, `@trpc/*`, `ws`) or `virtual:*` modules: the CLI and the pack test harness run it without a server. The root `CLAUDE.md` ("SDK packages") lists the subpaths and their one-line roles. This file covers how each area works. For the pack runtime (loader, `SDK_BRIDGE`, lifecycle, reload, writing, boot sequence), see [`src/packs/runtime/CLAUDE.md`](src/packs/runtime/CLAUDE.md).
 
+The candidate SQLite path is selected explicitly with `storageFormat` on host database constructors; omission
+keeps elmdb. The database port's format identity drives backup provenance and host-owned file/open descriptors
+in `database/storage.ts`. Backup reads inspect and open actual files; import checks all destination formats before
+validation/replacement. Recognized foreign storage refuses as `STORAGE_MISMATCH`, never run-history corruption
+salvage. Tests in `tests/backup/storage.spec.ts` exercise both implementations without aliases. Full app/CLI
+selection and operational/platform qualification remain in the SQLite goal.
+
 ## Package basics
 
 - The package is private and has no build step. Every `exports` entry in `package.json` points at `src/*.ts`, so consumers compile or bundle it: the API's tsup build, and `scripts/bundle-package.ts` for the CLI and `@apackdev/testing`. `bundle-package.ts` inlines `@apackdev/host` and removes it from the published dependencies.

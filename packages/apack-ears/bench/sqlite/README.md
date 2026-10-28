@@ -52,16 +52,16 @@ acknowledgments are separate trials; this is not group-commit or platform durabi
 `mutations.py` targets the original prototype and belongs to its preserved checkpoint; current safeguards have
 negative-proof evidence linked from the goal. The synthetic sine-generated vectors are low-rank; these timings do not establish ANN recall or real embedding quality.
 
-Run the evaluation-only host alias in a disposable environment, from `packages/apack-host`:
+The real host storage tests select each backend through normal constructors, without module aliases:
 
 ```sh
-../../node_modules/.bin/vitest run --config ../apack-ears/bench/sqlite/host.vitest.config.ts
+npm run test:linux -- npm test -w @apackdev/host -- tests/backup/storage.spec.ts tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/database/open-app-database.spec.ts
 ```
 
-This currently reports four backup-import failures: production backup preflight explicitly requires `data.mdb`.
-Keep that result visible. The alias does not manufacture a compatibility file or patch production backup code.
-The database-opening suite and the import-transaction coordinator suite pass; the latter uses mocked stores.
-These are integration probes, not proof of a production cutover.
+The host owns actual data-file/open descriptors, checks both destination formats before replacement, and exercises
+populated primary/run-history restore, media/acceptance rollback and retained recovery copies. The former alias
+probe is removed; current evidence must come from the real path. Explicit constructor selection is implemented;
+complete app/CLI profile selection, readiness and lifecycle/platform qualification remain in the goal.
 
 ## Implementation boundaries
 
