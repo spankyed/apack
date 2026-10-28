@@ -166,7 +166,7 @@ function approve() {
     return
   }
   const choice = props.bash?.choices.find(choice => choice.value === selectedChoice.value)
-  emit('respond', { approved: true, ...(choice ? { choice: choice.value, choiceToken: props.bash!.token, ...(choice.prefix !== undefined ? { prefix: prefix.value } : {}) } : {}) })
+  emit('respond', { approved: true, ...(choice ? { choice: choice.value, choiceToken: choice.token, ...(choice.prefix !== undefined ? { prefix: prefix.value } : {}) } : {}) })
 }
 </script>
 

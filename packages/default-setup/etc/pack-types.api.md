@@ -734,6 +734,7 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     cwd: z.ZodString;
     choices: z.ZodOptional<z.ZodArray<z.ZodObject<{
         value: z.ZodString;
+        token: z.ZodString;
         label: z.ZodString;
         prefix: z.ZodOptional<z.ZodString>;
     }, z.core.$strip>>>;
@@ -1011,6 +1012,24 @@ type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | '
 declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     kind: z.ZodLiteral<"auto_mode_server_fallback">;
     helpUrl: z.ZodString;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"plugin_hint">;
+    pluginName: z.ZodString;
+    marketplaceName: z.ZodString;
+    sourceCommand: z.ZodString;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<{
+            yes: "yes";
+            no: "no";
+            disable: "disable";
+        }>;
+        label: z.ZodString;
+    }, z.core.$strip>>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
     id: z.ZodString;

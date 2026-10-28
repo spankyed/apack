@@ -20,7 +20,7 @@ export const claudeTerminalBashRuntime = String.raw`function nativeBashChoices(n
  if(matches.length!==1)return;
  const control=matches[0],options=control.options;
  if(options.length>16)throw Error('Native Bash choice limit');
- const choices=options.map(option=>{
+ const offered=options.map(option=>{
   // Preserve original displayed labels. Unsupported rich labels stay in the terminal.
   if(option.disabled===true||option.value!=='yes'&&option.value!=='no'&&!control.standingReady)return;
   if(typeof option.value!=='string'||option.value.length>128||typeof option.label!=='string'||option.label.length>4000)return;
@@ -28,15 +28,17 @@ export const claudeTerminalBashRuntime = String.raw`function nativeBashChoices(n
   if(option.type==='input'&&(typeof option.initialValue!=='string'||option.initialValue.length>4000||typeof option.onChange!=='function'))return;
   return {value:option.value,label:option.label,...(option.type==='input'?{prefix:option.initialValue}:{})};
  }).filter(Boolean);
+ // Refining another standing rule does not change consent for the selected action.
+ const choices=offered.map(choice=>({...choice,token:createHash('sha256').update(JSON.stringify([d.revision,choice])).digest('hex')}));
  if(new Set(choices.map(choice=>choice.value)).size!==choices.length)throw Error('Native Bash choices are ambiguous');
  const token=createHash('sha256').update(JSON.stringify([d.revision,choices])).digest('hex');
  return {control,options,choices,token};
 }
 async function answerNativeBashChoice(n,d,request){
  let source=nativeBashChoices(n,d);
- if(!source||request.choiceToken!==source.token)throw Error('Native Bash choices changed or expired');
- const choice=source.choices.find(choice=>choice.value===request.choice);
- if(!choice||choice.value==='no')throw Error('Invalid native Bash approval choice');
+ const choice=source?.choices.find(choice=>choice.value===request.choice);
+ if(!choice||request.choiceToken!==choice.token)throw Error('Native Bash choices changed or expired');
+ if(choice.value==='no')throw Error('Invalid native Bash approval choice');
  if(choice.prefix!==undefined){
   if(typeof request.prefix!=='string'||request.prefix.length>4000)throw Error('Invalid native Bash prefix');
   if(request.prefix!==choice.prefix){

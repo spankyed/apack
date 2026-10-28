@@ -84,16 +84,32 @@ test('preserves original plugin recommendation choices and everyday composing', 
   expect(['yes', 'no', 'disable', 'timeout']).toContain(decision)
   const nativeWindow = await electronApp.browserWindow(appPage), captures: string[] = []
   await nativeWindow.evaluate(window => { window.show(); window.focus() }); await appPage.bringToFront()
+  const bashAdmissionTrace = process.env.CLAUDE_RESEARCH_BASH_ADMISSION_TRACE === '1'
+  if (bashAdmissionTrace) await appPage.evaluate(() => {
+    const capture = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : undefined, button = target?.closest('button')
+      if (!button?.closest('[data-testid="native-bash-approval"]') || button.textContent?.trim() !== 'Allow once') return
+      const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+      ;(window as any).__claudeResearchBashClick = JSON.parse(JSON.stringify({ at: Date.now(), pending: state.currentThread?.context?.claudeCode?.pendingControlRequest }))
+      document.removeEventListener('pointerdown', capture, true)
+    }
+    document.addEventListener('pointerdown', capture, true)
+  })
+  const saveBashClick = async () => {
+    if (!bashAdmissionTrace) return
+    const sample = await appPage.evaluate(() => (window as any).__claudeResearchBashClick)
+    expect(sample).toBeTruthy(); await writeFile(join(workspace!, 'native-bash-app-before.json'), JSON.stringify(sample, null, 2))
+  }
   await composer.focus(); await composer.press('Control+a'); await composer.pressSequentially('Run the release check and report its result.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const approval = appPage.getByTestId('native-bash-approval')
   await expect(approval).toBeVisible({ timeout: 15000 })
   await expect(approval.getByTestId('native-bash-command')).toContainText('document-skills@anthropic-agent-skills')
-  if (process.env.CLAUDE_RESEARCH_BASH_ADMISSION_TRACE === '1') await writeFile(join(workspace!, 'native-bash-app-before.json'), JSON.stringify({ at: Date.now(), context: await context() }, null, 2))
   await approval.getByRole('button', { name: 'Allow once', exact: true }).click()
-  try { await expect(approval).toBeHidden() }
+  try { await expect(approval).toBeHidden(); await saveBashClick() }
   catch (error) {
-    if (process.env.CLAUDE_RESEARCH_BASH_ADMISSION_TRACE === '1') {
+    if (bashAdmissionTrace) {
+      await saveBashClick()
       await writeFile(join(workspace!, 'native-bash-app-after.json'), JSON.stringify({ at: Date.now(), context: await context(), approval: await approval.textContent() }, null, 2))
       const image = await nativeWindow.evaluate(async window => (await window.capturePage()).toPNG().toString('base64')); await writeFile(join(workspace!, 'native-bash-admission-failure.png'), Buffer.from(image, 'base64'))
     }
