@@ -39,7 +39,7 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       stage = fs.mkdtempSync(path.join(path.dirname(destination), '.apack-backup-'));
       // A data dir the app never ran a flow in has no run history yet
-      const runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistory(db.paths.runHistory, { readOnly: true }) : undefined;
+      const runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistory(db.paths.runHistory, { readOnly: true, storageFormat: db.database.format }) : undefined;
       let backup: string;
       try {
         backup = await exportDatabase({ lmdb: databaseBackupStore(db.database), ...(runHistory && { runHistory: databaseBackupStore(runHistory.database) }) }, stage, {

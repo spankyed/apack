@@ -192,7 +192,7 @@ export async function dbImport(args: string[], io: DbIo): Promise<void> {
     const environment = resolveAppEnvironment({ env: target.env, userDataDir: db.userDataDir });
     const catalog = readInstalledContributionCatalog(environment.packsDir, disabledPackIds(environment.installedPacksFile));
     const validate = createSettingsBackupValidator(catalog.settings());
-    const backup = readBackup(backupDir, db.schema.getRegisteredEntityTypes(), validate);
+    const backup = readBackup(backupDir, db.schema.getRegisteredEntityTypes(), validate, { lmdb: db.database.format, runHistory: db.database.format });
     const skipUnknown = values['skip-unknown'] as boolean;
     if (backup.unknownDatabases.length > 0 && !skipUnknown) {
       throw new Error(
@@ -219,7 +219,7 @@ export async function dbImport(args: string[], io: DbIo): Promise<void> {
     }
     // Its progress lines go to stderr with everything else that isn't the result, so `apack db import > file` holds
     // only what the command was asked for
-    const runHistory = openRunHistory(db.paths.runHistory);
+    const runHistory = openRunHistory(db.paths.runHistory, { storageFormat: db.database.format });
     try {
       await importDatabase({ lmdb: databaseBackupStore(db.database), runHistory: databaseBackupStore(runHistory.database) }, backupDir, db.paths.media, { skipUnknownDatabases: skipUnknown, log: backupLog(io), validate });
     } finally {
