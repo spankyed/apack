@@ -1,0 +1,52 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/values.spec.ts -t projects a page
+
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+
+ ❯ tests/sqlite/values.spec.ts (8 tests | 1 failed | 7 skipped) 44ms
+   ↓ SQLite authoritative attribute layout > round-trips native and overflow kinds, distinguishing missing, null, false, zero and signed zero
+   ↓ SQLite authoritative attribute layout > allocates physical names without case-folding logical type or field names
+   ↓ SQLite authoritative attribute layout > admits a declared field over flexible data without rewriting or validating incumbent values
+   × SQLite authoritative attribute layout > projects a page in two SQL calls and patches a scalar without reading or encoding its large neighbors 36ms
+     → expected 2 to be +0 // Object.is equality
+   ↓ SQLite authoritative attribute layout > keeps attribute changes and newly declared slots inside the caller transaction
+   ↓ SQLite authoritative attribute layout > reopens existing layouts read-only and diagnoses missing or duplicate authoritative values
+   ↓ SQLite authoritative attribute layout > stores wide declarations beyond the native column budget without losing fields
+   ↓ SQLite authoritative attribute layout > rejects invalid values and ambiguous patches before changing stored data
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/values.spec.ts > SQLite authoritative attribute layout > projects a page in two SQL calls and patches a scalar without reading or encoding its large neighbors
+AssertionError: expected 2 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 2
+
+ ❯ tests/sqlite/values.spec.ts:76:19
+     74|     codec.decode = bytes => { decodes++; return decode(bytes); };
+     75|     values.set(layout, 'Message-0', { rank: 99 });
+     76|     expect(reads).toBe(0);
+       |                   ^
+     77|     expect(encodes).toBe(0);
+     78|     const page = values.read(layout, Array.from({ length: 50 }, (_, i)…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 skipped (8)
+   Start at  01:42:15
+   Duration  370ms (transform 97ms, setup 11ms, collect 110ms, tests 44ms, environment 0ms, prepare 54ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/values.spec.ts -t 'projects a page'

@@ -1,6 +1,6 @@
 # SQLite storage design for EARS
 
-Status: proposed implementation direction, 2026-10-28. Execution and acceptance belong to
+Status: attribute component implemented; EARS integration and performance qualification pending, 2026-10-28. Execution and acceptance belong to
 [the SQLite goal](../goals/goal-ears-sqlite.md); [the contract matrix](ears-sqlite-contracts.md) defines required semantics.
 
 ## Direction
@@ -40,6 +40,23 @@ rule remain readable; checked mutations validate changed fields, and intentional
 Physical table/column identifiers must not collide under SQLite's case-insensitive identifier rules. Logical names
 such as `Note`/`NOTE` or `fooBar`/`foobar` remain distinct. Allocate stable numeric identifiers or another reversible
 collision-free mapping; keep logical names in metadata and diagnostics. Bind values and quote physical identifiers.
+
+## Component checkpoint
+
+`packages/apack-ears/src/sqlite/values.ts` implements scalar column pairs (kind and native value), with
+large/composite and flexible values in a separate store. Declaration adds slots without rewriting incumbent
+flexible data; the next write moves a changed field to its current representation. Caller-owned transactions cover
+schema, primary metadata and derived writes; the caller also owns row-rule validation. Layout handles are admitted
+schema state, not a process-global cache. Existing layouts reopen without writes.
+
+Native slots currently stop at 128 per type so wide declarations fall back to flexible storage rather than exceed
+SQLite's column limit. Text/bytes larger than the provisional inline threshold live outside the row. These are
+bounded starting policies, not measured optimal values. The focused 300-field case proves no values are dropped;
+component tests also prove a scalar patch neither reads nor encodes its neighboring large body, and a projected
+50-row page uses two SQL calls without decoding unrelated composites.
+
+The EARS prototype still uses its old authoritative layout. Integrating this component, removing that layout,
+compiling predicates/projections to the new storage and measuring the actual facade remain phase-2 requirements.
 
 ## Indexes and queries
 

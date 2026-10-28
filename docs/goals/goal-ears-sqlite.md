@@ -186,64 +186,45 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The [current contract matrix](../plans/ears-sqlite-contracts.md) surveys committed `a1b6603e5a` against prototype
-`4a3fe698f8`. The detached integration checkout is `monorepo-worktrees.noindex/integration-ddxGkz`; neither original
-source branch has accepted the merge yet. The prepared candidate is published only on our remote `session/ears-sqlite`.
+The implementation is prepared in `monorepo-worktrees.noindex/integration-ddxGkz`, currently based on the graph checkpoint
+`8b7e938f00` plus the storage component; remote `session/ears-sqlite` points there. The local `sqlite-evaluation` branch still holds the planning
+base and its owned prepared files. Accept the pinned integration there only after strict validation; preserve its
+owned files when advancing. Never copy the concurrent agent's dirty source. The committed integration input remains
+`a1b6603e5a`; the [contract matrix](../plans/ears-sqlite-contracts.md) maps that baseline to requirements.
 
-The first strict run (`40630566649`, candidate `3f4c54b7a9`) exposed an evaluation-config upward dependency and an
-over-broad inherited phantom-contract guard. Both are repaired in the prepared candidate. The obsolete pending
-config-only retry (`40633142965`, `c33ab07ef7`) was cancelled/superseded; use authoritative GitHub status for the
-latest corrected run. Let remaining live jobs finish and do not infer completion from one successful shard.
+Strict run `40636458325` covers corrected integration `d93afe4190` and was last observed with producers running.
+Run `40637723256` covers structured transport `9659ceb389` and remains pending behind it. Poll these exact handles;
+neither is proof for the later graph/storage changes. Earlier failed/cancelled attempts are historical, not acceptance.
 
-A matching `933aa19` macOS arm64 addon was extracted from the producer artifact into the private detached engine
-checkout `elmdb-worktrees.noindex/sqlite-baseline`; source/hash provenance is recorded in
-[implementation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/). No Rust target was copied
-or compiled locally. Original worktree dependencies and compiled outputs remain private.
+Implemented checkpoints: structured storage requests with native MessagePack confined to `src/lmdb/adapter.ts`;
+SQLite transport avoids request/result serialization; shared scheduler selection; native SQL one-hop traversal,
+batched BFS frontiers and relation hydration; cross-type graph watch membership tracking. Pinned-native probes
+also corrected null-list matching, checked-write versus unchecked-repair behavior, requested-kind walk ordering
+and explicit relation-end matching. Explicit ends can be trashed or missing; unconstrained adjacency needs a
+reachable end. The graph tracking is conservative across declared types and still needs phase-3 load qualification.
 
-Corrected checkpoint `d93afe4190` is under strict validation in run `40636458325`; the earlier run is terminal,
-with both native shards and integration-2 passing and only the two diagnosed shards failing.
+The native baseline is engine `933aa19`. The matching macOS addon came from the recorded producer artifact into
+private `elmdb-worktrees.noindex/sqlite-baseline`; Linux builds use its separate Docker volume. No Rust target was
+copied or built directly on the daily-use Mac. Dependencies, generated output and database fixtures remain private.
 
-Targeted checks on the current integrated API: default elmdb 221 passed with 12 opt-in cases skipped; SQLite
-232 passed with one known `explain` gap. The eight scheduler cases now select the backend through the shared database fixture and pass on both
-SQLite and the pinned elmdb baseline; this closes the earlier coverage gap without changing their assertions. EARS typechecking and the refined static guard pass.
-Native-oracle probes exposed and fixed null-list membership and the prototype's incorrect retroactive schema
-refusal; ordinary typed writes now validate only changed fields, while unchecked repair remains possible.
+Evidence: disposable Linux native package 221 passed, 13 SQLite-only cases skipped, no unhandled errors after watch
+fixture cleanup. The graph checkpoint passed EARS typechecking and 21 shared relation cases; full SQLite passed
+237 cases with only the known explain failure. The new graph regression fails with its membership fix removed.
+API reports for the structured-port change were generated in Linux and reviewed. Raw results are retained in
+[implementation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/).
 
-The [storage direction](../plans/ears-sqlite-storage.md) uses native scalar columns plus separate large/flexible
-values, pending real EARS slice measurements. The four-layout diagnostic, exact samples and contract proofs are
-saved with the evidence. These storage primitives are not application performance claims.
+The next storage checkpoint adds `src/sqlite/values.ts`: native declared scalar slots, out-of-row large/composite
+values, flexible undeclared data, explicit kind/presence and signed-zero handling, case-safe physical identifiers,
+two-call projected pages, and patch writes that never read/encode unrelated bodies. Eight focused component cases
+pass on macOS and disposable Linux, including read-only reopen, rollback, corruption, wide declarations and partial
+writes. Linux EARS typechecking also passes. A negative mutation inserting a full-row read makes the partial-write
+guard fail; the tested implementation was restored. Exact output is retained with the implementation evidence. The native-slot budget and
+inline threshold are provisional. This component is not yet connected to EARS and is not an app performance claim.
 
-Next: accept only the corrected pinned integration after the disposable strict gate passes, advance the isolated
-implementation branch, then deliver the structured backend/elmdb adapter and native SQLite slice. Open the draft
-PR with that working slice. The four host backup-format failures, measured explain, true SQLite scheduler coverage
-and all later phase requirements remain open. Do not mark the goal complete at this checkpoint.
-
-The structured-port checkpoint introduces read/write/commit/load envelopes and moves MessagePack request/result
-encoding into `src/lmdb/adapter.ts`. SQLite passes objects directly; persisted values still use MessagePack.
-Operation/read payloads retain the existing broad record types and need refinement alongside the production SQL
-implementation. SQLite remains under `bench/sqlite`; the production layout and first source-owned slice remain open.
-
-Verification: EARS typecheck and the focused 25 watch cases pass. SQLite passed 233 cases with the existing explain
-failure; the new operational case rejects transport serialization. A native run exposed pending test watches at
-teardown; explicit cleanup fixes this. The disposable Linux rerun passes all 221 native cases, with 13 SQLite-only
-cases skipped and no unhandled errors. Official API reports were regenerated with fresh package builds in Linux;
-the reviewed diff changes only the storage-port signatures. The local broad rerun was rejected by automatic review
-and was not executed. Raw results are recorded with the implementation evidence. The strict CI run above still
-covers the earlier integration checkpoint, not these later transport edits; validate the new committed tip separately.
-
-
-The next query checkpoint removes per-source SQL selection from one-hop traversal and per-edge payload reads
-from relation terminals/listings. One-hop traversal remains a composed SQL selection through following filters,
-projections and limits; deep traversal batches each BFS frontier while retaining an explicit JavaScript seen set.
-A 64-source fixture verifies one adjacency selection and an actual `relations_source` query-plan access path.
-Destination membership is now tracked for graph reads so cross-type trash/restore invalidates their watches;
-tracking is conservative across declared types and still needs the phase-3 load/budget evaluation.
-
-The pinned native oracle also exposed prototype differences: requested relation-kind order matters, and explicit
-relation-end filters match even trashed/missing endpoints, unlike unconstrained adjacency. These are now shared
-contract cases: 21 relation cases pass on elmdb and SQLite; 35 focused SQLite cases pass including batching and
-operational checks. Removing destination membership tracking makes the new watch regression fail. Disposable
-Linux validation passed EARS typechecking and all 21 shared relation cases; the full SQLite suite passed 237 cases
-with only the known explain failure. The earlier Linux attempt used the subsequently corrected assertion and failed;
-do not treat it as acceptance. Exact output is recorded with the implementation evidence.
-Local package-wide typechecking was rejected by automatic review and is routed to Linux instead.
+Next: integrate the component as the authoritative value
+layout through EARS, replacing the prototype's whole-row MessagePack/JSON storage and per-row assembly. Refine
+structured operation/read types, deliver measured SQLite explain and the first source-owned SQL slice, then open
+the draft PR as phase 2 requires. The benchmark-directory prototype remains temporary. Do not silently retain its
+layout or declare phase 2 complete on component tests. All phase 3–7 requirements remain, including background
+index admission, useful search/realistic vectors, four host backup-format failures, complete app composition,
+operational/platform qualification and adoption budgets. Normal production still uses elmdb.

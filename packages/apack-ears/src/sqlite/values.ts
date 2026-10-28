@@ -1,0 +1,176 @@
+// Authoritative attribute storage: declared scalar columns, with large/composite and undeclared values outside
+// the row. Layout handles belong to the caller's admitted schema; no process-global schema cache is kept here.
+export interface SqliteValuesSql {
+  all(sql: string, parameters?: unknown[]): Record<string, unknown>[];
+  get(sql: string, parameters?: unknown[]): Record<string, unknown> | undefined;
+  run(sql: string, parameters?: unknown[]): unknown;
+}
+
+export interface SqliteValuesCodec {
+  encode(value: unknown): Uint8Array;
+  decode(bytes: Uint8Array): unknown;
+}
+
+export interface SqliteValueLayout {
+  readonly name: string;
+  readonly table: string;
+  readonly fields: ReadonlyMap<string, number>;
+}
+
+type Cell = { kind: string; value: string | number | Uint8Array | null };
+const refusal = (code: string, message: string): never => { throw Object.assign(new Error(message), { code }); };
+
+/** The caller owns row-rule validation and the surrounding transaction, including metadata and derived updates. */
+export class SqliteValues {
+  constructor(private readonly sql: SqliteValuesSql, private readonly codec: SqliteValuesCodec,
+    private readonly inlineTextLimit = 256, private readonly nativeFieldLimit = 128) {}
+
+  initialize(): void {
+    this.sql.run(`CREATE TABLE IF NOT EXISTS value_types(id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE COLLATE BINARY)`);
+    this.sql.run(`CREATE TABLE IF NOT EXISTS value_fields(id INTEGER PRIMARY KEY,type_id INTEGER NOT NULL,
+      name TEXT NOT NULL COLLATE BINARY,UNIQUE(type_id,name))`);
+    this.sql.run(`CREATE TABLE IF NOT EXISTS value_overflow(entity_id TEXT NOT NULL,field TEXT NOT NULL COLLATE BINARY,
+      kind TEXT NOT NULL,value,PRIMARY KEY(entity_id,field)) WITHOUT ROWID`);
+  }
+
+  /** Reopens an admitted layout without DDL or writes, including on a read-only connection. */
+  layout(name: string): SqliteValueLayout | undefined {
+    const type = this.sql.get('SELECT id FROM value_types WHERE name=?', [name]);
+    if (!type) return undefined;
+    return { name, table: `values_t${Number(type.id)}`, fields: new Map(
+      this.sql.all('SELECT id,name FROM value_fields WHERE type_id=?', [type.id])
+        .map(row => [String(row.name), Number(row.id)])) };
+  }
+
+  /** Adds physical slots without rewriting incumbent values. Old flexible values remain readable until replaced. */
+  declare(name: string, names: Iterable<string>): SqliteValueLayout {
+    this.sql.run('INSERT OR IGNORE INTO value_types(name) VALUES (?)', [name]);
+    const type = this.sql.get('SELECT id FROM value_types WHERE name=?', [name])!;
+    const table = `values_t${Number(type.id)}`;
+    this.sql.run(`CREATE TABLE IF NOT EXISTS ${table}(entity_id TEXT PRIMARY KEY) WITHOUT ROWID`);
+    const fields = new Map(this.sql.all('SELECT id,name FROM value_fields WHERE type_id=?', [type.id])
+      .map(row => [String(row.name), Number(row.id)]));
+    for (const field of names) {
+      if (field === 'id' || field === 'entityType' || fields.has(field) || fields.size >= this.nativeFieldLimit) continue;
+      this.sql.run('INSERT INTO value_fields(type_id,name) VALUES (?,?)', [type.id, field]);
+      const id = Number(this.sql.get('SELECT id FROM value_fields WHERE type_id=? AND name=?', [type.id, field])!.id);
+      this.sql.run(`ALTER TABLE ${table} ADD COLUMN k${id} TEXT`);
+      this.sql.run(`ALTER TABLE ${table} ADD COLUMN v${id}`);
+      fields.set(field, id);
+    }
+    return { name, table, fields };
+  }
+
+  /** Patches only supplied fields; neither reads nor encodes unrelated values. Undefined fields are omitted. */
+  set(layout: SqliteValueLayout, id: string, fields: Readonly<Record<string, unknown>>, removed: readonly string[] = []): void {
+    const values = Object.entries(fields).filter(([name, value]) => name !== 'id' && name !== 'entityType' && value !== undefined);
+    const deleting = removed.filter(name => name !== 'id' && name !== 'entityType');
+    if (values.some(([name]) => deleting.includes(name))) refusal('VALUE_INVALID', 'A patch cannot set and remove the same field');
+    // Encode before making any SQL changes: a codec refusal must not leave half a field batch behind.
+    const cells = values.map(([name, value]) => [name, this.cell(value)] as const);
+    this.sql.run(`INSERT OR IGNORE INTO ${layout.table}(entity_id) VALUES (?)`, [id]);
+    const changed = [...values.map(([name]) => name), ...deleting];
+    if (changed.length) this.sql.run('DELETE FROM value_overflow WHERE entity_id=? AND field IN (SELECT value FROM json_each(?))',
+      [id, JSON.stringify(changed)]);
+    const assignments: string[] = [], parameters: unknown[] = [];
+    for (const [name, cell] of cells) {
+      const field = layout.fields.get(name);
+      const outside = field === undefined || cell.kind === 'array' || cell.kind === 'object' ||
+        (typeof cell.value === 'string' && cell.value.length > this.inlineTextLimit) ||
+        (cell.value instanceof Uint8Array && cell.value.byteLength > this.inlineTextLimit);
+      if (outside) this.sql.run('INSERT INTO value_overflow(entity_id,field,kind,value) VALUES (?,?,?,?)',
+        [id, name, cell.kind, cell.value]);
+      if (field !== undefined) {
+        assignments.push(`k${field}=?`, `v${field}=?`);
+        parameters.push(outside ? '@' : cell.kind, outside ? null : cell.value);
+      }
+    }
+    for (const name of deleting) {
+      const field = layout.fields.get(name);
+      if (field !== undefined) assignments.push(`k${field}=NULL`, `v${field}=NULL`);
+    }
+    if (assignments.length) this.sql.run(`UPDATE ${layout.table} SET ${assignments.join(',')} WHERE entity_id=?`, [...parameters, id]);
+  }
+
+  /** Fetches a projected page in two crossings. The caller holds one read snapshot across both statements. */
+  read(layout: SqliteValueLayout, ids: readonly string[], requested?: readonly string[]): Array<Record<string, unknown> | undefined> {
+    if (!ids.length) return [];
+    const names = requested === undefined ? [...layout.fields.keys()] : [...new Set(requested)];
+    const selected = names.flatMap(name => {
+      const field = layout.fields.get(name);
+      return field === undefined ? [] : [field];
+    });
+    const columns = selected.flatMap(field => [`v.k${field}`, `v.v${field}`]);
+    const input = JSON.stringify(ids);
+    const rows = this.sql.all(`SELECT v.entity_id${columns.length ? ',' + columns.join(',') : ''}
+      FROM json_each(?) seed JOIN ${layout.table} v ON v.entity_id=seed.value ORDER BY seed.key`, [input]);
+    const overflow = this.sql.all(`SELECT o.entity_id,o.field,o.kind,o.value FROM value_overflow o
+      WHERE o.entity_id IN (SELECT value FROM json_each(?))${requested === undefined ? '' :
+        ' AND o.field IN (SELECT value FROM json_each(?))'}`, [input, ...(requested === undefined ? [] : [JSON.stringify(names)])]);
+    const native = new Map(rows.map(row => [String(row.entity_id), row]));
+    const extra = new Map<string, Record<string, unknown>[]>();
+    for (const row of overflow) {
+      const id = String(row.entity_id), held = extra.get(id) ?? [];
+      held.push(row);
+      extra.set(id, held);
+    }
+    return ids.map(id => {
+      const row = native.get(id);
+      if (!row) return undefined;
+      const out = Object.fromEntries([['id', id], ['entityType', layout.name]]);
+      const outside = new Set<string>();
+      for (const name of names) {
+        const field = layout.fields.get(name);
+        if (field === undefined) continue;
+        const kind = row[`k${field}`];
+        if (kind === '@') outside.add(name);
+        if (kind !== null && kind !== '@') Object.defineProperty(out, name,
+          { value: this.value(String(kind), row[`v${field}`]), enumerable: true, writable: true, configurable: true });
+      }
+      for (const field of extra.get(id) ?? []) {
+        const name = String(field.field);
+        if (Object.hasOwn(out, name)) refusal('CORRUPT', `Duplicate authoritative value for ${name}`);
+        outside.delete(name);
+        Object.defineProperty(out, name,
+          { value: this.value(String(field.kind), field.value), enumerable: true, writable: true, configurable: true });
+      }
+      if (outside.size) refusal('CORRUPT', 'Missing overflow attribute value');
+      return out;
+    });
+  }
+
+  private cell(value: unknown): Cell {
+    if (value === null) return { kind: 'null', value: null };
+    if (typeof value === 'boolean') return { kind: 'bool', value: Number(value) };
+    if (typeof value === 'number' && Number.isFinite(value)) return { kind: Object.is(value, -0) ? 'zero' : 'num', value };
+    if (typeof value === 'string') return { kind: 'text', value };
+    if (value instanceof Date && Number.isFinite(value.getTime())) return { kind: 'date', value: value.getTime() };
+    if (value instanceof Uint8Array) return { kind: 'bytes', value };
+    if (Array.isArray(value)) return { kind: 'array', value: this.codec.encode(value) };
+    if (value !== null && typeof value === 'object' && !(value instanceof Date)) return { kind: 'object', value: this.codec.encode(value) };
+    return refusal('VALUE_INVALID', 'Invalid stored attribute value');
+  }
+
+  private value(kind: string, value: unknown): unknown {
+    switch (kind) {
+      case 'null': if (value === null) return null; break;
+      case 'bool': if (value === 0 || value === 1) return value === 1; break;
+      case 'num': if (typeof value === 'number' && Number.isFinite(value)) return value; break;
+      case 'zero': if (value === 0) return -0; break;
+      case 'text': if (typeof value === 'string') return value; break;
+      case 'date': if (typeof value === 'number' && Number.isFinite(new Date(value).getTime())) return new Date(value); break;
+      case 'bytes':
+        if (value instanceof Uint8Array) return Uint8Array.from(value);
+        break;
+      case 'array': case 'object':
+        if (value instanceof Uint8Array) {
+          const decoded = this.codec.decode(value);
+          if (kind === 'array' && Array.isArray(decoded)) return decoded;
+          if (kind === 'object' && decoded !== null && typeof decoded === 'object' &&
+              !Array.isArray(decoded) && !(decoded instanceof Date) && !(decoded instanceof Uint8Array)) return decoded;
+        }
+        break;
+    }
+    return refusal('CORRUPT', `Invalid stored attribute kind ${kind}`);
+  }
+}
