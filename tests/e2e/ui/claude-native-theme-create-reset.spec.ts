@@ -76,7 +76,7 @@ test('creates, validates, forks and resets original native custom themes', async
     const boundNativePid = (await context()).native.state.nativePid
     if(process.env.CLAUDE_RESEARCH_THEME_DESKTOP==='1') {
       await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
-      const composer=card.locator('.composer-document'),draft='Review the release notes with this theme.'
+      const composer=card.locator('.composer-document [contenteditable]'),draft='Review the release notes with this theme.'
       await composer.fill(draft)
       const tools=card.getByRole('button',{name:'Session tools',exact:true});if(await tools.getAttribute('aria-expanded')!=='true')await tools.click()
       const ready=card.locator('.native-inline-text').filter({hasText:/^Workspace ready$/})
