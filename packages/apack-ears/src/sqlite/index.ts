@@ -12,7 +12,7 @@ import { toElmdbSchema, type EngineSchema } from '../schema.ts';
 import { SqliteDatabase } from './database.ts';
 
 /** Format provenance; opening the files performs validation. Format 1 changes in place before release. */
-export const DATABASE_FORMAT = 'sqlite/1';
+export { DATABASE_FORMAT } from './format.ts';
 
 export interface DatabaseOptions {
   path: string;

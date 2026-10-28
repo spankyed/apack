@@ -26,6 +26,7 @@ function fixture() {
   fs.writeJsonSync(path.join(backup, 'metadata.json'), { databases: ['lmdb'] });
   const store = {
     path: primary,
+    format: 'elmdb/1',
     copyTo: (dest: string) => fs.copy(primary, dest),
     replaceWith: (dir: string) => fs.copySync(path.join(dir, 'data.mdb'), path.join(primary, 'data.mdb')),
   } satisfies BackupStore;

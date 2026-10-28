@@ -175,3 +175,22 @@ partial-write amplification and the entity catalog/flexible store overhead exclu
 Record steady-state and durable acknowledgments separately against the current pinned elmdb build, which compresses
 larger fields. Choose thresholds, compression and background-work budgets from that evidence, not the synthetic
 repeated-body case alone.
+
+## Host storage and backup composition
+
+The database port reports its storage `format`; both adapters own that constant without changing the native ABI.
+The host's `database/storage.ts` owns the finite format-to-open/data-file descriptors. Host constructors accept
+an explicit `storageFormat`; omission preserves elmdb. Selecting the other backend over recognized existing files
+refuses as `STORAGE_MISMATCH`, outside run-history corruption salvage. This is essential: selecting the wrong
+candidate backend must not move an incumbent aside or create an apparently empty replacement profile.
+
+Backup inspection detects the actual supported data files and opens them read-only; metadata format labels remain
+provenance. Ambiguous files and permission errors refuse. Export records each live store's format. Import snapshots
+the candidate, checks every restorable store against its destination before validation/replacement, and uses the
+existing coordinated incumbent-copy/media/acceptance rollback. Cross-format import requires a deliberate logical
+conversion on a copy; it is not an implicit physical conversion. Primary data and run history may be inspected
+through their actual descriptors independently.
+
+This closes a host-boundary prerequisite, not app adoption. Explicit app/CLI profile selection, readiness handling,
+settings/media acceptance through the complete runtime, SDK composition, logical maintenance/conversion, recovery
+under real IO faults and platform packaging remain required by the goal. Normal production composition stays elmdb.

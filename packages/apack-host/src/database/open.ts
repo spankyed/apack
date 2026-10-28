@@ -2,7 +2,8 @@
 // (apack db) share, so both open a data dir the same way
 import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
-import { openDatabase } from '@apackdev/ears/lmdb';
+import { DATABASE_FORMAT } from '@apackdev/ears/lmdb';
+import { databaseStorage } from './storage.ts';
 import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import type { _AppDataPaths } from '@apackdev/sdk/utils';
@@ -15,6 +16,8 @@ import * as fs from 'node:fs';
 const logger = createLogger('run-history');
 
 export interface DatabaseStoreOptions {
+  /** Explicit candidate selection; omitted keeps the production elmdb composition. */
+  storageFormat?: string;
   /** Told when a query does something its data will make slow (the engine's `warn`); the app passes one in development */
   warn?: (message: string) => void;
   /** The database directory */
@@ -30,8 +33,8 @@ export interface DatabaseStoreOptions {
  * change (`onRegistrationChanged`: the app's registry, as packs register), so a declaration another pack made stays
  * while that pack registers. Nothing is installed.
  */
-export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
-  const database = openDatabase({ path, readOnly });
+export function openDatabaseStore({ path, schema, readOnly, warn, storageFormat = DATABASE_FORMAT }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
+  const database = databaseStorage(storageFormat).open({ path, readOnly });
   const engine = createEarsEngine({ database, warn });
   if (!readOnly) {
     try {
@@ -61,9 +64,9 @@ const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 
  * from starting over it. Any other failure (a full disk, a permission, the system's lock table) says nothing about the
  * files and throws, as it does opened read-only.
  */
-export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean } = {}): RunsDatabase {
+export function openRunHistory(dir: string, { readOnly, storageFormat = DATABASE_FORMAT }: { readOnly?: boolean; storageFormat?: string } = {}): RunsDatabase {
   const open = (): RunsDatabase => {
-    const database = openDatabase({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) });
+    const database = databaseStorage(storageFormat).open({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) });
     return { database, engine: createEarsEngine({ database }) };
   };
   try {
@@ -102,6 +105,8 @@ export interface OpenAppDatabaseOptions {
    * snapshot file, a pack directory, or a directory of pack directories (`readInstalledSchema`).
    */
   schemaFrom?: string;
+  /** Explicit format for an isolated candidate profile; omitted keeps elmdb. */
+  storageFormat?: string;
 }
 
 /**
@@ -109,13 +114,13 @@ export interface OpenAppDatabaseOptions {
  * packs' names read from their manifests (no pack code runs), which a tool reports. The engine is bound, so `@apackdev/sdk/ears`'s
  * operations act on it until `close()`. The run history is a database of its own (`openRunHistory`).
  */
-export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom }: OpenAppDatabaseOptions): Promise<AppDatabase> {
+export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom, storageFormat = DATABASE_FORMAT }: OpenAppDatabaseOptions): Promise<AppDatabase> {
   const context = resolveAppEnvironment({ env, userDataDir });
   const paths = findAppDataPaths(userDataDir);
   const schema = readInstalledSchema(context, { schemaFrom });
   // The database is held to the schema the app last declared, which a tool doesn't change: the app declares what its
   // packs' code says (their required fields among it), and no manifest carries all of that
-  const database = openDatabase({ path: paths.lmdb, readOnly });
+  const database = databaseStorage(storageFormat).open({ path: paths.lmdb, readOnly });
   if (!readOnly && database.schema === null) {
     database.close();
     throw new Error(`The database in ${userDataDir} holds no schema yet: start apack on it once, which declares its packs', then run this again.`);

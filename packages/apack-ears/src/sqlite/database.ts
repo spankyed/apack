@@ -1,6 +1,7 @@
 // SQLite storage for the structured EARS port. Scalar columns own small values; MessagePack is limited
 // to composite persistence and canonical metadata.
 /// <reference types="node" />
+import { DATABASE_FORMAT } from './format.ts';
 import NativeDatabase from "better-sqlite3";
 import { LRUCache } from "lru-cache";
 interface StatementSync {
@@ -56,6 +57,7 @@ const scalarKey = (v: unknown): string | undefined =>
     : undefined;
 
 export class SqliteDatabase implements EarsDatabase {
+  readonly format = DATABASE_FORMAT;
   readonly path: string;
   readonly readOnly: boolean;
   readonly sql: DatabaseSync;

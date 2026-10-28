@@ -1,5 +1,6 @@
 // MessagePack belongs to the native boundary, not the engine's JavaScript call path.
 import { Packr, Unpackr } from 'msgpackr';
+import { DATABASE_FORMAT } from './format.ts';
 import { setField } from '../ids.ts';
 import type { Answer, Changes, EarsDatabase, EarsUnit, WriteResult } from '../database.ts';
 
@@ -48,7 +49,7 @@ interface BinaryUnit extends Omit<EarsUnit, 'read' | 'write' | 'commit'> {
   write(request: Uint8Array): Uint8Array;
   commit(durable?: boolean | null): Uint8Array;
 }
-export interface BinaryDatabase extends Omit<EarsDatabase, 'readSync' | 'write' | 'begin' | 'bulkLoad' | 'indexesReady' | 'onIndexesChanged'> {
+export interface BinaryDatabase extends Omit<EarsDatabase, 'readSync' | 'write' | 'begin' | 'bulkLoad' | 'format' | 'indexesReady' | 'onIndexesChanged'> {
   readSync(request: Uint8Array): Uint8Array;
   write(request: Uint8Array, durable?: boolean | null): Uint8Array;
   begin(): BinaryUnit;
@@ -70,6 +71,7 @@ function adaptUnit(unit: BinaryUnit): EarsUnit {
 
 export function adaptDatabase(database: BinaryDatabase): EarsDatabase {
   return {
+    format: DATABASE_FORMAT,
     get path() { return database.path; },
     get readOnly() { return database.readOnly; },
     get isOpen() { return database.isOpen; },

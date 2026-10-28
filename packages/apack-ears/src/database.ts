@@ -55,6 +55,8 @@ export interface SchemaChange {
 
 /** The structured storage port used by the engine; each backend owns its wire and persistence codecs. */
 export interface EarsDatabase {
+  /** Storage format identity for host backup/open policy; opening the actual files still validates them. */
+  readonly format: string;
   readonly path: string;
   readonly readOnly: boolean;
   readonly isOpen: boolean;

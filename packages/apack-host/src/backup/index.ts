@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
 import { createEarsEngine, type Ears, type EarsDatabase, type EarsEngine } from '@apackdev/ears';
-import { DATABASE_FORMAT, openDatabase } from '@apackdev/ears/lmdb';
+import { backupStorage, databaseStorage } from '../database/storage.ts';
 import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 
 const logger = createLogger('database:backup');
@@ -24,6 +24,8 @@ const defaultLog: BackupLog = {
 
 /** A store a backup copies from and an import puts back into: the database, or the run history's record store */
 export interface BackupStore {
+  /** The destination format; a different source format requires explicit conversion on a copy. */
+  readonly format: string;
   readonly path: string;
   /** The store's own copy of one moment of itself into `targetDir` */
   copyTo(targetDir: string): Promise<void>;
@@ -38,6 +40,7 @@ export interface BackupStore {
 export function databaseBackupStore(database: EarsDatabase, engine?: EarsEngine): BackupStore {
   return {
     path: database.path,
+    format: database.format,
     copyTo: async (targetDir) => database.backup(targetDir),
     replaceWith: (dir) => (engine ? engine.admin.replaceWith(dir) : database.replaceWith(dir)),
   };
@@ -47,23 +50,27 @@ export function databaseBackupStore(database: EarsDatabase, engine?: EarsEngine)
  * A backup's database folders, each a store of the app's: the storage format this version writes it in, and how a
  * backup's copy of it is checked — opened read-only, so one in a format this version can't read is refused, and closed
  */
-const DATABASES = {
-  lmdb: { format: DATABASE_FORMAT, check: (dir: string) => openDatabase({ path: dir, readOnly: true }).close() },
-  runHistory: { format: DATABASE_FORMAT, check: checkRunHistory },
-} as const;
+const DATABASES = { lmdb: true, runHistory: true } as const;
 
 export type DatabaseName = keyof typeof DATABASES;
 
-/** Opens a backup's run history, refusing a database that holds no run nodes' type: the app's own, copied there */
-function checkRunHistory(dir: string): void {
-  const database = openDatabase({ path: dir, readOnly: true });
+/** Opens the selected files, checking the run history's own declaration before accepting it. */
+function openBackupDatabase(dir: string, name: DatabaseName): EarsDatabase {
+  const storage = backupStorage(dir);
+  if (!storage) throw new Error(`${dir} has no supported database data file`);
+  const database = storage.open({ path: dir, readOnly: true });
   try {
-    const types = (database.schema as { types?: Record<string, unknown> } | null)?.types ?? {};
-    if (!Object.prototype.hasOwnProperty.call(types, 'RunNode')) {
-      throw new Error(`${dir} is a database, but not a run history: its schema declares no RunNode`);
+    if (name === 'runHistory') {
+      const types = (database.schema as { types?: Record<string, unknown> } | null)?.types ?? {};
+      if (!Object.prototype.hasOwnProperty.call(types, 'RunNode')) {
+        throw new Error(`${dir} is a database, but not a run history: its schema declares no RunNode`);
+      }
     }
-  } finally {
-    database.close();
+    return database;
+  } catch (error) {
+    try { database.close(); }
+    catch (closeError) { throw new AggregateError([error, closeError], `Checking ${dir} failed and its database could not close`); }
+    throw error;
   }
 }
 export const isKnownDatabase = (name: string): name is DatabaseName => Object.hasOwn(DATABASES, name);
@@ -85,6 +92,10 @@ export async function exportDatabase(
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const fullBackupPath = path.join(targetPath, name || `apack-backup-${timestamp}`);
 
+  for (const name of databases) {
+    const store = stores[name];
+    if (store) databaseStorage(store.format);
+  }
   await fs.ensureDir(fullBackupPath);
 
   let includesMedia = false;
@@ -101,7 +112,7 @@ export async function exportDatabase(
     // What wrote it, for the refusal message and for reading a backup folder by eye. Provenance only: whether a
     // backup restores is settled by opening its databases (readBackup), never by what this says.
     ...(appVersion !== undefined && { appVersion }),
-    storageFormats: Object.fromEntries(databases.map((name) => [name, DATABASES[name].format])),
+    storageFormats: Object.fromEntries(databases.flatMap(name => stores[name] ? [[name, stores[name]!.format]] : [])),
   });
 
   for (const dbName of databases) {
@@ -148,7 +159,8 @@ export async function importDatabase(
     await fs.copy(backupPath, candidate);
     let contents: BackupContents;
     try {
-      contents = readBackup(candidate, entityTypes, validate);
+      contents = readBackup(candidate, entityTypes, validate,
+        Object.fromEntries(Object.entries(stores).map(([name, store]) => [name, store.format])));
     } catch (error) {
       if (error instanceof Error && error.message.includes(candidate)) {
         throw new Error(error.message.replaceAll(candidate, backupPath), { cause: error });
@@ -274,7 +286,8 @@ export interface BackupContents {
  * wrong. `entityTypes` are the types to count, and any type the backup holds that isn't among them comes back as
  * `unknownEntityTypes`.
  */
-export function readBackup(dir: string, entityTypes: Iterable<string> = [], validate?: (ears: Ears) => void): BackupContents {
+export function readBackup(dir: string, entityTypes: Iterable<string> = [], validate?: (ears: Ears) => void,
+  expectedFormats: Partial<Record<DatabaseName, string>> = {}): BackupContents {
   const metadataFile = path.join(dir, 'metadata.json');
   if (!fs.existsSync(metadataFile)) throw new Error(`${dir} isn't a backup: it has no metadata.json`);
   let metadata: { timestamp?: unknown; databases?: unknown; appVersion?: unknown; storageFormats?: unknown };
@@ -287,11 +300,19 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   const appVersion = typeof metadata.appVersion === 'string' ? metadata.appVersion : undefined;
   const unknownDatabases = metadata.databases.filter((name) => !isKnownDatabase(String(name))).map(String);
   const listed = metadata.databases.filter((name) => isKnownDatabase(String(name))) as DatabaseName[];
-  const missingDatabases = listed.filter((name) => !fs.existsSync(path.join(dir, name, 'data.mdb')));
+  const missingDatabases = listed.filter((name) => !backupStorage(path.join(dir, name)));
   if (!listed.includes('lmdb')) throw new Error("The backup doesn't include the database (lmdb)");
   // A listed database whose folder isn't there was empty when the backup was made, and the import skips it too
   const databases = listed.filter((name) => !missingDatabases.includes(name));
-  if (!databases.includes('lmdb')) throw new Error(`The backup's lmdb folder is missing or has no data.mdb`);
+  if (!databases.includes('lmdb')) throw new Error(`The backup's lmdb folder is missing or has no supported database data file`);
+
+  for (const name of databases) {
+    const expected = expectedFormats[name];
+    if (expected === undefined) continue;
+    databaseStorage(expected);
+    const source = backupStorage(path.join(dir, name))!;
+    if (source.format !== expected) throw new Error(`Cannot import ${name} in ${source.format} into ${expected}; convert an explicit copy first`);
+  }
 
   // Whether a backup can be restored is the files' answer, not the metadata's: a backup whose databases open is
   // restorable whatever metadata.json claims. What it recorded about its origin goes into the message, no more.
@@ -305,8 +326,10 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   };
   // Every database the import would put in place, so one this version can't read is found before anything is
   // replaced, not when the store opens the new files again
-  for (const name of databases) refusing(() => DATABASES[name].check(path.join(dir, name)));
-  const database = refusing(() => openDatabase({ path: path.join(dir, 'lmdb'), readOnly: true }));
+  for (const name of databases) {
+    if (name !== 'lmdb') refusing(() => openBackupDatabase(path.join(dir, name), name).close());
+  }
+  const database = refusing(() => openBackupDatabase(path.join(dir, 'lmdb'), 'lmdb'));
   try {
     // An engine over the backup's files, held to the schema they hold, since what a backup holds is what is being asked
     const engine = createEarsEngine({ database });
