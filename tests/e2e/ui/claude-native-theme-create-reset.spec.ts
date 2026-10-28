@@ -75,6 +75,10 @@ test('creates, validates, forks and resets original native custom themes', async
     }, { timeout: 25000, intervals: [250] }).toBe(true)
     const boundNativePid = (await context()).native.state.nativePid
     if(process.env.CLAUDE_RESEARCH_THEME_DESKTOP==='1') {
+      // Establish an empty owned terminal draft through its original editing control before preserving a separate app draft.
+      await input.press('Control+u')
+      const nativeDraft=async()=>{try{return JSON.parse(await readFile(join(workspace!,'native-dialog-shapes.json'),'utf8')).events.filter((event:any)=>event.type==='local-prompt').at(-1)?.value.text??null}catch{return null}}
+      await expect.poll(nativeDraft).toBe('')
       await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
       const composer=card.locator('.composer-document [contenteditable]'),draft='Review the release notes with this theme.'
       await composer.fill(draft)
@@ -112,7 +116,7 @@ test('creates, validates, forks and resets original native custom themes', async
       await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
       const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
       await composer.fill('Continue the same session after theme editing.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-      await writeFile(join(workspace!,'native-theme-create-reset-proof.json'),JSON.stringify({desktopControls:true,validColorWrite:true,cancelRestoresPalette:true,captures,saved,emptyNameFilesBefore,emptyNameFilesAfter,createdBefore,createdAfter,invalidFileBefore,invalidFileAfter,resetTheme,pluginBefore,pluginAfter}))
+      await writeFile(join(workspace!,'native-theme-create-reset-proof.json'),JSON.stringify({desktopControls:true,emptyNativeDraftEstablished:true,validColorWrite:true,cancelRestoresPalette:true,captures,saved,emptyNameFilesBefore,emptyNameFilesAfter,createdBefore,createdAfter,invalidFileBefore,invalidFileAfter,resetTheme,pluginBefore,pluginAfter}))
       await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeThemeDesktop:true,nativeThemeCreateReset:true,nativeThemeEmptyName:true,nativeThemeInvalidRejected:true,nativeThemeFork:true,nativeThemeCollision:true,nativeThemeTokenReset:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
     }
 
