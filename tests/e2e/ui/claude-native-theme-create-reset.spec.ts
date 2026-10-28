@@ -6,8 +6,11 @@ import { stripVTControlCharacters } from 'node:util'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-test.afterEach(async ({ appPage }, testInfo) => { if (testInfo.status !== testInfo.expectedStatus && appPage && !appPage.isClosed()) await appPage.screenshot({ path: testInfo.outputPath('native-theme-create-reset-failure.png') }).catch(() => {}) })
-test('creates, validates, forks and resets original native custom themes', async ({ app, appPage }, testInfo) => {
+test.afterEach(async ({ appPage, electronApp }, testInfo) => {
+  if(testInfo.status===testInfo.expectedStatus||!appPage||appPage.isClosed())return
+  await (async()=>{const window=await electronApp.browserWindow(appPage),png=await window.evaluate(async window=>(await window.webContents.capturePage()).toPNG().toString('base64'));await writeFile(testInfo.outputPath('native-theme-create-reset-failure.png'),Buffer.from(png,'base64'))})().catch(()=>{})
+})
+test('creates, validates, forks and resets original native custom themes', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
   expect(process.env.HOME).toBe(workspace)
   const { themeCreateReset } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
@@ -90,8 +93,10 @@ test('creates, validates, forks and resets original native custom themes', async
       const themeDir=join(workspace!,'.claude/themes'),themeFile=(slug:string)=>join(themeDir,slug+'.json')
       const files=()=>readdir(themeDir).then(rows=>rows.sort()),settings=async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
       async function retained(){await expect(composer).toHaveText(draft);expect(await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))).toEqual(saved);expect((await context()).native.state.nativePid).toBe(boundNativePid)}
+      const nativeWindow=await electronApp.browserWindow(appPage);await nativeWindow.evaluate(window=>{window.show();window.focus()});await appPage.bringToFront()
+      const capturePixels=async(path:string,width:number,height:number)=>{await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))));const image=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),{width,height});await writeFile(path,Buffer.from(image,'base64'))}
       const captures:string[]=[]
-      async function capture(stage:string){for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width:width!,height:height!});await expect(panel).toBeInViewport({ratio:1});await retained();const path=testInfo.outputPath(`native-theme-desktop-${stage}-${width}.png`);await appPage.screenshot({path});captures.push(path)}}
+      async function capture(stage:string){for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width:width!,height:height!});await expect(panel).toBeInViewport({ratio:1});await retained();const path=testInfo.outputPath(`native-theme-desktop-${stage}-${width}.png`);await capturePixels(path,width!,height!);captures.push(path)}}
       await openTheme();await panel.locator('[data-native-settings-option="dark"]').click();await expect(panel).toHaveCount(0);await expect.poll(async()=>(await settings()).theme).toBe('dark');await retained()
       await openTheme();const emptyNameFilesBefore=await files();await panel.locator('[data-native-settings-option="__new_custom_theme__"]').click()
       const name=panel.locator('[data-native-setting-field="name"]');await expect(name).toBeVisible()
@@ -105,7 +110,7 @@ test('creates, validates, forks and resets original native custom themes', async
       await panel.getByRole('button',{name:'Refresh',exact:true}).click();await color.fill('#66bb77');await panel.getByRole('button',{name:'Save color',exact:true}).click();await expect.poll(async()=>JSON.parse(await readFile(themeFile('release-review'),'utf8')).overrides.success).toBe('#66bb77');await expect(ready).toHaveCSS('color','rgb(102, 187, 119)');createdBefore=await readFile(themeFile('release-review'),'utf8');await expect(panel.locator('[data-native-settings-option="success"]')).toBeVisible();
       await panel.locator('[data-native-settings-option="success"]').click();await color.fill('#abcdef');await expect(ready).toHaveCSS('color','rgb(171, 205, 239)');await panel.getByRole('button',{name:'Cancel',exact:true}).click();await expect(ready).toHaveCSS('color','rgb(102, 187, 119)');expect(await readFile(themeFile('release-review'),'utf8')).toBe(createdBefore);await panel.getByRole('button',{name:'Close theme selection',exact:true}).click();await expect(panel).toHaveCount(0)
       await expect(composer).toBeVisible();await expect(ready).toBeVisible();await expect(ready).toHaveCSS('color','rgb(102, 187, 119)')
-      for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width:width!,height:height!});await retained();await expect(composer).toBeInViewport({ratio:1});const path=testInfo.outputPath(`native-theme-desktop-saved-${width}.png`);await appPage.screenshot({path});captures.push(path)}
+      for(const [width,height]of [[1100,900],[680,600]]){await appPage.setViewportSize({width:width!,height:height!});await retained();await expect(composer).toBeInViewport({ratio:1});const path=testInfo.outputPath(`native-theme-desktop-saved-${width}.png`);await capturePixels(path,width!,height!);captures.push(path)}
       await openTheme();const pluginFile=join(workspace!,'prompt-fixture/theme-packs/team.json'),pluginBefore=await readFile(pluginFile,'utf8')
       await panel.getByRole('button',{name:'Edit Team Review',exact:true}).click();await expect(name).toBeVisible();await name.fill('Release Review');await panel.getByRole('button',{name:'Create theme',exact:true}).click()
       await expect.poll(async()=>JSON.parse(await readFile(themeFile('release-review-2'),'utf8').catch(()=>'{}'))).toMatchObject({name:'Release Review',base:'dark',overrides:{success:'#55aa66',warning:'#cc9944'}})
@@ -202,7 +207,7 @@ test('creates, validates, forks and resets original native custom themes', async
     await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeThemeCreateReset: true, nativeThemeEmptyName: true, nativeThemeInvalidRejected: true, nativeThemeFork: true, nativeThemeCollision: true, nativeThemeTokenReset: true, nativeRetainedDraft: true, sameNativeOwner: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
   } catch(error) {
     if(!appPage.isClosed()) {
-      await appPage.screenshot({path:testInfo.outputPath('native-theme-desktop-failure.png')}).catch(()=>{})
+      await (async()=>{const window=await electronApp.browserWindow(appPage),png=await window.evaluate(async window=>(await window.webContents.capturePage()).toPNG().toString('base64'));await writeFile(testInfo.outputPath('native-theme-desktop-failure.png'),Buffer.from(png,'base64'))})().catch(()=>{})
       await writeFile(join(workspace!,'native-theme-desktop-failure.json'),JSON.stringify({context:await context().catch(()=>null),panels:await appPage.getByRole('dialog').allTextContents().catch(()=>[]),ui:await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return Object.values(c.nativeUiViews).map((v:any)=>({state:v.state,prompt:v.prompt}))}).catch(()=>null),browserErrors:errors},null,2))
     }
     throw error
