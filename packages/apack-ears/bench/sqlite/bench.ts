@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { createEarsEngine, type EARS } from "../../src/index.ts";
 import { openDatabase } from "../../src/lmdb/index.ts";
 import { toElmdbSchema } from "../../src/schema.ts";
-import { SqliteDatabase } from "./database.ts";
+import { SqliteDatabase } from "../../src/sqlite/database.ts";
 const backend = process.argv[2],
   durable = process.argv.includes("--durable"),
   n = 10_000;

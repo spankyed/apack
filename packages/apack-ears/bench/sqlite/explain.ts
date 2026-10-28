@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEarsEngine } from "../../src/index.ts";
 import { toElmdbSchema } from "../../src/schema.ts";
-import { SqliteDatabase } from "./database.ts";
+import { SqliteDatabase } from "../../src/sqlite/database.ts";
 const dir = mkdtempSync(join(tmpdir(), "ears-sqlite-explain-"));
 const db = new SqliteDatabase({
   path: dir,

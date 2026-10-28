@@ -1,8 +1,7 @@
-// Private feasibility implementation: reuse EARS' public builders/watch code through its existing database port.
-// SQLite owns transactions, persistence, indexes and relational selection. Payloads retain MessagePack values.
-import { createRequire } from "node:module";
-// Deliberately load the private native dependency only when the evaluation backend is selected.
-// Keep the small binding surface structural so ordinary repo checks need no experimental install.
+// SQLite storage for the structured EARS port. Scalar columns own small values; MessagePack is limited
+// to composite persistence and canonical metadata.
+/// <reference types="node" />
+import NativeDatabase from "better-sqlite3";
 interface StatementSync {
   all(...parameters: any[]): unknown[];
   get(...parameters: any[]): unknown;
@@ -21,12 +20,12 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Packr, Unpackr } from "msgpackr";
-import type { EarsDatabase, EarsUnit, ReadRequest, WriteRequest, WriteResult, Answer, Changes, OpResult } from "../../src/database.ts";
-import { RESERVED_ATTRIBUTES } from "../../src/errors.ts";
-import { sameValue } from "../../src/watch.ts";
+import type { EarsDatabase, EarsUnit, ReadRequest, WriteRequest, WriteResult, Answer, Changes, OpResult } from "../database.ts";
+import { RESERVED_ATTRIBUTES } from "../errors.ts";
+import { sameValue } from "../utils.ts";
 import { executeQuery } from "./query.ts";
 import { SqliteSearch } from "./search.ts";
-import { SqliteValues, type SqliteValueLayout } from "../../src/sqlite/values.ts";
+import { SqliteValues, type SqliteValueLayout } from "./values.ts";
 
 type Data = Record<string, any>;
 type Track = { keys: Set<string>; ranges: Set<string> };
@@ -97,44 +96,52 @@ export class SqliteDatabase implements EarsDatabase {
       );
     if (this.readOnly && !existsSync(file))
       fail("NO_DATABASE", `No SQLite database at ${file}`);
-    const Database = createRequire(import.meta.url)(
-      "./extensions/node_modules/better-sqlite3"
-    ) as new (path: string, options: { readonly: boolean }) => DatabaseSync;
-    this.sql = new Database(file, { readonly: this.readOnly });
-    this.sql.exec("PRAGMA busy_timeout=5000; PRAGMA cache_size=-65536;");
-    if (!this.readOnly) {
-      this.sql
-        .exec(`PRAGMA journal_mode=WAL; PRAGMA fullfsync=ON; PRAGMA checkpoint_fullfsync=ON; PRAGMA synchronous=${
-        options.syncs === false ? "OFF" : "FULL"
+    this.sql = new NativeDatabase(file, { readonly: this.readOnly });
+    try {
+      this.sql.exec("PRAGMA busy_timeout=5000; PRAGMA cache_size=-65536;");
+      if (!this.readOnly) {
+        this.sql
+          .exec(`PRAGMA journal_mode=WAL; PRAGMA fullfsync=ON; PRAGMA checkpoint_fullfsync=ON; PRAGMA synchronous=${
+          options.syncs === false ? "OFF" : "FULL"
+        };
+          CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value BLOB NOT NULL);
+          CREATE TABLE IF NOT EXISTS entities(id TEXT PRIMARY KEY, type TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE,
+            trashed INTEGER NOT NULL, short_code TEXT UNIQUE);
+          CREATE INDEX IF NOT EXISTS entity_type ON entities(type,trashed,seq);
+          CREATE TABLE IF NOT EXISTS relations(id TEXT PRIMARY KEY, kind TEXT NOT NULL, source TEXT NOT NULL,
+            target TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE, info BLOB);
+          CREATE INDEX IF NOT EXISTS relations_source ON relations(source,kind,seq);
+          CREATE INDEX IF NOT EXISTS relations_target ON relations(target,kind,seq);
+          CREATE INDEX IF NOT EXISTS relations_kind ON relations(kind,seq);
+          CREATE TABLE IF NOT EXISTS field_index(entity_id TEXT NOT NULL, type TEXT NOT NULL, field TEXT NOT NULL,
+            value TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY(entity_id,field,value));
+          CREATE INDEX IF NOT EXISTS field_lookup ON field_index(type,field,value,seq);
+        `);
+      }
+      this.values = new SqliteValues(this, { encode: value => this.pack(value), decode: bytes => this.unpack(bytes) });
+      if (!this.readOnly) this.values.initialize();
+      this.search = new SqliteSearch(this);
+      this.heldSchema = this.meta("schema") ?? {
+        types: {},
+        relations: {},
+        roles: {},
       };
-        CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value BLOB NOT NULL);
-        CREATE TABLE IF NOT EXISTS entities(id TEXT PRIMARY KEY, type TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE,
-          trashed INTEGER NOT NULL, short_code TEXT UNIQUE);
-        CREATE INDEX IF NOT EXISTS entity_type ON entities(type,trashed,seq);
-        CREATE TABLE IF NOT EXISTS relations(id TEXT PRIMARY KEY, kind TEXT NOT NULL, source TEXT NOT NULL,
-          target TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE, info BLOB);
-        CREATE INDEX IF NOT EXISTS relations_source ON relations(source,kind,seq);
-        CREATE INDEX IF NOT EXISTS relations_target ON relations(target,kind,seq);
-        CREATE INDEX IF NOT EXISTS relations_kind ON relations(kind,seq);
-        CREATE TABLE IF NOT EXISTS field_index(entity_id TEXT NOT NULL, type TEXT NOT NULL, field TEXT NOT NULL,
-          value TEXT NOT NULL, seq INTEGER NOT NULL, PRIMARY KEY(entity_id,field,value));
-        CREATE INDEX IF NOT EXISTS field_lookup ON field_index(type,field,value,seq);
-      `);
+      this.schemaPresent = this.meta("schema") !== undefined;
+      this.heldRevision = Number(this.meta("schemaRevision") ?? 0);
+      if (!this.readOnly) this.search.ensure(this.heldSchema);
+      else this.search.loadVectors(this.heldSchema);
+      if (options.schema) this.setSchema(options.schema);
+    } catch (error) {
+      this.opened = false;
+      try { this.sql.close(); }
+      catch (cleanup) {
+        throw Object.assign(new AggregateError([error, cleanup], 'Opening SQLite failed and closing its connection also failed',
+          { cause: error }), { code: (error as { code?: unknown })?.code });
+      }
+      throw error;
     }
-    this.values = new SqliteValues(this, { encode: value => this.pack(value), decode: bytes => this.unpack(bytes) });
-    if (!this.readOnly) this.values.initialize();
-    this.search = new SqliteSearch(this);
-    this.heldSchema = this.meta("schema") ?? {
-      types: {},
-      relations: {},
-      roles: {},
-    };
-    this.schemaPresent = this.meta("schema") !== undefined;
-    this.heldRevision = Number(this.meta("schemaRevision") ?? 0);
-    if (!this.readOnly) this.search.ensure(this.heldSchema);
-    else this.search.loadVectors(this.heldSchema);
-    if (options.schema) this.setSchema(options.schema);
   }
+
   get isOpen() {
     return this.opened;
   }

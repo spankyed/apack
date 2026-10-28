@@ -186,16 +186,16 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The implementation is prepared in `monorepo-worktrees.noindex/integration-ddxGkz`, currently based on storage checkpoint
-`9601b057f0` plus its authoritative-layout integration; remote `session/ears-sqlite` points there. The local `sqlite-evaluation` branch still holds the planning
-base and its owned prepared files. Accept the pinned integration there only after strict validation; preserve its
-owned files when advancing. Never copy the concurrent agent's dirty source. The committed integration input remains
-`a1b6603e5a`; the [contract matrix](../plans/ears-sqlite-contracts.md) maps that baseline to requirements.
+The canonical isolated `session/ears-sqlite` checkout is `monorepo-worktrees.noindex/sqlite-evaluation`, now advanced
+to `b02acdeb10` through the green pinned integration and owned storage commits. Every saved local prepared file was
+byte-identical to `d93afe4190`; it was backed up under `/private/tmp/ears-sqlite-primary-preintegration-c8glycsk`
+before advancing. The source-entry checkpoint is prepared in `monorepo-worktrees.noindex/integration-ddxGkz`;
+keep the canonical checkout on the resulting owned commit (fast-forward after pushing if needed) before further implementation. No concurrent agent's dirty
+source was copied. The committed integration input remains `a1b6603e5a`; the contract matrix maps that baseline.
 
-Strict run `40636458325` covers corrected integration `d93afe4190`; producers and app-and-rest passed, with
-integration/native shards still running.
-Run `40637723256` covers structured transport `9659ceb389` and remains pending behind it. Poll these exact handles;
-neither is proof for the later graph/storage changes. Earlier failed/cancelled attempts are historical, not acceptance.
+Strict run `40636458325` passed every shard on corrected integration `d93afe4190`. Run `40637723256` covers structured
+transport `9659ceb389` and is running. Neither proves acceptance of later SQLite changes; keep full validation on
+pinned source and poll the exact existing handles rather than restarting them on observation timeouts.
 
 Implemented checkpoints: structured storage requests with native MessagePack confined to `src/lmdb/adapter.ts`;
 SQLite transport avoids request/result serialization; shared scheduler selection; native SQL one-hop traversal,
@@ -219,20 +219,25 @@ contain a whole-row payload or JSON document. Scalar predicates/projections read
 direct scalar list membership is derived per field. Updates read only changed attributes plus required metadata,
 patch those values and maintain affected indexes. Search hit/recency hydration and pages fetch values in batches.
 Replacement copies logical values in bounded row batches under one source snapshot, independent of physical slot
-IDs, and rebuilds destination indexes while retaining matching embeddings. Source ownership and production
-composition of the remaining benchmark-directory adapter are still pending.
+IDs, and rebuilds destination indexes while retaining matching embeddings. The adapter, query and search modules now live under `src/sqlite/`; the harness delegates to the same app-only
+`@apackdev/ears/sqlite` entry. Normal production still selects elmdb.
 
-Verification: final disposable Linux EARS typecheck passes; SQLite 249 passed with only the existing explain failure
-(250 total). The 16 operational cases include facade-level scalar updates beside a large body and replacement
-across different field-slot layouts. The partial-write guard fails when a full-row read/clone is restored. Four
-shared value cases pass against native elmdb, including undeclared primary types and undefined normalization:
-object properties are omitted, while undefined list elements are refused. SQLite normalizes only changed values,
-without transport serialization. Earlier intermediate failures are not acceptance; final raw output is retained in
-the implementation evidence. Native-slot/inline limits remain provisional, and no new app performance claim is made.
+Verification for the source-entry checkpoint: fresh normal dependencies install in Linux; EARS/CLI/repo typechecks,
+EARS API check, 12 host bridge cases, 65 CLI rule cases, 21 selected import-boundary cases and all five published
+trees pass. Native EARS passes 226 cases with 27 SQLite-only skips. SQLite passes 252 cases with only the existing
+explain failure (253 total). The public factory's three cases cover read-only reopen, idempotent temporary cleanup/
+listener ownership and closing the actual native connection on admission refusal. Native driver loading remains
+unqualified for packaged Electron/Windows. Root import/pack guards now cover both backend entries and native
+packages, including self-package alias imports, under `database-imports` / `findDatabaseImports`.
 
-Next: move the remaining SQLite adapter/query/search modules into source ownership with normal dependencies and
-an app-only entry, refine structured operation/read types, implement truthful measured SQLite explain, and record
-actual-facade comparisons including small updates beside large values. Open the draft PR with that working slice.
-Do not silently retain temporary adapter composition or declare phase 2 complete from component tests. All phase 3–7 requirements remain, including background
+The SQLite package entry and reviewed API report expose EarsDatabase construction, not implementation-specific
+any types. Runtime dependencies are pinned in the normal workspace lockfile; the unused private extension manifests
+are removed. The new constructor closes refused connections, and temporary factories retain no idle exit listener.
+The partial-write, unknown-type and undefined-normalization proofs remain in the implementation evidence. No new
+app performance claim is made, and the native-slot/inline limits remain provisional.
+
+Next: continue from the canonical checkout containing the source-entry checkpoint; refine structured operation/read
+types, implement truthful measured SQLite explain, and record actual-facade comparisons including small updates
+beside large values. Open the draft PR with that working slice. Do not declare phase 2 complete from package wiring. All phase 3–7 requirements remain, including background
 index admission, useful search/realistic vectors, four host backup-format failures, complete app composition,
 operational/platform qualification and adoption budgets. Normal production still uses elmdb.

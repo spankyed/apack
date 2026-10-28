@@ -30,7 +30,7 @@ interface Layout {
   updateRank(id: string, rank: number, at: number): void;
 }
 const Database = createRequire(import.meta.url)(
-  "./extensions/node_modules/better-sqlite3"
+  "better-sqlite3"
 ) as new (path: string) => Sql;
 const packer = new Packr({ useRecords: false }),
   unpacker = new Unpackr({ useRecords: false });

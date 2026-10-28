@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { SqliteDatabase } from "../../bench/sqlite/database.ts";
+import { SqliteDatabase } from "../../src/sqlite/database.ts";
 import { createEarsEngine } from "../../src/index.ts";
 import { toElmdbSchema } from "../../src/schema.ts";
 
@@ -309,7 +309,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
         { ops: [{ op: "set", id, fields: { title: "after" } }] }
       );
       const binding = createRequire(import.meta.url).resolve(
-        "../../bench/sqlite/extensions/node_modules/better-sqlite3"
+        "better-sqlite3"
       );
       const script = `const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('busy_timeout=25');let busy=false;try{d.exec('BEGIN IMMEDIATE');d.exec('ROLLBACK');}catch(e){busy=e.code==='SQLITE_BUSY';}console.log(JSON.stringify({title:d.prepare(${JSON.stringify("SELECT value title FROM (" + db.fieldSource("title", ["Note"]) + ") LIMIT 1")}).get().title,busy}));d.close();`;
       const child = () => {

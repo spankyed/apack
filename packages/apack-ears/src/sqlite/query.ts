@@ -1,7 +1,7 @@
 // SQL selection and traversal; explicit application fallbacks preserve ICU ordering and deep-value semantics.
 import type { SqliteDatabase } from "./database.ts";
 import { scalarKey } from "./database.ts";
-import { sameValue } from "../../src/watch.ts";
+import { sameValue } from "../utils.ts";
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });

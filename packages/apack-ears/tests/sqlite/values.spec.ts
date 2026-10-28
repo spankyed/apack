@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SqliteDatabase } from '../../bench/sqlite/database.ts';
+import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { SqliteValues } from '../../src/sqlite/values.ts';
 
 const held: Array<{ database: SqliteDatabase; path: string }> = [];

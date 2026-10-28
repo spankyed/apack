@@ -16,12 +16,13 @@ Use a separate worktree with private dependencies/output. Run broad checks in di
 owner at a time. From the repository root:
 
 ```sh
-npm run test:linux -- bash -lc 'npm ci --prefix packages/apack-ears/bench/sqlite/extensions && npm run typecheck -w @apackdev/ears && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears'
+npm run test:linux -- bash -lc 'npm run typecheck -w @apackdev/ears && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears'
 npm run test:linux -- npm test -w @apackdev/ears
 ```
 
-SQLite uses pinned `better-sqlite3` 13.0.3 and `sqlite-vec` 0.1.9 in a private experimental install, separate from the
-workspace lockfile. Source ownership, normal dependencies and packaged runtime loading remain goal requirements.
+SQLite uses pinned `better-sqlite3` 13.0.3 and `sqlite-vec` 0.1.9 from the normal workspace lockfile. The adapter
+lives in `src/sqlite/` and its app-only entry is `@apackdev/ears/sqlite`; this directory now holds harnesses rather
+than another implementation. Packaged Electron/native loading still needs qualification.
 Ordinary tests select elmdb and skip SQLite-only cases. Targeted driver checks have run on macOS arm64 and
 Linux; this is not Electron/Windows qualification. The SQLite suite currently has the documented explain gap;
 do not report its remaining passing cases as a completely passing suite.
@@ -56,12 +57,12 @@ These are integration probes, not proof of a production cutover.
 
 ## Implementation boundaries
 
-`database.ts` implements the structured database/unit port. Authoritative attributes live in native scalar columns
+`src/sqlite/database.ts` implements the structured database/unit port. Authoritative attributes live in native scalar columns
 and out-of-row values through `src/sqlite/values.ts`; entities no longer hold a whole-row payload or JSON document.
-Catalog metadata, derived scalar/list membership and relations use SQLite WAL transactions. `query.ts` compiles
+Catalog metadata, derived scalar/list membership and relations use SQLite WAL transactions. `src/sqlite/query.ts` compiles
 selection, projection and one-hop traversal into SQL. Mixed-value sorting remains a JavaScript fallback, and deep
 traversal retains a JavaScript seen set with batched SQL frontiers.
-`search.ts` adapts native FTS5 and sqlite-vec distance functions to EARS text, embedding and hybrid operations.
+`src/sqlite/search.ts` adapts native FTS5 and sqlite-vec distance functions to EARS text, embedding and hybrid operations.
 Existing EARS builders, transactions, typed facades and observers are reused.
 
 The prototype is intentionally unfinished: its schema validator and error translation are partial; index admission

@@ -3,7 +3,7 @@
 import { afterAll } from 'vitest';
 import { createEarsEngine, type EARSRuntimeDeps, type EarsDatabase, type EarsEngine, type EngineSchema, type RelationRules, type RowRules } from '../../src/index.ts';
 import { createTemporaryDatabases } from '../../src/lmdb/index.ts';
-import { SqliteDatabase } from '../../bench/sqlite/database.ts';
+import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

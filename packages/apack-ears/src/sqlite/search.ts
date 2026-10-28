@@ -1,7 +1,8 @@
+/// <reference types="node" />
 // FTS5 owns text indexing/ranking. sqlite-vec owns vector distance evaluation; EARS owns chunks and model freshness.
 // Fuzzy expansion and highlight adaptation are explicit application work, not native FTS5 capabilities.
 import { createHash } from "node:crypto";
-import { createRequire } from "node:module";
+import { getLoadablePath } from "sqlite-vec";
 import type { SqliteDatabase } from "./database.ts";
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
@@ -54,10 +55,7 @@ export class SqliteSearch {
         Object.values(d.indexes ?? {}).some((i: any) => i.kind === "vector")
       )
     ) {
-      const require = createRequire(import.meta.url);
-      this.db.sql.loadExtension(
-        require("./extensions/node_modules/sqlite-vec").getLoadablePath()
-      );
+      this.db.sql.loadExtension(getLoadablePath());
       this.vectorLoaded = true;
     }
   }

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createEarsEngine } from "../../src/index.ts";
 import { openDatabase } from "../../src/lmdb/index.ts";
 import { toElmdbSchema } from "../../src/schema.ts";
-import { SqliteDatabase } from "./database.ts";
+import { SqliteDatabase } from "../../src/sqlite/database.ts";
 const output: Record<string, unknown> = {};
 const schema = {
   types: { Doc: { required: [], search: { fields: { title: 2, body: 1 } } } },

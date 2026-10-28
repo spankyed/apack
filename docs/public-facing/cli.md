@@ -479,7 +479,7 @@ Checks:
 | `pack-own-aliases` | `@/…`, a TypeScript-only `paths` mapping no runtime reads. Name your own modules with `#` subpath imports from your `package.json` | no |
 | `internal-package-imports` | an `@apackdev` export named `_x`: it is `@internal`, the app's own, and an app update is free to rename it | no |
 | `host-imports` | `@apackdev/host`, which is not installed for a pack | no |
-| `elmdb-imports` | `elmdb` or `@apackdev/ears/lmdb`: your data comes through the engine the app installs | no |
+| `database-imports` | Native database packages or app-only `@apackdev/ears/lmdb` and `/sqlite` entries: use the engine the app binds | no |
 | `untyped-sends` | `untypedBroadcastToSurface`, `untypedSendToSystem` — use the typed facades from `#generated/events` | yes |
 | `raw-transport` | `_rootEvents`, `trpc.bus`, `@apackdev/sdk/rpc` | yes |
 | `backend-console` | `console.*` under `features/*/be/`, `migrations/` or `extensions/` — use `createLogger` from `@apackdev/sdk/logger` | yes |

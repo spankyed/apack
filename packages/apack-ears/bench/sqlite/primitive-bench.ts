@@ -2,8 +2,8 @@
 import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 const require = createRequire(import.meta.url);
-const Database = require("./extensions/node_modules/better-sqlite3");
-const { getLoadablePath } = require("./extensions/node_modules/sqlite-vec");
+const Database = require("better-sqlite3");
+const { getLoadablePath } = require("sqlite-vec");
 const db = new Database(":memory:");
 db.loadExtension(getLoadablePath());
 const results = [];
