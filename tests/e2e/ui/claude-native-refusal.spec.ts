@@ -10,6 +10,17 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 type Screen = { cols: number; rows: number; write(text: string, done: () => void): void; resize(cols: number, rows: number): void; dispose(): void; buffer: { active: { baseY: number; getLine(row: number): { translateToString(trim: boolean): string } | undefined } } }
 let terminalScreen: Screen | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
+test.afterEach(async ({appPage},info)=>{
+  if(info.status===info.expectedStatus||!workspace)return
+  const diagnostics=await appPage.evaluate(()=>{
+    const actor=(window as any).applicationState.system.get('default-setup/threads'),state=actor.getSnapshot().context;
+    const element=document.querySelector('[data-onboarding-id="agent-chat-input"] [contenteditable="true"]') as any;
+    const components=[];let component=element?.__vueParentComponent;
+    for(let i=0;component&&i<12;i++,component=component.parent){const setup=component.setupState??{};components.push({name:component.type.__file??component.type.name,keys:Object.keys(setup),disabled:component.props.disabled,submitting:setup.submitting,revision:setup.promptEditor?.revision,problem:setup.nativePromptProblem,nativePrompt:component.props.nativePrompt});}
+    return {focused:document.hasFocus(),active:document.activeElement?.tagName,dialogs:[...document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]')].map(element=>({visible:!!element.getClientRects().length,text:element.textContent?.slice(0,300)})),document:element?.editor?.state.doc.toJSON(),components,uiViews:state.nativeUiViews};
+  });
+  await writeFile(join(workspace,'native-refusal-fill-diagnostics.json'),JSON.stringify(diagnostics,null,2));
+});
 test('preserves original model refusal choices and everyday recovery', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(120000)
   expect(process.env.HOME).toBe(workspace)
