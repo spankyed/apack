@@ -217,3 +217,16 @@ Next: accept only the corrected pinned integration after the disposable strict g
 implementation branch, then deliver the structured backend/elmdb adapter and native SQLite slice. Open the draft
 PR with that working slice. The four host backup-format failures, measured explain, true SQLite scheduler coverage
 and all later phase requirements remain open. Do not mark the goal complete at this checkpoint.
+
+The structured-port checkpoint introduces read/write/commit/load envelopes and moves MessagePack request/result
+encoding into `src/lmdb/adapter.ts`. SQLite passes objects directly; persisted values still use MessagePack.
+Operation/read payloads retain the existing broad record types and need refinement alongside the production SQL
+implementation. SQLite remains under `bench/sqlite`; the production layout and first source-owned slice remain open.
+
+Verification: EARS typecheck and the focused 25 watch cases pass. SQLite passed 233 cases with the existing explain
+failure; the new operational case rejects transport serialization. A native run exposed pending test watches at
+teardown; explicit cleanup fixes this. The disposable Linux rerun passes all 221 native cases, with 13 SQLite-only
+cases skipped and no unhandled errors. Official API reports were regenerated with fresh package builds in Linux;
+the reviewed diff changes only the storage-port signatures. The local broad rerun was rejected by automatic review
+and was not executed. Raw results are recorded with the implementation evidence. The strict CI run above still
+covers the earlier integration checkpoint, not these later transport edits; validate the new committed tip separately.

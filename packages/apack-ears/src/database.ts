@@ -1,13 +1,30 @@
-// What the engine holds of its elmdb database, and the one place it crosses to it: every read and write goes through
-// `createConnection`, which sends them to the unit `transact` holds open, or to the database itself outside one, and
-// hands back each answer decoded and each refusal as an `EarsError`.
-//
-// The port is structural so this module never loads `elmdb`: `@apackdev/ears/lmdb` opens the database, and only that
-// entry imports it.
-import { Packr, Unpackr } from 'msgpackr';
+// The structured database boundary and connection shared by EARS backends. The connection owns units,
+// instrumentation and commit delivery; each backend owns its transport and persistence representation.
 import { callSite, createCallTally, type CallCounting, type CallReport, type CallTally } from './calls.ts';
 import { EarsError, type EarsErrorCode } from './errors.ts';
-import { setField } from './ids.ts';
+
+/** A synchronous read batch, optionally recording dependencies for one watch. */
+export interface ReadRequest {
+  readonly reads: ReadonlyArray<Record<string, unknown>>;
+  readonly track?: number;
+}
+
+/** A mutation batch sharing one logical write timestamp. */
+export interface WriteRequest {
+  readonly ops: readonly Op[];
+  readonly now?: number;
+}
+
+/** The identity and dependency owners affected by this particular commit. */
+export interface Changes {
+  readonly sequence: number;
+  readonly touched: number[];
+}
+
+export interface WriteResult {
+  readonly results: OpResult[];
+  readonly changes?: Changes;
+}
 
 /** How `transact` commits */
 export interface UnitOptions {
@@ -15,14 +32,14 @@ export interface UnitOptions {
   durable?: boolean;
 }
 
-/** An elmdb unit held open across calls (`elmdb`'s `Unit`) */
+/** A backend transaction held open across synchronous engine calls. */
 export interface EarsUnit {
-  write(batch: Uint8Array): Uint8Array;
-  read(reads: Uint8Array): Uint8Array;
+  write(batch: WriteRequest): WriteResult;
+  read(reads: ReadRequest): Answer[];
   savepoint(): number;
   rollbackTo(depth: number): void;
   release(depth: number): void;
-  commit(durable?: boolean | null): Uint8Array;
+  commit(durable?: boolean | null): Changes;
   abort(): void;
   readonly isOpen: boolean;
 }
@@ -34,15 +51,15 @@ export interface SchemaChange {
   effect: string;
 }
 
-/** What the engine needs of an open elmdb database (`elmdb`'s `Database`, which `@apackdev/ears/lmdb` opens) */
+/** The structured storage port used by the engine; each backend owns its wire and persistence codecs. */
 export interface EarsDatabase {
   readonly path: string;
   readonly readOnly: boolean;
   readonly isOpen: boolean;
   /** The schema the database holds, in elmdb's canonical JSON */
   readonly schema: unknown;
-  write(batch: Uint8Array, durable?: boolean | null): Uint8Array;
-  readSync(reads: Uint8Array): Uint8Array;
+  write(batch: WriteRequest, durable?: boolean | null): WriteResult;
+  readSync(reads: ReadRequest): Answer[];
   begin(): EarsUnit;
   setSchema(schema: object): SchemaChange[];
   /** Every entry removed but the database's format and schema */
@@ -52,7 +69,7 @@ export interface EarsDatabase {
   /** Every entry replaced by another database's primary data, the derived data rebuilt under this one's schema */
   replaceWith(source: string): void;
   stats(): { types: Record<string, { live: number; trashed: number }>; relations: Record<string, number>; fileBytes: number };
-  bulkLoad(loads: Uint8Array): void;
+  bulkLoad(loads: ReadonlyArray<Record<string, unknown>>): void;
   /** The last commit's sequence, or 0: a number that only increases for as long as the database exists */
   readonly sequence: number;
   /** Drops what the reads tracked under `token` touched (`{ reads, track: token }`) */
@@ -63,47 +80,8 @@ export interface EarsDatabase {
   close(): void;
 }
 
-// A field holding `undefined` is absent, as it is once stored (msgpackr's `skipValues`, which its declarations omit);
-// Dates are msgpack timestamps, which elmdb keeps
-const packr = new Packr({ useRecords: false, skipValues: [undefined] } as ConstructorParameters<typeof Packr>[0]);
-const unpackr = new Unpackr({ useRecords: false, mapsAsObjects: true, int64AsType: 'number' });
-// The exact decode, for an answer whose maps may hold a `__proto__` key, which a decode straight to objects renames
-const exact = new Unpackr({ useRecords: false, mapsAsObjects: false, int64AsType: 'number' });
-
-export const pack = (value: unknown): Uint8Array => packr.pack(value);
-
-/** Maps decoded as `Map`s, made objects whose keys are their own properties, `__proto__` among them */
-function objectsOf(value: unknown): unknown {
-  if (value instanceof Map) {
-    const out: Record<string, unknown> = {};
-    for (const [key, inner] of value) setField(out, String(key), objectsOf(inner));
-    return out;
-  }
-  if (Array.isArray(value)) return value.map(objectsOf);
-  return value;
-}
-
-/** An answer as elmdb writes it: `kind` names it */
+/** A read answer, discriminated by `kind`. */
 export type Answer = { kind: string } & Record<string, unknown>;
-
-const PROTO = [...'__proto__'].map((char) => char.charCodeAt(0));
-
-/** Whether `bytes` hold the text `__proto__` anywhere: a key of that name, or a value that merely spells it */
-function spellsProto(bytes: Uint8Array): boolean {
-  for (let at = bytes.indexOf(PROTO[0]!); at !== -1 && at + PROTO.length <= bytes.length; at = bytes.indexOf(PROTO[0]!, at + 1)) {
-    if (PROTO.every((byte, offset) => bytes[at + offset] === byte)) return true;
-  }
-  return false;
-}
-
-/**
- * Every answer decoded alike, whatever its shape: exactly when its bytes could hold a `__proto__` key anywhere — a
- * row, a field's value, an edge's info, an answer inside another — and straight to objects otherwise
- */
-function unpackAnswers(bytes: Uint8Array): Answer[] {
-  return (spellsProto(bytes) ? objectsOf(exact.unpack(bytes)) : unpackr.unpack(bytes)) as Answer[];
-}
-
 /** `value` and everything inside it, frozen */
 function deepFreeze<T>(value: T): T {
   if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -340,7 +318,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
     }
     try {
       // The unit's deferred checks run as it commits; one that fails aborts it
-      const changes = timedInUnit(() => unpackr.unpack(crossing(() => held.commit(options?.durable ?? false))));
+      const changes = timedInUnit(() => crossing(() => held.commit(options?.durable ?? false)));
       unitEnded();
       heard(changes as { sequence: number; touched: number[] });
     } catch (error) {
@@ -393,26 +371,26 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
   return {
     read(reads) {
       return counting('read', reads.length, () => {
-        const bytes = pack(tracking === undefined ? { reads } : { reads, track: tracking });
+        const request: ReadRequest = tracking === undefined ? { reads } : { reads, track: tracking };
         const held = unit;
-        const answers = unpackAnswers(crossing(() => (held ? held.read(bytes) : database.readSync(bytes))));
+        const answers = crossing(() => (held ? held.read(request) : database.readSync(request)));
         return freeze ? answers.map(freezeValues) : answers;
       });
     },
     write(ops, now = Date.now()) {
       const written = counting('write', ops.length, () => {
-        const bytes = pack({ ops, now });
+        const request = { ops, now };
         const target = levels.length ? writable() : undefined;
-        const answer = crossing(() => (target ? target.write(bytes) : database.write(bytes, false)));
+        const answer = crossing(() => (target ? target.write(request) : database.write(request, false)));
         if (target) levels.at(-1)!.kept = true;
-        return unpackr.unpack(answer) as { results: OpResult[]; changes?: { sequence: number; touched: number[] } };
+        return answer;
       });
       if (written.changes) heard(written.changes);
       return written.results;
     },
     load(loads) {
       runCommitted(
-        () => crossing(() => database.bulkLoad(pack(loads))),
+        () => crossing(() => database.bulkLoad(loads)),
         () => committed({ sequence: database.sequence, touched: 'all' }),
       );
     },

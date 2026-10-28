@@ -205,7 +205,7 @@ export interface EarsDatabase {
     // (undocumented)
     begin(): EarsUnit;
     // (undocumented)
-    bulkLoad(loads: Uint8Array): void;
+    bulkLoad(loads: ReadonlyArray<Record<string, unknown>>): void;
     // (undocumented)
     close(): void;
     // (undocumented)
@@ -217,7 +217,7 @@ export interface EarsDatabase {
     // (undocumented)
     readonly readOnly: boolean;
     // (undocumented)
-    readSync(reads: Uint8Array): Uint8Array;
+    readSync(reads: ReadRequest): Answer[];
     replaceWith(source: string): void;
     reset(): void;
     readonly schema: unknown;
@@ -240,7 +240,7 @@ export interface EarsDatabase {
     };
     untrack(token: number): void;
     // (undocumented)
-    write(batch: Uint8Array, durable?: boolean | null): Uint8Array;
+    write(batch: WriteRequest, durable?: boolean | null): WriteResult;
 }
 
 // @public
@@ -324,11 +324,11 @@ export interface EarsUnit {
     // (undocumented)
     abort(): void;
     // (undocumented)
-    commit(durable?: boolean | null): Uint8Array;
+    commit(durable?: boolean | null): Changes;
     // (undocumented)
     readonly isOpen: boolean;
     // (undocumented)
-    read(reads: Uint8Array): Uint8Array;
+    read(reads: ReadRequest): Answer[];
     // (undocumented)
     release(depth: number): void;
     // (undocumented)
@@ -336,7 +336,7 @@ export interface EarsUnit {
     // (undocumented)
     savepoint(): number;
     // (undocumented)
-    write(batch: Uint8Array): Uint8Array;
+    write(batch: WriteRequest): WriteResult;
 }
 
 // @public

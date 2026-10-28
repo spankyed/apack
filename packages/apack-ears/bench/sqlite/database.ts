@@ -21,7 +21,7 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Packr, Unpackr } from "msgpackr";
-import type { EarsDatabase, EarsUnit } from "../../src/database.ts";
+import type { EarsDatabase, EarsUnit, ReadRequest, WriteRequest, WriteResult, Answer, Changes, OpResult } from "../../src/database.ts";
 import { RESERVED_ATTRIBUTES } from "../../src/errors.ts";
 import { sameValue } from "../../src/watch.ts";
 import { executeQuery } from "./query.ts";
@@ -850,10 +850,9 @@ export class SqliteDatabase implements EarsDatabase {
         "Another handle changed the schema; reopen this handle"
       );
   }
-  readSync(bytes: Uint8Array): Buffer {
+  readSync(request: ReadRequest): Answer[] {
     this.assertOpen();
-    const request = this.unpack(bytes),
-      previous = this.recording;
+    const previous = this.recording;
     if (request.track !== undefined) {
       let t = this.tracks.get(request.track);
       if (!t)
@@ -867,7 +866,7 @@ export class SqliteDatabase implements EarsDatabase {
     if (snapshot) this.sql.exec("BEGIN");
     try {
       this.checkRevision();
-      const answer = this.pack(request.reads.map((r: Data) => this.answer(r)));
+      const answer = request.reads.map((r: Data) => this.answer(r)) as Answer[];
       if (snapshot) this.sql.exec("COMMIT");
       return answer;
     } catch (e) {
@@ -891,33 +890,32 @@ export class SqliteDatabase implements EarsDatabase {
     this.active = unit;
     return unit;
   }
-  write(bytes: Uint8Array, _durable?: boolean): Buffer {
+  write(request: WriteRequest, _durable?: boolean | null): WriteResult {
     const unit = this.begin();
     try {
-      const results = this.unpack(unit.write(bytes)).results;
-      const changes = this.unpack(unit.commit());
-      return this.pack({ results, changes });
+      const results = unit.write(request).results;
+      const changes = unit.commit();
+      return { results, changes };
     } catch (e) {
       if (unit.isOpen) unit.abort();
       throw e;
     }
   }
-  batch(bytes: Uint8Array, changes: Set<string>): Buffer {
-    const request = this.unpack(bytes),
-      name = `batch_${++this.counter}`;
+  batch(request: WriteRequest, changes: Set<string>): WriteResult {
+    const name = `batch_${++this.counter}`;
     this.sql.exec(`SAVEPOINT ${name}`);
     try {
       const results = request.ops.map((op: Data) =>
-        this.mutate(op, request.now ?? Date.now(), changes)
+        this.mutate(op, request.now ?? Date.now(), changes) as OpResult
       );
       this.sql.exec(`RELEASE ${name}`);
-      return this.pack({ results });
+      return { results };
     } catch (e) {
       this.sql.exec(`ROLLBACK TO ${name}; RELEASE ${name}`);
       throw e;
     }
   }
-  finish(unit: SqliteUnit, commit: boolean): Buffer {
+  finish(unit: SqliteUnit, commit: boolean): Changes {
     if (this.active !== unit) fail("CLOSED", "This unit has ended");
     try {
       const sequence = this.sequence + (commit ? 1 : 0);
@@ -945,10 +943,10 @@ export class SqliteDatabase implements EarsDatabase {
         this.putMeta("commit", sequence);
         this.sql.exec("COMMIT");
       } else this.sql.exec("ROLLBACK");
-      return this.pack({
+      return {
         sequence,
         touched: this.touched(unit.changes),
-      });
+      };
     } catch (e) {
       this.sql.exec("ROLLBACK");
       throw e;
@@ -1042,10 +1040,10 @@ export class SqliteDatabase implements EarsDatabase {
       throw e;
     }
   }
-  bulkLoad(bytes: Uint8Array) {
+  bulkLoad(loads: ReadonlyArray<Record<string, unknown>>) {
     const unit = this.begin();
     try {
-      for (const load of this.unpack(bytes) as Data[]) {
+      for (const load of loads as Data[]) {
         if (load.load === "entity") {
           let row = this.row(load.id);
           if (!row) {
@@ -1181,13 +1179,13 @@ class SqliteUnit implements EarsUnit {
   ended() {
     this.open = false;
   }
-  write(bytes: Uint8Array) {
+  write(request: WriteRequest) {
     if (!this.open) fail("CLOSED", "Unit has ended");
-    return this.db.batch(bytes, this.changes);
+    return this.db.batch(request, this.changes);
   }
-  read(bytes: Uint8Array) {
+  read(request: ReadRequest) {
     if (!this.open) fail("CLOSED", "Unit has ended");
-    return this.db.readSync(bytes);
+    return this.db.readSync(request);
   }
   savepoint() {
     const n = ++this.depth;
@@ -1202,7 +1200,7 @@ class SqliteUnit implements EarsUnit {
     this.db.sql.exec(`RELEASE unit_${n}`);
     this.depth = n - 1;
   }
-  commit(_durable?: boolean) {
+  commit(_durable?: boolean | null) {
     if (!this.open) fail("CLOSED", "Unit has ended");
     return this.db.finish(this, true);
   }

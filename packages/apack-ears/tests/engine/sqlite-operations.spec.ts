@@ -62,6 +62,28 @@ function embed(e: ReturnType<typeof engine>) {
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
   "SQLite operational feasibility",
   () => {
+    it("does not serialize transport envelopes or read answers", () => {
+      const db = open(), e = engine(db);
+      const persist = db.pack.bind(db);
+      db.pack = (value) => {
+        if (value && typeof value === "object" &&
+            (Object.hasOwn(value, "ops") || Object.hasOwn(value, "reads") ||
+             Object.hasOwn(value, "results") || Object.hasOwn(value, "touched") ||
+             Array.isArray(value))) {
+          throw new Error("Transport serialization reached the SQLite persistence codec");
+        }
+        return persist(value);
+      };
+      const id = e.create("Note", { title: "before" }).id();
+      e.transact(() => {
+        e.write(id).set("title", "after");
+        expect(e.getAttr(id, "title")).toBe("after");
+      });
+      expect(e.query("Note").pickAll().map(row => row.title)).toEqual(["after"]);
+      e.admin.putAttr(id, "extra", "unchecked");
+      expect(e.getAttr(id, "extra")).toBe("unchecked");
+    });
+
     it("reopens lossless payloads, FTS and embeddings, including read-only access", () => {
       const db = open(),
         e = engine(db);
@@ -183,16 +205,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
         if (++calls === 1) other.write(id).set("title", "after");
         return value;
       };
-      const answers = a.unpack(
-        a.readSync(
-          a.pack({
-            reads: [
-              { read: "row", id },
-              { read: "row", id },
-            ],
-          })
-        )
-      );
+      const answers = a.readSync({ reads: [{ read: "row", id }, { read: "row", id }] });
       expect(answers.map((v: any) => v.row.title)).toEqual([
         "before",
         "before",
@@ -223,7 +236,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
         id = e.create("Note", { title: "before" }).id();
       const unit = db.begin();
       unit.write(
-        db.pack({ ops: [{ op: "set", id, fields: { title: "after" } }] })
+        { ops: [{ op: "set", id, fields: { title: "after" } }] }
       );
       const binding = createRequire(import.meta.url).resolve(
         "../../bench/sqlite/extensions/node_modules/better-sqlite3"
@@ -295,12 +308,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
         }
         return result;
       };
-      const written = db.unpack(
-        db.write(
-          db.pack({ ops: [{ op: "set", id, fields: { title: "mine" } }] })
-        )
-      );
-      expect(written.changes.sequence).toBe(before + 1);
+      const written = db.write({ ops: [{ op: "set", id, fields: { title: "mine" } }] });
+      expect(written.changes!.sequence).toBe(before + 1);
       expect(db.sequence).toBe(before + 2);
       expect(e.getAttr(id, "title")).toBe("mine");
       expect(e.getAttr(id, "extra")).toBe("other writer");

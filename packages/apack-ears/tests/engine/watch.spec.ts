@@ -2,12 +2,14 @@
 // changed, after the writing code has returned, never inside a write. The guarantee that matters most — a watch never
 // misses a change, whatever writes it — is the model-based harness's (model-based.spec.ts); these cases are the
 // contract's edges, each with a reading of how many times a read ran where that is the point.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { engine, type Id } from './helpers.ts';
 import type { EngineUnderTest } from './engine-under-test.ts';
 import { createConnection, runCommitted, type Commit, type EarsDatabase } from '../../src/database.ts';
 
 let e: EngineUnderTest;
+const stops: Array<() => void> = [];
+afterEach(() => { for (const stop of stops.splice(0)) stop(); });
 beforeEach(() => { e = engine(); });
 
 /** A watch that keeps what it was handed, and counts how many times its read ran */
@@ -19,6 +21,7 @@ function watched<T>(read: () => T) {
     next: (value, commit) => { seen.push({ value, commit }); },
     error: (error) => { errors.push(error); },
   });
+  stops.push(() => watching.stop());
   return { seen, errors, runs: () => runs, last: () => seen.at(-1)?.value, stop: () => watching.stop() };
 }
 
