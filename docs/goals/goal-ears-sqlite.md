@@ -206,6 +206,12 @@ captured diagnostic. A lockfile-corrected diagnostic passes all four constituent
 (36.03 seconds total); the aggregate timeout cause remains unisolated. Publish this evidence descendant
 and require its exact strict gate before promotion. See
 [profile/runtime evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/profile-runtime/README.md).
+The evidence descendant 3f4651b009f4d211497b92ad47c7491adac506b6 is now published on the existing draft;
+[strict run 40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) is the single active exact gate.
+Do not dispatch another run while this handle is live. Further plain-Node compiled CLI regex, substring and
+vector queries pass on the same functional source, including a missing-WASM refusal and restored success;
+[asset evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/profile-runtime/cli-assets/README.md)
+is a local documentation descendant until the current gate closes. Electron/platform qualification remains open.
 Inspect actual refs and PR #286 before dispatching another exact gate. Canonical remains a889531dd1;
 the approved helper requires clean pins and exact strict success before promotion. Never compile or run
 full checks on the daily Mac.

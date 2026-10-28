@@ -25,7 +25,7 @@ changing their bytes; scripts are retained alongside them.
   two authenticated built-server boots, real shipped pack loading, persistent SDK
   Prompt reads, AppState and settings lifecycle, plus a bundled CLI ID query pass.
   The reported readySeconds include RPC completion and are not latency qualification.
-  Electron ABI, asar unpacking/signing, compiled CLI regex assets and live pack admission
+  Electron ABI, asar unpacking/signing, compiled CLI coverage on other platforms and live pack admission
   remain separate requirements.
 - 86ea008dd8 waits for the existing frontend-unloaded precondition before backup in the
   disabled-owner E2E case. Its original 5-second backup assertion is unchanged. CI log
@@ -44,3 +44,6 @@ Node source syntax, bundled API native ownership and missing-ancestor invalidati
 have a removal/mutation control that fails for the intended reason. Runtime files and
 source archives are deliberately excluded. The existing 100k heartbeat qualification
 miss and all remaining phase 3–7 requirements retain their original acceptance targets.
+
+The [compiled CLI asset check](cli-assets/README.md) additionally passes regex, substring and vector
+queries under plain Node, with a missing-WASM refusal and restored success. Electron remains open.
