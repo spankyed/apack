@@ -147,6 +147,23 @@ describe('createHostRuntime', () => {
     }
   });
 
+  it("offers counting both engines' calls only when asked, each engine counting its own", () => {
+    const engine = newEngine();
+    const runHistory = _openTestRunHistory();
+    const options = { runHistory, database: {} as EarsDatabase, engine, transport: { rootEvents: testRootEvents }, appVersion: '1.2.3', packs: createNativePackTestRegistry() };
+    expect(createHostRuntime(options).diagnostics).toBeUndefined();
+
+    const calls = createHostRuntime({ ...options, countCalls: true }).diagnostics!.calls;
+    calls.start();
+    engine.query('Memo').ids();
+    runHistory.engine.query.all().ids();
+    runHistory.engine.query.all().ids();
+    const report = calls.stop();
+    expect(report.app.totals.read.calls).toBe(1);
+    expect(report.runHistory.totals.read.calls).toBe(2);
+    expect(calls.report()).toEqual(report);
+  });
+
   it("stops the packs, empties the stores and keys, then starts the packs as a boot does", async () => {
     // The engine reads the database, so emptying the database is what empties the engine
     const { database, engine } = _openTestDatabase({ entityTypes: [...entityTypes] });

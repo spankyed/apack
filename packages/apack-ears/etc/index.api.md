@@ -24,6 +24,45 @@ export interface BaseEntity {
 }
 
 // @public
+export interface CallCounting {
+    report(): CallReport;
+    start(): void;
+    stop(): CallReport;
+}
+
+// @public
+export type CallKind = 'read' | 'write' | 'unit';
+
+// @public
+export interface CallReport {
+    counting: boolean;
+    elapsedMs: number;
+    sites: CallSite[];
+    totals: Record<CallKind, {
+        calls: number;
+        ops: number;
+        ms: number;
+    }> & {
+        watchRuns: {
+            calls: number;
+            ms: number;
+        };
+    };
+    watches: WatchCount[];
+}
+
+// @public
+export interface CallSite {
+    calls: number;
+    kind: CallKind;
+    ms: number;
+    ops: number;
+    site: string;
+    watch: boolean;
+    writes: number;
+}
+
+// @public
 export interface Create {
     // (undocumented)
     <E extends string>(type: TypeName<E>, row?: Record<string, unknown> & RowIdentity): WriteBuilder<E>;
@@ -126,7 +165,7 @@ export interface Ears {
         info?: unknown;
     }): void;
     upsert: Upsert;
-    watch<T>(read: () => T, observer: WatchObserver<T> | ((value: T, commit: number) => void)): Watching;
+    watch<T>(read: () => T, observer: WatchObserver<T> | ((value: T, commit: number) => void), options?: WatchOptions): Watching;
     wouldCreateCycle(source: EARS.EntityId, target: EARS.EntityId, kinds: readonly EARS.RelKind[]): boolean;
     write: Write;
 }
@@ -137,6 +176,7 @@ export interface EarsAdmin {
     bulkLoad<T>(fn: () => T): T;
     bulkLoadAttr(id: EARS.EntityId, kind: EARS.AttrKind, value: unknown): void;
     bulkLoadRelation(relId: EARS.RelationId, kind: string, source: EARS.EntityId, target: EARS.EntityId, info?: unknown): void;
+    readonly calls: CallCounting;
     clear(): void;
     countEntities(): Record<string, number>;
     declare(schema: EngineSchema): SchemaChange[];
@@ -258,7 +298,11 @@ export type EarsErrorCode =
 /** `search` was on a type with no text index (no `search` in its manifest entry), or `near`, `like`, `hybrid` or `pendingEmbeddings` on one with no vector index (no `embed`) */
 | 'UNKNOWN_INDEX'
 /** `hits()` was asked of a query with no `search`, `near`, `like` or `hybrid`, or with a `where` given a function after it */
-| 'NO_SEARCH';
+| 'NO_SEARCH'
+/** `explain()` was asked of a query with a `where` given a function, which runs outside the plan the database explains */
+| 'NOT_EXPLAINABLE'
+/** A write's value isn't of its field's type, as the entity type's shape declares it: the message names the field and the type */
+| 'FIELD_TYPE';
 
 // @public
 export interface EARSRuntimeDeps {
@@ -343,6 +387,26 @@ export type EntityShapes = {
 export const entityTypeOf: (id: EARS.EntityId) => EARS.Entity;
 
 // @public
+export type FieldRule = FieldType & {
+    readonly optional?: boolean;
+    readonly nullable?: boolean;
+};
+
+// @public
+export type FieldType = {
+    readonly type: 'string' | 'number' | 'boolean' | 'any';
+} | {
+    readonly type: 'enum';
+    readonly values: readonly string[];
+} | {
+    readonly type: 'ref';
+    readonly to: readonly string[];
+} | {
+    readonly type: 'list';
+    readonly of: FieldType;
+};
+
+// @public
 export type FieldValue<S extends EntityShapes, E extends string, K extends string> = [
 E
 ] extends [keyof S] ? (K extends keyof ShapeOf<S, E> ? ShapeOf<S, E>[K] : unknown) : unknown;
@@ -410,6 +474,7 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     distinct(field?: keyof ShapeOf<D['shapes'], E> & string): QueryBuilder<E, D>;
     // (undocumented)
     exists(): boolean;
+    explain(): QueryExplanation<E>;
     first(): EARS.EntityId<E> | undefined;
     // (undocumented)
     forEach(fn: (id: EARS.EntityId<E>) => void): QueryBuilder<E, D>;
@@ -483,6 +548,25 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
 }
 
 // @public
+export interface QueryExplanation<E extends string = string> {
+    // (undocumented)
+    ids: EARS.EntityId<E>[];
+    ms: number;
+    // (undocumented)
+    stages: QueryStage[];
+    visited: number;
+}
+
+// @public
+export interface QueryStage {
+    index?: string;
+    kept: number;
+    ms: number;
+    stage: string;
+    visited: number;
+}
+
+// @public
 export interface RelationEdge<K extends string = string, Source extends string = string, Target extends string = string> {
     // (undocumented)
     id: EARS.RelationId;
@@ -545,6 +629,7 @@ export interface RowIdentity {
 // @public
 export interface RowRules {
     embed?: EmbedDeclaration;
+    fields?: Readonly<Record<string, FieldRule>>;
     indexes?: readonly string[];
     required: readonly string[];
     search?: SearchDeclaration;
@@ -712,6 +797,18 @@ export interface Upsert {
 }
 
 // @public
+export const WATCH_SCHEDULE: WatchSchedule;
+
+// @public
+export interface WatchCount {
+    label: string;
+    // (undocumented)
+    ms: number;
+    runs: number;
+    skipped: number;
+}
+
+// @public
 export interface Watching {
     stop(): void;
 }
@@ -720,6 +817,21 @@ export interface Watching {
 export interface WatchObserver<T> {
     error?(error: unknown, commit: number): void;
     next(value: T, commit: number): void;
+}
+
+// @public
+export interface WatchOptions {
+    label?: string;
+}
+
+// @public
+export interface WatchSchedule {
+    // (undocumented)
+    delayFactor: number;
+    // (undocumented)
+    flushSliceMs: number;
+    // (undocumented)
+    minimumGapMs: number;
 }
 
 // @public

@@ -31,10 +31,12 @@ export interface HostRuntimeOptions {
   /** The app's registered packs (`createPackRegistry()`): packs read them through the SDK, the services reset them and apply their content */
   packs: PackRegistry;
   appVersion: string;
+  /** Whether the runtime offers counting its engines' calls (`HostRuntime.diagnostics`): a development app's choice */
+  countCalls?: boolean;
 }
 
 /** The running app as the SDK reaches it, which the composition root binds with `bindHost` */
-export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs }: HostRuntimeOptions): HostRuntime {
+export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls }: HostRuntimeOptions): HostRuntime {
   const settings = createSettingsService(createSettingsStore({
     ears: () => engine,
     catalog: packs.settingsCatalog,
@@ -48,6 +50,18 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     packs,
     appVersion,
     redaction: secretRedaction,
+    ...(countCalls && {
+      diagnostics: {
+        calls: {
+          start() {
+            engine.admin.calls.start();
+            runHistory.engine.admin.calls.start();
+          },
+          report: () => ({ app: engine.admin.calls.report(), runHistory: runHistory.engine.admin.calls.report() }),
+          stop: () => ({ app: engine.admin.calls.stop(), runHistory: runHistory.engine.admin.calls.stop() }),
+        },
+      },
+    }),
     services: {
       onboarding: createOnboarding(engine),
       // The service replaces the data; naming what the app is told about it belongs here, with the wiring

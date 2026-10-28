@@ -105,7 +105,10 @@ export function openAppStore(): AppStore {
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
   const runHistory = openRunHistory(_getRunHistoryPath());
-  runtime = createHostRuntime({ database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs });
+  runtime = createHostRuntime({
+    database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs,
+    countCalls: resolveAppEnvironment().env === 'development',
+  });
   bindHost(runtime);
   printLogEvents();
   appPacks = packs;
