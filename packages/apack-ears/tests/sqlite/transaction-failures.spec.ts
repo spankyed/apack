@@ -17,11 +17,11 @@ function open() {
   const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema({ types: { Row: { required: [] } }, relations: {}, roles: [] }) });
   held.push({ db, path });
   const e = createEarsEngine({ database: db }); e.create('Row', { id: 'Row-before', title: 'incumbent' });
-  db.sql.pragma('wal_checkpoint(TRUNCATE)');
+  db.sql.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   return { db, e, path };
 }
-function limit(db: SqliteDatabase) { db.sql.pragma(`max_page_count=${Number(db.sql.pragma('page_count', { simple: true })) + 8}`); }
-const restoreCapacity = (db: SqliteDatabase) => db.sql.pragma('max_page_count=2147483646');
+function limit(db: SqliteDatabase) { db.sql.exec(`PRAGMA max_page_count=${Number(db.get('PRAGMA page_count')!.page_count) + 8}`); }
+const restoreCapacity = (db: SqliteDatabase) => db.sql.exec('PRAGMA max_page_count=2147483646');
 const large = 'x'.repeat(2 * 1024 * 1024);
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite transaction failure state', () => {

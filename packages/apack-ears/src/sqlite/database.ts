@@ -219,7 +219,7 @@ export class SqliteDatabase implements EarsDatabase {
     if (!this.opened) fail("CLOSED", "The database is closed");
     if (this.faulted) throw this.faulted;
   }
-  /** Preserve the operation's refusal when SQLite has already rolled back after FULL/IOERR. */
+  /** Preserve the original storage error when SQLite has already rolled back after FULL/IOERR. */
   abortFailedOperation(error: unknown, command: string | null = 'ROLLBACK'): never {
     if (this.faulted) throw this.faulted;
     try {
