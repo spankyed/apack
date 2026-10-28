@@ -140,7 +140,9 @@ describe('installing over a pack that is already running', () => {
     try {
       system.send({ type: 'INSTALL_PACK', packSlug: packSource('1.0.0'), sourceKind: 'local' });
       await vi.waitFor(() => expect(readiness).toHaveBeenCalled());
-      expect(registry.claimPackOperation(PACK_ID)).toBe(false);
+      const claimed = registry.claimPackOperation(PACK_ID);
+      if (claimed) registry.releasePackOperation(PACK_ID);
+      expect(claimed).toBe(false);
       expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_ACTIVATED');
       expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_INSTALL_COMPLETE');
       expect(release.mock.calls.some(([id]) => id === PACK_ID)).toBe(false);
@@ -151,7 +153,10 @@ describe('installing over a pack that is already running', () => {
         expect(registry.getPackRegistration(PACK_ID)).toBeNull();
         expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_ACTIVATED');
       } else expect(emitted(system.sent).map(event => event.type)).toContain('PACK_ACTIVATED');
-    } finally { finish(); readiness.mockRestore(); release.mockRestore(); system.stop(); }
+    } finally {
+      finish(); await new Promise<void>(resolve => setImmediate(resolve));
+      readiness.mockRestore(); release.mockRestore(); system.stop();
+    }
   });
 
   it('replaces the registered copy without a deactivation window', async () => {
@@ -599,53 +604,6 @@ describe('a pack that is gone', () => {
 });
 
 describe('installing over a pack that is already running', () => {
-  it.each([false, true])('holds the install claim and withholds activation while indexes build (failure: %s)', async fails => {
-    let finish!: () => void, refuse!: (error: Error) => void;
-    const ready = new Promise<void>((resolve, reject) => { finish = resolve; refuse = reject; });
-    const readiness = vi.spyOn(registry, 'indexesReady').mockReturnValue(ready);
-    const release = vi.spyOn(registry, 'releasePackOperation');
-    const system = runPacksSystem();
-    try {
-      system.send({ type: 'INSTALL_PACK', packSlug: packSource('1.0.0'), sourceKind: 'local' });
-      await vi.waitFor(() => expect(readiness).toHaveBeenCalled());
-      expect(registry.claimPackOperation(PACK_ID)).toBe(false);
-      expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_ACTIVATED');
-      expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_INSTALL_COMPLETE');
-      expect(release.mock.calls.some(([id]) => id === PACK_ID)).toBe(false);
-      if (fails) refuse(new Error('install index build failed')); else finish();
-      await vi.waitFor(() => expect(emitted(system.sent).map(event => event.type)).toContain(fails ? 'PACK_INSTALL_FAILED' : 'PACK_INSTALL_COMPLETE'));
-      await vi.waitFor(() => expect(release.mock.calls.some(([id]) => id === PACK_ID)).toBe(true));
-      if (fails) {
-        expect(registry.getPackRegistration(PACK_ID)).toBeNull();
-        expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_ACTIVATED');
-      } else expect(emitted(system.sent).map(event => event.type)).toContain('PACK_ACTIVATED');
-    } finally { finish(); readiness.mockRestore(); release.mockRestore(); system.stop(); }
-  });
-
-  it.each([
-    ['runtime import', 'throw new Error("candidate import refused");'],
-    ['runtime binding', 'module.exports.registration.bindServices = () => { throw new Error("candidate binding refused"); };'],
-  ])('preserves the incumbent and build after refused %s', async (_kind, runtime) => {
-    const installed = await installPackFromLocal(packSource('1.0.0'));
-    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
-    const previous = registry.getPackRuntime(PACK_ID);
-    const registration = registry.getPackRegistration(PACK_ID);
-    const build = readPackBuild(installed.dir);
-    const records = readInstalledPacks();
-    const system = runPacksSystem();
-    try {
-      system.send({ type: 'INSTALL_PACK', packSlug: packSource('2.0.0', { runtime }), sourceKind: 'local' });
-      await vi.waitFor(() => expect(emitted(system.sent).map(e => e.type)).toContain('PACK_INSTALL_FAILED'));
-      expect(registry.getPackRegistration(PACK_ID)).toBe(registration);
-      expect(registry.getPackRuntime(PACK_ID)).toEqual(previous);
-      expect(readPackBuild(installed.dir)).toEqual(build);
-      expect(readInstalledPacks()).toEqual(records);
-      expect(emitted(system.sent).map(e => e.type)).not.toContain('PACK_DEACTIVATED');
-      expect(system.sent.map(e => e.type)).not.toContain('TEARDOWN_PACK');
-      expect(system.sent.map(e => e.type)).not.toContain('RELOAD_PACK');
-      expect(registry.loadProblem(PACK_ID)).toBeUndefined();
-    } finally { system.stop(); }
-  });
 
   it('reserves the resolved owner across installs from different sources', async () => {
     const a = path.join(tmpDir, 'source-a');
