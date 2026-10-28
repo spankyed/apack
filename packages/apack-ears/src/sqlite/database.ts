@@ -30,6 +30,7 @@ import { executeQuery } from "./query.ts";
 import { SqliteIndexBuilds, type SqliteValueIndex } from "./index-builds.ts";
 import { SqliteSearch } from "./search.ts";
 import { SqliteValues, type SqliteValueLayout } from "./values.ts";
+import { createSchemaValidator } from "./schema-validation.ts";
 
 type Data = Record<string, any>;
 type Track = { keys: Set<string>; ranges: Set<string> };
@@ -58,6 +59,7 @@ export class SqliteDatabase implements EarsDatabase {
   readonly sql: DatabaseSync;
   private opened = true;
   private active?: SqliteUnit;
+  private schemaValidator?: ReturnType<typeof createSchemaValidator>;
   private readonly statements = new Map<string, StatementSync>();
   private readonly packer = new Packr({
     useRecords: false,
@@ -135,6 +137,13 @@ export class SqliteDatabase implements EarsDatabase {
       };
       this.schemaPresent = this.meta("schema") !== undefined;
       this.heldRevision = Number(this.meta("schemaRevision") ?? 0);
+      if (this.schemaPresent) {
+        try { (this.schemaValidator ??= createSchemaValidator())(this.heldSchema); }
+        catch (error) {
+          if ((error as { code?: string })?.code !== 'SCHEMA_INVALID') throw error;
+          throw Object.assign(new Error('Stored SQLite declaration is invalid', { cause: error }), { code: 'CORRUPT' });
+        }
+      }
       if (!this.readOnly) this.search.ensure(this.heldSchema);
       else this.search.loadVectors(this.heldSchema);
       this.indexBuilds = new SqliteIndexBuilds(this, () => !this.active, () => this.checkRevision(),
@@ -1085,21 +1094,10 @@ export class SqliteDatabase implements EarsDatabase {
   setSchema(schema: object): any[] {
     this.writable();
     if (this.active) fail("UNIT_OPEN", "Commit or abort the open unit first");
-    const next = this.clone(schema) as Data;
     this.checkRevision();
+    (this.schemaValidator ??= createSchemaValidator())(schema);
+    const next = this.clone(schema) as Data;
     if (sameValue(next, this.heldSchema)) return [];
-    if (!next.types || !next.relations || !next.roles)
-      fail("SCHEMA_INVALID", "Schema requires types, relations and roles");
-    for (const type of Object.keys(next.types)) {
-      if (type === "Relation") fail("SCHEMA_INVALID", "Relation is reserved");
-      if (!/^[A-Z][A-Za-z0-9]*$/.test(type))
-        fail(
-          "SCHEMA_INVALID",
-          `The schema has 1 problem:\ntypes.${type}: a type's name is PascalCase, which ${JSON.stringify(
-            type
-          )} isn't`
-        );
-    }
     const report = Object.keys(next.types)
       .filter((t) => !has(this.heldSchema.types, t))
       .map((t) => ({ path: `types.${t}`, change: "added", effect: "applied" }));

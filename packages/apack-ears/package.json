@@ -57,6 +57,7 @@
     "provenance": true
   },
   "dependencies": {
+    "ajv": "8.20.0",
     "better-sqlite3": "13.0.3",
     "elmdb": "file:../../vendor/elmdb/crates/elmdb-node",
     "msgpackr": "^1.11.9",

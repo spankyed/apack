@@ -261,7 +261,17 @@ Schema admission also now checks issued-prefix changes under writer ownership, c
 where an ordinary entity commit after the old precheck left schema revision unchanged. Types and 29 adjacent
 schema/index/operational cases pass; moving the check outside the transaction fails the deterministic race test.
 [Prefix-ownership evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/schema-prefix-ownership/README.md)
-retains proof. Complete structural declaration validation remains unfinished.
+retains proof. The next local descendant adds structure/reference validation described below; live-pack and I/O acceptance remain open.
+
+Local continuation now validates declaration structure with per-owner Ajv 8.20.0 and explicit cross-reference,
+name, prefix and index compatibility checks before admission writes. Unsupported lower-level execution options
+refuse explicitly. Stored declarations validate before indexes load; malformed metadata refuses as CORRUPT with
+its schema-error cause. The admitted locale string now reaches text sorting. Private Linux passes types,
+80 focused cases, six independent mutations, 32 native-parser refusal comparisons, all five package builds and
+three unchanged EARS API reports. Full SQLite passes 347 with the same three search failures.
+[Schema-validation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/schema-validation/README.md)
+retains exact results, scope and earlier test/prerequisite failures. This local descendant is not in 194c72c77c's CI.
+Live-pack and real-I/O declaration qualification remain required.
 
 ### Unqualified results and current CI
 
@@ -311,7 +321,7 @@ a further canonical fast-forward. PR #286 remains a draft at this source. Do not
 Poll exact strict run `40703362139` at `194c72c77c`; preserve the canonical `683e1d5912` green checkpoint
 until it succeeds. The approved helper now expects that checkpoint as its starting base. Scalar-limit statement profiles reduce work but the earlier
 paired cohort showed no overall scalar-sort win. Continue balanced performance qualification and general top-k,
-complete atomic schema validation and background text/vector/trigram admission, and qualify IO/ownership under
+qualify live-pack/schema I/O failures and implement background text/vector/trigram admission, and qualify IO/ownership under
 the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
 unanswered; value-index work does not depend on it.
 

@@ -272,8 +272,7 @@ export function executeQuery(
       case "orderBy": {
         trackField(step.field);
         const collator = new Intl.Collator(
-          schema.collation?.locale ?? "en",
-          schema.collation?.options ?? {}
+          schema.collation === 'root' ? 'und' : schema.collation ?? 'en'
         );
         const next = steps[stepIndex + 1];
         const native = orderNumericIds(db, { sql, parameters, order: order(), field: step.field,
