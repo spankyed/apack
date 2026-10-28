@@ -152,8 +152,27 @@ export class SqliteDatabase implements EarsDatabase {
           throw Object.assign(new Error('Stored SQLite declaration is invalid', { cause: error }), { code: 'CORRUPT' });
         }
       }
-      if (!this.readOnly) this.search.ensure(this.heldSchema);
-      else this.search.loadVectors(this.heldSchema);
+      if (this.readOnly) this.search.validateStructures(this.heldSchema);
+      if (this.readOnly || !this.search.needsRepair(this.heldSchema)) {
+        this.search.loadVectors(this.heldSchema);
+      } else {
+        // Recheck physical structures and the declaration under writer ownership before any reconstruction.
+        this.sql.exec('BEGIN IMMEDIATE');
+        try {
+          this.checkRevision();
+          this.repairSearch(this.search.ensure(this.heldSchema), this.heldSchema);
+          this.sql.exec('COMMIT');
+        } catch (error) {
+          if (this.sql.inTransaction) {
+            try { this.sql.exec('ROLLBACK'); }
+            catch (rollback) {
+              throw Object.assign(new AggregateError([error, rollback], 'Search repair and rollback failed', { cause: error }),
+                { code: (error as { code?: unknown })?.code });
+            }
+          }
+          throw error;
+        }
+      }
       this.indexBuilds = new SqliteIndexBuilds(this, () => !this.active, () => this.checkRevision(),
         (id, type, seq, field, generation) => {
           const row = this.values.read(this.valueLayout(type), [id], [field])[0];
@@ -1099,6 +1118,20 @@ export class SqliteDatabase implements EarsDatabase {
       for (let i = 0; i < page.length; i++) { fn(rows[i], page[i].seq); after = page[i].seq; }
     }
   }
+  /** Repair only affected types and search inputs; unrelated large attributes never enter this backfill. */
+  private repairSearch(types: ReadonlySet<string>, schema: Data): void {
+    for (const type of types) {
+      this.run('DELETE FROM text_meta WHERE entity_id IN (SELECT id FROM entities WHERE type=?)', [type]);
+      const fields = this.search.fields(type, schema);
+      let after = -1;
+      for (;;) {
+        const page = this.all('SELECT id,type,seq FROM entities WHERE type=? AND seq>? ORDER BY seq LIMIT 256', [type, after]);
+        if (!page.length) break;
+        const rows = this.hydrate(page as Array<{ id: string; type: string }>, fields);
+        for (let i = 0; i < page.length; i++) { this.search.refile(rows[i], page[i].seq, schema); after = page[i].seq; }
+      }
+    }
+  }
   setSchema(schema: object): any[] {
     this.writable();
     if (this.active) fail("UNIT_OPEN", "Commit or abort the open unit first");
@@ -1130,7 +1163,7 @@ export class SqliteDatabase implements EarsDatabase {
       }
       for (const [type, definition] of Object.entries(next.types) as Array<[string, Data]>) this.layouts.set(type,
         this.values.declare(type, ['createdAt','updatedAt','trashedAt','shortCode','role', ...Object.keys(definition.fields ?? {})]));
-      this.search.ensure(next);
+      const missingSearch = this.search.ensure(next);
       const indexes: SqliteValueIndex[] = [];
       for (const [type, definition] of Object.entries(next.types) as Array<[string, Data]>) {
         const fields = new Set<string>(['role', 'shortCode']);
@@ -1148,10 +1181,8 @@ export class SqliteDatabase implements EarsDatabase {
         Object.entries(definition?.indexes ?? {}).filter(([, index]) => (index as Data).kind !== 'value'));
       const changedSearch = new Set(Object.keys(next.types).filter(type =>
         !sameValue(searchDefinitions(this.heldSchema.types[type]), searchDefinitions(next.types[type]))));
-      if (changedSearch.size) {
-        for (const type of changedSearch) this.run('DELETE FROM text_meta WHERE entity_id IN (SELECT id FROM entities WHERE type=?)', [type]);
-        this.eachRow((row, seq) => { if (changedSearch.has(row.entityType)) this.search.refile(row, seq, next); });
-      }
+      for (const type of missingSearch) changedSearch.add(type);
+      this.repairSearch(changedSearch, next);
       this.putMeta("commit", this.sequence + 1);
       const indexState = this.indexBuilds.readState();
       this.sql.exec("COMMIT");

@@ -186,210 +186,106 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-Canonical branch `session/ears-sqlite` is clean at **`194c72c77c`** in
-`monorepo-worktrees.noindex/sqlite-evaluation`, privately fast-forwarded only after exact strict run
-`40703362139` completed successfully (all six jobs, attempt 1). Its vendor link now uses the immutable private
-6ab2f69 engine. Detached integration `monorepo-worktrees.noindex/integration-FyE9XZ` combines the original
-`9c339d89a4` input with app master
-`98386b36a18d244c19ffb501830b990ed49f7653` through merge `4af1b513e3`. Native source is immutable private
-`elmdb-worktrees.noindex/sqlite-baseline-6ab2f69` at `6ab2f69fa13289ed4f02952253c58b4d41922c98`.
-Remote/local master still match this app input. No dirty concurrent source was copied.
+The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) and remote `session/ears-sqlite`
+are at **`78eff952020f813d7a25642aa4740a394ed71a5e`**. Detached integration
+`monorepo-worktrees.noindex/integration-FyE9XZ` is clean at that commit. Its exact
+[strict run 40728583374](https://github.com/spankyed/apack/actions/runs/40728583374) is live; poll it rather
+than dispatching another run. The earlier 6794ab1d4a gate failed an installed-package layout assertion;
+78eff95202 fixes it with an exact runtime whitelist and installed matcher execution. No failure was waived.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, descended from integration `6c29f083f3`:
-`cab5f1c42c` retains the durable diagnosis, `59395aea0f` corrects load measurements, and `31300a9532` batches
-projected ordering keys. Later `9f0cd225be` adds guarded SQL scalar sorting, `a82813ee38` retains its paired
-no-overall-win result, `78ef9b979b` pushes adjacent limits, and `503b8aba9d` closes issued-prefix admission's
-writer race. It has no installed dependencies, native build or captured runtime. Each disposable Linux
-validation owns a private dependency/output copy, including workspace-local modules. Before the next gate,
-fast-forward the detached integration to the committed continuation and push the existing draft branch. Canonical
-promotion stays conditional on that exact gate. `/private/tmp/ears-promote-sqlite.py` checks source/engine pins,
-clean checkouts, remote tip and successful exact strict run before its optional private fast-forward.
+Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains clean at **`194c72c77c`**, the last exact
+all-six-job green gate ([40703362139](https://github.com/spankyed/apack/actions/runs/40703362139)).
+Promote only an exact successful candidate through `/private/tmp/ears-promote-sqlite.py`, which verifies
+clean checkouts, remote tip, source/engine pins and strict success before a private fast-forward.
+Active implementation is `/private/tmp/ears-sqlite-diagnosis-evidence`; it has no installed dependencies,
+native build or captured runtime. Its verified recovery continuation remains a local checkpoint while the published gate runs.
+Commit progress here before advancing integration. Never copy dirty concurrent source or run compiler/full validation on the daily Mac.
 
-[Draft PR #286](https://github.com/spankyed/apack/pull/286) remains an implementation review surface. Normal
-production still uses elmdb; there is no SQLite adoption or master merge authorized by this goal.
+The pinned integration combines app master **98386b36a18d244c19ffb501830b990ed49f7653** through merge
+4af1b513e3 and private native source **6ab2f69fa13289ed4f02952253c58b4d41922c98**, held immutable in
+`elmdb-worktrees.noindex/sqlite-baseline-6ab2f69`. Check actual refs before combining later work. Normal
+production still uses elmdb; this goal authorizes neither master merge nor SQLite adoption.
 
 ### Implemented and verified scope
 
-- The typed structured port owns mutations, reads, loads, plans and results; native MessagePack stays in the lmdb
-  adapter. Root imports remain pure, SQLite is an app-only entry, and pack import/AST guards preserve that boundary.
-  [Typed-port evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/typed-port-linux.txt) and
-  the contract matrix retain compile-time counterexamples and checked-write/unchecked-repair distinctions.
-- Authoritative SQLite values use scalar columns and rowid overflow values, preserving dates/bytes, missing/null,
-  signed zero, lists/objects and own prototype-named properties. Partial writes avoid unrelated values; no duplicate
-  whole-row payload remains. Native SQL selection/projection/one-hop traversal, batched BFS and relation hydration
-  preserve caller/kind order and explicit versus unconstrained endpoint rules. Cross-type graph tracking remains
-  conservative and needs load qualification. [Implementation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/)
-  preserves the primary-layout, codec/normalization and constructor/ownership proofs.
-- SQLite diagnostics record actual statements/plans, bindings, row counts and scoped timings. Driver spans combine
-  binding, execution and marshalling; they are not isolated allocator/compiler measurements. The shared facade/UI
-  distinguishes native and SQLite explanations without invented counters.
-- SQLite rollback dependencies accumulate per successful batch/savepoint, with independent negative proofs;
-  native deliberately retains conservative rollback invalidation. Watch close/process-lifetime fixes cover read
-  dependencies and explicit versus unawaited settlement. Linux passes five consumer types, EARS/SDK API reports
-  (3/30), 37 shared watch/scheduler cases per driver and four SQLite process cases.
-  [Lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/integrated-watch-lifecycle/README.md)
-  identifies each exact test snapshot and the native-importing local attempt that lacked a private Mac binding.
-- Value-index admission persists generations/cursors and advances yielding batches on the owning connection.
-  Building/failed indexes use authoritative fallbacks; writes reconcile the admitted generation; removed generations
-  receive bounded cleanup. Atomic cache publication, rollback failure, busy/stale owners, read-only reopen and real
-  killed-process recovery are covered. [Admission evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/value-index-admission-8220a11d70/README.md)
-  retains four safeguard mutations and the original qualification results. Text/vector admission remains synchronous.
-- Ordering projects/batches comparison keys, preserving stable ties and duplicates across physical layouts. Linux
-  passes types and 34 focused cases; at `31300a9532`, the full SQLite suite passes **280 with three failures**, all
-  inherited substring/regex cases. Independent cost mutations fail per-entity SQL (770 versus at most 16 SELECTs
-  for 256 rows) and unrelated-body hydration guards. [Ordering evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/batched-ordering/README.md)
-  retains the failures and nine paired actual-facade trials. Median-of-process-medians 10k sorting improves
-  **220.91 → 56.95 ms (3.88×)**, but remains **7.36×** current native's 7.74 ms. Comparison still uses JS and
-  retains all keys; native typed sorting/top-k remains unfinished.
+- A private typed structured backend port and native adapter; pure root imports and app-only storage entries;
+  scalar/rowid-overflow authoritative values with selective reads/updates and lossless values; SQL selection,
+  projection, one-hop traversal and batched BFS. Typed/primary-layout evidence is in the
+  [implementation directory](../references/evidence/ears-sqlite-implementation-2026-10-28/).
+- Actual SQLite statements/plans/bindings/counts/timings in explanations, with honest driver spans rather than
+  fabricated LMDB counters. Watch transaction/savepoint tracking, lifetime and explicit settlement have shared
+  and process proofs in [lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/integrated-watch-lifecycle/README.md).
+- Persistent yielding value-index generations, authoritative fallbacks, intervening writes, bounded retirement,
+  rollback/busy/stale/read-only and killed-process recovery. See
+  [admission evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/value-index-admission-8220a11d70/README.md).
+  Text/vector/trigram admission remains synchronous and does not meet the final background-admission requirement.
+- Ajv declaration validation, explicit semantic refusals, stored-schema CORRUPT refusal, locale propagation and
+  incumbent prefix checks under writer ownership. See
+  [schema evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/schema-validation/README.md) and
+  [prefix race proof](../references/evidence/ears-sqlite-implementation-2026-10-28/schema-prefix-ownership/README.md).
+- Owned statement retention bounded to 256 entries and 1 MiB of UTF-8 SQL text, with meaningful mutations.
+  This is not a total native VM/RSS bound. See
+  [cache evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/statement-cache/README.md).
+- Batched ordering keys, guarded SQL scalar ordering and adjacent-limit pushdown preserve stability, duplicate
+  IDs, primary integrity and pipeline scope. General top-k, ICU fallback and distinct/group complexity remain open.
+- Per-string transactional FTS5 trigram documents and exact Rust substring/regex verification preserve Unicode,
+  list boundaries and disposal. The pinned upstream runtime uses the default allocator after stock wee_alloc
+  failed memory controls. Runtime provenance/license/build recipe and installed-package execution are retained.
+  At 78eff95202, **374 SQLite tests pass**, including all three formerly failing substring/regex cases; EARS
+  types, 73 focused cases, six independent safeguard mutations, five package builds, three unchanged API reports,
+  70 build-input/document-link cases, lint/import/publishing types and source/staged/npm-tarball loading pass in
+  disposable Linux. See [filtering evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/trigram-filtering/README.md).
 
-The next local descendant now orders boolean/numeric/date/null keys in SQLite after checking actual scalar
-cells and candidate types. Unsupported/invalid cells keep the existing decoder/ICU fallback. It preserves stable
-null/zero/int64 ties, date clipping, prior limits/order and actual-primary integrity; selected or empty queries
-avoid unrelated type tables. EARS types and 48 focused cases pass; full SQLite passes 294 with the same three
-open search failures. Seven independent mutations fail meaningful assertions.
-[Scalar-order evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-scalar-ordering/README.md)
-retains complete results. The paired nine-process cohort does not show an overall speedup: median sort is
-38.24 ms before, 41.21 ms after and 5.89 ms native (7.7% slower; substantial process variability).
-A subsequent isolated change pushes an immediately following limit into SQL, returning only that prefix of IDs.
-Private Linux passes types, 50 focused cases, nine safeguard mutations and 296 full SQLite cases, with the same
-three open search failures. Sequential statement profiles reduce instrumented numeric-page time from
-33.57 to 28.90 ms flexible and 31.52 to 26.33 ms typed, but do not replace balanced qualification. Full candidate
-validation still scans all rows; general ordering/pagination and latency qualification remain open.
-[Limit-pushdown evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-limit-pushdown/README.md)
+### Current recovery checkpoint
 
-Schema admission also now checks issued-prefix changes under writer ownership, closing a two-handle race
-where an ordinary entity commit after the old precheck left schema revision unchanged. Types and 29 adjacent
-schema/index/operational cases pass; moving the check outside the transaction fails the deterministic race test.
-[Prefix-ownership evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/schema-prefix-ownership/README.md)
-retains proof. The next local descendant adds structure/reference validation described below; live-pack and I/O acceptance remain open.
+A writable open previously recreated missing derived search storage empty and could silently omit matches.
+The continuation identifies incomplete physical groups, resets a partially present FTS group and reconstructs
+it from affected types/search fields under writer ownership. Read-only opens refuse incomplete storage as
+CORRUPT. Healthy opens avoid writer ownership and can read another writer's committed state. Repair preserves logical commit identity and intact embeddings; lost chunks become pending again.
+The recovery continuation passes EARS types, 90 focused cases before/after seven safeguard mutations,
+**392 full SQLite cases**, five package builds, three unchanged API reports, 64 build-input cases and lint/import
+checks in disposable Linux. It covers missing tables/indexes/triggers/shadow tables, stale postings, repair and
+rollback failures, healthy concurrent opens and selective hydration.
+[Recovery evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-recovery/README.md)
+retains exact source/commands and the earlier refused destructive fixture. This continuation is not covered by
+78eff95202's CI and is not published until an explicit next draft checkpoint.
 
-Local continuation now validates declaration structure with per-owner Ajv 8.20.0 and explicit cross-reference,
-name, prefix and index compatibility checks before admission writes. Unsupported lower-level execution options
-refuse explicitly. Stored declarations validate before indexes load; malformed metadata refuses as CORRUPT with
-its schema-error cause. The admitted locale string now reaches text sorting. Private Linux passes types,
-80 focused cases, six independent mutations, 32 native-parser refusal comparisons, all five package builds and
-three unchanged EARS API reports. Full SQLite passes 347 with the same three search failures.
-[Schema-validation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/schema-validation/README.md)
-retains exact results, scope and earlier test/prerequisite failures. This local descendant is not in 194c72c77c's CI.
-Live-pack and real-I/O declaration qualification remain required.
+This repair is atomic and paged in memory, but still synchronous. It is an integrity correction, not completion
+of phase 3: yielding generations/readiness, bounded foreground work and retired search-table cleanup remain
+required. Existing but corrupt postings need the separate audit/rebuild and real-corruption qualification.
 
-Prepared statement retention in the local descendant now uses a per-connection LRU bounded by 256 entries and
-1 MiB of UTF-8 SQL text. Oversized statements execute uncached; eviction preserves borrowed statements and
-close releases owned cache references. Private Linux passes types, 79 focused cases, six resource-policy
-mutations, five package builds and three unchanged API reports. Full SQLite passes 353 with the same three
-open search failures. [Statement-cache evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/statement-cache/README.md)
-records proofs and provisional limits. This bounds cache retention, not native VM memory or application RSS.
+### Unqualified results and failures
 
-### Unqualified results and current CI
-
-The earlier [actual-facade slice](../references/evidence/ears-sqlite-implementation-2026-10-28/facade-slice.md)
-preserves the isolated rowid-overflow correction, projection improvement and ordinary-read/vector regressions
-against its recorded native `933aa19` baseline. Do not relabel those as current `6ab2f69` results. Scalar/inline
-thresholds remain provisional. Quadratic distinct/group work, per-entity hydration in those paths and sustained memory growth still need
-the execution/phase-7 review required by the matrix. Statement retention is now bounded as described below.
-
-The original six sync-disabled 10k/100k value-admission trials pass their recorded targets. The first FULL/durable
-10k trial fails operation/turn-wait p99 (16.79/19.39 ms); subsequent durable trials were stopped. Targets were not
-relaxed. [Controlled diagnosis](../references/evidence/ears-sqlite-implementation-2026-10-28/durable-admission-diagnosis/README.md)
-adds three idle SQLite controls, three build/cleanup runs and three later native controls. SQLite write COMMIT
-accounts for nearly all current durable operation latency, and both backends exceed 16 ms on this host. Ordering
-and host variability prevent a backend ranking or attribution of the earlier sample's exact cause.
-
-The old timer metric measured only waits between foreground operations. The maintained harness now retains that
-as `turnWaitMs` and adds an independent 8 ms heartbeat with the same 16 ms p99 target, recorded before its first
-measurement. A shared helper fingerprints actual generic `.node` prebuilds and explicitly loaded extensions.
-Four behavior checks pass; three independent mutations fail final-overdue-sample, process-lifetime and generic
-binding assertions. EARS types and zero-trial provenance pass in private Linux. The first 1k sync-disabled smoke
-emits correctness-checked data but fails lookup/turn/heartbeat budgets (**31.82/19.53/34.41 ms**). It is retained,
-not retried until green. [Measurement evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/load-metrics-correction/README.md)
-records exact source/sample counts and the successful final assertion refinement without repeating the load.
-
-Strict run `40676231748` at `6c29f083f3` is terminal failure (the now-fixed bare wait, and a confirmed
-60-minute integration-1 timeout after a 30-minute Node download). The lifecycle wait fix passes its four cases
-and the repository's four-case wait guard, through normal five-package build preparation. Earlier fully green
-runs cover older inputs; cancelled `40655434334` is not a green gate.
-
-Strict run **40688661462**, attempt 1 at `683e1d5912`, passed five jobs but failed three existing CLI deadlines
-in integration-1. All three targets passed unchanged in the owned Linux runner (**36 cases**) with original
-budgets. The single targeted retry on identical source, **attempt 2, is now completed/success**; all six jobs
-pass. [Timeout investigation](../references/evidence/ears-sqlite-implementation-2026-10-28/ci683-integration-timeouts/README.md)
-retains failures, reproduction, verified warm toolchain restore and exact final CI JSON. The source gate is green;
-the Mac timeout's cause is still not isolated. Node version and compiler/test budgets were unchanged.
-
-The approved helper verified clean source, engine pin, remote head and exact strict success, then privately
-fast-forwarded canonical to `683e1d5912` and changed its vendor link to private 6ab2f69. No master merge, normal
-app adoption or daily-Mac native build occurred. The continuation was then published as **`194c72c77c`** on the existing draft branch; detached integration
-is clean at that commit. Its exact [strict run 40703362139](https://github.com/spankyed/apack/actions/runs/40703362139)
-completed successfully with all six jobs. The approved helper has privately fast-forwarded canonical to this
-exact commit. [Green-gate evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/ci194-success/README.md)
-retains the authoritative run/job state. Later schema-validation, cache and matcher descendants still require
-their own exact gate. PR #286 remains a draft; no master merge or application adoption occurred.
-
-The next regex dependency screen tests rregex 1.13.1 in isolated Linux. Tested Rust syntax works, but repeated
-compile/free controls grow WASM memory through 3,000 instances even with explicit free and GC. The stock
-artifact is not adopted. [Regex-screen evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/rust-regex-wasm-screen/README.md)
-retains exact artifact hashes, syntax checks and memory controls. A subsequent exact-source rebuild isolates
-wee_alloc as the cause in these controls: default allocation stays at 1.57 MB through 3,000 instances.
-A further 20-pattern/20-input native comparison agrees on all answers and five refusals; eight mixed-workload
-samples remain at 2.75 MB through 4,200 instances under a prewritten stability criterion.
-[Allocator-control evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/regex-allocator-control/README.md)
-retains source/provenance, build recipe and binary hashes. Controlled artifacts/target stay in owned Linux volume
-`apack-ears-regex-ffdc766d`. Next implement reproducible default-allocator loading/assets and SQLite trigram
-narrowing with exact per-element verification. The three search failures remain open; this matcher screen does
-not establish full search, latency, packaging or application resource acceptance.
-
-The local matcher bridge now vendors the controlled default-allocator assets with provenance/license, loads
-lazily and synchronously, disposes compiled allocations and preserves loader/runtime versus syntax failures.
-EARS package staging and build fingerprints include the assets. Private Linux passes types, 19 focused cases,
-five safeguard mutations, five package builds, three unchanged APIs and real source/staged/npm-tarball loading.
-Final static checks pass 64 build-input cases, import/pack guards and root lint; full SQLite has 364 passes and
-the same three open query failures. [Bridge evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/regex-bridge/README.md)
-records the initial lint-ownership failure and corrected generated-vendor scope. The bridge is not yet connected
-to query filtering; Electron/CLI/platform and full search/index lifecycle qualification remain open.
+- The earlier facade slice used native 933aa19; do not relabel it as current 6ab2f69 evidence.
+- Batched 10k numeric sorting improved its paired cohort 220.91 to 56.95 ms (3.88x), still 7.36x native.
+  A later nine-process SQL scalar cohort showed no overall win: 38.24 to 41.21 ms, native 5.89 ms, with substantial
+  variability. Adjacent-limit sequential profiles improved but are not balanced qualification. See
+  [ordering](../references/evidence/ears-sqlite-implementation-2026-10-28/batched-ordering/README.md),
+  [scalar cohort](../references/evidence/ears-sqlite-implementation-2026-10-28/native-scalar-ordering/README.md) and
+  [limit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-limit-pushdown/README.md).
+- Six sync-disabled admission trials pass their original targets. The first FULL trial fails operation/turn p99
+  (16.79/19.39 ms); later durable trials stopped. COMMIT dominates controlled diagnosis, but ordering/host variance
+  prevents a fair backend ranking. Do not change durability or budgets to pass. See
+  [durable diagnosis](../references/evidence/ears-sqlite-implementation-2026-10-28/durable-admission-diagnosis/README.md).
+- The independent 8 ms heartbeat harness retains its first 1k sync-disabled failure at lookup/turn/heartbeat p99
+  31.82/19.53/34.41 ms. No retry-until-green. See
+  [measurement correction](../references/evidence/ears-sqlite-implementation-2026-10-28/load-metrics-correction/README.md).
+- Older CI timeout, fixture and prerequisite failures remain historical evidence. One targeted identical-source
+  retry made the 683 gate green; its Mac CLI timeout cause remains unisolated. No timeout or compiler budget changed.
 
 ### Next deliverables and full remaining scope
 
-The schema/cache/matcher continuation is published as **6794ab1d4a15f23c565b6aea5bc3a73611c15d39** on
-`session/ears-sqlite`; detached integration is clean at this exact source. Draft PR #286 is updated and remains
-a draft. [Strict run 40716716057](https://github.com/spankyed/apack/actions/runs/40716716057) is terminal failure:
-five jobs passed; integration-1 found an installed-package assertion that excluded the intentional runtime vendor directory.
-The continuation fixes that assertion with an exact runtime-file whitelist and execution from the installed package.
-Preserve canonical 194c72c77c until a new candidate passes its own exact strict gate;
-the helper's next starting base is that green checkpoint. Scalar-limit statement profiles reduce work but the earlier
-paired cohort showed no overall scalar-sort win. Continue balanced performance qualification and general top-k,
-qualify live-pack/schema I/O failures and implement background text/vector/trigram admission, and qualify IO/ownership under
-the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
-unanswered; value-index work does not depend on it.
+Qualify live declarations and implement background
+text/vector/trigram generations/readiness/recovery/cleanup with the original foreground and WAL budgets.
+The optional preference for explicit indexing versus a slow complete search fallback remains unanswered;
+do not silently publish partial answers or claim that synchronous backfill meets the background requirement.
 
-All unmet phase 3–7 requirements remain: final qualification of substring/regex execution and refusal ordering; realistic relevance/languages/typos and
-no unbounded vocabulary scan; high-dimensional and approved real-vector recall/update/latency evidence; complete
-app/run-history composition and storage descriptors; four host backup-format failures and validated populated
-replacement/media rollback/recovery; logical conversion and maintenance; truthful real IO/commit-failure outcomes,
-crash/checkpoint/long-reader/ownership qualification; Electron/CLI native packaging and supported-platform policy;
-representative app/resource budgets, maintenance review and the adoption decision. No old synthetic report
-certifies app latency, memory growth, a filesystem, production durability or realistic search/vector quality.
-
-
-### Exact substring and regex continuation
-
-SQLite now maintains per-string external-content FTS5 trigram documents in the write transaction. Selective
-required literals narrow through FTS5 and exact Rust matching verifies original strings; broad/short/NUL
-patterns use the owner index and verify only candidate entities. List elements remain separate. Rust Unicode
-folding preserves the native per-scalar lowercase contract. Compiled patterns and SQL callback contexts are
-scoped to synchronous reads and released on success and failures. This is query execution over SQLite, with a
-small pinned upstream matcher adapter, rather than a new storage engine.
-
-A proposed special branch for single-type broad patterns was removed: deleting it still passed the streaming
-cost guard, so its benefit was not established. The cost guard remains. The initial full Linux suite passed all
-374 cases, including the three formerly failing substring/regex cases; the final continuation also passes all 374 cases, 73 focused cases before/after six
-disposal/correctness/index mutations, five package builds, three unchanged API reports and the installed
-SDK/runtime package checks. Publication still requires an exact new strict CI gate.
-Evidence and the current runtime build recipe are retained under
-`../references/evidence/ears-sqlite-implementation-2026-10-28/trigram-filtering/`.
-
-This does not close production search acceptance. Trigram/text admission still backfills synchronously;
-background generations, readiness, missing-derived-table recovery and retired-table cleanup remain open.
-Native lazy refusal ordering for mixed types and a later zero limit is not fully reproduced by eager matcher
-validation; qualify or explicitly decide that contract before adoption. Ranked full-text list/phrase boundaries,
-realistic multilingual relevance and corpus/resource/latency qualification are separate work. Neither the small
-native differential corpus nor the full shared test suite establishes all of those requirements.
+All unmet phase 3–7 requirements remain: native lazy substring/regex refusal ordering with mixed types/later zero
+limits (qualify or explicitly decide); realistic multilingual/identifier/typo relevance, correct full-text list/phrase
+boundaries and no unbounded fuzzy vocabulary scan; high-dimensional and approved real-vector recall/update/latency;
+complete app/run-history/storage descriptors; four host backup-format failures and populated replacement/media
+rollback/recovery; explicit copied-profile conversion and logical export/audit/rebuild; truthful IO/COMMIT failures,
+crash/checkpoint/long-reader/ownership qualification; Electron/CLI loading/signing/native packaging and supported
+filesystem assumptions; representative warm/cold/growth/resource budgets, execution-complexity and maintenance
+review, and final adoption decision. No microbenchmark or small corpus certifies app latency, memory growth,
+filesystem support, production durability or overall relevance/recall.

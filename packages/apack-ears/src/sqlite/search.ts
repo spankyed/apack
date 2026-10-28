@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { getLoadablePath } from "sqlite-vec";
 import type { SqliteDatabase } from "./database.ts";
 import { SqliteTrigrams } from "./trigrams.ts";
+import { missingSearchStructures, type SqliteSearchStructure } from "./search-structures.ts";
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
@@ -61,7 +62,41 @@ export class SqliteSearch {
       this.vectorLoaded = true;
     }
   }
-  ensure(schema: Data) {
+  private structures(schema: Data): SqliteSearchStructure[] {
+    const text: SqliteSearchStructure[] = [], vectorTypes: string[] = [], textTypes = new Set<string>();
+    for (const [type, definition] of Object.entries(schema.types) as Array<[string, Data]>) {
+      for (const [name, index] of Object.entries(definition.indexes ?? {}) as Array<[string, Data]>) {
+        if (index.kind === 'vector') vectorTypes.push(type);
+        if (index.kind !== 'text') continue;
+        textTypes.add(type);
+        const table = this.table(type, name, index);
+        text.push({ types: [type], objects: [['table', table], ['table', table + '_vocab'],
+          ...['data', 'idx', 'content', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const)],
+          reset: `DROP TABLE IF EXISTS ${table}_vocab; DROP TABLE IF EXISTS ${table};` });
+      }
+    }
+    return [
+      { types: [...textTypes], objects: [['table', 'text_meta']] },
+      { types: vectorTypes, objects: [['table', 'chunks'], ['index', 'chunk_pending']] },
+      ...text, ...this.trigrams.structures(schema),
+    ];
+  }
+  needsRepair(schema: Data): boolean {
+    return missingSearchStructures(this.db, this.structures(schema)).length !== 0;
+  }
+  /** Read-only opens cannot silently turn a missing derived group into incomplete search answers. */
+  validateStructures(schema: Data): void {
+    if (this.needsRepair(schema)) fail('CORRUPT', 'Derived SQLite search storage is incomplete; reopen writable to repair it');
+  }
+  fields(type: string, schema: Data): string[] {
+    return [...new Set<string>(Object.values(schema.types[type]?.indexes ?? {}).flatMap((value: any) =>
+      value.kind === 'text' ? Object.keys(value.fields) : value.kind === 'trigram' ? value.fields : value.kind === 'vector' ? value.from : []))];
+  }
+  ensure(schema: Data): Set<string> {
+    const missing = missingSearchStructures(this.db, this.structures(schema));
+    // A missing trigger may have left an external-content FTS index stale. Rebuild the entire group,
+    // rather than recreating just the trigger and trusting old postings or cached content hashes.
+    for (const group of missing) if (group.reset) this.db.sql.exec(group.reset);
     this.loadVectors(schema);
     this.trigrams.ensure(schema);
     this.db.sql
@@ -93,6 +128,7 @@ export class SqliteSearch {
           CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},row);`);
         }
       }
+    return new Set(missing.flatMap(group => group.types));
   }
   refile(row: Data, seq: number, schema = this.db.schemaForQueries(), changed?: ReadonlySet<string>) {
     this.trigrams.refile(row, schema, changed);

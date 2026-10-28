@@ -124,6 +124,30 @@ Query diagnostics must distinguish SQLite plans and measured SQL work from the l
 counts. Never synthesize physical SQLite counters just to satisfy a backend-specific assertion. Preserve logical
 warning and call-count meaning, and update diagnostics consumers/types where the reported information differs.
 
+## Missing derived search storage
+
+Primary values remain authoritative when a search group is missing. On open, inspect the declared physical
+text/trigram/vector structures. A read-only open refuses incomplete storage as `CORRUPT`; it must not quietly
+create empty indexes or return an incomplete search answer. A writable owner resets an incomplete FTS group
+through SQLite's virtual-table DDL and reconstructs affected types from projected search inputs in one
+transaction. A failed reconstruction rolls back recreated tables and postings; the logical commit identity does
+not change. Existing vector chunks retain embeddings when their text/model/dimensions agree. If the chunks
+table itself was lost, derive pending chunks again so the embedding service can recompute them.
+
+The object inventory includes the pinned FTS5 configuration's shadow tables. These are inspected by name;
+normal repair drops/recreates the virtual table through SQLite, rather than editing shadow content or
+`sqlite_schema` directly. The [FTS5 storage documentation](https://www.sqlite.org/fts5.html#fts5_data_structures)
+describes which content/docsize tables exist for this configuration. Destructive fault fixtures explicitly
+turn off SQLite's defensive mode only on disposable test databases; production keeps it enabled.
+
+Repair pages at most 256 affected entities at once and selects only current search inputs. A healthy reopen
+hydrates no primary entity rows and avoids taking writer ownership, so another handle's open write unit does not
+prevent it from reading committed data. This bounds the page count in memory, not a single field's
+size, total repair memory, or foreground duration. Current repair/backfill remains synchronous. Phase 3 must
+replace the long owner transaction with persistent generations, yielding work, write reconciliation and
+explicit read/readiness semantics before adoption. Existing but corrupt postings still need audit/rebuild and
+real-corruption qualification; physical-object presence is not an integrity checksum.
+
 ## Required slice measurements
 
 Measure actual EARS field reads, projected/full pages, lookups, small updates in large entities, streamed body

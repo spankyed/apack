@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { SqliteDatabase } from './database.ts';
+import type { SqliteSearchStructure } from './search-structures.ts';
 import { createRegexCompiler, type SqlitePattern } from './regex.ts';
 type Data = Record<string, any>;
 type Definition = { type: string; fields: string[]; table: string };
@@ -18,6 +19,16 @@ export class SqliteTrigrams {
       const hash = createHash('sha256').update(JSON.stringify([type, name, index.fields])).digest('hex').slice(0, 24);
       return [{ type, fields: index.fields, table: 'tri_' + hash }];
     });
+  }
+  structures(schema: Data): SqliteSearchStructure[] {
+    return Object.keys(schema.types).flatMap(type => this.definitions(type, schema).map(({ table }) => ({
+      types: [type],
+      objects: [['table', table], ...['data', 'idx', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const),
+        ['table', table + '_docs'], ['index', table + '_docs_entity'],
+        ...['ai', 'ad', 'au'].map(suffix => ['trigger', table + '_docs_' + suffix] as const)] as SqliteSearchStructure['objects'],
+      reset: ['ai', 'ad', 'au'].map(suffix => `DROP TRIGGER IF EXISTS ${table}_docs_${suffix};`).join('') +
+        `DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;`,
+    })));
   }
   ensure(schema: Data) {
     for (const type of Object.keys(schema.types)) for (const { table } of this.definitions(type, schema)) {
