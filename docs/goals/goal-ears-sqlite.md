@@ -196,7 +196,7 @@ fast-forwarded canonical from 194c72c77c; its next BASE is a1356b64b1. No master
 Active continuation remains `/private/tmp/ears-sqlite-diagnosis-evidence`, with no installed dependencies,
 native build or captured runtime. Functional pin ac84b7d3fb is published through evidence descendant a889531dd1 on the existing draft branch.
 Its exact [strict run 40753623963](https://github.com/spankyed/apack/actions/runs/40753623963) is running;
-poll it before promotion or another publication. Local diagnostic pin 201a2c8cbb adds measurement hooks only.
+poll it before promotion or another publication. Local storage implementation b36c179fe2 and runtime-fixture/assertion descendants through b8231cb734 are newer and require their own exact gate after publication.
 Inspect actual refs/PR for the newest published head and exact CI handle; do not dispatch
 duplicates or promote a descendant on its parent's success. `/private/tmp/ears-promote-sqlite.py` verifies clean
 checkouts, remote tip, source/engine pins and exact strict success before private promotion. Never copy concurrent
@@ -308,8 +308,11 @@ Pinned Linux checks pass 41 real host cases, two negative safeguards and restora
 cases, five package builds, EARS/SDK API checks, host/SDK/CLI types and import rules. One reviewed EARS root API
 line adds readonly format; SDK API reports are unchanged. Additional appData success cases initially exposed an
 unbound test fixture, retained as failure evidence; 1d7b7a9930 corrects actual host binding and installed declarations.
-The corrected check is live in container ears-host-storage-bound, exec session 61795, results
-/private/tmp/ears-host-storage-bound. Poll it; do not repeat for elapsed observation. See
+The corrected check is terminal success: 45 host cases, the stronger preflight counterexample, restored cases,
+host types, EARS/SDK API checks, lint/import rules and five package builds. Test-only b8231cb734 additionally
+asserts changed settings through the bound runtime; both affected cases pass and implementation hashes match.
+The four former data.mdb preflight failures now have real SQLite host-path coverage; this does not complete
+app/CLI profile selection, full boot, live packs, logical conversion or physical failure qualification. See
 [host storage evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/host-storage/README.md).
 After that check closes, publish a usable descendant through the existing draft, with its own exact strict gate.
 First finish/poll the existing a889531dd1 gate and promote only on that exact success.
@@ -339,8 +342,8 @@ composition must handle that state and await readiness where required before ado
 All unmet phase 3–7 requirements remain: native lazy substring/regex refusal ordering with mixed types/later zero
 limits (qualify or explicitly decide); realistic multilingual/identifier/typo relevance, correct full-text list/phrase
 boundaries and no unbounded fuzzy vocabulary scan; high-dimensional and approved real-vector recall/update/latency;
-complete app/run-history/storage descriptors; four host backup-format failures and populated replacement/media
-rollback/recovery; explicit copied-profile conversion and logical export/audit/rebuild; truthful IO/COMMIT failures,
+complete app/CLI profile and run-history composition; extend the now-tested host format/populated replacement/media
+rollback path through full lifecycle and physical failure qualification; explicit copied-profile conversion and logical export/audit/rebuild; truthful IO/COMMIT failures,
 crash/checkpoint/long-reader/ownership qualification; Electron/CLI loading/signing/native packaging and supported
 filesystem assumptions; representative warm/cold/growth/resource budgets, execution-complexity and maintenance
 review, and final adoption decision. No microbenchmark or small corpus certifies app latency, memory growth,
