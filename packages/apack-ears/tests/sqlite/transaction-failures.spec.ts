@@ -7,7 +7,11 @@ import { toElmdbSchema } from '../../src/schema.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
 
 const held: Array<{ db: SqliteDatabase; path: string }> = [];
-afterEach(() => { vi.restoreAllMocks(); for (const { db, path } of held.splice(0)) { db.close(); rmSync(path, { recursive: true, force: true }); } });
+afterEach(() => {
+  vi.restoreAllMocks(); const opened = held.splice(0);
+  for (const { db } of opened) db.close();
+  for (const path of new Set(opened.map(entry => entry.path))) rmSync(path, { recursive: true, force: true });
+});
 function open() {
   const path = mkdtempSync(join(tmpdir(), 'ears-sqlite-full-'));
   const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema({ types: { Row: { required: [] } }, relations: {}, roles: [] }) });
