@@ -62,6 +62,7 @@ export class SqliteDatabase implements EarsDatabase {
   readonly readOnly: boolean;
   readonly sql: DatabaseSync;
   private opened = true;
+  private faulted?: Error;
   private active?: SqliteUnit;
   private schemaValidator?: ReturnType<typeof createSchemaValidator>;
   // Bound owned references and SQL text, not native VM memory. Eviction releases our reference; callers may
@@ -216,6 +217,30 @@ export class SqliteDatabase implements EarsDatabase {
   }
   private assertOpen() {
     if (!this.opened) fail("CLOSED", "The database is closed");
+    if (this.faulted) throw this.faulted;
+  }
+  /** Preserve the operation's refusal when SQLite has already rolled back after FULL/IOERR. */
+  abortFailedOperation(error: unknown, command: string | null = 'ROLLBACK'): never {
+    if (this.faulted) throw this.faulted;
+    try {
+      if (command && this.sql.inTransaction) this.sql.exec(command);
+    } catch (rollback) {
+      const problem = Object.assign(new AggregateError([error, rollback],
+        'SQLite operation and rollback failed; close and reopen the database', { cause: error }),
+        { code: (error as { code?: unknown })?.code });
+      // An uncertain transaction cannot accept another write or background batch. close() still releases it.
+      this.faulted = problem;
+      this.active?.ended(); this.active = undefined;
+      this.indexBuilds.stop();
+      throw problem;
+    } finally {
+      this.layouts.clear();
+      if (!this.sql.inTransaction) {
+        this.active?.ended(); this.active = undefined;
+        if (!this.faulted) this.indexBuilds.wake();
+      }
+    }
+    throw error;
   }
   private writable() {
     this.assertOpen();
@@ -1026,8 +1051,7 @@ export class SqliteDatabase implements EarsDatabase {
       if (snapshot) this.sql.exec("COMMIT");
       return answer;
     } catch (e) {
-      if (snapshot) this.sql.exec("ROLLBACK");
-      throw e;
+      this.abortFailedOperation(e, snapshot ? 'ROLLBACK' : null);
     } finally {
       this.recording = previous;
     }
@@ -1039,9 +1063,7 @@ export class SqliteDatabase implements EarsDatabase {
     try {
       this.checkRevision();
     } catch (e) {
-      this.sql.exec("ROLLBACK");
-      this.layouts.clear();
-      throw e;
+      this.abortFailedOperation(e);
     }
     const unit = new SqliteUnit(this);
     this.active = unit;
@@ -1054,8 +1076,7 @@ export class SqliteDatabase implements EarsDatabase {
       const changes = unit.commit();
       return { results, changes };
     } catch (e) {
-      if (unit.isOpen) unit.abort();
-      throw e;
+      this.abortFailedOperation(e);
     }
   }
   batch(request: WriteRequest, changes: Set<string>): WriteResult {
@@ -1070,9 +1091,7 @@ export class SqliteDatabase implements EarsDatabase {
       for (const key of pending) changes.add(key);
       return { results };
     } catch (e) {
-      this.sql.exec(`ROLLBACK TO ${name}; RELEASE ${name}`);
-      this.layouts.clear();
-      throw e;
+      this.abortFailedOperation(e, `ROLLBACK TO ${name}; RELEASE ${name}`);
     }
   }
   finish(unit: SqliteUnit, commit: boolean): Changes {
@@ -1103,15 +1122,13 @@ export class SqliteDatabase implements EarsDatabase {
           }
         this.putMeta("commit", sequence);
         this.sql.exec("COMMIT");
-      } else { this.sql.exec("ROLLBACK"); this.layouts.clear(); }
+      } else { if (this.sql.inTransaction) this.sql.exec("ROLLBACK"); this.layouts.clear(); }
       return {
         sequence,
         touched: this.touched(changes),
       };
     } catch (e) {
-      this.sql.exec("ROLLBACK");
-      this.layouts.clear();
-      throw e;
+      this.abortFailedOperation(e);
     } finally {
       this.active = undefined;
       unit.ended();
@@ -1199,9 +1216,7 @@ export class SqliteDatabase implements EarsDatabase {
       this.indexBuilds.wake();
       return report;
     } catch (e) {
-      this.sql.exec("ROLLBACK");
-      this.layouts.clear();
-      throw e;
+      this.abortFailedOperation(e);
     }
   }
   reset() {
@@ -1215,8 +1230,7 @@ export class SqliteDatabase implements EarsDatabase {
       unit.changes.add("all");
       unit.commit();
     } catch (e) {
-      if (unit.isOpen) unit.abort();
-      throw e;
+      this.abortFailedOperation(e);
     }
   }
   bulkLoad(loads: readonly Load[]) {
@@ -1271,8 +1285,7 @@ export class SqliteDatabase implements EarsDatabase {
       unit.ended();
       this.indexBuilds.wake();
     } catch (e) {
-      if (unit.isOpen) unit.abort();
-      throw e;
+      this.abortFailedOperation(e);
     }
   }
   stats() {
@@ -1345,7 +1358,7 @@ export class SqliteDatabase implements EarsDatabase {
           }
         }
         unit.changes.add('all'); unit.commit();
-      } catch (error) { if (unit.isOpen) unit.abort(); throw error; }
+      } catch (error) { this.abortFailedOperation(error); }
     } finally { incoming.close(); }
   }
 
@@ -1396,7 +1409,8 @@ class SqliteUnit implements EarsUnit {
   savepoint() {
     if (!this.open) fail("CLOSED", "Unit has ended");
     const n = this.depth + 1;
-    this.db.sql.exec(`SAVEPOINT unit_${n}`);
+    try { this.db.sql.exec(`SAVEPOINT unit_${n}`); }
+    catch (error) { this.db.abortFailedOperation(error, null); }
     this.savepoints.push({ depth: n, changes: new Set() });
     this.depth = n;
     return n;
@@ -1405,7 +1419,8 @@ class SqliteUnit implements EarsUnit {
     if (!this.open) fail("CLOSED", "Unit has ended");
     const index = this.savepoints.findIndex(point => point.depth === n);
     if (index < 0) fail("BATCH_INVALID", "No open savepoint has this depth");
-    this.db.sql.exec(`ROLLBACK TO unit_${n}; RELEASE unit_${n}`);
+    try { this.db.sql.exec(`ROLLBACK TO unit_${n}; RELEASE unit_${n}`); }
+    catch (error) { this.db.abortFailedOperation(error); }
     this.savepoints.splice(index);
     this.db.invalidateLayouts();
     this.depth = n - 1;
@@ -1414,7 +1429,8 @@ class SqliteUnit implements EarsUnit {
     if (!this.open) fail("CLOSED", "Unit has ended");
     const index = this.savepoints.findIndex(point => point.depth === n);
     if (index < 0) fail("BATCH_INVALID", "No open savepoint has this depth");
-    this.db.sql.exec(`RELEASE unit_${n}`);
+    try { this.db.sql.exec(`RELEASE unit_${n}`); }
+    catch (error) { this.db.abortFailedOperation(error); }
     const kept = this.savepoints.splice(index);
     for (const point of kept) for (const key of point.changes) this.changes.add(key);
     this.depth = n - 1;
