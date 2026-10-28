@@ -1,0 +1,88 @@
+[
+  {
+    "control": "full-watch-workload",
+    "exitCode": 1,
+    "elapsedSeconds": 189.4175579349976,
+    "budgets": {
+      "admissionMs": {
+        "actual": 4.144222000000809,
+        "limit": 100
+      },
+      "searchLookupP99Ms": {
+        "actual": 5.306311000007554,
+        "limit": 16
+      },
+      "operationP99Ms": {
+        "actual": 8.306238999997731,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 38.031228000007104,
+        "limit": 16
+      },
+      "turnWaitP99Ms": {
+        "actual": 30.920074999998178,
+        "limit": 16
+      },
+      "heartbeatDelayP99Ms": {
+        "actual": 97.40293900000688,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 5314832,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 163895568,
+        "limit": 208858464
+      }
+    },
+    "buildMs": 103475.615399,
+    "gcMs": 70465.899741,
+    "writes": 22080,
+    "qualification": false
+  },
+  {
+    "control": "no-query-watches",
+    "exitCode": 1,
+    "elapsedSeconds": 109.13572398300312,
+    "budgets": {
+      "admissionMs": {
+        "actual": 7.595821000000797,
+        "limit": 100
+      },
+      "searchLookupP99Ms": {
+        "actual": 2.1957580000016605,
+        "limit": 16
+      },
+      "operationP99Ms": {
+        "actual": 3.5409709999948973,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 20.45974500000011,
+        "limit": 16
+      },
+      "turnWaitP99Ms": {
+        "actual": 9.409993999994185,
+        "limit": 16
+      },
+      "heartbeatDelayP99Ms": {
+        "actual": 44.73228399999789,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4507312,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 163006128,
+        "limit": 208858464
+      }
+    },
+    "buildMs": 49057.980855,
+    "gcMs": 44895.496696999995,
+    "writes": 21971,
+    "qualification": false
+  }
+]

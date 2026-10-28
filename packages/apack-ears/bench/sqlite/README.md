@@ -24,8 +24,8 @@ SQLite uses pinned `better-sqlite3` 13.0.3 and `sqlite-vec` 0.1.9 from the norma
 lives in `src/sqlite/` and its app-only entry is `@apackdev/ears/sqlite`; this directory now holds harnesses rather
 than another implementation. Packaged Electron/native loading still needs qualification.
 Ordinary tests select elmdb and skip SQLite-only cases. Targeted driver checks have run on macOS arm64 and
-Linux; this is not Electron/Windows qualification. The measured-explain checkpoint passes all 256 SQLite EARS
-cases; full app, operational and packaging qualification remains in the goal.
+Linux; this is not Electron/Windows qualification. The current validation count and exact source pin live in the goal and retained evidence;
+full app, operational and packaging qualification remains open.
 
 From the repository root, run one expensive task at a time:
 
@@ -73,7 +73,9 @@ traversal retains a JavaScript seen set with batched SQL frontiers.
 `src/sqlite/search.ts` adapts native FTS5 and sqlite-vec distance functions to EARS text, embedding and hybrid operations.
 Existing EARS builders, transactions, typed facades and observers are reused.
 
-The prototype is intentionally unfinished: its schema validator and error translation are partial; value-index admission yields in persistent batches while text/vector admission remains synchronous; fuzzy expansion scans the vocabulary; vector queries use exact scalar scans; backup publication,
+The candidate is unfinished: value/text/vector/trigram admission uses shared persistent background generations
+with explicit search readiness, and declarations validate through Ajv plus structural checks. Error and real IO
+qualification remain incomplete; fuzzy expansion scans the vocabulary; vectors use exact scalar scans; backup publication,
 OS I/O failure semantics, permissions, migration and cross-platform packaging are not qualified. It is not a
 second production backend. A passing EARS suite is a feasibility signal, not complete elmdb feature parity.
 
@@ -96,8 +98,8 @@ operation on stop and does not keep the process alive. `load-metrics.check.ts` v
 native prebuild fingerprints before cohorts start. Source/native fingerprints are collected before the cohort,
 and each admission process records its actually loaded native addon. The facade provenance probe uses the same
 helper and explicitly includes the loaded vector extension. Preserve results before another Linux
-sync, which replaces untracked volume content. This qualifies a synthetic same-connection slice; text/vector
-admission, full app budgets and platform durability qualification remain separate requirements.
+sync, which replaces untracked volume content. This measures a synthetic same-connection slice; shared search-admission qualification is described below.
+Full app budgets and platform durability qualification remain separate requirements.
 
 
 ### Background search admission qualification

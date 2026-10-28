@@ -189,14 +189,15 @@ platform claims must identify their actual tested scope.
 The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for
 `session/ears-sqlite`. The last exact published green checkpoint is
 **a1356b64b1249b52f86d7ee79ee9bf824d883114**: [strict run 40733030134](https://github.com/spankyed/apack/actions/runs/40733030134)
-completed successfully, all six jobs on attempt 1. Detached integration
-`monorepo-worktrees.noindex/integration-FyE9XZ` and canonical
-`monorepo-worktrees.noindex/sqlite-evaluation` are clean at that commit. The guarded helper has privately
+completed successfully, all six jobs on attempt 1. Canonical `monorepo-worktrees.noindex/sqlite-evaluation` is clean at that commit. Detached integration
+`monorepo-worktrees.noindex/integration-FyE9XZ` is clean at published evidence descendant a889531dd1. The guarded helper has privately
 fast-forwarded canonical from 194c72c77c; its next BASE is a1356b64b1. No master merge or adoption occurred.
 
 Active continuation remains `/private/tmp/ears-sqlite-diagnosis-evidence`, with no installed dependencies,
-native build or captured runtime. Functional pin ac84b7d3fb is published on the existing draft branch and is newer than the green CI;
-its evidence descendant needs its own exact strict gate. Inspect actual refs/PR for the newest published head and exact CI handle; do not dispatch
+native build or captured runtime. Functional pin ac84b7d3fb is published through evidence descendant a889531dd1 on the existing draft branch.
+Its exact [strict run 40753623963](https://github.com/spankyed/apack/actions/runs/40753623963) is running;
+poll it before promotion or another publication. Local diagnostic pin 201a2c8cbb adds measurement hooks only.
+Inspect actual refs/PR for the newest published head and exact CI handle; do not dispatch
 duplicates or promote a descendant on its parent's success. `/private/tmp/ears-promote-sqlite.py` verifies clean
 checkouts, remote tip, source/engine pins and exact strict success before private promotion. Never copy concurrent
 dirty files or compile/run full checks on the daily Mac.
@@ -298,8 +299,13 @@ need audit/rebuild. Same-handle readiness invalidation does not promise cross-ha
 
 ### Next deliverables and full remaining scope
 
-Publish the evidence descendant and run one exact strict CI gate. Diagnose the retained 100k heartbeat miss
-using correlated batch/foreground/watch/heartbeat spans and preregistered distinct controls before tuning. Complete
+Poll the existing exact strict gate at a889531dd1; promote only on its own success. The predeclared diagnostic
+pair at 201a2c8cbb is complete: heartbeat checks and EARS types pass, but both 100k OFF diagnostics miss latency
+limits. Full-watch / query-watch-free heartbeat p99 is 97.40 / 44.73 ms; scalar lookup p99 38.03 / 20.46 ms.
+During cleanup scalar lookups consume 35.83 / 33.24 s, against 5.18 / 4.55 s inside background batches. Query
+watches add substantial measured work but removing them does not resolve the miss. Sequential order and
+instrumentation prevent causal or qualification claims. See [raw diagnostic evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/cleanup-diagnostic/README.md).
+Inspect actual unindexed lookup SQL/plans and profile execution separately from background work before tuning. Complete
 large-text and FULL qualification under unchanged targets; do not rerun the same failed qualification until green. The candidate explicitly chooses INDEX_BUILDING over a slow foreground search scan; complete app
 composition must handle that state and await readiness where required before adoption.
 
