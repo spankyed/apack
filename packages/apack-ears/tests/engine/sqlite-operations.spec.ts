@@ -154,6 +154,44 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
       expect(current.query("Note").where("beta", "b").ids()).toEqual([id]);
     });
 
+    it("explains actual FTS and vector statements with their original bindings", () => {
+      const e = engine(open());
+      const id = e.create("Note", { title: "explain needle" }).id();
+      embed(e);
+      for (const [query, fragment] of [
+        [e.query("Note").search("needle"), "bm25("],
+        [e.query("Note").near([1, 0, 0]), "vec_distance_cosine("],
+      ] as const) {
+        const result = query.explain();
+        expect(result.backend).toBe("sqlite");
+        if (result.backend !== "sqlite") throw new Error("Wrong backend");
+        expect(result.ids).toEqual([id]);
+        const statement = result.statements.find(statement => statement.sql.includes(fragment))!;
+        expect(statement.plan.length).toBeGreaterThan(0);
+        expect(statement.parameters.length).toBeGreaterThan(0);
+        if (fragment.startsWith("vec_")) expect(statement.parameters.some(value => value instanceof Uint8Array)).toBe(true);
+      }
+    });
+
+    it("bounds explain capture while counting every executed query statement", () => {
+      const db = open(), e = engine(db);
+      const ids = e.transact(() => {
+        const ids = Array.from({ length: 270 }, () => e.create("Note", {}).id());
+        for (let i = 1; i < ids.length; i++) e.write(ids[i - 1]).link("refs", ids[i]);
+        return ids;
+      });
+      const all = db.all.bind(db);
+      let calls = 0;
+      db.all = (...args) => { calls++; return all(...args); };
+      const result = e.query.ids(ids[0]).descendants("refs").explain();
+      expect(result.backend).toBe("sqlite");
+      if (result.backend !== "sqlite") throw new Error("Wrong backend");
+      expect(result.ids).toEqual(ids.slice(1));
+      expect(result.statementCount).toBe(calls);
+      expect(result.statementCount).toBeGreaterThan(256);
+      expect(result.statements).toHaveLength(256);
+    });
+
     it("reopens lossless payloads, FTS and embeddings, including read-only access", () => {
       const db = open(),
         e = engine(db);

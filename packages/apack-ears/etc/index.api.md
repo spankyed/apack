@@ -340,6 +340,19 @@ export interface EarsUnit {
 }
 
 // @public
+export interface ElmdbExplanation<E extends string = string> {
+    // (undocumented)
+    backend: 'elmdb';
+    // (undocumented)
+    ids: EARS.EntityId<E>[];
+    // (undocumented)
+    ms: number;
+    // (undocumented)
+    stages: QueryStage[];
+    visited: number;
+}
+
+// @public
 export interface EmbedDeclaration {
     readonly chunk?: 'whole' | 'paragraph' | 'heading';
     readonly dims: number;
@@ -548,14 +561,7 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
 }
 
 // @public
-export interface QueryExplanation<E extends string = string> {
-    // (undocumented)
-    ids: EARS.EntityId<E>[];
-    ms: number;
-    // (undocumented)
-    stages: QueryStage[];
-    visited: number;
-}
+export type QueryExplanation<E extends string = string> = ElmdbExplanation<E> | SqliteExplanation<E>;
 
 // @public
 export interface QueryStage {
@@ -710,6 +716,41 @@ E
 } : {}) : {
     shortCode?: string;
 };
+
+// @public
+export interface SqliteExplanation<E extends string = string> {
+    // (undocumented)
+    backend: 'sqlite';
+    // (undocumented)
+    ids: EARS.EntityId<E>[];
+    // (undocumented)
+    ms: number;
+    statementCount: number;
+    // (undocumented)
+    statements: SqliteStatement[];
+}
+
+// @public
+export interface SqlitePlanStep {
+    // (undocumented)
+    detail: string;
+    // (undocumented)
+    id: number;
+    // (undocumented)
+    parent: number;
+}
+
+// @public
+export interface SqliteStatement {
+    ms: number;
+    // (undocumented)
+    parameters: unknown[];
+    // (undocumented)
+    plan: SqlitePlanStep[];
+    returnedRows: number;
+    // (undocumented)
+    sql: string;
+}
 
 // @public
 export interface TypedCreate<D extends EarsSchema> {

@@ -186,16 +186,16 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The canonical isolated `session/ears-sqlite` checkout is `monorepo-worktrees.noindex/sqlite-evaluation`, now advanced
-to `b02acdeb10` through the green pinned integration and owned storage commits. Every saved local prepared file was
-byte-identical to `d93afe4190`; it was backed up under `/private/tmp/ears-sqlite-primary-preintegration-c8glycsk`
-before advancing. The source-entry checkpoint is prepared in `monorepo-worktrees.noindex/integration-ddxGkz`;
-keep the canonical checkout on the resulting owned commit (fast-forward after pushing if needed) before further implementation. No concurrent agent's dirty
-source was copied. The committed integration input remains `a1b6603e5a`; the contract matrix maps that baseline.
+The canonical isolated `session/ears-sqlite` checkout is `monorepo-worktrees.noindex/sqlite-evaluation`, advanced
+through source-entry checkpoint `03770eca67`, with the measured explain checkpoint following it. Saved prepared
+files were byte-identical to `d93afe4190` and backed up under
+`/private/tmp/ears-sqlite-primary-preintegration-c8glycsk` before advancing. No concurrent agent's dirty source was
+copied. The committed integration input remains `a1b6603e5a`; the contract matrix maps that baseline.
 
 Strict run `40636458325` passed every shard on corrected integration `d93afe4190`. Run `40637723256` covers structured
-transport `9659ceb389` and is running. Neither proves acceptance of later SQLite changes; keep full validation on
-pinned source and poll the exact existing handles rather than restarting them on observation timeouts.
+transport `9659ceb389`; its sole failed shard stopped during setup-node download before tests. Only that failed
+shard was retried, and attempt 2 is running. Neither proves acceptance of later SQLite changes; keep full validation
+on pinned source and poll exact existing handles rather than restarting them on observation timeouts.
 
 Implemented checkpoints: structured storage requests with native MessagePack confined to `src/lmdb/adapter.ts`;
 SQLite transport avoids request/result serialization; shared scheduler selection; native SQL one-hop traversal,
@@ -224,11 +224,20 @@ IDs, and rebuilds destination indexes while retaining matching embeddings. The a
 
 Verification for the source-entry checkpoint: fresh normal dependencies install in Linux; EARS/CLI/repo typechecks,
 EARS API check, 12 host bridge cases, 65 CLI rule cases, 21 selected import-boundary cases and all five published
-trees pass. Native EARS passes 226 cases with 27 SQLite-only skips. SQLite passes 252 cases with only the existing
-explain failure (253 total). The public factory's three cases cover read-only reopen, idempotent temporary cleanup/
-listener ownership and closing the actual native connection on admission refusal. Native driver loading remains
-unqualified for packaged Electron/Windows. Root import/pack guards now cover both backend entries and native
-packages, including self-package alias imports, under `database-imports` / `findDatabaseImports`.
+trees pass. The later explain checkpoint passes 227 native EARS cases (29 SQLite-only skips) and all 256 SQLite
+cases. The public factory's three cases cover read-only reopen, idempotent temporary cleanup/listener ownership
+and closing the actual native connection on admission refusal. Native driver loading remains unqualified for
+packaged Electron/Windows. Root import/pack guards cover both backend entries and native packages, including
+self-package alias imports, under `database-imports` / `findDatabaseImports`.
+
+`explain()` now discriminates the backend. Native stage counters remain intact. SQLite records actual successful
+query SELECT calls, exact bindings, returned rows and statement timings, then obtains EXPLAIN QUERY PLAN under
+the same snapshot. Query timing excludes subsequent diagnostic planning; returned rows are not VM steps or rows
+visited internally. Only the first 256 statements are retained, with total statementCount showing truncation.
+The console renders both forms. Disposable Linux verification includes EARS/SDK API checks, console build and Vue
+typecheck, 84 selected pack cases, 10 CLI facade language-service cases, 14 published-any cases and all five package
+trees. Negative proofs reject unbranded explanation IDs, an unknown backend and missing SQL plans. Evidence logs
+are retained alongside prior checkpoints; historical explain-gap logs describe earlier source, not the current state.
 
 The SQLite package entry and reviewed API report expose EarsDatabase construction, not implementation-specific
 any types. Runtime dependencies are pinned in the normal workspace lockfile; the unused private extension manifests
@@ -236,8 +245,8 @@ are removed. The new constructor closes refused connections, and temporary facto
 The partial-write, unknown-type and undefined-normalization proofs remain in the implementation evidence. No new
 app performance claim is made, and the native-slot/inline limits remain provisional.
 
-Next: continue from the canonical checkout containing the source-entry checkpoint; refine structured operation/read
-types, implement truthful measured SQLite explain, and record actual-facade comparisons including small updates
+Next: continue from the canonical checkout; refine structured operation/read types and record actual-facade
+comparisons including small updates
 beside large values. Open the draft PR with that working slice. Do not declare phase 2 complete from package wiring. All phase 3–7 requirements remain, including background
 index admission, useful search/realistic vectors, four host backup-format failures, complete app composition,
 operational/platform qualification and adoption budgets. Normal production still uses elmdb.

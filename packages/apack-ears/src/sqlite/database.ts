@@ -21,6 +21,7 @@ import { mkdirSync, existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { Packr, Unpackr } from "msgpackr";
 import type { EarsDatabase, EarsUnit, ReadRequest, WriteRequest, WriteResult, Answer, Changes, OpResult } from "../database.ts";
+import type { SqliteStatement } from "../runtime.ts";
 import { RESERVED_ATTRIBUTES } from "../errors.ts";
 import { sameValue } from "../utils.ts";
 import { executeQuery } from "./query.ts";
@@ -78,6 +79,7 @@ export class SqliteDatabase implements EarsDatabase {
   readonly search: SqliteSearch;
   readonly values: SqliteValues;
   private readonly layouts = new Map<string, SqliteValueLayout>();
+  private explaining?: { statements: SqliteStatement[]; count: number };
 
   constructor(options: {
     path: string;
@@ -168,10 +170,41 @@ export class SqliteDatabase implements EarsDatabase {
     return statement;
   }
   all(sql: string, parameters: any[] = []): Data[] {
-    return this.statement(sql).all(...parameters) as Data[];
+    if (!this.explaining) return this.statement(sql).all(...parameters) as Data[];
+    const started = performance.now();
+    const rows = this.statement(sql).all(...parameters) as Data[];
+    this.recordStatement(sql, parameters, rows.length, performance.now() - started);
+    return rows;
   }
   get(sql: string, parameters: any[] = []): Data | undefined {
-    return this.statement(sql).get(...parameters) as Data | undefined;
+    if (!this.explaining) return this.statement(sql).get(...parameters) as Data | undefined;
+    const started = performance.now();
+    const row = this.statement(sql).get(...parameters) as Data | undefined;
+    this.recordStatement(sql, parameters, row ? 1 : 0, performance.now() - started);
+    return row;
+  }
+  private recordStatement(sql: string, parameters: unknown[], returnedRows: number, ms: number) {
+    const trace = this.explaining!;
+    trace.count++;
+    if (trace.statements.length >= 256) return;
+    trace.statements.push({ sql, parameters: parameters.map(value => value instanceof Uint8Array ? Uint8Array.from(value) : value),
+      returnedRows, ms, plan: [] });
+  }
+  private explain(plan: Data): Data {
+    const previous = this.explaining, statements: SqliteStatement[] = [];
+    const trace = { statements, count: 0 };
+    this.explaining = trace;
+    let answer: Data;
+    const started = performance.now();
+    try { answer = executeQuery(this, plan); }
+    finally { this.explaining = previous; }
+    const ms = performance.now() - started;
+    // Plan the exact statements/bindings after execution, under the same read snapshot. These extra calls are
+    // diagnostic overhead, not included in query execution timing or recursively recorded as executed SELECTs.
+    for (const statement of statements) statement.plan =
+      (this.statement('EXPLAIN QUERY PLAN ' + statement.sql).all(...statement.parameters) as Data[])
+        .map(row => ({ id: Number(row.id), parent: Number(row.parent), detail: String(row.detail) }));
+    return { kind: 'explained', backend: 'sqlite', answer, ms, statementCount: trace.count, statements };
   }
   run(sql: string, parameters: any[] = []) {
     return this.statement(sql).run(...parameters);
@@ -891,6 +924,7 @@ export class SqliteDatabase implements EarsDatabase {
         this.trackRange(`rows:${read.type}`);
         return this.search.pending(read.type, read.limit ?? 100);
       case "query": {
+        if (read.explain) return this.explain(read.plan);
         const answer = executeQuery(this, read.plan, read.visits === true);
         return read.visits
           ? { kind: "visited", answer, visited: answer.__visited ?? 0 }
