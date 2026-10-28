@@ -1,3 +1,4 @@
+import { claudeTerminalGoalProposalRuntime } from './terminal-goal-proposal-runtime.ts'
 import { claudeTerminalRefusalRuntime } from './terminal-refusal-runtime.ts'
 import { claudeTerminalPluginHintRuntime } from './terminal-plugin-hint-runtime.ts'
 import { claudeTerminalSettingsRuntime } from './terminal-settings-runtime.ts'
@@ -517,6 +518,7 @@ ${claudeTerminalMcpFormRuntime}
 ${claudeTerminalMcpUrlRuntime}
 ${claudeTerminalLspRecommendationRuntime}
 ${claudeTerminalPluginHintRuntime}
+${claudeTerminalGoalProposalRuntime}
 ${claudeTerminalRefusalRuntime}
 ${claudeTerminalSettingsRuntime}
 function nativeBillingNotice(n){
@@ -775,12 +777,14 @@ async function control(request,abort){
  }
  if(request.subtype==='apack_native_notice'){
   const refusal=nativeRefusal(n);await restoreNativeRefusalDraft(n,refusal.store);refusal.retirements=nativeRefusalRetirements(n,refusal.store);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal),retirements:refusal.retirements};
+  const goal=nativeGoalProposal(n);if(goal.item)return {notice:await projectNativeGoalProposal(n,goal),retirements:refusal.retirements};
   const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
   const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
   const d=nativeBillingNotice(n);return {retirements:refusal.retirements,notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
  }
  if(request.subtype==='apack_answer_native_notice'){
   abort.signal.throwIfAborted();
+  if(['goal_accept','goal_decline'].includes(request.decision)){answerNativeGoalProposal(n,request);return {answered:true};}
   if(['retry_fallback','edit_prompt','cancelled'].includes(request.decision)){answerNativeRefusal(n,request);return {answered:true};}
   if(['yes','no','disable'].includes(request.decision)&&nativePluginHint(n).item){answerNativePluginHint(n,request);return {answered:true};}
   if(['yes','no','never','disable'].includes(request.decision)){answerNativeLspRecommendation(n,request);return {answered:true};}

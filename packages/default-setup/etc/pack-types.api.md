@@ -1015,7 +1015,7 @@ declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
-    decision: 'cancelled' | 'continue' | 'disable' | 'edit_prompt' | 'interrupt' | 'never' | 'no' | 'retry_fallback' | 'yes';
+    decision: 'cancelled' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'no' | 'retry_fallback' | 'yes';
 };
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
@@ -1028,6 +1028,20 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         value: z.ZodEnum<{
             retry_fallback: "retry_fallback";
             edit_prompt: "edit_prompt";
+        }>;
+        label: z.ZodString;
+    }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"goal_proposal">;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<{
+            goal_decline: "goal_decline";
+            goal_accept: "goal_accept";
         }>;
         label: z.ZodString;
     }, z.core.$strip>>;
@@ -2958,9 +2972,9 @@ declare const CommandLifecycleLineSchema: z.ZodObject<{
     command_uuid: z.ZodString;
     state: z.ZodEnum<{
         completed: "completed";
+        cancelled: "cancelled";
         queued: "queued";
         started: "started";
-        cancelled: "cancelled";
         discarded: "discarded";
         refused: "refused";
     }>;
@@ -8979,8 +8993,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

@@ -155,3 +155,21 @@ it('shows native refusal text and exact retry/edit/cancel decisions without plug
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice }, noticeAnswer: { id: notice.id, status: 'pending', revision: notice.revision } }); await nextTick()
   expect(buttons.every(button => button.disabled)).toBe(true)
 })
+
+it('keeps a goal proposal nonblocking and routes decline/Escape with its exact native identity', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
+  const notice = { id: 'goal', revision: 'goal-revision', sessionId: 'session', kind: 'goal_proposal' as const, title: 'Claude proposes a goal', paragraphs: ['Finish this review', 'Claude continues with the current work while you decide.', 'Approving replaces the current goal: old goal'], choices: [{ value: 'goal_decline' as const, label: 'Not now' }, { value: 'goal_accept' as const, label: 'Set this goal' }] }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, busy: true, notice } }); await nextTick()
+  const card = f.root.querySelector('[aria-label="Claude goal proposal"]')!
+  expect(card.textContent).toContain('continues with the current work')
+  expect(card.textContent).toContain('replaces the current goal')
+  expect(f.active).toHaveBeenLastCalledWith(false)
+  expect([...card.querySelectorAll('button')].map(button => button.textContent)).toEqual(['Not now', 'Set this goal'])
+  card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_NOTICE', notice: { id: 'goal', revision: 'goal-revision', sessionId: 'session', decision: 'goal_decline' } }))
+  card.querySelectorAll<HTMLButtonElement>('button')[1]!.click()
+  expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('goal_accept')
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: undefined } }); await nextTick()
+  expect(f.root.querySelector('[aria-label="Claude goal proposal"]')).toBeNull()
+})
