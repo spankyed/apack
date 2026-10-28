@@ -145,12 +145,14 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
   });
 
   it('imports through the actual appData service and refreshes the accepted settings', async () => {
-    const f = await fixture(format);
+    const f = await fixture(format, { app: { personal: { name: 'Candidate' } } });
     vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_USER_DATA_DIR', path.join(f.dir, 'live'));
     const runtime = createHostRuntime({ database: f.live.database, engine: f.live.engine, runHistory: f.live.history,
       packs: createNativePackTestRegistry(), appVersion: '1.0.0', transport: { rootEvents: testRootEvents } });
     bindHost(runtime);
+    expect(runtime.services.settings.getOverrides()).toEqual({});
     await runtime.services.appData.importBackup(f.backup);
+    expect(runtime.services.settings.getOverrides()).toEqual({ app: { personal: { name: 'Candidate' } } });
     expect(f.live.engine.query('Note').ids()).toEqual(['Note-candidate']);
     expect(fs.readFileSync(path.join(f.liveMedia, 'asset'), 'utf8')).toBe('candidate');
   });
