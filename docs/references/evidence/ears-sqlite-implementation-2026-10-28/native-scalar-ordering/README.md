@@ -13,7 +13,7 @@ inputs are not inspected. Type-source order is canonicalized without changing ca
 SQL casts numeric values to REAL to preserve the driver's JS-number rounding of SQLite integers. Signed-zero,
 null/missing and input-order ties stay stable. Fractional timestamps use the decoder's date clipping through the
 fallback. The path still materializes all sorted IDs and restarts the pipeline; it does not implement top-k
-pushdown or claim bounded sort memory. No new latency result is claimed before paired measurement.
+pushdown or claim bounded sort memory.
 
 Private Linux passes EARS types, 48 focused query/value/cost cases and the restored 16 cost/semantic cases. The
 full SQLite suite passes **294**, with the same **three inherited substring/regex failures** still open. The JSON
@@ -27,3 +27,25 @@ mixed scalar corpus, plus prior limits/order, duplicate IDs and embedded-NUL fie
 
 The implementation under strict CI remains `683e1d5912`; this change is its local descendant until reviewed gates
 and publication. All remaining schema/index/search/vector/app/IO/platform requirements remain in the goal.
+
+## Paired timing outcome
+
+Nine fresh-process actual-facade trials use the unchanged benchmark with sync disabled, 2 CPUs / 6 GiB in
+private Linux arm64, Node 23.11.1, current native `6ab2f69`, SQLite before `683e1d5912` and after
+`9f0cd225be`. Order varies before/after/native, native/after/before, before/native/after. Each process supplies
+five batches, normalized per sort call. The median of the three process medians is **38.24 ms before,
+41.21 ms after, 5.89 ms native**: the scalar path is **7.7% slower** overall and **7.00× native** in this cohort.
+Individual process medians before are 73.11/38.24/37.09 ms and after 42.58/41.21/36.07 ms; this variability
+precludes claiming a stable regression size or a general speedup. This is synthetic sorting, not app qualification.
+
+SQL scalar ordering removes JS comparison/key decoding, but introduces candidate-type and validity probes and
+re-executes the input for the final sort. Those costs are plausible causes, not isolated measurements. Keep
+its semantic/cost tests; before treating the path as a performance improvement, profile these statements and
+combine eligibility/key materialization with execution or push a bounded top-k through the pipeline.
+
+[Paired trials](paired-trials/) retain every JSON/stdout/stderr, exact source maps, loaded binaries, harness and
+summary. Both provenance snapshots identify checkout HEAD `9f0cd225be`; the before snapshot has its complete
+EARS source replaced by the trusted `683e1d5912` Git archive and a corresponding dirty status, independently
+verified against every expected source hash. The after snapshot is clean. Dependencies and benchmark stay the
+same. The initial harness failed before any samples because this Linux Python lacks the extraction `filter`
+argument; the corrected runner uses system tar on these trusted Git archives. No failed timing run was discarded.

@@ -244,7 +244,9 @@ null/zero/int64 ties, date clipping, prior limits/order and actual-primary integ
 avoid unrelated type tables. EARS types and 48 focused cases pass; full SQLite passes 294 with the same three
 open search failures. Seven independent mutations fail meaningful assertions.
 [Scalar-order evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-scalar-ordering/README.md)
-retains complete results. It still materializes sorted IDs; top-k and latency qualification remain open.
+retains complete results. The paired nine-process cohort does not show an overall speedup: median sort is
+38.24 ms before, 41.21 ms after and 5.89 ms native (7.7% slower; substantial process variability).
+It still materializes sorted IDs; probe/query costs, top-k and latency qualification remain open.
 
 ### Unqualified results and current CI
 
@@ -289,8 +291,8 @@ descendant; no source under the active CI run was changed. Promote only the exac
 
 ### Next deliverables and full remaining scope
 
-Finish the single targeted CI retry and promote the exact candidate only if green. Commit/measure the guarded
-scalar-ordering descendant, then publish it with appropriate gates. Next implementation work should finish top-k,
+Finish the single targeted CI retry and promote the exact candidate only if green. Profile the guarded scalar-ordering descendant
+(the paired measurement shows no overall win), then publish an appropriately gated disposition. Next implementation work should finish top-k,
 complete atomic schema validation and background text/vector/trigram admission, and qualify IO/ownership under
 the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
 unanswered; value-index work does not depend on it.
