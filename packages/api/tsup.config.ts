@@ -26,7 +26,8 @@ export default defineConfig((options) => {
     // The development app's stacks name source files, which is what the engine's call count attributes calls by
     // (`@apackdev/ears`'s `calls.ts`); the app runs this build with `--enable-source-maps`
     sourcemap: isDev,
-    external: ['typescript', 'esbuild'],
+    // Native/vector/WASM loaders must retain the owning EARS package's paths.
+    external: ['typescript', 'esbuild', '@apackdev/ears/sqlite'],
     // Bundled CommonJS dependencies require Node builtins (yaml requires 'process'); ESM output has no
     // require, so give it one, as the CLI bundle does
     banner: ({ format }) => (format === 'esm'

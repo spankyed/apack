@@ -24,7 +24,8 @@ const fold = (s: string) =>
 export class SqliteSearch {
   private vectorLoaded = false;
   readonly trigrams: SqliteTrigrams;
-  constructor(private readonly db: SqliteDatabase) { this.trigrams = new SqliteTrigrams(db); }
+  private readonly db: SqliteDatabase;
+  constructor(db: SqliteDatabase) { this.db = db; this.trigrams = new SqliteTrigrams(db); }
   private textIndex(
     type: string,
     schema = this.db.schemaForQueries()

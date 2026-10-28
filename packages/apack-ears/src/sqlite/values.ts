@@ -22,8 +22,13 @@ const refusal = (code: string, message: string): never => { throw Object.assign(
 
 /** The caller owns row-rule validation and the surrounding transaction, including metadata and derived updates. */
 export class SqliteValues {
-  constructor(private readonly sql: SqliteValuesSql, private readonly codec: SqliteValuesCodec,
-    private readonly inlineTextLimit = 256, private readonly nativeFieldLimit = 128) {}
+  private readonly sql: SqliteValuesSql;
+  private readonly codec: SqliteValuesCodec;
+  private readonly inlineTextLimit: number;
+  private readonly nativeFieldLimit: number;
+  constructor(sql: SqliteValuesSql, codec: SqliteValuesCodec, inlineTextLimit = 256, nativeFieldLimit = 128) {
+    this.sql = sql; this.codec = codec; this.inlineTextLimit = inlineTextLimit; this.nativeFieldLimit = nativeFieldLimit;
+  }
 
   initialize(): void {
     this.sql.run(`CREATE TABLE IF NOT EXISTS value_types(id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE COLLATE BINARY)`);

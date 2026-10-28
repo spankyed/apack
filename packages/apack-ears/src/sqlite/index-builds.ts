@@ -46,9 +46,13 @@ export class SqliteIndexBuilds {
   readonly batchRows = 32;
   readonly sliceMs = 4;
 
-  constructor(private readonly db: SqliteDatabase, private readonly canRun: () => boolean,
-    private readonly checkRevision: () => void,
-    private readonly refile: (id: string, type: string, seq: number, field: string, generation: number) => void) {
+  private readonly db: SqliteDatabase;
+  private readonly canRun: () => boolean;
+  private readonly checkRevision: () => void;
+  private readonly refile: (id: string, type: string, seq: number, field: string, generation: number) => void;
+  constructor(db: SqliteDatabase, canRun: () => boolean, checkRevision: () => void,
+    refile: (id: string, type: string, seq: number, field: string, generation: number) => void) {
+    this.db = db; this.canRun = canRun; this.checkRevision = checkRevision; this.refile = refile;
     if (db.readOnly && (!db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='index_builds'") ||
         !db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='index_gc'"))) fail('CORRUPT', 'Missing index generation catalog');
     if (!db.readOnly) db.sql.exec(`

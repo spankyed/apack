@@ -121,6 +121,8 @@ const externalizeAllButInlined: Plugin = {
   name: 'externalize-all-but-inlined',
   setup(b) {
     b.onResolve({ filter: /^[^./]/ }, (args) => {
+      // SQLite's native extension and regex assets resolve relative to its own package.
+      if (args.path === '@apackdev/ears/sqlite') return { path: args.path, external: true };
       if (args.kind === 'entry-point' || INLINED.has(packageName(args.path))) return undefined;
       return { path: args.path, external: true };
     });

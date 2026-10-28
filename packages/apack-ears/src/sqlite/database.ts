@@ -1377,7 +1377,8 @@ class SqliteUnit implements EarsUnit {
   }
   private open = true;
   private depth = 0;
-  constructor(private readonly db: SqliteDatabase) {}
+  private readonly db: SqliteDatabase;
+  constructor(db: SqliteDatabase) { this.db = db; }
   get isOpen() {
     return this.open;
   }

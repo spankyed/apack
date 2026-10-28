@@ -12,7 +12,8 @@ export class SqliteTrigrams {
   private readonly compiler = createRegexCompiler();
   private readonly matchers = new Map<string, SqlitePattern>();
   private installed = false;
-  constructor(private readonly db: SqliteDatabase) {}
+  private readonly db: SqliteDatabase;
+  constructor(db: SqliteDatabase) { this.db = db; }
   private definitions(type: string, schema: Data): Definition[] {
     return Object.entries(schema.types[type]?.indexes ?? {}).flatMap(([name, value]) => {
       const index = value as Data;
