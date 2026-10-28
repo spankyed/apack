@@ -155,14 +155,18 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
 
   it('loads the SDK on the installed @apackdev/ears', async () => {
     // The SDK's EARS namespace and its repositories import the engine: a plain Node process resolves it from the consumer
+    const earsRoot = path.join(consumer!, 'node_modules', '@apackdev', 'ears');
+    const matcher = pathToFileURL(path.join(earsRoot, 'dist', 'sqlite', 'regex.js')).href;
     const { stdout: output } = await execFileAsync(
       process.execPath,
-      ['--input-type=module', '-e', "const { EARS } = await import('@apackdev/sdk/types'); const { flowRepository } = await import('@apackdev/sdk/repositories'); process.stdout.write(EARS.Entity.Flow + ' ' + EARS.RelKind.CONTAINS + ' ' + typeof flowRepository)"],
+      ['--input-type=module', '-e', `const { EARS } = await import('@apackdev/sdk/types'); const { flowRepository } = await import('@apackdev/sdk/repositories'); const {createRegexCompiler}=await import(${JSON.stringify(matcher)});const pattern=createRegexCompiler().compile('(?i)^hello');try{process.stdout.write(EARS.Entity.Flow + ' ' + EARS.RelKind.CONTAINS + ' ' + typeof flowRepository + ' ' + pattern.matches('HELLO'))}finally{pattern.close()}`],
       { cwd: consumer!, env: { PATH: process.env.PATH }, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 },
     );
-    expect(output).toBe('Flow contains object');
-    const ears = fs.readdirSync(path.join(consumer!, 'node_modules', '@apackdev', 'ears')).sort();
-    expect(ears).toEqual(['dist', 'package.json']);
+    expect(output).toBe('Flow contains object true');
+    expect(fs.readdirSync(earsRoot).sort()).toEqual(['dist', 'package.json', 'vendor']);
+    expect(fs.readdirSync(path.join(earsRoot, 'vendor'))).toEqual(['rregex']);
+    expect(fs.readdirSync(path.join(earsRoot, 'vendor', 'rregex')).sort())
+      .toEqual(['LICENSE', 'README.md', 'provenance.json', 'rregex.cjs', 'rregex_bg.wasm']);
   });
 
   /**

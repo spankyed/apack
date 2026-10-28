@@ -16,6 +16,7 @@ interface DatabaseSync {
   prepare(sql: string): StatementSync;
   exec(sql: string): unknown;
   loadExtension(path: string): unknown;
+  function(name: string, options: { deterministic: boolean }, fn: (...args: unknown[]) => unknown): unknown;
   close(): unknown;
 }
 import { randomBytes } from "node:crypto";

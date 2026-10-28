@@ -15,6 +15,12 @@ export function executeQuery(
   plan: QueryPlan,
   countVisits = false
 ): QueryAnswer {
+  const cleanup: Array<() => void> = [];
+  try { return executeScopedQuery(db, plan, countVisits, cleanup); }
+  finally { for (const close of cleanup.reverse()) close(); }
+}
+
+function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: boolean, cleanup: Array<() => void>): QueryAnswer {
   const schema = db.schemaForQueries(),
     scope = plan.scope ?? "live",
     steps: QueryStep[] = plan.steps ?? [];
@@ -315,6 +321,15 @@ export function executeQuery(
         };
         ids.sort((a, b) => compare(values.get(a), values.get(b)));
         restart(ids);
+        break;
+      }
+      case "containing":
+      case "matching": {
+        const direct = plan.start.from === 'types' && stepIndex === 0;
+        const selected = direct ? types : db.all(`SELECT DISTINCT e.type FROM (${sql}) p JOIN entities e ON e.id=p.id`, parameters)
+          .map(row => String(row.type));
+        const result = db.search.trigrams.select({ sql, parameters, types: selected, direct }, step);
+        cleanup.push(result.close); sql = result.sql; parameters = result.parameters;
         break;
       }
       case "search":

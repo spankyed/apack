@@ -4,6 +4,7 @@
 import { createHash } from "node:crypto";
 import { getLoadablePath } from "sqlite-vec";
 import type { SqliteDatabase } from "./database.ts";
+import { SqliteTrigrams } from "./trigrams.ts";
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
@@ -20,7 +21,8 @@ const fold = (s: string) =>
   s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
 export class SqliteSearch {
   private vectorLoaded = false;
-  constructor(private readonly db: SqliteDatabase) {}
+  readonly trigrams: SqliteTrigrams;
+  constructor(private readonly db: SqliteDatabase) { this.trigrams = new SqliteTrigrams(db); }
   private textIndex(
     type: string,
     schema = this.db.schemaForQueries()
@@ -61,6 +63,7 @@ export class SqliteSearch {
   }
   ensure(schema: Data) {
     this.loadVectors(schema);
+    this.trigrams.ensure(schema);
     this.db.sql
       .exec(`CREATE TABLE IF NOT EXISTS text_meta(entity_id TEXT,index_name TEXT,hash TEXT NOT NULL,PRIMARY KEY(entity_id,index_name));
       CREATE TABLE IF NOT EXISTS chunks(entity_id TEXT NOT NULL,type TEXT NOT NULL,index_name TEXT NOT NULL,
@@ -92,6 +95,7 @@ export class SqliteSearch {
       }
   }
   refile(row: Data, seq: number, schema = this.db.schemaForQueries(), changed?: ReadonlySet<string>) {
+    this.trigrams.refile(row, schema, changed);
     for (const [name, index] of Object.entries(
       schema.types[row.entityType]?.indexes ?? {}
     ) as Array<[string, Data]>) {
@@ -165,6 +169,7 @@ export class SqliteSearch {
     }
   }
   remove(id: string, type: string, schema = this.db.schemaForQueries()) {
+    this.trigrams.remove(id, type, schema);
     for (const [name, index] of Object.entries(
       schema.types[type]?.indexes ?? {}
     ) as Array<[string, Data]>)
@@ -177,6 +182,7 @@ export class SqliteSearch {
     this.db.run("DELETE FROM chunks WHERE entity_id=?", [id]);
   }
   clear(schema = this.db.schemaForQueries()) {
+    this.trigrams.clear(schema);
     for (const [type, definition] of Object.entries(schema.types) as Array<
       [string, Data]
     >)

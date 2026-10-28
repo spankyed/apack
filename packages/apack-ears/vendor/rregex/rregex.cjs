@@ -145,6 +145,71 @@ module.exports.escape = function(text) {
     }
 };
 
+/**
+ * Preserve the native substring contract: lowercase each Unicode scalar independently.
+ * @param {string} text
+ * @returns {string}
+ */
+module.exports.folded = function(text) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.folded(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+};
+
+/**
+ * A conservative common prefix of every extracted regex prefix. None means verification must scan.
+ * @param {string} pattern
+ * @returns {string | undefined}
+ */
+module.exports.requiredLiteral = function(pattern) {
+    const ptr0 = passStringToWasm0(pattern, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.requiredLiteral(ptr0, len0);
+    let v2;
+    if (ret[0] !== 0) {
+        v2 = getStringFromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    }
+    return v2;
+};
+
+/**
+ * @param {string} text
+ * @param {string} needle
+ * @returns {boolean}
+ */
+module.exports.contains = function(text, needle) {
+    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(needle, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.contains(ptr0, len0, ptr1, len1);
+    return ret !== 0;
+};
+
+/**
+ * @param {string} text
+ * @param {string} needle
+ * @returns {boolean}
+ */
+module.exports.containsFolded = function(text, needle) {
+    const ptr0 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(needle, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.containsFolded(ptr0, len0, ptr1, len1);
+    return ret !== 0;
+};
+
 const RRegexFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_rregex_free(ptr >>> 0, 1));

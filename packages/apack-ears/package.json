@@ -15,7 +15,11 @@
   },
   "files": [
     "dist",
-    "vendor/rregex"
+    "vendor/rregex/rregex.cjs",
+    "vendor/rregex/rregex_bg.wasm",
+    "vendor/rregex/provenance.json",
+    "vendor/rregex/LICENSE",
+    "vendor/rregex/README.md"
   ],
   "scripts": {
     "build:package": "tsx ../../scripts/build-package.ts .",

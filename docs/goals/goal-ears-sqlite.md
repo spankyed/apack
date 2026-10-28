@@ -351,18 +351,45 @@ to query filtering; Electron/CLI/platform and full search/index lifecycle qualif
 
 The schema/cache/matcher continuation is published as **6794ab1d4a15f23c565b6aea5bc3a73611c15d39** on
 `session/ears-sqlite`; detached integration is clean at this exact source. Draft PR #286 is updated and remains
-a draft. [Strict run 40716716057](https://github.com/spankyed/apack/actions/runs/40716716057) is confirmed live
-on this candidate. Poll this run without dispatching duplicates. Preserve canonical 194c72c77c until it succeeds;
+a draft. [Strict run 40716716057](https://github.com/spankyed/apack/actions/runs/40716716057) is terminal failure:
+five jobs passed; integration-1 found an installed-package assertion that excluded the intentional runtime vendor directory.
+The continuation fixes that assertion with an exact runtime-file whitelist and execution from the installed package.
+Preserve canonical 194c72c77c until a new candidate passes its own exact strict gate;
 the helper's next starting base is that green checkpoint. Scalar-limit statement profiles reduce work but the earlier
 paired cohort showed no overall scalar-sort win. Continue balanced performance qualification and general top-k,
 qualify live-pack/schema I/O failures and implement background text/vector/trigram admission, and qualify IO/ownership under
 the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
 unanswered; value-index work does not depend on it.
 
-All unmet phase 3–7 requirements remain: the three substring/regex cases; realistic relevance/languages/typos and
+All unmet phase 3–7 requirements remain: final qualification of substring/regex execution and refusal ordering; realistic relevance/languages/typos and
 no unbounded vocabulary scan; high-dimensional and approved real-vector recall/update/latency evidence; complete
 app/run-history composition and storage descriptors; four host backup-format failures and validated populated
 replacement/media rollback/recovery; logical conversion and maintenance; truthful real IO/commit-failure outcomes,
 crash/checkpoint/long-reader/ownership qualification; Electron/CLI native packaging and supported-platform policy;
 representative app/resource budgets, maintenance review and the adoption decision. No old synthetic report
 certifies app latency, memory growth, a filesystem, production durability or realistic search/vector quality.
+
+
+### Exact substring and regex continuation
+
+SQLite now maintains per-string external-content FTS5 trigram documents in the write transaction. Selective
+required literals narrow through FTS5 and exact Rust matching verifies original strings; broad/short/NUL
+patterns use the owner index and verify only candidate entities. List elements remain separate. Rust Unicode
+folding preserves the native per-scalar lowercase contract. Compiled patterns and SQL callback contexts are
+scoped to synchronous reads and released on success and failures. This is query execution over SQLite, with a
+small pinned upstream matcher adapter, rather than a new storage engine.
+
+A proposed special branch for single-type broad patterns was removed: deleting it still passed the streaming
+cost guard, so its benefit was not established. The cost guard remains. The initial full Linux suite passed all
+374 cases, including the three formerly failing substring/regex cases; the final continuation also passes all 374 cases, 73 focused cases before/after six
+disposal/correctness/index mutations, five package builds, three unchanged API reports and the installed
+SDK/runtime package checks. Publication still requires an exact new strict CI gate.
+Evidence and the current runtime build recipe are retained under
+`../references/evidence/ears-sqlite-implementation-2026-10-28/trigram-filtering/`.
+
+This does not close production search acceptance. Trigram/text admission still backfills synchronously;
+background generations, readiness, missing-derived-table recovery and retired-table cleanup remain open.
+Native lazy refusal ordering for mixed types and a later zero limit is not fully reproduced by eager matcher
+validation; qualify or explicitly decide that contract before adoption. Ranked full-text list/phrase boundaries,
+realistic multilingual relevance and corpus/resource/latency qualification are separate work. Neither the small
+native differential corpus nor the full shared test suite establishes all of those requirements.
