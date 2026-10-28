@@ -134,3 +134,23 @@ it('shows original shell plugin choices in chat and uses defer for Escape withou
   f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice: undefined } }); await nextTick()
   expect(f.root.querySelector('[aria-label="Claude plugin recommendation"]')).toBeNull()
 })
+
+it('shows native refusal text and exact retry/edit/cancel decisions without plugin details', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' } }); await nextTick(); f.back.click(); await nextTick()
+  const notice = { id: 'refusal', revision: 'revision', sessionId: 'session', kind: 'refusal_fallback_prompt' as const, originalModel: 'Opus 5', fallbackModel: 'Opus 4.8', title: 'Session paused', paragraphs: ['Original <b>refusal</b> explanation'], choices: [{ value: 'retry_fallback' as const, label: 'Retry on Opus 4.8' }, { value: 'edit_prompt' as const, label: 'Edit prompt' }] }
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice } }); await nextTick()
+  const card = f.root.querySelector('[aria-label="Claude model fallback"]')!
+  expect(card.textContent).toContain('Original <b>refusal</b> explanation'); expect(card.querySelector('b')).toBeNull()
+  expect(card.textContent).not.toContain('About this plugin')
+  const buttons = [...card.querySelectorAll<HTMLButtonElement>('.native-notice__actions button')]
+  expect(buttons.map(button => button.textContent)).toEqual(['Retry on Opus 4.8', 'Edit prompt', 'Cancel'])
+  for (const [index, decision] of ['retry_fallback', 'edit_prompt', 'cancelled'].entries()) {
+    buttons[index]!.click()
+    expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_NOTICE', notice: { id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision } }))
+  }
+  card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ notice: expect.objectContaining({ decision: 'cancelled' }) }))
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, notice }, noticeAnswer: { id: notice.id, status: 'pending', revision: notice.revision } }); await nextTick()
+  expect(buttons.every(button => button.disabled)).toBe(true)
+})

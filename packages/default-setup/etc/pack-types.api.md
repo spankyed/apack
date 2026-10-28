@@ -1005,11 +1005,28 @@ declare const ClaudeNativeMcpUrlSchema: z.ZodObject<{
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
-    decision: 'continue' | 'disable' | 'interrupt' | 'never' | 'no' | 'yes';
+    decision: 'cancelled' | 'continue' | 'disable' | 'edit_prompt' | 'interrupt' | 'never' | 'no' | 'retry_fallback' | 'yes';
 };
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
 declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"refusal_fallback_prompt">;
+    helpUrl: z.ZodOptional<z.ZodString>;
+    originalModel: z.ZodString;
+    fallbackModel: z.ZodString;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<{
+            retry_fallback: "retry_fallback";
+            edit_prompt: "edit_prompt";
+        }>;
+        label: z.ZodString;
+    }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"auto_mode_server_fallback">;
     helpUrl: z.ZodString;
     title: z.ZodString;

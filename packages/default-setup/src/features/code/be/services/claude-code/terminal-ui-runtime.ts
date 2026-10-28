@@ -1,3 +1,4 @@
+import { claudeTerminalRefusalRuntime } from './terminal-refusal-runtime.ts'
 import { claudeTerminalPluginHintRuntime } from './terminal-plugin-hint-runtime.ts'
 import { claudeTerminalSettingsRuntime } from './terminal-settings-runtime.ts'
 import { claudeTerminalLspRecommendationRuntime } from './terminal-lsp-recommendation-runtime.ts'
@@ -516,6 +517,7 @@ ${claudeTerminalMcpFormRuntime}
 ${claudeTerminalMcpUrlRuntime}
 ${claudeTerminalLspRecommendationRuntime}
 ${claudeTerminalPluginHintRuntime}
+${claudeTerminalRefusalRuntime}
 ${claudeTerminalSettingsRuntime}
 function nativeBillingNotice(n){
  const binding=originalContext??n.runtime.ey();
@@ -772,12 +774,14 @@ async function control(request,abort){
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
  if(request.subtype==='apack_native_notice'){
+  const refusal=nativeRefusal(n);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal)};
   const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint)};
   const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation)};
   const d=nativeBillingNotice(n);return {notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
  }
  if(request.subtype==='apack_answer_native_notice'){
   abort.signal.throwIfAborted();
+  if(['retry_fallback','edit_prompt','cancelled'].includes(request.decision)){answerNativeRefusal(n,request);return {answered:true};}
   if(['yes','no','disable'].includes(request.decision)&&nativePluginHint(n).item){answerNativePluginHint(n,request);return {answered:true};}
   if(['yes','no','never','disable'].includes(request.decision)){answerNativeLspRecommendation(n,request);return {answered:true};}
   const d=nativeBillingNotice(n);

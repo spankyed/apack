@@ -469,6 +469,7 @@ export const claudeNativeLinuxBindings: {
     }
   },
   "functionNames": {
+    "UCe": "w_e",
     "GCo": "i_o",
     "QCo": "a_o",
     "dA": "SA",
@@ -501,6 +502,7 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "5c0cdd900e2aff12b223358a8e67a3e0757edda8dba0e7aed14c02b45480a331": "c024be3ca62eb82676c8912578e3c127ede9b2a2cba344dff9f5ac457793edd9",
     "aabc115cca76c61f3f756409361c604dcf269fddd97ea9a4d36f610669b8deeb": "26d7b8d2b0defe92cf744ae1c0ec1c4db10325ce651c80eb485803ab105fc8f9",
     "e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5": "0b150b8f2b7cf9d0b6626c3c9bb48f124bfa8e660bd23a8d9251e24fdfd699e3",
     "3b940676db580289927110c44fd7c74c3669ebd556127ddc0fe5b74d759fd754": "883658d4e9fa91f3db81012943f687f1190c4d0755e41b9cb6ef008284490213",

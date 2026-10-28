@@ -1,9 +1,9 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
-    <section v-if="!active && view?.state?.notice" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+    <section v-if="!active && view?.state?.notice" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <h3>{{ view.state.notice.title }}</h3>
-        <template v-if="view.state.notice.kind !== 'auto_mode_server_fallback'">
+        <template v-if="view.state.notice.kind === 'plugin_hint' || view.state.notice.kind === 'lsp_recommendation'">
           <p class="native-notice__identity">{{ view.state.notice.pluginName }} · {{ view.state.notice.marketplaceName }}</p>
           <PopoverRoot :key="view.state.notice.revision">
             <PopoverTrigger as-child><button type="button" class="native-notice__details">About this plugin</button></PopoverTrigger>
@@ -17,13 +17,15 @@
         </template>
         <template v-else>
           <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
-          <p class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
+          <p v-if="view.state.notice.kind === 'refusal_fallback_prompt' && view.state.notice.helpUrl"><a :href="view.state.notice.helpUrl" target="_blank" rel="noopener noreferrer">Learn more</a></p>
+          <p v-if="view.state.notice.kind === 'auto_mode_server_fallback'" class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
         </template>
       </div>
       <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
       <div class="native-notice__actions">
         <template v-if="view.state.notice.kind !== 'auto_mode_server_fallback'">
           <button v-for="choice in view.state.notice.choices" :key="choice.value" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(choice.value)">{{ choice.label }}</button>
+          <button v-if="view.state.notice.kind === 'refusal_fallback_prompt'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice('cancelled')">Cancel</button>
         </template>
         <template v-else>
           <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice('interrupt')">Cancel</button>

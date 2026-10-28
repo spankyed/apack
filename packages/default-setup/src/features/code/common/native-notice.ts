@@ -4,12 +4,14 @@ const identity = { id: z.string().min(1).max(256), revision: z.string().uuid(), 
 const body = { title: z.string().max(16000), paragraphs: z.array(z.string().max(16000)).max(32) }
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
 export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
+  z.object({ ...identity, ...body, kind: z.literal('refusal_fallback_prompt'), helpUrl: z.string().url().startsWith('https://').max(4000).optional(), originalModel: z.string().max(16000), fallbackModel: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['retry_fallback', 'edit_prompt']), label: z.string().min(1).max(4000) })).length(2) }),
   z.object({ ...identity, ...body, kind: z.literal('auto_mode_server_fallback'), helpUrl: z.string().max(4000) }),
   z.object({ ...identity, ...body, kind: z.literal('plugin_hint'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), sourceCommand: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'disable']), label: z.string().min(1).max(4000) })).length(3) }),
   z.object({ ...identity, ...body, kind: z.literal('lsp_recommendation'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), fileExtension: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'never', 'disable']), label: z.string().min(1).max(4000) })).length(4) }),
 ])
 export type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>
-export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & { decision: 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' }
+export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & { decision: 'retry_fallback' | 'edit_prompt' | 'cancelled' | 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' }
 export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decision: string): boolean {
+  if (notice.kind === 'refusal_fallback_prompt') return decision === 'cancelled' || notice.choices.some(choice => choice.value === decision)
   return notice.kind === 'lsp_recommendation' || notice.kind === 'plugin_hint' ? notice.choices.some(choice => choice.value === decision) : decision === 'continue' || decision === 'interrupt'
 }
