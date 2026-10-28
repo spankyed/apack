@@ -52,7 +52,11 @@ language. A backend accepts structured read requests and write batches, returns 
 and owns snapshots, write units/savepoints and commit outcomes. `src/storage.ts` owns the discriminated request/
 answer vocabulary, including query steps and terminals. Compile-time assertions exercise the actual database,
 unit and connection entries; direct-port shared cases check result tags as well as facade behavior. Common connection code owns transaction nesting,
-observers, frozen-result handling and call instrumentation.
+observers, frozen-result handling and call instrumentation. SQLite accumulates dependency changes only after a
+batch succeeds and within its current savepoint; rollback discards the local delta, release merges it and commit
+collects still-open descendants. Native deliberately retains rolled-back keys conservatively, so shared contracts
+require no missed dependencies and correct primary rollback; exact rollback invalidation is a stronger SQLite
+requirement verified separately within those cases.
 
 The elmdb adapter alone encodes/decodes its native protocol. SQLite executes structured operations directly.
 Lossless storage may still encode individual values; that is separate from serializing already-live requests and

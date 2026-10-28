@@ -262,9 +262,16 @@ remain roughly 1.6–3× slower than the native baseline here, numeric sorting ~
 case ~13×. Measurements do not establish app budgets or realistic relevance/recall. Driver spans group binding,
 SQL execution and marshalling; more precise native/allocator attribution remains open.
 
-Next: open/update the draft PR with this measured vertical slice. Continue phase 3 with precise rollback dependency
-delivery (the prepared delta patch is `/private/tmp/ears-sqlite-rollback-deltas.patch`), then background index
-admission and foreground ownership/stall qualification. Strict run `40655434334` is live on typed checkpoint
+Draft [PR #286](https://github.com/spankyed/apack/pull/286) is open with the measured vertical slice and the full
+remaining acceptance scope. The following rollback checkpoint stages changes per successful batch and open
+savepoint; failed batches and rolled-back descendants no longer pollute SQLite commit dependencies. Releasing a
+savepoint merges only its delta, and final commit includes still-open descendants. Shared direct-port cases cover
+both backends, preserving native's documented conservative rollback invalidation while requiring precise SQLite
+deltas. Linux passes 260 SQLite cases and 231 native cases (29 SQLite-only skips); two mutations fail those exact
+assertions. The change avoids copying all accumulated outer changes on each write. Future benchmark runs now
+fingerprint the binaries actually loaded, including v13 prebuilds; its zero-trial provenance self-check passed.
+
+Next: continue phase 3 with background index admission and foreground ownership/stall qualification. Strict run `40655434334` is live on typed checkpoint
 `5985709142`; it does not cover the later overflow layout or later work. All phase 3–7 requirements remain,
 including useful search/realistic vectors, four host backup-format failures, complete app composition,
 operational/platform qualification and adoption budgets. Normal production still uses elmdb.

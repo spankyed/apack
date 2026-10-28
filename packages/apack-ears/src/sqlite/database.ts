@@ -1000,11 +1000,13 @@ export class SqliteDatabase implements EarsDatabase {
   batch(request: WriteRequest, changes: Set<string>): WriteResult {
     const name = `batch_${++this.counter}`;
     this.sql.exec(`SAVEPOINT ${name}`);
+    const pending = new Set<string>();
     try {
       const results = request.ops.map((op: Data) =>
-        this.mutate(op, request.now ?? Date.now(), changes) as OpResult
+        this.mutate(op, request.now ?? Date.now(), pending) as OpResult
       );
       this.sql.exec(`RELEASE ${name}`);
+      for (const key of pending) changes.add(key);
       return { results };
     } catch (e) {
       this.sql.exec(`ROLLBACK TO ${name}; RELEASE ${name}`);
@@ -1016,8 +1018,9 @@ export class SqliteDatabase implements EarsDatabase {
     if (this.active !== unit) fail("CLOSED", "This unit has ended");
     try {
       const sequence = this.sequence + (commit ? 1 : 0);
+      const changes = unit.changesForCommit();
       if (commit) {
-        for (const changed of unit.changes)
+        for (const changed of changes)
           if (changed.startsWith("relation:")) {
             const r = this.relation(changed.slice(9));
             if (r) {
@@ -1042,7 +1045,7 @@ export class SqliteDatabase implements EarsDatabase {
       } else { this.sql.exec("ROLLBACK"); this.layouts.clear(); }
       return {
         sequence,
-        touched: this.touched(unit.changes),
+        touched: this.touched(changes),
       };
     } catch (e) {
       this.sql.exec("ROLLBACK");
@@ -1280,7 +1283,15 @@ export class SqliteDatabase implements EarsDatabase {
 }
 
 class SqliteUnit implements EarsUnit {
-  readonly changes = new Set<string>();
+  private readonly rootChanges = new Set<string>();
+  private readonly savepoints: Array<{ depth: number; changes: Set<string> }> = [];
+  // Only changes in the current savepoint receive newly completed batches. Releasing merges its delta;
+  // rolling back discards it. No write copies the changes accumulated by the entire outer unit.
+  get changes(): Set<string> { return this.savepoints.at(-1)?.changes ?? this.rootChanges; }
+  changesForCommit(): Set<string> {
+    for (const point of this.savepoints) for (const key of point.changes) this.rootChanges.add(key);
+    return this.rootChanges;
+  }
   private open = true;
   private depth = 0;
   constructor(private readonly db: SqliteDatabase) {}
@@ -1299,17 +1310,29 @@ class SqliteUnit implements EarsUnit {
     return this.db.readSync(request);
   }
   savepoint() {
-    const n = ++this.depth;
+    if (!this.open) fail("CLOSED", "Unit has ended");
+    const n = this.depth + 1;
     this.db.sql.exec(`SAVEPOINT unit_${n}`);
+    this.savepoints.push({ depth: n, changes: new Set() });
+    this.depth = n;
     return n;
   }
   rollbackTo(n: number) {
+    if (!this.open) fail("CLOSED", "Unit has ended");
+    const index = this.savepoints.findIndex(point => point.depth === n);
+    if (index < 0) fail("BATCH_INVALID", "No open savepoint has this depth");
     this.db.sql.exec(`ROLLBACK TO unit_${n}; RELEASE unit_${n}`);
+    this.savepoints.splice(index);
     this.db.invalidateLayouts();
     this.depth = n - 1;
   }
   release(n: number) {
+    if (!this.open) fail("CLOSED", "Unit has ended");
+    const index = this.savepoints.findIndex(point => point.depth === n);
+    if (index < 0) fail("BATCH_INVALID", "No open savepoint has this depth");
     this.db.sql.exec(`RELEASE unit_${n}`);
+    const kept = this.savepoints.splice(index);
+    for (const point of kept) for (const key of point.changes) this.changes.add(key);
     this.depth = n - 1;
   }
   commit(_durable?: boolean | null) {

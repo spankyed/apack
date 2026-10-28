@@ -27,3 +27,44 @@ it('returns the same typed result vocabulary for reads and count-only groups', (
   expect(db.readSync({ reads: [{ read: 'query', explain: true, plan: { start, terminal: { answer: 'ids' } } }] })[0])
     .toMatchObject({ kind: 'explained', backend: process.env.EARS_EVALUATION_BACKEND === 'sqlite' ? 'sqlite' : 'elmdb', answer: { kind: 'ids', ids: ['Task-a', 'Task-b'] } });
 });
+
+it('rolls back failed batches and nested writes without losing committed dependencies', () => {
+  const db = openTestDatabase({ types: { Task: { required: [] } }, relations: {}, roles: [] });
+  db.write({ ops: ['a', 'b', 'c', 'd'].map(suffix => ({ op: 'create', type: 'Task', id: `Task-${suffix}`, fields: { title: suffix } })) });
+  for (const [index, suffix] of ['a', 'b', 'c', 'd'].entries()) db.readSync({ track: index + 1, reads: [{ read: 'field', id: `Task-${suffix}`, field: 'title' }] });
+  const unit = db.begin();
+  expect(() => unit.write({ ops: [
+    { op: 'set', id: 'Task-b', fields: { title: 'failed batch' } },
+    { op: 'set', id: 'Task-missing', fields: { title: 'refused' } },
+  ] })).toThrow();
+  unit.write({ ops: [{ op: 'set', id: 'Task-a', fields: { title: 'kept a' } }] });
+  const outer = unit.savepoint();
+  unit.write({ ops: [{ op: 'set', id: 'Task-b', fields: { title: 'rolled back b' } }, { op: 'set', id: 'Task-a', fields: { title: 'rolled back a' } }] });
+  const inner = unit.savepoint();
+  unit.write({ ops: [{ op: 'set', id: 'Task-c', fields: { title: 'rolled back c' } }] });
+  unit.release(inner);
+  unit.rollbackTo(outer);
+  unit.write({ ops: [{ op: 'set', id: 'Task-d', fields: { title: 'kept d' } }] });
+  const touched = unit.commit().touched.sort((a, b) => a - b);
+  // Native UnitState deliberately retains rolled-back keys, permitting extra reruns. The candidate uses logical
+  // deltas instead; verify its stronger precision without inventing a different native correctness contract.
+  expect(touched).toEqual(expect.arrayContaining([1, 4]));
+  if (process.env.EARS_EVALUATION_BACKEND === 'sqlite') expect(touched).toEqual([1, 4]);
+  expect(db.readSync({ reads: ['a', 'b', 'c', 'd'].map(suffix => ({ read: 'field', id: `Task-${suffix}`, field: 'title' })) }))
+    .toEqual(['kept a', 'b', 'c', 'kept d'].map(value => ({ kind: 'field', present: true, value })));
+});
+
+it('includes released savepoints and commits that close an open savepoint', () => {
+  const db = openTestDatabase({ types: { Task: { required: [] } }, relations: {}, roles: [] });
+  db.write({ ops: [{ op: 'create', type: 'Task', id: 'Task-a', fields: { title: 'before' } }] });
+  db.readSync({ track: 1, reads: [{ read: 'field', id: 'Task-a', field: 'title' }] });
+  const unit = db.begin();
+  const outer = unit.savepoint();
+  unit.savepoint();
+  unit.write({ ops: [{ op: 'set', id: 'Task-a', fields: { title: 'released' } }] });
+  unit.release(outer);
+  unit.savepoint();
+  unit.write({ ops: [{ op: 'set', id: 'Task-a', fields: { title: 'committed' } }] });
+  expect(unit.commit().touched).toEqual([1]);
+  expect(db.readSync({ reads: [{ read: 'field', id: 'Task-a', field: 'title' }] })[0]).toEqual({ kind: 'field', present: true, value: 'committed' });
+});
