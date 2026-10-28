@@ -349,8 +349,11 @@ to query filtering; Electron/CLI/platform and full search/index lifecycle qualif
 
 ### Next deliverables and full remaining scope
 
-Publish the committed schema/cache/matcher continuation to the existing draft branch and run its exact strict
-gate; preserve canonical 194c72c77c until it succeeds. The helper's next starting base is this green checkpoint. Scalar-limit statement profiles reduce work but the earlier
+The schema/cache/matcher continuation is published as **6794ab1d4a15f23c565b6aea5bc3a73611c15d39** on
+`session/ears-sqlite`; detached integration is clean at this exact source. Draft PR #286 is updated and remains
+a draft. [Strict run 40716716057](https://github.com/spankyed/apack/actions/runs/40716716057) is confirmed live
+on this candidate. Poll this run without dispatching duplicates. Preserve canonical 194c72c77c until it succeeds;
+the helper's next starting base is that green checkpoint. Scalar-limit statement profiles reduce work but the earlier
 paired cohort showed no overall scalar-sort win. Continue balanced performance qualification and general top-k,
 qualify live-pack/schema I/O failures and implement background text/vector/trigram admission, and qualify IO/ownership under
 the strengthened harness. The preference for explicit “indexing” versus a slow complete search fallback remains
