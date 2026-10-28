@@ -179,7 +179,7 @@ export class SqliteDatabase implements EarsDatabase {
           // Other owners may cache value generations. Invalidate them when physical recovery changes the
           // catalog, while preserving the logical data commit identity and the declaration itself.
           if (this.schemaPresent) this.putMeta('schemaRevision', this.heldRevision + 1);
-          this.sql.exec('COMMIT');
+          this.commitWrite();
           if (this.schemaPresent) this.heldRevision++;
           this.indexBuilds.acceptState(state);
         } catch (error) {
@@ -218,6 +218,23 @@ export class SqliteDatabase implements EarsDatabase {
   private assertOpen() {
     if (!this.opened) fail("CLOSED", "The database is closed");
     if (this.faulted) throw this.faulted;
+  }
+  /** A failed COMMIT is not proof of refusal once SQLite has ended the transaction. */
+  commitWrite(): void {
+    try { this.sql.exec('COMMIT'); }
+    catch (error) {
+      const code = (error as { code?: unknown })?.code;
+      const refused = typeof code === 'string' && /^(SQLITE_FULL|SQLITE_BUSY|SQLITE_LOCKED|SQLITE_CONSTRAINT)(_|$)/.test(code);
+      if (this.sql.inTransaction || refused) this.abortFailedOperation(error);
+      const uncertain = Object.assign(new Error(
+        'SQLite commit outcome is unknown; close and reopen the database and inspect the result before retrying',
+        { cause: error }), { code: 'COMMIT_UNKNOWN' });
+      this.faulted = uncertain;
+      this.active?.ended(); this.active = undefined;
+      this.layouts.clear();
+      this.indexBuilds.stop(uncertain);
+      throw uncertain;
+    }
   }
   /** Preserve the original storage error when SQLite has already rolled back after FULL/IOERR. */
   abortFailedOperation(error: unknown, command: string | null = 'ROLLBACK'): never {
@@ -1099,6 +1116,7 @@ export class SqliteDatabase implements EarsDatabase {
     try {
       const sequence = this.sequence + (commit ? 1 : 0);
       const changes = unit.changesForCommit();
+      const result = { sequence, touched: this.touched(changes) };
       if (commit) {
         for (const changed of changes)
           if (changed.startsWith("relation:")) {
@@ -1121,12 +1139,9 @@ export class SqliteDatabase implements EarsDatabase {
             }
           }
         this.putMeta("commit", sequence);
-        this.sql.exec("COMMIT");
+        this.commitWrite();
       } else { if (this.sql.inTransaction) this.sql.exec("ROLLBACK"); this.layouts.clear(); }
-      return {
-        sequence,
-        touched: this.touched(changes),
-      };
+      return result;
     } catch (e) {
       this.abortFailedOperation(e);
     } finally {
@@ -1208,7 +1223,7 @@ export class SqliteDatabase implements EarsDatabase {
       this.putMeta("schemaRevision", this.heldRevision + 1);
       this.putMeta("commit", this.sequence + 1);
       const indexState = this.indexBuilds.readState();
-      this.sql.exec("COMMIT");
+      this.commitWrite();
       this.heldSchema = next;
       this.schemaPresent = true;
       this.heldRevision++;
@@ -1280,7 +1295,7 @@ export class SqliteDatabase implements EarsDatabase {
       }
       // Unchecked import deliberately permits invalid data, just as the existing admin API does.
       this.putMeta("commit", this.sequence + 1);
-      this.sql.exec("COMMIT");
+      this.commitWrite();
       this.active = undefined;
       unit.ended();
       this.indexBuilds.wake();

@@ -141,8 +141,8 @@ const CODES: Record<string, EarsErrorCode> = {
 };
 
 /**
- * Runs `fn`, a call into elmdb, rethrowing a refusal the engine names as an `EarsError`; anything else elmdb throws
- * (a full disk, a closed database) is thrown as it is, with its own code
+ * Runs `fn`, a backend call, rethrowing a refusal the engine names as an `EarsError`; other storage errors
+ * (including COMMIT_UNKNOWN, a full disk or a closed database) retain their original codes and causes
  */
 export function crossing<T>(fn: () => T): T {
   try {

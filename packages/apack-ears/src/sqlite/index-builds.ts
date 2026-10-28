@@ -198,7 +198,8 @@ export class SqliteIndexBuilds {
     });
     if (!this.waiters.size) this.timer.unref();
   }
-  stop(): void {
+  stop(error?: unknown): void {
+    if (error !== undefined) this.lastError = error;
     this.stopped = true;
     if (this.timer) clearImmediate(this.timer);
     if (this.retry) clearTimeout(this.retry);
@@ -243,11 +244,12 @@ export class SqliteIndexBuilds {
         if (complete) this.db.run('DELETE FROM index_gc WHERE generation=?', [old.generation]);
         this.preferGC = false;
       }
-      this.db.sql.exec('COMMIT');
+      this.db.commitWrite();
       if (job) this.retries.delete(job.generation);
       if (changed) this.db.indexesChanged(changed);
       this.settle(); return 'progress';
     } catch (error) {
+      if ((error as { code?: unknown })?.code === 'COMMIT_UNKNOWN') { this.pending = false; this.stop(error); return 'failed'; }
       if (begun && this.db.sql.inTransaction) {
         try { this.db.sql.exec('ROLLBACK'); }
         catch (rollback) { this.lastError = Object.assign(new AggregateError([error, rollback], 'Index batch and rollback failed', { cause: error }), { code: (error as { code?: unknown })?.code }); this.pending = false; this.stop(); return 'failed'; }
@@ -259,11 +261,17 @@ export class SqliteIndexBuilds {
       if (job) {
         this.retries.delete(job.generation);
         try {
+          this.db.sql.exec('BEGIN IMMEDIATE');
           this.db.run("UPDATE index_builds SET state='failed',error=? WHERE generation=?", [error instanceof Error ? error.message : String(error), job.generation]);
+          this.db.commitWrite();
           this.pending = this.hasWork();
           if (job.kind !== 'value') this.db.indexesChanged(job.type);
         } catch (report) {
-          this.lastError = Object.assign(new AggregateError([error, report], 'Index batch failed and its failure could not be recorded', { cause: error }), { code: (error as { code?: unknown })?.code });
+          if (this.db.sql.inTransaction && (report as { code?: unknown })?.code !== 'COMMIT_UNKNOWN') {
+            try { this.db.sql.exec('ROLLBACK'); } catch (rollback) { report = new AggregateError([report, rollback], 'Index failure recording and rollback failed', { cause: report }); }
+          }
+          this.lastError = Object.assign(new AggregateError([error, report], 'Index batch failed and its failure could not be recorded', { cause: error }),
+            { code: (report as { code?: unknown })?.code === 'COMMIT_UNKNOWN' ? 'COMMIT_UNKNOWN' : (error as { code?: unknown })?.code });
           this.pending = false; this.stop(); return 'failed';
         }
       }
