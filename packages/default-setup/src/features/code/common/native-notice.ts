@@ -1,5 +1,8 @@
 import { z } from 'zod'
 
+/** Exact notice emitted by the reviewed 2.1.302 Opus 5 same-model refusal retry. */
+export const claudeOpus5RefusalRetryNotice = "Opus 5's safeguards stopped the response above · continuing once with that noted"
+
 const identity = { id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid() }
 const body = { title: z.string().max(16000), paragraphs: z.array(z.string().max(16000)).max(32) }
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
@@ -17,5 +20,5 @@ export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decisio
 }
 
 /** Original dialog settlement identities, scoped to their native conversation. */
-export const ClaudeNativeMessageRetirementsSchema = z.array(z.object({ sessionId: z.string().uuid(), uuids: z.array(z.string().uuid()), rewoundUserUuids: z.array(z.string().uuid()).optional() }))
+export const ClaudeNativeMessageRetirementsSchema = z.array(z.object({ sessionId: z.string().uuid(), uuids: z.array(z.string().uuid()), rewoundUserUuids: z.array(z.string().uuid()).optional(), rewoundNoticeUuids: z.array(z.string().uuid()).optional() }))
 export type ClaudeNativeMessageRetirements = z.infer<typeof ClaudeNativeMessageRetirementsSchema>

@@ -125,6 +125,10 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   const hasRetired = async () => (await context()).messages.some((message: any) => message.context?.claudeTerminalMessage?.sessionId === sessionId && retiredIds.includes(message.context?.cliUuid))
   if(process.env.CLAUDE_RESEARCH_REFUSAL_EMPTY_DRAFT !== '1') await expect.poll(hasRetired).toBe(true)
   expect(!emptyDraft || decision === 'edit_prompt').toBe(true)
+  const refusalNoteText="Opus 5's safeguards stopped the response above · continuing once with that noted"
+  const refusalNote=async()=>(await context()).messages.find((message:any)=>message.sender==='system'&&message.text===refusalNoteText)
+  if(emptyDraft) await expect.poll(refusalNote).toBeTruthy()
+  const originalRefusalNoteUuid=emptyDraft?(await refusalNote()).context.cliUuid:undefined
   const draft = emptyDraft ? '' : 'Keep the release review draft.'
   await composer.focus(); await composer.press('Control+a'); await composer.pressSequentially(draft)
   const editor = () => composer.evaluate(element => ({ document: (element as any).editor.state.doc.toJSON(), selection: (element as any).editor.state.selection.toJSON(), text: (element as any).editor.getText() }))
@@ -153,7 +157,7 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
     await expect(notice.getByRole('link', { name: 'Learn more', exact: true })).toHaveAttribute('href', shown.helpUrl)
     await expect(notice.getByRole('link', { name: 'Learn more', exact: true })).toBeInViewport({ ratio: 1 })
     await expect(composer).toHaveText(draft); await expect(composer).toBeInViewport({ ratio: 1 })
-    if(emptyDraft) await expect(appPage.getByTestId('chat-transcript').getByText(prompt,{exact:true})).toBeInViewport({ratio:1})
+    if(emptyDraft) await expect(appPage.getByTestId('chat-transcript').getByText(prompt,{exact:true}).filter({visible:true})).toBeInViewport({ratio:1})
     expect(await editor()).toEqual(retained)
     geometry.push({ width, height, notice: await notice.boundingBox(), composer: await composer.boundingBox() })
     await capture('pending', width, height)
@@ -165,6 +169,7 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   // Native refusal edit restores only an empty editor; never overwrite the draft typed while deciding.
   if (emptyDraft) {
     await expect(composer).toHaveText(prompt)
+    await expect.poll(async()=>(await context()).messages.some((message:any)=>message.context?.cliUuid===originalRefusalNoteUuid)).toBe(false)
     await expect(composer).toBeFocused()
     await appPage.keyboard.type('!');await expect(composer).toHaveText(prompt+'!')
     await appPage.keyboard.press('Backspace');await expect(composer).toHaveText(prompt)
@@ -200,8 +205,12 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   expect(await hasRetired()).toBe(false)
   const persistedRetirements=(await context()).claude.retiredNativeMessages
   expect(persistedRetirements?.find((item: any) => item.sessionId === sessionId)?.uuids ?? []).toEqual(expect.arrayContaining(retiredIds))
-  if(emptyDraft) expect(persistedRetirements.find((item:any)=>item.sessionId===sessionId).rewoundUserUuids).toContain(originalHumanUuid)
-  await writeFile(join(workspace!, 'native-refusal-app.json'), JSON.stringify({ decision, emptyDraft, helpRoute, immediateKeyboardEditing:emptyDraft, originalHumanUuid, afterDecisionContext, shown, prompt, retiredIds, persistedRetirements, captures, geometry, retained, afterDecision, recoveryRetained, sameSessionRecovery: true, sessionId, boundNativePid }, null, 2))
+  if(emptyDraft) {
+    const retiredScope=persistedRetirements.find((item:any)=>item.sessionId===sessionId)
+    expect(retiredScope.rewoundUserUuids).toContain(originalHumanUuid);expect(retiredScope.rewoundNoticeUuids).toContain(originalRefusalNoteUuid)
+    expect((await context()).messages.some((message:any)=>message.context?.cliUuid===originalRefusalNoteUuid)).toBe(false)
+  }
+  await writeFile(join(workspace!, 'native-refusal-app.json'), JSON.stringify({ decision, emptyDraft, helpRoute, immediateKeyboardEditing:emptyDraft, originalRefusalNoteUuid, originalHumanUuid, afterDecisionContext, shown, prompt, retiredIds, persistedRetirements, captures, geometry, retained, afterDecision, recoveryRetained, sameSessionRecovery: true, sessionId, boundNativePid }, null, 2))
   await writeFile(join(workspace!, 'native-refusal-recovery.json'), JSON.stringify(await context(), null, 2))
   await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ actualAppGui: true, nativePlanScenario: 'theme', nativeRefusalNotice: true, resumedPrintSameSession: true, sessionId, finalSessionId: sessionId, boundNativePid, browserErrors: errors }))
 })

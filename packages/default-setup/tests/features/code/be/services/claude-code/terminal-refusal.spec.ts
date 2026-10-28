@@ -2,7 +2,7 @@ import vm from 'node:vm'
 import { createHash, randomUUID } from 'node:crypto'
 import { rewriteClaudeNativePlatformSelectors } from '#features/code/be/services/claude-code/native-platform-runtime.ts'
 import { claudeTerminalRefusalRuntime } from '#features/code/be/services/claude-code/terminal-refusal-runtime.ts'
-import { ClaudeNativeNoticeSchema, isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
+import { claudeOpus5RefusalRetryNotice, ClaudeNativeNoticeSchema, isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
 function fixture() {
   const sessionId = randomUUID(), payload = { originalModel: 'Opus 5', fallbackModel: 'Opus 4.8', retractedMessageUuids: [randomUUID()] }
   const item = { id: randomUUID(), kind: 'refusal_fallback_prompt', payload }, open = [item]
@@ -14,7 +14,7 @@ function fixture() {
   const row = Array<unknown>(48); row[9] = control.options; row[17] = 'Session paused'; row[21] = '<b>Original explanation</b>'; row[22] = 'Original provider guidance'
   const root = { type: UCe, memoizedProps: { payload, wouldTakeAnswer: () => true }, updateQueue: { memoCache: { data: [row] } }, child: { type: Xe, memoizedProps: control } }
   const store = { getState: () => ({ open }), subscribe: () => () => {}, onClosed: (listener: typeof closed[number]) => { closed.push(listener); return () => {} } }
-  const humanUuid=randomUUID(),users=[{type:'user',uuid:humanUuid,origin:{kind:'human'}}];let turn:{turnId:string}|undefined={turnId:randomUUID()},draft={text:'',cursor:0};const askHost=vi.fn(async()=>({filled:true}));
+  const humanUuid=randomUUID(),users:{type:string;uuid:string;origin?:{kind:string};subtype?:string;level?:string;content?:string}[]=[{type:'user',uuid:humanUuid,origin:{kind:'human'}}];let turn:{turnId:string}|undefined={turnId:randomUUID()},draft={text:'',cursor:0};const askHost=vi.fn(async()=>({filled:true}));
   const binding = { messages:()=>users,composer:{read:async()=>draft},surface: 'terminal', toolContext: () => ({ dialogStore: store,getAppState:()=>({viewingAgentTaskId:undefined}) }) }
   const n = { runtime:{lpe:()=>turn,ey:()=>binding},roster:{Kw:{list:()=>[{clientId:'desktop',answers:['ui_prompt_fill']}]}},themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) }, questionOptions: { q: () => sessionId } }
   const format = vi.fn(async (_n: unknown, value: unknown) => value || '')
@@ -103,4 +103,11 @@ it('waits for the original Edit rewind, mirrors its removed human identity and f
 });
 it('never restores a previous Edit across a replacement turn',async()=>{
  const f=fixture();f.runtime.answer(f.n,{...f.request(),decision:'edit_prompt'});f.replaceTurn();await f.runtime.restore(f.n,f.store);f.finishRewind();await f.runtime.restore(f.n,f.store);expect(f.askHost).not.toHaveBeenCalled();
+});
+
+
+it('retires only the exact reviewed refusal notice UUID after its original native rewind',async()=>{
+ const f=fixture(),uuid=randomUUID(),unrelated=randomUUID();f.users.push({type:'system',uuid,subtype:'informational',level:'notice',content:claudeOpus5RefusalRetryNotice},{type:'system',uuid:unrelated,subtype:'informational',level:'notice',content:'Keep unrelated history'});
+ f.runtime.answer(f.n,{...f.request(),decision:'edit_prompt'});f.finishRewind();await f.runtime.restore(f.n,f.store);
+ expect(f.runtime.read(f.n).retirements).toEqual([{sessionId:f.sessionId,uuids:f.payload.retractedMessageUuids,rewoundUserUuids:[f.humanUuid],rewoundNoticeUuids:[uuid]}]);
 });

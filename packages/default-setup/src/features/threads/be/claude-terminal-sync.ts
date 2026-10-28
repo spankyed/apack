@@ -1,5 +1,5 @@
 import { write } from '#generated/ears.ts'
-import { ClaudeNativeMessageRetirementsSchema } from '#features/code/common/native-notice.ts'
+import { claudeOpus5RefusalRetryNotice, ClaudeNativeMessageRetirementsSchema } from '#features/code/common/native-notice.ts'
 import type { ClaudeNativeLaunch } from '#features/code/common/native-launch.ts'
 import type { EntityId } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
@@ -23,13 +23,13 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   let lastTaskSnapshot = ''
   let stopped = false, journalPending = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
   const initial = repository.chatQueries.threadData(threadId)
-  const retired = new Set<string>(), rewoundUsers = new Set<string>()
-  const retirementScopes = new Map<string, { uuids: Set<string>; rewoundUserUuids: Set<string> }>()
+  const retired = new Set<string>(), rewoundUsers = new Set<string>(), rewoundNotices = new Set<string>()
+  const retirementScopes = new Map<string, { uuids: Set<string>; rewoundUserUuids: Set<string>; rewoundNoticeUuids: Set<string> }>()
   function retainRetirements(value: unknown) {
     let changed = false
     for (const scope of ClaudeNativeMessageRetirementsSchema.parse(value)) {
       let ids = retirementScopes.get(scope.sessionId)
-      if (!ids) { ids = { uuids: new Set(), rewoundUserUuids: new Set() }; retirementScopes.set(scope.sessionId, ids) }
+      if (!ids) { ids = { uuids: new Set(), rewoundUserUuids: new Set(), rewoundNoticeUuids: new Set() }; retirementScopes.set(scope.sessionId, ids) }
       for (const uuid of scope.uuids) {
         const key = JSON.stringify([scope.sessionId, uuid])
         if (!retired.has(key)) { retired.add(key); ids.uuids.add(uuid); changed = true }
@@ -37,6 +37,10 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       for (const uuid of scope.rewoundUserUuids ?? []) {
         const key = JSON.stringify([scope.sessionId, uuid])
         if (!rewoundUsers.has(key)) { rewoundUsers.add(key); ids.rewoundUserUuids.add(uuid); changed = true }
+      }
+      for (const uuid of scope.rewoundNoticeUuids ?? []) {
+        const key = JSON.stringify([scope.sessionId, uuid])
+        if (!rewoundNotices.has(key)) { rewoundNotices.add(key); ids.rewoundNoticeUuids.add(uuid); changed = true }
       }
     }
     return changed
@@ -64,22 +68,26 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   }
   let nativeOrder = 0
   for (const message of nativeMessages.values()) nativeOrder = Math.max(nativeOrder, message.order ?? 0)
+  function isRetiredRefusalNotice(row: { sender?: string; text?: string; context?: unknown }, key: string) {
+    const notice = object(object(row.context)?.claudeNativeNotice)
+    return row.sender === 'system' && rewoundNotices.has(key) && row.text === claudeOpus5RefusalRetryNotice && notice?.subtype === 'informational' && notice.level === 'notice'
+  }
   function applyRetirements() {
     if (retainRetirements(owner.state.messageRetirements ?? [])) {
       const thread = repository.threadQueries.byId(threadId)!
-      repository.threadCommands.update(threadId, { context: { ...thread.context, claudeCode: { ...thread.context?.claudeCode, retiredNativeMessages: [...retirementScopes].map(([sessionId, ids]) => ({ sessionId, uuids: [...ids.uuids], ...(ids.rewoundUserUuids.size ? { rewoundUserUuids: [...ids.rewoundUserUuids] } : {}) })) } } })
+      repository.threadCommands.update(threadId, { context: { ...thread.context, claudeCode: { ...thread.context?.claudeCode, retiredNativeMessages: [...retirementScopes].map(([sessionId, ids]) => ({ sessionId, uuids: [...ids.uuids], ...(ids.rewoundUserUuids.size ? { rewoundUserUuids: [...ids.rewoundUserUuids] } : {}), ...(ids.rewoundNoticeUuids.size ? { rewoundNoticeUuids: [...ids.rewoundNoticeUuids] } : {}) })) } } })
     }
     for (const [key, message] of nativeMessages) {
-      if ((!retired.has(key) && !rewoundUsers.has(key)) || !message.terminal) continue
+      if ((!retired.has(key) && !rewoundUsers.has(key) && !rewoundNotices.has(key)) || !message.terminal) continue
       const row = repository.chatQueries.messageById(message.id), identity = object(object(row?.context)?.claudeTerminalMessage)
-      if (!(row?.sender === 'assistant' && retired.has(key) || row?.sender === 'user' && rewoundUsers.has(key)) || !identity || JSON.stringify([identity.sessionId, identity.uuid]) !== key) continue
+      if (!(row?.sender === 'assistant' && retired.has(key) || row?.sender === 'user' && rewoundUsers.has(key) || row && isRetiredRefusalNotice(row, key)) || !identity || JSON.stringify([identity.sessionId, identity.uuid]) !== key) continue
       write(message.id).destroy()
       nativeMessages.delete(key); pendingTools.delete(key); agentRows.delete(key)
     }
   }
   function upsert(entry: ClaudeNativeJournalEntry) {
     const row = projectClaudeTerminalHistory(entry)
-    if (!row || row.sender === 'assistant' && retired.has(JSON.stringify([row.sessionId, row.uuid])) || row.sender === 'user' && rewoundUsers.has(JSON.stringify([row.sessionId, row.uuid]))) return
+    if (!row || row.sender === 'assistant' && retired.has(JSON.stringify([row.sessionId, row.uuid])) || row.sender === 'user' && rewoundUsers.has(JSON.stringify([row.sessionId, row.uuid])) || isRetiredRefusalNotice(row, JSON.stringify([row.sessionId, row.uuid]))) return
     const key = JSON.stringify([row.sessionId, row.uuid]), existing = nativeMessages.get(key)
     const references = row.sender === 'user' ? acceptedReferences.get(key) ?? row.references : row.references
     if (existing && !existing.terminal) return

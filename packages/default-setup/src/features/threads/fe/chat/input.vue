@@ -10,7 +10,7 @@
       <div
         ref="inputCardRef"
         class="relative flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border bg-[#202022]"
-        :style="{ '--composer-history-reserve': nativeHistoryReserve, maxHeight: 'calc(var(--composer-available-height) - var(--composer-history-reserve, var(--composer-default-history-reserve)))' }"
+        :style="{ '--composer-history-reserve': nativeHistoryReserve, maxHeight: 'calc(var(--composer-available-height) - max(var(--composer-notice-history-reserve, 0px), var(--composer-history-reserve, var(--composer-default-history-reserve))))' }"
         :class="[$style.input, { 'opacity-50': disabled, [$style.inputCommandActive]: commandHighlight, [$style.inputDropActive]: isDraggingFile, [$style.inputRecording]: isListening }]"
         data-onboarding-id="agent-chat-input"
         @focusin="nativeFieldFocused = isNativeField($event.target)"

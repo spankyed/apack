@@ -1,3 +1,5 @@
+import { claudeOpus5RefusalRetryNotice } from '../../../common/native-notice.ts'
+
 /** Present only the original mounted refusal choices; native owns routing, retractions and settlement. */
 export const claudeTerminalRefusalRuntime = String.raw`
 const nativeRefusalRetirementStores=new WeakMap();
@@ -5,13 +7,13 @@ function nativeRefusalRetirements(n,store){
  let state=nativeRefusalRetirementStores.get(store);
  if(!state){
   if(typeof store.subscribe!=='function'||typeof store.onClosed!=='function')throw Error('Native refusal lifetime changed');
-  state={pending:new Map(),retired:new Map(),rewound:new Map(),problem:undefined};nativeRefusalRetirementStores.set(store,state);
+  state={pending:new Map(),retired:new Map(),rewound:new Map(),rewoundNotices:new Map(),problem:undefined};nativeRefusalRetirementStores.set(store,state);
   const capture=()=>{try{for(const item of store.getState().open){
    if(item.kind!=='refusal_fallback_prompt')continue;
    const sessionId=String(n.questionOptions.q()),uuids=item.payload?.retractedMessageUuids??[];
    if(!/^[a-f0-9-]{36}$/i.test(sessionId)||!Array.isArray(uuids)||uuids.some(id=>typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id)))throw Error('Invalid original refusal retirement');
    const binding=originalContext??n.runtime.ey(),turn=n.runtime.lpe();
-   state.pending.set(item.id,{sessionId,uuids:[...new Set(uuids)],binding,turnId:turn?.turnId,users:(binding.messages?.()??[]).filter(row=>row.type==='user'&&!row.isMeta&&(!row.origin||row.origin.kind==='human')).map(row=>row.uuid)});
+   state.pending.set(item.id,{sessionId,uuids:[...new Set(uuids)],binding,turnId:turn?.turnId,notices:(binding.messages?.()??[]).filter(row=>row.type==='system'&&row.subtype==='informational'&&row.level==='notice'&&row.content===${JSON.stringify(claudeOpus5RefusalRetryNotice)}).map(row=>row.uuid),users:(binding.messages?.()??[]).filter(row=>row.type==='user'&&!row.isMeta&&(!row.origin||row.origin.kind==='human')).map(row=>row.uuid)});
   }}catch(error){state.problem=String(error)}};
   capture();store.subscribe(capture);
   store.onClosed(event=>{
@@ -22,7 +24,7 @@ function nativeRefusalRetirements(n,store){
   });
  }
  if(state.problem)throw Error(state.problem);
- return [...new Set([...state.retired.keys(),...state.rewound.keys()])].map(sessionId=>({sessionId,uuids:[...(state.retired.get(sessionId)??[])],...(state.rewound.has(sessionId)?{rewoundUserUuids:[...state.rewound.get(sessionId)]}:{})}));
+ return [...new Set([...state.retired.keys(),...state.rewound.keys()])].map(sessionId=>({sessionId,uuids:[...(state.retired.get(sessionId)??[])],...(state.rewound.has(sessionId)?{rewoundUserUuids:[...state.rewound.get(sessionId)]}:{}),...(state.rewoundNotices.has(sessionId)?{rewoundNoticeUuids:[...state.rewoundNotices.get(sessionId)]}:{})}));
 }
 // Read the result of the original rewind; a closed Edit dialog alone is insufficient.
 async function restoreNativeRefusalDraft(n,store){
@@ -38,6 +40,7 @@ async function restoreNativeRefusalDraft(n,store){
   const current=new Set((pending.binding.messages?.()??[]).map(row=>row.uuid)),removed=pending.users.filter(uuid=>!current.has(uuid));
   if(!removed.length||typeof box.text!=='string'||!box.text)return;
   let rewound=state.rewound.get(pending.sessionId);if(!rewound){rewound=new Set();state.rewound.set(pending.sessionId,rewound);}for(const uuid of removed)rewound.add(uuid);
+  for(const uuid of pending.notices)if(!current.has(uuid)){let notices=state.rewoundNotices.get(pending.sessionId);if(!notices){notices=new Set();state.rewoundNotices.set(pending.sessionId,notices);}notices.add(uuid);}
   if(pending.binding.toolContext(new AbortController()).getAppState().viewingAgentTaskId!==undefined)return;
   // Match the original first eligible prompt host, then let its editor check emptiness atomically.
   const client=n.roster.Kw.list().find(value=>clients.has(value.clientId)&&clientViewCurrent(n,value.clientId)&&value.answers?.includes('ui_prompt_fill'));

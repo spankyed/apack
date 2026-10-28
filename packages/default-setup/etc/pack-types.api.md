@@ -1009,6 +1009,7 @@ declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
     sessionId: z.ZodString;
     uuids: z.ZodArray<z.ZodString>;
     rewoundUserUuids: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    rewoundNoticeUuids: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strip>>;
 
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
