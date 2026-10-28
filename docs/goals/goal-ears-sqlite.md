@@ -195,8 +195,8 @@ completed successfully, all six jobs on attempt 1. Detached integration
 fast-forwarded canonical from 194c72c77c; its next BASE is a1356b64b1. No master merge or adoption occurred.
 
 Active continuation remains `/private/tmp/ears-sqlite-diagnosis-evidence`, with no installed dependencies,
-native build or captured runtime. This shared-search-generation checkpoint is newer than the green CI and needs
-its own complete gate. Inspect actual refs/PR for the newest published head and exact CI handle; do not dispatch
+native build or captured runtime. Functional pin ac84b7d3fb is published on the existing draft branch and is newer than the green CI;
+its evidence descendant needs its own exact strict gate. Inspect actual refs/PR for the newest published head and exact CI handle; do not dispatch
 duplicates or promote a descendant on its parent's success. `/private/tmp/ears-promote-sqlite.py` verifies clean
 checkouts, remote tip, source/engine pins and exact strict success before private promotion. Never copy concurrent
 dirty files or compile/run full checks on the daily Mac.
@@ -252,21 +252,25 @@ valid embeddings reuse matching content/model/dimensions, and the latest complet
 replacement readiness. Failed deferred cleanup does not spin. Physical recovery now queues fresh generations
 instead of synchronous full backfill and advances the ownership epoch so cached old owners refuse writes.
 
-An intermediate source passes 407 SQLite cases, 250 native cases, twelve safeguard mutations, five package builds,
-3 EARS/30 SDK API reports, static checks and scripts typecheck (21.3s / original 60s). After stale-owner and access-path
-corrections, the pinning checkpoint passes EARS types and 71 adjacent cases. Final full checks, new guard mutations
-and exact CI on the committed source remain required. The reviewed public API adds indexesReady(), optional derived
-visibility subscription, and the two explicit index error codes; the pack-facing operation signatures are unchanged.
+Functional pin **ac84b7d3fb4dba6b6c460ea5163096c4a1a1cdb1** passes **413 SQLite / 250 native cases**, EARS
+types, 71 adjacent cases before/after eighteen routine mutations, a stronger paired-epoch counterexample, five
+package builds, 3 EARS/30 SDK API checks, 64 build-input cases, lint/import rules and scripts typecheck
+(20.95s / original 60s). The reviewed root API adds indexesReady(), optional derived visibility subscription and
+two explicit index error codes. Pack-facing operation signatures and SDK reports are unchanged.
 [Search-generation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-generations/README.md)
-retains source hashes, mutations, actual process-kill/lifetime checks and the initial fixture/expectation failures.
+retains exact source hashes, process-kill/lifetime checks, all negative proofs and earlier failures.
 
-The first 1k OFF short-string smoke and all three 10k OFF trials pass their prewritten limits. The first 100k OFF
-process timed out at its 240s safety bound before a final report; later trials were stopped and FULL was not run.
-The exact timed source is reconstructable from a1356b64b1 plus the retained patch, with all 31 hashes verified.
-Review found quadratic per-entity deletion by an unindexed FTS column. The pin uses rowid point deletion and
-selective generation cleanup indexes, with actual plan guards. The pending-vector index is partial so it does
-not duplicate embedding BLOBs. Optional sparse stage markers now preserve diagnosis if a later process times out.
-Do not relabel old metrics as post-fix measurements; qualify the committed pin under unchanged budgets.
+The first 1k OFF smoke and the original three 10k OFF trials pass. The initial 100k OFF process hit its 240s safety
+limit without a final report; the exact pre-fix source is reconstructable from a1356b64b1 plus the retained patch.
+Review found quadratic FTS deletion by an unindexed column. The pin uses rowid point deletion and selective
+retirement indexes, with real plan guards. Pending-vector indexing avoids embedding BLOB keys. Corrected 10k
+build median is 2.58s versus the earlier 9.07s instrumented fixture; do not claim an isolated-line or app speedup.
+
+All three corrected 100k OFF processes finish. The first two pass all limits; the third fails heartbeat p99
+**26.43ms / 16ms**, despite operation/lookup/turn p99 1.22/8.06/5.34ms and resource limits passing. Batch p99 remains
+short but rare long batches and larger lookup/I/O tails remain. Conservative stage/deadline bounds place 180 of 196 stalls above 16 ms entirely within cleanup; callback attribution remains open. The trace lacks correlated heartbeat phase stamps,
+so the cause is unproven. The cohort stopped; FULL was not run. Preserve the miss and add distinct correlated
+controls before tuning, rather than retrying until green or relaxing the target. Do not label 100k/FULL qualified.
 
 This is not completion of phase 3. Qualify realistic declarations/read/write/watch load, large fields, FULL
 commits, WAL/disk growth and ownership/recovery. Physical presence is not a postings checksum; static secondary
@@ -294,9 +298,9 @@ need audit/rebuild. Same-handle readiness invalidation does not promise cross-ha
 
 ### Next deliverables and full remaining scope
 
-Pin and finish full checks on the shared search-generation source, then measure the corrected 10k/100k load
-cohort and FULL policy without relaxing original targets. Diagnose and retain the first miss instead of retrying
-until green. The candidate explicitly chooses INDEX_BUILDING over a slow foreground search scan; complete app
+Publish the evidence descendant and run one exact strict CI gate. Diagnose the retained 100k heartbeat miss
+using correlated batch/foreground/watch/heartbeat spans and preregistered distinct controls before tuning. Complete
+large-text and FULL qualification under unchanged targets; do not rerun the same failed qualification until green. The candidate explicitly chooses INDEX_BUILDING over a slow foreground search scan; complete app
 composition must handle that state and await readiness where required before adoption.
 
 All unmet phase 3–7 requirements remain: native lazy substring/regex refusal ordering with mixed types/later zero
