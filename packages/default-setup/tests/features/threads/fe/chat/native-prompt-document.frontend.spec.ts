@@ -721,3 +721,16 @@ it('restores the original draft only while the current editor is still empty',()
   editor.commands.clearContent();expect(bridge.fillDraft({mode:'replace',text:'Original prompt',ifEmpty:true},bridge.revision)).toBe(true);expect(bridge.readDraft()).toEqual({text:'Original prompt',cursor:15});
  }finally{bridge.dispose();}
 });
+
+
+it('maps Select All over the app empty paragraph and accepts its native restoration',()=>{
+ const serializer=(editor.storage as any).markdown.serializer,original=serializer.serialize.bind(serializer);
+ const spelling=vi.spyOn(serializer,'serialize').mockImplementation((doc:any)=>doc.childCount===1&&doc.firstChild?.type.name==='paragraph'&&!doc.firstChild.content.size?'&nbsp;':original(doc));
+ const send=vi.fn(),bridge=bindClaudePromptEditor(editor,send,()=>{});
+ try{
+  editor.commands.selectAll();expect(editor.state.selection.toJSON()).toEqual({type:'all'});
+  expect(bridge.readDraft()).toEqual({text:'',cursor:0});expect(send.mock.calls.at(-1)?.[0]).toMatchObject({text:'',cursor:0,revision:bridge.revision});
+  for(const position of [0,editor.state.doc.content.size])expect(captureClaudePromptDocument(editor.state.doc,position,serialize)).toMatchObject({text:'',cursor:0,position:1});
+  expect(bridge.fillDraft({mode:'replace',text:'Original prompt',ifEmpty:true},bridge.revision)).toBe(true);expect(bridge.readDraft()).toEqual({text:'Original prompt',cursor:15});
+ }finally{bridge.dispose();spelling.mockRestore();}
+});

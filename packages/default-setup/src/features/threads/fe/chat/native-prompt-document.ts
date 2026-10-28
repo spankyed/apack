@@ -13,13 +13,14 @@ export type ClaudePromptSerializer = (doc: ProseMirrorNode) => string
 /** Locate a caret in the submitted Markdown without mistaking a document offset for text. */
 export function captureClaudePromptDocument(doc: ProseMirrorNode, position: number, serialize: ClaudePromptSerializer, marks?: readonly Mark[]): ClaudePromptDocument | undefined {
   if (!Number.isInteger(position) || position < 0 || position > doc.content.size) return
+  const text = serialize(doc)
+  // The empty paragraph has one text boundary, including Select All's document-edge head.
+  // The app's Markdown extension spells it as &nbsp;, not user draft text.
+  if ((text === '' || text === '&nbsp;') && doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size) {
+    return { text: '', cursor: 0, doc, position: 1 }
+  }
   const resolved = doc.resolve(position)
   if (!resolved.parent.isTextblock) return
-  const text = serialize(doc)
-  // The app's Markdown extension spells its empty paragraph as &nbsp;, not user draft text.
-  if ((text === '' || text === '&nbsp;') && doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size) {
-    return { text: '', cursor: 0, doc, position }
-  }
   let marker = '\uE000apackCursor\uE001'
   while (text.includes(marker)) marker += '\uE002'
   const marked = doc.replace(position, position, new Slice(Fragment.from(doc.type.schema.text(marker, marks ?? resolved.marks())), 0, 0))
