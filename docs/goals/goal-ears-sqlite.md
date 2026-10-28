@@ -253,6 +253,12 @@ three open search failures. Sequential statement profiles reduce instrumented nu
 validation still scans all rows; general ordering/pagination and latency qualification remain open.
 [Limit-pushdown evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-limit-pushdown/README.md)
 
+Schema admission also now checks issued-prefix changes under writer ownership, closing a two-handle race
+where an ordinary entity commit after the old precheck left schema revision unchanged. Types and 29 adjacent
+schema/index/operational cases pass; moving the check outside the transaction fails the deterministic race test.
+[Prefix-ownership evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/schema-prefix-ownership/README.md)
+retains proof. Complete structural declaration validation remains unfinished.
+
 ### Unqualified results and current CI
 
 The earlier [actual-facade slice](../references/evidence/ears-sqlite-implementation-2026-10-28/facade-slice.md)

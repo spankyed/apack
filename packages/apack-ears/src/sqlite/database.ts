@@ -1090,9 +1090,7 @@ export class SqliteDatabase implements EarsDatabase {
     if (sameValue(next, this.heldSchema)) return [];
     if (!next.types || !next.relations || !next.roles)
       fail("SCHEMA_INVALID", "Schema requires types, relations and roles");
-    for (const [type, def] of Object.entries(next.types) as Array<
-      [string, Data]
-    >) {
+    for (const type of Object.keys(next.types)) {
       if (type === "Relation") fail("SCHEMA_INVALID", "Relation is reserved");
       if (!/^[A-Z][A-Za-z0-9]*$/.test(type))
         fail(
@@ -1101,18 +1099,6 @@ export class SqliteDatabase implements EarsDatabase {
             type
           )} isn't`
         );
-      const old = this.heldSchema.types[type]?.shortCode?.prefix;
-      if (
-        old !== def.shortCode?.prefix &&
-        this.get(
-          "SELECT 1 FROM entities WHERE type=? AND short_code IS NOT NULL",
-          [type]
-        )
-      )
-        fail(
-          "SCHEMA_CHANGE_REFUSED",
-          `Cannot change ${type}'s short code prefix`
-        );
     }
     const report = Object.keys(next.types)
       .filter((t) => !has(this.heldSchema.types, t))
@@ -1120,6 +1106,22 @@ export class SqliteDatabase implements EarsDatabase {
     this.sql.exec("BEGIN IMMEDIATE");
     try {
       this.checkRevision();
+      // Incumbent-dependent refusals belong under writer ownership: another handle can issue its first short
+      // code between the earlier structural checks and BEGIN IMMEDIATE without changing the schema revision.
+      for (const [type, def] of Object.entries(next.types) as Array<[string, Data]>) {
+        const old = this.heldSchema.types[type]?.shortCode?.prefix;
+        if (
+          old !== def.shortCode?.prefix &&
+          this.get(
+            "SELECT 1 FROM entities WHERE type=? AND short_code IS NOT NULL",
+            [type]
+          )
+        )
+          fail(
+            "SCHEMA_CHANGE_REFUSED",
+            `Cannot change ${type}'s short code prefix`
+          );
+      }
       for (const [type, definition] of Object.entries(next.types) as Array<[string, Data]>) this.layouts.set(type,
         this.values.declare(type, ['createdAt','updatedAt','trashedAt','shortCode','role', ...Object.keys(definition.fields ?? {})]));
       this.search.ensure(next);
