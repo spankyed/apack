@@ -273,13 +273,20 @@ three unchanged EARS API reports. Full SQLite passes 347 with the same three sea
 retains exact results, scope and earlier test/prerequisite failures. This local descendant is not in 194c72c77c's CI.
 Live-pack and real-I/O declaration qualification remain required.
 
+Prepared statement retention in the local descendant now uses a per-connection LRU bounded by 256 entries and
+1 MiB of UTF-8 SQL text. Oversized statements execute uncached; eviction preserves borrowed statements and
+close releases owned cache references. Private Linux passes types, 79 focused cases, six resource-policy
+mutations, five package builds and three unchanged API reports. Full SQLite passes 353 with the same three
+open search failures. [Statement-cache evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/statement-cache/README.md)
+records proofs and provisional limits. This bounds cache retention, not native VM memory or application RSS.
+
 ### Unqualified results and current CI
 
 The earlier [actual-facade slice](../references/evidence/ears-sqlite-implementation-2026-10-28/facade-slice.md)
 preserves the isolated rowid-overflow correction, projection improvement and ordinary-read/vector regressions
 against its recorded native `933aa19` baseline. Do not relabel those as current `6ab2f69` results. Scalar/inline
-thresholds remain provisional. Quadratic distinct/group work, per-entity hydration in those paths, unbounded
-statement caching and sustained memory growth still need the execution/phase-7 review required by the matrix.
+thresholds remain provisional. Quadratic distinct/group work, per-entity hydration in those paths and sustained memory growth still need
+the execution/phase-7 review required by the matrix. Statement retention is now bounded as described below.
 
 The original six sync-disabled 10k/100k value-admission trials pass their recorded targets. The first FULL/durable
 10k trial fails operation/turn-wait p99 (16.79/19.39 ms); subsequent durable trials were stopped. Targets were not

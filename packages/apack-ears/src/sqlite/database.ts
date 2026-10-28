@@ -2,6 +2,7 @@
 // to composite persistence and canonical metadata.
 /// <reference types="node" />
 import NativeDatabase from "better-sqlite3";
+import { LRUCache } from "lru-cache";
 interface StatementSync {
   all(...parameters: any[]): unknown[];
   get(...parameters: any[]): unknown;
@@ -60,7 +61,13 @@ export class SqliteDatabase implements EarsDatabase {
   private opened = true;
   private active?: SqliteUnit;
   private schemaValidator?: ReturnType<typeof createSchemaValidator>;
-  private readonly statements = new Map<string, StatementSync>();
+  // Bound owned references and SQL text, not native VM memory. Eviction releases our reference; callers may
+  // still hold an in-flight statement. Oversized SQL executes normally without entering the cache.
+  private readonly statements = new LRUCache<string, StatementSync>({
+    max: 256,
+    maxSize: 1024 * 1024,
+    sizeCalculation: (_statement, sql) => Buffer.byteLength(sql, 'utf8'),
+  });
   private readonly packer = new Packr({
     useRecords: false,
     skipValues: [undefined],
