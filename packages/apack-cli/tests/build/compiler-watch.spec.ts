@@ -291,3 +291,17 @@ it.runIf(process.platform === 'win32')('keeps authored watch subscriptions cover
   expect(inputs.paths.has(file)).toBe(false);
   expect(compilerWatchTargets(observed, pack).size).toBe(0);
 });
+
+
+it('reprobes a missing nested input when its ancestor reports change instead of rename', () => {
+  const { root, pack } = fixture();
+  const missing = path.join(root, 'future', 'nested', 'value.txt');
+  const targets = compilerWatchTargets(new Map([[missing, 'file']]), pack);
+  const target = targets.get(root);
+  expect(target).toBeDefined();
+  const matches = createCompilerWatchMatcher(target!.paths);
+  const ancestor = path.join(root, 'future');
+  expect(matches(ancestor, 'change')).toBe(true);
+  expect(matches(ancestor, 'rename')).toBe(true);
+  expect(matches(path.join(root, 'unrelated'), 'change')).toBe(false);
+});
