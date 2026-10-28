@@ -17,7 +17,7 @@ test.afterEach(async ({appPage},info)=>{
     const element=document.querySelector('[data-onboarding-id="agent-chat-input"] [contenteditable="true"]') as any;
     const components=[];let component=element?.__vueParentComponent;
     for(let i=0;component&&i<12;i++,component=component.parent){const setup=component.setupState??{};components.push({name:component.type.__file??component.type.name,keys:Object.keys(setup),disabled:component.props.disabled,submitting:setup.submitting,revision:setup.promptEditor?.revision,problem:setup.nativePromptProblem,nativePrompt:component.props.nativePrompt});}
-    return {focused:document.hasFocus(),active:document.activeElement?.tagName,dialogs:[...document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]')].map(element=>({visible:!!element.getClientRects().length,text:element.textContent?.slice(0,300)})),document:element?.editor?.state.doc.toJSON(),components,uiViews:state.nativeUiViews};
+    return {hostDiagnostics:(window as any).nativeRefusalHostDiagnostics,focused:document.hasFocus(),active:document.activeElement?.tagName,dialogs:[...document.querySelectorAll('dialog[open],[role="dialog"][aria-modal="true"]')].map(element=>({visible:!!element.getClientRects().length,text:element.textContent?.slice(0,300)})),document:element?.editor?.state.doc.toJSON(),components,uiViews:state.nativeUiViews};
   });
   await writeFile(join(workspace,'native-refusal-fill-diagnostics.json'),JSON.stringify(diagnostics,null,2));
 });
@@ -91,6 +91,16 @@ test('preserves original model refusal choices and everyday recovery', async ({ 
   const composer = card.locator('[contenteditable="true"]')
 
 
+  await appPage.evaluate(()=>{
+    const actor=(window as any).applicationState.system.get('default-setup/threads'),send=actor.send.bind(actor);(window as any).nativeRefusalHostDiagnostics=[];
+    actor.send=(event:any)=>{
+      if(event.type==='CLAUDE_PROMPT_HOST_RESPONSE'){
+        const state=actor.getSnapshot().context,view=state.nativeUiViews[event.mountId],element=document.querySelector('[data-onboarding-id="agent-chat-input"] [contenteditable="true"]') as any,editor=element?.editor;
+        (window as any).nativeRefusalHostDiagnostics.push({event,request:view?.promptHostRequest,promptRevision:view?.promptRevision,prompt:view?.prompt,focused:document.hasFocus(),composing:editor?.view.composing,selection:editor?.state.selection.toJSON(),markdown:editor?.storage.markdown.serializer.serialize(editor.state.doc),cardText:document.querySelector('[data-onboarding-id="agent-chat-input"]')?.textContent});
+      }
+      return send(event);
+    };
+  });
   const { refusalNotice: decision } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   expect(['retry_fallback', 'edit_prompt', 'cancelled']).toContain(decision)
   const nativeWindow = await electronApp.browserWindow(appPage), captures: string[] = []
