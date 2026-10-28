@@ -133,6 +133,7 @@ export function executeQuery(
       case "linkedFrom":
       case "unlinkedTo":
       case "unlinkedFrom": {
+        for (const type of Object.keys(schema.types)) db.trackRange(`members:${type}`);
         const outward = step.step.endsWith("To"),
           negative = step.step.startsWith("unlinked");
         const kind = step.kind;
@@ -159,7 +160,8 @@ export function executeQuery(
             args.push(other);
           }
         }
-        conditions.push(`${reachable("far")}`);
+        const needsFar = step.step !== "linkedWith" && other === undefined;
+        if (needsFar) conditions.push(`${reachable("far")}`, `far.id!=e.id`);
         const far =
           step.step === "linkedWith"
             ? "CASE WHEN r.source=e.id THEN r.target ELSE r.source END"
@@ -167,7 +169,7 @@ export function executeQuery(
         filter(
           `${
             negative ? "NOT " : ""
-          }EXISTS(SELECT 1 FROM relations r JOIN entities far ON far.id=${far} WHERE ${conditions.join(
+          }EXISTS(SELECT 1 FROM relations r ${needsFar ? `JOIN entities far ON far.id=${far}` : ""} WHERE ${conditions.join(
             " AND "
           )})`,
           args
@@ -186,33 +188,47 @@ export function executeQuery(
           db.trackRange(`kind:${k}`);
         }
         for (const t of step.types ?? []) db.definition(t);
+        // An intermediate type can change reachability even when the final output is type-restricted.
+        for (const type of Object.keys(schema.types)) db.trackRange(`members:${type}`);
+        if (!deep) {
+          // Keep the whole adjacency selection in SQL. Deduplicate by first encounter, preserving source order
+          // and relation insertion order, rather than doing one binding call for each source entity.
+          sql = `SELECT id,0 major,ROW_NUMBER() OVER (ORDER BY major,ord,kind_ord,edge_seq) ord FROM (
+            SELECT far.id,p.major,p.ord,kind.key kind_ord,r.seq edge_seq,
+              ROW_NUMBER() OVER (PARTITION BY far.id ORDER BY p.major,p.ord,kind.key,r.seq) encounter
+            FROM (${sql}) p JOIN relations r ON r.${outward ? "source" : "target"}=p.id
+            JOIN json_each(?) kind ON kind.value=r.kind
+            JOIN entities far ON far.id=r.${outward ? "target" : "source"}
+            WHERE far.id!=p.id AND ${reachable("far")}
+            ${step.types ? "AND far.type IN (SELECT value FROM json_each(?))" : ""}
+          ) WHERE encounter=1`;
+          parameters.push(JSON.stringify(kinds), ...(step.types ? [JSON.stringify(step.types)] : []));
+          types = step.types ?? Object.keys(schema.types);
+          break;
+        }
         const seeds = idsNow(),
-          seen = new Set<string>(deep ? seeds : []),
+          seen = new Set<string>(seeds),
           found: string[] = [];
         let frontier = seeds;
         do {
           const next: string[] = [];
-          for (const id of frontier) {
-            const ends = db.all(
-              `SELECT far.id,far.type FROM relations r JOIN entities far ON far.id=r.${
-                outward ? "target" : "source"
-              } WHERE r.${
-                outward ? "source" : "target"
-              }=? AND r.kind IN (SELECT value FROM json_each(?)) AND ${reachable(
-                "far"
-              )} ORDER BY r.seq`,
-              [id, JSON.stringify(kinds)]
-            );
-            for (const end of ends)
-              if (!seen.has(end.id)) {
-                seen.add(end.id);
-                next.push(end.id);
-                if (!step.types || step.types.includes(end.type))
-                  found.push(end.id);
-              }
+          const ends = db.all(
+            `SELECT far.id,far.type FROM json_each(?) seed JOIN relations r
+              ON r.${outward ? "source" : "target"}=seed.value
+              JOIN json_each(?) kind ON kind.value=r.kind
+              JOIN entities far ON far.id=r.${outward ? "target" : "source"}
+              WHERE ${reachable("far")}
+              ORDER BY seed.key,kind.key,r.seq`,
+            [JSON.stringify(frontier), JSON.stringify(kinds)]
+          );
+          for (const end of ends) {
+            if (seen.has(end.id)) continue;
+            seen.add(end.id);
+            next.push(end.id);
+            if (!step.types || step.types.includes(end.type)) found.push(end.id);
           }
           frontier = next;
-        } while (deep && frontier.length);
+        } while (frontier.length);
         restart(found);
         types = step.types ?? Object.keys(schema.types);
         break;
@@ -509,28 +525,16 @@ export function executeQuery(
       db.relationDefinition(k);
       db.trackRange(`kind:${k}`);
     }
-    const edges: Data[] = [];
-    for (const id of ids)
-      for (const r of db.all(
-        `SELECT r.id FROM relations r JOIN entities far ON far.id=r.${
-          terminal.outward ? "target" : "source"
-        } WHERE r.${
-          terminal.outward ? "source" : "target"
-        }=? AND r.kind IN (SELECT value FROM json_each(?)) AND ${reachable(
-          "far"
-        )}` +
-          (terminal.types
-            ? " AND far.type IN (SELECT value FROM json_each(?))"
-            : "") +
-          " ORDER BY (SELECT key FROM json_each(?) WHERE value=r.kind),r.seq",
-        [
-          id,
-          JSON.stringify(groups),
-          ...(terminal.types ? [JSON.stringify(terminal.types)] : []),
-          JSON.stringify(groups),
-        ]
-      ))
-        edges.push(db.relation(r.id)!);
+    const edges = db.all(
+      `SELECT r.* FROM json_each(?) seed JOIN relations r
+        ON r.${terminal.outward ? "source" : "target"}=seed.value
+        JOIN entities far ON far.id=r.${terminal.outward ? "target" : "source"}
+        WHERE r.kind IN (SELECT value FROM json_each(?)) AND ${reachable("far")}
+        ${terminal.types ? "AND far.type IN (SELECT value FROM json_each(?))" : ""}
+        ORDER BY seed.key,(SELECT key FROM json_each(?) WHERE value=r.kind),r.seq`,
+      [JSON.stringify(ids), JSON.stringify(groups),
+        ...(terminal.types ? [JSON.stringify(terminal.types)] : []), JSON.stringify(groups)]
+    ).map(row => db.decodeRelation(row));
     return {
       kind: "relations",
       relations: edges,

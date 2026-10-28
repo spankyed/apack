@@ -292,3 +292,47 @@ describe('roles', () => {
     expect(e.getRow(b)).not.toHaveProperty('role');
   });
 });
+
+
+it('updates cross-type graph watches when a destination is trashed or restored', async () => {
+  const root = e.create('Project').id(), leaf = task('destination');
+  e.write(root).link('refs', leaf);
+  const read = () => [
+    e.query('Project').out('refs').ids(),
+    e.query('Project').descendants('refs').ids(),
+    e.query('Project').linkedTo('refs', leaf).ids(),
+    e.query('Project').linkedWith(leaf).ids(),
+    e.query('Project').linkedTo('refs').ids(),
+  ];
+  const seen: ReturnType<typeof read>[] = [];
+  const watch = e.watch(read, value => seen.push(value));
+  try {
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[leaf], [leaf], [root], [root], [root]]);
+    e.write(leaf).trash();
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[], [], [root], [root], []]);
+    e.write(leaf).restore();
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[leaf], [leaf], [root], [root], [root]]);
+    expect(seen).toHaveLength(3);
+  } finally { watch.stop(); }
+});
+
+
+it('walks each source in the requested kind order, then relation insertion order', () => {
+  const [a, b, c, d] = [task('a'), task('b'), task('c'), task('d')];
+  e.write(a).link('refs', b).link('blocks', c).link('blocks', d);
+  expect(e.query.ids(a).out(['blocks', 'refs']).ids()).toEqual([c, d, b]);
+  expect(e.query.ids(a).descendants(['blocks', 'refs']).ids()).toEqual([c, d, b]);
+});
+
+
+it('matches an explicit relation end even when unchecked data has no entity at that end', () => {
+  const root = e.create('Project').id(), missing = 'Task-missing';
+  e.admin.addRelation(root, 'refs', missing);
+  expect(e.query('Project').linkedTo('refs', missing).ids()).toEqual([root]);
+  expect(e.query('Project').linkedWith(missing).ids()).toEqual([root]);
+  expect(e.query('Project').linkedTo('refs').ids()).toEqual([]);
+  expect(e.query('Project').out('refs').ids()).toEqual([]);
+});

@@ -62,6 +62,37 @@ function embed(e: ReturnType<typeof engine>) {
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
   "SQLite operational feasibility",
   () => {
+    it("selects adjacency and relation payloads without a binding call per source or edge", () => {
+      const db = open(), e = engine(db);
+      const pairs = e.transact(() => Array.from({ length: 64 }, (_, i) => {
+        const root = e.create("Note", { title: `root ${i}` }).id();
+        const leaf = e.create("Note", { title: `leaf ${i}` }).id();
+        e.write(root).link("refs", leaf, { info: { n: i } });
+        return { root, leaf };
+      }));
+      e.write(pairs[1].root).link("refs", pairs[0].leaf);
+      const all = db.all.bind(db), relation = db.relation.bind(db);
+      let selects = 0, edgeReads = 0;
+      let selection: Parameters<SqliteDatabase["all"]> | undefined;
+      db.all = (...args) => { selects++; selection = args; return all(...args); };
+      db.relation = (...args) => { edgeReads++; return relation(...args); };
+      const query = () => e.query.ids(pairs.map(pair => pair.root));
+      expect(query().out("refs").ids()).toEqual(pairs.map(pair => pair.leaf));
+      expect(selects).toBe(1);
+      const plan = all("EXPLAIN QUERY PLAN " + selection![0], selection![1]);
+      expect(plan.some(row => String(row.detail).includes("relations_source"))).toBe(true);
+      selects = 0;
+      const edges = query().outEdges("refs");
+      expect(edges).toHaveLength(65);
+      expect(edges[0].info).toEqual({ n: 0 });
+      expect(selects).toBe(2); // Ordered seeds, then one statement to hydrate every edge.
+      expect(edgeReads).toBe(0);
+      selects = 0;
+      expect(e.findRelations()).toHaveLength(65);
+      expect(selects).toBe(1);
+      expect(edgeReads).toBe(0);
+    });
+
     it("does not serialize transport envelopes or read answers", () => {
       const db = open(), e = engine(db);
       const persist = db.pack.bind(db);

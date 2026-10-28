@@ -237,16 +237,15 @@ export class SqliteDatabase implements EarsDatabase {
   }
   relation(id: string): Data | undefined {
     const r = this.get("SELECT * FROM relations WHERE id=?", [id]);
-    return r
-      ? {
-          id: r.id,
-          kind: r.kind,
-          source: r.source,
-          target: r.target,
-          info: r.info === null ? null : this.unpack(r.info),
-        }
-      : undefined;
+    return r ? this.decodeRelation(r) : undefined;
   }
+  decodeRelation(row: Data): Data {
+    return {
+      id: row.id, kind: row.kind, source: row.source, target: row.target,
+      info: row.info === null ? null : this.unpack(row.info),
+    };
+  }
+
   entity(id: string): Data {
     return this.row(id) ?? fail("NO_SUCH_ENTITY", `No entity "${id}"`);
   }
@@ -814,11 +813,11 @@ export class SqliteDatabase implements EarsDatabase {
         return {
           kind: "relations",
           relations: this.all(
-            "SELECT id FROM relations" +
+            "SELECT * FROM relations" +
               (terms.length ? " WHERE " + terms.join(" AND ") : "") +
               " ORDER BY seq",
             params
-          ).map((r) => this.relation(r.id)),
+          ).map((r) => this.decodeRelation(r)),
         };
       }
       case "wouldCreateCycle":

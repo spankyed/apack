@@ -230,3 +230,20 @@ cases skipped and no unhandled errors. Official API reports were regenerated wit
 the reviewed diff changes only the storage-port signatures. The local broad rerun was rejected by automatic review
 and was not executed. Raw results are recorded with the implementation evidence. The strict CI run above still
 covers the earlier integration checkpoint, not these later transport edits; validate the new committed tip separately.
+
+
+The next query checkpoint removes per-source SQL selection from one-hop traversal and per-edge payload reads
+from relation terminals/listings. One-hop traversal remains a composed SQL selection through following filters,
+projections and limits; deep traversal batches each BFS frontier while retaining an explicit JavaScript seen set.
+A 64-source fixture verifies one adjacency selection and an actual `relations_source` query-plan access path.
+Destination membership is now tracked for graph reads so cross-type trash/restore invalidates their watches;
+tracking is conservative across declared types and still needs the phase-3 load/budget evaluation.
+
+The pinned native oracle also exposed prototype differences: requested relation-kind order matters, and explicit
+relation-end filters match even trashed/missing endpoints, unlike unconstrained adjacency. These are now shared
+contract cases: 21 relation cases pass on elmdb and SQLite; 35 focused SQLite cases pass including batching and
+operational checks. Removing destination membership tracking makes the new watch regression fail. Disposable
+Linux validation passed EARS typechecking and all 21 shared relation cases; the full SQLite suite passed 237 cases
+with only the known explain failure. The earlier Linux attempt used the subsequently corrected assertion and failed;
+do not treat it as acceptance. Exact output is recorded with the implementation evidence.
+Local package-wide typechecking was rejected by automatic review and is routed to Linux instead.
