@@ -326,9 +326,15 @@ a further canonical fast-forward. PR #286 remains a draft at this source. Do not
 The next regex dependency screen tests rregex 1.13.1 in isolated Linux. Tested Rust syntax works, but repeated
 compile/free controls grow WASM memory through 3,000 instances even with explicit free and GC. The stock
 artifact is not adopted. [Regex-screen evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/rust-regex-wasm-screen/README.md)
-retains exact artifact hashes, syntax checks and memory controls. Evaluate an allocator-controlled rebuild or
-another wrapper before integrating SQLite trigram narrowing and bounded Rust-compatible matching. The three
-search failures remain open; passing this small syntax probe would not have closed their production requirement.
+retains exact artifact hashes, syntax checks and memory controls. A subsequent exact-source rebuild isolates
+wee_alloc as the cause in these controls: default allocation stays at 1.57 MB through 3,000 instances.
+A further 20-pattern/20-input native comparison agrees on all answers and five refusals; eight mixed-workload
+samples remain at 2.75 MB through 4,200 instances under a prewritten stability criterion.
+[Allocator-control evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/regex-allocator-control/README.md)
+retains source/provenance, build recipe and binary hashes. Controlled artifacts/target stay in owned Linux volume
+`apack-ears-regex-ffdc766d`. Next implement reproducible default-allocator loading/assets and SQLite trigram
+narrowing with exact per-element verification. The three search failures remain open; this matcher screen does
+not establish full search, latency, packaging or application resource acceptance.
 
 ### Next deliverables and full remaining scope
 
