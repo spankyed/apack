@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Session } from 'node:inspector/promises';
+import { createEarsEngine, type EARS } from './packages/apack-ears/src/index.ts';
+import { toElmdbSchema } from './packages/apack-ears/src/schema.ts';
+import { SqliteDatabase } from './packages/apack-ears/src/sqlite/database.ts';
+import { loadedNativeBindings } from './packages/apack-ears/bench/sqlite/load-metrics.ts';
+const n=100000, needle='bucket-7-value';
+const path=mkdtempSync(join(tmpdir(),'ears-lookup-probe-'));
+const schema={types:{Row:{required:['slug'],fields:{slug:{type:'string' as const},counter:{type:'number' as const,optional:true},payload:{type:'string' as const}}}},relations:{},roles:[]};
+const db=new SqliteDatabase({path,schema:toElmdbSchema(schema),syncs:false});
+const e=createEarsEngine({database:db});
+try {
+ for(let offset=0;offset<n;offset+=256)e.transact(()=>{for(let i=offset;i<Math.min(n,offset+256);i++)e.create('Row',{id:`Row-${i}` as EARS.EntityId,slug:`bucket-${i%100}-value`,payload:i%128===0?'large body '.repeat(1500):'body '.repeat(100)});},{durable:false});
+ const expected=Array.from({length:10},(_,i)=>`Row-${7+i*100}`);
+ const traced:Array<{sql:string;parameters:any[];plan:unknown}> = [];
+ const all=db.all.bind(db),get=db.get.bind(db);
+ db.all=(sql,parameters=[])=>{const rows=all(sql,parameters);traced.push({sql,parameters,plan:all('EXPLAIN QUERY PLAN '+sql,parameters)});return rows;};
+ db.get=(sql,parameters=[])=>{const row=get(sql,parameters);traced.push({sql,parameters,plan:all('EXPLAIN QUERY PLAN '+sql,parameters)});return row;};
+ assert.deepEqual(e.query('Row').where('slug',needle).limit(10).ids(),expected);
+ db.all=all;db.get=get;
+ const selection=traced.filter(s=>s.sql.includes('ORDER BY')&&s.sql.includes('FROM entities')).at(-1);
+ assert(selection,'Actual terminal selection was not captured');
+ let checksum=0;
+ const modes={cpu:()=>{let value=checksum;for(let i=0;i<3000000;i++)value=(Math.imul(value^i,1664525)+1013904223)|0;checksum=value;return expected;},facade:()=>e.query('Row').where('slug',needle).limit(10).ids(),sql:()=>all(selection.sql,selection.parameters).map(r=>r.id)};
+ const samples:{mode:string;ms:number;cpuMicros:number}[]=[];
+ // Alternating equal-size blocks measure actual generated SQL versus the facade around that same SQL.
+ for(let round=0;round<20;round++)for(const mode of (round%2?['sql','cpu','facade']:['facade','cpu','sql']) as Array<keyof typeof modes>){
+  for(let i=0;i<25;i++){
+   const cpu=process.cpuUsage(),start=performance.now();const rows=modes[mode]();const ms=performance.now()-start;const used=process.cpuUsage(cpu);
+   assert.deepEqual(rows,expected);samples.push({mode,ms,cpuMicros:used.user+used.system});
+  }
+ }
+ console.log(JSON.stringify({checksum,scope:'fixed 3-million-iteration integer CPU sentinel alternating with actual SQL and facade; independent 100k profile; diagnostic only, CPU sentinel work is not matched to SQL',node:process.version,sqlite:get('SELECT sqlite_version() version')!.version,traced,samples,nativeBindings:loadedNativeBindings(),resourceUsage:process.resourceUsage(),memory:process.memoryUsage()}));
+}finally{db.close();rmSync(path,{recursive:true,force:true});}

@@ -310,10 +310,12 @@ captures actual SQL/plans without watches or background work: facade / generated
 p99 17.82 / 14.34 ms. Its native driver call holds 1,092 of 1,176 CPU-profile samples. The generated fallback
 repeats entity, scalar/overflow and list-membership probes per candidate; no temporary sort appears. The [four-way predicate diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-predicate-variants/README.md)
 finds no compelling median improvement; retain the varying tails and do not select the best p99 as acceptance.
-No production predicate change was made. A fixed-work CPU sentinel / SQL / facade diagnostic is now running
-in owned container `ears-scalar-cpu-control-e236`, exec session 78353, results `/private/tmp/ears-scalar-cpu-control`.
-Poll that exact handle; do not restart on observation timeout. Use its result before attributing outliers or
-changing scheduling. Declared scalar types cannot exclude unchecked imported array values. Complete
+No production predicate change was made. The [fixed-work CPU sentinel](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-cpu-control/README.md)
+is complete: JS loop / SQL / facade p99 27.48 / 9.33 / 11.30 ms. Large tails occur without database calls, but
+the longer CPU loop has eleven outliers only within its first 143 calls; JIT/runtime/host causes remain unisolated.
+This neither excuses the failed workload nor proves a host-contention cause. Preserve cold samples and original
+targets. Continue controlled cold/steady-state resource diagnosis alongside real host/storage/backup composition;
+do not add an unproven predicate rewrite or retune scheduling merely for a synthetic pass. Declared scalar types cannot exclude unchecked imported array values. Complete
 large-text and FULL qualification under unchanged targets; do not rerun the same failed qualification until green. The candidate explicitly chooses INDEX_BUILDING over a slow foreground search scan; complete app
 composition must handle that state and await readiness where required before adoption.
 
