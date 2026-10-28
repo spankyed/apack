@@ -6,3 +6,5 @@ export { findRunningApp, publishRunningApp, appLockFile } from './running.ts';
 export { assertNoDatabaseWriter, findDatabaseWriter, holdDatabaseWriteLock, type DatabaseWriteLock } from './write-lock.ts';
 
 export { storedSettings, readSettingsOverrides } from './settings.ts';
+
+export { configuredDatabaseFormat, databaseStorage, type DatabaseStorage } from './storage.ts';

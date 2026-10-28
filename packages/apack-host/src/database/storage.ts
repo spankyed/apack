@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DATABASE_FORMAT as ELMDB_FORMAT, openDatabase as openElmdb, type DatabaseOptions } from '@apackdev/ears/lmdb';
 import { DATABASE_FORMAT as SQLITE_FORMAT, openDatabase as openSqlite } from '@apackdev/ears/sqlite';
+import { APP_ENVS, appDataDirFor } from '@apackdev/sdk/env';
 import type { EarsDatabase } from '@apackdev/ears';
 
 export interface DatabaseStorage {
@@ -41,4 +42,37 @@ export function backupStorage(dir: string): DatabaseStorage | undefined {
   });
   if (present.length > 1) throw new Error(`${dir} contains ambiguous database files`);
   return present[0];
+}
+
+function canonicalPath(dir: string): string {
+  const resolved = path.resolve(dir);
+  try { return fs.realpathSync(resolved); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    try {
+      if (fs.lstatSync(resolved).isSymbolicLink()) return canonicalPath(path.resolve(path.dirname(resolved), fs.readlinkSync(resolved)));
+    } catch (linkError) { if ((linkError as NodeJS.ErrnoException).code !== 'ENOENT') throw linkError; }
+    const parent = path.dirname(resolved);
+    if (parent === resolved) throw error;
+    return path.join(canonicalPath(parent), path.basename(resolved));
+  }
+}
+
+/** Temporary candidate boot selection; default profiles and implicit storage never opt into SQLite. */
+export function configuredDatabaseFormat(userDataDir = process.env.APACK_USER_DATA_DIR): string {
+  const format = process.env.APACK_STORAGE_FORMAT ?? ELMDB_FORMAT;
+  databaseStorage(format);
+  if (format === SQLITE_FORMAT) {
+    if (!userDataDir || !path.isAbsolute(userDataDir)) {
+      throw new Error('SQLite candidate selection requires an explicit absolute APACK_USER_DATA_DIR');
+    }
+    const selected = canonicalPath(userDataDir);
+    if (APP_ENVS.some(env => {
+      const relative = path.relative(canonicalPath(appDataDirFor(env)), selected);
+      return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
+    })) {
+      throw new Error('SQLite candidate selection requires an isolated profile outside the default app data directories');
+    }
+  }
+  return format;
 }

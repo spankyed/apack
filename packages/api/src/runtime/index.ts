@@ -3,7 +3,7 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
-import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
+import { assertNoDatabaseWriter, databaseStorage, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
@@ -82,7 +82,7 @@ function bootReading(): string {
   const mb = (bytes: number) => `${(bytes / 2 ** 20).toFixed(1)} MB`;
   let onDisk: string;
   try {
-    onDisk = mb(statSync(path.join(_getLmdbPath(), 'data.mdb')).size);
+    onDisk = appDatabase ? mb(statSync(path.join(appDatabase.path, databaseStorage(appDatabase.format).dataFile)).size) : 'unknown';
   } catch {
     onDisk = 'unknown';
   }
@@ -104,11 +104,21 @@ export function openAppStore(): AppStore {
     // A where that filters thousands of rows for want of an index is a developer's to fix, so only development says so
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
-  const runHistory = openRunHistory(_getRunHistoryPath());
-  runtime = createHostRuntime({
-    database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs,
-    countCalls: resolveAppEnvironment().env === 'development',
-  });
+  let runHistory: RunsDatabase | undefined;
+  try {
+    runHistory = openRunHistory(_getRunHistoryPath());
+    runtime = createHostRuntime({
+      database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs,
+      countCalls: resolveAppEnvironment().env === 'development',
+    });
+  } catch (error) {
+    const failures: unknown[] = [error];
+    for (const store of [database, runHistory?.database]) {
+      try { store?.close(); } catch (closeError) { failures.push(closeError); }
+    }
+    if (failures.length > 1) throw new AggregateError(failures, 'Opening app storage failed and cleanup also failed', { cause: error });
+    throw error;
+  }
   bindHost(runtime);
   printLogEvents();
   appPacks = packs;
@@ -138,7 +148,8 @@ export async function setupBackend(): Promise<void> {
   assertNoDatabaseWriter(appContext.userDataDir);
 
   // The app's data: the engine reads and writes it from here on
-  const { engine, packs } = openAppStore();
+  const { database, runHistory, engine, packs } = openAppStore();
+  await Promise.all([database.indexesReady(), runHistory.database.indexesReady()]);
 
   // Packs require workspace @apackdev/* packages at runtime: from a checkout they must get source,
   // not a stale dist (main starts the API with the condition; manual boots must pass it). The

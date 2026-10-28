@@ -2,8 +2,7 @@
 // (apack db) share, so both open a data dir the same way
 import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
-import { DATABASE_FORMAT } from '@apackdev/ears/lmdb';
-import { databaseStorage } from './storage.ts';
+import { configuredDatabaseFormat, databaseStorage } from './storage.ts';
 import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import type { _AppDataPaths } from '@apackdev/sdk/utils';
@@ -16,7 +15,7 @@ import * as fs from 'node:fs';
 const logger = createLogger('run-history');
 
 export interface DatabaseStoreOptions {
-  /** Explicit candidate selection; omitted keeps the production elmdb composition. */
+  /** Explicit constructor selection; otherwise uses the isolated candidate boot setting or production elmdb. */
   storageFormat?: string;
   /** Told when a query does something its data will make slow (the engine's `warn`); the app passes one in development */
   warn?: (message: string) => void;
@@ -33,7 +32,7 @@ export interface DatabaseStoreOptions {
  * change (`onRegistrationChanged`: the app's registry, as packs register), so a declaration another pack made stays
  * while that pack registers. Nothing is installed.
  */
-export function openDatabaseStore({ path, schema, readOnly, warn, storageFormat = DATABASE_FORMAT }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
+export function openDatabaseStore({ path, schema, readOnly, warn, storageFormat = configuredDatabaseFormat() }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
   const database = databaseStorage(storageFormat).open({ path, readOnly });
   const engine = createEarsEngine({ database, warn });
   if (!readOnly) {
@@ -64,7 +63,7 @@ const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 
  * from starting over it. Any other failure (a full disk, a permission, the system's lock table) says nothing about the
  * files and throws, as it does opened read-only.
  */
-export function openRunHistory(dir: string, { readOnly, storageFormat = DATABASE_FORMAT }: { readOnly?: boolean; storageFormat?: string } = {}): RunsDatabase {
+export function openRunHistory(dir: string, { readOnly, storageFormat = configuredDatabaseFormat() }: { readOnly?: boolean; storageFormat?: string } = {}): RunsDatabase {
   const open = (): RunsDatabase => {
     const database = databaseStorage(storageFormat).open({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) });
     return { database, engine: createEarsEngine({ database }) };
@@ -105,7 +104,7 @@ export interface OpenAppDatabaseOptions {
    * snapshot file, a pack directory, or a directory of pack directories (`readInstalledSchema`).
    */
   schemaFrom?: string;
-  /** Explicit format for an isolated candidate profile; omitted keeps elmdb. */
+  /** Explicit format for an isolated candidate profile; otherwise uses the process boot selection. */
   storageFormat?: string;
 }
 
@@ -114,7 +113,7 @@ export interface OpenAppDatabaseOptions {
  * packs' names read from their manifests (no pack code runs), which a tool reports. The engine is bound, so `@apackdev/sdk/ears`'s
  * operations act on it until `close()`. The run history is a database of its own (`openRunHistory`).
  */
-export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom, storageFormat = DATABASE_FORMAT }: OpenAppDatabaseOptions): Promise<AppDatabase> {
+export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom, storageFormat = configuredDatabaseFormat(userDataDir) }: OpenAppDatabaseOptions): Promise<AppDatabase> {
   const context = resolveAppEnvironment({ env, userDataDir });
   const paths = findAppDataPaths(userDataDir);
   const schema = readInstalledSchema(context, { schemaFrom });
