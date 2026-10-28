@@ -64,7 +64,10 @@ Shared native/SQLite tests pin omitted undefined object properties and refused u
 is per changed value, preserving the structured transport. Undeclared primary types remain readable/filterable through
 all-entity or ID starts. The backend/query/search implementation is source-owned under `src/sqlite/`, with an app-only `./sqlite` entry
 and pinned workspace dependencies. Measured backend-specific explain and discriminated operation/read/result
-types are implemented. Actual-facade benchmark evidence remains the next phase-2 requirement.
+types are implemented. The [actual-facade comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/facade-slice.md)
+exposed expensive large-value key traversal in the overflow WITHOUT ROWID table. Only that table now uses rowids
+plus a unique logical key; the identical repeat cuts its projected large-row page from ~14.3 ms to ~0.27 ms.
+Sorting/vector regressions, app budgets and more precise native/allocator attribution remain open.
 
 ## Indexes and queries
 

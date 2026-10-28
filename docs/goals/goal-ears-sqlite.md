@@ -254,7 +254,17 @@ on both drivers. Three disposable mutations prove weakening write requests, read
 actual port type assertions. The first direct-port assertion incorrectly excluded an optional diagnostic field;
 its failure and corrected passing run are retained in the evidence directory.
 
-Next: record actual-facade comparisons including small updates
-beside large values. Open the draft PR with that working slice. Do not declare phase 2 complete from package wiring. All phase 3–7 requirements remain, including background
-index admission, useful search/realistic vectors, four host backup-format failures, complete app composition,
+The first pinned actual-facade comparisons and their raw three-trial cohorts are recorded in
+[the slice evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/facade-slice.md). They exposed a
+large-value physical-layout regression. Isolated correction `df99b9d579` uses a rowid overflow table; all 258
+SQLite cases pass, and identical repeats cut projected large-row reads from ~14.3 ms to ~0.27 ms. Ordinary reads
+remain roughly 1.6–3× slower than the native baseline here, numeric sorting ~29× and the low-rank synthetic vector
+case ~13×. Measurements do not establish app budgets or realistic relevance/recall. Driver spans group binding,
+SQL execution and marshalling; more precise native/allocator attribution remains open.
+
+Next: open/update the draft PR with this measured vertical slice. Continue phase 3 with precise rollback dependency
+delivery (the prepared delta patch is `/private/tmp/ears-sqlite-rollback-deltas.patch`), then background index
+admission and foreground ownership/stall qualification. Strict run `40655434334` is live on typed checkpoint
+`5985709142`; it does not cover the later overflow layout or later work. All phase 3–7 requirements remain,
+including useful search/realistic vectors, four host backup-format failures, complete app composition,
 operational/platform qualification and adoption budgets. Normal production still uses elmdb.
