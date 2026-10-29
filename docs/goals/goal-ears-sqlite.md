@@ -199,8 +199,12 @@ Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published 
 fixes, witnessed archive publication recovery and standalone staged CLI checks. Existing draft #286
 is updated around the final implementation and actual remaining requirements.
 Its focused [SQLite platform run 40897144759](https://github.com/spankyed/apack/actions/runs/40897144759)
-is confirmed live on exactly 203ab2c32c across Linux x64, macOS arm64 and Windows x64. Poll the same run,
-never redispatch merely because observation expires. Its gate explicitly requires eight CLI logical
+completed FAILURE on exactly 203ab2c32c: Linux x64 and macOS arm64 succeeded; Windows
+passed all 122 collected host assertions but reported an unhandled Vitest worker RPC timeout
+(`onTaskUpdate`). The run is failed; Windows CLI/binary verification did not run. Its reports
+and logs are retained under archive evidence `windows-rpc-40897144759`. The cause is unisolated.
+The next changed-source qualification caps host workers at two to match the declared CPU budget;
+this is a control, not evidence that worker count caused the failure. Its gate explicitly requires eight CLI logical
 command cases, both publication-kill cases, five staged CLI process checks, all five public snapshot
 cases, applicable host logical cases, nine maintenance cases and existing EARS/host contracts.
 The ordinary app job is intentionally skipped for this focused suite. This is not the full Strict gate.
@@ -379,7 +383,7 @@ safe retry without deleting old private scratch. These prove process-kill behavi
 Convergence source 5dcd8c9c88 passes all 45 CLI /27 host logical/kill/ownership cases, staged process
 smoke, five builds, CLI/host types, lint and import rules. The probe is owned by CLI test support.
 The platform gate now requires eight CLI logical cases, both kill cases and five staged binary checks;
-these descendants are published at 203ab2c32c with the live exact-source run above. Canonical remains 6cf.
+these descendants are published at 203ab2c32c with the failed exact-source run above. Canonical remains 6cf.
 Next complete isolated installed CLI and app operations, preserve selected-store/media ownership,
 qualify process death before/during staging/publication and protected populated replacement, and complete
 actual copied-profile conversion plus representative duration/memory/disk/platform evidence. Keep partial
@@ -792,3 +796,11 @@ crash/checkpoint/long-reader/ownership qualification; Electron/CLI loading/signi
 filesystem assumptions; representative warm/cold/growth/resource budgets, execution-complexity and maintenance
 review, and final adoption decision. No microbenchmark or small corpus certifies app latency, memory growth,
 filesystem support, production durability or overall relevance/recall.
+
+Installed CLI qualification at **9cd6db3e022a1d4f43fa49b0343e69e8d199ae33** passes the checked-in
+`tests/scripts/test-sqlite-installed-cli.py` command in disposable Linux ARM64, Node 23.11.1.
+It installs freshly packed EARS/SDK/CLI/native tarballs using normal npm scripts, runs all five
+logical CLI checks from an isolated consumer, verifies installed native/regex provenance, and
+retains the generated lockfile and tarball hashes. The staged counterpart, five package builds,
+lint and import checks also pass. Evidence is `logical-archive/installed-repository-command-verified`.
+This does not qualify installed macOS/Windows, signed Electron, full app resources or the full Strict gate.
