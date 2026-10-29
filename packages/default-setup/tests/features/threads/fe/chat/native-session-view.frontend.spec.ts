@@ -1,3 +1,4 @@
+import type { ClaudeNativeNotice } from '#features/code/common/native-notice.ts'
 import { createApp, h, ref, computed, nextTick, type App } from 'vue'
 import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-terminal-views.ts'
 import ClaudeNativeSession from '#features/threads/fe/chat/ClaudeNativeSession.vue'
@@ -239,4 +240,42 @@ it('keeps sandbox decisions tied to the displayed host and withdraws unavailable
   expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_TERMINAL_NOTICE',notice:{id:notice.id,revision:'replacement',sessionId:'session',decision:'sandbox_allow'}}))
   card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('sandbox_cancel')
   f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:undefined}});await nextTick();expect(f.root.querySelector('[aria-label="Claude sandbox network request"]')).toBeNull()
+})
+
+
+const identity={id:'notice',revision:'old-revision',sessionId:'session',title:'Original native notice',paragraphs:['Original explanation']}
+const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: string }[] = [
+ {notice:{...identity,kind:'auto_mode_server_fallback',helpUrl:'https://example.test/help'},button:'Continue in auto mode',decision:'continue'},
+ {notice:{...identity,kind:'refusal_fallback_prompt',originalModel:'Original',fallbackModel:'Fallback',choices:[{value:'retry_fallback',label:'Retry'},{value:'edit_prompt',label:'Edit'}]},button:'Retry',decision:'retry_fallback'},
+ {notice:{...identity,kind:'goal_proposal',choices:[{value:'goal_decline',label:'Not now'},{value:'goal_accept',label:'Set this goal'}]},button:'Set this goal',decision:'goal_accept'},
+ {notice:{...identity,kind:'autocompact_offer',selectedTokens:400000,canPrevious:false,canNext:true,choices:[{value:'compact_keep',label:'Keep auto'},{value:'compact_accept',label:'Compact sooner'}]},button:'Larger',decision:'compact_next'},
+ {notice:{...identity,kind:'plugin_hint',pluginName:'review',marketplaceName:'local',sourceCommand:'review',choices:[{value:'yes',label:'Install'},{value:'no',label:'Not now'},{value:'disable',label:'Disable'}]},button:'Install',decision:'yes'},
+ {notice:{...identity,kind:'lsp_recommendation',pluginName:'review',marketplaceName:'local',fileExtension:'ts',choices:[{value:'yes',label:'Install'},{value:'no',label:'Not now'},{value:'never',label:'Never'},{value:'disable',label:'Disable'}]},button:'Install',decision:'yes'},
+]
+it.each(ownedNoticeCases)('does not retarget a displayed $notice.kind click or Escape to a replacement',async({notice,button,decision})=>{
+ const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
+ const card=f.root.querySelector('[data-native-notice]')!,stale=[...card.querySelectorAll<HTMLButtonElement>('button')].find(node=>node.textContent===button)!
+ expect(stale).toBeTruthy()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,revision:'replacement'}}})
+ const count=actor.send.mock.calls.length;stale.click();card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(actor.send.mock.calls.length).toBe(count)
+ await nextTick()
+ const fresh=[...f.root.querySelectorAll<HTMLButtonElement>('[data-native-notice] button')].find(node=>node.textContent===button)!
+ fresh.click();expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ownerId:'owner',notice:{id:notice.id,revision:'replacement',sessionId:notice.sessionId,decision}}))
+})
+it('does not transfer notice consent between owners with an unchanged replayed notice',async()=>{
+ const f=await fixture(),notice=ownedNoticeCases[0]!.notice
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick();f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
+ const card=f.root.querySelector('[data-native-notice]')!,stale=[...card.querySelectorAll<HTMLButtonElement>('button')].find(node=>node.textContent==='Continue in auto mode')!
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,ownerId:'replacement-owner',notice}})
+ const count=actor.send.mock.calls.length;stale.click();expect(actor.send.mock.calls.length).toBe(count)
+})
+
+it('keeps keyboard focus when the same autocompact dialog publishes a fresh size revision',async()=>{
+ const f=await fixture(),notice=ownedNoticeCases[3]!.notice
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick();f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
+ const larger=[...f.root.querySelectorAll<HTMLButtonElement>('[data-native-notice] button')].find(button=>button.textContent==='Larger')!;larger.focus();expect(document.activeElement).toBe(larger)
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,revision:'fresh-size'}}});await nextTick()
+ expect(document.activeElement).toBe(larger);expect(larger.isConnected).toBe(true)
+ larger.click();expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({id:notice.id,revision:'fresh-size',sessionId:notice.sessionId,decision:'compact_next'})
 })
