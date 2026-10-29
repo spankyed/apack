@@ -30,7 +30,10 @@ const summary = values => { const sorted = [...values].sort((a, b) => a - b); re
 const paths = ['all', 'tenPercent', 'onePercent'];
 const eligible = (i, path) => i % 17 !== 0 && (path === 'all' || (path === 'tenPercent' ? i % 100 < 10 : i % 100 === 0));
 function open(file, d) {
-  const db = new Database(file); db.loadExtension(getLoadablePath()); db.pragma('journal_mode=WAL'); db.pragma('synchronous=OFF');
+  const db = new Database(file), extension = getLoadablePath(); db.loadExtension(extension);
+  report.vectorExtension = { path: extension, sha256: hash(readFileSync(extension)), version: db.prepare('SELECT vec_version() v').get().v };
+  report.nativeBindingsWhileOpen = loadedNativeBindings([extension]);
+  db.pragma('journal_mode=WAL'); db.pragma('synchronous=OFF');
   if (d) db.exec(`CREATE TABLE raw(id INTEGER PRIMARY KEY,embedding BLOB NOT NULL,live INTEGER NOT NULL,bucket INTEGER NOT NULL,in_ten INTEGER NOT NULL);
     CREATE INDEX raw_ten ON raw(live,in_ten); CREATE INDEX raw_one ON raw(live,bucket);
     CREATE VIRTUAL TABLE quantized USING vec0(embedding int8[${d}] distance_metric=cosine,live boolean);`);
@@ -50,19 +53,19 @@ function operations(db) {
     writeCosts,
     put(i, vector, live = i % 17 !== 0) {
       const id = i + 1, a = performance.now(); rawPut.run(id, bytes(vector), Number(live), i % 100, Number(i % 100 < 10));
-      const b = performance.now(), encoded = quantize(vector), c = performance.now(); quantPut.run(id, encoded, Number(live));
+      const b = performance.now(), encoded = quantize(vector), c = performance.now(); quantPut.run(BigInt(id), encoded, BigInt(Number(live)));
       writeCosts.rawMs += b - a; writeCosts.quantizeMs += c - b; writeCosts.derivedMs += performance.now() - c; writeCosts.rows++;
     },
     update(id, vector) {
       const a = performance.now(); rawUpdate.run(bytes(vector), id); const b = performance.now(), encoded = quantize(vector), c = performance.now();
-      quantUpdate.run(encoded, id); writeCosts.rawMs += b - a; writeCosts.quantizeMs += c - b; writeCosts.derivedMs += performance.now() - c; writeCosts.rows++;
+      quantUpdate.run(encoded, BigInt(id)); writeCosts.rawMs += b - a; writeCosts.quantizeMs += c - b; writeCosts.derivedMs += performance.now() - c; writeCosts.rows++;
     },
-    native(vector, k = 1) { return knn.all(quantize(vector), k); },
+    native(vector, k = 1) { return knn.all(quantize(vector), BigInt(k)); },
     search(path, vector, k = 10) {
       const begin = performance.now(), encoded = quantize(vector);
       const selected = path === 'all' ? undefined : lookup[path].all().map(row => row.id);
       const preparedAt = performance.now();
-      const approximate = selected === undefined ? knn.all(encoded, candidates) : scopedKnn.all(encoded, candidates, JSON.stringify(selected));
+      const approximate = selected === undefined ? knn.all(encoded, BigInt(candidates)) : scopedKnn.all(encoded, BigInt(candidates), JSON.stringify(selected));
       const foundAt = performance.now(), rows = rerank[path].all(bytes(vector), JSON.stringify(approximate.map(row => row.rowid)), k), end = performance.now();
       return { rows, ms: end - begin, preparationMs: preparedAt - begin, candidatesMs: foundAt - preparedAt,
         rerankMs: end - foundAt, candidateRows: approximate.length, scopedRows: selected?.length };
@@ -145,4 +148,4 @@ try {
     } finally { pulse?.stop(); db?.close(); rmSync(root, { recursive: true, force: true }); }
   }
 } catch (error) { report.failure = { message: error.message, stack: error.stack }; process.exitCode = 1; }
-finally { report.nativeBindings = loadedNativeBindings([getLoadablePath()]); report.memoryAtEnd = process.memoryUsage(); report.resources = process.resourceUsage(); save(); }
+finally { report.nativeBindingsAfterClose = loadedNativeBindings([getLoadablePath()]); report.memoryAtEnd = process.memoryUsage(); report.resources = process.resourceUsage(); save(); }
