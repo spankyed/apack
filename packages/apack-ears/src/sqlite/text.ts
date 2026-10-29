@@ -114,8 +114,9 @@ export class SqliteText {
     const table = searchTable(job), fields = Object.keys(job.definition.fields);
     const recency = options.recency?.halfLife > 0 ? options.recency : undefined;
     const now = recency ? recency.now ?? Date.now() : undefined;
-    // Decay can change the prefix. Its generic-value path ranks before limiting in JS.
-    const nativeLimit = recency ? undefined : limit;
+    // Scalar timestamps are losslessly represented in SQL. Nonfinite query options keep their JS semantics.
+    const nativeRecency = recency && Number.isFinite(now) && Number.isFinite(recency.halfLife);
+    const nativeLimit = recency && !nativeRecency ? undefined : limit;
     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
     if (!tokens.length) return [];
     const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT DISTINCT term FROM ${table}_vocab WHERE col IN ('body','aliases')`).map(row => String(row.term));
@@ -203,13 +204,21 @@ export class SqliteText {
         `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
          clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner,min(seq) seq FROM matches WHERE negative=0 GROUP BY clause,id),
          accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
+      const decayed = nativeRecency ? `, decayed AS (
+        SELECT a.id,a.owner,a.seq,a.score base_score,
+          a.score * CASE WHEN r.kind IN ('num','zero','date') THEN pow(0.5,max(0,? - r.value)/?) ELSE 1 END score
+        FROM accepted a LEFT JOIN (${this.db.fieldSource(recency.field, [job.type])}) r ON r.id=a.id)` : '';
+      if (nativeRecency) args.push(now, recency.halfLife);
+      // Stable JS decay ties previously retained the base-score order, then entity insertion order.
+      const scored = nativeRecency ? 'decayed' : 'accepted';
+      const order = `a.score DESC,${nativeRecency ? 'a.base_score DESC,' : ''}a.seq`;
       const ranked = nativeLimit === undefined ? '' : `, ranked AS MATERIALIZED
-        (SELECT a.id,a.score,a.owner,a.seq FROM accepted a ORDER BY a.score DESC,a.seq LIMIT ?)`;
+        (SELECT a.* FROM ${scored} a ORDER BY ${order} LIMIT ?)`;
       if (nativeLimit !== undefined) args.push(nativeLimit);
-      return this.db.all(`WITH ${ctes.join(',')}, ${combined}${ranked}
-        SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? 'accepted' : 'ranked'} a
+      return this.db.all(`WITH ${ctes.join(',')}, ${combined}${decayed}${ranked}
+        SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? scored : 'ranked'} a
         ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
-        ORDER BY a.score DESC,a.seq${details ? ',m.docid,m.clause' : ''}`, args);
+        ORDER BY ${order}${details ? ',m.docid,m.clause' : ''}`, args);
     };
     let open = '\u0001', close = '\u0002';
     // The read request owns a snapshot across both statements. Score the entity prefix before fetching
@@ -239,7 +248,7 @@ export class SqliteText {
       }
       if (ranges.length) Object.defineProperty(hit.highlights, field, { value: mergeRanges(ranges), enumerable: true, configurable: true, writable: true });
     }
-    if (recency) {
+    if (recency && !nativeRecency) {
       const payloads = new Map(this.db.rows([...hits.keys()], [recency.field]).map(row => [row.id, row]));
       for (const hit of hits.values()) {
         const value = payloads.get(hit.id)?.[recency.field], at = value instanceof Date ? value.getTime() : value;

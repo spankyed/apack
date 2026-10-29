@@ -278,3 +278,15 @@ sequence / prefix**, four fresh processes in one disposable Linux container, unc
 recency and 1000 writes remain. Retain all samples, answers, plans/provenance, bytes/RSS/WAL/heartbeat and
 build/admission costs. No retry or discarded samples. This compares a changed execution plan, not a rerun
 to replace the failed prefix or 100k/FULL qualification. Recency is still the generic-value path.
+
+### Native recency correction cohort
+
+After finite native recency passes functional, snapshot and native row/decode-bound removal checks, run
+exactly **sequence / recency / recency / sequence**, four fresh processes in one Linux container with the
+unchanged two CPUs/6 GiB and 180 seconds each. Sequence is 2d0bdcbde9, recency is the converged native-value
+ranking source. Both receive the identical updated `text-shape.mjs`, preserving its dataset, all existing
+samples and 1000 name writes, plus 50 recency-highlight/picked-name reads. Verify complete tag highlights
+for both highlighted modes. Recency uses the existing createdAt timestamps and one fixed clock per trial.
+Retain every sample, answer, native hash/entrypoint, bytes/WAL/RSS, heartbeat and binding counts. Stop on
+setup or correctness failure; no discarded cold samples or automatic retry. This measures the changed
+native ranking path, not acceptance of phase 3's failed 100k/FULL gate, fuzzy, real corpus or app budgets.

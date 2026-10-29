@@ -295,11 +295,15 @@ The local immutable-sequence correction removes redundant ranking/output entity 
 The preregistered four-process cost cohort completed: broad ~17.1 versus ~18.6 ms, highlights ~18.3 versus
 ~19.8 ms, recency ~46 versus ~48 ms; all answers pass, no samples/retries discarded. Broad/highlight/recency
 p99 still miss 16 ms. See [sequence cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/sequence-cost/README.md).
-Next implement native recency value ranking before the prefix: preserve numeric/Date/missing/non-numeric
-values, one clock, base-score tie order, multi-type/global/pipeline scope, complete highlighted hits and units.
-The scalar codec accepts finite numeric/Date cells; investigate nonfinite recency options separately instead
-of silently changing their existing generic behavior. Prove actual returned-row/value-decoding bounds and
-removal controls, then preregister a new cost comparison. Metadata WITHOUT ROWID is only an unmeasured
+Local native recency computes finite timestamp decay in SQL before ranking/limiting, preserving numeric,
+Date, negative-zero, missing and nonnumeric values, one clock and base-score ties. Nonfinite options retain
+the preceding generic behavior. It passes **491 SQLite / 289 native**, five builds, types/API reports,
+lint/imports, 75 focused cases and a candidate-hydration removal control. Native row bounds, dynamic-slot
+overflow retention, read-only reopen, units/rollback/watches and concurrent score/highlight snapshots are
+covered. See [native recency evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-recency/README.md).
+Next execute the preregistered sequence/recency/recency/sequence cost cohort on the committed source, using
+the identical expanded fixture (including recency highlights) for both controls. Preserve all failures and
+unchanged budgets; functional proof does not accept its cost. Metadata WITHOUT ROWID is only an unmeasured
 possible diagnostic, not a chosen layout change. Before Windows qualification, switch the two new ordinary
 recovery alias fixture links to Windows junctions as the existing storage fixture does (crash tests are POSIX-only).
 Recency and every phase 3–7 requirement remain required; none of these diagnostics is qualification. Preserve every failed cohort and all remaining

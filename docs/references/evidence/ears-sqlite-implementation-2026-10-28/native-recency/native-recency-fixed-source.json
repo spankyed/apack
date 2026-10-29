@@ -1,0 +1,8 @@
+{
+  "base": "b5767d189a24eef98cff8c2781075dd7cf7c83c3",
+  "changedFiles": [
+    "packages/apack-ears/src/sqlite/text.ts",
+    "packages/apack-ears/tests/sqlite/text-limits.spec.ts"
+  ],
+  "sha256": "6487f4b9bf6e9e809e47be5945a8a0bd88ea96f350374568869dbb6fee3ef332"
+}
