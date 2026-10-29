@@ -136,19 +136,25 @@ describe('vector search', () => {
     const nearest = () => e.query('Note').near([1, 0, 0], { k: 1 }).ids();
     const before = e.lastCommit();
     expect(nearest()).toEqual([first]);
-    expect(() => e.transact(() => {
+    const outerRollback = new Error('rollback outer embeddings');
+    const nestedRollback = new Error('rollback nested embeddings');
+    try { e.transact(() => {
       e.embed([{ ...firstChunk, model, vector: [0, 0, 1] }, { ...secondChunk, model, vector: [1, 0, 0] }]);
-      expect(nearest()).toEqual([second]);
-      expect(() => e.transact(() => {
+      expect(nearest(), 'outer unit sees its embedding replacement').toEqual([second]);
+      try { e.transact(() => {
         e.embed([{ ...firstChunk, model, vector: [1, 0, 0] }, { ...secondChunk, model, vector: [0, 1, 0] }]);
-        expect(nearest()).toEqual([first]);
-        throw new Error('rollback nested embeddings');
-      })).toThrow('rollback nested embeddings');
-      expect(nearest()).toEqual([second]);
+        expect(nearest(), 'nested unit sees its embedding replacement').toEqual([first]);
+        throw nestedRollback;
+      }); } catch (error) {
+        if (error !== nestedRollback) throw error;
+      }
+      expect(nearest(), 'nested rollback restores outer embeddings').toEqual([second]);
       e.write(second).trash();
-      expect(nearest()).toEqual([first]);
-      throw new Error('rollback outer embeddings');
-    })).toThrow('rollback outer embeddings');
+      expect(nearest(), 'unit read excludes its trashed owner').toEqual([first]);
+      throw outerRollback;
+    }); } catch (error) {
+      if (error !== outerRollback) throw error;
+    }
     expect(nearest()).toEqual([first]);
     expect(e.lastCommit()).toBe(before);
     expect(e.query('Note').ids()).toEqual([first, second]);
