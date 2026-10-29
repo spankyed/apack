@@ -1,7 +1,8 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
-    <section v-if="!active && view?.state?.notice && view.state.notice.kind !== 'managed_settings_security'" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : view.state.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : view.state.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : view.state.notice.kind === 'goal_proposal' ? 'goal_decline' : view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+    <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
+    <section v-if="!active && view?.state?.notice && view.state.notice.kind !== 'managed_settings_security' && view.state.notice.kind !== 'sandbox_network_access'" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : view.state.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : view.state.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : view.state.notice.kind === 'goal_proposal' ? 'goal_decline' : view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <header v-if="view.state.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
           <h3>{{ view.state.notice.title }}</h3>
@@ -107,6 +108,7 @@ import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeManagedSecurityReview from './NativeManagedSecurityReview.vue'
+import NativeSandboxNetworkReview from './NativeSandboxNetworkReview.vue'
 import { parseClaudeDocument } from '#extensions/blocks/display/native-status-text.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ threadId: string; busy: boolean; inputPending?: boolean }>()
@@ -127,6 +129,11 @@ function answerManagedSecurity(response: ClaudeNativeNoticeResponse) {
   const state = view.value?.state, notice = state?.notice
   if (!state || notice?.kind !== 'managed_settings_security' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
   if (response.decision === 'policy_reject') managedPolicyExit.value = { ownerId: state.ownerId, afterSequence: view.value?.output.at(-1)?.sequence ?? 0 }
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
+}
+function answerSandboxNetwork(response: ClaudeNativeNoticeResponse) {
+  const state = view.value?.state, notice = state?.notice
+  if (!state || notice?.kind !== 'sandbox_network_access' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
 }
 function answerNotice(decision: ClaudeNativeNoticeResponse['decision']) {

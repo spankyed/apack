@@ -1,3 +1,4 @@
+import { claudeTerminalSandboxNetworkRuntime } from './terminal-sandbox-network-runtime.ts'
 import { claudeTerminalManagedSecurityRuntime } from './terminal-managed-security-runtime.ts'
 import { claudeTerminalAutocompactOfferRuntime } from './terminal-autocompact-offer-runtime.ts'
 import { claudeTerminalGoalProposalRuntime } from './terminal-goal-proposal-runtime.ts'
@@ -521,6 +522,7 @@ ${claudeTerminalMcpUrlRuntime}
 ${claudeTerminalLspRecommendationRuntime}
 ${claudeTerminalPluginHintRuntime}
 ${claudeTerminalGoalProposalRuntime}
+${claudeTerminalSandboxNetworkRuntime}
 ${claudeTerminalManagedSecurityRuntime}
 ${claudeTerminalAutocompactOfferRuntime}
 ${claudeTerminalRefusalRuntime}
@@ -782,6 +784,7 @@ async function control(request,abort){
  if(request.subtype==='apack_native_notice'){
   const policy=nativeManagedSecurity(n);if(policy.item)return {notice:await projectNativeManagedSecurity(n,policy),retirements:policy.startup?[]:nativeRefusalRetirements(n,policy.store)};if(policy.startup)return {notice:null,retirements:[]};
   const refusal=nativeRefusal(n);await restoreNativeRefusalDraft(n,refusal.store);refusal.retirements=nativeRefusalRetirements(n,refusal.store);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal),retirements:refusal.retirements};
+  const network=nativeSandboxNetwork(n);if(network.item)return {notice:await projectNativeSandboxNetwork(n,network),retirements:refusal.retirements};
   const compact=nativeAutocompactOffer(n);if(compact.item)return {notice:await projectNativeAutocompactOffer(n,compact),retirements:refusal.retirements};
   const goal=nativeGoalProposal(n);if(goal.item)return {notice:await projectNativeGoalProposal(n,goal),retirements:refusal.retirements};
   const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
@@ -792,6 +795,7 @@ async function control(request,abort){
   abort.signal.throwIfAborted();
   if(['policy_approve','policy_reject'].includes(request.decision)){await answerNativeManagedSecurity(n,request);return {answered:true};}
   if(['compact_previous','compact_next','compact_accept','compact_keep','compact_dismiss'].includes(request.decision)){await answerNativeAutocompactOffer(n,request,abort);return {answered:true};}
+  if(['sandbox_allow','sandbox_remember','sandbox_deny','sandbox_cancel'].includes(request.decision)){answerNativeSandboxNetwork(n,request);return {answered:true};}
   if(['goal_accept','goal_decline'].includes(request.decision)){answerNativeGoalProposal(n,request);return {answered:true};}
   if(['retry_fallback','edit_prompt','cancelled'].includes(request.decision)){answerNativeRefusal(n,request);return {answered:true};}
   if(['yes','no','disable'].includes(request.decision)&&nativePluginHint(n).item){answerNativePluginHint(n,request);return {answered:true};}
