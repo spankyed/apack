@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "c7c5d6adda0ad669b81428a6d377a9b6f4ecd9c8",
+  "researchCommit": "2cf9c6803f04903af991975ee4d0077888ff214d",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -36,6 +36,7 @@
     "src/analysis/native-export-graph.mjs": "1a545f4b579d1872b76b6d4eba0f0be96b62cb312f1e9d6833e7c7879dee93d1",
     "src/analysis/native-help-contracts.mjs": "df59564c2e6fc697fd279a756d2ce23566c208aff399449190f16916cb28652a",
     "src/analysis/native-platform-map.mjs": "5314bcc93beab93d815da1589d0e0a4d1b7957408fecdbbeba12c79cec607e4b",
+    "src/analysis/native-return-dialogs.mjs": "11810ae8535d7e2f808f0736865ac420b6c4a9e08aca7fe4ecc68a4a592eee1c",
     "src/analysis/native-sandbox-consent.mjs": "8849e6defcec8edbe0c6f8eac646305703a786897cfea3cbbea6b64561534aed",
     "src/analysis/nested-settings-schema.mjs": "18b7325340e055a4ff21818199b0ecf69035c8dd7553526818fbef5e17f63ea0",
     "src/analysis/protocol-schemas.mjs": "ad3d3b8138038efaf2d9c3294d1fe8335221f980585fdc061ab49585f6c248ee",
@@ -358,5 +359,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "23853b0811d542dd09fa0d4ee10a06a5cc9e0b44edddbfe3fbcd742b93ad5823"
+  "archiveSha256": "6a86ea54b45759344ea6045c7aeadf11957548e50206406c1501a7bc51c1a5d8"
 }
