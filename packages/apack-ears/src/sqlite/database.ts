@@ -126,7 +126,7 @@ export class SqliteDatabase implements EarsDatabase {
     try {
       this.embeddings = new SqliteEmbeddings(this);
       this.embeddings.initialize();
-      this.sql.exec("PRAGMA busy_timeout=0; PRAGMA cache_size=-65536;");
+      this.sql.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=0; PRAGMA cache_size=-65536;");
       if (!this.readOnly) {
         this.sql
           .exec(`PRAGMA journal_mode=WAL; PRAGMA fullfsync=ON; PRAGMA checkpoint_fullfsync=ON; PRAGMA synchronous=${
@@ -1257,6 +1257,7 @@ export class SqliteDatabase implements EarsDatabase {
         this.run("UPDATE index_builds SET state='ready',after_seq=through_seq WHERE type=? AND kind='value' AND name=?",
           [job.type, job.name]);
       this.search.ensure(this.heldSchema);
+      this.sql.exec('DELETE FROM embedding_search');
       this.putMeta('schemaRevision', this.heldRevision + 1);
       const state = this.indexBuilds.readState();
       this.commitWrite();

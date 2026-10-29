@@ -88,6 +88,7 @@ function metadataAndEmbeddings(db: SqliteDatabase, issue: (message: string) => v
   }
   if (db.get(`SELECT 1 FROM embedding_values v LEFT JOIN entities e ON e.id=v.entity_id WHERE e.id IS NULL LIMIT 1`))
     issue('Orphan authoritative embedding');
+  if (db.get('PRAGMA foreign_key_check(embedding_search)')) issue('Orphan derived vector projection');
   if (db.get(`SELECT 1 FROM chunks c LEFT JOIN embedding_values v ON v.id=c.embedding_id WHERE c.embedding_id IS NOT NULL
     AND (v.id IS NULL OR v.entity_id!=c.entity_id OR v.index_name!=c.index_name OR v.chunk!=c.chunk
       OR v.hash!=c.hash OR v.model!=c.model OR v.dims!=c.dims) LIMIT 1`)) issue('Derived chunk has an invalid primary embedding reference');
@@ -117,8 +118,9 @@ function contents(job: SqliteIndexJob): [string, unknown[]] {
     'SELECT entity_id,type,field,value,seq FROM field_index WHERE generation=? ORDER BY entity_id,field,value', [job.generation],
   ];
   if (job.kind === 'vector') return [
-    `SELECT c.entity_id,c.type,c.index_name,c.chunk,c.model,c.dims,c.hash,c.text,v.embedding FROM chunks c
-      LEFT JOIN embedding_values v ON v.id=c.embedding_id WHERE c.generation=? ORDER BY c.entity_id,c.index_name,c.chunk`, [job.generation],
+    `SELECT c.entity_id,c.type,c.index_name,c.chunk,c.model,c.dims,c.hash,c.text,v.embedding,p.bits,p.normalized,
+      CASE WHEN c.embedding_id IS NULL OR p.embedding_id IS NOT NULL THEN 1 ELSE 0 END projection_present FROM chunks c
+      LEFT JOIN embedding_values v ON v.id=c.embedding_id LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE c.generation=? ORDER BY c.entity_id,c.index_name,c.chunk`, [job.generation],
   ];
   const table = searchTable(job);
   return job.kind === 'text' ? [

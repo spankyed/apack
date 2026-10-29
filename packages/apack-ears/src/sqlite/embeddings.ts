@@ -48,8 +48,10 @@ export class SqliteEmbeddings {
     this.db.run(`INSERT INTO embedding_values(entity_id,index_name,chunk,hash,model,dims,embedding) VALUES (?,?,?,?,?,?,?)
       ON CONFLICT(entity_id,index_name,chunk,hash,model,dims) DO UPDATE SET embedding=excluded.embedding`,
       [row.id,row.index,row.chunk,row.hash,row.model,row.dimensions,Buffer.from(row.bytes)]);
-    return Number(this.db.get(`SELECT id FROM embedding_values WHERE entity_id=? AND index_name=? AND chunk=? AND hash=? AND model=? AND dims=?`,
+    const id = Number(this.db.get(`SELECT id FROM embedding_values WHERE entity_id=? AND index_name=? AND chunk=? AND hash=? AND model=? AND dims=?`,
       [row.id,row.index,row.chunk,row.hash,row.model,row.dimensions])!.id);
+    this.db.search.vectors.put(id, row.bytes, row.dimensions);
+    return id;
   }
   /** A newly produced vector supersedes obsolete versions of that chunk in the same logical write. */
   replace(row: SqliteEmbedding): number {

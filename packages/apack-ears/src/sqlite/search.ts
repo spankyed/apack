@@ -2,6 +2,7 @@
 // FTS5 owns text indexing/ranking. sqlite-vec owns vector distance evaluation; EARS owns chunks and model freshness.
 // Fuzzy expansion and highlight adaptation are explicit application work, not native FTS5 capabilities.
 import { encodeEmbeddingVector } from './embeddings.ts';
+import { SqliteVectors } from './vectors.ts';
 import { createHash } from "node:crypto";
 import { getLoadablePath } from "sqlite-vec";
 import type { SqliteDatabase } from "./database.ts";
@@ -23,9 +24,10 @@ const textOf = (v: any): string =>
 export class SqliteSearch {
   private vectorLoaded = false;
   readonly trigrams: SqliteTrigrams;
+  readonly vectors: SqliteVectors;
   private readonly db: SqliteDatabase;
   private readonly texts: SqliteText;
-  constructor(db: SqliteDatabase) { this.db = db; this.trigrams = new SqliteTrigrams(db); this.texts = new SqliteText(db); }
+  constructor(db: SqliteDatabase) { this.db = db; this.trigrams = new SqliteTrigrams(db); this.texts = new SqliteText(db); this.vectors = new SqliteVectors(db); }
   private textIndex(
     type: string,
     schema = this.db.schemaForQueries()
@@ -56,9 +58,13 @@ export class SqliteSearch {
         Object.values(d.indexes ?? {}).some((i: any) => i.kind === "vector")
       )
     ) {
-      this.db.sql.loadExtension(getLoadablePath());
-      this.vectorLoaded = true;
+      this.loadVectorExtension();
     }
+  }
+  loadVectorExtension(): void {
+    if (this.vectorLoaded) return;
+    this.db.sql.loadExtension(getLoadablePath());
+    this.vectorLoaded = true;
   }
   private structures(schema: Data): SqliteSearchStructure[] {
     const text: SqliteIndexJob[] = [], vectors: SqliteIndexJob[] = [];
@@ -69,7 +75,7 @@ export class SqliteSearch {
       }
     return [
       { types: text.map(j => j.type), indexes: text, objects: [['table', 'text_meta']] },
-      { types: vectors.map(j => j.type), indexes: vectors, objects: [['table', 'chunks']] },
+      { types: vectors.map(j => j.type), indexes: vectors, objects: [['table', 'chunks'], ['table', 'embedding_search']] },
       { types: [], indexes: [], objects: [['index', 'chunk_pending'], ['index', 'chunk_vectors'], ['index', 'chunk_reuse'], ['index', 'chunk_generation'], ['index', 'text_generation']] },
       ...text.map(job => this.texts.structure(job)), ...this.trigrams.structures(schema),
     ];
@@ -89,6 +95,7 @@ export class SqliteSearch {
   ensure(schema: Data): void {
     this.loadVectors(schema);
     this.trigrams.ensure(schema);
+    this.vectors.ensure();
     this.db.sql
       .exec(`CREATE TABLE IF NOT EXISTS text_meta(entity_id TEXT,index_name TEXT,generation INTEGER NOT NULL,hashes TEXT NOT NULL,PRIMARY KEY(entity_id,index_name,generation));
       CREATE TABLE IF NOT EXISTS chunks(entity_id TEXT NOT NULL,type TEXT NOT NULL,index_name TEXT NOT NULL,generation INTEGER NOT NULL,
@@ -134,6 +141,8 @@ export class SqliteSearch {
             row.id, name, chunk, hash, index.model, index.dims]);
       }
       this.db.run('DELETE FROM chunks WHERE entity_id=? AND index_name=? AND generation=? AND chunk>=?', [row.id, name, generation, texts.length]);
+      for (const chunk of this.db.all('SELECT embedding_id FROM chunks WHERE entity_id=? AND index_name=? AND generation=? AND embedding_id IS NOT NULL', [row.id, name, generation]))
+        this.vectors.retain(Number(chunk.embedding_id));
     }
   }
   /** Retirement alternates with build work. Rows are removed in batches before dropping an empty group. */
@@ -231,28 +240,10 @@ export class SqliteSearch {
   ): Data[] {
     const [name, index] = this.vectorIndex(type);
     const generation = this.db.indexBuilds.index(type, 'vector', name).generation;
-    const embedding = encodeEmbeddingVector(vector, index.dims);
-    return this.db
-      .all(
-        `SELECT c.entity_id id,1-min(vec_distance_cosine(v.embedding,?)) score FROM chunks c
-      JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id WHERE c.type=? AND c.index_name=? AND c.generation=? AND c.embedding_id IS NOT NULL
-      AND ${
-        ids === null
-          ? "e.trashed=0"
-          : "c.entity_id IN (SELECT value FROM json_each(?))"
-      } AND c.entity_id!=? GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`,
-        [
-          embedding,
-          type,
-          name,
-          generation,
-          ...(ids === null ? [] : [JSON.stringify(ids)]),
-          exclude ?? "",
-          k,
-        ]
-      )
-      .map((r) => ({ id: r.id, score: r.score, terms: [] }));
+    return this.vectors.search(ids, type, name, generation, index.dims, vector, k, exclude)
+      .map(r => ({ id: r.id, score: r.score, terms: [] }));
   }
+
   like(ids: string[] | null, type: string, id: string, k: number): Data[] {
     const [name] = this.vectorIndex(type);
     const generation = this.db.indexBuilds.index(type, 'vector', name).generation;
