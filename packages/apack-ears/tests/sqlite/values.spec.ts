@@ -48,6 +48,33 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite authori
     expect(values.read(upper, ['NOTE-a'])[0]!.fooBar).toBe(3);
   });
 
+  it('restores logical raw cells without normalizing composite bytes or depending on slot identity', () => {
+    const { db, values } = setup();
+    const source = values.declare('Note', ['negative', 'packet']);
+    const destination = values.declare('Imported', ['packet', 'negative', 'nil']);
+    expect(source.fields.get('negative')).not.toBe(destination.fields.get('negative'));
+    const packet = Buffer.from([0x91, 0xcb, 0x80, 0, 0, 0, 0, 0, 0, 0]); // MessagePack array containing Float64 -0.
+    values.restoreCell(destination, 'Imported-one', 'packet', 'array', packet);
+    values.restoreCell(destination, 'Imported-one', 'negative', 'zero', 0);
+    values.restoreCell(destination, 'Imported-one', 'nil', 'null', null);
+    values.restoreCell(destination, 'Imported-one', '__proto__', 'object', db.pack({ own: true }));
+    const row = values.read(destination, ['Imported-one'])[0]!;
+    expect(Object.is(row.negative, -0)).toBe(true);
+    expect(Object.is((row.packet as number[])[0], -0)).toBe(true);
+    expect(row.nil).toBeNull(); expect(Object.hasOwn(row, '__proto__')).toBe(true);
+    expect(db.get("SELECT value FROM value_overflow WHERE entity_id=? AND field='packet'", ['Imported-one'])!.value).toEqual(packet);
+    expect(db.get("SELECT kind,value FROM value_members WHERE entity_id=? AND field='packet'", ['Imported-one'])).toEqual({ kind: 'num', value: 0 });
+  });
+
+  it('validates a raw payload before replacing its incumbent value', () => {
+    const { db, values } = setup(), layout = values.declare('Note', ['payload']);
+    values.set(layout, 'Note-one', { payload: ['retained'] });
+    expect(() => values.restoreCell(layout, 'Note-one', 'payload', 'array', Buffer.from([0x81]))).toThrow();
+    expect(values.read(layout, ['Note-one'])[0]!.payload).toEqual(['retained']);
+    expect(db.get("SELECT value FROM value_members WHERE entity_id=? AND field='payload'", ['Note-one'])!.value).toBe('retained');
+    expect(() => values.restoreCell(layout, 'Note-one', 'id', 'text', 'another')).toThrow('cannot replace entity identity');
+  });
+
   it('admits a declared field over flexible data without rewriting or validating incumbent values', () => {
     const { db, values } = setup();
     const before = values.declare('Note', []);

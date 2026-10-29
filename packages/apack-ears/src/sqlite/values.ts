@@ -120,9 +120,7 @@ export class SqliteValues {
     const assignments: string[] = [], parameters: unknown[] = [];
     for (const [name, cell] of cells) {
       const field = layout.fields.get(name);
-      const outside = field === undefined || cell.kind === 'array' || cell.kind === 'object' ||
-        (typeof cell.value === 'string' && cell.value.length > this.inlineTextLimit) ||
-        (cell.value instanceof Uint8Array && cell.value.byteLength > this.inlineTextLimit);
+      const outside = this.outside(layout, name, cell);
       if (outside) this.sql.run('INSERT INTO value_overflow(entity_id,field,kind,value) VALUES (?,?,?,?)',
         [id, name, cell.kind, cell.value]);
       if (field !== undefined) {
@@ -135,6 +133,27 @@ export class SqliteValues {
       if (field !== undefined) assignments.push(`k${field}=NULL`, `v${field}=NULL`);
     }
     if (assignments.length) this.sql.run(`UPDATE ${layout.table} SET ${assignments.join(',')} WHERE entity_id=?`, [...parameters, id]);
+  }
+
+  private outside(layout: SqliteValueLayout, field: string, cell: Cell): boolean {
+    return !layout.fields.has(field) || cell.kind === 'array' || cell.kind === 'object' ||
+      (typeof cell.value === 'string' && cell.value.length > this.inlineTextLimit) ||
+      (cell.value instanceof Uint8Array && cell.value.byteLength > this.inlineTextLimit);
+  }
+
+  /** Private staged restore: validate representation and retain raw payload bytes, bypassing declared row rules. */
+  restoreCell(layout: SqliteValueLayout, id: string, field: string, kind: string, value: Cell['value']): void {
+    if (field === 'id' || field === 'entityType') refusal('VALUE_INVALID', 'A logical field cannot replace entity identity');
+    const decoded = this.value(kind, value), members = this.members(decoded), cell = { kind, value };
+    const outside = this.outside(layout, field, cell), slot = layout.fields.get(field);
+    // Decode and derive before writes, so a malformed blob cannot leave a partially replaced field.
+    this.sql.run(`INSERT OR IGNORE INTO ${layout.table}(entity_id) VALUES (?)`, [id]);
+    this.sql.run('DELETE FROM value_overflow WHERE entity_id=? AND field=?', [id, field]);
+    this.sql.run('DELETE FROM value_members WHERE entity_id=? AND field=?', [id, field]);
+    if (outside) this.sql.run('INSERT INTO value_overflow VALUES (?,?,?,?)', [id, field, kind, value]);
+    if (slot !== undefined) this.sql.run(`UPDATE ${layout.table} SET k${slot}=?,v${slot}=? WHERE entity_id=?`,
+      [outside ? '@' : kind, outside ? null : value, id]);
+    for (const member of members) this.sql.run('INSERT OR IGNORE INTO value_members VALUES (?,?,?,?)', [id, field, member.kind, member.value]);
   }
 
   /** Fetches a projected page in two crossings. The caller holds one read snapshot across both statements. */
