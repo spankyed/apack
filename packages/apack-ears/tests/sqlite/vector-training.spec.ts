@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -9,8 +9,34 @@ import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { SqliteVectorIndex } from '../../src/sqlite/vector-index.ts';
 import { SqliteVectorTraining } from '../../src/sqlite/vector-training.ts';
 
+// Test-side barrier establishes a real read snapshot before schema/close races.
+// Production worker code and APIs contain no fault/progress hook for these tests.
+const control=vi.hoisted(()=>({gate:undefined as SharedArrayBuffer|undefined}));
+vi.mock('node:worker_threads',async()=>{
+  const actual=await vi.importActual<typeof import('node:worker_threads')>('node:worker_threads');
+  return {...actual,Worker:class extends actual.Worker {
+    constructor(code:ConstructorParameters<typeof actual.Worker>[0],options:ConstructorParameters<typeof actual.Worker>[1]) {
+      if(control.gate) {
+        if(typeof code!=='string'||!code.includes('  const count=db.prepare('))throw Error('Missing snapshot barrier location');
+        code=code.replace('  const count=db.prepare(',`  const gate=new Int32Array(a.testGate);Atomics.store(gate,0,1);Atomics.notify(gate,0);Atomics.wait(gate,1,0);
+  const count=db.prepare(`);
+        options={...options,workerData:{...options?.workerData,testGate:control.gate}};
+      }
+      super(code,options);
+    }
+  }};
+});
+async function snapshot(gate:SharedArrayBuffer,pending:Promise<unknown>) {
+  let waiting=true;
+  try {await Promise.race([
+    (async()=>{while(waiting&&Atomics.load(new Int32Array(gate),0)!==1)await new Promise<void>(resolve=>setImmediate(resolve));})(),
+    pending.then(()=>{throw Error('Worker completed before the snapshot witness');}),
+  ]);}finally{waiting=false;}
+}
+function release(gate:SharedArrayBuffer) {Atomics.store(new Int32Array(gate),1,1);Atomics.notify(new Int32Array(gate),1);}
+
 const held:Array<{db:SqliteDatabase;trainer:SqliteVectorTraining;path:string}>=[];
-afterEach(async()=>{for(const {db,trainer,path} of held.splice(0)){db.close();await trainer.stop();rmSync(path,{recursive:true,force:true});}});
+afterEach(async()=>{control.gate=undefined;for(const {db,trainer,path} of held.splice(0)){db.close();await trainer.stop();rmSync(path,{recursive:true,force:true});}});
 const schema=(model='fixture'):EngineSchema=>({types:{Row:{required:[],embed:{from:['title'],model,dims:128}}},relations:{},roles:[]});
 function fixture(count=512) {
   const path=mkdtempSync(join(tmpdir(),'ears-vector-training-'));
@@ -31,7 +57,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const result=await pending;await turn;expect(yielded).toBe(true);
     expect(db.sequence).toBe(sequence+1);expect(result.samples).toBe(512);
     expect(result.modelSha256).toBe(createHash('sha256').update(result.model).digest('hex'));
-    expect(result.extensionSha256).toMatch(/^[a-f0-9]{64}$/);expect(result.workerSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.extensionSha256).toBe(createHash('sha256').update(readFileSync(process.env.EARS_VEC1_EXTENSION!)).digest('hex'));expect(result.workerSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(result.sourceCommitHex).toMatch(/^[A-F0-9]+$/);
     db.sql.exec('BEGIN IMMEDIATE');index.admit(job,result.model);db.commitWrite();
     for(let ready=false;!ready;){db.sql.exec('BEGIN IMMEDIATE');ready=index.step(job.generation,32);db.commitWrite();}
@@ -41,8 +67,10 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
 
   it('rejects stale work after declaration changes without installing it',async()=>{
     const {db,e,trainer,job}=fixture();
+    const gate=control.gate=new SharedArrayBuffer(8);
     const pending=trainer.train(job),refused=expect(pending).rejects.toMatchObject({code:'SCHEMA_CHANGED'});
-    e.admin.setSchema(schema('changed'));await refused;
+    try{await snapshot(gate,pending);e.admin.setSchema(schema('changed'));}finally{release(gate);control.gate=undefined;}
+    await refused;
     expect(db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name GLOB 'ann_[0-9]*'")).toBeUndefined();
   });
 
@@ -54,14 +82,15 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
   });
 
   it('rejects close and drains the worker before fixture cleanup',async()=>{
-    const {db,trainer,job}=fixture();const pending=trainer.train(job),refused=expect(pending).rejects.toMatchObject({code:'CLOSED'});
-    db.close();await refused;await trainer.stop();
+    const {db,trainer,job}=fixture(),gate=control.gate=new SharedArrayBuffer(8);
+    const pending=trainer.train(job),refused=expect(pending).rejects.toMatchObject({code:'CLOSED'});
+    try{await snapshot(gate,pending);db.close();}finally{release(gate);control.gate=undefined;}
+    await refused;await trainer.stop();
   });
 
   it('refuses foreground transaction ownership and insufficient input without poisoning the database',async()=>{
-    const {e,trainer,job}=fixture(8);
-    let refusal!:Promise<unknown>;e.transact(()=>{refusal=trainer.train(job);});
-    await expect(refusal).rejects.toMatchObject({code:'UNIT_OPEN'});
+    const {db,e,trainer,job}=fixture(8),unit=db.begin();
+    try{await expect(trainer.train(job)).rejects.toMatchObject({code:'UNIT_OPEN'});}finally{unit.abort();}
     await expect(trainer.train(job)).rejects.toMatchObject({code:'TRAINING_DATA'});
     expect(e.query('Row').count()).toBe(8);
   });

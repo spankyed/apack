@@ -35,6 +35,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     db.all=(sql,parameters=[])=>{if(sql.startsWith('WITH page AS MATERIALIZED'))plan=all('EXPLAIN QUERY PLAN '+sql,parameters);return all(sql,parameters);};
     expect(write(()=>index.step(job.generation,1))).toBe(false);
     expect(plan.some(row=>String(row.detail).includes('chunk_native_admission')&&String(row.detail).includes('embedding_id>?'))).toBe(true);
+    expect(plan.some(row=>String(row.detail).startsWith('SEARCH v USING INTEGER PRIMARY KEY'))).toBe(true);
     expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(1);
     // Updating an already-visited vector and adding new owners must both survive later backfill.
     const pending=e.pendingEmbeddings('Row',{limit:1000});expect(pending.chunks).toHaveLength(0);
