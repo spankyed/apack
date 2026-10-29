@@ -193,11 +193,10 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, committed through **f2646a3166**.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, published through **645905f3421036305e5beb23e44140ad7c8749f4**.
 Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
-Integration/remote remains **2308fbf58ae9f906f35e618dd63ea43b58ada861**; newer local checkpoints
-are not yet published. Canonical/helper BASE stay at exact green 60d until a corrected full gate passes.
+Integration/remote is **645905f3421036305e5beb23e44140ad7c8749f4**. Canonical/helper BASE stay at exact green 60d until a corrected full gate passes.
 
 The earlier **b25a985c8cebdf898b86cb915bca2600ba03782a** [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212)
 is terminal FAILURE. Producers, both integration shards, both native shards and SQLite Linux/macOS passed.
@@ -213,8 +212,8 @@ checks pass **524 SQLite / 302 native** cases, both focused vector files, builds
 lint and import checks; see [evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-validation/README.md).
 High-dimensional latency/recall and real-corpus resource qualification remain open.
 
-Next checkpoint: use the existing macOS App acceptance workflow's focused `bundled-ui` selector
-on the next published descendant. Retain Playwright failure traces and console errors while preserving
+Next checkpoint: poll the exact live [focused macOS acceptance 40851475766](https://github.com/spankyed/apack/actions/runs/40851475766)
+on published 645905f342, using the existing App acceptance workflow's `bundled-ui` selector. Retain Playwright failure traces and console errors while preserving
 the original assertion/deadlines. The Linux reproduction completed its builds and launched Electron,
 but failed main-window readiness before the test body; it supplies no editor behavior proof.
 Both setup attempts are retained in [evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bundled-editor/README.md).

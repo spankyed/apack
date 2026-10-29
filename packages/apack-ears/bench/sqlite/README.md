@@ -329,3 +329,32 @@ selection source. Use the identical expanded `text-shape.mjs` from the native-re
 entrypoint, call count and file/WAL/RSS/heartbeat result. No retries, discarded samples or budget changes.
 Native plan evidence comes from functional validation; this cohort measures the changed execution shape.
 It does not replace phase 3 qualification or close bounded fuzzy, realistic search/vector or app budgets.
+
+
+### High-dimensional vector protocol
+
+Preregister the next diagnostic before execution: 1536 Float32 dimensions, 64 independent Gaussian cluster
+centers, and clustered (0.6 center + 0.8 independent noise) and mixed (alternating clustered/uniform Gaussian)
+corpora. Normalize after generation, then preserve Float32 rounding in independent double-accumulated cosine
+ground truth. Queries use a disjoint PRNG stream, never an indexed row. Pin generator/fixture/runtime hashes.
+No low-rank trigonometric fixture, self-neighbor or native search result may serve as ground truth.
+
+The first smoke is one fresh SQLite process then one fresh native-baseline process, 1k rows for each
+distribution, 16 held-out queries, k=10, three paths (unfiltered, 10% indexed membership, 1% indexed membership),
+one first call and two warm calls per query/path. Every seventeenth entity is trashed. Check known independent
+cosine examples, deterministic regeneration, coordinate variance, exact SQLite recall=1 (allow only demonstrated
+floating-point boundary ties), native mean recall@10 >=0.95 per path, no duplicate/out-of-scope/trashed results,
+and no mutation of input vectors. Retain all query IDs/scores, truth, first/warm timings, independent heartbeat,
+setup/update costs, loaded entries/addons, memory/resource usage, and DB/WAL files. Content updates and subsequent
+embedding publication are separate acknowledged operations; record both and verify stale hashes/pending work.
+
+After the smoke passes, run fresh 10k and 100k profiles in balanced SQLite/native/native/SQLite order, one
+owned Linux container, 2 CPUs/6 GiB/no extra swap, same fixture and OFF write policy. Each process has a
+600-second diagnostic bound; preserve partial reports on failure and stop the cohort. No automatic retry,
+discarded first call or changing thresholds after observations. Query work is measured separately from truth
+computation and fixture generation. Do not infer physical cold storage from a fresh process after backfill.
+Before trying ANN alternatives, use provisional engineering ceilings: warm query p95 <=100 ms at 10k and
+<=200 ms at 100k, query heartbeat-delay p99 <=16 ms, mean recall@10 >=0.95 for each path/distribution.
+These are diagnostic thresholds for selecting an execution strategy, not approved full-app/adoption budgets;
+actual representative app-flow acceptance and matched durability remain required. A synthetic pass cannot
+replace licensed, attributed real-model corpus qualification or complete chunk/hybrid/lifecycle contracts.
