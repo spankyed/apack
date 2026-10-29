@@ -151,3 +151,8 @@ The completion-navigation profile now checks parent/Agent IME cancellation with 
 open at normal/compact sizes. Use `verifyNativeCompletionNavigation(root, { composition: true })`
 for the expanded eight-capture journey after saved app/native verification. Open its captures;
 exact Unicode DOM receipts do not prove CJK glyph rendering or physical OS candidate windows.
+
+`src/analysis/native-sandbox-consent.mjs <mac-module> <linux-module>` records source-only
+view/wrapper hashes and byte/UTF-16 ranges. The sandbox host is implemented but lacks positive
+native/app acceptance: the current offline image lacks bwrap/socat and denies user namespaces.
+Do not treat source inspection or mocked consent as a successful sandboxed-tool journey.
