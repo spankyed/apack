@@ -32,6 +32,47 @@ function embedAll(e: EarsEngine) {
 }
 
 describe('vector search', () => {
+  it.each([
+    ['zero', [0, 0, 0]], ['negative zero', [-0, 0, -0]],
+    ['Float32 underflow to zero', [Number.MIN_VALUE, -Number.MIN_VALUE, 0]],
+    ['positive Float32 overflow', [Number.MAX_VALUE, 0, 0]],
+    ['negative Float32 overflow', [-Number.MAX_VALUE, 0, 0]],
+    ['NaN', [NaN, 0, 0]], ['infinity', [Infinity, 0, 0]], ['wrong dimensions', [1, 0]],
+  ] as const)('refuses %s cosine embeddings and queries without changing pending work', (_name, vector) => {
+    const e = engine(); e.create('Note', { title: 'pending' });
+    const { model, chunks } = e.pendingEmbeddings('Note'), before = e.lastCommit();
+    expect(() => e.embed(chunks.map(chunk => ({ ...chunk, model, vector })))).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+    expect(e.pendingEmbeddings('Note').count).toBe(1); expect(e.lastCommit()).toBe(before);
+    expect(() => e.query('Note').near(vector).ids()).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+    expect(embedAll(e)).toEqual({ stored: 1, stale: 0 });
+    expect(() => e.query('Note').near(vector).ids()).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+  });
+
+  it('refuses another model or invalid vector before answering an obsolete chunk stale', () => {
+    const e = engine(), id = e.create('Note', { title: 'before' }).id();
+    const { model, chunks: [chunk] } = e.pendingEmbeddings('Note');
+    e.write(id).set('title', 'after'); const before = e.lastCommit();
+    expect(() => e.embed([{ ...chunk!, model: 'another:model', vector: [1, 0, 0] }])).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+    expect(() => e.embed([{ ...chunk!, model, vector: [0, 0, 0] }])).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+    expect(e.lastCommit()).toBe(before); expect(e.pendingEmbeddings('Note').count).toBe(1);
+    expect(e.embed([{ ...chunk!, model, vector: [1, 0, 0] }])).toEqual({ stored: 0, stale: 1 });
+  });
+
+  it('rolls back the whole embedding batch and publishes no watch result on invalid input', async () => {
+    const e = engine(); e.create('Note', { title: 'one' }); e.create('Note', { title: 'two' });
+    const { model, chunks } = e.pendingEmbeddings('Note'), before = e.lastCommit();
+    const seen: number[] = [], watching = e.watch(() => e.query('Note').near([1, 0, 0]).count(), count => seen.push(count));
+    try {
+      await e.admin.watchesSettled(); expect(seen).toEqual([0]);
+      expect(() => e.embed(chunks.map((chunk, i) => ({ ...chunk, model, vector: i ? [0, 0, 0] : [1, 0, 0] }))))
+        .toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+      await e.admin.watchesSettled(); expect(seen).toEqual([0]); expect(e.lastCommit()).toBe(before);
+      expect(e.pendingEmbeddings('Note').count).toBe(2);
+      expect(e.embed(chunks.map(chunk => ({ ...chunk, model, vector: [1, 0, 0] })))).toEqual({ stored: 2, stale: 0 });
+      await e.admin.watchesSettled(); expect(seen).toEqual([0, 2]);
+    } finally { watching.stop(); }
+  });
+
   it('holds a written entity pending until its vectors are stored, and again when its text changes', () => {
     const e = engine();
     const a = e.create('Note', { title: 'fruit', body: 'apples' }).id();

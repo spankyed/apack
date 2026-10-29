@@ -122,6 +122,8 @@ jobs:
           path: |
             ${{ runner.temp }}/strict-chain.log
             node_modules/.cache/apack-chain/runs/
+            .apack/tests/results/
+            tests/packs/*/.apack/tests/results/
 
   sqlite-candidate:
     permissions:

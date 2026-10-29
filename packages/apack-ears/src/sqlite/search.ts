@@ -19,6 +19,15 @@ const textOf = (v: any): string =>
     : Array.isArray(v)
     ? v.filter((x) => typeof x === "string").join("\n\n")
     : "";
+function vectorBytes(vector: number[], dimensions: number): Buffer {
+  if (vector.length !== dimensions || vector.some(value => !Number.isFinite(value)))
+    fail('VALUE_INVALID', 'Invalid vector dimension/value');
+  const values = Float32Array.from(vector);
+  // Validate the representation that is stored and compared: finite JS values can overflow or become all zeros.
+  if (values.some(value => !Number.isFinite(value)) || values.every(value => value === 0))
+    fail('VALUE_INVALID', 'Cosine vectors require finite Float32 components and a nonzero direction');
+  return Buffer.from(values.buffer);
+}
 export class SqliteSearch {
   private vectorLoaded = false;
   readonly trigrams: SqliteTrigrams;
@@ -198,6 +207,8 @@ export class SqliteSearch {
     const row = this.db.row(op.id);
     if (!row) return { kind: "stale" };
     const [name, index] = this.vectorIndex(row.entityType, this.db.schemaForQueries(), false);
+    if (op.model !== index.model) fail('VALUE_INVALID', 'Embedding model does not match the index');
+    const embedding = vectorBytes(op.vector, index.dims);
     const job = this.db.indexBuilds.index(row.entityType, 'vector', name);
     if (job.state !== 'ready') return { kind: 'stale' };
     const chunk = this.db.get(
@@ -206,12 +217,6 @@ export class SqliteSearch {
     );
     if (!chunk || chunk.hash !== op.hash || chunk.model !== op.model)
       return { kind: "stale" };
-    if (
-      op.vector.length !== index.dims ||
-      op.vector.some((x: number) => !Number.isFinite(x))
-    )
-      fail("VALUE_INVALID", "Invalid embedding dimension/value");
-    const embedding = Buffer.from(Float32Array.from(op.vector).buffer);
     this.db.run(
       "UPDATE chunks SET embedding=? WHERE entity_id=? AND index_name=? AND generation=? AND chunk=?",
       [embedding, op.id, name, job.generation, op.chunk]
@@ -227,9 +232,7 @@ export class SqliteSearch {
   ): Data[] {
     const [name, index] = this.vectorIndex(type);
     const generation = this.db.indexBuilds.index(type, 'vector', name).generation;
-    if (vector.length !== index.dims || vector.some((x) => !Number.isFinite(x)))
-      fail("VALUE_INVALID", "Invalid query vector");
-    const embedding = Buffer.from(Float32Array.from(vector).buffer);
+    const embedding = vectorBytes(vector, index.dims);
     return this.db
       .all(
         `SELECT c.entity_id id,1-min(vec_distance_cosine(c.embedding,?)) score FROM chunks c

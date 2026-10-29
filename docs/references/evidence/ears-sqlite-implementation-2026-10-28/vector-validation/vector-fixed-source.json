@@ -1,0 +1,8 @@
+{
+  "base": "b69140ef4351a196f23e7cb50fbd2432cc2f2ed9",
+  "changedFiles": [
+    "packages/apack-ears/src/sqlite/search.ts",
+    "packages/apack-ears/tests/engine/vector.spec.ts"
+  ],
+  "sha256": "654c2c05e5a942ca2148f7845ee15c2c7424f55982f98eff9e23ef567bb4262d"
+}

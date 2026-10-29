@@ -595,3 +595,8 @@ crash/checkpoint/long-reader/ownership qualification; Electron/CLI loading/signi
 filesystem assumptions; representative warm/cold/growth/resource budgets, execution-complexity and maintenance
 review, and final adoption decision. No microbenchmark or small corpus certifies app latency, memory growth,
 filesystem support, production durability or overall relevance/recall.
+
+
+Vector input parity checkpoint: shared contracts now cover Float32 overflow/underflow, zero cosine direction, wrong model before obsolete-hash handling, and atomic embedding refusal without watch delivery. Both full suites passed locally in disposable Linux (524 SQLite / 302 native); see [retained evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-validation/README.md). This does not qualify high-dimensional vector recall, latency or corpus resources.
+
+Strict gate 40842115212 at b25a985c8c is terminal FAILURE: both integration shards, both native shards and SQLite Linux/macOS passed; Windows failed the collector issue corrected in 7b56a145d4, and app-and-rest failed the bundled UI editor model-update assertion. The latter is under focused investigation and is not attributed to SQLite. Strict CI now retains fixture Playwright result directories; the failed run retained only its console log, so it cannot provide the missing browser event timeline. Canonical stays at last-green 60d4283; no broad replacement gate until failures have been triaged and source converges.
