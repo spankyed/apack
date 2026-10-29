@@ -197,9 +197,10 @@ Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Latest loc
 adds indexed timestamp selection after finite native recency and sequence ranking. It passes **492 SQLite /
 289 native**, 76 focused cases, five builds, EARS/host types, 34 recovery cases, lint/imports/API reports and
 native hydration/selected-plan controls. Newer local work is not yet published. Its preregistered
-materialized/indexed/indexed/materialized cost cohort is running; poll exec session 41697 / owned container
-`ears-selection-cost` rather than restarting it. Preserve its first result, then record/publish one converged
-checkpoint and dispatch one new exact gate. Further canonical advancement requires that new exact source
+materialized/indexed/indexed/materialized cohort completed all four trials: recency highlights ~27 versus
+~35 ms, ID-only recency mixed (30.1 / 25.6 versus 27.2 / 27.5 ms), with one noisier indexed build/highlight
+trial retained. No owned Linux container remains. Publish this converged checkpoint and dispatch one new
+exact gate; no latency/resource acceptance is claimed. Further canonical advancement requires that new exact source
 and successful gate. Next prioritize bounded fuzzy work as specified below; full goal acceptance remains open.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
@@ -225,7 +226,8 @@ Descendant **e5fe7ea16bee7b96acaa495fe132ad65fe766a7c** had the exact [strict ru
 completed FAILURE in producers: benchmark Vitest lacked the required source condition; consumers were skipped.
 Both benchmark/root EARS configs now declare it and pass the actual Linux import guard. Preserve that failure;
 the failed run remains retained. The local helper
-already exists with BASE 585dcafccf and exact-success guards; the user's renewed approval does not bypass them.
+had BASE 585dcafccf at that checkpoint; the current base is recorded above. The user's renewed approval
+does not bypass its exact-success guards.
 Published 60d4283f68 / 40819583704 is green and promoted as above. Predecessor 7cba75f431 /
 40814018368 remains terminal FAILURE: five jobs pass, app/rest exposes the recovery alias bug corrected in
 964f1e1fd2. Earlier failures are retained too. Newer local recency work and cost evidence are distinct from
@@ -283,8 +285,8 @@ lint/imports and twelve baseline-failing alias controls; real SIGKILL also cover
 resume through another spelling for both backends. Foreign/leaf-link refusals and reader exclusion remain.
 See [recovery alias evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-aliases/README.md).
 Recovery correction is committed at 964f1e1fd2 and published in 60d4283f68 with exact gate 40819583704.
-That exact gate succeeded and canonical advanced to 60d4283f68. Newer native ranking/recency
-plans and remaining costs, preserving every failed cohort and the entire phase 3–7 scope. The next pinned
+That exact gate succeeded and canonical advanced to 60d4283f68. The following newer native ranking/recency
+work preserves every failed cohort and the entire phase 3–7 scope. The next pinned
 `text-plan.mjs` diagnostic is preregistered in the benchmark README: actual SQL/plans, binding/JS split, ten
 samples per path, one 10k profile, no retry. It completed: broad execution is almost entirely native SQL
 with three entity lookups; recency returns/hydrates all 10k candidates. See [actual plan evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-plans/README.md).
@@ -311,8 +313,10 @@ The correlated indexed timestamp correction passes **492 SQLite / 289 native**, 
 five builds, EARS/host types, 34 recovery cases, lint/imports/API reports and two removal controls. The
 initial value observer was insufficient and its failed negative proof is retained; the unmodified native
 plan guard now fails on the old full-scan join and passes indexed probes. See [selection evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-selection/README.md).
-Next run the preregistered materialized/indexed/indexed/materialized cost cohort, preserving all samples
-and failures. Then prioritize bounded fuzzy search: specify/review its behavior and useful-result cases
+The preregistered materialized/indexed/indexed/materialized cohort completed with all answers passing:
+recency highlights ~27 versus ~35 ms; ID-only recency mixed, and one indexed trial has slower build and
+highlight tails. No sample was discarded or causal explanation inferred. See [selection cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/selection-cost/README.md).
+Next prioritize bounded fuzzy search: specify/review its behavior and useful-result cases
 before implementation, prove native candidate work avoids a full vocabulary scan, and evaluate relevance
 and growth costs. No current correctness or diagnostic result closes that requirement. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
 possible diagnostic, not a chosen layout change. The ordinary recovery alias fixtures now use Windows junctions, matching the existing storage fixture;

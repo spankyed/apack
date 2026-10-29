@@ -1,0 +1,14 @@
+{
+  "order": [
+    "materialized",
+    "indexed",
+    "indexed",
+    "materialized"
+  ],
+  "fixtureSha256": "ef525eb7bc75c2b49d29eea4e26534b41e40f17d1ef140fc95a847067554cc04",
+  "controlChanges": "only identical new benchmark fixture copied in; implementation source stays pinned",
+  "cpus": 2,
+  "memoryGiB": 6,
+  "deadlineSeconds": 180,
+  "automaticRetries": false
+}
