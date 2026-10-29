@@ -172,11 +172,11 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     const { db, e } = seed(), primary = new Error('private second snapshot failed'), cleanup = new Error('snapshot close failed');
     const backup = SqliteDatabase.prototype.backup, close = SqliteDatabase.prototype.close;
     let failed = false, scratch = '';
-    const copying = vi.spyOn(SqliteDatabase.prototype, 'backup').mockImplementation(function(path) {
+    const copying = vi.spyOn(SqliteDatabase.prototype, 'backup').mockImplementation(function(this: SqliteDatabase, path) {
       if (this !== db) { failed = true; scratch = dirname(path); throw primary; }
       return backup.call(this, path);
     });
-    const closing = vi.spyOn(SqliteDatabase.prototype, 'close').mockImplementation(function() {
+    const closing = vi.spyOn(SqliteDatabase.prototype, 'close').mockImplementation(function(this: SqliteDatabase) {
       close.call(this); if (failed && this !== db) throw cleanup;
     });
     let error: unknown;
