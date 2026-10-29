@@ -125,6 +125,22 @@ describe('vector search', () => {
     expect(hit!.score).toBeCloseTo(1, 5);
   });
 
+  it('preserves native owner scopes through filters, earlier limits, graph traversal and like', () => {
+    const e = engine(), root = e.create('Plain', { title: 'root' }).id();
+    const [a, b, c, reference] = [
+      { title: 'a', body: 'boats', category: 'selected' },
+      { title: 'b', body: 'ships', category: 'selected' },
+      { title: 'c', body: 'apples', category: 'selected' },
+      { title: 'reference', body: 'apples', category: 'reference' },
+    ].map(row => e.create('Note', row).id());
+    for (const id of [a!, b!, c!]) e.write(root).link('in', id);
+    embedAll(e);
+    expect(e.query('Note').where('category', 'selected').limit(2).near([1, 0, 0], { k: 1 }).ids()).toEqual([b]);
+    expect(e.query('Note').where('category', 'selected').near([1, 0, 0], { k: 1 }).ids()).toEqual([c]);
+    expect(e.query.ids(root).out('in', 'Note').where('category', 'selected').limit(2).like(reference!, { k: 1 }).ids()).toEqual([b]);
+    expect(e.query.ids(root).descendants('in').where('category', 'selected').limit(2).near([1, 0, 0], { k: 1 }).ids()).toEqual([b]);
+  });
+
   it('ranks own embeddings in a unit and restores them across nested and outer rollback', () => {
     const e = engine();
     const first = e.create('Note', { title: 'first', body: 'apples' }).id();

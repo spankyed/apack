@@ -33,11 +33,13 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
 
     // Independent scalar instrumentation makes the exact-scan mutation fail this test. It does not
     // replace native Hamming candidate selection and is never registered by production code.
-    let nativePlan: ReturnType<SqliteDatabase['all']> = [];
+    let nativePlan: ReturnType<SqliteDatabase['all']> = [], materializedIds = 0;
     const all = db.all.bind(db), get = db.get.bind(db), eligibilityProbes: number[] = [];
     db.all = (sql, parameters = []) => {
       if (sql.startsWith('WITH candidates AS MATERIALIZED')) nativePlan = all('EXPLAIN QUERY PLAN ' + sql, parameters);
-      return all(sql, parameters);
+      const rows = all(sql, parameters);
+      if (sql.startsWith('SELECT p.id FROM (')) materializedIds = Math.max(materializedIds, rows.length);
+      return rows;
     };
     db.get = (sql, parameters = []) => {
       const result = get(sql, parameters);
@@ -63,9 +65,10 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
     // before joining candidates. Function-call bounds alone cannot detect those unnecessary BLOB reads.
     expect(nativePlan.filter(row => row.parent === 0).some(row =>
       String(row.detail).includes('chunk_vectors') && String(row.detail).includes('entity_id=?'))).toBe(true);
-    reranked = 0;
+    reranked = 0; materializedIds = 0;
     expect(e.query.ids(ids.slice(300)).near(positive, { k: 5 }).ids()).toEqual(ids.slice(300, 305));
     expect(reranked).toBe(256); // Excludes the entire unfiltered candidate prefix before limiting.
+    expect(materializedIds).toBeLessThanOrEqual(5);
     expect(nativePlan.filter(row => row.parent === 0 && String(row.detail).startsWith('LIST SUBQUERY'))).toHaveLength(1);
     e.write(ids[0]!).trash();
     expect(e.query('Row').near(positive, { k: 5 }).ids()).toEqual(ids.slice(1, 6));

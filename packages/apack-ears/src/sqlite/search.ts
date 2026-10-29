@@ -3,6 +3,7 @@
 // Fuzzy expansion and highlight adaptation are explicit application work, not native FTS5 capabilities.
 import { encodeEmbeddingVector } from './embeddings.ts';
 import { SqliteVectors } from './vectors.ts';
+import type { SqliteEntityScope } from './query-scope.ts';
 import { createHash } from "node:crypto";
 import { getLoadablePath } from "sqlite-vec";
 import type { SqliteDatabase } from "./database.ts";
@@ -232,7 +233,7 @@ export class SqliteSearch {
     return { kind: "done" };
   }
   vector(
-    ids: string[] | null,
+    scope: SqliteEntityScope | null,
     type: string,
     vector: number[],
     k: number,
@@ -240,11 +241,11 @@ export class SqliteSearch {
   ): Data[] {
     const [name, index] = this.vectorIndex(type);
     const generation = this.db.indexBuilds.index(type, 'vector', name).generation;
-    return this.vectors.search(ids, type, name, generation, index.dims, vector, k, exclude)
+    return this.vectors.search(scope, type, name, generation, index.dims, vector, k, exclude)
       .map(r => ({ id: r.id, score: r.score, terms: [] }));
   }
 
-  like(ids: string[] | null, type: string, id: string, k: number): Data[] {
+  like(scope: SqliteEntityScope | null, type: string, id: string, k: number): Data[] {
     const [name] = this.vectorIndex(type);
     const generation = this.db.indexBuilds.index(type, 'vector', name).generation;
     const row = this.db.get(
@@ -256,7 +257,7 @@ export class SqliteSearch {
     const vector = Array.from({ length: bytes.length / 4 }, (_, i) =>
       bytes.readFloatLE(i * 4)
     );
-    return this.vector(ids, type, vector, k, id);
+    return this.vector(scope, type, vector, k, id);
   }
   text(ids: string[] | null, type: string, query: string, options: Data = {}, wantHits = true, limit?: number): Data[] {
     const [name] = this.textIndex(type);

@@ -1,5 +1,6 @@
 // Rebuildable vector projections. Canonical bytes remain owned by embedding_values.
 import type { SqliteDatabase } from './database.ts';
+import type { SqliteEntityScope } from './query-scope.ts';
 import { encodeEmbeddingVector, validateEmbeddingBytes } from './embeddings.ts';
 
 /** Float64 accumulation keeps every finite, nonzero Float32 direction normalizable. */
@@ -37,12 +38,12 @@ export class SqliteVectors {
       ON p.embedding_id=v.id WHERE v.id=? AND p.embedding_id IS NULL`, [id]);
     if (row) this.put(id, row.embedding, row.dims);
   }
-  search(ids: string[] | null, type: string, name: string, generation: number,
+  search(scope: SqliteEntityScope | null, type: string, name: string, generation: number,
     dimensions: number, vector: number[], k: number, exclude?: string): Array<Record<string, any>> {
     const query = normalized(encodeEmbeddingVector(vector, dimensions)).bytes;
     const eligible = `c.type=? AND c.index_name=? AND c.generation=? AND c.embedding_id IS NOT NULL
-      AND ${ids === null ? 'e.trashed=0' : 'c.entity_id IN (SELECT value FROM json_each(?))'} AND c.entity_id!=?`;
-    const bindings = [type, name, generation, ...(ids === null ? [] : [JSON.stringify(ids)]), exclude ?? ''];
+      AND ${scope === null ? 'e.trashed=0' : `c.entity_id IN (${scope.sql})`} AND c.entity_id!=?`;
+    const bindings = [type, name, generation, ...(scope?.parameters ?? []), exclude ?? ''];
     const exact = () => this.db.all(`SELECT c.entity_id id,
       1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score FROM chunks c
       JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id

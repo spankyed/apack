@@ -336,10 +336,10 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       case "near":
       case "like":
       case "hybrid": {
-        const ids =
-          plan.start.from === "types" && steps[0] === step && scope === "live"
-            ? null
-            : idsNow();
+        const root = plan.start.from === 'types' && steps[0] === step && scope === 'live';
+        const vectorScope = root ? null : { sql: `SELECT p.id FROM (${sql}) p`, parameters: [...parameters] };
+        // Vector eligibility stays in SQLite. Text's existing adapter still consumes an explicit ID list.
+        const ids = root || step.step === 'near' || step.step === 'like' ? null : idsNow();
         const next = steps[stepIndex + 1];
         // Each type's top k contains every possible global winner. Earlier limits and later filters
         // retain their own pipeline scope; hybrid fusion still needs its complete text ranking.
@@ -384,10 +384,10 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
             );
           else if (step.step === "near")
             hits.push(
-              ...db.search.vector(ids, type, step.vector, step.k ?? 10)
+              ...db.search.vector(vectorScope, type, step.vector, step.k ?? 10)
             );
           else if (step.step === "like")
-            hits.push(...db.search.like(ids, type, step.id, step.k ?? 10));
+            hits.push(...db.search.like(vectorScope, type, step.id, step.k ?? 10));
           else {
             const text = db.search.text(
                 ids,
@@ -397,7 +397,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
                 plan.terminal.answer === "hits"
               ),
               vector = db.search.vector(
-                ids,
+                vectorScope,
                 type,
                 step.vector,
                 Math.max(
