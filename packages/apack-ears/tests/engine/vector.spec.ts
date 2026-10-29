@@ -125,6 +125,35 @@ describe('vector search', () => {
     expect(hit!.score).toBeCloseTo(1, 5);
   });
 
+  it('ranks own embeddings in a unit and restores them across nested and outer rollback', () => {
+    const e = engine();
+    const first = e.create('Note', { title: 'first', body: 'apples' }).id();
+    const second = e.create('Note', { title: 'second', body: 'boats' }).id();
+    const { model, chunks } = e.pendingEmbeddings('Note');
+    const firstChunk = chunks.find(chunk => chunk.id === first)!;
+    const secondChunk = chunks.find(chunk => chunk.id === second)!;
+    e.embed(chunks.map(chunk => ({ ...chunk, model, vector: chunk.id === first ? [1, 0, 0] : [0, 1, 0] })));
+    const nearest = () => e.query('Note').near([1, 0, 0], { k: 1 }).ids();
+    const before = e.lastCommit();
+    expect(nearest()).toEqual([first]);
+    expect(() => e.transact(() => {
+      e.embed([{ ...firstChunk, model, vector: [0, 0, 1] }, { ...secondChunk, model, vector: [1, 0, 0] }]);
+      expect(nearest()).toEqual([second]);
+      expect(() => e.transact(() => {
+        e.embed([{ ...firstChunk, model, vector: [1, 0, 0] }, { ...secondChunk, model, vector: [0, 1, 0] }]);
+        expect(nearest()).toEqual([first]);
+        throw new Error('rollback nested embeddings');
+      })).toThrow('rollback nested embeddings');
+      expect(nearest()).toEqual([second]);
+      e.write(second).trash();
+      expect(nearest()).toEqual([first]);
+      throw new Error('rollback outer embeddings');
+    })).toThrow('rollback outer embeddings');
+    expect(nearest()).toEqual([first]);
+    expect(e.lastCommit()).toBe(before);
+    expect(e.query('Note').ids()).toEqual([first, second]);
+  });
+
   it('merges the text and vector rankings on a fixed corpus: what both find ranks above what one finds first', () => {
     const e = engine();
     const [ships, pears, stars, boats] = [['stars', 'ships'], ['stars', 'pears'], ['stars', 'stars'], ['boats', 'boats']]
