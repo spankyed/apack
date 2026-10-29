@@ -3,6 +3,9 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import NativeDatabase from 'better-sqlite3';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import { createInterface } from 'node:readline';
 import { createEarsEngine, type EngineSchema } from '../../src/index.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
@@ -176,6 +179,54 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(e.lastCommit()).toBe(before);
     expect(db.get("SELECT value FROM value_members WHERE entity_id=? AND field='tags'", ['Row-one'])!.value).toBe('stale');
     expect(e.query('Row').where('tags', 'fresh').ids()).toEqual([]);
+  });
+
+  it.each(['before', 'after'] as const)('retains atomic membership repair when killed %s its commit', async point => {
+    const { db, e } = seed();
+    e.write('Row-one').set('tags', ['fresh']);
+    db.run("DELETE FROM value_members WHERE entity_id=? AND field='tags'", ['Row-one']);
+    const original = db.indexBuilds.jobs().map(job => job.generation), before = e.lastCommit(), path = db.path;
+    db.close();
+    const module = new URL('../../src/sqlite/database.ts', import.meta.url).href;
+    const code = `
+      import {writeSync} from 'node:fs';
+      const deadline=performance.now()+10000;
+      const {SqliteDatabase}=await import(${JSON.stringify(module)});
+      const db=new SqliteDatabase({path:process.argv[1],syncs:false});
+      const commit=db.commitWrite.bind(db);
+      const stop=()=>{
+        writeSync(1,JSON.stringify({inTransaction:db.sql.inTransaction,
+          members:db.get("SELECT count(*) n FROM value_members WHERE entity_id='Row-one' AND field='tags'").n})+'\\n');
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,Math.max(0,deadline-performance.now()));
+        process.exit(2);
+      };
+      db.commitWrite=()=>{if(${JSON.stringify(point)}==='before')stop();commit();if(${JSON.stringify(point)}==='after')stop();};
+      db.rebuildIndexes();
+    `;
+    const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code, path], { timeout: 10000, killSignal: 'SIGKILL' });
+    const exited = once(child, 'exit'), lines = createInterface({ input: child.stdout }); let stderr = '';
+    child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
+    try {
+      const [line] = await Promise.race([once(lines, 'line'), exited.then(([status, signal]) => {
+        throw Error(`Repair child exited before witness: ${status}/${signal}: ${stderr}`);
+      })]);
+      expect(JSON.parse(String(line))).toEqual({ inTransaction: point === 'before', members: 1 });
+      expect(child.kill('SIGKILL'), stderr).toBe(true);
+      const [, signal] = await exited; expect(signal, stderr).toBe('SIGKILL');
+      const resumed = open(path);
+      expect(resumed.e.lastCommit()).toBe(before);
+      if (point === 'before') expect(resumed.db.indexBuilds.jobs().map(job => job.generation)).toEqual(original);
+      else expect(resumed.db.indexBuilds.jobs().every(job => !original.includes(job.generation))).toBe(true);
+      expect(resumed.db.get("SELECT count(*) n FROM value_members WHERE entity_id=? AND field='tags'", ['Row-one'])!.n).toBe(point === 'before' ? 0 : 1);
+      expect(resumed.e.getAttr('Row-one', 'tags')).toEqual(['fresh']);
+      await resumed.db.indexesReady();
+      resumed.db.rebuildIndexes(); await resumed.db.indexesReady();
+      expect(resumed.e.query('Row').where('tags', 'fresh').ids()).toEqual(['Row-one']);
+      expect(resumed.e.lastCommit()).toBe(before);
+    } finally {
+      lines.close();
+      if (child.pid && child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await exited; }
+    }
   });
 
   it('removes failed audit scratch and releases write ownership after a snapshot failure', async () => {
