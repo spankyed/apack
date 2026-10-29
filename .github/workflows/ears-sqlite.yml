@@ -59,15 +59,22 @@ jobs:
         run: >-
           npm test -w @apackdev/host -- tests/backup/recovery.spec.ts tests/backup/recovery-crash.spec.ts
           tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/backup/logical.spec.ts
+          tests/backup/logical-crash.spec.ts
           tests/backup/storage.spec.ts tests/database/storage.spec.ts
           tests/database/open-app-database.spec.ts tests/database/write-lock.spec.ts
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/host.json
           2>&1 | tee .temp/sqlite-platform/host.log
-      - name: Offline SQLite maintenance commands
+      - name: Offline SQLite maintenance and logical archive commands
         run: >-
-          npm test -w @apackdev/cli -- tests/commands/db-rebuild.spec.ts
+          npm test -w @apackdev/cli -- tests/commands/db-rebuild.spec.ts tests/commands/db-logical.spec.ts
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/cli-maintenance.json
           2>&1 | tee .temp/sqlite-platform/cli-maintenance.log
+      - name: Built CLI logical archive round trip
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: >-
+          node --import tsx packages/apack-cli/tests/_support/logical-cli.mjs
+          .temp/sqlite-platform/logical-cli.json 2>&1 | tee .temp/sqlite-platform/logical-cli.log
       - name: Verify candidate cases actually ran
         run: node .github/scripts/ears-sqlite-platform.mjs verify
       - name: Retain SQLite platform evidence

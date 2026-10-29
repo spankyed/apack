@@ -474,3 +474,12 @@ and history-only load preserves primary commit/data. Unknown outcomes use existi
 Logical archives do not replace the physical backup's media ownership; media/packs/secrets remain separate.
 Real profile command checks, actual built CLI and packaged/interruption/resource/copy-conversion acceptance
 are distinct closing checks. Public command documentation does not imply those final gates have passed.
+
+Parent-issued publication-boundary kill checks witness the actual exclusive link call, then stop the child
+before or immediately after it. Before publication the final path is absent and retry succeeds; after
+publication the complete archive verifies/restores and retry refuses overwrite. Source commit/values stay
+unchanged. Process death may leave private export scratch in the output parent; retry owns a new directory
+and never guesses that another directory is abandoned. After stopping all exporting tools and verifying
+retained output, an operator can remove leftover `.apack-logical-export-*` directories. These process-kill
+checks do not prove directory persistence under power loss. Interrupted ingestion/semantic rebuild and
+large-profile disk/resource/power-loss qualification remain separate requirements.

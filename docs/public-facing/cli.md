@@ -82,6 +82,8 @@ unknown outcomes retain incumbent recovery copies for `db recover`. Media, packs
 of these files, and current media is preserved. Use `db backup` for a full database-and-media backup.
 Archive publication requires hard-link support; unsupported filesystems refuse. Directory durability and
 Windows inherited permissions depend on the host/filesystem; this is not a universal power-loss guarantee.
+A killed export can leave a private `.apack-logical-export-*` directory beside its output. Stop exporting
+tools and verify any retained output before removing such scratch directories; retry does not delete them.
 
 `apack pack outdated [--profile <name>] [--json]` checks GitHub-installed packs for newer releases compatible with the profile’s recorded app version. Beta profiles include prereleases. Local/URL installs and app-shipped packs are reported as unmanaged. A failed check exits nonzero; finding an update alone does not. CLI GitHub installs record their source for subsequent checks; uninstall removes that record.
 

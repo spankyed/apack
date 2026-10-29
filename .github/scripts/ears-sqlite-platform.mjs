@@ -19,13 +19,16 @@ if (mode === 'verify') {
   const report = file => JSON.parse(readFileSync(join(evidence, file), 'utf8'));
   const passedIn = (value, pattern) => value.testResults.flatMap(test => pattern.test(test.name.replaceAll('\\', '/'))
     ? test.assertionResults.filter(result => result.status === 'passed') : []).length;
-  const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json');
+  const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const result = { source, earsPassed: ears.numPassedTests, sqliteCasesPassed: passedIn(ears, /\/tests\/sqlite\//),
     selectedTextPassed: selected.filter(test => test.status === 'passed').length, selectedTextTotal: selected.length,
     maintenanceCasesPassed: passedIn(cli, /\/tests\/commands\/db-rebuild\.spec\.ts$/),
+    logicalCommandCasesPassed: passedIn(cli, /\/tests\/commands\/db-logical\.spec\.ts$/),
+    logicalCrashCasesPassed: passedIn(host, /\/tests\/backup\/logical-crash\.spec\.ts$/),
+    builtLogicalChecks: builtCli.checks.length,
     logicalSnapshotCasesPassed: passedIn(ears, /\/tests\/sqlite\/logical-snapshot\.spec\.ts$/),
     logicalHostCasesPassed: logical.filter(test => test.status === 'passed').length,
     logicalHostSkipped: logicalSkipped.map(test => ({ name: test.fullName, status: test.status })),
@@ -33,6 +36,10 @@ if (mode === 'verify') {
   save('verification.json', result);
   assert(result.maintenanceCasesPassed >= 9 && cli.numFailedTests === 0,
     'All nine actual offline maintenance command cases must execute and pass');
+  assert.equal(result.logicalCommandCasesPassed, 8, 'Every logical dump/load command case must execute');
+  assert.equal(result.logicalCrashCasesPassed, 2, 'Both parent-issued archive publication kill cases must execute');
+  assert.equal(builtCli.source, source, 'Built CLI must match the candidate source');
+  assert(!builtCli.failure && result.builtLogicalChecks === 5, 'All separate-process staged CLI checks must pass');
   assert.equal(result.logicalSnapshotCasesPassed, 5, 'All public snapshot API cases must execute');
   assert.equal(logical.length, 10, 'All host logical publication/preview/replacement cases must be collected');
   assert.equal(result.logicalHostCasesPassed, platform() === 'win32' ? 9 : 10, 'All platform-applicable logical archive cases must pass');
