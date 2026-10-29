@@ -205,6 +205,9 @@ export class SqliteValues {
     return refusal('VALUE_INVALID', 'Invalid stored attribute value');
   }
 
+  /** Validate a raw logical cell while allowing an exporter to retain the original binary payload. */
+  validateCell(kind: string, value: unknown): void { this.value(kind, value); }
+
   private value(kind: string, value: unknown): unknown {
     switch (kind) {
       case 'null': if (value === null) return null; break;
