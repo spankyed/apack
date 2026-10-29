@@ -193,10 +193,10 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, published through **6d52e97ca7c49c382c258ee2aa52234d6d36dd79**.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
 Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
-Integration/remote is **6d52e97ca7c49c382c258ee2aa52234d6d36dd79**. Canonical/helper BASE stay at exact green 60d until a corrected full gate passes.
+Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE stay at exact green 60d until a corrected full gate passes.
 
 The earlier **b25a985c8cebdf898b86cb915bca2600ba03782a** [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212)
 is terminal FAILURE. Producers, both integration shards, both native shards and SQLite Linux/macOS passed.
@@ -227,8 +227,12 @@ is confirmed live, with Windows EARS passed (523 cases/one platform skip) but ho
 cases. That source cannot be promoted. Child imports used a raw drive path and a relative-destination
 fixture was absolute across different drives; corrected fixtures and explicit forced-termination reclaim
 cases pass 47 focused Linux cases plus host types/lint/import checks. See [Windows host evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-host/README.md).
-Next publish the correction and run focused App acceptance `host-windows`; continue polling the existing
-full gate's other jobs without a duplicate full dispatch. Canonical/helper BASE stays 60d.
+Focused Windows [40857266870](https://github.com/spankyed/apack/actions/runs/40857266870) is terminal
+SUCCESS on published 6cf6c8349e: 46 passed/4 explicit platform skips, including all four forced kills,
+simultaneous acquisition and relative-destination refusal. Full gate 40853782865 remains on older 6d;
+producers, SQLite macOS/Linux, integration-2 and app-and-rest pass, including the bundled editor. Native-1,
+native-2 and integration-1 are confirmed live. Poll those exact handles; the Windows-failed source cannot
+be promoted. Once terminal, run one corrected full gate on the converged source. Canonical/helper BASE stays 60d.
 Master advanced independently to 3d2929177d with exactly two new documentation plans (application-performance
 and ears-query-efficiency); inspected, not merged or edited. Candidate runtime/native pins remain 98386b36a1/6ab2f69.
 
@@ -237,8 +241,13 @@ still costs 30–31 ms unfiltered at 10k and regresses selective paths; no vec0 
 [Dependency preflight](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-dependencies/README.md)
 finds Vectorlite's transaction limitation, libSQL JS function-registration incompatibility to verify on
 stable 0.5.29, and actual stale committed/rolled-back results from SQLite-Vector's quantized preload.
-No dependency is changed. Next perform a bounded native-engine compatibility probe before choosing a
-strategy; keep raw/scoped exactness, unit rollback, generation ownership and recovery requirements intact.
+No dependency is changed. Stable libSQL 0.5.29 isolated probes show that single-BLOB binding can abort
+the process while explicit positional arrays complete, function registration is unsupported, and the
+read-only constructor option accepts writes. Tiny-fixture ANN misses need further isolation; no corruption
+claim is made. These are direct-integration gaps, not adoption results.
+Next preregister and test vec0 int8 candidates with Float32 reranking inside the existing pinned extension;
+retain per-vector quantization, scoped recall, own-write/savepoint/reopen and large-k/chunk requirements.
+Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.
 See [vector evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md). Full phases 3–7 remain required, including real embeddings and
 representative app budgets; no scope is deferred by the focused success or synthetic smoke.
 
