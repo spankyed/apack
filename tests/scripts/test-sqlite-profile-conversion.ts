@@ -61,7 +61,9 @@ function fixture(name: string, history = true) {
   return { source, paths, context, output: join(root, name + '-converted') };
 }
 try {
-  const f = fixture('both'), before = hashes(f.source);
+  const f = fixture('both'), before = hashes(f.source), outputParentAlias = join(root, 'output-parent-alias');
+  symlinkSync(root, outputParentAlias, process.platform === 'win32' ? 'junction' : 'dir');
+  f.output = join(outputParentAlias, 'both-converted');
   report.sourceHashes = before;
   const result = await convertSqliteProfile({ source: f.source, output: f.output, producer }); report.converted = result;
   assert.equal(result.path, join(realpathSync(f.output), 'profile')); assert.deepEqual(result.stores.map(store => store.name), ['primary', 'runs']);
