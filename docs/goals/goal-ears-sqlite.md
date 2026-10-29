@@ -193,9 +193,9 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Current functional runtime is
-**a2de2944a1**, published with its converged typo-cost evidence at
-**b25a985c8cebdf898b86cb915bca2600ba03782a** on integration/remote. Its single exact
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Current functional checkpoint is
+**7b56a145d4** (call-site correction), retaining the text runtime/cost evidence at **a2de2944a1**.
+The latest dispatched full gate covers earlier **b25a985c8cebdf898b86cb915bca2600ba03782a**. Its single exact
 [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212) is confirmed live;
 macOS/Linux candidate lanes pass 511 EARS / 95 host cases; Windows has 509 passing, one skipped and one
 failed call-site case. Producers pass and five consumer jobs remain live/queued. Poll this exact handle
@@ -260,10 +260,11 @@ full performance, relevance/vector, app/operational/packaging acceptance remains
 The [new Windows finding](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-call-sites/README.md)
 shows the assertion-only path correction was incomplete: the collector selected its own engine frame.
 The local two-line path normalization now happens before engine exclusion/shortening, with the strict
-assertion restored and three independent stack fixtures. It passes **514 SQLite / 292 native**, nine
+assertion restored and three independent stack fixtures. Committed at **7b56a145d4**, it passes **514 SQLite / 292 native**, nine
 focused cases per backend, types/builds/API/lint/imports and an old-source control failing both raw
-Windows fixtures. Text/presence source and the cost cohort are unchanged. Commit this correction/evidence;
-await the remaining exact b25 jobs and inspect other failures before publishing another exact gate.
+Windows fixtures. Text/presence source and the cost cohort are unchanged. Publish this correction/evidence
+through the existing draft, but await the remaining exact b25 jobs and inspect other failures before
+dispatching another exact gate. A branch advance cannot change that run's frozen source.
 The corrected collector still needs real Windows CI, and Windows host recovery has not yet run.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
