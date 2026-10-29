@@ -161,3 +161,12 @@ Do not treat source inspection or mocked consent as a successful sandboxed-tool 
 session confirmation, cold-resume quota, return compaction and newer-model suggestion producers,
 gates and effects. The newer-model line notification bypasses the dialog store. Source sites
 prove neither native eligibility nor default-app support; no original implementation is executed.
+
+Use `CLAUDE_RESEARCH_BACKGROUND_HANDOFF=1` with kind `terminal-plan-app-theme` for the
+ordinary session-background status/Refresh/Stop journey. It uses the real `/background` command,
+checks a separately identified original worker, leaves/reopens the thread, retains composing,
+and operates Stop through the app at normal/compact sizes. Open all four captures and reconcile
+the durable native `continued-in` row, saved app parent/cost and native stopped job. Child
+attachment/approvals/questions/resume and task/left-arrow warnings remain separate acceptance.
+The original-only `native-background-session.mjs` and `native-background-handoff.mjs` probes
+require the same inspected offline boundary and fresh private HOME; they are not app acceptance.
