@@ -62,7 +62,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite authori
     expect(Object.is(row.negative, -0)).toBe(true);
     expect(Object.is((row.packet as number[])[0], -0)).toBe(true);
     expect(row.nil).toBeNull(); expect(Object.hasOwn(row, '__proto__')).toBe(true);
-    expect(db.get("SELECT value FROM value_overflow WHERE entity_id=? AND field='packet'", ['Imported-one'])!.value).toEqual(packet);
+    expect(db.get("SELECT value FROM value_overflow WHERE entity_id=? AND field='packet'", ['Imported-one'])!.value).toEqual(Buffer.from(packet));
     expect(db.get("SELECT kind,value FROM value_members WHERE entity_id=? AND field='packet'", ['Imported-one'])).toEqual({ kind: 'num', value: 0 });
   });
 
