@@ -35,8 +35,25 @@ function toDTO(note: NoteEntity): NoteDTO {
 /** The fields a summary reads: never `content`, `updatedAt` or `lastSeen`, which typing in a note moves */
 const SUMMARY_FIELDS = ['title', 'icon', 'noteType', 'completed', 'hideCompletedChildren', 'displayOrder', 'savedDisplayOrder', 'favorite', 'createdAt', 'trashedAt'] as const;
 
-function toSummary(note: Pick<NoteEntity, 'id' | (typeof SUMMARY_FIELDS)[number]> & { trashedAt?: number }): NoteSummary {
-  const parents = query.ids(note.id).in(EARS.RelKind.CONTAINS, EARS.Entity.Note).ids();
+type SummaryRow = Pick<NoteEntity, 'id' | (typeof SUMMARY_FIELDS)[number]> & { trashedAt?: number };
+
+/** The notes as the tree shows them, each one's parent and child count read for all of them in two reads */
+function toSummaries(notes: SummaryRow[]): NoteSummary[] {
+  const ids = notes.map((note) => note.id);
+  if (!ids.length) return [];
+  // A note's parent is the first note that CONTAINS it, its children the notes it CONTAINS, each counted once
+  const parents = new Map<string, EARS.EntityId>();
+  for (const { source, target } of query.ids(ids).inEdges(EARS.RelKind.CONTAINS, EARS.Entity.Note)) {
+    if (source !== target && !parents.has(target)) parents.set(target, source);
+  }
+  const children = new Map<string, Set<string>>();
+  for (const { source, target } of query.ids(ids).outEdges(EARS.RelKind.CONTAINS, EARS.Entity.Note)) {
+    if (source !== target) children.set(source, (children.get(source) ?? new Set()).add(target));
+  }
+  return notes.map((note) => summaryOf(note, parents.get(note.id) ?? null, children.get(note.id)?.size ?? 0));
+}
+
+function summaryOf(note: SummaryRow, parentId: EARS.EntityId | null, childCount: number): NoteSummary {
   return {
     id: note.id,
     title: note.title,
@@ -44,10 +61,10 @@ function toSummary(note: Pick<NoteEntity, 'id' | (typeof SUMMARY_FIELDS)[number]
     noteType: note.noteType ?? 'document',
     completed: note.completed ?? false,
     hideCompletedChildren: note.hideCompletedChildren ?? false,
-    parentId: parents.length > 0 ? parents[0] : null,
+    parentId,
     displayOrder: note.displayOrder,
     savedDisplayOrder: note.savedDisplayOrder ?? null,
-    childCount: query.ids(note.id).out(EARS.RelKind.CONTAINS, EARS.Entity.Note).ids().length,
+    childCount,
     createdAt: note.createdAt,
     favorite: note.favorite ?? false,
     ...(note.trashedAt ? { trashedAt: note.trashedAt } : {}),
@@ -58,19 +75,21 @@ export const noteQueries = {
   /** One note as the tree shows it */
   summary: (id: EARS.EntityId): NoteSummary | undefined => {
     const note = query.ids(id).ofType(EARS.Entity.Note).pickOne([...SUMMARY_FIELDS]);
-    return note ? toSummary(note as never) : undefined;
+    return note ? toSummaries([note as SummaryRow])[0] : undefined;
   },
 
   /** Every note as the tree shows it */
-  summaries: (): NoteSummary[] => query(EARS.Entity.Note).pick([...SUMMARY_FIELDS]).map((note) => toSummary(note as never)),
+  summaries: (): NoteSummary[] => toSummaries(query(EARS.Entity.Note).pick([...SUMMARY_FIELDS]) as SummaryRow[]),
 
   /** The notes in the trash, as the trash lists them */
-  trashedSummaries: (): NoteSummary[] => query.trashed(EARS.Entity.Note).pick([...SUMMARY_FIELDS]).map((note) => toSummary(note as never)),
+  trashedSummaries: (): NoteSummary[] => toSummaries(query.trashed(EARS.Entity.Note).pick([...SUMMARY_FIELDS]) as SummaryRow[]),
 
   /** The notes whose title holds `text`, ignoring case, as a search lists them */
   search: (text: string): NoteSummary[] => {
     const wanted = text.trim().toLowerCase();
-    return wanted ? noteQueries.summaries().filter((note) => (note.title || '').toLowerCase().includes(wanted)) : [];
+    if (!wanted) return [];
+    const notes = query(EARS.Entity.Note).pick([...SUMMARY_FIELDS]) as SummaryRow[];
+    return toSummaries(notes.filter((note) => (note.title || '').toLowerCase().includes(wanted)));
   },
 
   /** What the welcome page lists: the `limit` notes seen last, and the favourites */

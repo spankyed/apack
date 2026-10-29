@@ -94,11 +94,15 @@ export const threadQueries = {
   /** The threads the list and the board show: every one not archived, newest first, each with its parent's id */
   listed: (): ThreadExtended[] => {
     const threads = query(EARS.Entity.Thread).pickAll().filter(t => !t.archived);
+    // A thread's parent is the one linking to it with 'parent_of': every thread's, in one read, the first kept
+    const parents = new Map<string, string>();
+    for (const { source, target } of query.ids(threads.map(t => t.id)).inEdges(EARS.RelKind.PARENT_OF, EARS.Entity.Thread)) {
+      if (!parents.has(target)) parents.set(target, source);
+    }
     return threads
       .map(thread => {
-        // A thread's parent is the one linking to it with 'parent_of'
-        const parentIds = query.ids(thread.id).in(EARS.RelKind.PARENT_OF, EARS.Entity.Thread).ids();
-        return { ...thread, ...(parentIds.length > 0 ? { parentId: parentIds[0] as string } : {}) } as ThreadExtended;
+        const parentId = parents.get(thread.id);
+        return { ...thread, ...(parentId !== undefined ? { parentId } : {}) } as ThreadExtended;
       })
       .sort((a, b) => ((b.timestamp as number) || 0) - ((a.timestamp as number) || 0));
   },
@@ -397,6 +401,28 @@ function getAllThreadMessages(threadId: EARS.EntityId): Partial<MessageEntity>[]
 }
 
 /**
+ * A thread's last `limit` messages that aren't queued, chronological, then its queued ones, each with its status alone,
+ * and whether earlier ones exist. Every write that adds a message moves the queued ones last (`relinkQueuedToEnd`), so
+ * the thread is read from its last message back, in a window grown until it holds `limit` + 1 others or the thread
+ * ends: opening a long thread costs its page. It reads no message's content, which is what keeps a view over it still
+ * while a message streams.
+ */
+function lastPage(threadId: EARS.EntityId, limit: number) {
+  for (let n = limit + 4; ; n *= 2) {
+    const window = (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
+      .reverse().limit(n).pick(['status'] as const) ?? []) as Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }>;
+    const others = window.filter(m => m.status !== 'queued');
+    if (others.length > limit || window.length < n) {
+      return {
+        page: others.slice(0, limit).reverse(),
+        queued: window.filter(m => m.status === 'queued').reverse(),
+        hasMore: others.length > limit,
+      };
+    }
+  }
+}
+
+/**
  * A thread's messages in the order the chat shows them, each with its status alone: chronological, the queued ones
  * last. It reads no message's content, which is what keeps a view over it still while a message streams.
  */
@@ -433,19 +459,32 @@ export function snippetOf(text: string, marks: ReadonlyArray<readonly [number, n
  */
 function searchMessages(text: string, limit = 20): MessageSearchResult[] {
   if (!text.trim()) return [];
-  const hits = query(EARS.Entity.Message)
+  const matches = (n: number) => query(EARS.Entity.Message)
     .search(text, { prefix: true, recency: { field: 'timestamp', halfLife: SEARCH_HALF_LIFE_MS } })
-    .limit(limit)
+    .limit(n)
     .hits({ fields: ['text', 'sender', 'timestamp'], highlights: true });
+  // A marker is matched like any message and left out after, so a page asks again for more until it is full or the
+  // matches run out
+  let n = limit;
+  let hits = matches(n);
+  while (hits.filter(hit => hit.row.sender !== 'marker').length < limit && hits.length === n) hits = matches(n *= 2);
+  const kept = hits.filter(hit => hit.row.sender !== 'marker');
+  // Each message's thread, the first it is contained by, and each thread's topic, for all of them in two reads
+  const threadOf = new Map<string, EARS.EntityId>();
+  for (const { source, target } of query.ids(kept.map(hit => hit.id)).outEdges(EARS.RelKind.CONTAINS, EARS.Entity.Thread)) {
+    if (!threadOf.has(source)) threadOf.set(source, target);
+  }
+  const topics = new Map<string, string>(
+    query.ids([...new Set(threadOf.values())]).ofType(EARS.Entity.Thread).pick(['topic'] as const)
+      .map(t => [t.id, t.topic ?? ''] as const));
   const results: MessageSearchResult[] = [];
-  for (const { id, row, highlights } of hits) {
-    if (row.sender === 'marker') continue;
-    const threadId = query.ids(id).out(EARS.RelKind.CONTAINS, EARS.Entity.Thread).first();
+  for (const { id, row, highlights } of kept) {
+    const threadId = threadOf.get(id);
     if (!threadId) continue;
-    const topic = query.ids(threadId).pickOne(['topic'])?.topic ?? '';
+    if (results.length === limit) break;
     const marks = (highlights?.text ?? []).map(([, s, e]) => [s, e] as [number, number]);
     results.push({
-      messageId: id, threadId, topic, sender: row.sender, timestamp: row.timestamp,
+      messageId: id, threadId, topic: topics.get(threadId) ?? '', sender: row.sender, timestamp: row.timestamp,
       ...snippetOf(row.text ?? '', marks),
     });
   }
@@ -477,15 +516,8 @@ export const chatQueries = {
   chatPage: (threadId: EARS.EntityId, limit: number): ChatPage | null => {
     const thread = getThreadFields(threadId);
     if (!thread) return null;
-    const ordered = displayOrder(threadId);
-    const regular = ordered.filter(m => m.status !== 'queued');
-    const page = regular.slice(Math.max(0, regular.length - limit));
-    return {
-      ...thread,
-      id: threadId as ThreadEntity['id'],
-      messageIds: [...page, ...ordered.filter(m => m.status === 'queued')].map(m => m.id),
-      hasMore: regular.length > page.length,
-    };
+    const { page, queued, hasMore } = lastPage(threadId, limit);
+    return { ...thread, id: threadId as ThreadEntity['id'], messageIds: [...page, ...queued].map(m => m.id), hasMore };
   },
 
   /** An open tab's thread, or `null` once it is gone */
@@ -544,6 +576,12 @@ function relinkMessageToEnd(threadId: EARS.EntityId, messageId: EARS.EntityId): 
   write(messageId).unlink(EARS.RelKind.CONTAINS, threadId);
   write(threadId).link(EARS.RelKind.CONTAINS, messageId);
   write(messageId).link(EARS.RelKind.CONTAINS, threadId);
+}
+
+/** Moves a thread's queued messages after the rest, in their order: what every write adding a message ends with */
+function relinkQueuedToEnd(threadId: EARS.EntityId, except?: EARS.EntityId): void {
+  const queued = query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).where('status', 'queued').ids();
+  for (const id of queued) if (id !== except) relinkMessageToEnd(threadId, id);
 }
 
 export const chatCommands = {
@@ -609,20 +647,9 @@ export const chatCommands = {
     write(threadId).link(EARS.RelKind.CONTAINS, messageId);
     write(threadId).set('lastMessageTimestamp', timestamp);
 
-    // Keep queued messages at the end of the relation list so they always
-    // render below the current agent turn — even after a thread reload.
-    // Skipped during bulk import (no queued messages in imported data).
-    if (!skipRelink) {
-      const siblings = query.ids(threadId)
-        .out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(['id', 'status'] as const);
-      if (siblings) {
-        for (const sib of siblings) {
-          if ((sib as any).status === 'queued' && sib.id !== messageId) {
-            relinkMessageToEnd(threadId, sib.id!);
-          }
-        }
-      }
-    }
+    // Keep queued messages at the end of the relation list so they always render below the current agent turn, even
+    // after a thread reload; a bulk add skips it for each message and moves them once after its last
+    if (!skipRelink) relinkQueuedToEnd(threadId, messageId);
 
     return { id: messageId, threadId, text: text.trim(), sender, timestamp };
   },
@@ -755,6 +782,7 @@ export const chatCommands = {
     const markerId = markerTx.link(EARS.RelKind.CONTAINS, threadId).id();
     write(threadId).link(EARS.RelKind.CONTAINS, markerId);
     write(threadId).set('lastMessageTimestamp', timestamp);
+    relinkQueuedToEnd(threadId);
 
     // Link marker to eligible messages and set compacted flag
     const compactedMessageIds: EARS.EntityId[] = [];
