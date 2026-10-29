@@ -198,10 +198,10 @@ Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published 
 **34c612ab84d176a1ae4107dbc815892470694181**, including the vector diagnostics and maintenance/audit
 implementation. Existing draft #286 is updated with actual checks and unresolved requirements.
 Its focused [SQLite platform run 40873999402](https://github.com/spankyed/apack/actions/runs/40873999402)
-is live on exactly 34c612ab84: Linux x64, macOS arm64 and Windows x64 are running. App acceptance's
+completed SUCCESS on exactly 34c612ab84: Linux x64, macOS arm64 and Windows x64 all pass. App acceptance's
 ordinary check job is deliberately skipped for this focused dispatch. Each platform must execute all nine
 real maintenance command cases in addition to selected EARS/host contracts; evidence verifies nonvacuity.
-Poll that exact run; do not dispatch duplicates. It is not the full strict chain.
+Retain that exact run; do not dispatch duplicates. It is not the full strict chain.
 Canonical/helper BASE remain at exact full-green **6cf6c8349e**. Runtime base/native pins remain
 98386b36a1/6ab2f69; master ref 3d2929177d has only the previously reviewed two plan documents.
 Published maintenance includes app-only rebuild/audit ownership, offline primary/runs/all selection,
@@ -304,7 +304,9 @@ New local 00c462a0bb implements atomic offline membership reconstruction in the 
 transaction, using a native SQL scan plus per-array decoding; all-SQLite validation is active in
 c030c21b8d passes all 540 SQLite cases, build/types/lint. The initial callback type-narrowing failure
 is retained. New 32d07ab0d2 adds real parent-kill witnesses before/after repair COMMIT and reopened
-state/retry checks; validation is active in ears-membership-kill (poll the existing live exec handle). It still needs measured duration/memory/WAL and interruption
+state/retry checks; all 37 recovery cases, build/types/lint pass. Fixed populated-cost protocol
+2952e038df is now active in ears-membership-cost (exec 64242), with six fresh 1k/10k/100k OFF/FULL
+profiles and no post-hoc budget or sample retries. Poll that same handle. It still needs measured duration/memory/WAL and interruption
 qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
