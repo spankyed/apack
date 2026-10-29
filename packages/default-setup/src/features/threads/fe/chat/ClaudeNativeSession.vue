@@ -1,5 +1,6 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
+    <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" @operate="operateBackground" />
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
     <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
     <section v-for="panel in noticePanels" :key="panel.key" :data-native-notice="panel.notice.kind" :aria-label="panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
@@ -98,6 +99,9 @@
   </section>
 </template>
 <script setup lang="ts">
+import NativeBackgroundSession from './NativeBackgroundSession.vue'
+import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
+import type { ClaudeBackgroundSessionRequest } from '#features/code/common/native-background.ts'
 import { claudeBillingText } from '#features/code/common/native-billing.ts'
 import { isClaudeNativeNoticeDecision, type ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
@@ -111,7 +115,7 @@ import NativeManagedSecurityReview from './NativeManagedSecurityReview.vue'
 import NativeSandboxNetworkReview from './NativeSandboxNetworkReview.vue'
 import { parseClaudeDocument } from '#extensions/blocks/display/native-status-text.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
-const props = defineProps<{ threadId: string; busy: boolean; inputPending?: boolean }>()
+const props = defineProps<{ threadId: string; continuation?: ClaudeNativeContinuation; busy: boolean; inputPending?: boolean }>()
 const emit = defineEmits<{ active: [value: boolean] }>()
 const actor: ThreadsState = useSurface()
 const mountId = crypto.randomUUID()
@@ -188,6 +192,11 @@ let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: Resi
 let attachedOwner: string | undefined
 const identity = () => ({ threadId: props.threadId, mountId })
 function renew() { actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
+function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest) {
+  if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.background?.continuedInSessionId === target.continuedInSessionId && view.value.background.sessionId === target.sessionId && view.value.background.status === 'pending') return
+  actor.send({ type: 'CLAUDE_TERMINAL_BACKGROUND', ...identity(), sessionId: target.sessionId, continuedInSessionId: target.continuedInSessionId,
+    revision: (view.value?.background?.revision ?? 0) + 1, ...request })
+}
 function open() { returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
 function cancelOpen() {
   const openingId = view.value?.openingId
@@ -216,7 +225,11 @@ watch([view, active], async ([value, showing]) => {
   terminal?.write(value.output)
 }, { flush: 'post' })
 defineExpose({ open })
-renew(); const heartbeat = setInterval(renew, 10000)
+renew();
+watch(() => JSON.stringify([props.continuation?.sessionId, props.continuation?.continuedInSessionId]), () => {
+  if (props.continuation) operateBackground({ ...props.continuation }, { operation: 'refresh' })
+}, { immediate: true, flush: 'post' })
+const heartbeat = setInterval(renew, 10000)
 onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false) })
 </script>
 

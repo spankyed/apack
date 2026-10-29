@@ -30,7 +30,7 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
-        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" />
+        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :continuation="currentThread.context.claudeCode.nativeContinuation?.sessionId === currentThread.context.claudeCode.sessionId ? currentThread.context.claudeCode.nativeContinuation : undefined" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" />
         <NativeManagedSettingsNotice v-if="!nativeTerminalActive && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">

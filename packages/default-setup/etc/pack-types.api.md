@@ -493,6 +493,36 @@ interface ClaudeAgentHandback {
     warning?: string;
 }
 
+/** Original background job identity is distinct from the parent app conversation. */
+interface ClaudeBackgroundSession {
+    id: string;
+    sessionId: string;
+    cwd: string;
+    name?: string;
+    pid?: number;
+    state: 'blocked' | 'done' | 'failed' | 'stopped' | 'working';
+    status?: 'busy' | 'idle' | 'waiting';
+    waitingFor?: string;
+}
+
+type ClaudeBackgroundSessionRequest = {
+    operation: 'refresh';
+} | {
+    operation: 'stop';
+    id: string;
+    pid: number;
+};
+
+interface ClaudeBackgroundSessionState {
+    sessionId: string;
+    continuedInSessionId: string;
+    revision: number;
+    operation: 'refresh' | 'stop';
+    status: 'done' | 'error' | 'pending';
+    session?: ClaudeBackgroundSession;
+    problem?: string;
+}
+
 interface ClaudeBillingObservation {
     sessionId: string;
     observedAt: number;
@@ -743,6 +773,12 @@ declare const ClaudeNativeBashDialogSchema: z.ZodObject<{
     reason: z.ZodOptional<z.ZodString>;
     input: z.ZodRecord<z.ZodString, z.ZodUnknown>;
 }, z.core.$strip>;
+
+interface ClaudeNativeContinuation {
+    sessionId: string;
+    continuedInSessionId: string;
+    timestamp: string;
+}
 
 type ClaudeNativeFileDialog = z.infer<typeof ClaudeNativeFileDialogSchema>;
 
@@ -1516,6 +1552,7 @@ interface ClaudeNativeTerminalState {
     /** Authenticated native executable beneath that launcher. */
     nativePid?: number;
     exitCode?: number;
+    continuation?: ClaudeNativeContinuation;
     preview?: {
         turnId: string;
         output: string;
@@ -2051,12 +2088,18 @@ type ClaudeTerminalViewRequest = {
     ownerId: string;
     sequence: number;
     request: ClaudeNativeMcpFormRequest;
-} | {
+} | ({
+    type: 'CLAUDE_TERMINAL_BACKGROUND';
+    sessionId: string;
+    continuedInSessionId: string;
+    revision: number;
+} & ClaudeBackgroundSessionRequest) | {
     type: 'CLAUDE_TERMINAL_CLOSE';
     ownerId: string;
 });
 
 type ClaudeTerminalViewSnapshot = {
+    background?: ClaudeBackgroundSessionState;
     mcpOperation?: {
         sequence: number;
         status: 'done' | 'error' | 'pending';
@@ -2756,6 +2799,7 @@ interface CliServiceType {
         error: string;
     }>;
     claudeCode: {
+        backgroundSession: typeof backgroundSession;
         parseMcpElicitationForm: typeof parseMcpElicitationForm;
         validateMcpElicitationForm: typeof validateMcpElicitationForm;
         query(opts: Omit<QueryOptions, 'cwd'> & {
@@ -6923,6 +6967,25 @@ declare const StreamEventLineSchema: z.ZodObject<{
  */
 type StreamLine = KnownStreamLine | UnknownLine;
 
+/**
+ * Shared helpers for subcommand namespaces.
+ *
+ * Every `mcp.list()` / `auth.status()` / `plugins.install()` etc. ultimately
+ * becomes an `execOnce` call. Rather than each namespace reinventing error
+ * handling and JSON parsing, they all go through these two helpers:
+ *
+ *   - `run(args, opts)`      → one-shot, returns trimmed stdout
+ *   - `runJson<T>(args, opts)` → one-shot, `JSON.parse` the stdout
+ *
+ * Callers are free to fall through to `execOnce` directly for bespoke cases
+ * (long-lived children, custom stdin, etc.).
+ */
+
+interface SubcommandOptions extends ExecOnceOptions {
+    /** Prepend these args before everything else (e.g. `['--debug']`). */
+    prefix?: readonly string[];
+}
+
 interface SwitchNode extends NodeBase {
     nodeType: 'switch';
     conditions: Array<Condition>;
@@ -7014,6 +7077,7 @@ declare const ThinkingSchema: z.ZodEnum<{
  */
 interface ThreadContext {
     claudeCode?: {
+        nativeContinuation?: ClaudeNativeContinuation;
         retiredNativeMessages?: ClaudeNativeMessageRetirements;
         sessionId?: string;
         lastTurnAt?: number;
@@ -7782,6 +7846,9 @@ declare const attach: z.ZodObject<{
         agent_id: z.ZodString;
     }, z.core.$strict>>;
 }, z.core.$strict>;
+
+/** Read only the child linked by the original parent's durable journal. */
+declare function backgroundSession(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, options?: SubcommandOptions): Promise<ClaudeBackgroundSession | undefined>;
 
 declare const box: z.ZodObject<{
     text: z.ZodString;
