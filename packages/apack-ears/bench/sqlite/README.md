@@ -384,3 +384,20 @@ generations and full backup/rebuild still require integration proof before selec
 `chunks` uses an implicit rowid; a durable derived index must not join on that unstable identity across
 VACUUM backups ([SQLite documentation](https://www.sqlite.org/lang_vacuum.html)). Require a stable owner
 mapping or explicit primary key and test backup/reopen; do not change production layout before evidence.
+
+
+The first int8-cosine cohort passes all transaction controls and 1k profiles, then stops at the first
+10k clustered heartbeat miss (17.23ms p99). Before testing the next metric, preregister `l2-unit`:
+normalize each input with double-precision norm, round 127 times each coordinate to signed int8, and
+append 32 zero coordinates to queries. Stored vectors use those extra coordinates to make their
+integer squared norm exactly R², R=ceil(127+sqrt(original dimensions)/2), by bounded greedy squares.
+The rounding-error triangle bound makes this radius sufficient; assert remaining padding is zero.
+Then squared L2=constant+queryNorm²-2*integerDot, eliminating stored quantization-norm bias while
+allowing the library's int8 L2 kernel. Original Float32 cosine still supplies final scores.
+
+Keep 64 candidates, original corpora/scopes/updates, all transaction/backup controls and every target.
+Run 1k/10k/100k once in order, stopping at the first miss, and retain the rejected cosine results.
+Check integer norm/distance identities, zero query padding and scaled/sparse/dense/held-out examples
+before timing. Source v0.1.9 has a conditional NEON L2 path; do not infer that the tested binary uses
+it, or that a speedup is caused by it, without runtime/build evidence. This remains a primitive
+counterfactual with multi-chunk/large-k and integrated EARS/resource/app requirements still open.
