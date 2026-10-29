@@ -269,10 +269,13 @@ Host/CLI wiring at 1529c7537a adds an app-only exclusive-write wrapper and offli
 with dry-run default. Disposable Linux passes five builds, EARS/host/CLI types, 15 host storage cases, API generation, lint/imports.
 Exact 24180090dc also passes the three real CLI profile cases, API verification, five builds, EARS/host/CLI
 types, 15 host cases and lint/imports. Dry run leaves generations intact; forced rebuild waits for readiness
-and invalidates the old reader; managed-writer exclusion is tested. Selected-store implementation 59d9275045 adds --database primary/runs/all and disables unreadable-history
-replacement for maintenance. It is validating in ears-rebuild-stores (exec 34035); poll the same handle.
-The following unvalidated host test checks unreadable-incumbent preservation. Full suite/platform
-qualification of this newer source remains open. Audit and lossless logical export remain required. See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
+and invalidates the old reader; managed-writer exclusion is tested. Selected stores at 59d9275045 pass six real CLI cases, types/builds, 15 host cases, API verification and
+lint/imports. The c286f096d2 unreadable-history preservation test passes with host types/lint: incumbent
+bytes remain unchanged, with no aside/replacement. Full suite/platform qualification remains required.
+Internal audit slice 9e1df259e2 compares streamed active derived contents with rebuilt private snapshots;
+it is validating in ears-audit-contents. This slice is not yet public and does not cover all primary/value
+invariants or FTS inverted-posting integrity. Complete audit and lossless logical export remain required.
+ See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
 Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
 continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
 Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.
