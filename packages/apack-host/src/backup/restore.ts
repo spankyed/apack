@@ -8,6 +8,7 @@ import { findRunningApp } from '../database/running.ts';
 import { holdDatabaseWriteLock } from '../database/write-lock.ts';
 import { holdRecoveryExclusion } from '../database/recovery-lock.ts';
 import type { ExclusiveLock } from '../exclusive-lock.ts';
+import { syncRecoveryDirectory, syncRecoveryTree } from './recovery.ts';
 import { writePrivateFile } from '../private-file.ts';
 
 interface RecoveryStore { name: 'lmdb' | 'runHistory'; path: string; format: string }
@@ -70,23 +71,6 @@ export function listImportRecoveries(userDataDir: string): ImportRecovery[] {
   });
 }
 
-function syncDirectory(dir: string): void {
-  if (process.platform === 'win32') return;
-  const fd = fs.openSync(dir, 'r');
-  try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-}
-function syncTree(dir: string): void {
-  directory(dir); fs.chmodSync(dir, 0o700);
-  for (const name of fs.readdirSync(dir)) {
-    const file = path.join(dir, name), stat = fs.lstatSync(file);
-    if (stat.isDirectory()) syncTree(file);
-    else if (stat.isFile()) {
-      fs.chmodSync(file, 0o600);
-      const fd = fs.openSync(file, 'r+'); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-    } else throw new Error(`Recovery refuses links and special files: ${file}`);
-  }
-  syncDirectory(dir);
-}
 function digest(file: string): string {
   const hash = createHash('sha256'), buffer = Buffer.allocUnsafe(64 * 1024);
   const visit = (entry: string, relative: string): void => {
@@ -146,10 +130,10 @@ export function restoreImportRecovery(target: { userDataDir: string; apiPortFile
           const copy = storage.open({ path: dest, readOnly: true });
           try { copy.stats(); } finally { copy.close(); }
         } else { digest(source); fs.cpSync(source, dest, { recursive: true, errorOnExist: true, force: false }); }
-        syncTree(dest);
+        syncRecoveryTree(dest);
         planned.push({ name: entry.name, present: true, digest: digest(entry.dataFile ? path.join(dest, entry.dataFile) : dest) });
       }
-      syncDirectory(stage);
+      syncRecoveryDirectory(stage);
       plan = { format: 'apack-import-restore/1', entries: planned };
       writePrivateFile(planFile, JSON.stringify(plan) + '\n');
     } else plan = readJson(planFile) as RestorePlan;
@@ -160,7 +144,7 @@ export function restoreImportRecovery(target: { userDataDir: string; apiPortFile
     }
     directory(path.join(dir, 'rollback'));
     if (!exists(interrupted)) fs.mkdirSync(interrupted, { mode: 0o700 });
-    directory(interrupted); syncDirectory(dir);
+    directory(interrupted); syncRecoveryDirectory(dir);
     // Validate every remaining candidate before the first rename. Missing stages must already be installed.
     for (const [i, entry] of entries.entries()) {
       const expected = plan.entries[i]!, staged = path.join(stage, entry.name);
@@ -176,9 +160,9 @@ export function restoreImportRecovery(target: { userDataDir: string; apiPortFile
         if (exists(entry.destination)) {
           directory(entry.destination);
           if (exists(previous)) throw new Error(`Both live and interrupted paths exist before publication: ${entry.name}`);
-          fs.renameSync(entry.destination, previous); syncDirectory(path.dirname(entry.destination)); syncDirectory(interrupted);
+          fs.renameSync(entry.destination, previous); syncRecoveryDirectory(path.dirname(entry.destination)); syncRecoveryDirectory(interrupted);
         }
-        if (expected.present) { fs.renameSync(staged, entry.destination); syncDirectory(path.dirname(entry.destination)); syncDirectory(stage); }
+        if (expected.present) { fs.renameSync(staged, entry.destination); syncRecoveryDirectory(path.dirname(entry.destination)); syncRecoveryDirectory(stage); }
       }
     }
     // The preparation stays visible until every entry is installed, verified and its parent synced.
@@ -188,7 +172,7 @@ export function restoreImportRecovery(target: { userDataDir: string; apiPortFile
         throw new Error(`Import recovery did not settle ${entry.name}`);
       }
     }
-    fs.renameSync(marker, completed); syncDirectory(dir);
+    fs.renameSync(marker, completed); syncRecoveryDirectory(dir);
     return { session, status: 'recovered', recoveryPath: path.join(dir, 'rollback') };
   } finally { try { exclusion?.release(); } finally { lock.release(); } }
 }

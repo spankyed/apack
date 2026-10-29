@@ -1,3 +1,5 @@
+import nativeFs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,7 +15,7 @@ vi.mock('@apackdev/ears/lmdb', async importOriginal => ({
 }));
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) fs.removeSync(root); });
+afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); for (const root of roots.splice(0)) fs.removeSync(root); });
 const log = { info: () => {}, warn: () => {} };
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-import-transaction-'));
@@ -112,4 +114,25 @@ it('retains a prepared recovery journal and never replays an uncertain replaceme
   expect(fs.readFileSync(path.join(recovery, 'lmdb/data.mdb'), 'utf8')).toBe('incumbent');
   expect(fs.readFileSync(path.join(primary, 'data.mdb'), 'utf8')).toBe('candidate');
   expect(() => assertNoImportRecovery(primary)).toThrow(expect.objectContaining({ code: 'RECOVERY_REQUIRED', recoveryPath: recovery }));
+});
+
+it.skipIf(process.platform === 'win32').each(['copy', 'parent'])('refuses before replacement when syncing the recovery %s fails', async point => {
+  const { root, primary, backup, media, store } = fixture();
+  const replaceWith = vi.fn(store.replaceWith), accept = vi.fn(), restored = vi.fn();
+  const failure = Object.assign(new Error('recovery preparation sync failed'), { code: 'EIO' });
+  const files = new Map<number, string>();
+  const open = nativeFs.openSync.bind(nativeFs), close = nativeFs.closeSync.bind(nativeFs), sync = nativeFs.fsyncSync.bind(nativeFs);
+  vi.spyOn(nativeFs, 'openSync').mockImplementation((file, flags, mode) => { const fd = open(file, flags, mode); files.set(fd, String(file)); return fd; });
+  vi.spyOn(nativeFs, 'closeSync').mockImplementation(fd => { files.delete(fd); close(fd); });
+  vi.spyOn(nativeFs, 'fsyncSync').mockImplementation(fd => {
+    const file = files.get(fd);
+    if (point === 'copy' ? file?.endsWith(path.join('rollback', 'lmdb', 'data.mdb')) : file === root) throw failure;
+    sync(fd);
+  });
+  syncBuiltinESMExports();
+  await expect(importDatabase({ lmdb: { ...store, replaceWith } }, backup, media, { log, accept, restored })).rejects.toBe(failure);
+  expect(replaceWith).not.toHaveBeenCalled(); expect(accept).not.toHaveBeenCalled(); expect(restored).not.toHaveBeenCalled();
+  expect(fs.readFileSync(path.join(primary, 'data.mdb'), 'utf8')).toBe('incumbent');
+  expect(() => assertNoImportRecovery(primary)).not.toThrow();
+  expect(fs.readdirSync(root).some(name => name.startsWith('.apack-import-'))).toBe(false);
 });

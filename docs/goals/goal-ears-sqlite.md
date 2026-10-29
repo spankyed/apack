@@ -187,49 +187,32 @@ platform claims must identify their actual tested scope.
 ## Current handoff
 
 The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for
-`session/ears-sqlite`. The last exact published green checkpoint is
-**1a0f664d01bacb969ab48cd27aae1afd146de1cc**:
-[strict run 40783434078](https://github.com/spankyed/apack/actions/runs/40783434078) completed SUCCESS, all six jobs.
-The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation`
-from a889531dd1 to that exact checkpoint; its BASE is now 1a0f664d01.
-No master merge, adoption or Mac build occurred; app master and the private native engine remain pinned
-to 98386b36a1 / 6ab2f69. Verify actual refs before another publication and gate each new exact tip.
+`session/ears-sqlite`. The latest exact published green checkpoint is
+**585dcafccf5da62ea50f2e5d37294d9de8a11b9f**:
+[strict run 40790543472](https://github.com/spankyed/apack/actions/runs/40790543472) completed SUCCESS, all six jobs.
+The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation` from
+1a0f664d01 to 585dcafccf; its BASE is now 585dcafccf. Integration `integration-FyE9XZ` and the remote draft
+still point to that green tip until the next publication. App master/native remain pinned to 98386b36a1 / 6ab2f69.
+No master merge, adoption, local compiler or native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; no Mac dependencies, native build or
-captured runtime are installed. New descendants require their own checks and strict run. Published integration and remote draft tip are now
-**585dcafccf5da62ea50f2e5d37294d9de8a11b9f**. Its single exact
-[strict run 40790543472](https://github.com/spankyed/apack/actions/runs/40790543472) is confirmed live
-(producer job 123174397259); poll that handle, do not dispatch duplicates or advance canonical before success.
-Canonical remains clean 1a0f664d01. Local continuation may contain documentation beyond the published tip.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Committed **bccf1ee752** implements explicit
+`db recover`, resumable offline incumbent restoration, forensic retention and managed-reader exclusion.
+The final runtime snapshot adds preparation durability barriers and permission/failure cases. It passes five
+builds, host/API/CLI types, **73 host cases**, **3 CLI cases**, lint/imports and three removal controls. Actual
+SIGKILL after primary import COMMIT and at both restore publication boundaries is covered for both backends;
+a separate live reader blocks recovery, and its dead claim is reclaimed after SIGKILL. The real built CLI
+inspects and restores a partial SQLite import, independently verified in a fresh process. Metadata must be
+writable for managed read-only tools; direct backend snapshot construction remains unchanged. Retained files/tree
+and the preparation's parent are synced before the first live replacement; injected sync refusal touches no
+live data. See [import recovery evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/import-recovery/README.md)
+for exact archives, source comparison, prior failures and qualified limits. No owned Linux container remains live.
 
-The next checkpoint is commit-outcome and import-maintenance safety. Committed source
-**8b7159e051d2fa261b7e61aa6613f7aceeba891b** quarantines ended COMMIT failures as `COMMIT_UNKNOWN`,
-preserves causes, avoids replay and captures fallible watch changes before COMMIT. Local checkpoint
-**8f23caf3dc** adds same-handle write leases, persisted import preparation, fail-closed host/settings handling,
-shared backend contracts, real-store import concurrency and the intentional two-method EARS construction API.
-See [commit/maintenance evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-maintenance/README.md).
-Two focused permission-aware Linux snapshots passed types, package builds, maintenance/commit/host tests and
-a lease-removal control. The final archive matches 2,491 committed package source/test/API files and passed
-five builds, EARS/host/API types, 75 host cases, 431 SQLite cases, 256 native cases and EARS API reports.
-It is terminal FAILURE because lint refused catch-parameter reassignment in index failure reporting;
-the failure is retained, and import checks/syscall probes had not executed. A mechanical separate-local fix is
-validated successfully in `ears-maintenance-lint-fixed`: five builds, EARS types, 17 focused safety tests,
-lint/imports and all six actual WAL-sync fault probes. All fault cases conservatively refuse data access as
-COMMIT_UNKNOWN and independently reopen at the incumbent sequence; no ambiguous persisted commit was
-observed. The separate-local change is the only package source delta since the full-suite source. Keep the
-failed predecessor disposition; the new exact 585dcafccf strict gate above is now running. Closing checks also include process-kill recovery and a new exact integrated strict gate.
-Explicit recovery is now implemented locally, still unpublished: `db recover` lists named-profile sessions
-and deliberately restores retained incumbents through a persisted, resumable publication plan. Managed readers
-hold private metadata claims; recovery excludes them and refuses the running app/profile writer. The final
-plain-Node snapshot passes five builds, host/CLI types, 67 host cases (real SIGKILL at import COMMIT and both
-publication boundaries for both backends, plus live/dead readers), 3 CLI cases, lint/imports and a removal control.
-Earlier namespace-spy, debugger and child-startup failures remain recorded in
-[import recovery evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/import-recovery/README.md).
-Next close the preparation durability barrier: sync retained files/tree and the preparation's parent before the
-first live replacement, with sync-failure refusal tests. Then qualify managed-read metadata permissions and
-broader host/API/CLI flows; publication waits for a new exact strict gate after the current one is terminal.
-Cross-process raw ownership, filesystem/power-loss/platform and large-copy resource qualification remain required;
-a recovery marker must never be deleted merely to bypass startup refusal.
+The next publication is this recovery descendant to the existing draft only, followed by one exact strict run;
+do not advance canonical on the parent's success. Then continue phase 5/6 app/media ownership, raw/unmanaged
+readers, directory-creation hierarchy, read-only mounts, filesystem/power-loss/platform and large-copy resource
+qualification, plus all existing phases 3–7 criteria below. Never delete a pending preparation to bypass startup.
+The earlier 431 SQLite / 256 native suite and real WAL-sync evidence remains in
+[commit/maintenance evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-maintenance/README.md).
 
 Previous **3f4651b009** / [40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) is terminal FAILURE.
 Producer and both native jobs passed; integration-1 and app/rest failed on undeclared API bundler inputs fixed

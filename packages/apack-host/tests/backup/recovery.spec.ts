@@ -148,3 +148,35 @@ it('refuses new readers during physical replacement and releases failed-open cla
   expect(() => openProfileDatabase(f.paths.lmdb, true, () => { throw failure; })).toThrow(failure);
   expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
 });
+
+it.skipIf(process.platform === 'win32')('refuses a managed open without writable metadata while direct read-only snapshots remain available', () => {
+  const f = fixture('sqlite/1'), parent = path.dirname(f.paths.lmdb);
+  fs.chmodSync(parent, 0o500);
+  try {
+    expect(() => openRunHistory(f.paths.runHistory, { readOnly: true, storageFormat: f.format })).toThrow();
+    expect(ids(f.paths.runHistory, f.format, 'RunNode')).toEqual(['RunNode-before', 'RunNode-interrupted']);
+  } finally { fs.chmodSync(parent, 0o700); }
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+});
+
+it('retains a managed reader claim when its backend fails to close', () => {
+  const f = fixture('sqlite/1'), reader = openRunHistory(f.paths.runHistory, { readOnly: true, storageFormat: f.format });
+  const sql = (reader.database as unknown as { sql: { close(): void } }).sql;
+  const failure = new Error('database close failed');
+  const spy = vi.spyOn(sql, 'close').mockImplementationOnce(() => { throw failure; });
+  try {
+    expect(() => reader.database.close()).toThrow(failure);
+    expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile');
+  } finally { spy.mockRestore(); reader.database.close(); }
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+});
+
+it.each(['invalid record', JSON.stringify({ pid: process.pid, machine: 'another-host', what: 'reader', since: 'now' })])('refuses unresolved reader ownership (%s)', record => {
+  const f = fixture('sqlite/1'), dir = path.join(path.dirname(f.paths.lmdb), 'db-readers'), file = path.join(dir, 'unresolved.json');
+  fs.mkdirSync(dir); fs.writeFileSync(file, record);
+  expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile');
+  expect(fs.existsSync(path.join(f.dir, 'restore-stage'))).toBe(false);
+  expect(findDatabaseWriter(f.target.userDataDir)).toBeNull();
+  fs.unlinkSync(file);
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+});

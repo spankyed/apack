@@ -46,9 +46,31 @@ These process-death probes run on POSIX; Windows is explicitly skipped. They are
 
 ## Remaining acceptance
 
-Before publishing this recovery checkpoint, sync the retained copies and the preparation's parent before
-the first live import replacement; test refusal before mutation on either sync failure. Broad integrated
-host/API/CLI checks and a new exact strict gate remain required. Qualify writable metadata permission
-requirements, read-only mount behavior, raw/unmanaged ownership, filesystem/power-loss assumptions and
-supported packaged platforms. Resource/disk usage for large recovery copies still needs measurement.
-The remaining SQLite goal (performance, relevance, vectors, full app flows and final review) stays active.
+The preparation barrier now syncs all retained files/tree and the session's parent before the first live
+replacement. Sync failures at either boundary preserve the original error and incumbent, call no replacement,
+acceptance or rollback handler, and remove the unneeded staging session. Removing either sync fails its
+specific regression (one failure/five passes per control). Shared helpers own the same file/directory sync
+policy for preparation and restore. Windows still cannot sync directories through this Node API; no universal
+power-loss assertion follows from these Linux checks.
+
+`ears-import-recovery-durable/` passes 69 host cases, 3 CLI cases, builds/types/lint/imports and all three
+removal controls. `ears-import-recovery-runtime/` additionally passes API types and **73 host cases**, covering
+metadata permission refusal, retained reader ownership after failed backend close, unreadable/foreign reader
+claims, existing managed open/write-lock behavior and all five process-death cases. All three removal controls
+fail for their intended assertions. The Linux capability/permission preflight is retained. Its entire package
+source/test/API tree matches `runtime-source-comparison.json`; `runtime-observed-checks.json` explicitly records
+orchestrator-observed exits, separately from the harness's own logs.
+
+The final run executes the actual built `dist/package/dist/cli.js`: a real SIGKILL leaves a partial SQLite
+import, CLI inspection reports pending, CLI --restore settles both stores/media, and an independent fresh
+process verifies incumbent data and unblocked writable opens. This uses built-workspace output/dependencies,
+not a fully installed or signed distribution. Raw stdout/stderr and the structured result are retained.
+
+The prior published maintenance source `585dcafccf` completed all six strict jobs in run 40790543472; its
+exact CI record is retained and the approved helper advanced canonical to that source. This recovery descendant
+requires its own exact strict gate before canonical advances again.
+
+Broader integrated host/API/CLI validation, read-only mounts, raw/unmanaged ownership, filesystem/power-loss
+and supported packaged platforms remain required. Directory creation/parent hierarchy beyond the preparation,
+media writer coordination and large-copy time/memory/disk usage still need qualification. The remaining SQLite
+goal (performance, relevance, vectors, full app flows and final review) stays active.

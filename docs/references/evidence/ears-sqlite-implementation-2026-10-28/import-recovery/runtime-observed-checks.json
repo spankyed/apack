@@ -1,0 +1,65 @@
+{
+  "observer": "exec session 91982 completed with exit code 0; check() asserts every expected outcome; timings transcribed from that tool output",
+  "checks": {
+    "packages-build": [
+      0,
+      26.466667225999117
+    ],
+    "host-types": [
+      0,
+      8.943
+    ],
+    "api-types": [
+      0,
+      18.014
+    ],
+    "cli-types": [
+      0,
+      10.442
+    ],
+    "host-recovery": [
+      0,
+      30.68
+    ],
+    "cli-recovery": [
+      0,
+      3.596
+    ],
+    "lint": [
+      0,
+      2.475
+    ],
+    "specifiers": [
+      0,
+      5.349
+    ],
+    "negative-prepublication-check-removed": [
+      1,
+      5.05
+    ],
+    "negative-preparation-copy": [
+      1,
+      1.144
+    ],
+    "negative-preparation-parent": [
+      1,
+      1.222
+    ],
+    "compiled-recovery-interrupted-import": [
+      -9,
+      1.287
+    ],
+    "compiled-recovery-list": [
+      0,
+      0.451
+    ],
+    "compiled-recovery-restore": [
+      0,
+      0.66
+    ],
+    "compiled-recovery-independent-inspection": [
+      0,
+      0.872
+    ]
+  }
+}
