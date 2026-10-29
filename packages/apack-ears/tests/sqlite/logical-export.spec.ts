@@ -13,7 +13,7 @@ afterEach(() => { vi.restoreAllMocks(); for (const db of opened.splice(0)) db.cl
 function fixture() {
   const path = mkdtempSync(join(tmpdir(), 'ears-logical-source-')); paths.push(path);
   const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema({ types: {
-    Row: { required: [], shortCode: 'ROW', fields: { negative: { type: 'number' }, at: { type: 'any' }, bytes: { type: 'any' } },
+    Row: { required: [], shortCode: 'ROW', fields: { negative: { type: 'number', optional: true }, at: { type: 'any', optional: true }, bytes: { type: 'any', optional: true } },
       embed: { from: ['title'], model: 'fixture', dims: 3 } },
   }, relations: { edge: {} }, roles: [] }) }); opened.push(db);
   const e = createEarsEngine({ database: db });
