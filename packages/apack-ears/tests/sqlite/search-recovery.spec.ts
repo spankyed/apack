@@ -8,6 +8,7 @@ import { toElmdbSchema } from '../../src/schema.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { SqliteSearch } from '../../src/sqlite/search.ts';
 import { searchTable } from '../../src/sqlite/index-builds.ts';
+import { auditSqliteDatabase } from '../../src/sqlite/audit.ts';
 import { SqliteValues } from '../../src/sqlite/values.ts';
 
 const schema: EngineSchema = { types: {
@@ -71,6 +72,20 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(e.query('Row').near([1, 0, 0], { k: 1 }).ids()).toEqual(['Row-one']);
     expect(e.getAttr('Other-large', 'body')).toBe('unrelated '.repeat(10000));
     expect(e.lastCommit()).toBe(before);
+  });
+
+  it('audits private reconstructed contents without repairing the incumbent', async () => {
+    const { db, e, text } = seed(), before = e.lastCommit();
+    const clean = await auditSqliteDatabase(db);
+    expect(clean).toMatchObject({ ok: true, sequence: before, issues: [] });
+    expect(clean.comparedIndexes).toBeGreaterThanOrEqual(3);
+    db.run(`DELETE FROM ${text} WHERE rowid IN (SELECT rowid FROM ${text} WHERE ${text} MATCH ?)`, ['needle']);
+    const damaged = await auditSqliteDatabase(db);
+    expect(damaged.ok).toBe(false);
+    expect(damaged.issues.some(issue => issue.includes('derived text contents differ'))).toBe(true);
+    expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual([]);
+    expect(e.lastCommit()).toBe(before);
+    expect(e.getAttr('Row-one', 'title')).toBe('alpha needle');
   });
 
   it('refuses rebuild on read-only, open-unit and stopped owners without changing the catalog', () => {

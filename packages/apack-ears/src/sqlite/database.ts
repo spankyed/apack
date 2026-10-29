@@ -6,6 +6,7 @@ import { DATABASE_FORMAT } from './format.ts';
 import NativeDatabase from "better-sqlite3";
 import { LRUCache } from "lru-cache";
 interface StatementSync {
+  iterate(...parameters: any[]): IterableIterator<unknown>;
   all(...parameters: any[]): unknown[];
   get(...parameters: any[]): unknown;
   run(...parameters: any[]): {
