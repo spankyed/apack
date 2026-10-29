@@ -129,7 +129,11 @@ it.each(['foreign-parent', 'different-leaf', 'relative', 'leaf-symlink'] as cons
     const foreign = path.join(f.target.userDataDir, 'foreign'); fs.mkdirSync(foreign);
     record.stores[0].path = path.join(foreign, path.basename(f.paths.lmdb));
   } else if (kind === 'different-leaf') record.stores[0].path = path.join(path.dirname(f.paths.lmdb), 'other');
-  else if (kind === 'relative') record.stores[0].path = path.relative(process.cwd(), f.paths.lmdb);
+  else if (kind === 'relative') {
+    // path.relative(cwd, target) is absolute when Windows puts cwd and temp on different drives.
+    record.stores[0].path = path.basename(f.paths.lmdb);
+    expect(path.isAbsolute(record.stores[0].path)).toBe(false);
+  }
   else {
     const moved = f.paths.lmdb + '-moved'; fs.renameSync(f.paths.lmdb, moved); fs.symlinkSync(moved, f.paths.lmdb, process.platform === 'win32' ? 'junction' : 'dir');
   }

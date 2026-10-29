@@ -223,14 +223,23 @@ This does not establish the prior broad failure's cause. No UI product change or
 was made. Its output is retained in [editor evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bundled-editor/README.md).
 Published 6d52e97ca7 includes the vector evidence, file-backed console diagnostics and broad-fixture
 failure trace configuration. Its one exact [Strict chain 40853782865](https://github.com/spankyed/apack/actions/runs/40853782865)
-is confirmed live. Poll that handle without duplicate dispatches to validate the Windows correction and
-broad composition. Keep canonical/helper BASE at 60d until that exact gate succeeds.
+is confirmed live, with Windows EARS passed (523 cases/one platform skip) but host failed six fixture
+cases. That source cannot be promoted. Child imports used a raw drive path and a relative-destination
+fixture was absolute across different drives; corrected fixtures and explicit forced-termination reclaim
+cases pass 47 focused Linux cases plus host types/lint/import checks. See [Windows host evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-host/README.md).
+Next publish the correction and run focused App acceptance `host-windows`; continue polling the existing
+full gate's other jobs without a duplicate full dispatch. Canonical/helper BASE stays 60d.
 Master advanced independently to 3d2929177d with exactly two new documentation plans (application-performance
 and ears-query-efficiency); inspected, not merged or edited. Candidate runtime/native pins remain 98386b36a1/6ab2f69.
 
-Next vector checkpoint: execute the preregistered 10k actual-plan/scalar/vec0 counterfactual from
-[vector evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md)
-before selecting an indexing change. Full phases 3–7 remain required, including real embeddings and
+Vector actual-plan counterfactual **c95de2ed65** passes all 576 result checks, but packed exact KNN
+still costs 30–31 ms unfiltered at 10k and regresses selective paths; no vec0 integration is justified.
+[Dependency preflight](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-dependencies/README.md)
+finds Vectorlite's transaction limitation, libSQL JS function-registration incompatibility to verify on
+stable 0.5.29, and actual stale committed/rolled-back results from SQLite-Vector's quantized preload.
+No dependency is changed. Next perform a bounded native-engine compatibility probe before choosing a
+strategy; keep raw/scoped exactness, unit rollback, generation ownership and recovery requirements intact.
+See [vector evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md). Full phases 3–7 remain required, including real embeddings and
 representative app budgets; no scope is deferred by the focused success or synthetic smoke.
 
 The preceding published gate source **a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**

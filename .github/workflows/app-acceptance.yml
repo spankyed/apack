@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, cli, build, integration, packaged]
+        options: [all, app, external, bundled-ui, host-windows, cli, build, integration, packaged]
         default: all
       test:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: macos-26
+    runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45
     env:
@@ -52,6 +52,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build shipped pack
+        if: ${{ inputs.suite != 'host-windows' }}
         env:
           APACK_ACCEPTANCE_SUITE: ${{ inputs.suite }}
         run: |
@@ -63,10 +64,20 @@ jobs:
             npm run build:default-setup
           fi
       - name: Build app runtime
-        if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' }}
+        if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' && inputs.suite != 'host-windows' }}
         id: runtime
         # The renderer leg's heap ceiling is declared on the leg (RUNTIME_BUILD_LEGS).
         run: npm run build:runtime -- --cores 2
+      - name: Host contract dependencies
+        if: ${{ inputs.suite == 'host-windows' }}
+        run: npm run packages:build
+      - name: Focused Windows ownership and recovery
+        if: ${{ inputs.suite == 'host-windows' }}
+        env:
+          EARS_EVALUATION_BACKEND: sqlite
+        run: |
+          node -e "require('node:fs').mkdirSync('.apack/tests/results',{recursive:true})"
+          npm test -w @apackdev/host -- tests/database/write-lock.spec.ts tests/backup/recovery.spec.ts --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.apack/tests/results/host-windows.json
       - name: Runtime smoke
         if: ${{ inputs.suite == 'packaged' }}
         run: npm run test:smoke
