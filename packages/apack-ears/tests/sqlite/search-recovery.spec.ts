@@ -330,12 +330,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(e.query('Row').matching('second.*marker').ids()).toEqual(['Row-two']);
     expect(e.query('Row').search('needle').ids()).toEqual(['Row-one']);
     expect(e.query('Row').search('databse').ids()).toEqual([]);
-    if (name(text, tri) === 'chunks') {
-      expect(e.pendingEmbeddings('Row').count).toBe(2);
-    } else {
-      expect(e.pendingEmbeddings('Row').count).toBe(0);
-      expect(e.query('Row').near([1, 0, 0], { k: 1 }).ids()).toEqual(['Row-one']);
-    }
+    expect(e.pendingEmbeddings('Row').count).toBe(0);
+    expect(e.query('Row').near([1, 0, 0], { k: 1 }).ids()).toEqual(['Row-one']);
     repaired.close();
     const readonly = open(path, true); expect(readonly.e.query('Row').search('marker').ids()).toEqual(['Row-two']);
   });
