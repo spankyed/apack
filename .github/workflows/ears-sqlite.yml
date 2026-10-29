@@ -88,6 +88,19 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then producer="$producer.exe"; fi
           node scripts/with-source.mjs node --import tsx tests/scripts/test-sqlite-profile-conversion.ts \
             "$producer" .temp/sqlite-platform/profile-conversion.json 2>&1 | tee .temp/sqlite-platform/profile-conversion.log
+      - name: Build shipped pack and API for converted-profile lifecycle
+        if: runner.os == 'Linux'
+        run: |
+          npm run build:default-setup
+          npm run build -w @app/api
+      - name: Native baseline and converted API restart with real pack views
+        if: runner.os == 'Linux'
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: >-
+          python3 tests/scripts/test-sqlite-converted-api.py
+          --producer vendor/elmdb/target/release/elmdb
+          --output .temp/sqlite-platform/converted-api
       - name: Verify candidate cases actually ran
         run: node .github/scripts/ears-sqlite-platform.mjs verify
       - name: Retain SQLite platform evidence

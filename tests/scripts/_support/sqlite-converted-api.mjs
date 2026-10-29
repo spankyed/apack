@@ -75,7 +75,7 @@ if (mode === 'client') {
     let primary;
     try {
       assert.equal(app.database.format, format); const row = app.ears.getRow(id);
-      assert.equal(row.label, native ? 'updated in native baseline' : finalLabel); assert.deepEqual(row.markerBytes, new Uint8Array([0, 255, 42]));
+      assert.equal(row.label, native ? 'updated in native baseline' : finalLabel); assert(row.markerBytes instanceof Uint8Array); assert.deepEqual([...row.markerBytes], [0, 255, 42]);
       assert.deepEqual(row.markerAt, new Date(1234)); assert.equal(row.largeField, 'x'.repeat(256000));
       assert.equal(storedSettings(app.ears).app.personal.name, settingsName);
       assert(app.schema.packs.some(pack => pack.id === 'default-setup'));

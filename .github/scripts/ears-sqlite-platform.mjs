@@ -23,13 +23,14 @@ if (mode === 'verify') {
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
+  const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
   const result = { source, earsPassed: ears.numPassedTests, sqliteCasesPassed: passedIn(ears, /\/tests\/sqlite\//),
     selectedTextPassed: selected.filter(test => test.status === 'passed').length, selectedTextTotal: selected.length,
     maintenanceCasesPassed: passedIn(cli, /\/tests\/commands\/db-rebuild\.spec\.ts$/),
     logicalCommandCasesPassed: passedIn(cli, /\/tests\/commands\/db-logical\.spec\.ts$/),
     logicalCrashCasesPassed: passedIn(host, /\/tests\/backup\/logical-crash\.spec\.ts$/),
     builtLogicalChecks: builtCli.checks.length,
-    profileConversionChecks: profile.checks.length,
+    profileConversionChecks: profile.checks.length, convertedApi,
     nativeDumpCasesPassed: passedIn(ears, /\/tests\/sqlite\/elmdb-conversion\.spec\.ts$/),
     logicalSnapshotCasesPassed: passedIn(ears, /\/tests\/sqlite\/logical-snapshot\.spec\.ts$/),
     logicalHostCasesPassed: logical.filter(test => test.status === 'passed').length,
@@ -42,6 +43,13 @@ if (mode === 'verify') {
   assert.equal(result.logicalCrashCasesPassed, 2, 'Both parent-issued archive publication kill cases must execute');
   assert.equal(builtCli.source, source, 'Built CLI must match the candidate source');
   assert(!builtCli.failure && result.builtLogicalChecks === 5, 'All separate-process staged CLI checks must pass');
+  if (convertedApi) {
+    assert.equal(convertedApi.source, source, 'Actual converted API gate must match source');
+    assert.equal(convertedApi.nativeBaselineBoots, 1); assert.equal(convertedApi.sqliteBoots, 2);
+    assert.equal(convertedApi.livePackUpdates, 3);
+    for (const key of ['postRestartDataRetained', 'nativeSourceUnchanged', 'historyRetained', 'settingsRetained', 'mediaRetained'])
+      assert.equal(convertedApi[key], true, `Actual API lifecycle must verify ${key}`);
+  }
   assert.equal(profile.source, source, 'Profile conversion must run against exact candidate source');
   assert.equal(profile.enginePin, readFileSync('vendor/elmdb.rev', 'utf8').trim());
   assert(/^[a-f0-9]{64}$/.test(profile.producerSha256), 'Retain the actual native dump producer hash');
