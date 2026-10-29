@@ -277,7 +277,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       get records() { return bridge.session.records },
       uiTransport,
       async refreshMcpInput() {
-        if (closed || operatingMcpForm) return
+        if (closed || !bridge.ready || operatingMcpForm) return
         const epoch = mcpFormEpoch
         try {
           const result = await bridge.uiTransport.request({ subtype: 'apack_mcp_input' }) as { form?: unknown; url?: unknown }
@@ -307,7 +307,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         } finally { cancellingMcpForm = false }
       },
       async refreshNotice() {
-        if (closed || !bridge.ready) return
+        if (closed || !bridge.ready && !bridge.nativePid) return
         const sessionId = bridge.projection.sessionId
         const result = await bridge.uiTransport.request({ subtype: 'apack_native_notice' }) as { notice?: unknown; retirements?: unknown }
         if (closed || sessionId !== bridge.projection.sessionId) return

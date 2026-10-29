@@ -38,6 +38,7 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-x1j6664s.js",
       "exports": {
         "R8": "b9",
+        "Jre": "zre",
         "zDe": "FNe"
       }
     },
@@ -470,6 +471,7 @@ export const claudeNativeLinuxBindings: {
   },
   "functionNames": {
     "XCo": "u_o",
+    "$n": "$n",
     "Je": "Je",
     "dbe": "Sbe",
     "NCe": "p_e",
@@ -507,6 +509,9 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "2ae48b174e08569312fe73be8e3a53dc3ab8aada8bbac0ad2728830bad3fea86": "8041f42c4dd7f1e03f064e59b4e0c11d89588b2757fd0c30bac2b56068a140d9",
+    "56012d2b3e0dcaefc69e774334770496357f8eac063327fc734c1b927741fea9": "56012d2b3e0dcaefc69e774334770496357f8eac063327fc734c1b927741fea9",
+    "3df530c59832e0a9a0e98969b590cffd72fc98bed31c64a264673e75936a69ae": "afdacb8fa2292465d5888e83e9c4c36e7e7eccbbcead93cc516a9ec8c0e107df",
     "b6c0babc158b7585de81413d552cb23f2c0cb99b0d32177dc6f0d22bbd851bcf": "8b805094d8332b0ee0c868d56972aee13ab0af93d2abebda0de97b06b2c324cb",
     "88e14cdf10a3baf23d955bcabd01d36dafc7aa9a6f6c5fd305a3c72643df90c7": "7953baa9972b5773877630db38bbef38b400586c4fc98791246a45a44819b4c1",
     "2c54d2af4782ef795f859c90e6d55bba81fcc01b5f38c412b10a8b4e08f78b68": "2f5ee6cd2a4d10d64a3a890b1c5c63820e8df6765c30969eb0735d7ca9c2ea3e",
