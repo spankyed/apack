@@ -327,8 +327,12 @@ Text receipts and original failed runs remain in scheduler evidence. Later bench
 commits are not retroactively qualified by this exact run. Final exact-tip gates remain.
 Normal native distribution/fork selection and all frozen fresh/app/resource/full Strict gates
 remain required. The active integrated vector path still fails broad responsiveness.
-Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
-the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
+Concurrent master advanced to `8b1a479b96` (PR #287), with application query-efficiency
+changes, an SDK testing export and native pin `4d558a2754`. Our measured source still uses
+the `98386b36a1` runtime baseline and `6ab2f69` native pin. Deliberately integrate that
+committed master snapshot and matching native artifact in isolation, then validate affected
+app/SDK/native contracts before claiming current-baseline comparison or final acceptance.
+Publishing this checkpoint does not integrate or qualify that concurrent work.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
 model/generation/hash freshness, own-unit/savepoint reads, watches, audit/rebuild/restore, representative real
 recall/update/resource/latency and heartbeat budgets. Preserve canonical Float32 bytes and original failures.

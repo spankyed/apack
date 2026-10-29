@@ -90,3 +90,10 @@ checkpointing is a hypothesis to test, not a proven exclusive cause. Do not sile
 switch primary writes to NORMAL/OFF or claim a data-integrity tradeoff as acceptance.
 Optimize actual scope/count/rerank plans and qualify the native membership implementation
 and distribution decision. All original failed measurements and frozen budgets remain.
+
+During publication the master guard detected concurrent PR #287 at `8b1a479b96`,
+including app query-efficiency changes, SDK testing export and native pin `4d558a2754`.
+These measurements remain pinned to their original `98386b36a1` runtime /`6ab2f69`
+native baseline. They do not qualify the new app snapshot. Deliberate isolated integration,
+matching native build and affected validation/comparison remain required. The publisher
+only advances this session branch; master and the canonical full-green checkout are untouched.
