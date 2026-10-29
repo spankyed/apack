@@ -72,3 +72,19 @@ quantizer with an ordinary derived table. SQLite applies indexed eligibility, or
 by native Hamming distance with an ordinal tie breaker, retains the candidate prefix,
 then performs the same native cosine rerank. This isolates whether vec0's additional
 virtual-table lifecycle is necessary. Keep every existing budget and input unchanged.
+
+## Application-cache and filesystem control
+
+The earlier primitive harness used SQLite's default 2,000 KiB page cache and kept
+temporary databases under the mounted result directory. EARS currently sets
+`cache_size=-65536` in `src/sqlite/database.ts`. Large random canonical reranks can
+therefore behave differently from that primitive configuration. Do not promote those
+primitive timings to app estimates or silently replace their recorded samples.
+
+Before selecting the layout, compare both vec0 and ordinary SQL, both candidate limits,
+at 99,900 rows with `EARS_VECTOR_CACHE_KIB=65536` and
+`EARS_VECTOR_SCRATCH=/metrics/databases` (a private ordinary container filesystem).
+Keep all phases, eligibility, queries, passes, limits and acceptance budgets unchanged.
+Record actual cache size and database location; retain earlier results separately.
+This is a controlled production-configuration follow-on, not proof of cold storage,
+physical durability, main-app performance or arbitrary filesystem behavior.

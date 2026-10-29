@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
 import { getLoadablePath } from 'sqlite-vec';
 import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
@@ -33,10 +33,16 @@ const report = {protocol:'ears-real-vector-vec1/1',qualification:false,source:pr
   size,mode,backend:isBinary?'sqlite-vec':'vec1',truthSha256:sha(truthBytes),extensionSha256:sha(readFileSync(extension)),
   node:process.version,platform:process.platform,arch:process.arch,cohorts:[]};
 const save = () => writeFileSync(output,JSON.stringify(report,null,2)+'\n');
-const file = output + '.sqlite3';
+const file = process.env.EARS_VECTOR_SCRATCH ? join(process.env.EARS_VECTOR_SCRATCH,basename(output)+'.sqlite3') : output+'.sqlite3';
+assert(!existsSync(file));
+const cacheKiB = Number(process.env.EARS_VECTOR_CACHE_KIB ?? 2000);
+assert([2000,65536].includes(cacheKiB));
 let db;
 try {
   db = new Database(file); db.loadExtension(extension);
+  db.pragma(`cache_size=-${cacheKiB}`);
+  report.cacheKiB = -db.pragma('cache_size',{simple:true});
+  report.databaseLocation = process.env.EARS_VECTOR_SCRATCH?'private container filesystem':'mounted results directory';
   db.pragma('journal_mode=WAL'); db.pragma('synchronous=FULL');
   report.sqlite = db.prepare('SELECT sqlite_version() v').get().v;
   report.version = db.prepare(isBinary?'SELECT vec_version() v':'SELECT vec1_info() v').get().v;
