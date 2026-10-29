@@ -187,18 +187,20 @@ platform claims must identify their actual tested scope.
 ## Current handoff
 
 The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for
-`session/ears-sqlite`. The latest exact published green checkpoint is
-**585dcafccf5da62ea50f2e5d37294d9de8a11b9f**:
-[strict run 40790543472](https://github.com/spankyed/apack/actions/runs/40790543472) completed SUCCESS, all six jobs.
+`session/ears-sqlite`. Latest exact published green is **60d4283f682f3e44e12088352e04e39532ffc3d7**:
+[strict run 40819583704](https://github.com/spankyed/apack/actions/runs/40819583704) completed SUCCESS, all six jobs.
 The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation` from
-1a0f664d01 to 585dcafccf; its BASE is now 585dcafccf. App master/native remain pinned to 98386b36a1 / 6ab2f69.
-No master merge, adoption, local compiler or native build occurred.
+585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. Integration and remote also remain at that source;
+master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, clean at local runtime checkpoint **0f57770e1f**
-before the following evidence update. Native recency passes **491 SQLite / 289 native**, and its complete
-four-process cost evidence is retained below; these newer local changes are not yet published; the exact CI source remains 60d4283f68. Run 40819583704
-now has producers SUCCESS and all five consumers live. No owned Linux container remains. Next inspect the changed
-native recency execution plan specified below; do not restart that CI or promote a different source.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Latest local runtime **f426f938f8**
+adds indexed timestamp selection after finite native recency and sequence ranking. It passes **492 SQLite /
+289 native**, 76 focused cases, five builds, EARS/host types, 34 recovery cases, lint/imports/API reports and
+native hydration/selected-plan controls. Newer local work is not yet published. Its preregistered
+materialized/indexed/indexed/materialized cost cohort is running; poll exec session 41697 / owned container
+`ears-selection-cost` rather than restarting it. Preserve its first result, then record/publish one converged
+checkpoint and dispatch one new exact gate. Further canonical advancement requires that new exact source
+and successful gate. Next prioritize bounded fuzzy work as specified below; full goal acceptance remains open.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
 `db recover`, resumable offline incumbent restoration, forensic retention and managed-reader exclusion.
@@ -224,13 +226,10 @@ completed FAILURE in producers: benchmark Vitest lacked the required source cond
 Both benchmark/root EARS configs now declare it and pass the actual Linux import guard. Preserve that failure;
 the failed run remains retained. The local helper
 already exists with BASE 585dcafccf and exact-success guards; the user's renewed approval does not bypass them.
-Latest published candidate is **60d4283f682f3e44e12088352e04e39532ffc3d7**, on the existing
-`session/ears-sqlite` branch and clean detached integration checkout. It includes ranked prefixes, retained
-costs and the physical-profile recovery correction. Its single exact strict gate is
-[40819583704](https://github.com/spankyed/apack/actions/runs/40819583704), confirmed in progress; poll that handle
-rather than dispatching duplicates. Prior 7cba75f431 / 40814018368 is terminal FAILURE (five jobs pass; app/rest
-exposes the corrected alias bug). Do not promote canonical before exact success. Local continuation/handoff
-beyond the published tip is distinct from CI source; no master merge, release or adoption occurred.
+Published 60d4283f68 / 40819583704 is green and promoted as above. Predecessor 7cba75f431 /
+40814018368 remains terminal FAILURE: five jobs pass, app/rest exposes the recovery alias bug corrected in
+964f1e1fd2. Earlier failures are retained too. Newer local recency work and cost evidence are distinct from
+that CI source; require its own exact gate before further canonical promotion.
 
 Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's representative search corpus before
 tuning. Phase 4 now preregisters `tests/fixtures/search-relevance.json`: 28 repository-domain documents and
@@ -272,7 +271,7 @@ limited reads remain ~28 ms versus legacy ~15 ms, unaccepted. See
 [owner cost and exact functional proof](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-cost/README.md).
 The earlier owner-postings checkpoint was published at 7cba75f431; its failed gate is retained above.
 The current publication includes the following prefix/recovery corrections. No performance acceptance or
-adoption is claimed. Keep canonical on 585dcafccf until the current exact gate succeeds.
+adoption is claimed. Canonical is at green 60d4283f68; newer changes require a new exact gate before advancement.
 Local ranked-prefix/late-highlight-fetch checkpoint passes **483 SQLite / 289 native** EARS cases, five
 builds, types/API reports, lint/imports and five removal controls. See [prefix evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-prefixes/README.md).
 The preregistered six-process cost cohort completed on pinned prefix source 76b1aa2765: broad p50 ~18.5 ms
@@ -284,7 +283,7 @@ lint/imports and twelve baseline-failing alias controls; real SIGKILL also cover
 resume through another spelling for both backends. Foreign/leaf-link refusals and reader exclusion remain.
 See [recovery alias evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-aliases/README.md).
 Recovery correction is committed at 964f1e1fd2 and published in 60d4283f68 with exact gate 40819583704.
-Do not promote before exact success. Next diagnose actual native ranking/recency
+That exact gate succeeded and canonical advanced to 60d4283f68. Newer native ranking/recency
 plans and remaining costs, preserving every failed cohort and the entire phase 3–7 scope. The next pinned
 `text-plan.mjs` diagnostic is preregistered in the benchmark README: actual SQL/plans, binding/JS split, ten
 samples per path, one 10k profile, no retry. It completed: broad execution is almost entirely native SQL
