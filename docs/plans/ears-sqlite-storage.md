@@ -361,3 +361,47 @@ It can hold the writer and block its calling thread for the full scan. Qualifica
 peak memory, WAL/disk growth and interruption behavior on representative profiles before claiming acceptable
 maintenance limits. The CLI holds managed profile exclusion; same-handle ownership does not exclude unmanaged
 writers or certify arbitrary filesystems. Validation is pending; no performance target is waived.
+
+## Lossless logical snapshot export and staged import
+
+The existing CLI JSON/CSV export is a display format: it converts dates/bigints and reads individual queries.
+Keep that behavior explicit. The recovery archive must instead preserve one snapshot's logical primary data,
+without storing physical slot/table identifiers or derived FTS/value postings as authority.
+
+Use the existing pinned MessagePack codec for a versioned record stream with a fixed magic, length-prefixed
+frames, header, and terminal record count/checksum over the preceding framed bytes. Typed value cells retain
+their kind: scalar negative zero stays distinguished by its `zero` kind, dates retain milliseconds, and bytes/
+composites retain their original binary payload. Do not decode/re-encode opaque composite payloads through
+JSON or accidentally normalize the persisted data. Logical field names replace physical slot numbers.
+
+The records cover schema/application metadata and counters, ordered entity identities (live and trashed),
+every logical field, relations with their identity/order/info, and stored embeddings with complete
+entity/index/chunk/content-hash/model/dimension identity and Float32 bytes. Preserve reusable embeddings
+independently of derived generation numbers. The current coupling between embeddings and generation-owned
+chunks needs an explicit restore path; the currently unsupported unchecked embedding load must not silently
+lose vectors during conversion. Media, packs and secrets remain separately owned by the host backup format.
+
+Snapshot the source to a private directory first. Stream from that immutable copy in small entity batches,
+using bounded native slot pages and an overflow cursor so output backpressure never pins a live app reader.
+Memory may still scale with the largest individual field/frame unless explicit chunking is implemented;
+never describe a row/field-limited implementation as a fixed 8 MiB bound. The codec should consume each
+incoming byte linearly, avoid repeated whole-buffer concatenation, enforce explicit frame/record limits,
+and close the input iterator and scratch owners on error/cancellation. Checksum is completeness/integrity,
+not authentication against a malicious producer.
+
+The host owns destination path/permissions, temporary output, sync, exclusive publication and cleanup. A
+partial or failed export never replaces an existing artifact or appears complete. Import consumes the entire
+stream into an isolated staging database, validates header/schema/records/footer/count/hash and rejects
+truncation, trailing bytes and conflicting identities before any incumbent publication. Rebuild and audit
+that staging database before coordinated replacement. Never commit successive decoded batches directly to
+a live destination while its footer is unverified. Import into a new staging store can retain snapshot
+ordering/counters; replacement of an existing app store must preserve the destination's monotonic commit
+and stale-handle rules. Reuse the existing host replacement/recovery coordinator for incumbent protection.
+
+Closing checks must include codec fragmentation and early iterator cleanup, invalid length/checksum/footer/
+trailing data, prototype-looking field names, absent/null/zero/date/bytes/composites, raw embedding identity,
+undeclared and case-distinct fields/types, live/trash/relations/counters, mid-output IO refusal and destination
+collision, interrupted staging and populated replacement, all selected stores, and actual copied-profile
+conversion/reopen. Measure large-field peak memory and output/staging disk, and retain source/native pins.
+This contract specifies the remaining implementation; it does not declare export/import complete or replace
+the full app/operational/adoption gates in the goal.
