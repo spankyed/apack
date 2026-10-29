@@ -7,6 +7,7 @@ Outputs row ordinals and scores, never source IDs, text or embedding payloads.
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -27,6 +28,7 @@ def sha256(path):
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--corpus', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--partition', choices=('original', 'fresh'), default='original')
 args = parser.parse_args()
 assert platform.system() == 'Linux' and Path('/.dockerenv').exists()
 assert np.__version__ == '2.5.4'
@@ -44,16 +46,32 @@ for name in ('corpus.f32', 'queries.f32'):
     assert path.stat().st_size == manifest['files'][name]['bytes']
     assert sha256(path) == manifest['files'][name]['sha256']
 corpus = np.memmap(args.corpus / 'corpus.f32', dtype='<f4', mode='r', shape=(99900, 1536))
-queries = np.memmap(args.corpus / 'queries.f32', dtype='<f4', mode='r', shape=(100, 1536)).astype(np.float64)
+selected = np.array([499 + 999 * j for j in range(100)], dtype=np.int64)
+excluded = np.zeros(99900, dtype=bool)
+if args.partition == 'fresh':
+    excluded[selected] = True
+    ordinals = np.arange(99900)
+    excluded |= (ordinals % 100 == 7) & np.isin((ordinals + 31337) % 99900, selected)
+    query_bytes = np.ascontiguousarray(corpus[selected], dtype='<f4').tobytes()
+    queries = corpus[selected].astype(np.float64)
+else:
+    query_bytes = (args.corpus / 'queries.f32').read_bytes()
+    queries = np.frombuffer(query_bytes, dtype='<f4').reshape(100, 1536).astype(np.float64)
+canonical_queries = queries.copy()
 assert np.isfinite(queries).all()
 query_norms = np.linalg.norm(queries, axis=1)
 assert (query_norms > 0).all()
 queries /= query_norms[:, None]
-report = {'protocol': 'ears-real-vector-truth/1', 'qualification': False,
+report = {'protocol': 'ears-real-vector-fresh-truth/1' if args.partition == 'fresh' else 'ears-real-vector-truth/1', 'qualification': False,
+          'partition': args.partition, 'queriesSha256': hashlib.sha256(query_bytes).hexdigest(),
+          'queryOrdinals': selected.tolist() if args.partition == 'fresh' else None,
+          'excludedOrdinals': np.flatnonzero(excluded).tolist(),
+          'exclusionsSha256': hashlib.sha256(np.flatnonzero(excluded).astype('<u4').tobytes()).hexdigest(),
+          'scalarChecks': [],
           'recipeSha256': sha256(Path(__file__)), 'numpy': np.__version__, 'limits': limits,
           'manifestSha256': sha256(args.corpus / 'manifest.json'),
           'metric': 'Float64 cosine over canonical Float32; descending score then ascending zero-based corpus ordinal',
-          'eligibility': 'ordinal % 100 < scopePercent; trash when ordinal % 97 == 0',
+          'eligibility': 'ordinal % 100 < scopePercent; trash when ordinal % 97 == 0; exclude frozen partition ordinals',
           'update': 'replace rows with ordinal % 100 == 7 by original corpus[(ordinal+31337)%99900]',
           'k': 10, 'cohorts': []}
 start = time.monotonic()
@@ -72,13 +90,25 @@ for size in (1000, 10000, 99900):
             scores[offset:offset + len(batch)] = (batch / norms[:, None]) @ queries.T
         ordinals = np.arange(size)
         for percent in (100, 10, 1):
-            eligible = ordinals[(ordinals % 100 < percent) & (ordinals % 97 != 0)]
+            eligible = ordinals[(ordinals % 100 < percent) & (ordinals % 97 != 0) & ~excluded[:size]]
             answers = []
             for q in range(100):
                 ordered = eligible[np.lexsort((eligible, -scores[eligible, q]))][:10]
                 assert len(ordered) == min(10, len(eligible))
                 answers.append({'query': q, 'ordinals': ordered.tolist(),
                                 'cosines': scores[ordered, q].tolist()})
+            # Independent scalar fsum over canonical Float32 inputs checks matrix accumulation.
+            for q in (0, 37, 99):
+                ordinal = answers[q]['ordinals'][0]
+                source = (ordinal + 31337) % 99900 if phase == 'updated' and ordinal % 100 == 7 else ordinal
+                left = [float(value) for value in corpus[source]]
+                right = [float(value) for value in canonical_queries[q]]
+                scalar = math.fsum(a*b for a, b in zip(left, right)) / math.sqrt(
+                    math.fsum(a*a for a in left) * math.fsum(b*b for b in right))
+                matrix = float(scores[ordinal, q])
+                assert abs(scalar - matrix) < 1e-12
+                report['scalarChecks'].append({'size': size, 'phase': phase, 'scopePercent': percent,
+                    'query': q, 'ordinal': ordinal, 'scalarCosine': scalar, 'matrixCosine': matrix})
             report['cohorts'].append({'size': size, 'phase': phase, 'scopePercent': percent,
                                       'eligible': len(eligible), 'answers': answers})
         print(json.dumps({'size': size, 'phase': phase, 'elapsedSeconds': time.monotonic() - start}), flush=True)

@@ -86,9 +86,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $linker = (Get-Command link.exe -CommandType Application).Source
+          $linker = (Get-Command link.exe -CommandType Application -All | Select-Object -First 1).Source
           Write-Host "Rust linker: $linker"
           if ($linker -match '[\\/]Git[\\/]usr[\\/]bin[\\/]') { throw "Git's link.exe must not shadow the MSVC linker" }
+          if ($linker -notmatch '[\\/]MSVC[\\/]') { throw "Expected the configured MSVC linker" }
+          "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$linker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Build matching native dump producer (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

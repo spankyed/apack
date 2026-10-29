@@ -82,7 +82,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const repeated=e.create('Row',{title:Array.from({length:300},(_,i)=>`paragraph ${i}`).join('\n\n')}).id();
     const tied=e.create('Row',{title:'tie'}).id();
     const pending=e.pendingEmbeddings('Row',{limit:1000});expect(pending.chunks).toHaveLength(301);
-    e.embed(pending.chunks.map(chunk=>({...chunk,model:pending.model,vector})));
+    e.embed(pending.chunks.map(chunk=>({...chunk,model:pending.model,vector:
+      chunk.id===repeated&&chunk.chunk===0?vector.map(value=>-value):vector})));
     const actual=models.index.candidates.bind(models.index);
     const native=vi.spyOn(models.index,'candidates');
     const hits=e.query('Row').near(vector,{k:3}).hits();
