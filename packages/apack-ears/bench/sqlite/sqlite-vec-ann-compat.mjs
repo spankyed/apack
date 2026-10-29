@@ -48,14 +48,20 @@ try {
   // Request all candidates on this tiny graph, so rollback/snapshot evidence is separate from ANN recall.
   const nearest=handle=>handle.prepare(`SELECT rowid,vec_distance_cosine(v,?) exact FROM corpus
     WHERE v MATCH ? AND k=1024 ORDER BY distance`).all(q,q).sort((a,b)=>a.exact-b.exact||a.rowid-b.rowid)[0]?.rowid;
-  assert.equal(nearest(db),10001);
-  assert(db.prepare('SELECT v FROM corpus WHERE rowid=10001').get().v.equals(q));
-  report.passed.push('real graph exists; canonical negative-zero bytes retained');save();
+  const initial=db.prepare(`SELECT rowid,vec_distance_cosine(v,?) exact FROM corpus
+    WHERE v MATCH ? AND k=1024 ORDER BY distance`).all(q,q);
+  const direct=db.prepare('SELECT v,vec_distance_cosine(v,?) exact FROM corpus WHERE rowid=10001').get(q);
+  report.initialGraphSearch={requestedK:1024,graphNodes:report.graphNodes,returned:initial.length,
+    selfReturned:initial.some(row=>row.rowid===10001),best:initial.sort((a,b)=>a.exact-b.exact||a.rowid-b.rowid).slice(0,5),
+    directSelf:{exists:!!direct,canonicalBytesMatch:direct?.v.equals(q),exactDistance:direct?.exact}};
   try {
     const rows=db.prepare('SELECT rowid FROM corpus WHERE v MATCH ? AND k=1 AND rowid IN (SELECT value FROM json_each(?)) ORDER BY distance').all(q,JSON.stringify([10003]));
     report.rowidFilter={supported:rows.length===1&&rows[0].rowid===10003,returned:rows.map(row=>row.rowid)};
   } catch(error) {report.rowidFilter={supported:false,error:{code:error.code,message:error.message}};}
   save();
+  assert.equal(nearest(db),10001);
+  assert(direct.v.equals(q));
+  report.passed.push('real graph exists; canonical negative-zero bytes retained');save();
   const replace=(id,v)=>{remove.run(BigInt(id));insert.run(BigInt(id),v);};
   reader=open(file,true);assert.equal(nearest(reader),10001);
   db.exec('BEGIN IMMEDIATE');replace(10001,opposite);assert.equal(nearest(db),10002);assert.equal(nearest(reader),10001);
