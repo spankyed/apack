@@ -100,7 +100,10 @@ try {
     SELECT rowid FROM corpus WHERE embedding MATCH vec_quantize_binary(?) AND k=? AND scope < ? AND active=1
     ) SELECT raw.rowid,vec_distance_cosine(raw.v,?) distance FROM found JOIN raw ON raw.rowid=found.rowid`:
     `SELECT rowid,vec1_cos_distance(v,?) distance FROM corpus(?,?) WHERE scope < ? AND active=1`);
-  const options = JSON.stringify({K:candidates,nprobe:16});
+  const nprobe = Number(process.env.EARS_VEC1_NPROBE ?? 16);
+  assert([16,32,64].includes(nprobe));
+  report.queryOptions = {K:candidates,nprobe};
+  const options = JSON.stringify(report.queryOptions);
   for (const phase of ['initial','updated']) {
     if(phase==='updated') {
       started = performance.now();
