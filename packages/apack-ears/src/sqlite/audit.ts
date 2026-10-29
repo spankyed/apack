@@ -66,6 +66,38 @@ function primaryData(db: SqliteDatabase, report: SqliteAuditReport, issue: (mess
   }
 }
 
+function metadataAndEmbeddings(db: SqliteDatabase, issue: (message: string) => void): void {
+  const maximum = Number(db.get(`SELECT max(n) n FROM (SELECT coalesce(max(seq),0) n FROM entities
+    UNION ALL SELECT coalesce(max(seq),0) n FROM relations)`)!.n);
+  let next: unknown;
+  for (const row of db.statement('SELECT key,value FROM meta ORDER BY key').iterate()) {
+    const entry = row as { key: string; value: Uint8Array };
+    let value: unknown;
+    try { value = db.unpack(entry.value); } catch { issue(`${entry.key}: metadata cannot be decoded`); continue; }
+    if (entry.key === 'seq') next = value;
+    if (['seq', 'commit', 'schemaRevision'].includes(entry.key) &&
+        (typeof value !== 'number' || !Number.isSafeInteger(value) || value < (entry.key === 'seq' ? 1 : 0)))
+      issue(`${entry.key}: invalid metadata counter`);
+  }
+  if (maximum > 0 && (typeof next !== 'number' || next <= maximum)) issue('seq: next identity does not exceed stored primary sequences');
+  for (const value of db.statement(`SELECT c.entity_id,c.chunk,c.dims,c.embedding FROM chunks c
+    JOIN index_builds j ON j.generation=c.generation WHERE c.embedding IS NOT NULL ORDER BY c.entity_id,c.chunk`).iterate()) {
+    const row = value as { entity_id: string; chunk: number; dims: number; embedding: Uint8Array };
+    const bytes = row.embedding;
+    let valid = Number.isSafeInteger(row.dims) && row.dims > 0 && bytes instanceof Uint8Array && bytes.byteLength === row.dims * 4;
+    let nonzero = false;
+    if (valid) {
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      for (let offset = 0; offset < view.byteLength; offset += 4) {
+        const component = view.getFloat32(offset, true);
+        if (!Number.isFinite(component)) { valid = false; break; }
+        if (component !== 0) nonzero = true;
+      }
+    }
+    if (!valid || !nonzero) issue(`${row.entity_id} chunk ${row.chunk}: invalid Float32 cosine embedding`);
+  }
+}
+
 function contents(job: SqliteIndexJob): [string, unknown[]] {
   if (job.kind === 'value') return [
     'SELECT entity_id,type,field,value,seq FROM field_index WHERE generation=? ORDER BY entity_id,field,value', [job.generation],
@@ -95,6 +127,7 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
         const message = String(Object.values(row)[0]); if (message !== 'ok') issue(message);
       }
       primaryData(incumbent, report, issue);
+      metadataAndEmbeddings(incumbent, issue);
       const jobs = incumbent.indexBuilds.jobs();
       for (const job of jobs) if (job.state !== 'ready') issue(`${job.type}.${job.name}: ${job.state}`);
       if (report.issueCount) return report;

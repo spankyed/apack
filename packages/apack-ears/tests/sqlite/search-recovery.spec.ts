@@ -126,6 +126,23 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(db.get("SELECT count(*) n FROM value_overflow WHERE value='orphan'")!.n).toBe(150);
   });
 
+  it('reports malformed stored embeddings instead of accepting identical corrupted copies', async () => {
+    const { db, e } = seed(), before = e.lastCommit();
+    expect(db.run("UPDATE chunks SET embedding=? WHERE entity_id=?", [Buffer.alloc(4), 'Row-one']).changes).toBe(1);
+    const report = await auditSqliteDatabase(db);
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContain('Row-one chunk 0: invalid Float32 cosine embedding');
+    expect(e.lastCommit()).toBe(before);
+  });
+
+  it('reports an identity counter that could reuse existing primary sequences', async () => {
+    const { db } = seed();
+    db.run("UPDATE meta SET value=? WHERE key='seq'", [db.pack(1)]);
+    const report = await auditSqliteDatabase(db);
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContain('seq: next identity does not exceed stored primary sequences');
+  });
+
   it('refuses rebuild on read-only, open-unit and stopped owners without changing the catalog', () => {
     const { db, e } = seed();
     const jobs = db.indexBuilds.jobs(), before = e.lastCommit();
