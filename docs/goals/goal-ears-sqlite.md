@@ -191,8 +191,7 @@ The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the 
 **585dcafccf5da62ea50f2e5d37294d9de8a11b9f**:
 [strict run 40790543472](https://github.com/spankyed/apack/actions/runs/40790543472) completed SUCCESS, all six jobs.
 The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation` from
-1a0f664d01 to 585dcafccf; its BASE is now 585dcafccf. Integration `integration-FyE9XZ` and the remote draft
-still point to that green tip until the next publication. App master/native remain pinned to 98386b36a1 / 6ab2f69.
+1a0f664d01 to 585dcafccf; its BASE is now 585dcafccf. App master/native remain pinned to 98386b36a1 / 6ab2f69.
 No master merge, adoption, local compiler or native build occurred.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Committed **bccf1ee752** implements explicit
@@ -207,10 +206,16 @@ and the preparation's parent are synced before the first live replacement; injec
 live data. See [import recovery evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/import-recovery/README.md)
 for exact archives, source comparison, prior failures and qualified limits. No owned Linux container remains live.
 
-The next publication is this recovery descendant to the existing draft only, followed by one exact strict run;
-do not advance canonical on the parent's success. Then continue phase 5/6 app/media ownership, raw/unmanaged
-readers, directory-creation hierarchy, read-only mounts, filesystem/power-loss/platform and large-copy resource
-qualification, plus all existing phases 3–7 criteria below. Never delete a pending preparation to bypass startup.
+Published recovery tip is now **d9e23b00b7df22124e59625ea8c5de266860c583** on the existing draft branch and
+clean detached `integration-FyE9XZ`. Its single exact
+[strict run 40796822583](https://github.com/spankyed/apack/actions/runs/40796822583) is confirmed live
+(producer job 123195199088); poll that handle, do not dispatch duplicates or advance canonical on its parent's
+success. Local continuation contains documentation beyond the published tip; keep that distinct from CI source.
+
+Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's representative search corpus before
+tuning. Preserve every existing phase 3–7 criterion. Phase 5/6 app/media ownership, raw/unmanaged readers,
+directory-creation hierarchy, read-only mounts, filesystem/power-loss/platform and large-copy resource
+qualification remain required before adoption. Never delete a pending preparation to bypass startup.
 The earlier 431 SQLite / 256 native suite and real WAL-sync evidence remains in
 [commit/maintenance evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-maintenance/README.md).
 
