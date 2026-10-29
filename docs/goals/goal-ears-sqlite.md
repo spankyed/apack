@@ -267,8 +267,10 @@ data commit. Disposable Linux passes build/types, all 23 search-recovery cases a
 after deleting a real FTS posting and stale-handle refusal. Guard checkpoint 97631ce9ff passes all 25 recovery cases, types/build/lint, including stopped-owner refusal and admission rollback.
 Host/CLI wiring at 1529c7537a adds an app-only exclusive-write wrapper and offline db rebuild --force
 with dry-run default. Disposable Linux passes five builds, EARS/host/CLI types, 15 host storage cases, API generation, lint/imports.
-Report 24180090dc and command tests c7c2c83ed8 now have one active validation container ears-rebuild-command
-(exec 80108); poll this handle for command/API verification. Audit and lossless logical export remain required. See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
+Exact 24180090dc also passes the three real CLI profile cases, API verification, five builds, EARS/host/CLI
+types, 15 host cases and lint/imports. Dry run leaves generations intact; forced rebuild waits for readiness
+and invalidates the old reader; managed-writer exclusion is tested. Run-history maintenance and full
+suite/platform qualification of this newer source remain open. Audit and lossless logical export remain required. See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
 Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
 continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
 Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.
