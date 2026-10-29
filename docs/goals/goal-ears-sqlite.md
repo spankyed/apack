@@ -325,11 +325,21 @@ Raw-cell restoration 64eca270d4 with fixture corrections at bcf1fee8d2 passes al
 codec/export/stage/value cases, build/types and lint in disposable Linux. Original fixture failures
 are retained. Raw payloads are restored by logical name without normalizing composite bytes or
 enforcing current row rules.
-This is a sealed ingestion spool, not a restored/audited app store. Public export,
-embedding restore, staging and host publication remain required per docs/plans/ears-sqlite-storage.md.
+Internal restoration at 2f7c4cb23b passes all 91 affected archive/value/vector/recovery/plain-Node cases,
+build/types/lint. It constructs a separate store, preserves raw composite payloads and dormant embeddings,
+reopens/builds/audits before success, and cleans owned staging on semantic/IO refusal. Primary embedding
+storage is independent of derived generations, with explicit legacy-candidate refusal. Unchecked vector
+loads and a fixed paired layout diagnostic are committed at da8c356d66; its full SQLite suite passes
+588 cases with build/types/lint. Its single registered layout process completed all answer controls, but omitted original inline secondary
+indexes; the observed broad-query difference cannot be attributed to the join. Retain this incomplete
+baseline and run the separately fixed corrected-index/covering-index diagnostic before adoption. A subsequent replacement
+review found decode/re-encode could normalize composite bytes; raw transactional replacement and its
+populated-incumbent test are being prepared and still need their own exact-source check.
+Public archive/host publication, interruption, copied-profile conversion and resource/platform qualification
+remain required per docs/plans/ears-sqlite-storage.md. Canonical/publication refs above remain unchanged.
 See [archive evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/logical-archive/README.md). See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
-qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public
-and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
+qualification; this synchronous offline scan is not the dynamic schema-admission path. Audit/rebuild are public through the already published maintenance surface; complete primary/value
+invariants, fault/resource checks and final host/CLI/platform convergence remain required.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
 Complete audit and lossless logical export remain required.
  See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).

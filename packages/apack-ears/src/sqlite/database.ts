@@ -36,6 +36,7 @@ import { SqliteIndexBuilds, type SqliteIndexSpec } from "./index-builds.ts";
 import { SqliteEmbeddings, encodeEmbeddingVector } from './embeddings.ts';
 import { SqliteSearch } from "./search.ts";
 import { SqliteValues, type SqliteValueLayout } from "./values.ts";
+import { logicalValues } from './logical-records.ts';
 import { createSchemaValidator } from "./schema-validation.ts";
 
 type Data = Record<string, any>;
@@ -1395,11 +1396,28 @@ export class SqliteDatabase implements EarsDatabase {
         this.sql.exec("DELETE FROM meta WHERE key NOT IN ('schema','commit','schemaRevision')");
         for (const entry of incoming.all("SELECT key,value FROM meta WHERE key NOT IN ('schema','commit','schemaRevision')"))
           this.run('INSERT INTO meta VALUES (?,?)', [entry.key,entry.value]);
-        incoming.eachRow((row, seq) => {
-          this.run('INSERT INTO entities VALUES (?,?,?,?,?)', [row.id,row.entityType,seq,has(row,'trashedAt') ? 1 : 0,row.shortCode ?? null]);
-          this.values.set(this.valueLayout(row.entityType, true), row.id, row);
-          this.refile(row, seq); this.search.refile(row, seq);
-        });
+        let position = 0;
+        for (;;) {
+          const page = incoming.all('SELECT id,type,seq,trashed,short_code FROM entities WHERE seq>? ORDER BY seq LIMIT 16', [position]);
+          if (!page.length) break;
+          const groups = new Map<string, string[]>();
+          for (const row of page) {
+            this.run('INSERT INTO entities VALUES (?,?,?,?,?)', [row.id,row.type,row.seq,row.trashed,row.short_code]);
+            const layout = this.valueLayout(row.type, true);
+            this.run(`INSERT INTO ${layout.table}(entity_id) VALUES (?)`, [row.id]);
+            const ids = groups.get(row.type) ?? []; ids.push(row.id); groups.set(row.type, ids);
+          }
+          for (const [type, ids] of groups) {
+            const layout = incoming.values.layout(type) ?? fail('CORRUPT', 'Replacement source lacks primary values');
+            for (const cell of logicalValues(incoming, layout, ids))
+              this.values.restoreCell(this.valueLayout(type), cell.id, cell.field, cell.storageKind, cell.value);
+          }
+          for (const record of page) {
+            const row = this.row(record.id)!;
+            this.refile(row, record.seq); this.search.refile(row, record.seq);
+          }
+          position = page.at(-1)!.seq;
+        }
         let after = -1;
         for (;;) {
           const batch = incoming.all('SELECT * FROM relations WHERE seq>? ORDER BY seq LIMIT 256', [after]);

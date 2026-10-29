@@ -406,9 +406,25 @@ conversion/reopen. Measure large-field peak memory and output/staging disk, and 
 This contract specifies the remaining implementation; it does not declare export/import complete or replace
 the full app/operational/adoption gates in the goal.
 
-Archive ingestion now spools raw records into a separate `archive.sqlite3`, with a terminal verified seal,
+Archive ingestion spools raw records into a separate `archive.sqlite3`, with a terminal verified seal,
 identity constraints and counter checks. It cannot be mistaken for an EARS profile's `data.sqlite3`. A seal
-proves wire/identity completeness, not schema/cell/embedding semantics or full audit; constructing the actual
-staging EARS store remains a separate required operation. In particular, do not fabricate negative or
-arbitrary derived generations to hide restored primary embeddings. Resolve authoritative embedding
-representation and raw restoration explicitly, then audit the completed store before publication.
+proves wire/identity completeness, not schema/cell/embedding semantics or full audit. The internal restore
+operation now reserves a different destination, validates the spool/declaration/raw cells/catalog, copies
+primary data, reopens to admit current indexes, waits for readiness and audits before returning a closed
+store. Failure removes only its reserved destination; an existing destination and input spool stay owned
+by their caller. The host must still coordinate publication, sync, interruption recovery and selected stores.
+
+Primary `embedding_values` owns raw Float32 bytes independently of disposable `chunks`. Each chunk references
+a primary integer ID only when entity/index/chunk/content hash/model/dimensions match. Rebuild/retirement
+never delete primary embeddings; lost derived chunks can be reconstructed without calling an embedding model.
+Dormant imports remain primary but do not answer searches under mismatched content/declarations. Producing
+or unchecked-loading a newer embedding replaces obsolete identities for that chunk transactionally, clearing
+retired references before removing old payloads. Destroy/reset delete primary vectors. The importer can retain
+multiple distinct reusable identities from an archive; a later embedding write supersedes them for its chunk.
+This representation stores one BLOB per identity rather than duplicating the BLOB across generations.
+
+The prerelease format-one policy still applies: an older candidate whose chunks contain vector BLOBs refuses
+opening rather than silently creating empty primary storage. Export using that original source and explicitly
+convert a copy. No ordinary app profile or elmdb format is migrated. The query join's cost, dormant-identity
+resource bounds and large restored/replaced stores need measured qualification; this design does not waive
+existing vector latency/recall/resource or recovery gates.

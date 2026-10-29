@@ -60,6 +60,23 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('restored logic
     const created = e.create('Row', { title: 'third' }).id(); expect(e.getAttr(created, 'shortCode')).toBe('ROW-3');
     expect(f.e.lastCommit()).toBe(before); expect(f.e.query('Row').count()).toBe(1);
   });
+  it('replaces a populated incumbent without re-encoding restored cells or losing dormant embeddings', async () => {
+    const source = fixture(); await spool(source);
+    await restoreLogicalStage(source.spool, source.destination, { syncs: false });
+    const incumbent = fixture();
+    for (let i = 0; i < 12; i++) incumbent.e.create('Row', { title: 'incumbent ' + i });
+    const before = incumbent.e.lastCommit();
+    incumbent.db.replaceWith(source.destination);
+    expect(incumbent.e.lastCommit()).toBeGreaterThan(before);
+    expect(incumbent.e.query('Row').ids()).toEqual(['Row-one']);
+    expect(Object.is((incumbent.e.getAttr('Row-one', 'rawNegative') as number[])[0], -0)).toBe(true);
+    expect(incumbent.db.get("SELECT value FROM value_overflow WHERE entity_id='Row-one' AND field='rawNegative'")!.value)
+      .toEqual(source.db.get("SELECT value FROM value_overflow WHERE entity_id='Row-one' AND field='rawNegative'")!.value);
+    expect(incumbent.db.get("SELECT embedding FROM embedding_values WHERE index_name='oldIndex'")!.embedding)
+      .toEqual(source.db.get("SELECT embedding FROM embedding_values WHERE index_name='oldIndex'")!.embedding);
+    expect(incumbent.e.pendingEmbeddings('Row').count).toBe(0);
+    expect(incumbent.e.query('Row').near([1, 0, 0]).ids()).toEqual(['Row-one']);
+  });
   it('keeps mismatched restored vectors primary but pending until current content is embedded', async () => {
     const f = fixture(); f.e.write('Row-one').set('title', 'changed content'); await spool(f);
     await restoreLogicalStage(f.spool, f.destination, { syncs: false }); const { db, e } = reopen(f.destination);

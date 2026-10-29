@@ -17,7 +17,7 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const report = { qualification: false, source: process.env.EARS_TEST_SOURCE, node: process.version, constraints,
   fixtureHash: hash(readFileSync(new URL('./embedding-layout.mjs', import.meta.url))),
   corpusHash: hash(readFileSync(new URL('./vector-corpus.mjs', import.meta.url))), dimensions: DIMENSIONS,
-  distribution: 'clustered', durability: 'OFF disposable fixtures', sizes: [],
+  distribution: 'clustered', durability: 'OFF disposable fixtures', sizes: [], baselineCorrection: 'Inline diagnostic now includes all original chunk indexes; first historical diagnostic omitted them.',
   entries: Object.fromEntries(['@apackdev/ears', '@apackdev/ears/sqlite'].map(name => [name, import.meta.resolve(name)])) };
 assert(Object.values(report.entries).every(path => path.includes('/dist/')));
 const save = () => writeFileSync(output, JSON.stringify(report, null, 2));
@@ -54,7 +54,11 @@ try {
       chunk INTEGER NOT NULL,model TEXT NOT NULL,dims INTEGER NOT NULL,hash TEXT NOT NULL,text TEXT NOT NULL,
       embedding BLOB,PRIMARY KEY(entity_id,index_name,generation,chunk));
       INSERT INTO diagnostic_inline SELECT c.entity_id,c.type,c.index_name,c.generation,c.chunk,c.model,c.dims,c.hash,c.text,v.embedding
-      FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id;`);
+      FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id;
+      CREATE INDEX diagnostic_pending ON diagnostic_inline(type,index_name,generation,entity_id,chunk) WHERE embedding IS NULL;
+      CREATE INDEX diagnostic_generation ON diagnostic_inline(generation);
+      CREATE INDEX diagnostic_reuse ON diagnostic_inline(entity_id,index_name,chunk,hash,model,dims,generation);
+      CREATE INDEX diagnostic_vector_covering ON chunks(type,index_name,generation,entity_id,embedding_id) WHERE embedding_id IS NOT NULL;`);
     row.withDiagnosticCopy = { files: files(), memory: process.memoryUsage() };
     const job = db.get("SELECT * FROM index_builds WHERE kind='vector'");
     for (const path of ['all', 'tenPercent', 'onePercent']) {
@@ -62,10 +66,10 @@ try {
       const eligible = i => i % 17 !== 0 && (path === 'all' || (path === 'tenPercent' ? i % 100 < 10 : i % 100 === 0));
       const ids = selected.map(i => `Row-${i}`), condition = path === 'all' ? '' : 'AND c.entity_id IN (SELECT value FROM json_each(?))';
       const statements = new Map();
-      for (const variant of ['inline', 'linked']) {
+      for (const variant of ['inline', 'linked', 'covered']) {
         const sql = `SELECT c.entity_id id,1-min(vec_distance_cosine(${variant === 'inline' ? 'c' : 'v'}.embedding,?)) score
-          FROM ${variant === 'inline' ? 'diagnostic_inline' : 'chunks'} c
-          ${variant === 'linked' ? 'JOIN embedding_values v ON v.id=c.embedding_id' : ''}
+          FROM ${variant === 'inline' ? 'diagnostic_inline' : 'chunks'} c ${variant === 'covered' ? 'INDEXED BY diagnostic_vector_covering' : variant === 'linked' ? `INDEXED BY ${path === 'all' ? 'chunk_generation' : 'sqlite_autoindex_chunks_1'}` : ''}
+          ${variant !== 'inline' ? 'JOIN embedding_values v ON v.id=c.embedding_id' : ''}
           JOIN entities e ON e.id=c.entity_id WHERE c.type=? AND c.index_name=? AND c.generation=?
           AND c.${variant === 'inline' ? 'embedding' : 'embedding_id'} IS NOT NULL AND e.trashed=0 ${condition}
           AND c.entity_id!=? GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`;
@@ -80,8 +84,8 @@ try {
         const parameters = [Buffer.from(vector.buffer), 'Row', job.name, job.generation,
           ...(path === 'all' ? [] : [JSON.stringify(ids)]), '', 10];
         let previous;
-        // Preregistered ABBA order, each query and filter, retaining first calls as well as warm calls.
-        for (const variant of ['inline', 'linked', 'linked', 'inline']) {
+        // Fixed mirrored order for each query/filter; retain first calls and every warm call.
+        for (const variant of ['inline', 'linked', 'covered', 'covered', 'linked', 'inline']) {
           await new Promise(resolve => setImmediate(resolve));
           const start = performance.now(), answer = statements.get(variant).all(...parameters), ms = performance.now() - start;
           row.samples.push({ path, query: q, variant, ms, answer });
