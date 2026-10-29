@@ -259,7 +259,10 @@
       ],
       "forbidden": [],
       "options": {
-        "fuzzy": false
+        "fuzzy": false,
+        "fields": [
+          "name"
+        ]
       }
     },
     {
@@ -582,9 +585,7 @@
         "Document-typo"
       ],
       "forbidden": [],
-      "options": {
-        "fuzzy": false
-      }
+      "options": {}
     },
     {
       "name": "disabled typo expansion",

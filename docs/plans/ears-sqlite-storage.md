@@ -235,3 +235,23 @@ These controls do not settle arbitrary COMMIT IOERR ambiguity or physical durabi
 Readiness currently waits on the entire database's active generation catalog. Qualification must also cover an
 unrelated failed retained index while another pack starts: avoiding unnecessary global availability failures
 belongs to complete live-pack admission, not a completed consequence of the new async startup boundary.
+
+## Search usefulness contract checkpoint
+
+The shared `tests/fixtures/search-relevance.json` corpus records useful-result expectations before tuning.
+Current candidate translation honors declared field-qualified clauses, `any`, global exclusions, last-word
+prefix and arbitrary recency timestamp fields. Native FTS receives original query text, with Unicode61
+`remove_diacritics 2` and optional English Porter on fresh candidate tables. Other-script exact matching does
+not imply word segmentation, universal accent folding or non-English stemming. Fresh/reset copied profiles
+are required after changing this format-one derived layout; opening an old table does not retokenize it.
+Highlights choose delimiters absent from authoritative source text when literal control markers collide,
+then return offsets into the original scalar/list string in UTF-16 units.
+
+The existing one-row-per-entity FTS representation joins list elements, so it still gives incorrect positive
+and negative cross-element phrase results. Unicode61 also does not split camelCase components. Those three
+corpus failures remain required; no JS full-corpus fallback or weakened expectation resolves them. The next
+representation change must preserve cross-element AND, field restrictions, original whole-identifier search,
+source-element highlight offsets, stable useful ranking, foreground maintenance, background generations and
+reopen/rollback behavior. Measure index bytes and write/build cost alongside foreground latency before
+selecting the final shape. Full vocabulary fuzzy expansion is independently unfinished. See the
+[corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md).

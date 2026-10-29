@@ -226,7 +226,16 @@ tuning. Phase 4 now preregisters `tests/fixtures/search-relevance.json`: 28 repo
 identifiers/case/accents, per-element phrases and highlights, field restrictions/syntax, boolean/any/negation,
 last-word prefix, typo opt-out, recency and exact multilingual terms plus English stemming. Run unchanged
 expectations against both pinned backends before tuning; retain failures, then fix demonstrated candidate gaps.
-This curated corpus is a first contract slice, not full real-world relevance, scalability or language qualification. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
+This curated corpus is a first contract slice, not full real-world relevance, scalability or language qualification.
+The corrected fixture inputs now pass 32/32 on pinned elmdb. Local candidate fixes recency field reads,
+any/field/prefix translation, native query Unicode handling, multi-accent Latin tokenization and literal marker
+highlight offsets. Focused EARS types/lint/build and existing search contracts pass; full SQLite EARS reports
+460 passed / exactly 3 required relevance failures. See
+[shared corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md)
+for source patch, both fixture corrections and all failed runs. Do not publish this as accepted or skip those
+cases. Next resolve FTS document/token representation for camelCase component discovery and positive/negative
+phrase boundaries across list elements, then require the unchanged corpus plus write/reopen/rollback and
+index-size/build/latency evidence. Fuzzy vocabulary bounding and the rest of phase 4 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
 `runtime-control.mjs`: same two-CPU quota/6 GiB, ABBA order, 500 fixed samples per path, first-150/remaining-350
 strata, cgroup counters/GC/CPU profiles and no discarded cold samples. This is diagnostic only; it cannot
 replace the failed admission cohort. That four-process control is complete: all answers pass, no own-group throttling is observed during timing,
