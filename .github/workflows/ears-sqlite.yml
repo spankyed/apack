@@ -90,7 +90,7 @@ jobs:
           Write-Host "Rust linker: $linker"
           if ($linker -match '[\\/]Git[\\/]usr[\\/]bin[\\/]') { throw "Git's link.exe must not shadow the MSVC linker" }
       - name: Build matching native dump producer
-        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
+        shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
         working-directory: vendor/elmdb
         run: |
           rustup show active-toolchain
