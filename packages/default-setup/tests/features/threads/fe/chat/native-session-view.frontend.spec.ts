@@ -211,3 +211,16 @@ it('keeps managed-policy review available while the native console is selected',
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain('Managed settings require approval')
   expect(f.active).toHaveBeenLastCalledWith(true)
 })
+
+it.each([true, false])('distinguishes a verified managed-policy exit from another code-one failure: %s', async nativeConfirmation => {
+  const f = await fixture()
+  const notice = { id: 'policy', revision: 'current', sessionId: 'session', kind: 'managed_settings_security' as const, title: 'Managed settings require approval', paragraphs: ['Introduction', 'Changes', 'Advice', 'Risk'], paragraphsAnsi: ['Introduction', 'Changes', 'Advice', 'Risk'], preferredChoice: 'policy_reject' as const, choices: [{ value: 'policy_reject' as const, label: 'No, exit Claude Code' }, { value: 'policy_approve' as const, label: 'Yes, I trust these settings' }] }
+  f.publish({ ...f.snapshot, output: [{ sequence: 1, text: 'Managed settings were not approved; exiting without applying them.' }], state: { ...f.snapshot.state!, notice } }); await nextTick()
+  document.querySelector<HTMLButtonElement>('[data-policy-decision="policy_reject"]')!.click()
+  f.publish({ ...f.snapshot, output: [{ sequence: 1, text: 'Managed settings were not approved; exiting without applying them.' }, { sequence: 2, text: nativeConfirmation ? '\x1b[31mManaged settings were not approved;\nexiting without applying them.\x1b[0m' : 'Unrelated native failure' }], state: { ...f.snapshot.state!, status: 'error', exitCode: 1 } }); await nextTick()
+  f.back.click(); await nextTick()
+  expect(f.root.textContent).toContain(nativeConfirmation ? 'Claude Code closed because you declined the managed settings.' : 'Claude Code disconnected unexpectedly.')
+  const replacement = { ...f.snapshot.state!, ownerId: 'replacement', status: 'error' as const, exitCode: 1 }
+  f.publish({ ...f.snapshot, output: [{ sequence: 2, text: 'Managed settings were not approved; exiting without applying them.' }], state: replacement }); await nextTick()
+  expect(f.root.textContent).toContain('Claude Code disconnected unexpectedly.')
+})

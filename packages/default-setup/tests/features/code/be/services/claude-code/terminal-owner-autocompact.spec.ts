@@ -1,10 +1,10 @@
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
-const f = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), request: vi.fn(), projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
+const f = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), request: vi.fn(), ready: true, nativePid: undefined as number | undefined, projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
 vi.mock('node-pty', () => ({ spawn: f.spawn }))
-vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: async () => {}, ready: true, projection: f.projection, transcripts: [], session: { metadata: { permissionMode: 'default' }, update() {} }, uiTransport: { request: f.request } }) }))
-beforeEach(() => { vi.clearAllMocks(); f.request.mockReset() })
+vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: async () => {}, get ready() { return f.ready }, get nativePid() { return f.nativePid }, projection: f.projection, transcripts: [], session: { metadata: { permissionMode: 'default' }, update() {} }, uiTransport: { request: f.request } }) }))
+beforeEach(() => { vi.clearAllMocks(); f.request.mockReset(); f.ready = true; f.nativePid = undefined })
 async function fixture() {
   let exit!: (event: { exitCode: number }) => void
   f.spawn.mockImplementation(() => ({ pid: 0, onData() {}, onExit(callback: typeof exit) { exit = callback }, kill() { exit({ exitCode: 0 }) } }))
@@ -40,5 +40,20 @@ it('still retires the card after an original final decision', async () => {
     f.request.mockResolvedValueOnce({ answered: true })
     await owner.answerNotice({ ...request, decision: 'compact_keep' })
     expect(owner.state.notice).toBeUndefined()
+  } finally { await prepared.dispose() }
+})
+
+it('reads startup policy consent only after the original observer owns the process', async () => {
+  const { prepared, owner, notice } = await fixture()
+  try {
+    f.ready = false; f.request.mockReset()
+    await owner.refreshMcpInput(); expect(f.request).not.toHaveBeenCalled()
+    await owner.refreshNotice(); expect(f.request).not.toHaveBeenCalled()
+    f.nativePid = 12345
+    const policy = { id: notice.id, revision: randomUUID(), sessionId: notice.sessionId, kind: 'managed_settings_security', title: 'Managed settings require approval', paragraphs: ['Original introduction', 'Original changes', 'Original advice', 'Original risks'], paragraphsAnsi: ['Original introduction', 'Original changes', 'Original advice', 'Original risks'], preferredChoice: 'policy_approve', choices: [{ value: 'policy_approve', label: 'Yes, I trust these settings' }, { value: 'policy_reject', label: 'No, exit Claude Code' }] }
+    f.request.mockResolvedValueOnce({ notice: policy, retirements: [] })
+    await owner.refreshNotice()
+    expect(owner.state.notice).toEqual(policy)
+    expect(f.request).toHaveBeenCalledExactlyOnceWith({ subtype: 'apack_native_notice' })
   } finally { await prepared.dispose() }
 })

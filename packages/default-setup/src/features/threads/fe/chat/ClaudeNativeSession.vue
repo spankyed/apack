@@ -45,7 +45,7 @@
       </div>
     </section>
     <div v-if="!active" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt'" class="native-launch__actions">
-      <span v-if="launchProblem" role="status" class="native-problem">{{ launchProblem }}</span>
+      <span v-if="launchProblem" role="status" class="native-problem" :class="{ 'native-problem--expected': managedPolicyDeclined }">{{ launchProblem }}</span>
       <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
         {{ view?.opening ? view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' : 'Use native interface' }}
@@ -63,7 +63,7 @@
           </div>
         </div>
         <div class="native-controls">
-          <span role="status" class="native-state" :class="{ 'native-state--live': view?.state?.status === 'live', 'native-state--error': view?.state?.status === 'error' }">
+          <span role="status" class="native-state" :class="{ 'native-state--live': view?.state?.status === 'live', 'native-state--error': view?.state?.status === 'error' && !managedPolicyDeclined }">
             <span aria-hidden="true" />{{ stateLabel }}
           </span>
           <button type="button" class="native-button native-button--size" :aria-expanded="expanded" @click="expanded = !expanded">{{ expanded ? 'Minimize' : 'Expand' }}</button>
@@ -107,6 +107,7 @@ import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeManagedSecurityReview from './NativeManagedSecurityReview.vue'
+import { parseClaudeDocument } from '#extensions/blocks/display/native-status-text.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props = defineProps<{ threadId: string; busy: boolean; inputPending?: boolean }>()
 const emit = defineEmits<{ active: [value: boolean] }>()
@@ -116,9 +117,16 @@ const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
 const noticePending = computed(() => view.value?.noticeAnswer?.status === 'pending' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision)
 const noticeProblem = computed(() => view.value?.noticeAnswer?.status === 'error' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision ? view.value.noticeAnswer.problem : undefined)
+const managedPolicyExit = ref<{ ownerId: string; afterSequence: number }>()
+const managedPolicyDeclined = computed(() => {
+  const current = view.value, intent = managedPolicyExit.value
+  return !!intent && current?.state?.ownerId === intent.ownerId && current.state.exitCode === 1 && ['error', 'exited'].includes(current.state.status)
+    && parseClaudeDocument(current.output.filter(chunk => chunk.sequence > intent.afterSequence).map(chunk => chunk.text).join('')).map(span => span.text).join('').replace(/\s+/g, ' ').includes('Managed settings were not approved; exiting without applying them.')
+})
 function answerManagedSecurity(response: ClaudeNativeNoticeResponse) {
   const state = view.value?.state, notice = state?.notice
   if (!state || notice?.kind !== 'managed_settings_security' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
+  if (response.decision === 'policy_reject') managedPolicyExit.value = { ownerId: state.ownerId, afterSequence: view.value?.output.at(-1)?.sequence ?? 0 }
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
 }
 function answerNotice(decision: ClaudeNativeNoticeResponse['decision']) {
@@ -127,9 +135,10 @@ function answerNotice(decision: ClaudeNativeNoticeResponse['decision']) {
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: { id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision } })
 }
 const workspaceName = computed(() => view.value?.state?.cwd?.split(/[\\/]/).filter(Boolean).at(-1) || 'Current workspace')
-const launchProblem = computed(() => view.value?.problem || view.value?.state?.problem || (view.value?.state?.status === 'error' ? 'Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.' : undefined))
+const launchProblem = computed(() => managedPolicyDeclined.value ? 'Claude Code closed because you declined the managed settings.' : view.value?.problem || view.value?.state?.problem || (view.value?.state?.status === 'error' ? 'Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.' : undefined))
 const stateLabel = computed(() => {
   const state = view.value?.state
+  if (managedPolicyDeclined.value) return 'Session ended'
   if (state?.status === 'live') return state.busy ? 'Working' : 'Connected'
   return state?.status === 'starting' ? 'Connecting' : state?.status === 'error' ? 'Connection error' : 'Session ended'
 })
@@ -279,4 +288,5 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
   .native-state { margin-right: auto; }
   .native-activity { grid-template-columns: minmax(0, 1fr); max-height: 160px; }
 }
+.native-problem--expected { color: #a3a3a3; }
 </style>

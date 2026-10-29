@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
-const f = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), request: vi.fn(), projection: { sessionId: '11111111-1111-1111-1111-111111111111', tasks: [] } } })
+const f = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), request: vi.fn(), projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
 vi.mock('node-pty', () => ({ spawn: f.spawn }))
 vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: async () => {}, ready: true, projection: f.projection, session: { metadata: { permissionMode: 'default' }, update() {} }, uiTransport: { request: f.request } }) }))
 beforeEach(() => { vi.clearAllMocks(); f.request.mockReset() })
