@@ -51,3 +51,26 @@ Further multi-chunk/tie/filter/freshness qualification, physical model refresh a
 packaging remain required. The host import path inspected here replaces data logically
 inside the open connection; it does not physically swap that handle's files. Future
 physical replacement/deletion owners still must await worker drain.
+
+## Multi-chunk owners and platform follow-up
+
+`666aa6e0c9` passes 624 EARS, 135 host/storage and seventeen focused native cases,
+plus builds/types/API/static and the existing four mutation controls. The new case adds
+300 chunks on one owner, verifies expansion through 512 and 1024 native candidates,
+stable owner ties, a 4,500-owner SQL scope, like exclusion, advisory candidate distances,
+and changed-content invalidation/rollback. `89539dda3e` strengthens this to include an
+opposite-direction chunk on that owner and passes all seventeen focused cases/types.
+Two further mutations stop expansion at 256 or score owners by their worst chunk;
+both fail intended assertions. `owner-contracts/` and `owner-controls/` retain the receipts.
+
+[Platform 40967406799](https://github.com/spankyed/apack/actions/runs/40967406799)
+is terminal on `88b05e0bfa`: Linux x64/macOS ARM64 pass with 622 EARS cases and complete
+platform verification. Windows passes 621 EARS cases (one POSIX-only skip), including all
+fifteen then-existing native cases, and reaches linker verification; its new preflight
+incorrectly inspects both MSVC and Git command paths instead of the first executable.
+It refuses before building the native producer. This does not qualify the later Windows
+conversion/crash gates. The correction explicitly selects the first command in execution
+order, requires MSVC and sets Cargo's target-specific linker to that exact path. See
+[PowerShell command lookup](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/get-command).
+A new platform run must qualify the correction and seven current durable-model cases.
+Artifact receipts/hashes and text results are retained without copying native binaries.

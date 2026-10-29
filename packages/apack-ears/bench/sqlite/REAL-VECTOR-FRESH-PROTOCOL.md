@@ -1,8 +1,9 @@
 # Fresh vector validation partition
 
 Frozen after the exploratory integer-membership diagnostic, before evaluating this
-partition. This specifies future validation; it does not claim files, oracle results
-or a completed run already exist. Preserve every earlier failed configuration.
+partition. The [fresh oracle](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/fresh-vector-oracle/README.md)
+now records eighteen cohorts, exclusions and independent scalar checks. Database/model
+execution and its acceptance gates remain unqualified. Preserve every earlier failed configuration.
 
 Use the sealed original 99,900-vector Qdrant projection, SHA-256
 `07483f2744b8c71fa788884f0f3b268403fd36e4e2303c585e390c973a53ad7f`.

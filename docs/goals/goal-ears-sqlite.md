@@ -288,13 +288,15 @@ independent SQL comparisons; the patched code passes the small compatibility gat
 The ten-query broad first-pass p95 of 17.50 ms remains retained. Sparse/wide IDs retain
 the old slow path. No final responsiveness, native adoption or integrated claim follows.
 [Fresh validation protocol](../../packages/apack-ears/bench/sqlite/REAL-VECTOR-FRESH-PROTOCOL.md)
-is frozen before new queries are evaluated; files/oracle still need generation. Next
-implement actual candidate generation/admission/transaction ownership with an explicit
-maintenance/distribution decision, then qualify the complete fresh and integrated gates.
+is frozen before new queries are evaluated; the [independent fresh oracle](../references/evidence/ears-sqlite-implementation-2026-10-28/fresh-vector-oracle/README.md)
+now covers eighteen cohorts with 54 scalar checks and the 101-ordinal exclusion union.
+Next run the actual integrated native EARS path against that truth with fresh training and
+SQL scopes, keeping frozen budgets and every failed configuration. Complete the explicit
+maintenance/distribution decision and remaining integrated gates before adoption.
 No more primitive result alone can establish the required final execution design.
 Internal generation storage, background training and a durable shared-scheduler model queue
 now exist in `vector-index.ts`, `vector-training.ts` and `vector-models.ts`.
-Runtime `fa0362f0af` passes 623 EARS, 135 host/storage and sixteen native lifecycle cases,
+Runtime `666aa6e0c9` passes 624 EARS, 135 host/storage and seventeen native lifecycle cases,
 builds/types/API/static checks in disposable Linux. [Scheduler evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-scheduler/README.md)
 retains exact sources and checks. Attempts are committed before read-only workers launch;
 completed models remain available until the result transaction commits. Restart recovery is
@@ -302,8 +304,9 @@ explicit under the managed exclusive writer. Projection and retirement use bound
 and readiness shares the existing scheduler without advancing logical commit identity.
 Ready attached models now feed actual EARS near/hybrid vector execution with bounded
 chunk-to-owner expansion and canonical exact reranking; unready/insufficient native owners
-retain the existing fallback. A 4,608-vector EARS fixture covers native invocation and unit
-visibility, not real-corpus recall/latency acceptance.
+retain the existing fallback. EARS fixtures cover native invocation, 300-chunk owner expansion, stable ties, large SQL
+scopes, like exclusion, canonical scoring and unit visibility. `89539dda3e` passes the
+strengthened best-chunk/expansion mutation controls. These are not real-corpus recall/latency acceptance.
 Normal app composition does not activate this service. Automatic eligibility admission,
 incumbent-preserving physical model refresh, host drain-before-replacement/deletion, final
 multi-chunk/filter/tie/freshness qualification and complete audit/rebuild/restore integration remain required.
@@ -311,9 +314,11 @@ The earlier [platform run 40960736926](https://github.com/spankyed/apack/actions
 on `4575088eed` passed Linux/macOS; Windows passed its 616 EARS cases, including all ten
 then-existing native cases, but failed later because Rust selected Git's `link.exe`.
 The producer now uses PowerShell on Windows and checks linker selection. The workflow also
-requires all five durable-model cases. [Run 40967406799](https://github.com/spankyed/apack/actions/runs/40967406799) is live on
-`88b05e0bfa` after static platform-shell corrections; it covers the scheduler checkpoint,
-not the newer EARS routing case. Final exact-tip platform qualification remains required.
+requires all seven current durable-model cases. [Run 40967406799](https://github.com/spankyed/apack/actions/runs/40967406799) is terminal
+on `88b05e0bfa`: Linux/macOS pass; Windows passes 621 EARS cases (one POSIX-only skip)
+but its new linker check erroneously inspects both discovered executable paths. The
+correction selects the first MSVC path and sets Cargo's target-specific linker explicitly.
+A successor must qualify this correction and all seven current durable-model cases.
 Normal native distribution/fork selection and all frozen fresh/app/resource/full Strict gates
 remain required. The active integrated vector path still fails broad responsiveness.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
