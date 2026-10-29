@@ -178,6 +178,15 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(e.query('Row').where('role', 'reader').ids()).toEqual(['Row-one']);
   });
 
+  it('does not certify an absent field when its authoritative primary row is missing', async () => {
+    const { db } = seed();
+    const layout = db.values.layout('Row')!;
+    expect(db.run(`DELETE FROM ${layout.table} WHERE entity_id=?`, ['Row-one']).changes).toBe(1);
+    db.rebuildIndexes();
+    expect(db.indexBuilds.index('Row', 'value', 'role').state).toBe('building');
+    await expect(db.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+  });
+
   it('rolls membership reconstruction back if later index admission fails', () => {
     const { db, e } = seed();
     e.write('Row-one').set('tags', ['fresh']);
