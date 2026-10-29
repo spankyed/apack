@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, cli, build, integration, packaged]
+        options: [all, app, external, bundled-ui, cli, build, integration, packaged]
         default: all
       test:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
@@ -78,7 +78,7 @@ jobs:
         run: npm run test:packaged-authoring:app
       - name: Build fixture contracts
         id: preparation
-        if: ${{ inputs.suite == 'all' || inputs.suite == 'external' || inputs.suite == 'cli' || inputs.suite == 'integration' }}
+        if: ${{ inputs.suite == 'all' || inputs.suite == 'external' || inputs.suite == 'bundled-ui' || inputs.suite == 'cli' || inputs.suite == 'integration' }}
         run: npm run test:external-pack:contract
       - name: Selected integration files
         if: ${{ inputs.suite == 'integration' }}
@@ -107,13 +107,13 @@ jobs:
       - name: Prepare external default fork
         if: ${{ inputs.suite == 'all' || inputs.suite == 'external' }}
         run: npm run test:external-pack:fork
-      - name: External pack app suite including step services and settings ownership
-        if: ${{ inputs.suite == 'all' || inputs.suite == 'external' }}
-        working-directory: tests/packs/external-pack
+      - name: Selected external pack app suite
+        if: ${{ inputs.suite == 'all' || inputs.suite == 'external' || inputs.suite == 'bundled-ui' }}
+        working-directory: ${{ inputs.suite == 'bundled-ui' && 'tests/packs/bundled-ui-pack' || 'tests/packs/external-pack' }}
         env:
           APACK_E2E_GREP: ${{ inputs.test }}
         run: |
-          args=(--host "$GITHUB_WORKSPACE" --prebuilt)
+          args=(--host "$GITHUB_WORKSPACE" --prebuilt --trace retain-on-failure)
           if [[ -n "$APACK_E2E_GREP" ]]; then args+=(--grep "$APACK_E2E_GREP"); fi
           ../../../node_modules/.bin/apack pack test "${args[@]}"
       - name: App suites including settings recovery

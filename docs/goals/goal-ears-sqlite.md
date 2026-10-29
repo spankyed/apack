@@ -193,14 +193,35 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Current functional checkpoint is
-**7b56a145d4** (call-site correction), retaining the text runtime/cost evidence at **a2de2944a1**.
-It is published with its handoff at **2308fbf58ae9f906f35e618dd63ea43b58ada861** on integration/remote.
-The latest dispatched full gate covers earlier **b25a985c8cebdf898b86cb915bca2600ba03782a**. Its single exact
-[Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212) is confirmed live;
-macOS/Linux candidate lanes pass 511 EARS / 95 host cases; Windows has 509 passing, one skipped and one
-failed call-site case. Producers pass and five consumer jobs remain live/queued. Poll this exact handle
-without duplicate dispatches; this source cannot be promoted. Canonical/helper BASE stay at green 60d.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, committed through **f2646a3166**.
+Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
+**7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
+Integration/remote remains **2308fbf58ae9f906f35e618dd63ea43b58ada861**; newer local checkpoints
+are not yet published. Canonical/helper BASE stay at exact green 60d until a corrected full gate passes.
+
+The earlier **b25a985c8cebdf898b86cb915bca2600ba03782a** [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212)
+is terminal FAILURE. Producers, both integration shards, both native shards and SQLite Linux/macOS passed.
+Windows failed the call-site collector issue corrected in 7b56a145d4; app-and-rest failed the bundled UI
+editor's model-update assertion after 27 external-pack cases passed. No causal attribution to SQLite is
+established. Relevant editor/fixture source matches pinned master. This run cannot be promoted; do not
+rerun unchanged source or enlarge deadlines. Preserve its logs and diagnose the focused fixture first.
+Strict CI now retains fixture Playwright result directories; the failed run had only console output.
+
+Vector input parity is verified: shared contracts cover Float32 overflow/underflow, zero cosine direction,
+wrong model before obsolete-hash handling, and atomic refusal without watch delivery. Disposable Linux
+checks pass **524 SQLite / 302 native** cases, both focused vector files, builds, types, API reports,
+lint and import checks; see [evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-validation/README.md).
+High-dimensional latency/recall and real-corpus resource qualification remain open.
+
+Next checkpoint: use the existing macOS App acceptance workflow's focused `bundled-ui` selector
+on the next published descendant. Retain Playwright failure traces and console errors while preserving
+the original assertion/deadlines. The Linux reproduction completed its builds and launched Electron,
+but failed main-window readiness before the test body; it supplies no editor behavior proof.
+Both setup attempts are retained in [evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bundled-editor/README.md).
+Establish the cause/baseline boundary, correct verified candidate issues, then dispatch one exact strict
+gate on converged source. After gate triage, continue all remaining phase 3–7 requirements below;
+no scope is deferred by this checkpoint.
+
 The preceding published gate source **a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**
 contains runtime f426f938f8 and the explicit three-platform SQLite lane. Its single exact
 [strict run 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) is
@@ -595,8 +616,3 @@ crash/checkpoint/long-reader/ownership qualification; Electron/CLI loading/signi
 filesystem assumptions; representative warm/cold/growth/resource budgets, execution-complexity and maintenance
 review, and final adoption decision. No microbenchmark or small corpus certifies app latency, memory growth,
 filesystem support, production durability or overall relevance/recall.
-
-
-Vector input parity checkpoint: shared contracts now cover Float32 overflow/underflow, zero cosine direction, wrong model before obsolete-hash handling, and atomic embedding refusal without watch delivery. Both full suites passed locally in disposable Linux (524 SQLite / 302 native); see [retained evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-validation/README.md). This does not qualify high-dimensional vector recall, latency or corpus resources.
-
-Strict gate 40842115212 at b25a985c8c is terminal FAILURE: both integration shards, both native shards and SQLite Linux/macOS passed; Windows failed the collector issue corrected in 7b56a145d4, and app-and-rest failed the bundled UI editor model-update assertion. The latter is under focused investigation and is not attributed to SQLite. Strict CI now retains fixture Playwright result directories; the failed run retained only its console log, so it cannot provide the missing browser event timeline. Canonical stays at last-green 60d4283; no broad replacement gate until failures have been triaged and source converges.
