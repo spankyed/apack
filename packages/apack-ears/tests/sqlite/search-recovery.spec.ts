@@ -143,6 +143,20 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(report.issues).toContain('seq: next identity does not exceed stored primary sequences');
   });
 
+  it('detects stale list membership independently of the copied acceleration table', async () => {
+    const { db, e } = seed();
+    e.write('Row-one').set('tags', ['needle', 'needle', null, false, 0, -0, 3, { nested: true }]);
+    expect((await auditSqliteDatabase(db)).ok).toBe(true);
+    const before = e.lastCommit();
+    expect(db.run("DELETE FROM value_members WHERE entity_id=? AND field='tags' AND kind='text'", ['Row-one']).changes).toBe(1);
+    const report = await auditSqliteDatabase(db);
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContain('Derived list membership differs from primary arrays');
+    expect(e.getAttr('Row-one', 'tags')).toEqual(['needle', 'needle', null, false, 0, -0, 3, { nested: true }]);
+    expect(e.lastCommit()).toBe(before);
+    expect(db.get("SELECT 1 FROM value_members WHERE entity_id=? AND field='tags' AND kind='text'", ['Row-one'])).toBeUndefined();
+  });
+
   it('refuses rebuild on read-only, open-unit and stopped owners without changing the catalog', () => {
     const { db, e } = seed();
     const jobs = db.indexBuilds.jobs(), before = e.lastCommit();

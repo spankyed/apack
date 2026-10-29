@@ -97,11 +97,8 @@ export class SqliteValues {
       [id, JSON.stringify(changed)]);
     if (changed.length) this.sql.run('DELETE FROM value_members WHERE entity_id=? AND field IN (SELECT value FROM json_each(?))',
       [id, JSON.stringify(changed)]);
-    for (const [name, value] of values) if (Array.isArray(value)) for (const item of value) {
-      if (item !== null && !['string', 'number', 'boolean'].includes(typeof item)) continue;
-      const member = this.cell(item);
-      this.sql.run('INSERT OR IGNORE INTO value_members VALUES (?,?,?,?)',
-        [id, name, member.kind === 'zero' ? 'num' : member.kind, member.value ?? 0]);
+    for (const [name, value] of values) for (const member of this.members(value)) {
+      this.sql.run('INSERT OR IGNORE INTO value_members VALUES (?,?,?,?)', [id, name, member.kind, member.value]);
     }
     const assignments: string[] = [], parameters: unknown[] = [];
     for (const [name, cell] of cells) {
@@ -167,6 +164,15 @@ export class SqliteValues {
       }
       if (outside.size) refusal('CORRUPT', 'Missing overflow attribute value');
       return out;
+    });
+  }
+
+  /** The rebuildable scalar membership of an authoritative list; null uses a non-null key sentinel. */
+  members(value: unknown): Cell[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter(item => item === null || ['string', 'number', 'boolean'].includes(typeof item)).map(item => {
+      const cell = this.cell(item);
+      return { kind: cell.kind === 'zero' ? 'num' : cell.kind, value: cell.value ?? 0 };
     });
   }
 

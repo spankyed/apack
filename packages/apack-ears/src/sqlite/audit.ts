@@ -98,6 +98,24 @@ function metadataAndEmbeddings(db: SqliteDatabase, issue: (message: string) => v
   }
 }
 
+async function rebuildPrivateMembership(db: SqliteDatabase): Promise<void> {
+  db.sql.exec('DELETE FROM value_members');
+  let after = 0;
+  for (;;) {
+    const records = db.all('SELECT id,type,seq FROM entities WHERE seq>? ORDER BY seq LIMIT 128', [after]) as Array<{id: string; type: string; seq: number}>;
+    if (!records.length) return;
+    const rows = db.hydrate(records);
+    db.sql.exec('BEGIN IMMEDIATE');
+    try {
+      for (const row of rows) for (const [field, value] of Object.entries(row)) for (const member of db.values.members(value))
+        db.run('INSERT OR IGNORE INTO value_members VALUES (?,?,?,?)', [row.id, field, member.kind, member.value]);
+      db.commitWrite();
+    } catch (error) { db.abortFailedOperation(error); }
+    after = records.at(-1)!.seq;
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+}
+
 function contents(job: SqliteIndexJob): [string, unknown[]] {
   if (job.kind === 'value') return [
     'SELECT entity_id,type,field,value,seq FROM field_index WHERE generation=? ORDER BY entity_id,field,value', [job.generation],
@@ -147,6 +165,9 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
       incumbent.backup(rebuiltPath);
       rebuilt = new SqliteDatabase({ path: rebuiltPath, syncs: false });
       rebuilt.rebuildIndexes(); await rebuilt.indexesReady();
+      await rebuildPrivateMembership(rebuilt);
+      const membership = 'SELECT entity_id,field,kind,value FROM value_members ORDER BY entity_id,field,kind,value';
+      if (digest(incumbent, membership) !== digest(rebuilt, membership)) issue('Derived list membership differs from primary arrays');
       for (const job of jobs) {
         const fresh = rebuilt.indexBuilds.index(job.type, job.kind, job.name);
         const [before, beforeArgs] = contents(job), [after, afterArgs] = contents(fresh);
