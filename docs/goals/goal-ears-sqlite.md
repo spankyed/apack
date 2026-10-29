@@ -302,7 +302,8 @@ canonical stays at exact full-green 6cf. Native own-embedding visibility remains
 discrepancy; do not claim the newer shared native suite or full gate passes.
 New local 00c462a0bb implements atomic offline membership reconstruction in the rebuild admission
 transaction, using a native SQL scan plus per-array decoding; all-SQLite validation is active in
-ears-membership-repair (exec 57250). It still needs measured duration/memory/WAL and interruption
+ears-membership-repair-typed (exec 80165), at corrected c030c21b8d. The first build stopped on
+TypeScript narrowing of the callback input before tests; explicit return on refusal fixes it. It still needs measured duration/memory/WAL and interruption
 qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
