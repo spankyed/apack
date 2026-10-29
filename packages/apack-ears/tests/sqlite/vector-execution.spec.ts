@@ -90,7 +90,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
     expect(db.all('SELECT * FROM embedding_values ORDER BY id')).toEqual(canonical);
   });
 
-  it('audits missing projections and rebuilds them without changing primary bytes or commit identity', async () => {
+  it('audits missing or corrupt projections and rebuilds without changing primary bytes or commit identity', async () => {
     const { db, e } = fixture(); e.create('Row', { title: 'one' });
     const pending = e.pendingEmbeddings('Row'); e.embed(pending.chunks.map(chunk => ({ ...chunk, model: pending.model, vector: [1, 0, 0] })));
     const canonical = db.all('SELECT * FROM embedding_values'), sequence = db.sequence;
@@ -98,6 +98,11 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
     expect((await auditSqliteDatabase(db)).ok).toBe(false);
     db.rebuildIndexes(); await db.indexesReady();
     expect((await auditSqliteDatabase(db)).ok).toBe(true);
+    db.run('UPDATE embedding_search SET normalized=?', [Buffer.from(new Float32Array([0, 1, 0]).buffer)]);
+    expect((await auditSqliteDatabase(db)).ok).toBe(false);
+    db.rebuildIndexes(); await db.indexesReady();
+    expect((await auditSqliteDatabase(db)).ok).toBe(true);
+    expect(e.query('Row').near([1, 0, 0]).hits()[0]!.score).toBeCloseTo(1);
     expect(db.all('SELECT * FROM embedding_values')).toEqual(canonical); expect(db.sequence).toBe(sequence);
   });
 });

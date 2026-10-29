@@ -13,7 +13,8 @@ function normalized(bytes: Uint8Array): { bytes: Buffer; squared: number } {
 }
 
 export class SqliteVectors {
-  constructor(private readonly db: SqliteDatabase) {}
+  private readonly db: SqliteDatabase;
+  constructor(db: SqliteDatabase) { this.db = db; }
   ensure(): void {
     this.db.sql.exec(`CREATE TABLE IF NOT EXISTS embedding_search(
       embedding_id INTEGER PRIMARY KEY REFERENCES embedding_values(id) ON DELETE CASCADE,
