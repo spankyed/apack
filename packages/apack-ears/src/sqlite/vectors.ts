@@ -50,17 +50,17 @@ export class SqliteVectors {
       GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`, [query, ...bindings, k]);
     // Small and large-K queries stay exact. No native candidate cap may silently underfill owners.
     if (k <= 0 || k > 32 || dimensions < 128 || dimensions % 8 !== 0) return exact();
-    const count = Number(this.db.get(`SELECT count(*) n FROM chunks c JOIN entities e ON e.id=c.entity_id
-      WHERE ${eligible}`, bindings)!.n);
+    const count = Number(this.db.get(`SELECT count(*) n FROM (SELECT 1 FROM chunks c JOIN entities e ON e.id=c.entity_id
+      WHERE ${eligible} LIMIT 4097)`, bindings)!.n);
     if (count <= 4096) return exact();
     const rows = this.db.all(`WITH candidates AS MATERIALIZED (
       SELECT c.entity_id FROM chunks c JOIN embedding_search p ON p.embedding_id=c.embedding_id
       JOIN entities e ON e.id=c.entity_id WHERE ${eligible}
       GROUP BY c.entity_id ORDER BY min(vec_distance_hamming(vec_bit(p.bits),vec_quantize_binary(?))),e.seq LIMIT 256
       ) SELECT c.entity_id id,1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score
-      FROM candidates a JOIN chunks c ON c.entity_id=a.entity_id
-      JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
+      FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
       LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE ${eligible}
+      AND c.entity_id IN (SELECT entity_id FROM candidates)
       GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`, [...bindings, query, query, ...bindings, k]);
     return rows.length < k ? exact() : rows;
   }

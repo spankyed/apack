@@ -33,6 +33,17 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
 
     // Independent scalar instrumentation makes the exact-scan mutation fail this test. It does not
     // replace native Hamming candidate selection and is never registered by production code.
+    let nativePlan: ReturnType<SqliteDatabase['all']> = [];
+    const all = db.all.bind(db), get = db.get.bind(db), eligibilityProbes: number[] = [];
+    db.all = (sql, parameters = []) => {
+      if (sql.startsWith('WITH candidates AS MATERIALIZED')) nativePlan = all('EXPLAIN QUERY PLAN ' + sql, parameters);
+      return all(sql, parameters);
+    };
+    db.get = (sql, parameters = []) => {
+      const result = get(sql, parameters);
+      if (sql.includes('count(*)') && sql.includes('FROM chunks c')) eligibilityProbes.push(Number(result!.n));
+      return result;
+    };
     let reranked = 0;
     db.sql.function('vec_distance_cosine', { deterministic: true }, (a, b) => {
       if (!(a instanceof Uint8Array) || !(b instanceof Uint8Array)) throw Error('Expected Float32 blobs');
@@ -47,6 +58,11 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
     });
     expect(e.query('Row').near(positive, { k: 5 }).ids()).toEqual(ids.slice(0, 5));
     expect(reranked).toBe(555); // All 300 chunks of the first owner, plus 255 other owners.
+    expect(eligibilityProbes[0]).toBe(4097);
+    // Canonical BLOB lookup must be driven by selected owners, rather than scanning the whole generation
+    // before joining candidates. Function-call bounds alone cannot detect those unnecessary BLOB reads.
+    expect(nativePlan.filter(row => row.parent === 0).some(row =>
+      String(row.detail).includes('chunk_vectors') && String(row.detail).includes('entity_id=?'))).toBe(true);
     reranked = 0;
     expect(e.query.ids(ids.slice(300)).near(positive, { k: 5 }).ids()).toEqual(ids.slice(300, 305));
     expect(reranked).toBe(256); // Excludes the entire unfiltered candidate prefix before limiting.
