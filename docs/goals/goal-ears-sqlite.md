@@ -366,10 +366,16 @@ validation and protected forced import. The first CLI run passed 35 cases but ex
 a refused same-PID acquisition deleted the incumbent, allowing a later call through. Ownership fix
 8e5d0829c4 adds per-acquisition tokens and acquired-state cleanup. All 45 CLI and 15 ownership cases,
 five builds, CLI types, lint/import checks pass in disposable Linux; restoring the old release condition
-fails both new ownership controls and restoring source passes. Built-process smoke at 048e26bfc7 is live
-in ears-built-logical-cli (exec 27593); poll that exact handle. These local descendants are not covered
-by the published platform gate and are not yet pushed.
-Next complete actual built/installed CLI and app operations, preserve selected-store/media ownership,
+fails both new ownership controls and restoring source passes. The first staged-process smoke refused its incorrect bundle path before any command ran; correction
+32e3623359 uses the actual dist/package executable with cwd outside workspace handoff and passes all
+five built CLI checks. Publication-boundary SIGKILL cases at 79a58575e1 pass in 27 affected host cases,
+verifying no final path before linking, complete restorable bytes after linking, unchanged source and
+safe retry without deleting old private scratch. These prove process-kill behavior only.
+Convergence source 5dcd8c9c88 passes all 45 CLI /27 host logical/kill/ownership cases, staged process
+smoke, five builds, CLI/host types, lint and import rules. The probe is owned by CLI test support.
+The platform gate now requires eight CLI logical cases, both kill cases and five staged binary checks;
+these descendants still need their own exact-source publication/run. Canonical remains 6cf.
+Next complete isolated installed CLI and app operations, preserve selected-store/media ownership,
 qualify process death before/during staging/publication and protected populated replacement, and complete
 actual copied-profile conversion plus representative duration/memory/disk/platform evidence. Keep partial
 restored directories private until audit and publication complete; never direct a partial-ingestion or
