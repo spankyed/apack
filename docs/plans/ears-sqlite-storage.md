@@ -254,6 +254,15 @@ BM25 is evaluated per string; each clause uses its best weighted field match, an
 This deliberately changes score statistics from the former per-entity document. Usefulness and resource
 acceptance, rather than exact scores, decide whether this representation is acceptable.
 
+A private indexed owner token encodes the immutable entity sequence with zero BM25 field weight. Capped
+native cardinality counts order a single conjunction; subsequent clauses intersect owner postings inside
+MATCH. Runtime masks include at most 2048 owners, with a full-clause fallback for larger sets, so estimates
+never truncate answers. Global exclusions use positive candidate owners. OR/any positive scoring stays
+unchanged. The preceding rowid-constrained approach was rejected after a medium-query regression. Owner
+tokens are excluded from vocabulary expansion and from user text columns. Their added document length does
+change BM25 statistics and their bytes/build costs are measured separately. Broad limited reads still require
+native pagination work; the source-string shape is not yet fully accepted.
+
 Original text stays indexed for whole identifiers. A second derived column inserts spaces at camelCase and
 acronym boundaries. Queries reach both columns; sparse insertion offsets map its native highlights back to
 the original UTF-16 source. It is not a replacement Unicode tokenizer or a new native extension. Strings

@@ -252,14 +252,20 @@ The preregistered six-process comparison completed all expected-answer trials at
 improves to ~0.7 ms, but the 100-owner case worsens to ~68 ms (both word orders), versus legacy ~0.5 ms and
 unpruned ~20 ms. This correction is not accepted. See
 [conjunction cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/conjunction-cost/README.md).
-The local owner-postings candidate now uses a private FTS owner column and one native MATCH intersection,
-with a runtime 2048-owner cap and an untruncated fallback. It passes EARS build/types, **100 focused cases**,
-lint and the native-expression removal guard, including masks/fallback/private metadata and empty-query
-vocabulary avoidance. Full SQLite and cost results are not yet claimed for this candidate. See
-[owner-postings evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-postings/README.md).
-Next run the preregistered legacy/rowid/postings/postings/rowid/legacy cohort using the unchanged expanded
-fixture, then converge functional/cost proof before publishing. Preserve all previous failures and every
-query/phrase/highlight/storage criterion. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
+The converged owner-postings source **c132441538bbbad60a53dc12fb79f77755c83406** uses a private FTS owner
+column and one native MATCH intersection, runtime 2048-owner cap and untruncated fallback. It passes
+**475 SQLite / 288 native EARS cases**, five builds, EARS types/API reports, lint/imports; focused mask/removal
+proof remains **100 cases**. See [owner-postings implementation](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-postings/README.md).
+The complete preregistered six-process owner cohort fixes medium queries to ~3.1 ms in both orders versus
+rowid ~69 ms; point conjunctions ~0.7 ms, private owner bytes ~3% above the preceding string shape. Broad
+limited reads remain ~28 ms versus legacy ~15 ms, unaccepted. See
+[owner cost and exact functional proof](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-cost/README.md).
+Publish this functional checkpoint on the existing draft branch and run one exact strict integration gate;
+that is not adoption or performance acceptance. Keep canonical on 585dcafccf until that exact gate succeeds.
+Next implement safe adjacent text-limit/top-k pushdown before match expansion/JS return. Preserve recency,
+later filters, multiple types, complete highlights and the unchanged relevance corpus; check actual native
+returned-row bounds, then preregister a new cost comparison. Preserve every failed cohort and all remaining
+phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
 rest of phases 4–7 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
