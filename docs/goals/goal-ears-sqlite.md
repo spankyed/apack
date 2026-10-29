@@ -193,10 +193,11 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Published candidate is now
-**a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**, on the existing remote branch and clean detached integration.
-It contains runtime f426f938f8 plus all completed cost evidence and the explicit three-platform SQLite lane.
-Its single exact [strict run 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) is
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Current functional runtime is
+**a2de2944a1**, with its converged typo-cost evidence below; publish its clean descendant through the
+existing draft only. The preceding published gate source **a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**
+contains runtime f426f938f8 and the explicit three-platform SQLite lane. Its single exact
+[strict run 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) is
 terminal FAILURE: seven jobs pass; Windows has three portability failures, and integration-2 has two
 compiler fixture timeouts. Canonical/helper BASE remain at previous green 60d4283f68. The local Windows
 correction pins controlled asset checkout bytes, normalizes a test path and uses a parent-issued kill
@@ -204,7 +205,7 @@ after a committed cursor witness. Exact Linux validation passes 492 SQLite / 289
 cases, types/builds/lint/imports and the cursor-removal negative control. A tiny Windows VM Node probe
 confirms signal reporting only; corrected Windows recovery still needs CI. See
 [Windows/platform evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-portability/README.md).
-The correction is published at **e452d67ae1** on integration/remote; canonical remains at exact green 60d.
+The correction was published at **e452d67ae1**; canonical remains at exact green 60d.
 The two compiler fixtures pass all seven cases with original budgets in a stage-instrumented Linux run,
 which does not explain the hosted macOS failure. The existing focused macOS workflow at exact e452d67ae1,
 [40834826426](https://github.com/spankyed/apack/actions/runs/40834826426), completed SUCCESS: both files,
@@ -226,10 +227,15 @@ isolates redundant MATCH branches: exact rows/scores remain equal while broad 10
 were checked but not selected; a uniform MATCH-presence path preserves the actual tokenizer/stemmer.
 The local [presence correction](../references/evidence/ears-sqlite-implementation-2026-10-28/present-typos/README.md)
 passes **511 SQLite / 289 native**, 95 focused cases, types/builds/API/lint/imports and four negative
-controls, including actual loss of the read snapshot. End-to-end cost remains pending. Next execute the
-preregistered six-process scan/presence/unpruned/unpruned/presence/scan cohort from the storage plan,
-with identical existing fixture and all three sizes. Preserve the independent broad compiler failure
-until diagnosed or qualified. No owned Linux cohort remains;
+controls, including actual loss of the read snapshot. It is committed at **a2de2944a1**. The preregistered
+six-process [presence-cost cohort](../references/evidence/ears-sqlite-implementation-2026-10-28/presence-cost/README.md)
+completed all sizes and 2340 expected-answer requests: 100k exact/typo medians ~3–3.5 ms versus scan
+~138–144, broad ~164–166 versus ~294–299 (rejected unpruned ~1280). Small profiles and maximum-token
+cases still regress against the original scan. Observed process memory falls but is not bounded; full
+performance/relevance/app acceptance remains open. Next publish the converged implementation/evidence
+through the existing draft and run one exact Strict chain with the explicit three-platform lane. The
+independent broad compiler failure remains retained; its focused macOS/Linux cases pass, cause unisolated.
+Canonical must stay at exact green 60d until the new exact gate succeeds. No owned Linux cohort remains;
 no VM scratch process or file remains from the signal probe.
 
 The published pre-typo runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/
@@ -237,7 +243,7 @@ storage cases, lint/imports/API reports and native hydration/selected-plan contr
 indexed cohort improves recency highlights ~35 to ~27 ms; ID-only recency is mixed, and one slower indexed
 build/highlight trial remains retained. Hosted macOS arm64 and Linux x64 pass the built probe and 492 EARS /
 95 host cases; Windows passes the probe but needs the correction above. After resolving the exact gate,
-qualify the now-bounded typo behavior's cost and broader useful-result coverage;
+qualify the now-bounded typo behavior's real-app cost and broader useful-result coverage;
 full performance, relevance/vector, app/operational/packaging acceptance remains open.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
@@ -556,8 +562,9 @@ large-text and FULL qualification under unchanged targets; do not rerun the same
 composition must handle that state and await readiness where required before adoption.
 
 All unmet phase 3–7 requirements remain: native lazy substring/regex refusal ordering with mixed types/later zero
-limits (qualify or explicitly decide); realistic multilingual/identifier/typo relevance, correct full-text list/phrase
-boundaries and no unbounded fuzzy vocabulary scan; high-dimensional and approved real-vector recall/update/latency;
+limits (qualify or explicitly decide); realistic multilingual/identifier/typo relevance and app cost while
+preserving the proved list/phrase and bounded native-query-work invariants; high-dimensional and approved
+real-vector recall/update/latency;
 complete app/CLI profile and run-history composition; extend the now-tested host format/populated replacement/media
 rollback path through full lifecycle and physical failure qualification; explicit copied-profile conversion and logical export/audit/rebuild; truthful IO/COMMIT failures,
 crash/checkpoint/long-reader/ownership qualification; Electron/CLI loading/signing/native packaging and supported

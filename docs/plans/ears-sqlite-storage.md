@@ -339,3 +339,9 @@ paths, normal built entries, two CPUs/6 GiB and the existing 180-second process 
 time in the normal facade timings. Keep all original failed-strategy results and every new sample, check
 the expected answers and actual loaded JS/native hashes, and stop on the first failure. Do not qualify
 real-app/cold-store/language/memory budgets from this diagnostic alone.
+
+The [six-process cohort](../references/evidence/ears-sqlite-implementation-2026-10-28/presence-cost/README.md)
+completed on a2de2944a1 with all sizes/answers: 100k selective medians ~3–3.5 ms, broad ~164–166 ms;
+the original scan is ~138–144 / ~294–299 ms. Small profiles and maximum-length tokens still regress
+against the scan, and broad latency remains high. Preserve every result; architecture bounding and this
+correction are implemented, while complete app/corpus/resource acceptance stays open.

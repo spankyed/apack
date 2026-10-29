@@ -1,0 +1,18 @@
+{
+  "scan": {
+    "commit": "e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614",
+    "sha256": "2f25bbbec016b5ba1f8e972587e5f36259d881f1149242e6126b5c98cb2e3b01"
+  },
+  "fixture": {
+    "commit": "0ba7b955b816a7c923df95d08021cf966878bf7e",
+    "sha256": "479e658ba8bd5071715b4424a43dbc4beccb0cc5b799bff14e19354056fcaca3"
+  },
+  "unpruned": {
+    "commit": "9beb23ebc9a73c0860c7e8053c9be85814ff1929",
+    "sha256": "b7db62c1f253e002021fda4de084c30f3b29be92378640bd4d1de522a40fa65e"
+  },
+  "presence": {
+    "commit": "a2de2944a12d66c81bda7e6c5ac9d69a6c818ac1",
+    "sha256": "5b98d4844aed93c09c41ef013c4a3d446c9a12c53de500f9addbe6f41389630b"
+  }
+}
