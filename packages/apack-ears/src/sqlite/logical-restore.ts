@@ -25,7 +25,7 @@ export async function restoreLogicalStage(stage: string, destination: string,
     const seal = input.prepare("SELECT value FROM archive_state WHERE key='sealed'").get() as {value: number} | undefined;
     const head = input.prepare("SELECT value FROM archive_state WHERE key='sequence'").get() as {value: number} | undefined;
     if (seal?.value !== 1 || !head || !Number.isSafeInteger(head.value) || head.value < 0) refuse('Logical ingestion spool is not sealed');
-    if (input.pragma('quick_check', { simple: true }) !== 'ok' || input.pragma('foreign_key_check').length)
+    if (input.pragma('quick_check', { simple: true }) !== 'ok' || input.prepare('PRAGMA foreign_key_check').all().length)
       refuse('Logical ingestion spool fails SQLite integrity checks');
     output = new SqliteDatabase({ path: destination, syncs: options.syncs });
     output.indexBuilds.stop();
