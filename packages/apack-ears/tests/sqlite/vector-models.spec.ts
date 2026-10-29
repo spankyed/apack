@@ -13,7 +13,7 @@ afterEach(async()=>{
   for(const {models} of all)await models.stop();
   for(const path of new Set(all.map(s=>s.path)))rmSync(path,{recursive:true,force:true});
 });
-const schema=toElmdbSchema({types:{Row:{required:[],embed:{from:['title'],model:'fixture',dims:128}}},relations:{},roles:[]});
+const schema=toElmdbSchema({types:{Row:{required:[],embed:{from:['title'],model:'fixture',dims:128,chunk:'paragraph'}}},relations:{},roles:[]});
 function own(path:string,fresh=false) {
   const db=new SqliteDatabase({path,syncs:false,...(fresh?{schema}:{})});
   const models=new SqliteVectorModels(db,process.env.EARS_VEC1_EXTENSION!);held.push({db,models,path});
@@ -72,6 +72,39 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     })).toThrow('rollback native query');
     expect(e.query('Row').near(vector,{k:1}).ids()).toEqual(original);
     expect(db.get('SELECT count(*) n FROM embedding_values')!.n).toBe(4608);
+  });
+
+  it('expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions',async()=>{
+    const {db,e,models,job,write}=fixture(4608);
+    const vector=Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71));
+    const first=e.query('Row').near(vector,{k:1}).ids()[0]!;
+    write(()=>models.enqueue(job));await db.indexesReady();
+    const repeated=e.create('Row',{title:Array.from({length:300},(_,i)=>`paragraph ${i}`).join('\n\n')}).id();
+    const tied=e.create('Row',{title:'tie'}).id();
+    const pending=e.pendingEmbeddings('Row',{limit:1000});expect(pending.chunks).toHaveLength(301);
+    e.embed(pending.chunks.map(chunk=>({...chunk,model:pending.model,vector})));
+    const actual=models.index.candidates.bind(models.index);
+    const native=vi.spyOn(models.index,'candidates');
+    const hits=e.query('Row').near(vector,{k:3}).hits();
+    expect(hits.map(hit=>hit.id)).toEqual([first,repeated,tied]);
+    expect(hits.every(hit=>Math.abs(hit.score-1)<1e-5)).toBe(true);
+    expect(native.mock.calls.map(call=>call[2])).toContain(512);
+    expect(native.mock.calls.map(call=>call[2])).toContain(1024);
+    expect(native.mock.calls.every(call=>call[2]<=4096)).toBe(true);
+    native.mockClear();
+    const scoped=e.query('Row').limit(4500).near(vector,{k:3}).ids();
+    expect(scoped[0]).toBe(first);expect(scoped).not.toContain(repeated);expect(scoped).not.toContain(tied);
+    expect(native).toHaveBeenCalled();expect(native.mock.calls.every(call=>call[3]!==null)).toBe(true);
+    expect(e.query('Row').like(first,{k:2}).ids()).toEqual([repeated,tied]);
+    // Native candidate distances are advisory: canonical owner scoring must still compute the answer.
+    native.mockImplementation((...args)=>actual(...args).map(row=>({...row,distance:12345})));
+    expect(e.query('Row').near(vector,{k:3}).hits()).toEqual(hits);
+    expect(()=>e.transact(()=>{
+      e.write(repeated).set('title','changed');
+      expect(e.query('Row').near(vector,{k:3}).ids()).not.toContain(repeated);
+      throw Error('rollback multi-chunk edit');
+    })).toThrow('rollback multi-chunk edit');
+    expect(e.query('Row').near(vector,{k:3}).hits()).toEqual(hits);
   });
 
   it('retains a completed model when its result transaction rolls back before acknowledgement',async()=>{
