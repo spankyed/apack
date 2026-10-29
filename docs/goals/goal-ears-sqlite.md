@@ -218,7 +218,17 @@ lint/imports and all six actual WAL-sync fault probes. All fault cases conservat
 COMMIT_UNKNOWN and independently reopen at the incumbent sequence; no ambiguous persisted commit was
 observed. The separate-local change is the only package source delta since the full-suite source. Keep the
 failed predecessor disposition; the new exact 585dcafccf strict gate above is now running. Closing checks also include process-kill recovery and a new exact integrated strict gate.
-Explicit recovery tooling, cross-process ownership and physical durability of retained files remain required;
+Explicit recovery is now implemented locally, still unpublished: `db recover` lists named-profile sessions
+and deliberately restores retained incumbents through a persisted, resumable publication plan. Managed readers
+hold private metadata claims; recovery excludes them and refuses the running app/profile writer. The final
+plain-Node snapshot passes five builds, host/CLI types, 67 host cases (real SIGKILL at import COMMIT and both
+publication boundaries for both backends, plus live/dead readers), 3 CLI cases, lint/imports and a removal control.
+Earlier namespace-spy, debugger and child-startup failures remain recorded in
+[import recovery evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/import-recovery/README.md).
+Next close the preparation durability barrier: sync retained files/tree and the preparation's parent before the
+first live replacement, with sync-failure refusal tests. Then qualify managed-read metadata permissions and
+broader host/API/CLI flows; publication waits for a new exact strict gate after the current one is terminal.
+Cross-process raw ownership, filesystem/power-loss/platform and large-copy resource qualification remain required;
 a recovery marker must never be deleted merely to bypass startup refusal.
 
 Previous **3f4651b009** / [40775526128](https://github.com/spankyed/apack/actions/runs/40775526128) is terminal FAILURE.

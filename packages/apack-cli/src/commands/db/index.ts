@@ -2,6 +2,7 @@
 import { CLEAR_SETTINGS_USAGE, dbClearSettings, dbImport, dbReset, IMPORT_USAGE, RESET_USAGE } from './destructive';
 import { dbExec, dbQuery, EXEC_USAGE, QUERY_USAGE } from './code';
 import { VERIFY_USAGE } from './backup-verify';
+import { dbRecover, RECOVER_USAGE } from './recover';
 import { dbBackup, BACKUP_USAGE } from './backup';
 import { dbExport, EXPORT_USAGE } from './export';
 import { dbInspect, INSPECT_USAGE } from './inspect';
@@ -17,6 +18,7 @@ const COMMANDS: Record<string, { run: (args: string[], io: DbIo) => Promise<void
   script: { run: dbScript, usage: SCRIPT_USAGE },
   inspect: { run: dbInspect, usage: INSPECT_USAGE },
   runs: { run: dbRuns, usage: RUNS_USAGE },
+  recover: { run: dbRecover, usage: RECOVER_USAGE },
   backup: { run: dbBackup, usage: BACKUP_USAGE },
   export: { run: dbExport, usage: EXPORT_USAGE },
   import: { run: dbImport, usage: IMPORT_USAGE },
@@ -39,6 +41,7 @@ Commands:
   runs [--run <id>]     The flow runs in the run history, or one run's whole tree
   backup --out <dir>    Full database and media backup to a new directory
   backup verify <dir>   Check backup readability and completeness
+  recover               Inspect interrupted imports; explicitly restore retained incumbents
   export --out <dir>    Each entity type's entities to a file
   import <backup-dir>   Replace the database with a backup (lists the change; --force makes it)
   reset                 Delete all data, as Reset Database does (lists it; --force deletes)

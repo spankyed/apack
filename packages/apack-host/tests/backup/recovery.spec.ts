@@ -1,0 +1,150 @@
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterEach, expect, it, vi } from 'vitest';
+import { createEarsEngine } from '@apackdev/ears';
+import { _appDataPaths } from '@apackdev/sdk/utils';
+import { resolveAppEnvironment } from '@apackdev/sdk/env';
+import { databaseStorage } from '../../src/database/storage.ts';
+import { findDatabaseWriter, holdDatabaseWriteLock, publishRunningApp, openDatabaseStore, openRunHistory } from '../../src/database/index.ts';
+import { assertNoImportRecovery, prepareImportRecovery } from '../../src/backup/recovery.ts';
+import { holdRecoveryExclusion, openProfileDatabase } from '../../src/database/recovery-lock.ts';
+import { listImportRecoveries, restoreImportRecovery } from '../../src/backup/restore.ts';
+
+const roots: string[] = [];
+afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
+const schema = (type: string) => ({ types: { [type]: { required: [] } }, relations: {}, roles: [] });
+function fixture(format: string, hadMedia = true) {
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-import-recovery-')); roots.push(userDataDir);
+  const target = { ...resolveAppEnvironment({ env: 'test', userDataDir }), storageFormat: format };
+  const paths = _appDataPaths(userDataDir), session = '.apack-import-owned', dir = path.join(path.dirname(paths.lmdb), session);
+  fs.mkdirSync(path.join(dir, 'rollback'), { recursive: true });
+  for (const [name, type] of [['lmdb', 'Row'], ['runHistory', 'RunNode']] as const) {
+    const db = databaseStorage(format).open({ path: paths[name], schema: schema(type), syncs: false });
+    try {
+      const e = createEarsEngine({ database: db }); e.create(type, { id: `${type}-before` });
+      db.backup(path.join(dir, 'rollback', name)); e.create(type, { id: `${type}-interrupted` });
+    } finally { db.close(); }
+  }
+  fs.mkdirSync(paths.media, { recursive: true }); fs.writeFileSync(path.join(paths.media, 'asset'), 'candidate');
+  if (hadMedia) { fs.mkdirSync(path.join(dir, 'rollback/media')); fs.writeFileSync(path.join(dir, 'rollback/media/asset'), 'incumbent'); }
+  prepareImportRecovery(dir, [{ name: 'lmdb', path: paths.lmdb, format }, { name: 'runHistory', path: paths.runHistory, format }], paths.media);
+  return { target, paths, session, dir, format };
+}
+function ids(dir: string, format: string, type = 'Row') {
+  const db = databaseStorage(format).open({ path: dir, readOnly: true });
+  try { return createEarsEngine({ database: db }).query(type).ids(); } finally { db.close(); }
+}
+
+it.each(['elmdb/1', 'sqlite/1'])('restores both %s stores and media, preserves forensic copies, and never replays completed recovery', format => {
+  const f = fixture(format);
+  expect(listImportRecoveries(f.target.userDataDir)).toEqual([{ session: f.session, status: 'pending', recoveryPath: path.join(f.dir, 'rollback') }]);
+  expect(() => assertNoImportRecovery(f.paths.lmdb)).toThrow(expect.objectContaining({ code: 'RECOVERY_REQUIRED' }));
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+  expect(() => assertNoImportRecovery(f.paths.lmdb)).not.toThrow();
+  expect(ids(f.paths.lmdb, format)).toEqual(['Row-before']);
+  expect(ids(f.paths.runHistory, format, 'RunNode')).toEqual(['RunNode-before']);
+  expect(ids(path.join(f.dir, 'interrupted/lmdb'), format)).toEqual(['Row-before', 'Row-interrupted']);
+  expect(ids(path.join(f.dir, 'rollback/lmdb'), format)).toEqual(['Row-before']);
+  expect(fs.readFileSync(path.join(f.paths.media, 'asset'), 'utf8')).toBe('incumbent');
+  expect(fs.readFileSync(path.join(f.dir, 'interrupted/media/asset'), 'utf8')).toBe('candidate');
+  const db = databaseStorage(format).open({ path: f.paths.lmdb, syncs: false });
+  try { createEarsEngine({ database: db }).create('Row', { id: 'Row-later' }); } finally { db.close(); }
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+  expect(ids(f.paths.lmdb, format)).toEqual(['Row-before', 'Row-later']);
+  expect(findDatabaseWriter(f.target.userDataDir)).toBeNull();
+});
+
+it.each(['move-incumbent', 'publish-incumbent'] as const)('resumes after interruption immediately following %s', boundary => {
+  const f = fixture('sqlite/1'), failure = new Error('process interruption');
+  const rename = fs.renameSync.bind(fs); let armed = true;
+  const spy = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+    rename(from, to);
+    if (armed && String(to) === (boundary === 'move-incumbent' ? path.join(f.dir, 'interrupted/lmdb') : f.paths.lmdb)) {
+      armed = false; throw failure;
+    }
+  });
+  syncBuiltinESMExports();
+  expect(() => restoreImportRecovery(f.target, f.session)).toThrow(failure);
+  spy.mockRestore(); syncBuiltinESMExports();
+  expect(listImportRecoveries(f.target.userDataDir)[0]?.status).toBe('restoring');
+  expect(() => assertNoImportRecovery(f.paths.lmdb)).toThrow(expect.objectContaining({ code: 'RECOVERY_REQUIRED' }));
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+  expect(ids(f.paths.lmdb, f.format)).toEqual(['Row-before']);
+  expect(ids(f.paths.runHistory, f.format, 'RunNode')).toEqual(['RunNode-before']);
+});
+
+it('restores the original absence of media', () => {
+  const f = fixture('sqlite/1', false); restoreImportRecovery(f.target, f.session);
+  expect(fs.existsSync(f.paths.media)).toBe(false);
+  expect(fs.readFileSync(path.join(f.dir, 'interrupted/media/asset'), 'utf8')).toBe('candidate');
+});
+
+it('refuses a running app and another writer without staging or changing data', () => {
+  const f = fixture('sqlite/1'); const running = publishRunningApp(f.target.userDataDir);
+  try { expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Quit the app'); }
+  finally { running(); }
+  expect(findDatabaseWriter(f.target.userDataDir)).toBeNull();
+  const lock = holdDatabaseWriteLock(f.target.userDataDir, 'another operation');
+  try { expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Another tool'); }
+  finally { lock.release(); }
+  expect(fs.existsSync(path.join(f.dir, 'restore-stage'))).toBe(false);
+  expect(ids(f.paths.lmdb, f.format)).toEqual(['Row-before', 'Row-interrupted']);
+});
+
+it('validates every incumbent before moving any live store', () => {
+  const f = fixture('sqlite/1'); fs.writeFileSync(path.join(f.dir, 'rollback/runHistory/data.sqlite3'), 'damaged');
+  expect(() => restoreImportRecovery(f.target, f.session)).toThrow();
+  expect(fs.existsSync(path.join(f.dir, 'interrupted'))).toBe(false);
+  expect(ids(f.paths.lmdb, f.format)).toEqual(['Row-before', 'Row-interrupted']);
+  expect(findDatabaseWriter(f.target.userDataDir)).toBeNull();
+});
+
+it('refuses a changed stage on resume and keeps the preparation', () => {
+  const f = fixture('sqlite/1');
+  const rename = fs.renameSync.bind(fs);
+  const spy = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+    if (String(to) === path.join(f.dir, 'interrupted/lmdb')) throw new Error('stop before publication');
+    rename(from, to);
+  });
+  syncBuiltinESMExports();
+  expect(() => restoreImportRecovery(f.target, f.session)).toThrow('stop before publication'); spy.mockRestore(); syncBuiltinESMExports();
+  fs.appendFileSync(path.join(f.dir, 'restore-stage/runHistory/data.sqlite3'), 'changed');
+  expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Recovery copy changed');
+  expect(fs.existsSync(path.join(f.dir, 'recovery.json'))).toBe(true);
+  expect(ids(f.paths.lmdb, f.format)).toEqual(['Row-before', 'Row-interrupted']);
+});
+
+it('rejects path traversal, foreign profile destinations and mismatched format', () => {
+  const f = fixture('sqlite/1');
+  expect(() => restoreImportRecovery(f.target, '../escape')).toThrow('Name one');
+  expect(() => restoreImportRecovery({ ...f.target, storageFormat: 'elmdb/1' }, f.session)).toThrow('storage format');
+  const file = path.join(f.dir, 'recovery.json'), original = JSON.parse(fs.readFileSync(file, 'utf8'));
+  original.stores[0].path = path.join(f.target.userDataDir, 'outside'); fs.writeFileSync(file, JSON.stringify(original));
+  expect(() => restoreImportRecovery(f.target, f.session)).toThrow('does not match this profile');
+  expect(fs.existsSync(path.join(f.dir, 'restore-stage'))).toBe(false);
+});
+
+it.each(['lmdb', 'runHistory'] as const)('excludes an open managed %s reader until it closes', name => {
+  const f = fixture('sqlite/1');
+  const reader = name === 'runHistory' ? openRunHistory(f.paths.runHistory, { readOnly: true, storageFormat: f.format })
+    : openDatabaseStore({ path: f.paths.lmdb, readOnly: true, storageFormat: f.format, schema: {
+      getRegisteredEntityTypes: () => new Set(['Row']), getRegisteredRelationKinds: () => new Set<string>(), getRegisteredRoles: () => new Set<string>(),
+    } });
+  try {
+    expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile');
+    expect(fs.existsSync(path.join(f.dir, 'restore-stage'))).toBe(false);
+  } finally { reader.database.close(); }
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+});
+
+it('refuses new readers during physical replacement and releases failed-open claims', () => {
+  const f = fixture('sqlite/1'), exclusion = holdRecoveryExclusion(f.paths.lmdb);
+  try {
+    expect(() => openRunHistory(f.paths.runHistory, { readOnly: true, storageFormat: f.format })).toThrow('Wait for import recovery');
+  } finally { exclusion.release(); }
+  const failure = new Error('database open refused');
+  expect(() => openProfileDatabase(f.paths.lmdb, true, () => { throw failure; })).toThrow(failure);
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+});

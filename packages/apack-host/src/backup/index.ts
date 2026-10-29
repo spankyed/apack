@@ -1,3 +1,4 @@
+export { listImportRecoveries, restoreImportRecovery, type ImportRecovery } from './restore.ts';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';

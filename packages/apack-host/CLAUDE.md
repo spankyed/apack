@@ -42,9 +42,16 @@ or rollback. The app-data service also leases primary/history for reset and expo
 `.apack-import-*` directory precedes live replacement; an unknown commit preserves it and the incumbent copies
 without replay. Host composition closes affected stores and suppresses settled settings/data publication.
 `database/open.ts` refuses writable startup while a preparation exists; read-only forensic opens remain available.
-Recovery tooling and full crash/filesystem qualification remain requirements of the SQLite goal; never delete a
-preparation simply to bypass that refusal. These leases do not exclude a separate process or promise a single
-cross-store read snapshot.
+`backup/restore.ts` owns explicit offline restoration: stage/validate retained incumbents, persist a restore plan,
+quarantine interrupted live directories, publish verified stages and rename the preparation only after every entry
+settles. The CLI exposes it as `db recover`; completed sessions are never replayed. Full crash/filesystem
+qualification remains in the SQLite goal; never delete a preparation simply to bypass that refusal. These leases do not exclude a separate process or promise a single
+cross-store read snapshot. Managed read-only store opens register private metadata claims via
+`database/recovery-lock.ts` until close. Recovery publishes its exclusion before checking claims; readers publish
+claims before checking the exclusion, so neither can pass the other unnoticed. Dead claims use the existing
+host/PID liveness policy; unreadable/foreign-host claims refuse. Profile metadata must be writable for managed
+read-only access. Direct backend snapshot opens remain lower-level construction tools and must not be used to
+bypass a live profile’s ownership protocol.
 
 ## Module map (`src/`)
 
