@@ -1,7 +1,7 @@
 // Disposable native-producer acceptance gate. Requires a matching elmdb CLI; never reads a user profile.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createEarsEngine } from '@apackdev/ears';
@@ -64,7 +64,7 @@ try {
   const f = fixture('both'), before = hashes(f.source);
   report.sourceHashes = before;
   const result = await convertSqliteProfile({ source: f.source, output: f.output, producer }); report.converted = result;
-  assert.equal(result.path, join(f.output, 'profile')); assert.deepEqual(result.stores.map(store => store.name), ['primary', 'runs']);
+  assert.equal(result.path, join(realpathSync(f.output), 'profile')); assert.deepEqual(result.stores.map(store => store.name), ['primary', 'runs']);
   assert.deepEqual(hashes(f.source), before); assert.deepEqual(readdirSync(f.output), ['profile']);
   const converted = _appDataPaths(result.path), copied = resolveAppEnvironment({ env: 'test', userDataDir: result.path });
   for (const [from, to] of [[join(f.paths.media, 'asset.bin'), join(converted.media, 'asset.bin')], [f.paths.secretsFile, converted.secretsFile],

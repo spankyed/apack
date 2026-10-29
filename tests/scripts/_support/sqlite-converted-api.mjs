@@ -38,8 +38,8 @@ if (mode === 'client') {
       });
       const first = await wait(() => true); assert.equal(first.ok, true, first.error); assert.equal(first.value.id, id);
       const trial = Number(process.env.CONVERTED_API_TRIAL);
-      assert.equal(first.value.label, trial === 1 ? initialLabel : 'updated through real pack');
-      const label = trial === 1 ? 'updated through real pack' : finalLabel;
+      assert.equal(first.value.label, process.env.CONVERTED_API_EXPECT_LABEL ?? (trial === 1 ? initialLabel : 'updated through real pack'));
+      const label = process.env.CONVERTED_API_WRITE_LABEL ?? (trial === 1 ? 'updated through real pack' : finalLabel);
       await rpc.bus.send.mutate({ to: 'default-setup/prompts', event: { type: 'UPDATE_PROMPT', promptId: id, label } });
       const changed = await wait(update => update.ok && update.value?.label === label);
       assert(changed.commit > first.commit); assert(updates.length >= 2);
@@ -69,21 +69,24 @@ if (mode === 'client') {
     mkdirSync(paths.media); writeFileSync(join(paths.media, 'asset.bin'), new Uint8Array([42, 0, 255]));
     save({ source: process.env.EARS_TEST_SOURCE, context, paths, hashes: { primary: sha(join(paths.lmdb, 'data.mdb')), runs: sha(join(paths.runHistory, 'data.mdb')), media: sha(join(paths.media, 'asset.bin')) }, shippedIntegritySha256: sha(join(shipped, 'integrity.json')) });
   } else {
-    assert.equal(mode, 'inspect');
-    const app = await openAppDatabase({ env: 'test', userDataDir: context.userDataDir, readOnly: true, storageFormat: 'sqlite/1' });
+    assert(['inspect', 'source-inspect'].includes(mode));
+    const native = mode === 'source-inspect', format = native ? 'elmdb/1' : 'sqlite/1';
+    const app = await openAppDatabase({ env: 'test', userDataDir: context.userDataDir, readOnly: true, storageFormat: format });
     let primary;
     try {
-      assert.equal(app.database.format, 'sqlite/1'); const row = app.ears.getRow(id);
-      assert.equal(row.label, finalLabel); assert.deepEqual(row.markerBytes, new Uint8Array([0, 255, 42]));
+      assert.equal(app.database.format, format); const row = app.ears.getRow(id);
+      assert.equal(row.label, native ? 'updated in native baseline' : finalLabel); assert.deepEqual(row.markerBytes, new Uint8Array([0, 255, 42]));
       assert.deepEqual(row.markerAt, new Date(1234)); assert.equal(row.largeField, 'x'.repeat(256000));
       assert.equal(storedSettings(app.ears).app.personal.name, settingsName);
       assert(app.schema.packs.some(pack => pack.id === 'default-setup'));
       primary = { sequence: app.database.sequence, label: row.label, typedAndLargeFieldsRetained: true, settingsRetained: true };
     } finally { app.close(); }
-    const runs = openRunHistory(paths.runHistory, { storageFormat: 'sqlite/1', readOnly: true, replaceUnreadable: false });
+    const runs = openRunHistory(paths.runHistory, { storageFormat: format, readOnly: true, replaceUnreadable: false });
     try { assert.equal(runs.engine.getAttr('RunNode-native-api', 'label'), 'native history retained'); }
     finally { runs.database.close(); }
-    assert(!existsSync(join(paths.lmdb, 'data.mdb')) && !existsSync(join(paths.runHistory, 'data.mdb')));
-    save({ source: process.env.EARS_TEST_SOURCE, primary, historyRetained: true, mediaSha256: sha(join(paths.media, 'asset.bin')), allStoresSqlite: true });
+    const file = native ? 'data.mdb' : 'data.sqlite3', foreign = native ? 'data.sqlite3' : 'data.mdb';
+    assert(!existsSync(join(paths.lmdb, foreign)) && !existsSync(join(paths.runHistory, foreign)));
+    save({ source: process.env.EARS_TEST_SOURCE, primary, historyRetained: true, mediaSha256: sha(join(paths.media, 'asset.bin')), format,
+      hashes: { primary: sha(join(paths.lmdb, file)), runs: sha(join(paths.runHistory, file)) } });
   }
 }
