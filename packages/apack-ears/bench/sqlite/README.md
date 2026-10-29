@@ -123,6 +123,24 @@ application budgets from this short-string synthetic, or fairness between native
 backend fixture. Fingerprint the loaded SQLite binding and vector extension after sampling stops so provenance
 collection does not perturb the measured heartbeat.
 
+### Default-typo growth cost protocol
+
+Before its first execution, `text-typo-cost.mjs` fixes 1k/10k/100k fresh profiles with one unique ten-character
+term per ordinary row and a shared broad term. Compare pinned vocabulary-scan e452d67ae1 against bounded
+alternatives 9beb23ebc9 in order **scan / bounded / bounded / scan**, one fresh process per trial, one owned
+Linux container with two CPUs and 6 GiB. Each process runs all three sizes with OFF commits and normal
+built package entries. Copy this identical diagnostic fixture into both sources; change no production code.
+Use the existing 180-second process diagnostic bound, stop on the first failure and retain partial JSON,
+stdout/stderr and source/native/fixture hashes. No automatic retries or discarded samples.
+
+Each profile records one first invocation and twelve warm calls for exact, deletion, transposition, absent,
+maximum eligible token, phrase, prefix, Unicode, broad and highlighted queries, with fixed useful answers.
+The default fuzzy option stays enabled. First invocation is **not cold storage**: backfill and prior queries
+warm the OS/database cache. Retain all raw times, independent heartbeat samples, RSS/heap/resource usage,
+file/WAL bytes and a separate untimed binding observation including returned vocabulary rows and argument
+bytes. The 100k profile and 32-character typo are mandatory, even if they are slow. These are SQLite
+revision diagnostics, not matched elmdb, whole-app budget, cold-start, memory-bound or language acceptance.
+
 
 After the passing first 1k smoke, predeclare the next cohort: three fresh sync-disabled processes each at 10k
 then 100k, followed only if all six pass by one first 10k FULL process. Stop at the first correctness, resource
