@@ -58,7 +58,8 @@ jobs:
       - name: Host recovery and storage contracts
         run: >-
           npm test -w @apackdev/host -- tests/backup/recovery.spec.ts tests/backup/recovery-crash.spec.ts
-          tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/database/storage.spec.ts
+          tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/backup/logical.spec.ts
+          tests/backup/storage.spec.ts tests/database/storage.spec.ts
           tests/database/open-app-database.spec.ts tests/database/write-lock.spec.ts
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/host.json
           2>&1 | tee .temp/sqlite-platform/host.log

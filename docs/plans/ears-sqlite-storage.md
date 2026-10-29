@@ -431,3 +431,30 @@ identical exact answers; see the archive evidence. Its earlier incomplete-index 
 without treating its observed difference as a causal join cost. Dormant-identity
 resource bounds and large restored/replaced stores need measured qualification; this design does not waive
 existing vector latency/recall/resource or recovery gates.
+
+### App and host archive composition
+
+The app-only SQLite entry exposes `exportLogicalSnapshot(database, { maxFrameBytes? })` and
+`stageLogicalSnapshot(chunks, newDirectory, { maxFrameBytes? })`. The latter reserves a private container,
+fully verifies the ingestion spool, restores a separate child store with FULL commits, builds and audits,
+then removes the spool and returns the closed child. A failure removes only its reserved container;
+a pre-existing directory is untouched. Successful staging belongs to the caller. Keep it private until
+publication; incomplete ingestion never becomes the profile's ordinary data file.
+
+The host's `exportLogicalDatabase` writes through async bounded file writes, syncs/closes before exclusive
+hard-link publication, cleans its private temporary directory and syncs the parent. A directory-sync
+failure after publication returns `NOT_DURABLE` with `publishedPath` while retaining the complete artifact.
+Cleanup failures retain their original causes and identify a published path where applicable. Exclusive
+hard-link support is a requirement of this publication path; unsupported filesystems fail rather than
+falling back to overwriting or a visible partial copy. Only actual CI hosts are qualified; Windows
+inherited ACLs/directory durability and arbitrary filesystems are not certified.
+
+The host's logical inspection/import accepts explicit primary/history archive paths. It stages and audits
+every selected input before invoking the existing import coordinator. Physical-backup validation still
+requires primary data. Logical selected-store validation supports history alone without refreshing or
+rewriting an unrelated primary store. Inspection also runs the primary application validator when primary
+is selected, making it usable for a genuine dry run. Import retains write exclusion, incumbent copies,
+watch notifications, acceptance rollback and `COMMIT_UNKNOWN` recovery. Logical archives contain database
+data only; current media remains untouched, and packs/secrets are separately owned. Full backup/media
+composition, user-facing CLI commands, interruption/large-profile/real-conversion and packaged-platform
+qualification remain required; these APIs alone do not complete those gates.

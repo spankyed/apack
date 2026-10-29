@@ -37,6 +37,17 @@ A feature's halves sit together: `features/packs/be/system.ts` answers `features
 for what they hold, never for a layer — no `core/`, `shared/`, `lib/` or `utils/`, at any depth, as in the API and
 the renderer.
 
+SQLite's app-only logical archive API is composed by `backup/logical.ts` and `backup/index.ts`.
+`exportLogicalDatabase(database, file)` synchronizes a private 0600 archive before exclusive hard-link
+publication; existing/racing targets survive, unsupported hard-link filesystems refuse, and a published
+artifact whose directory sync fails is retained with `NOT_DURABLE`/`publishedPath`. Windows directory sync
+and inherited ACL durability remain platform qualification, not portable guarantees. The parent must exist.
+`readLogicalBackup(stores, archives)` stages, rebuilds, audits and validates selected primary/history archives
+without replacing live data. `importLogicalDatabase` uses the same staging path and ordinary import coordinator,
+including write leases, incumbent copies, rollback and uncertain-outcome recovery. Logical archives do not own
+media, packs or secrets; incumbent media is preserved. Every selected archive validates before replacement.
+Physical `readBackup` still requires the primary database; a history-only logical import does not replace it.
+
 Database import acquires same-handle write leases before copying incumbents and keeps them through acceptance
 or rollback. The app-data service also leases primary/history for reset and export. A preparation in the owned
 `.apack-import-*` directory precedes live replacement; an unknown commit preserves it and the incumbent copies

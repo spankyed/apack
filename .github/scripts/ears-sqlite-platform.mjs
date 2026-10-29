@@ -21,13 +21,24 @@ if (mode === 'verify') {
     ? test.assertionResults.filter(result => result.status === 'passed') : []).length;
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
+  const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
+  const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const result = { source, earsPassed: ears.numPassedTests, sqliteCasesPassed: passedIn(ears, /\/tests\/sqlite\//),
     selectedTextPassed: selected.filter(test => test.status === 'passed').length, selectedTextTotal: selected.length,
     maintenanceCasesPassed: passedIn(cli, /\/tests\/commands\/db-rebuild\.spec\.ts$/),
+    logicalSnapshotCasesPassed: passedIn(ears, /\/tests\/sqlite\/logical-snapshot\.spec\.ts$/),
+    logicalHostCasesPassed: logical.filter(test => test.status === 'passed').length,
+    logicalHostSkipped: logicalSkipped.map(test => ({ name: test.fullName, status: test.status })),
     hostPassed: host.numPassedTests, recoveryCasesPassed: passedIn(host, /\/backup\/recovery\.spec\.ts$/) };
   save('verification.json', result);
   assert(result.maintenanceCasesPassed >= 9 && cli.numFailedTests === 0,
     'All nine actual offline maintenance command cases must execute and pass');
+  assert.equal(result.logicalSnapshotCasesPassed, 5, 'All public snapshot API cases must execute');
+  assert.equal(logical.length, 10, 'All host logical publication/preview/replacement cases must be collected');
+  assert.equal(result.logicalHostCasesPassed, platform() === 'win32' ? 9 : 10, 'All platform-applicable logical archive cases must pass');
+  assert(logicalSkipped.every(test => platform() === 'win32' && ['pending', 'skipped'].includes(test.status) &&
+    test.fullName === 'reports a published but unsynchronized directory truthfully and retains its complete archive'),
+    'Only Windows directory-sync qualification may be skipped in the logical archive cases');
   assert(selected.length > 0 && selected.every(test => test.status === 'passed') && result.recoveryCasesPassed > 0,
     'SQLite-selected text cases and recovery must execute and pass; native fallback is insufficient');
 } else {
