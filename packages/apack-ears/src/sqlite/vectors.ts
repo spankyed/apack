@@ -51,9 +51,20 @@ export class SqliteVectors {
       GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`, [query, ...bindings, k]);
     // Small and large-K queries stay exact. No native candidate cap may silently underfill owners.
     if (k <= 0 || k > 32 || dimensions < 128 || dimensions % 8 !== 0) return exact();
-    const count = Number(this.db.get(`SELECT count(*) n FROM (SELECT 1 FROM chunks c JOIN entities e ON e.id=c.entity_id
-      WHERE ${eligible} LIMIT 4097)`, bindings)!.n);
-    if (count <= 4096) return exact();
+    // Materialize the bounded eligibility page once. Small scopes reuse it for exact scoring;
+    // large scopes return only their count and do not read canonical vector payloads here.
+    const probe=this.db.all(`WITH eligible AS MATERIALIZED (
+      SELECT c.entity_id id,c.embedding_id,e.seq FROM chunks c JOIN entities e ON e.id=c.entity_id
+      WHERE ${eligible} LIMIT 4097),
+      total AS MATERIALIZED (SELECT count(*) n FROM eligible),
+      ranked AS MATERIALIZED (
+        SELECT c.id,1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score,c.seq
+        FROM total t CROSS JOIN eligible c JOIN embedding_values v ON v.id=c.embedding_id
+        LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE t.n<=4096
+        GROUP BY c.id ORDER BY score DESC,c.seq LIMIT ?)
+      SELECT NULL id,NULL score,n,NULL seq FROM total
+      UNION ALL SELECT id,score,NULL,seq FROM ranked ORDER BY n DESC,score DESC,seq`, [...bindings,query,k]);
+    if(Number(probe[0]!.n)<=4096)return probe.slice(1).map(row=>({id:row.id,score:row.score}));
     const owners=this.db.indexBuilds.nativeVectorOwners(generation,query,scope,exclude);
     if(owners) {
       const rows=this.db.all(`SELECT c.entity_id id,

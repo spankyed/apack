@@ -34,17 +34,13 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
     // Independent scalar instrumentation makes the exact-scan mutation fail this test. It does not
     // replace native Hamming candidate selection and is never registered by production code.
     let nativePlan: ReturnType<SqliteDatabase['all']> = [], materializedIds = 0;
-    const all = db.all.bind(db), get = db.get.bind(db), eligibilityProbes: number[] = [];
+    const all = db.all.bind(db), eligibilityProbes: number[] = [];
     db.all = (sql, parameters = []) => {
       if (sql.startsWith('WITH candidates AS MATERIALIZED')) nativePlan = all('EXPLAIN QUERY PLAN ' + sql, parameters);
       const rows = all(sql, parameters);
+      if(sql.startsWith('WITH eligible AS MATERIALIZED'))eligibilityProbes.push(Number(rows[0]!.n));
       if (sql.startsWith('SELECT p.id FROM (')) materializedIds = Math.max(materializedIds, rows.length);
       return rows;
-    };
-    db.get = (sql, parameters = []) => {
-      const result = get(sql, parameters);
-      if (sql.includes('count(*)') && sql.includes('FROM chunks c')) eligibilityProbes.push(Number(result!.n));
-      return result;
     };
     let reranked = 0;
     db.sql.function('vec_distance_cosine', { deterministic: true }, (a, b) => {
@@ -92,6 +88,20 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
       e.write(ids[1]!).destroy();
       expect(db.get('SELECT 1 FROM embedding_search p LEFT JOIN embedding_values v ON v.id=p.embedding_id WHERE v.id IS NULL')).toBeUndefined();
     } finally { watching.stop(); }
+  });
+
+  it('evaluates a small eligibility scope once for counting and exact scoring',()=>{
+    const {db,e}=fixture(128),vector=[1,...Array<number>(127).fill(0)];
+    const ids=Array.from({length:3},(_,i)=>e.create('Row',{title:String(i)}).id());
+    const pending=e.pendingEmbeddings('Row');
+    e.embed(pending.chunks.map(chunk=>({...chunk,model:pending.model,vector})));
+    let evaluated=0;
+    db.sql.function('scope_probe',{deterministic:false},(_id)=>{evaluated++;return 1;});
+    const job=db.indexBuilds.jobs().find(job=>job.kind==='vector')!;
+    const rows=db.search.vectors.search({sql:'SELECT id FROM entities WHERE scope_probe(id)',parameters:[]},
+      'Row',job.name,job.generation,128,vector,2);
+    expect(rows.map(row=>row.id)).toEqual(ids.slice(0,2));
+    expect(evaluated).toBe(3);
   });
 
   it('keeps finite cosine scores for extreme directions without rewriting canonical bytes', () => {
