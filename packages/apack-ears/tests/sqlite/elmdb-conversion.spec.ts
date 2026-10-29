@@ -56,6 +56,17 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('explicit elmdb
       expect(e.getAttr(next, 'shortCode')).toMatch(/20$/);
     } finally { database.close(); }
   });
+  it('accepts the native canonical null for an absent short-code rule without weakening other schema validation', async () => {
+    const nativeSchema = JSON.parse(JSON.stringify(toElmdbSchema({ types: { Note: { required: [] } }, relations: {}, roles: [] })));
+    nativeSchema.types.Note.shortCode = null;
+    const f = fixture(dump([{ load: 'entity', id: 'Note-one', fields: { title: 'retained' } }], nativeSchema));
+    const converted = await convertElmdbDump(f.input, f.output), db = openDatabase({ path: converted.path, readOnly: true });
+    try { expect(createEarsEngine({ database: db }).getAttr('Note-one', 'title')).toBe('retained'); } finally { db.close(); }
+    nativeSchema.types.Note.shortCode = 42;
+    const invalid = fixture(dump([], nativeSchema));
+    await expect(convertElmdbDump(invalid.input, invalid.output)).rejects.toMatchObject({ code: 'SCHEMA_INVALID' });
+    expect(existsSync(invalid.output)).toBe(false);
+  });
   it('refuses an incumbent destination without removing its contents', async () => {
     const f = fixture(dump([])); writeFileSync(f.output, 'incumbent');
     await expect(convertElmdbDump(f.input, f.output)).rejects.toMatchObject({ code: 'EEXIST' });

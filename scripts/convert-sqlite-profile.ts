@@ -1,6 +1,6 @@
 // Explicit developer tooling over a stopped source copy; never part of app startup or automatic migration.
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { APP_ENVS, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -13,6 +13,14 @@ const within = (parent: string, child: string) => {
   const selected = relative(parent, child);
   return selected === '' || (selected !== '..' && !selected.startsWith('..' + sep) && !isAbsolute(selected));
 };
+function canonical(file: string): string {
+  try { return realpathSync(file); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || dirname(file) === file) throw error;
+    return join(canonical(dirname(file)), basename(file));
+  }
+}
+
 function ordinaryTree(directory: string): void {
   for (const entry of readdirSync(directory)) {
     const file = join(directory, entry), stat = lstatSync(file);
@@ -31,12 +39,11 @@ export interface ConvertSqliteProfileOptions {
 
 export async function convertSqliteProfile(options: ConvertSqliteProfileOptions) {
   const source = realpathSync(options.source), parent = realpathSync(dirname(resolve(options.output)));
-  const output = join(parent, relative(dirname(resolve(options.output)), resolve(options.output)));
+  const output = join(parent, basename(resolve(options.output)));
   if (within(source, output) || within(output, source)) throw new Error('Conversion source and output must be separate trees');
   for (const env of APP_ENVS) {
     // No implicit or default production-profile destination, including an alias of an existing parent.
-    let defaultPath = resolve(appDataDirFor(env));
-    if (existsSync(defaultPath)) defaultPath = realpathSync(defaultPath);
+    const defaultPath = canonical(resolve(appDataDirFor(env)));
     if (within(defaultPath, output)) throw new Error('Conversion requires an isolated output outside default app profiles');
   }
   if (existsSync(output)) throw Object.assign(new Error('Conversion output must not exist'), { code: 'EEXIST' });

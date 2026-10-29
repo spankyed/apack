@@ -129,6 +129,10 @@ export async function convertElmdbDump(file: string, directory: string) {
     let schema: unknown;
     if (schemaBytes.length) {
       try { schema = JSON.parse(schemaBytes.toString('utf8')); } catch { return invalid('schema JSON'); }
+      // Rust's canonical schema writes absent short-code rules as null. The SQLite declaration
+      // language represents the same absence by omitting the key; ordinary validation stays strict.
+      if (object(schema) && object(schema.types)) for (const definition of Object.values(schema.types))
+        if (object(definition) && definition.shortCode === null) delete definition.shortCode;
       createSchemaValidator()(schema);
     }
     mkdirSync(directory, { mode: 0o700 }); reserved = true;
