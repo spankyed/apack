@@ -292,21 +292,22 @@ is frozen before new queries are evaluated; files/oracle still need generation. 
 implement actual candidate generation/admission/transaction ownership with an explicit
 maintenance/distribution decision, then qualify the complete fresh and integrated gates.
 No more primitive result alone can establish the required final execution design.
-Internal generation storage and [background training ownership](../references/evidence/ears-sqlite-implementation-2026-10-28/native-training-worker/README.md)
-now exist in `vector-index.ts`/`vector-training.ts`. Runtime `7478a0fc34` passes 617 EARS,
-135 host/storage, ten native lifecycle cases, builds/types/API/static and two mutation
-controls. A deterministic old-snapshot barrier found and fixed a real stale-result omission.
-The cursor now uses an indexed bounded ID page before BLOB lookup; a missing index on a
-populated store requires explicit offline preparation. Workers return identified bounded
-models without holding the foreground writer. Actual extension/source/image hashes are
-retained; these checks use original vec1, not the scratch membership patch.
-Normal app composition does not activate this service. Cancellation waits for worker exit;
-host owners must drain it before replacement/deletion. Next implement persistent attempt/
-model states, scheduler/restart ownership, incumbent-preserving model refresh, host draining,
-final EARS owner aggregation and readiness/watch/retirement/audit/rebuild/restore paths.
-The platform workflow now requires the ten cases and pinned native build provenance;
-[40960736926](https://github.com/spankyed/apack/actions/runs/40960736926) is running on exact
-`4575088eed`. Earlier platform green predates this slice.
+Internal generation storage, background training and a durable shared-scheduler model queue
+now exist in `vector-index.ts`, `vector-training.ts` and `vector-models.ts`.
+Runtime `bf9738ecf7` passes 622 EARS, 135 host/storage and fifteen native lifecycle cases,
+builds/types/API/static checks in disposable Linux. [Scheduler evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-scheduler/README.md)
+retains exact sources and checks. Attempts are committed before read-only workers launch;
+completed models remain available until the result transaction commits. Restart recovery is
+explicit under the managed exclusive writer. Projection and retirement use bounded batches,
+and readiness shares the existing scheduler without advancing logical commit identity.
+Normal app composition does not activate this service. Automatic eligibility admission,
+incumbent-preserving physical model refresh, host drain-before-replacement/deletion, final
+EARS owner aggregation and complete audit/rebuild/restore integration remain required.
+The earlier [platform run 40960736926](https://github.com/spankyed/apack/actions/runs/40960736926)
+on `4575088eed` passed Linux/macOS; Windows passed its 616 EARS cases, including all ten
+then-existing native cases, but failed later because Rust selected Git's `link.exe`.
+The producer now uses PowerShell on Windows and checks linker selection. The workflow also
+requires all five durable-model cases. Those changes still require a new exact-tip platform run.
 Normal native distribution/fork selection and all frozen fresh/app/resource/full Strict gates
 remain required. The active integrated vector path still fails broad responsiveness.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;

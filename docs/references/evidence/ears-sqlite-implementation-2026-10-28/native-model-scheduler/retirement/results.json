@@ -1,0 +1,167 @@
+[
+  {
+    "label": "dependencies",
+    "exitCode": 0,
+    "seconds": 1.6565537250135094
+  },
+  {
+    "label": "packages-build",
+    "exitCode": 0,
+    "seconds": 26.4700487809896
+  },
+  {
+    "label": "compile-original",
+    "args": [
+      "cc",
+      "-O3",
+      "-DNDEBUG",
+      "-Werror=implicit-function-declaration",
+      "-shared",
+      "-fPIC",
+      "-I/seed/node_modules/better-sqlite3/deps/sqlite3",
+      "/assets/vec1.c",
+      "-lm",
+      "-o",
+      "/metrics/vec1.so"
+    ],
+    "exitCode": 0,
+    "seconds": 2.506847184995422
+  },
+  {
+    "label": "ears-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.382521588995587
+  },
+  {
+    "label": "native-admission",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "tests/sqlite/vector-index.spec.ts",
+      "tests/sqlite/vector-training.spec.ts",
+      "tests/sqlite/vector-models.spec.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/native-admission.json"
+    ],
+    "exitCode": 0,
+    "seconds": 3.5179346869990695
+  },
+  {
+    "label": "mutation-stale-result",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "tests/sqlite/vector-training.spec.ts",
+      "-t",
+      "rejects stale work",
+      "--maxWorkers=1"
+    ],
+    "exitCode": 1,
+    "seconds": 1.1823994249862153
+  },
+  {
+    "label": "mutation-cursor-plan",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "tests/sqlite/vector-index.spec.ts",
+      "-t",
+      "captures foreground changes",
+      "--maxWorkers=1"
+    ],
+    "exitCode": 1,
+    "seconds": 0.9036922790110111
+  },
+  {
+    "label": "ears-api",
+    "args": [
+      "npm",
+      "run",
+      "api:check",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.473232740012463
+  },
+  {
+    "label": "lint",
+    "args": [
+      "npm",
+      "run",
+      "lint:check"
+    ],
+    "exitCode": 0,
+    "seconds": 2.5162111009994987
+  },
+  {
+    "label": "specifiers",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.460571173985954
+  },
+  {
+    "label": "ears-all",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 43.101019030000316
+  },
+  {
+    "label": "host-storage",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/host",
+      "--",
+      "tests/backup/recovery.spec.ts",
+      "tests/backup/recovery-crash.spec.ts",
+      "tests/backup/import.spec.ts",
+      "tests/backup/import-transaction.spec.ts",
+      "tests/backup/logical.spec.ts",
+      "tests/backup/logical-crash.spec.ts",
+      "tests/backup/storage.spec.ts",
+      "tests/database/storage.spec.ts",
+      "tests/database/open-app-database.spec.ts",
+      "tests/database/write-lock.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/host.json"
+    ],
+    "exitCode": 0,
+    "seconds": 49.32891702701454
+  }
+]
