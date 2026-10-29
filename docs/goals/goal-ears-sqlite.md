@@ -238,9 +238,15 @@ snapshot preceding the sole parameter-property-to-field-assignment loader correc
 for exact source patches, setup/config/loader failures and qualified limits. The earlier
 [corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md)
 retains fixture corrections and pre-fix failures. No query budget or useful-result expectation was weakened.
-Next execute the preregistered old/new/new/old 10k text-shape cohort from the benchmark README: old 9a2771ec25,
-new this converged source, all samples/bytes/calls retained. The fixture is syntax-checked, not yet measured.
-Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
+Local functional checkpoint is **026b6b18b0b786f5cc732ffb83982b2b90d37ca1**, clean and unpublished. Its
+preregistered old/new/new/old 10k text-shape cohort completed all four expected-answer trials. Cross-field
+p50 regresses from ~0.29 ms to ~20 ms because common clause matches materialize before intersection; broad
+queries are ~1.9× slower, readiness ~3.3× slower, main database ~25% larger, while name writes remain close.
+These costs are not accepted. See [shape evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-shape/README.md).
+Next fix native selective clause execution, verify rare/common term orders plus OR/any/exclusions and the
+unchanged corpus, then measure a genuinely changed source with a new preregistered comparison. Preserve
+this entire cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
+after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
 rest of phases 4–7 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
 `runtime-control.mjs`: same two-CPU quota/6 GiB, ABBA order, 500 fixed samples per path, first-150/remaining-350
