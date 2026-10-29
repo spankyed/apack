@@ -73,6 +73,38 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(e.lastCommit()).toBe(before);
   });
 
+  it('refuses rebuild on read-only, open-unit and stopped owners without changing the catalog', () => {
+    const { db, e } = seed();
+    const jobs = db.indexBuilds.jobs(), before = e.lastCommit();
+    const reader = open(db.path, true);
+    expect(() => reader.db.rebuildIndexes()).toThrow(expect.objectContaining({ code: 'READ_ONLY' }));
+    const unit = db.begin();
+    try { expect(() => db.rebuildIndexes()).toThrow(expect.objectContaining({ code: 'UNIT_OPEN' })); }
+    finally { unit.abort(); }
+    const failure = new Error('fatal scheduler failure');
+    db.indexBuilds.stop(failure);
+    expect(() => db.rebuildIndexes()).toThrow(failure);
+    expect(db.indexBuilds.jobs()).toEqual(jobs);
+    expect(e.lastCommit()).toBe(before);
+    expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual(['Row-one']);
+  });
+
+  it('rolls back failed rebuild admission and keeps current generations usable', () => {
+    const { db, e } = seed();
+    const jobs = db.indexBuilds.jobs(), before = e.lastCommit();
+    const reader = open(db.path, true);
+    const failure = new Error('rebuild physical admission failed');
+    const fault = vi.spyOn(db.search, 'ensure').mockImplementation(() => { throw failure; });
+    expect(() => db.rebuildIndexes()).toThrow(failure); fault.mockRestore();
+    expect(db.sql.inTransaction).toBe(false);
+    expect(db.indexBuilds.jobs()).toEqual(jobs);
+    expect(db.get('SELECT 1 FROM index_gc LIMIT 1')).toBeUndefined();
+    expect(e.lastCommit()).toBe(before);
+    expect(reader.e.query('Row').count()).toBe(2);
+    expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual(['Row-one']);
+    expect(e.query('Row').near([1, 0, 0], { k: 1 }).ids()).toEqual(['Row-one']);
+  });
+
   it.each(components)('refuses read-only and reconstructs %s in a private background generation', async (_label, kind, name) => {
     const { db, text, tri } = seed(), path = db.path, sequence = db.sequence;
     db.close();

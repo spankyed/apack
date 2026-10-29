@@ -207,6 +207,10 @@ export class SqliteIndexBuilds {
     for (const waiter of this.waiters) waiter.reject(this.lastError ?? Object.assign(new Error('The database is closed'), { code: 'CLOSED' }));
     this.waiters.clear();
   }
+  /** Explicit maintenance cannot enqueue work on an owner that requires reopen. */
+  assertRunning(): void {
+    if (this.stopped) throw this.lastError ?? Object.assign(new Error('Index scheduler is stopped; reopen the database'), { code: 'CLOSED' });
+  }
   step(): 'progress' | 'idle' | 'paused' | 'busy' | 'failed' {
     if (this.stopped || !this.db.isOpen || this.db.readOnly || !this.canRun()) return 'paused';
     let begun = false, job: SqliteIndexJob | undefined, changed: string | undefined;

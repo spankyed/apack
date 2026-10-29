@@ -1242,6 +1242,7 @@ export class SqliteDatabase implements EarsDatabase {
   rebuildIndexes(): void {
     this.writable();
     if (this.active) fail('UNIT_OPEN', 'Commit or abort the open unit before rebuilding indexes');
+    this.indexBuilds.assertRunning();
     this.sql.exec('BEGIN IMMEDIATE');
     try {
       this.checkRevision();
