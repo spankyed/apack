@@ -243,9 +243,14 @@ preregistered old/new/new/old 10k text-shape cohort completed all four expected-
 p50 regresses from ~0.29 ms to ~20 ms because common clause matches materialize before intersection; broad
 queries are ~1.9× slower, readiness ~3.3× slower, main database ~25% larger, while name writes remain close.
 These costs are not accepted. See [shape evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-shape/README.md).
-Next fix native selective clause execution, verify rare/common term orders plus OR/any/exclusions and the
-unchanged corpus, then measure a genuinely changed source with a new preregistered comparison. Preserve
-this entire cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
+The new local native-clause correction uses capped native count probes to order a conjunction, native MATCH
+plus owner-index rowid constraints for subsequent clauses, and positive-owner constraints for global exclusions.
+It passes **473/473 SQLite**, 98 focused cases, EARS build/types/lint, a native-plan removal control and the
+unchanged relevance corpus. Its preceding adaptive snapshot also passes five builds/imports and 42 native
+search cases. See [native-conjunction evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-conjunctions/README.md).
+Next execute the new preregistered six-process legacy/materialized/selective/selective/materialized/legacy
+comparison, with both rare/common and 100-owner/common word orders, exclusions and OR. Cost is unmeasured
+for this correction. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
 rest of phases 4–7 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and

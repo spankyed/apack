@@ -22,7 +22,7 @@ try {
   db = openDatabase({ path: root, schema, syncs: false });
   const e = createEarsEngine({ database: db }), start = performance.now();
   for (let offset = 0; offset < n; offset += 256) e.transact(() => {
-    for (let i = offset; i < Math.min(n, offset + 256); i++) e.create('Row', { id: `Row-${i}`, name: `openDatabaseStore ticket${i}`,
+    for (let i = offset; i < Math.min(n, offset + 256); i++) e.create('Row', { id: `Row-${i}`, name: `openDatabaseStore ticket${i} group${i % 100}`,
       body: 'backup ready ' + (i % 128 === 0 ? 'large body '.repeat(1500) : 'body '.repeat(100)), tags: ['engineering', 'storage', 'ops'] });
   });
   const seedMs = performance.now() - start, before = files(), peak = { filesBytes: total(before), walBytes: 0, rss: process.memoryUsage().rss };
@@ -37,8 +37,8 @@ try {
   await db.indexesReady(); const buildMs = performance.now() - admitStart; sample();
   const afterBuild = files(), sqlCalls = { all: 0, get: 0, run: 0 }, originals = {};
   for (const key of Object.keys(sqlCalls)) { originals[key] = db[key].bind(db); db[key] = (...args) => { sqlCalls[key]++; return originals[key](...args); }; }
-  const samples = { point: [], crossField: [], broad: [], update: [] }, counts = {};
-  for (const [name, query, expected] of [['point', 'ticket42', ['Row-42']], ['crossField', 'ticket42 ready', ['Row-42']], ['broad', 'storage', null]]) {
+  const samples = { point: [], crossField: [], crossFieldReverse: [], medium: [], mediumReverse: [], negative: [], negativeReverse: [], disjunction: [], broad: [], update: [] }, counts = {};
+  for (const [name, query, expected] of [['point', 'ticket42', ['Row-42']], ['crossField', 'ticket42 ready', ['Row-42']], ['crossFieldReverse', 'ready ticket42', ['Row-42']], ['medium', 'group7 ready', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['mediumReverse', 'ready group7', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['negative', 'ticket42 -storage', []], ['negativeReverse', '-storage ticket42', []], ['disjunction', 'ticket42 OR ticket43', ['Row-42', 'Row-43']], ['broad', 'storage', null]]) {
     phase = name; const callsBefore = { ...sqlCalls };
     const limit = name === 'broad' ? 50 : 250;
     for (let i = 0; i < limit; i++) {

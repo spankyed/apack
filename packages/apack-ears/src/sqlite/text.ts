@@ -144,17 +144,47 @@ export class SqliteText {
     const positive = groups.flat(); if (!positive.length) return [];
     const required = options.any ? positive.map(i => [i]) : groups.filter(group => group.length);
     const condition = required.map(group => '(' + group.map(i => `max(clause=${i})`).join(' AND ') + ')').join(' OR ');
+    const scoped = ids === null ? [] : [JSON.stringify(ids)];
+    const scope = ids === null ? 'e.trashed=0' : 'f.entity_id IN (SELECT value FROM json_each(?))';
+    const previous = new Map<number, number>();
+    const negatives = clauses.flatMap((clause, i) => clause.negative ? [i] : []);
+    let executionOrder = [...positive, ...negatives];
+    if (required.length === 1 && required[0]!.length > 1) {
+      // Native FTS probes bound returned hits, not a vocabulary scan or a second posting index. Use their
+      // counts only to order a conjunction; the final statement rereads all matches in its own snapshot.
+      const estimates = new Map<number, number>();
+      for (const bound of [32, 128, 512, 2048]) {
+        for (const i of required[0]!) estimates.set(i, Number(this.db.get(
+          `SELECT count(*) n FROM (SELECT f.rowid FROM ${table} f JOIN entities e ON e.id=f.entity_id
+           WHERE ${table} MATCH ? AND CAST(f.field AS INTEGER) IN (${clauses[i]!.fields.join(',')}) AND ${scope} LIMIT ?)`,
+          [clauses[i]!.match, ...scoped, bound])!.n));
+        if ([...estimates.values()].some(count => count < bound)) break;
+      }
+      const order = [...required[0]!].sort((a, b) => estimates.get(a)! - estimates.get(b)!);
+      for (let i = 1; i < order.length; i++) previous.set(order[i]!, order[i - 1]!);
+      executionOrder = [...order, ...negatives];
+    }
+    const positions = new Map(executionOrder.map((i, position) => [i, position]));
+    // Every accepted entity belongs to at least one group's last executed positive clause. Exclusions
+    // only need those owners; their scores never contribute to a positive result.
+    const candidates = required.map(group => group.reduce((last, i) => positions.get(last)! > positions.get(i)! ? last : i));
     const select = (open: string, close: string) => {
-      const args: any[] = [], ctes = clauses.map((clause, i) => {
+      const args: any[] = [], ctes = executionOrder.map(i => {
+        const clause = clauses[i]!;
+        const preceding = previous.get(i);
+        const owners = clause.negative ? candidates.map(candidate => `SELECT id FROM c${candidate}`).join(' UNION ') :
+          preceding === undefined ? undefined : `SELECT id FROM c${preceding}`;
+        const restriction = owners === undefined ? '' : ` AND f.rowid IN
+          (SELECT d.id FROM ${table}_docs d WHERE d.entity_id IN (${owners}))`;
         const weights = fields.map((field, position) => `WHEN ${position} THEN ${Number(job.definition.fields[field].weight ?? 1)}`).join(' ');
         if (wantHits) args.push(open, close, open, close);
         args.push(clause.match);
-        if (ids !== null) args.push(JSON.stringify(ids));
+        args.push(...scoped);
         return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,
           -bm25(${table},0,0,0,1,1)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
           ${wantHits ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
           FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ? AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
-          AND ${ids === null ? 'e.trashed=0' : 'f.entity_id IN (SELECT value FROM json_each(?))'})`;
+          AND ${scope}${restriction})`;
       });
       return this.db.all(`WITH ${ctes.join(',')}, matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
         clause_scores AS (SELECT clause,id,max(score) score FROM matches WHERE negative=0 GROUP BY clause,id),

@@ -77,17 +77,58 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     expect(e.query('Row').search('database', { fuzzy: false }).ids()).toEqual([]);
     expect(e.query('Row').search('canvas', { fuzzy: false }).ids()).toEqual(['Row-large']);
   });
+  it('preserves conjunctions, disjunctions and exclusions independently of clause order', () => {
+    const { e } = open();
+    e.create('Row', { id: 'Row-ab', name: 'alpha', body: ['beta'] });
+    e.create('Row', { id: 'Row-ac', name: 'alpha', body: ['gamma'] });
+    e.create('Row', { id: 'Row-cd', name: 'gamma', body: ['delta'] });
+    e.create('Row', { id: 'Row-a', name: 'alpha' });
+    const ids = (query: string, any = false) => e.query('Row').search(query, { fuzzy: false, any }).ids().sort();
+    expect(ids('alpha beta')).toEqual(['Row-ab']);
+    expect(ids('beta alpha')).toEqual(['Row-ab']);
+    expect(ids('-gamma beta alpha')).toEqual(['Row-ab']);
+    expect(ids('alpha -beta gamma')).toEqual(['Row-ac']);
+    expect(ids('alpha beta OR gamma delta')).toEqual(['Row-ab', 'Row-cd']);
+    expect(ids('gamma delta OR beta alpha')).toEqual(['Row-ab', 'Row-cd']);
+    expect(ids('alpha beta OR gamma delta -beta')).toEqual(['Row-cd']);
+    expect(ids('-alpha gamma delta OR beta alpha')).toEqual(['Row-cd']);
+    expect(ids('alpha beta -alpha')).toEqual([]);
+    expect(ids('-alpha')).toEqual([]);
+    expect(ids('alpha beta -gamma', true)).toEqual(['Row-a', 'Row-ab']);
+    expect(ids('name:missing alpha')).toEqual([]);
+  });
+  it('keeps native cardinality probes bounded while choosing between medium and common clauses', () => {
+    const { db, e } = open();
+    e.transact(() => { for (let i = 0; i < 250; i++) e.create('Row', { id: `Row-${i}`, body: i < 100 ? 'common facet' : 'common' }); });
+    const get = db.get.bind(db), probes: Array<{ bound: number; count: number }> = [];
+    vi.spyOn(db, 'get').mockImplementation((sql, args) => {
+      const value = get(sql, args);
+      if (sql.startsWith('SELECT count(*) n FROM (SELECT f.rowid')) probes.push({ bound: Number(args?.at(-1)), count: Number(value?.n) });
+      return value;
+    });
+    const expected = Array.from({ length: 100 }, (_, i) => `Row-${i}`);
+    expect(e.query('Row').search('common facet', { fuzzy: false }).ids()).toEqual(expected);
+    expect(e.query('Row').search('facet common', { fuzzy: false }).ids()).toEqual(expected);
+    expect(probes.some(probe => probe.bound > 32)).toBe(true);
+    expect(probes.every(probe => probe.count <= probe.bound && probe.bound <= 2048)).toBe(true);
+  });
   it('uses selective native FTS execution for entity combination without hydrating primary rows', () => {
     const { db, e } = open();
     e.transact(() => { for (let i = 0; i < 100; i++) e.create('Row', { id: `Row-${i}`, name: 'alpha', body: i === 99 ? ['beta', 'gamma'] : ['unrelated'] }); });
     const read = vi.spyOn(db.values, 'read'), all = db.all.bind(db), plans: string[] = [];
     vi.spyOn(db, 'all').mockImplementation((sql, args) => {
-      if (sql.startsWith('WITH c0 AS MATERIALIZED')) plans.push(...all('EXPLAIN QUERY PLAN ' + sql, args).map(row => String(row.detail)));
+      if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) plans.push(...all('EXPLAIN QUERY PLAN ' + sql, args).map(row => String(row.detail)));
       return all(sql, args);
     });
     expect(e.query('Row').search('alpha "beta"', { fuzzy: false }).ids()).toEqual(['Row-99']);
+    expect(e.query('Row').search('"beta" alpha', { fuzzy: false }).ids()).toEqual(['Row-99']);
+    const forward = e.query('Row').search('alpha "beta"', { fuzzy: false }).hits({ highlights: true });
+    const reverse = e.query('Row').search('"beta" alpha', { fuzzy: false }).hits({ highlights: true });
+    expect(forward.map(hit => ({ id: hit.id, score: hit.score, highlights: hit.highlights })))
+      .toEqual(reverse.map(hit => ({ id: hit.id, score: hit.score, highlights: hit.highlights })));
     expect(read).not.toHaveBeenCalled();
-    expect(plans.some(detail => /VIRTUAL TABLE INDEX .*M/.test(detail))).toBe(true);
+    expect(plans.some(detail => detail.includes('VIRTUAL TABLE INDEX') && detail.includes('M') && detail.includes('='))).toBe(true);
+    expect(plans.some(detail => detail.includes('_docs_entity') && detail.includes('entity_id=?'))).toBe(true);
     const table = searchTable(db.indexBuilds.jobs().find(job => job.kind === 'text')!);
     expect(all(`EXPLAIN QUERY PLAN SELECT id FROM ${table}_docs WHERE entity_id=?`, ['Row-99'])
       .some(row => String(row.detail).includes('COVERING INDEX') && String(row.detail).includes('entity_id=?'))).toBe(true);

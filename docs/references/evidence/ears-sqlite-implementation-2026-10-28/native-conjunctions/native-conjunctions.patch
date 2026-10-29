@@ -1,0 +1,173 @@
+diff --git a/packages/apack-ears/bench/sqlite/README.md b/packages/apack-ears/bench/sqlite/README.md
+index 4c265b7077..7cb566f5bd 100644
+--- a/packages/apack-ears/bench/sqlite/README.md
++++ b/packages/apack-ears/bench/sqlite/README.md
+@@ -199,3 +199,24 @@ file/WAL/RSS high-water, raw heartbeat, call counts, 250 point and cross-field r
+ and 1,000 name updates. No warm samples are discarded. Stop on setup/correctness failure; no automatic retry.
+ Each process has a 180-second safety bound. This diagnostic measures shape costs and answer parity for common
+ queries, not realistic relevance, FULL durability, app/watch acceptance or the unresolved 100k admission gate.
++
++### Selective conjunction correction cohort
++
++The first shape cohort is retained in `text-shape` evidence; its mixed-field regression is not accepted.
++After functional proof, run one **legacy / materialized / selective / selective / materialized / legacy**
++cohort, six fresh Linux processes, unchanged two CPUs/6 GiB and 180 seconds each. Legacy is `9a2771ec25`,
++materialized is `026b6b18b0`, selective is the new native-intersection checkpoint. All six receive exactly the
++same updated `text-shape.mjs`: its name now includes `group${i % 100}`, and it adds reverse point/common
++and both orders of a 100-row group/common query, selective/global exclusion, and a two-ticket disjunction
++(250 samples each), preserving every earlier measurement.
++This is a changed diagnostic fixture and implementation comparison, not a rerun of the old failed cohort.
++
++Native probes count at most 32/128/512/2048 eligible joined rows per clause and return only that count,
++stopping after the first level with an unsaturated clause. This bounds counted output, not FTS posting
++traversal, tokenization, rejected rows or elapsed work. Counts select order only; the final SQL statement
++rereads current matches, and answers are never truncated by estimates. If all clauses saturate the maximum,
++this heuristic does not promise optimal order. Single clauses, OR groups and `any` keep their existing
++semantics/scores. Global exclusions use owner candidates from the positive groups, rather than materializing
++their entire matching corpus; this does not change their truth conditions or positive scores. Record all calls/samples, including probe overhead. Retain larger/broad materialization,
++index-size/build and app-budget limits as unresolved until separately qualified. Stop on any correctness or
++setup failure; never repeat automatically or change a deadline/expectation after the result.
+diff --git a/packages/apack-ears/bench/sqlite/text-shape.mjs b/packages/apack-ears/bench/sqlite/text-shape.mjs
+index a77c96686d..b47d15e76a 100644
+--- a/packages/apack-ears/bench/sqlite/text-shape.mjs
++++ b/packages/apack-ears/bench/sqlite/text-shape.mjs
+@@ -22,7 +22,7 @@ try {
+   db = openDatabase({ path: root, schema, syncs: false });
+   const e = createEarsEngine({ database: db }), start = performance.now();
+   for (let offset = 0; offset < n; offset += 256) e.transact(() => {
+-    for (let i = offset; i < Math.min(n, offset + 256); i++) e.create('Row', { id: `Row-${i}`, name: `openDatabaseStore ticket${i}`,
++    for (let i = offset; i < Math.min(n, offset + 256); i++) e.create('Row', { id: `Row-${i}`, name: `openDatabaseStore ticket${i} group${i % 100}`,
+       body: 'backup ready ' + (i % 128 === 0 ? 'large body '.repeat(1500) : 'body '.repeat(100)), tags: ['engineering', 'storage', 'ops'] });
+   });
+   const seedMs = performance.now() - start, before = files(), peak = { filesBytes: total(before), walBytes: 0, rss: process.memoryUsage().rss };
+@@ -37,8 +37,8 @@ try {
+   await db.indexesReady(); const buildMs = performance.now() - admitStart; sample();
+   const afterBuild = files(), sqlCalls = { all: 0, get: 0, run: 0 }, originals = {};
+   for (const key of Object.keys(sqlCalls)) { originals[key] = db[key].bind(db); db[key] = (...args) => { sqlCalls[key]++; return originals[key](...args); }; }
+-  const samples = { point: [], crossField: [], broad: [], update: [] }, counts = {};
+-  for (const [name, query, expected] of [['point', 'ticket42', ['Row-42']], ['crossField', 'ticket42 ready', ['Row-42']], ['broad', 'storage', null]]) {
++  const samples = { point: [], crossField: [], crossFieldReverse: [], medium: [], mediumReverse: [], negative: [], negativeReverse: [], disjunction: [], broad: [], update: [] }, counts = {};
++  for (const [name, query, expected] of [['point', 'ticket42', ['Row-42']], ['crossField', 'ticket42 ready', ['Row-42']], ['crossFieldReverse', 'ready ticket42', ['Row-42']], ['medium', 'group7 ready', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['mediumReverse', 'ready group7', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['negative', 'ticket42 -storage', []], ['negativeReverse', '-storage ticket42', []], ['disjunction', 'ticket42 OR ticket43', ['Row-42', 'Row-43']], ['broad', 'storage', null]]) {
+     phase = name; const callsBefore = { ...sqlCalls };
+     const limit = name === 'broad' ? 50 : 250;
+     for (let i = 0; i < limit; i++) {
+diff --git a/packages/apack-ears/src/sqlite/text.ts b/packages/apack-ears/src/sqlite/text.ts
+index bb76eb6f69..b7f5d9762f 100644
+--- a/packages/apack-ears/src/sqlite/text.ts
++++ b/packages/apack-ears/src/sqlite/text.ts
+@@ -144,17 +144,47 @@ export class SqliteText {
+     const positive = groups.flat(); if (!positive.length) return [];
+     const required = options.any ? positive.map(i => [i]) : groups.filter(group => group.length);
+     const condition = required.map(group => '(' + group.map(i => `max(clause=${i})`).join(' AND ') + ')').join(' OR ');
++    const scoped = ids === null ? [] : [JSON.stringify(ids)];
++    const scope = ids === null ? 'e.trashed=0' : 'f.entity_id IN (SELECT value FROM json_each(?))';
++    const previous = new Map<number, number>();
++    const negatives = clauses.flatMap((clause, i) => clause.negative ? [i] : []);
++    let executionOrder = [...positive, ...negatives];
++    if (required.length === 1 && required[0]!.length > 1) {
++      // Native FTS probes bound returned hits, not a vocabulary scan or a second posting index. Use their
++      // counts only to order a conjunction; the final statement rereads all matches in its own snapshot.
++      const estimates = new Map<number, number>();
++      for (const bound of [32, 128, 512, 2048]) {
++        for (const i of required[0]!) estimates.set(i, Number(this.db.get(
++          `SELECT count(*) n FROM (SELECT f.rowid FROM ${table} f JOIN entities e ON e.id=f.entity_id
++           WHERE ${table} MATCH ? AND CAST(f.field AS INTEGER) IN (${clauses[i]!.fields.join(',')}) AND ${scope} LIMIT ?)`,
++          [clauses[i]!.match, ...scoped, bound])!.n));
++        if ([...estimates.values()].some(count => count < bound)) break;
++      }
++      const order = [...required[0]!].sort((a, b) => estimates.get(a)! - estimates.get(b)!);
++      for (let i = 1; i < order.length; i++) previous.set(order[i]!, order[i - 1]!);
++      executionOrder = [...order, ...negatives];
++    }
++    const positions = new Map(executionOrder.map((i, position) => [i, position]));
++    // Every accepted entity belongs to at least one group's last executed positive clause. Exclusions
++    // only need those owners; their scores never contribute to a positive result.
++    const candidates = required.map(group => group.reduce((last, i) => positions.get(last)! > positions.get(i)! ? last : i));
+     const select = (open: string, close: string) => {
+-      const args: any[] = [], ctes = clauses.map((clause, i) => {
++      const args: any[] = [], ctes = executionOrder.map(i => {
++        const clause = clauses[i]!;
++        const preceding = previous.get(i);
++        const owners = clause.negative ? candidates.map(candidate => `SELECT id FROM c${candidate}`).join(' UNION ') :
++          preceding === undefined ? undefined : `SELECT id FROM c${preceding}`;
++        const restriction = owners === undefined ? '' : ` AND f.rowid IN
++          (SELECT d.id FROM ${table}_docs d WHERE d.entity_id IN (${owners}))`;
+         const weights = fields.map((field, position) => `WHEN ${position} THEN ${Number(job.definition.fields[field].weight ?? 1)}`).join(' ');
+         if (wantHits) args.push(open, close, open, close);
+         args.push(clause.match);
+-        if (ids !== null) args.push(JSON.stringify(ids));
++        args.push(...scoped);
+         return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,
+           -bm25(${table},0,0,0,1,1)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
+           ${wantHits ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
+           FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ? AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
+-          AND ${ids === null ? 'e.trashed=0' : 'f.entity_id IN (SELECT value FROM json_each(?))'})`;
++          AND ${scope}${restriction})`;
+       });
+       return this.db.all(`WITH ${ctes.join(',')}, matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
+         clause_scores AS (SELECT clause,id,max(score) score FROM matches WHERE negative=0 GROUP BY clause,id),
+diff --git a/packages/apack-ears/tests/sqlite/text-documents.spec.ts b/packages/apack-ears/tests/sqlite/text-documents.spec.ts
+index d435c5b234..2258e65773 100644
+--- a/packages/apack-ears/tests/sqlite/text-documents.spec.ts
++++ b/packages/apack-ears/tests/sqlite/text-documents.spec.ts
+@@ -77,17 +77,58 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string
+     expect(e.query('Row').search('database', { fuzzy: false }).ids()).toEqual([]);
+     expect(e.query('Row').search('canvas', { fuzzy: false }).ids()).toEqual(['Row-large']);
+   });
++  it('preserves conjunctions, disjunctions and exclusions independently of clause order', () => {
++    const { e } = open();
++    e.create('Row', { id: 'Row-ab', name: 'alpha', body: ['beta'] });
++    e.create('Row', { id: 'Row-ac', name: 'alpha', body: ['gamma'] });
++    e.create('Row', { id: 'Row-cd', name: 'gamma', body: ['delta'] });
++    e.create('Row', { id: 'Row-a', name: 'alpha' });
++    const ids = (query: string, any = false) => e.query('Row').search(query, { fuzzy: false, any }).ids().sort();
++    expect(ids('alpha beta')).toEqual(['Row-ab']);
++    expect(ids('beta alpha')).toEqual(['Row-ab']);
++    expect(ids('-gamma beta alpha')).toEqual(['Row-ab']);
++    expect(ids('alpha -beta gamma')).toEqual(['Row-ac']);
++    expect(ids('alpha beta OR gamma delta')).toEqual(['Row-ab', 'Row-cd']);
++    expect(ids('gamma delta OR beta alpha')).toEqual(['Row-ab', 'Row-cd']);
++    expect(ids('alpha beta OR gamma delta -beta')).toEqual(['Row-cd']);
++    expect(ids('-alpha gamma delta OR beta alpha')).toEqual(['Row-cd']);
++    expect(ids('alpha beta -alpha')).toEqual([]);
++    expect(ids('-alpha')).toEqual([]);
++    expect(ids('alpha beta -gamma', true)).toEqual(['Row-a', 'Row-ab']);
++    expect(ids('name:missing alpha')).toEqual([]);
++  });
++  it('keeps native cardinality probes bounded while choosing between medium and common clauses', () => {
++    const { db, e } = open();
++    e.transact(() => { for (let i = 0; i < 250; i++) e.create('Row', { id: `Row-${i}`, body: i < 100 ? 'common facet' : 'common' }); });
++    const get = db.get.bind(db), probes: Array<{ bound: number; count: number }> = [];
++    vi.spyOn(db, 'get').mockImplementation((sql, args) => {
++      const value = get(sql, args);
++      if (sql.startsWith('SELECT count(*) n FROM (SELECT f.rowid')) probes.push({ bound: Number(args?.at(-1)), count: Number(value?.n) });
++      return value;
++    });
++    const expected = Array.from({ length: 100 }, (_, i) => `Row-${i}`);
++    expect(e.query('Row').search('common facet', { fuzzy: false }).ids()).toEqual(expected);
++    expect(e.query('Row').search('facet common', { fuzzy: false }).ids()).toEqual(expected);
++    expect(probes.some(probe => probe.bound > 32)).toBe(true);
++    expect(probes.every(probe => probe.count <= probe.bound && probe.bound <= 2048)).toBe(true);
++  });
+   it('uses selective native FTS execution for entity combination without hydrating primary rows', () => {
+     const { db, e } = open();
+     e.transact(() => { for (let i = 0; i < 100; i++) e.create('Row', { id: `Row-${i}`, name: 'alpha', body: i === 99 ? ['beta', 'gamma'] : ['unrelated'] }); });
+     const read = vi.spyOn(db.values, 'read'), all = db.all.bind(db), plans: string[] = [];
+     vi.spyOn(db, 'all').mockImplementation((sql, args) => {
+-      if (sql.startsWith('WITH c0 AS MATERIALIZED')) plans.push(...all('EXPLAIN QUERY PLAN ' + sql, args).map(row => String(row.detail)));
++      if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) plans.push(...all('EXPLAIN QUERY PLAN ' + sql, args).map(row => String(row.detail)));
+       return all(sql, args);
+     });
+     expect(e.query('Row').search('alpha "beta"', { fuzzy: false }).ids()).toEqual(['Row-99']);
++    expect(e.query('Row').search('"beta" alpha', { fuzzy: false }).ids()).toEqual(['Row-99']);
++    const forward = e.query('Row').search('alpha "beta"', { fuzzy: false }).hits({ highlights: true });
++    const reverse = e.query('Row').search('"beta" alpha', { fuzzy: false }).hits({ highlights: true });
++    expect(forward.map(hit => ({ id: hit.id, score: hit.score, highlights: hit.highlights })))
++      .toEqual(reverse.map(hit => ({ id: hit.id, score: hit.score, highlights: hit.highlights })));
+     expect(read).not.toHaveBeenCalled();
+-    expect(plans.some(detail => /VIRTUAL TABLE INDEX .*M/.test(detail))).toBe(true);
++    expect(plans.some(detail => detail.includes('VIRTUAL TABLE INDEX') && detail.includes('M') && detail.includes('='))).toBe(true);
++    expect(plans.some(detail => detail.includes('_docs_entity') && detail.includes('entity_id=?'))).toBe(true);
+     const table = searchTable(db.indexBuilds.jobs().find(job => job.kind === 'text')!);
+     expect(all(`EXPLAIN QUERY PLAN SELECT id FROM ${table}_docs WHERE entity_id=?`, ['Row-99'])
+       .some(row => String(row.detail).includes('COVERING INDEX') && String(row.detail).includes('entity_id=?'))).toBe(true);

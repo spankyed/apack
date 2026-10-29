@@ -199,3 +199,24 @@ file/WAL/RSS high-water, raw heartbeat, call counts, 250 point and cross-field r
 and 1,000 name updates. No warm samples are discarded. Stop on setup/correctness failure; no automatic retry.
 Each process has a 180-second safety bound. This diagnostic measures shape costs and answer parity for common
 queries, not realistic relevance, FULL durability, app/watch acceptance or the unresolved 100k admission gate.
+
+### Selective conjunction correction cohort
+
+The first shape cohort is retained in `text-shape` evidence; its mixed-field regression is not accepted.
+After functional proof, run one **legacy / materialized / selective / selective / materialized / legacy**
+cohort, six fresh Linux processes, unchanged two CPUs/6 GiB and 180 seconds each. Legacy is `9a2771ec25`,
+materialized is `026b6b18b0`, selective is the new native-intersection checkpoint. All six receive exactly the
+same updated `text-shape.mjs`: its name now includes `group${i % 100}`, and it adds reverse point/common
+and both orders of a 100-row group/common query, selective/global exclusion, and a two-ticket disjunction
+(250 samples each), preserving every earlier measurement.
+This is a changed diagnostic fixture and implementation comparison, not a rerun of the old failed cohort.
+
+Native probes count at most 32/128/512/2048 eligible joined rows per clause and return only that count,
+stopping after the first level with an unsaturated clause. This bounds counted output, not FTS posting
+traversal, tokenization, rejected rows or elapsed work. Counts select order only; the final SQL statement
+rereads current matches, and answers are never truncated by estimates. If all clauses saturate the maximum,
+this heuristic does not promise optimal order. Single clauses, OR groups and `any` keep their existing
+semantics/scores. Global exclusions use owner candidates from the positive groups, rather than materializing
+their entire matching corpus; this does not change their truth conditions or positive scores. Record all calls/samples, including probe overhead. Retain larger/broad materialization,
+index-size/build and app-budget limits as unresolved until separately qualified. Stop on any correctness or
+setup failure; never repeat automatically or change a deadline/expectation after the result.
