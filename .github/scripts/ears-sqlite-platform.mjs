@@ -19,12 +19,15 @@ if (mode === 'verify') {
   const report = file => JSON.parse(readFileSync(join(evidence, file), 'utf8'));
   const passedIn = (value, pattern) => value.testResults.flatMap(test => pattern.test(test.name.replaceAll('\\', '/'))
     ? test.assertionResults.filter(result => result.status === 'passed') : []).length;
+  const nativeGeneration=report('native-generation/provenance.json');
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
-  const result = { source, earsPassed: ears.numPassedTests, sqliteCasesPassed: passedIn(ears, /\/tests\/sqlite\//),
+  const result = { source, nativeGenerationCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-index\.spec\.ts$/),
+    nativeTrainingCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-training\.spec\.ts$/),
+    nativeGenerationExtensionSha256:nativeGeneration.extensionSha256, earsPassed: ears.numPassedTests, sqliteCasesPassed: passedIn(ears, /\/tests\/sqlite\//),
     selectedTextPassed: selected.filter(test => test.status === 'passed').length, selectedTextTotal: selected.length,
     maintenanceCasesPassed: passedIn(cli, /\/tests\/commands\/db-rebuild\.spec\.ts$/),
     logicalCommandCasesPassed: passedIn(cli, /\/tests\/commands\/db-logical\.spec\.ts$/),
@@ -37,6 +40,15 @@ if (mode === 'verify') {
     logicalHostSkipped: logicalSkipped.map(test => ({ name: test.fullName, status: test.status })),
     hostPassed: host.numPassedTests, recoveryCasesPassed: passedIn(host, /\/backup\/recovery\.spec\.ts$/) };
   save('verification.json', result);
+  assert.equal(nativeGeneration.source,source,'Native lifecycle build must match the checkout');
+  assert.equal(nativeGeneration.upstream.commit,'814fd8ef4d42d6567f1613a66f556c8194764d06');
+  assert.equal(nativeGeneration.upstream.sha256,'b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1');
+  assert.equal(nativeGeneration.patchApplied,false);
+  assert.equal(nativeGeneration.platform,platform());assert.equal(nativeGeneration.arch,arch());
+  assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.extension)).digest('hex'),nativeGeneration.extensionSha256);
+  assert.equal(result.nativeGenerationCasesPassed,5,'All native generation lifecycle cases must execute');
+  assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
+
   assert(result.maintenanceCasesPassed >= 9 && cli.numFailedTests === 0,
     'All nine actual offline maintenance command cases must execute and pass');
   assert.equal(result.logicalCommandCasesPassed, 8, 'Every logical dump/load command case must execute');

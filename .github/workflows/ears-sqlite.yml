@@ -49,6 +49,13 @@ jobs:
         run: npm ci
       - name: Build matching packages
         run: npm run packages:build
+      - name: Prepare Windows C compiler
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: x64
+      - name: Build pinned native generation test extension
+        run: node .github/scripts/ears-vec1-build.mjs
       - name: Built SQLite runtime and read-only backup
         run: node .github/scripts/ears-sqlite-platform.mjs probe 2>&1 | tee .temp/sqlite-platform/runtime.log
       - name: SQLite-selected EARS contracts
