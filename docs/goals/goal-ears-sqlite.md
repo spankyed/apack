@@ -274,6 +274,13 @@ does not solve responsiveness. No production dependency/layout changes follow. N
 strategy with efficient arbitrary membership filtering and transactional ownership, including the
 maintenance cost of any required extension change, before integration. Fresh frozen queries and complete integrated/admission/platform checks remain required
 before acceptance. No strategy selection or adoption is established.
+A scratch [text-IN extension patch](../references/evidence/ears-sqlite-implementation-2026-10-28/vec1-text-in-patch/README.md)
+reduces the UUID owner predicate to about 19.46 ms p95 at 10% and 13.75 ms at 1%, with
+93 ordinary-SQL comparisons passing on both original/patched code and 20 small compatibility
+groups passing on the patch. This still misses scoped responsiveness before EARS integration.
+The patch is bench-only; no production dependency/loader/layout changed. Next inspect compact
+integer owner surrogates and efficient membership, then review any fork's maintenance and
+platform burden before adoption. Keep all fresh-query, admission and complete goal acceptance.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
 the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
