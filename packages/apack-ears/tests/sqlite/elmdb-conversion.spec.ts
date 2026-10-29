@@ -51,7 +51,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('explicit elmdb
       expect(e.getAttr('Row-second', 'at')).toEqual(at);
       expect(e.getAttr('Row-second', 'bytes')).toEqual(new Uint8Array([0, 255]));
       expect(Object.is((e.getAttr('Row-second', 'nested') as { zero: number }).zero, -0)).toBe(true);
-      expect(e.getRelation('Relation-edge')?.info).toEqual({ at });
+      expect(e.findRelations({ kind: 'custom' })[0]?.info).toEqual({ at });
       const next = e.create('Row', { text: 'next' }).id();
       expect(e.getAttr(next, 'shortCode')).toMatch(/20$/);
     } finally { database.close(); }
