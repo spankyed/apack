@@ -281,6 +281,17 @@ groups passing on the patch. This still misses scoped responsiveness before EARS
 The patch is bench-only; no production dependency/loader/layout changed. Next inspect compact
 integer owner surrogates and efficient membership, then review any fork's maintenance and
 platform burden before adoption. Keep all fresh-query, admission and complete goal acceptance.
+The [integer membership diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/vec1-integer-in-patch/README.md)
+completes: matched native owner-IN p95 at 9,889 owners is 96.19 ms original /13.65 ms
+with a bounded bitmap patch, and 17.42/9.48 ms at 988 owners. Both extensions pass 306
+independent SQL comparisons; the patched code passes the small compatibility gate.
+The ten-query broad first-pass p95 of 17.50 ms remains retained. Sparse/wide IDs retain
+the old slow path. No final responsiveness, native adoption or integrated claim follows.
+[Fresh validation protocol](../../packages/apack-ears/bench/sqlite/REAL-VECTOR-FRESH-PROTOCOL.md)
+is frozen before new queries are evaluated; files/oracle still need generation. Next
+implement actual candidate generation/admission/transaction ownership with an explicit
+maintenance/distribution decision, then qualify the complete fresh and integrated gates.
+No more primitive result alone can establish the required final execution design.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
 the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,

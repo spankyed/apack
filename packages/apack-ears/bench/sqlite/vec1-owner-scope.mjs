@@ -25,7 +25,7 @@ if(actualExtensionSha256!==identity.identity.extensionSha256) {
 }
 assert.equal(identity.identity.size, 99900);
 const report = {protocol:'ears-vec1-owner-scope/1',source:process.env.EARS_TEST_SOURCE,qualification:false,
-  scope:'Ten observed queries, UUID-shaped text owners, SQL owner-IN versus equivalent range predicates; no integrated or fresh recall acceptance',
+  scope:'Ten observed queries, explicit ownerStorage, SQL owner-IN versus equivalent range predicates; no integrated or fresh recall acceptance',
   node:process.version,platform:process.platform,arch:process.arch,modelSha256:sha(model),
   loadedNative:[],patchProvenance,records:[]};
 const save = () => writeFileSync(output,JSON.stringify(report,null,2)+'\n');
