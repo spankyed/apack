@@ -195,6 +195,7 @@ master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, re
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Current functional checkpoint is
 **7b56a145d4** (call-site correction), retaining the text runtime/cost evidence at **a2de2944a1**.
+It is published with its handoff at **2308fbf58ae9f906f35e618dd63ea43b58ada861** on integration/remote.
 The latest dispatched full gate covers earlier **b25a985c8cebdf898b86cb915bca2600ba03782a**. Its single exact
 [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212) is confirmed live;
 macOS/Linux candidate lanes pass 511 EARS / 95 host cases; Windows has 509 passing, one skipped and one
@@ -244,7 +245,8 @@ Canonical must stay at exact green 60d until the new exact gate succeeds. No own
 no VM scratch process or file remains from the signal probe.
 
 While the gate runs, prepare phase 4's real/high-dimensional vector qualification and phase 3's remaining
-admission diagnosis without advancing the remote/integration input. [Real-vector reconnaissance](../references/evidence/ears-sqlite-implementation-2026-10-28/real-vector-selection/README.md)
+admission diagnosis, keeping its frozen b25 input distinct from newer validated draft checkpoints.
+[Real-vector reconnaissance](../references/evidence/ears-sqlite-implementation-2026-10-28/real-vector-selection/README.md)
 identifies a public precomputed 1536-dimensional fixture matching the shipped embedding model, including
 the correct vector column and pinned metadata revision. It is metadata only: no fixture payload or API
 call, no approved real-vector/recall result, and no inference-key access. Full phase 3–7 scope stays required.
@@ -262,9 +264,10 @@ shows the assertion-only path correction was incomplete: the collector selected 
 The local two-line path normalization now happens before engine exclusion/shortening, with the strict
 assertion restored and three independent stack fixtures. Committed at **7b56a145d4**, it passes **514 SQLite / 292 native**, nine
 focused cases per backend, types/builds/API/lint/imports and an old-source control failing both raw
-Windows fixtures. Text/presence source and the cost cohort are unchanged. Publish this correction/evidence
-through the existing draft, but await the remaining exact b25 jobs and inspect other failures before
-dispatching another exact gate. A branch advance cannot change that run's frozen source.
+Windows fixtures. Text/presence source and the cost cohort are unchanged. This correction/evidence is
+published through the existing draft. Await the remaining exact b25 jobs and inspect other failures
+before dispatching one new exact gate at the corrected source. A branch advance cannot change the
+current run's frozen input; do not restart it because observation times out.
 The corrected collector still needs real Windows CI, and Windows host recovery has not yet run.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
