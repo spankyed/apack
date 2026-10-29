@@ -210,7 +210,12 @@ Vector input parity is verified: shared contracts cover Float32 overflow/underfl
 wrong model before obsolete-hash handling, and atomic refusal without watch delivery. Disposable Linux
 checks pass **524 SQLite / 302 native** cases, both focused vector files, builds, types, API reports,
 lint and import checks; see [evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-validation/README.md).
-High-dimensional latency/recall and real-corpus resource qualification remain open.
+The local high-dimensional harness at **9e64045eaf** passed its 1k held-out smoke on both backends
+(384 requests each; SQLite exact, native mixed unfiltered mean recall about 0.97). Its first 10k SQLite
+clustered profile passed exactness but missed heartbeat p99 (57.91 ms /16 ms), stopping the cohort.
+Other 10k/100k trials remain unrun. These local benchmarks are not in published 645905f342 yet.
+See [vector evidence and next diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md).
+High-dimensional execution-strategy acceptance and real-corpus resource qualification remain open.
 
 Next checkpoint: poll the exact live [focused macOS acceptance 40851475766](https://github.com/spankyed/apack/actions/runs/40851475766)
 on published 645905f342, using the existing App acceptance workflow's `bundled-ui` selector. Retain Playwright failure traces and console errors while preserving
