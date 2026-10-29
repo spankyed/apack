@@ -74,6 +74,14 @@ export class SqliteValues {
         .map(row => [String(row.name), Number(row.id)])) };
   }
 
+  /** Conservative absence proof for offline rebuild: missing primary rows still require normal validation. */
+  hasStoredField(layout: SqliteValueLayout, field: string): boolean {
+    const slot = layout.fields.get(field);
+    return this.sql.get(`SELECT 1 FROM entities e LEFT JOIN ${layout.table} v ON v.entity_id=e.id
+      WHERE e.type=? AND (v.entity_id IS NULL ${slot === undefined ? '' : `OR v.k${slot} IS NOT NULL`}
+      OR EXISTS(SELECT 1 FROM value_overflow o WHERE o.entity_id=e.id AND o.field=?)) LIMIT 1`, [layout.name, field]) !== undefined;
+  }
+
   /** Adds physical slots without rewriting incumbent values. Old flexible values remain readable until replaced. */
   declare(name: string, names: Iterable<string>): SqliteValueLayout {
     this.sql.run('INSERT OR IGNORE INTO value_types(name) VALUES (?)', [name]);

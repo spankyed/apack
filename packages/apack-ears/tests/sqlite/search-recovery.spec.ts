@@ -167,6 +167,17 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect((await auditSqliteDatabase(db)).ok).toBe(true);
   });
 
+  it('proves absent value fields ready offline while preserving backfill of present fields', async () => {
+    const { db, e } = seed();
+    e.admin.bulkLoadAttr('Row-one', 'role', ['reader']);
+    db.rebuildIndexes();
+    const jobs = db.indexBuilds.jobs().filter(job => job.kind === 'value');
+    expect(jobs.find(job => job.type === 'Row' && job.name === 'role')!.state).toBe('building');
+    expect(jobs.filter(job => job.name === 'shortCode').every(job => job.state === 'ready')).toBe(true);
+    await db.indexesReady();
+    expect(e.query('Row').where('role', 'reader').ids()).toEqual(['Row-one']);
+  });
+
   it('rolls membership reconstruction back if later index admission fails', () => {
     const { db, e } = seed();
     e.write('Row-one').set('tags', ['fresh']);

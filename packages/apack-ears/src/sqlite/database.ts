@@ -1258,6 +1258,11 @@ export class SqliteDatabase implements EarsDatabase {
       this.values.rebuildMembers();
       const jobs = this.indexBuilds.jobs();
       this.indexBuilds.restart(jobs);
+      // Offline maintenance already owns the writer. Prove absence natively instead of committing
+      // thousands of empty background batches for optional fields such as role and shortCode.
+      for (const job of jobs) if (job.kind === 'value' && !this.values.hasStoredField(this.valueLayout(job.type), job.name))
+        this.run("UPDATE index_builds SET state='ready',after_seq=through_seq WHERE type=? AND kind='value' AND name=?",
+          [job.type, job.name]);
       this.search.ensure(this.heldSchema);
       this.putMeta('schemaRevision', this.heldRevision + 1);
       const state = this.indexBuilds.readState();
