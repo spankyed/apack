@@ -50,7 +50,7 @@ function history() {
   try { return { sequence: db.sequence, ids: createEarsEngine({ database: db }).query('RunNode').ids() }; } finally { db.close(); }
 }
 try {
-  const db = openDatabase({ path: paths.lmdb, syncs: false, schema: { types: { Row: { required: [], search: { fields: { title: 1 } },
+  const db = openDatabase({ path: paths.lmdb, syncs: false, schema: { types: { Row: { required: [], search: { fields: { title: 1 } }, substrings: ['title'],
     embed: { from: ['title'], model: 'built-cli', dims: 3 } } }, relations: {}, roles: [] } });
   try {
     const e = createEarsEngine({ database: db }); e.create('Row', { id: 'Row-one', title: 'needle', negative: -0, bytes: new Uint8Array([0, 255]), big: 'x'.repeat(256000) });
