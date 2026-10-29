@@ -279,7 +279,9 @@ resume through another spelling for both backends. Foreign/leaf-link refusals an
 See [recovery alias evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-aliases/README.md).
 Recovery correction is committed at 964f1e1fd2 and published in 60d4283f68 with exact gate 40819583704.
 Do not promote before exact success. Next diagnose actual native ranking/recency
-plans and remaining costs, preserving every failed cohort and the entire phase 3–7 scope. Preserve every failed cohort and all remaining
+plans and remaining costs, preserving every failed cohort and the entire phase 3–7 scope. The next pinned
+`text-plan.mjs` diagnostic is preregistered in the benchmark README: actual SQL/plans, binding/JS split, ten
+samples per path, one 10k profile, no retry; this is diagnosis, not a new qualification cohort. Preserve every failed cohort and all remaining
 phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the

@@ -257,3 +257,13 @@ redundant native grouping. Bounded highlight queries score first, then fetch com
 selected entities inside the request's read snapshot; only requested primary hit fields are projected.
 Actual native returned-row and highlight-call controls are required before timing. This diagnostic is not
 100k/FULL admission, full app qualification, bounded fuzzy, vector recall or an adoption decision.
+
+### Actual text execution-plan diagnostic
+
+After the ranked-prefix cohort, run exactly one pinned 10k profile with `text-plan.mjs` in disposable Linux,
+unchanged two CPUs/6 GiB and OFF commits. Seed the same name/body/tags shape. Take ten consecutive samples
+per point, point/common, 100-owner/common, broad limited, highlighted, recency and unlimited read. Retain
+all samples, actual facade SQL/parameters/native EXPLAIN QUERY PLAN, binding time/returned rows and total
+facade time. Capture plans after timing. Use normal built entries and native hashes; stop on setup or answer
+failure, with one 180-second process bound and no automatic retries. This diagnoses SQL versus JS cost and
+ranking materialization; it does not replace the failed cohort, discard cold samples or qualify latency.
