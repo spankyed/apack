@@ -10,10 +10,11 @@ import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
 
 const require = createRequire(import.meta.url), Database = require('better-sqlite3');
 const [extensionFile, corpusPath, truthFile, sizeArg, mode, output, modelCache] = process.argv.slice(2);
-const size = Number(sizeArg), isVec0 = mode.startsWith('vec0-binary-');
-const extension = isVec0 ? getLoadablePath() : resolve(extensionFile);
+const size = Number(sizeArg), isVec0 = mode.startsWith('vec0-binary-'), isSqlBinary = mode.startsWith('sql-binary-');
+const isBinary = isVec0 || isSqlBinary;
+const extension = isBinary ? getLoadablePath() : resolve(extensionFile);
 assert([1000,10000,99900].includes(size));
-assert(['flat','ivf-bq-256','ivf-bq-1024','scan-bq-256','scan-bq-1024','vec0-binary-256','vec0-binary-1024'].includes(mode));
+assert(['flat','ivf-bq-256','ivf-bq-1024','scan-bq-256','scan-bq-1024','vec0-binary-256','vec0-binary-1024','sql-binary-256','sql-binary-1024'].includes(mode));
 assert(output && !existsSync(output) && !existsSync(output + '.sqlite3'));
 const sha = data => createHash('sha256').update(data).digest('hex');
 const truthBytes = readFileSync(truthFile), truth = JSON.parse(truthBytes);
@@ -29,7 +30,7 @@ const vector = ordinal => corpus.subarray(ordinal * bytes,(ordinal+1) * bytes);
 const percentile = (values,p) => [...values].sort((a,b)=>a-b)[Math.max(0,Math.ceil(values.length*p)-1)] ?? null;
 const summary = values => ({count:values.length,p50:percentile(values,.5),p95:percentile(values,.95),p99:percentile(values,.99),max:Math.max(...values)});
 const report = {protocol:'ears-real-vector-vec1/1',qualification:false,source:process.env.EARS_TEST_SOURCE,
-  size,mode,backend:isVec0?'sqlite-vec':'vec1',truthSha256:sha(truthBytes),extensionSha256:sha(readFileSync(extension)),
+  size,mode,backend:isBinary?'sqlite-vec':'vec1',truthSha256:sha(truthBytes),extensionSha256:sha(readFileSync(extension)),
   node:process.version,platform:process.platform,arch:process.arch,cohorts:[]};
 const save = () => writeFileSync(output,JSON.stringify(report,null,2)+'\n');
 const file = output + '.sqlite3';
@@ -38,12 +39,14 @@ try {
   db = new Database(file); db.loadExtension(extension);
   db.pragma('journal_mode=WAL'); db.pragma('synchronous=FULL');
   report.sqlite = db.prepare('SELECT sqlite_version() v').get().v;
-  report.version = db.prepare(isVec0?'SELECT vec_version() v':'SELECT vec1_info() v').get().v;
+  report.version = db.prepare(isBinary?'SELECT vec_version() v':'SELECT vec1_info() v').get().v;
   report.loadedNative = loadedNativeBindings([extension]);
-  if(isVec0) {
-    db.exec('CREATE TABLE raw(rowid INTEGER PRIMARY KEY,v BLOB NOT NULL); CREATE VIRTUAL TABLE corpus USING vec0(embedding bit[1536],scope integer,active integer)');
+  if(isBinary) {
+    db.exec('CREATE TABLE raw(rowid INTEGER PRIMARY KEY,v BLOB NOT NULL)');
+    db.exec(isVec0?'CREATE VIRTUAL TABLE corpus USING vec0(embedding bit[1536],scope integer,active integer)':
+      'CREATE TABLE corpus(rowid INTEGER PRIMARY KEY,embedding BLOB NOT NULL,scope INTEGER NOT NULL,active INTEGER NOT NULL); CREATE INDEX eligible ON corpus(active,scope)');
   } else db.exec('CREATE VIRTUAL TABLE corpus USING vec1(v, scope, active)');
-  if (isVec0) {
+  if (isBinary) {
     report.training = {required:false,quantizer:'sqlite-vec vec_quantize_binary; no trained transform'};
   } else if (mode === 'flat') {
     db.prepare("INSERT INTO corpus(cmd,arg) VALUES('rebuild',?)").run(JSON.stringify({index:'flat',distance:'cos'}));
@@ -73,17 +76,21 @@ try {
     report.modelSha256 = sha(model); report.training.parameters = parameters; save();
     db.prepare("INSERT INTO corpus(cmd,arg) VALUES('rebuild',?)").run(model);
   }
-  const rawInsert = isVec0 ? db.prepare('INSERT INTO raw(rowid,v) VALUES (?,?)') : undefined;
-  const insert = db.prepare(isVec0?'INSERT INTO corpus(rowid,embedding,scope,active) VALUES (?,vec_quantize_binary(?),?,?)':'INSERT INTO corpus(rowid,v,scope,active) VALUES (?,?,?,?)');
+  const rawInsert = isBinary ? db.prepare('INSERT INTO raw(rowid,v) VALUES (?,?)') : undefined;
+  const insert = db.prepare(isBinary?'INSERT INTO corpus(rowid,embedding,scope,active) VALUES (?,vec_quantize_binary(?),?,?)':'INSERT INTO corpus(rowid,v,scope,active) VALUES (?,?,?,?)');
   let started = performance.now();
   db.transaction(()=>{for(let i=0;i<size;i++) {
     rawInsert?.run(i+1,vector(i)); insert.run(BigInt(i+1),vector(i),BigInt(i%100),BigInt(i%97===0?0:1));
   }})();
   report.loadMs = performance.now()-started; save();
-  const update = db.prepare(isVec0?'UPDATE raw SET v=? WHERE rowid=?':'UPDATE corpus SET v=? WHERE rowid=?');
-  const remove = isVec0?db.prepare('DELETE FROM corpus WHERE rowid=?'):undefined;
+  const update = db.prepare(isBinary?'UPDATE raw SET v=? WHERE rowid=?':'UPDATE corpus SET v=? WHERE rowid=?');
+  const remove = isBinary?db.prepare('DELETE FROM corpus WHERE rowid=?'):undefined;
   const candidates = mode==='flat'?10:Number(mode.split('-').at(-1));
-  const statement = db.prepare(isVec0?`WITH found AS MATERIALIZED (
+  const statement = db.prepare(isSqlBinary?`WITH found AS MATERIALIZED (
+    SELECT rowid FROM corpus WHERE active=1 AND scope < ?
+    ORDER BY vec_distance_hamming(vec_bit(embedding),vec_quantize_binary(?)),rowid LIMIT ?
+    ) SELECT raw.rowid,vec_distance_cosine(raw.v,?) distance FROM found JOIN raw ON raw.rowid=found.rowid`:
+    isVec0?`WITH found AS MATERIALIZED (
     SELECT rowid FROM corpus WHERE embedding MATCH vec_quantize_binary(?) AND k=? AND scope < ? AND active=1
     ) SELECT raw.rowid,vec_distance_cosine(raw.v,?) distance FROM found JOIN raw ON raw.rowid=found.rowid`:
     `SELECT rowid,vec1_cos_distance(v,?) distance FROM corpus(?,?) WHERE scope < ? AND active=1`);
@@ -93,7 +100,7 @@ try {
       started = performance.now();
       db.transaction(()=>{for(let i=7;i<size;i+=100) {
         const v=vector((i+31337)%99900); update.run(v,i+1);
-        if(isVec0) { remove.run(BigInt(i+1)); insert.run(BigInt(i+1),v,BigInt(i%100),BigInt(i%97===0?0:1)); }
+        if(isBinary) { remove.run(BigInt(i+1)); insert.run(BigInt(i+1),v,BigInt(i%100),BigInt(i%97===0?0:1)); }
       }})();
       report.updateMs = performance.now()-started;
     }
@@ -106,7 +113,8 @@ try {
         try {
           for(let q=0;q<100;q++) {
             const blob=queries.subarray(q*bytes,(q+1)*bytes), begin=performance.now();
-            const found=isVec0?statement.all(blob,BigInt(candidates),BigInt(percent),blob):statement.all(blob,blob,options,percent);
+            const found=isSqlBinary?statement.all(percent,blob,candidates,blob):
+              isVec0?statement.all(blob,BigInt(candidates),BigInt(percent),blob):statement.all(blob,blob,options,percent);
             const rows=found.sort((a,b)=>a.distance-b.distance||a.rowid-b.rowid).slice(0,10);
             const ms=performance.now()-begin;
             const ordinals=rows.map(row=>row.rowid-1), answer=expected.answers[q].ordinals;

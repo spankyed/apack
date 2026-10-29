@@ -66,3 +66,9 @@ transform. For updates, replace the derived binary row within the same transacti
 the canonical update. Retain load/update/disk/RSS costs and any unsupported behavior.
 Metadata filtering in this primitive control does not qualify arbitrary EARS owner-ID
 candidate sets, multiple chunks, units, watches or model/generation admission.
+
+Also compare `sql-binary-256` and `sql-binary-1024` using the same dependency and
+quantizer with an ordinary derived table. SQLite applies indexed eligibility, orders
+by native Hamming distance with an ordinal tie breaker, retains the candidate prefix,
+then performs the same native cosine rerank. This isolates whether vec0's additional
+virtual-table lifecycle is necessary. Keep every existing budget and input unchanged.
