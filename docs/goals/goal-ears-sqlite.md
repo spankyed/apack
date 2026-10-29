@@ -221,7 +221,12 @@ already exists with BASE 585dcafccf and exact-success guards; the user's renewed
 Local continuation includes diagnostics beyond the published tip; keep that distinct from CI source.
 
 Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's representative search corpus before
-tuning. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
+tuning. Phase 4 now preregisters `tests/fixtures/search-relevance.json`: 28 repository-domain documents and
+32 useful-result cases, shared by both backends through `engine/search-relevance.spec.ts`. Expectations cover
+identifiers/case/accents, per-element phrases and highlights, field restrictions/syntax, boolean/any/negation,
+last-word prefix, typo opt-out, recency and exact multilingual terms plus English stemming. Run unchanged
+expectations against both pinned backends before tuning; retain failures, then fix demonstrated candidate gaps.
+This curated corpus is a first contract slice, not full real-world relevance, scalability or language qualification. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
 `runtime-control.mjs`: same two-CPU quota/6 GiB, ABBA order, 500 fixed samples per path, first-150/remaining-350
 strata, cgroup counters/GC/CPU profiles and no discarded cold samples. This is diagnostic only; it cannot
 replace the failed admission cohort. That four-process control is complete: all answers pass, no own-group throttling is observed during timing,
