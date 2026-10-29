@@ -58,9 +58,9 @@ export class SqliteText {
   ensure(job: SqliteIndexJob): void {
     const table = searchTable(job), index = job.definition;
     if (index.stem && index.stem !== 'en') throw Object.assign(new Error('SQLite text indexes support English stemming only'), { code: 'UNSUPPORTED' });
-    this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,
+    this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,
       tokenize='${index.stem ? 'porter ' : ''}unicode61 remove_diacritics 2');
-      CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},row);
+      CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},col);
       CREATE TABLE IF NOT EXISTS ${table}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS ${table}_docs_entity ON ${table}_docs(entity_id,field,element);`);
   }
@@ -70,7 +70,8 @@ export class SqliteText {
     this.db.run(`DELETE FROM ${table} WHERE rowid IN (SELECT id FROM ${table}_docs WHERE ${where})`, args);
     this.db.run(`DELETE FROM ${table}_docs WHERE ${where}`, args);
   }
-  refile(row: Data, job: SqliteIndexJob, changed?: ReadonlySet<string>): void {
+  refile(row: Data, job: SqliteIndexJob, seq: number, changed?: ReadonlySet<string>): void {
+    if (!Number.isSafeInteger(seq) || seq < 1) fail('Invalid text owner sequence');
     const fields = Object.keys(job.definition.fields);
     const old = this.db.get('SELECT hashes FROM text_meta WHERE entity_id=? AND index_name=? AND generation=?', [row.id, job.name, job.generation]);
     let decoded: unknown;
@@ -97,8 +98,8 @@ export class SqliteText {
       this.remove(job, row.id, field);
       for (const doc of docs) {
         const id = this.db.run(`INSERT INTO ${table}_docs(entity_id,field,element) VALUES (?,?,?)`, [row.id, doc.field, doc.element]).lastInsertRowid;
-        this.db.run(`INSERT INTO ${table}(rowid,entity_id,field,element,body,aliases) VALUES (?,?,?,?,?,?)`,
-          [id, row.id, doc.field, doc.element, doc.body, identifierParts(doc.body).text]);
+        this.db.run(`INSERT INTO ${table}(rowid,entity_id,field,element,body,aliases,owner) VALUES (?,?,?,?,?,?,?)`,
+          [id, row.id, doc.field, doc.element, doc.body, identifierParts(doc.body).text, 'e' + seq]);
       }
     }
     if (!previous || hashes.some((hash, i) => previous[i] !== hash))
@@ -112,7 +113,8 @@ export class SqliteText {
   search(job: SqliteIndexJob, ids: string[] | null, query: string, options: Data, wantHits: boolean): Data[] {
     const table = searchTable(job), fields = Object.keys(job.definition.fields);
     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
-    const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT term FROM ${table}_vocab`).map(row => String(row.term));
+    if (!tokens.length) return [];
+    const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT DISTINCT term FROM ${table}_vocab WHERE col IN ('body','aliases')`).map(row => String(row.term));
     const distance = (a: string, b: string): number => {
       let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
       for (let i = 1; i <= a.length; i++) {
@@ -172,19 +174,22 @@ export class SqliteText {
       const args: any[] = [], ctes = executionOrder.map(i => {
         const clause = clauses[i]!;
         const preceding = previous.get(i);
-        const owners = clause.negative ? candidates.map(candidate => `SELECT id FROM c${candidate}`).join(' UNION ') :
-          preceding === undefined ? undefined : `SELECT id FROM c${preceding}`;
-        const restriction = owners === undefined ? '' : ` AND f.rowid IN
-          (SELECT d.id FROM ${table}_docs d WHERE d.entity_id IN (${owners}))`;
+        const owners = clause.negative ? candidates.map(candidate => `SELECT owner FROM c${candidate}`).join(' UNION ') :
+          preceding === undefined ? undefined : `SELECT owner FROM c${preceding}`;
+        // A mask is an FTS expression, not repeated rowid-constrained MATCH. Limit generated terms at
+        // execution time; a larger owner set falls back to the full clause rather than losing answers.
+        const match = owners === undefined ? '?' : `('(' || ? || ')' ||
+          (SELECT CASE WHEN count(*)>2048 THEN '' ELSE ' AND owner : (' || coalesce(group_concat(owner,' OR '),'z') || ')' END
+           FROM (SELECT DISTINCT owner FROM (${owners}) LIMIT 2049)))`;
         const weights = fields.map((field, position) => `WHEN ${position} THEN ${Number(job.definition.fields[field].weight ?? 1)}`).join(' ');
         if (wantHits) args.push(open, close, open, close);
         args.push(clause.match);
         args.push(...scoped);
-        return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,
-          -bm25(${table},0,0,0,1,1)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
+        return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,
+          -bm25(${table},0,0,0,1,1,0)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
           ${wantHits ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
-          FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ? AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
-          AND ${scope}${restriction})`;
+          FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ${match} AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
+          AND ${scope})`;
       });
       return this.db.all(`WITH ${ctes.join(',')}, matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
         clause_scores AS (SELECT clause,id,max(score) score FROM matches WHERE negative=0 GROUP BY clause,id),

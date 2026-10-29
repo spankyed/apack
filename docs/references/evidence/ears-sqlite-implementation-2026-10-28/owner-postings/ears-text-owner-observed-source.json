@@ -1,0 +1,9 @@
+{
+  "base": "abc6c3af2b2ce7674e4437036306d7a566ea2299",
+  "changedFiles": [
+    "packages/apack-ears/src/sqlite/search.ts",
+    "packages/apack-ears/src/sqlite/text.ts",
+    "packages/apack-ears/tests/sqlite/text-documents.spec.ts"
+  ],
+  "sha256": "82ba9f576e18f4d5f73845032c6ee75eba74a1b53d7d6bdf1f0958ff1c8e06fa"
+}

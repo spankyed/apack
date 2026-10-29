@@ -15,6 +15,17 @@ function open(path?: string, readOnly = false) {
   stores.push(db); return { db, e: createEarsEngine({ database: db }) };
 }
 
+function observeNativeMatches(db: SqliteDatabase) {
+  const expressions: string[] = [], plans: string[] = [], all = db.all.bind(db);
+  db.sql.function('trace_match', { deterministic: false }, (value: unknown) => { const text = String(value); expressions.push(text); return text; });
+  vi.spyOn(db, 'all').mockImplementation((sql, args) => {
+    if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) plans.push(...all('EXPLAIN QUERY PLAN ' + sql, args).map(row => String(row.detail)));
+    const observed = sql.replace(/(WHERE fts_[a-f0-9]+ MATCH )([\s\S]*?)( AND CAST\(f\.field)/g, '$1trace_match($2)$3');
+    return all(observed, args);
+  });
+  return { expressions, plans, all };
+}
+
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string FTS documents', () => {
   it('maps identifier and acronym components to original UTF-16 offsets and preserves whole identifiers', () => {
     const { e } = open(); e.create('Row', { id: 'Row-code', name: '😀 openDatabaseStore HTTPRequest' });
@@ -112,14 +123,33 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     expect(probes.some(probe => probe.bound > 32)).toBe(true);
     expect(probes.every(probe => probe.count <= probe.bound && probe.bound <= 2048)).toBe(true);
   });
+  it('bounds native owner masks without truncating either the masked or fallback answer', () => {
+    const { db, e } = open();
+    e.transact(() => { for (let i = 0; i < 2200; i++) e.create('Row', { id: `Row-${i}`, name: 'groupCommon', body: 'common', cohort: i < 2000 }); });
+    const { expressions } = observeNativeMatches(db);
+    expect(e.query('Row').where('cohort', true).search('name:groupCommon body:common', { fuzzy: false }).count()).toBe(2000);
+    const masked = expressions.filter(expression => expression.includes('body : "common"'));
+    expect(masked.some(expression => expression.includes(' AND owner : ('))).toBe(true);
+    expect(masked.every(expression => (expression.match(/\be\d+\b/g) ?? []).length <= 2048)).toBe(true);
+    expressions.length = 0;
+    expect(e.query('Row').search('name:groupCommon body:common', { fuzzy: false }).count()).toBe(2200);
+    const fallback = expressions.filter(expression => expression.includes('body : "common"'));
+    expect(fallback.length).toBeGreaterThan(0);
+    expect(fallback.every(expression => !expression.includes(' AND owner : ('))).toBe(true);
+    expect(e.query('Row').search('e1', { fuzzy: false }).ids()).toEqual([]);
+  });
+  it('returns empty text queries without reading the vocabulary', () => {
+    const { db, e } = open(); e.create('Row', { name: 'openDatabaseStore' });
+    const all = db.all.bind(db), vocabulary: string[] = [];
+    vi.spyOn(db, 'all').mockImplementation((sql, args) => { if (sql.includes('_vocab')) vocabulary.push(sql); return all(sql, args); });
+    expect(e.query('Row').search('').ids()).toEqual([]);
+    expect(e.query('Row').search('   ').ids()).toEqual([]);
+    expect(vocabulary).toEqual([]);
+  });
   it('uses selective native FTS execution for entity combination without hydrating primary rows', () => {
     const { db, e } = open();
     e.transact(() => { for (let i = 0; i < 100; i++) e.create('Row', { id: `Row-${i}`, name: 'alpha', body: i === 99 ? ['beta', 'gamma'] : ['unrelated'] }); });
-    const read = vi.spyOn(db.values, 'read'), all = db.all.bind(db), plans: string[] = [];
-    vi.spyOn(db, 'all').mockImplementation((sql, args) => {
-      if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) plans.push(...all('EXPLAIN QUERY PLAN ' + sql, args).map(row => String(row.detail)));
-      return all(sql, args);
-    });
+    const read = vi.spyOn(db.values, 'read'), { expressions, plans, all } = observeNativeMatches(db);
     expect(e.query('Row').search('alpha "beta"', { fuzzy: false }).ids()).toEqual(['Row-99']);
     expect(e.query('Row').search('"beta" alpha', { fuzzy: false }).ids()).toEqual(['Row-99']);
     const forward = e.query('Row').search('alpha "beta"', { fuzzy: false }).hits({ highlights: true });
@@ -127,8 +157,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     expect(forward.map(hit => ({ id: hit.id, score: hit.score, highlights: hit.highlights })))
       .toEqual(reverse.map(hit => ({ id: hit.id, score: hit.score, highlights: hit.highlights })));
     expect(read).not.toHaveBeenCalled();
-    expect(plans.some(detail => detail.includes('VIRTUAL TABLE INDEX') && detail.includes('M') && detail.includes('='))).toBe(true);
-    expect(plans.some(detail => detail.includes('_docs_entity') && detail.includes('entity_id=?'))).toBe(true);
+    expect(plans.some(detail => /VIRTUAL TABLE INDEX .*M/.test(detail))).toBe(true);
+    expect(expressions.some(expression => expression.includes(' AND owner : ('))).toBe(true);
     const table = searchTable(db.indexBuilds.jobs().find(job => job.kind === 'text')!);
     expect(all(`EXPLAIN QUERY PLAN SELECT id FROM ${table}_docs WHERE entity_id=?`, ['Row-99'])
       .some(row => String(row.detail).includes('COVERING INDEX') && String(row.detail).includes('entity_id=?'))).toBe(true);

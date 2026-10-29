@@ -252,8 +252,14 @@ The preregistered six-process comparison completed all expected-answer trials at
 improves to ~0.7 ms, but the 100-owner case worsens to ~68 ms (both word orders), versus legacy ~0.5 ms and
 unpruned ~20 ms. This correction is not accepted. See
 [conjunction cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/conjunction-cost/README.md).
-Next qualify FTS-owned owner-term intersection instead of repeated rowid-constrained MATCH, with a bounded
-native mask and correctness-preserving fallback; retain all query/phrase/highlight and storage/build criteria. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
+The local owner-postings candidate now uses a private FTS owner column and one native MATCH intersection,
+with a runtime 2048-owner cap and an untruncated fallback. It passes EARS build/types, **100 focused cases**,
+lint and the native-expression removal guard, including masks/fallback/private metadata and empty-query
+vocabulary avoidance. Full SQLite and cost results are not yet claimed for this candidate. See
+[owner-postings evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-postings/README.md).
+Next run the preregistered legacy/rowid/postings/postings/rowid/legacy cohort using the unchanged expanded
+fixture, then converge functional/cost proof before publishing. Preserve all previous failures and every
+query/phrase/highlight/storage criterion. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
 rest of phases 4–7 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and

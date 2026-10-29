@@ -118,7 +118,7 @@ export class SqliteSearch {
   refileIndex(row: Data, seq: number, job: SqliteIndexJob, changed?: ReadonlySet<string>): void {
     const index = job.definition, name = job.name, generation = job.generation;
     if (job.kind === 'trigram') { this.trigrams.refileIndex(row, job); return; }
-    if (job.kind === 'text') this.texts.refile(row, job, changed);
+    if (job.kind === 'text') this.texts.refile(row, job, seq, changed);
     if (job.kind === 'vector') {
       const joined = index.from.map((field: string) => textOf(row[field])).filter(Boolean).join('\n\n').trim();
       const texts = index.chunk === 'paragraph' ? joined.split(/\n\s*\n/).filter(Boolean) : joined ? [joined] : [];

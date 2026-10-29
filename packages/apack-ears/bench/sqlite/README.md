@@ -220,3 +220,20 @@ semantics/scores. Global exclusions use owner candidates from the positive group
 their entire matching corpus; this does not change their truth conditions or positive scores. Record all calls/samples, including probe overhead. Retain larger/broad materialization,
 index-size/build and app-budget limits as unresolved until separately qualified. Stop on any correctness or
 setup failure; never repeat automatically or change a deadline/expectation after the result.
+
+### Native owner-postings correction cohort
+
+The six-process conjunction cohort at `aadd721d43` is retained: rowid constraints fix a point case but
+regress a 100-owner case to ~68 ms. That implementation is not accepted. After focused correctness checks,
+run exactly **legacy / rowid / postings / postings / rowid / legacy**, fresh processes in one Linux container,
+unchanged two CPUs/6 GiB and 180 seconds per process. Legacy is `9a2771ec25`, rowid is `aadd721d43`, postings
+is the new owner-column implementation. Use the identical updated `text-shape.mjs` from the previous cohort
+for all six, including both word orders, 100-owner groups, exclusions, OR, broad reads, writes, all samples,
+bytes/calls/RSS/heartbeat. Stop on setup/correctness failure; no automatic retries or discarded samples.
+
+Owner terms encode the immutable entity sequence in a private indexed column with zero BM25 weight. MATCH
+intersects owner postings in one expression; no per-document MATCH loop is used. Build the mask in the final
+SQL snapshot, cap generated terms at 2048, and fall back to the unrestricted clause if the runtime owner set
+is larger. Estimates never truncate results. The indexed column changes document-length statistics and adds
+storage/build work, which this cohort must report. Fresh/reset copied format-one profiles are required.
+This diagnostic does not settle broad-query pagination, fuzzy scaling, real app budgets or phase 3–7 acceptance.
