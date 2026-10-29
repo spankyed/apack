@@ -251,8 +251,12 @@ vec0 int8 UPDATE rejects its own encoded representation. No production integrati
 is justified yet. See [retained bounded-domain experiment](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-int8/neon-safe/README.md).
 Local regression source **45e5e360f4** adds vector own-write/savepoint/outer rollback checks. Disposable
 Linux builds/types and all 17 SQLite vector cases pass; pinned native passes 16 but fails the new unit
-sequence. The exact failing internal checkpoint still needs isolation; do not relax or skip the assertion.
+sequence. The failure is isolated at the first outer-unit read after embedding replacement, before a nested unit opens; do not relax or skip the assertion.
 See [vector unit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-unit/README.md).
+Retained-reader source **8c04a6bca0** passes disposable Linux EARS build/types, the real snapshot/WAL
+checkpoint case and lint. A pinned read-only snapshot retains its old rows and blocks TRUNCATE while
+writes grow WAL; release permits truncation to zero. Sustained resource limits, FULL checkpoint latency,
+external ownership and platform qualification remain open. See [WAL reader evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-readers/README.md).
 Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
 continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
 Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.
