@@ -194,7 +194,7 @@ The guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-e
 to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No master merge, adoption,
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with unpublished vector/operational tests, rebuild host/CLI wiring and API report through 24180090dc; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with unpublished vector/operational tests, rebuild host/CLI wiring and selected-store implementation through 59d9275045; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
 Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
 Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE are now at exact green 6cf6c8349e.
@@ -269,8 +269,10 @@ Host/CLI wiring at 1529c7537a adds an app-only exclusive-write wrapper and offli
 with dry-run default. Disposable Linux passes five builds, EARS/host/CLI types, 15 host storage cases, API generation, lint/imports.
 Exact 24180090dc also passes the three real CLI profile cases, API verification, five builds, EARS/host/CLI
 types, 15 host cases and lint/imports. Dry run leaves generations intact; forced rebuild waits for readiness
-and invalidates the old reader; managed-writer exclusion is tested. Run-history maintenance and full
-suite/platform qualification of this newer source remain open. Audit and lossless logical export remain required. See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
+and invalidates the old reader; managed-writer exclusion is tested. Selected-store implementation 59d9275045 adds --database primary/runs/all and disables unreadable-history
+replacement for maintenance. It is validating in ears-rebuild-stores (exec 34035); poll the same handle.
+The following unvalidated host test checks unreadable-incumbent preservation. Full suite/platform
+qualification of this newer source remains open. Audit and lossless logical export remain required. See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
 Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
 continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
 Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.

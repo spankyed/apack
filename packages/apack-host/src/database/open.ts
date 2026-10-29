@@ -64,7 +64,8 @@ const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 
  * read — another format, a record store's from before, damaged — are moved aside, to `<dir>.unreadable-<time>`, and a
  * new database is started: the history is a log, so what that costs is past runs, and refusing would keep the whole app
  * from starting over it. Any other failure (a full disk, a permission, the system's lock table) says nothing about the
- * files and throws, as it does opened read-only.
+ * files and throws, as it does opened read-only. Explicit maintenance sets replaceUnreadable=false to refuse
+ * damaged history without moving or replacing the incumbent.
  */
 export function openRunHistory(dir: string, { readOnly, storageFormat = configuredDatabaseFormat(), replaceUnreadable = true }: { readOnly?: boolean; storageFormat?: string; replaceUnreadable?: boolean } = {}): RunsDatabase {
   if (!readOnly) assertNoImportRecovery(dir);

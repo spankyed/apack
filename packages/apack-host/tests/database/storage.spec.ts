@@ -86,3 +86,12 @@ it('routes explicit SQLite rebuild through maintenance ownership and waits for r
   expect(e.query('Probe').count()).toBe(2);
   expect(databaseStorage(ELMDB).rebuildIndexes).toBeUndefined();
 });
+
+it('refuses unreadable run history without replacement when maintenance disables salvage', () => {
+  const parent = root(), directory = path.join(parent, 'runs'); fs.mkdirSync(directory);
+  const bytes = Buffer.from('not an LMDB database');
+  fs.writeFileSync(path.join(directory, 'data.mdb'), bytes);
+  expect(() => openRunHistory(directory, { storageFormat: ELMDB, replaceUnreadable: false })).toThrow();
+  expect(fs.readdirSync(parent)).toEqual(['runs']);
+  expect(fs.readFileSync(path.join(directory, 'data.mdb'))).toEqual(bytes);
+});
