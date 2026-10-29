@@ -281,7 +281,10 @@ build/types/lint pass. Primary decoding/orphans and bounded retained issues pass
 build/types/lint. The earlier failed fixture used a valid msgpackr special object; its corrected truncated
 map is retained with both results. New cdb961fb87 adds metadata identity and embedding representation
 checks; all 31 recovery cases, build/types/lint pass. New 2fd2e376a6 independently reconstructs list
-membership in the audit copy; complete SQLite-suite validation is active in ears-audit-membership.
+membership in the audit copy; 536/537 SQLite cases pass, with only a new persisted -0 preservation
+expectation wrong before audit runs. Corrected tests compare the persisted value and add real cleanup
+failures; initial test types fail on receiver annotations, fixed in the subsequent source. Complete SQLite
+validation is active in ears-audit-cleanup-typed.
 Public rebuild still needs a correct generationless membership repair/publication design. Poll that same handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
