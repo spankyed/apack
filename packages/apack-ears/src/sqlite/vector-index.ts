@@ -84,6 +84,8 @@ export class SqliteVectorIndex {
   candidates(generation: number, vector: Uint8Array, limit: number, scope: SqliteEntityScope | null = null,
     exclude?: string): Array<Record<string, any>> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 4096) fail('VALUE_INVALID', 'Invalid native candidate limit');
+    if(!this.db.get("SELECT 1 FROM index_builds WHERE generation=? AND kind='vector'",[generation]))
+      fail('SCHEMA_CHANGED','Native vector generation was retired');
     const name = table(generation), state = this.db.get('SELECT state FROM vector_indexes WHERE generation=?', [generation]);
     if (state?.state !== 'ready') fail('INDEX_BUILDING', 'Native vector projection is not ready');
     const filter = scope || exclude ? `owner IN (SELECT e.seq FROM entities e WHERE
@@ -91,6 +93,12 @@ export class SqliteVectorIndex {
     return this.db.all(`SELECT rowid embedding_id,owner,vec1_cos_distance(v,?) distance FROM ${name}(?,?) WHERE ${filter}`,
       [Buffer.from(vector),Buffer.from(vector),JSON.stringify({K:limit,nprobe:32}),
         ...(scope || exclude ? [...(scope?.parameters ?? []),exclude ?? ''] : [])]);
+  }
+  collect(generation:number,limit:number):boolean {
+    this.writer();
+    if(!Number.isSafeInteger(limit)||limit<1||limit>128)fail('VALUE_INVALID','Invalid native retirement batch');
+    const name=table(generation);
+    return Number(this.db.run(`DELETE FROM ${name} WHERE rowid IN (SELECT rowid FROM ${name} LIMIT ?)`,[limit]).changes)<limit;
   }
   /** Caller must first retire projection rows in bounded batches; DROP must not hide live work. */
   retire(generation: number): void {

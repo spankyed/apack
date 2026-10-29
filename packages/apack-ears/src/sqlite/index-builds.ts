@@ -275,6 +275,7 @@ export class SqliteIndexBuilds {
         if (old.kind === 'value') complete = Number(this.db.run(`DELETE FROM field_index WHERE rowid IN
           (SELECT rowid FROM field_index WHERE type=? AND field=? AND generation=? LIMIT ?)`, [old.type, old.name, old.generation, this.batchRows]).changes) < this.batchRows;
         else complete = this.db.search.collectIndex(old, this.batchRows);
+        if(complete&&old.kind==='vector'&&this.vectorModels)complete=this.vectorModels.collectRetired(old.generation);
         if (complete) this.db.run('DELETE FROM index_gc WHERE generation=?', [old.generation]);
         this.preferGC = false;
       }

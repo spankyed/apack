@@ -15,6 +15,7 @@ export class SqliteVectorModels {
   private readonly release:()=>void;
   private running?:Promise<void>;
   private outcome?:SqliteModelOutcome;
+  private orphanSweep=false;
   private stopped=false;
   private stopping?:Promise<void>;
   lastError?:unknown;
@@ -28,15 +29,27 @@ export class SqliteVectorModels {
         definition TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('pending','training','trained','projecting','ready','failed')),
         attempt TEXT,model BLOB,model_sha256 TEXT,samples INTEGER,source_commit_hex TEXT,
         extension_sha256 TEXT,native_version TEXT,worker_sha256 TEXT,error TEXT);`);
+      db.sql.exec('CREATE INDEX IF NOT EXISTS vector_training_state ON vector_training(state,generation)');
+      this.orphanSweep=!!this.orphan();
       db.indexBuilds.attachVectorModels(this);
     } catch(error){this.release();throw error;}
   }
   hasWork():boolean {
-    return !!this.outcome||!!this.running||!!this.db.get("SELECT 1 FROM vector_training WHERE state IN ('pending','training','trained','projecting') LIMIT 1");
+    return this.orphanSweep||!!this.outcome||!!this.running||!!this.db.get("SELECT 1 FROM vector_training WHERE state IN ('pending','training','trained','projecting') LIMIT 1");
   }
   failure():Error|undefined {
     const row=this.db.get("SELECT generation,error FROM vector_training WHERE state='failed' ORDER BY generation LIMIT 1");
     return row?Object.assign(new Error(`Native vector model ${row.generation} failed: ${row.error}`),{code:'INDEX_FAILED'}):undefined;
+  }
+  private orphan():Record<string,any>|undefined {
+    return this.db.get(`SELECT v.generation FROM vector_indexes v LEFT JOIN index_builds b ON b.generation=v.generation
+      LEFT JOIN index_gc g ON g.generation=v.generation WHERE b.generation IS NULL AND g.generation IS NULL LIMIT 1`);
+  }
+  collectRetired(generation:number):boolean {
+    this.writer();
+    if(!this.db.get('SELECT 1 FROM vector_indexes WHERE generation=?',[generation]))return true;
+    if(!this.index.collect(generation,32))return false;
+    this.index.retire(generation);return true;
   }
   private writer():void {
     if(this.stopped||!this.db.isOpen)fail('CLOSED','Native model owner is closed');
@@ -105,7 +118,12 @@ export class SqliteVectorModels {
       return {progressed:true,accept:()=>{if(this.outcome===received)this.outcome=undefined;}};
     }
     const row=this.db.get("SELECT * FROM vector_training WHERE state IN ('trained','projecting') ORDER BY generation LIMIT 1");
-    if(!row)return {progressed:false,accept:()=>{}};
+    if(!row) {
+      if(!this.orphanSweep)return {progressed:false,accept:()=>{}};
+      const orphan=this.orphan();
+      if(orphan){this.collectRetired(Number(orphan.generation));return {progressed:true,accept:()=>{}};}
+      return {progressed:true,accept:()=>{this.orphanSweep=false;}};
+    }
     const generation=Number(row.generation),job=this.job(generation);
     if(row.state==='trained') {
       if(!(row.model instanceof Uint8Array)||createHash('sha256').update(row.model).digest('hex')!==row.model_sha256)

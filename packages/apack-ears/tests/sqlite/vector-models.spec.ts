@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,7 +9,7 @@ import { SqliteVectorModels } from '../../src/sqlite/vector-models.ts';
 
 const held:Array<{db:SqliteDatabase;models:SqliteVectorModels;path:string}>=[];
 afterEach(async()=>{
-  const all=held.splice(0);for(const {db} of all)db.close();
+  vi.restoreAllMocks();const all=held.splice(0);for(const {db} of all)db.close();
   for(const {models} of all)await models.stop();
   for(const path of new Set(all.map(s=>s.path)))rmSync(path,{recursive:true,force:true});
 });
@@ -30,7 +30,7 @@ function fixture(count=512) {const f=own(mkdtempSync(join(tmpdir(),'ears-vector-
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EARS_VEC1_EXTENSION)('durable native model admission',()=>{
   it('uses the shared scheduler to train, project and publish readiness without logical commits',async()=>{
-    const {db,models,job,write}=fixture(),sequence=db.sequence,events:number[]=[];
+    const {db,e,models,job,write}=fixture(),sequence=db.sequence,events:number[]=[];
     const off=db.onIndexesChanged(changes=>events.push(changes.sequence));
     try {
       write(()=>models.enqueue(job));await db.indexesReady();
@@ -39,6 +39,13 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
       expect(state.extension_sha256).toMatch(/^[a-f0-9]{64}$/);expect(db.sequence).toBe(sequence);
       expect(events).toEqual([sequence]);
       expect(models.index.candidates(job.generation,Buffer.from(Float32Array.from(Array(128).fill(1)).buffer),100)).toHaveLength(100);
+      e.admin.setSchema({types:{Row:{required:[],embed:{from:['title'],model:'replacement',dims:128}}},relations:{},roles:[]});
+      await db.indexesReady();
+      for(let i=0;i<1000&&db.get('SELECT 1 FROM index_gc WHERE generation=?',[job.generation]);i++)db.indexBuilds.step();
+      expect(db.get('SELECT 1 FROM vector_indexes WHERE generation=?',[job.generation])).toBeUndefined();
+      expect(db.get(`SELECT 1 FROM sqlite_schema WHERE name='ann_${job.generation}'`)).toBeUndefined();
+      expect(db.get('SELECT count(*) n FROM embedding_values')!.n).toBe(512);
+      expect(()=>models.index.candidates(job.generation,Buffer.from(Float32Array.from(Array(128).fill(1)).buffer),1)).toThrow(expect.objectContaining({code:'SCHEMA_CHANGED'}));
     }finally{off();}
   });
 
@@ -47,14 +54,27 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     db.sql.exec('BEGIN IMMEDIATE');const first=models.step();expect(first.progressed).toBe(true);
     expect(db.get('SELECT state FROM vector_training')!.state).toBe('trained');db.sql.exec('ROLLBACK');
     expect(db.get('SELECT state FROM vector_training')!.state).toBe('training');
-    const replay=write(()=>models.step());expect(replay.progressed).toBe(true);replay.accept();
-    expect(db.get('SELECT state FROM vector_training')!.state).toBe('trained');
+    db.sql.exec('BEGIN IMMEDIATE');const replay=models.step();expect(replay.progressed).toBe(true);db.sql.exec('ROLLBACK');
+    // Refuse the shared scheduler's actual result COMMIT, while SQLite still owns the transaction.
+    const exec=db.sql.exec.bind(db.sql);let refused=false;
+    vi.spyOn(db.sql,'exec').mockImplementation(sql=>{
+      if(sql==='COMMIT'&&!refused){refused=true;throw Object.assign(new Error('injected result commit refusal'),{code:'SQLITE_BUSY'});}
+      return exec(sql);
+    });
+    expect(db.indexBuilds.step()).toBe('busy');expect(refused).toBe(true);
+    expect(db.get('SELECT state FROM vector_training')!.state).toBe('training');
+    db.sql.exec('BEGIN IMMEDIATE');const retained=models.step();expect(retained.progressed).toBe(true);db.sql.exec('ROLLBACK');
     await db.indexesReady();expect(db.get('SELECT state FROM vector_training')!.state).toBe('ready');
   });
 
   it('recovers abandoned attempts and resumes committed model work after reopening',async()=>{
     const first=fixture();first.write(()=>first.models.enqueue(first.job));expect(first.models.start()).toBe(true);
-    await first.models.settled();await first.models.stop();
+    await first.models.settled();
+    // A replacement attempt must never inherit this completed older response.
+    first.write(()=>first.db.run("UPDATE vector_training SET attempt='replacement-attempt'"));
+    const stale=first.write(()=>first.models.step());stale.accept();
+    expect(first.db.get('SELECT state,attempt,model FROM vector_training')).toEqual({state:'training',attempt:'replacement-attempt',model:null});
+    await first.models.stop();
     expect(first.db.get('SELECT state FROM vector_training')!.state).toBe('training');
     const path=first.db.path,sequence=first.db.sequence;first.db.close();
     const next=own(path);next.write(()=>next.models.recover());
