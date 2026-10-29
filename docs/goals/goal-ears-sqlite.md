@@ -194,7 +194,7 @@ The guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-e
 to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No master merge, adoption,
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with unpublished vector/operational tests and rebuild host/CLI wiring through 1529c7537a; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with unpublished vector/operational tests, rebuild host/CLI wiring and API report through 24180090dc; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
 Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
 Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE are now at exact green 6cf6c8349e.
@@ -266,8 +266,9 @@ Internal maintenance source **3ac7b231e1** adds explicit fresh derived-generatio
 data commit. Disposable Linux passes build/types, all 23 search-recovery cases and lint, including restoration
 after deleting a real FTS posting and stale-handle refusal. Guard checkpoint 97631ce9ff passes all 25 recovery cases, types/build/lint, including stopped-owner refusal and admission rollback.
 Host/CLI wiring at 1529c7537a adds an app-only exclusive-write wrapper and offline db rebuild --force
-with dry-run default. Its disposable Linux run ears-rebuild-cli (exec 50750) is active; API report
-generation and full scoped validation are pending. Audit and lossless logical export remain required. See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
+with dry-run default. Disposable Linux passes five builds, EARS/host/CLI types, 15 host storage cases, API generation, lint/imports.
+Report 24180090dc and command tests c7c2c83ed8 now have one active validation container ears-rebuild-command
+(exec 80108); poll this handle for command/API verification. Audit and lossless logical export remain required. See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
 Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
 continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
 Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.
