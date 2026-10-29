@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { execFile, spawn, type ChildProcess, type ExecFileException } from 'node:child_process';
 import { once } from 'node:events';
 import { afterEach, expect, it } from 'vitest';
+import { withoutSourceCondition } from '../../src/build/source-resolution.ts';
 
 const roots: string[] = [], readers: ChildProcess[] = [];
 afterEach(async () => {
@@ -20,6 +21,9 @@ import {resolveAppEnvironment} from '@apackdev/sdk/env';
 import {_RUN_HISTORY_SCHEMA} from '@apackdev/sdk/services';
 import {databaseStorage,openDatabaseStore,openRunHistory,findDatabaseWriter} from '@apackdev/host/database';
 import {databaseBackupStore,importDatabase,listImportRecoveries,restoreImportRecovery} from '@apackdev/host/backup';
+for(const name of ['@apackdev/ears','@apackdev/sdk/utils']){
+ if(!new URL(import.meta.resolve(name)).pathname.includes('/dist/'))throw new Error('Recovery child must resolve built package: '+name);
+}
 const [action,root,format,boundary]=JSON.parse(process.env.EARS_RECOVERY_PROBE), paths=_appDataPaths(root);
 const target={...resolveAppEnvironment({env:'test',userDataDir:root}),storageFormat:format};
 const schema=type=>type==='RunNode'?_RUN_HISTORY_SCHEMA:({types:{[type]:{required:[]}},relations:{},roles:[]});
@@ -80,7 +84,7 @@ else{
 async function run(action: string, root: string, format: string, boundary: string, killed = false) {
   const result = await new Promise<{ error: ExecFileException | null; stdout: string; stderr: string }>(resolve => {
     execFile(process.execPath, ['--input-type=module', '--eval', child], {
-      encoding: 'utf8', timeout: 15_000, env: { ...process.env, APACK_STORAGE_FORMAT: format, APACK_USER_DATA_DIR: root, EARS_RECOVERY_PROBE: JSON.stringify([action, root, format, boundary]) },
+      encoding: 'utf8', timeout: 15_000, env: { ...process.env, NODE_OPTIONS: withoutSourceCondition(process.env.NODE_OPTIONS), APACK_STORAGE_FORMAT: format, APACK_USER_DATA_DIR: root, EARS_RECOVERY_PROBE: JSON.stringify([action, root, format, boundary]) },
     }, (error, stdout, stderr) => { resolve({ error, stdout, stderr }); });
   });
   const reason = `${action} (${format}, ${boundary}): ${result.stderr}`;
@@ -107,7 +111,7 @@ it.skipIf(process.platform === 'win32')('refuses a separate live reader and recl
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-reader-recovery-')); roots.push(root);
   await run('import', root, 'sqlite/1', 'move', true);
   const reader = spawn(process.execPath, ['--input-type=module', '--eval', child], {
-    stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, APACK_STORAGE_FORMAT: 'sqlite/1', APACK_USER_DATA_DIR: root, EARS_RECOVERY_PROBE: JSON.stringify(['reader', root, 'sqlite/1', 'move']) },
+    stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NODE_OPTIONS: withoutSourceCondition(process.env.NODE_OPTIONS), APACK_STORAGE_FORMAT: 'sqlite/1', APACK_USER_DATA_DIR: root, EARS_RECOVERY_PROBE: JSON.stringify(['reader', root, 'sqlite/1', 'move']) },
   });
   readers.push(reader);
   const ready = await Promise.race([once(reader.stdout!, 'data'), once(reader, 'exit').then(() => { throw new Error('Reader exited before opening'); })]);

@@ -208,9 +208,14 @@ for exact archives, source comparison, prior failures and qualified limits. No o
 
 Published recovery tip is now **d9e23b00b7df22124e59625ea8c5de266860c583** on the existing draft branch and
 clean detached `integration-FyE9XZ`. Its single exact
-[strict run 40796822583](https://github.com/spankyed/apack/actions/runs/40796822583) is confirmed live
-(producer job 123195199088); poll that handle, do not dispatch duplicates or advance canonical on its parent's
-success. Local continuation contains documentation beyond the published tip; keep that distinct from CI source.
+[strict run 40796822583](https://github.com/spankyed/apack/actions/runs/40796822583) completed FAILURE: five jobs passed; app/rest failed five recovery crash cases because child processes
+inherited the source condition and plain Node refused SDK namespaces. Preserve that failure; do not promote.
+The local fix strips only the source condition using the existing helper, asserts built package resolution,
+and passes 73 focused Linux recovery/storage cases with the inherited source flag; removing the fix
+reproduces all five failures. Package builds, host types and lint pass. See
+[recovery launch evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-launch/README.md).
+Publish this descendant on the existing branch and run one exact strict gate before canonical promotion.
+Local continuation includes diagnostics beyond the published tip; keep that distinct from CI source.
 
 Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's representative search corpus before
 tuning. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
@@ -220,9 +225,13 @@ replace the failed admission cohort. That four-process control is complete: all 
 SQL/facade p99 stay below 3 ms, and the CPU loop has two ~30 ms calls at ordinals 31–32 in every process.
 Do not change the runner/query compiler on that evidence. See
 [runtime quota evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/runtime-quota/README.md).
-The next preregistered diagnostic is exactly one existing full-watch 100k OFF source/tsx admission with
-optional runtime tracing (GC/CPU profile/cgroup every 64 ms); original 300-second bound and workload budgets
-remain. This is diagnostic only, not a favorable retry or permission to proceed to FULL. Preserve every existing phase 3–7 criterion. Phase 5/6 app/media ownership, raw/unmanaged readers,
+The single preregistered full-watch 100k OFF trace completed on ebf86401a2: diagnostic heartbeat p99
+7.076 ms and lookup p99 2.726 ms, original budgets met. Ten individual heartbeat delays exceeded 16 ms;
+none overlapped the 445 observed GC events and no own-group throttle increment was recorded. Scalar watches
+already track fields/membership and the workload changes the watched slug. Native SQLite hashes match older
+controls. No production optimization or runner change follows from this evidence alone. See
+[admission runtime evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/admission-runtime/README.md).
+This diagnostic does not supersede the failed qualification or permit FULL. Preserve every existing phase 3–7 criterion. Phase 5/6 app/media ownership, raw/unmanaged readers,
 directory-creation hierarchy, read-only mounts, filesystem/power-loss/platform and large-copy resource
 qualification remain required before adoption. Never delete a pending preparation to bypass startup.
 The earlier 431 SQLite / 256 native suite and real WAL-sync evidence remains in
