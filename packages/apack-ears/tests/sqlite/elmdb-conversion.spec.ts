@@ -9,7 +9,7 @@ import { toElmdbSchema } from '../../src/schema.ts';
 import { openDatabase } from '../../src/sqlite/index.ts';
 const roots: string[] = [];
 afterEach(() => { for (const path of roots.splice(0)) rmSync(path, { recursive: true, force: true }); });
-const schema = toElmdbSchema({ types: { Row: { required: [], embed: { from: ['text'], model: 'conversion', dims: 3 } } }, relations: { Custom: {} }, roles: [] });
+const schema = toElmdbSchema({ types: { Row: { required: [], shortCode: 'ROW', embed: { from: ['text'], model: 'conversion', dims: 3 } } }, relations: { custom: {} }, roles: [] });
 function dump(loads: unknown[], schemaValue: unknown = schema) {
   const length = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32LE(n); return b; };
   const frame = (b: Uint8Array) => Buffer.concat([length(b.length), b]);
@@ -30,7 +30,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('explicit elmdb
     const f = fixture(dump([
       { load: 'entity', id: 'Row-second', fields: { text: 'retained', at, bytes: Buffer.from([0, 255]), nested: { zero: -0 }, shortCode: 'ROW-9', __proto__: null }, trashed: false },
       { load: 'entity', id: 'Row-first', fields: { text: 'trashed', trashedAt: 42 }, trashed: true },
-      { load: 'relation', id: 'Relation-edge', kind: 'Custom', source: 'Row-second', target: 'Row-first', info: { at } },
+      { load: 'relation', id: 'Relation-edge', kind: 'custom', source: 'Row-second', target: 'Row-first', info: { at } },
       { load: 'sequence', name: 'shortCode:Row', next: 20 },
       { load: 'sequence', name: 'seq', next: 90 },
     ]));
@@ -46,7 +46,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('explicit elmdb
       expect(e.getAttr('Row-second', 'bytes')).toEqual(new Uint8Array([0, 255]));
       expect(Object.is((e.getAttr('Row-second', 'nested') as { zero: number }).zero, -0)).toBe(true);
       expect(e.getRelation('Relation-edge')?.info).toEqual({ at });
-      const next = e.create('Row', { text: 'next' });
+      const next = e.create('Row', { text: 'next' }).id();
       expect(e.getAttr(next, 'shortCode')).toMatch(/20$/);
     } finally { database.close(); }
   });
@@ -56,7 +56,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('explicit elmdb
     expect(readFileSync(f.output, 'utf8')).toBe('incumbent');
   });
   it.each(['truncated', 'trailing', 'count'] as const)('removes owned staging on late %s failure', async kind => {
-    const valid = dump([{ load: 'entity', id: 'Row-one', fields: { text: 'retained' }, trashed: false }]);
+    const valid = dump(Array.from({ length: 1001 }, (_, i) => ({ load: 'entity', id: `Row-${i}`, fields: { text: 'retained' }, trashed: false })));
     const broken = kind === 'truncated' ? valid.subarray(0, valid.length - 1) : kind === 'trailing' ? Buffer.concat([valid, Buffer.from([0])]) : Buffer.from(valid);
     if (kind === 'count') broken.writeBigUInt64LE(2n, broken.length - 8);
     const f = fixture(broken);
