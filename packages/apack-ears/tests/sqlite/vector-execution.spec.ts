@@ -66,6 +66,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
     reranked = 0;
     expect(e.query.ids(ids.slice(300)).near(positive, { k: 5 }).ids()).toEqual(ids.slice(300, 305));
     expect(reranked).toBe(256); // Excludes the entire unfiltered candidate prefix before limiting.
+    expect(nativePlan.filter(row => row.parent === 0 && String(row.detail).startsWith('LIST SUBQUERY'))).toHaveLength(1);
     e.write(ids[0]!).trash();
     expect(e.query('Row').near(positive, { k: 5 }).ids()).toEqual(ids.slice(1, 6));
     reranked = 0;
