@@ -5,10 +5,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { APP_ENVS, appDataDirFor } from '@apackdev/sdk/env';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { DATABASE_FORMAT as ELMDB } from '@apackdev/ears/lmdb';
-import { DATABASE_FORMAT as SQLITE } from '@apackdev/ears/sqlite';
-import type { EarsDatabase } from '@apackdev/ears';
+import { DATABASE_FORMAT as SQLITE, openDatabase as openSqlite } from '@apackdev/ears/sqlite';
+import { createEarsEngine, type EarsDatabase } from '@apackdev/ears';
 import { prepareImportRecovery } from '../../src/backup/recovery.ts';
-import { configuredDatabaseFormat, openDatabaseStore, openRunHistory } from '../../src/database/index.ts';
+import { configuredDatabaseFormat, databaseStorage, openDatabaseStore, openRunHistory } from '../../src/database/index.ts';
 
 const roots: string[] = [], opened: EarsDatabase[] = [];
 afterEach(() => { for (const db of opened.splice(0)) db.close(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); vi.unstubAllEnvs(); });
@@ -68,4 +68,21 @@ it.each([ELMDB, SQLITE])('blocks writable recovery opens without salvaging eithe
   const inspectedHistory = openRunHistory(paths.runHistory, { readOnly: true, storageFormat: format });
   opened.push(inspectedHistory.database);
   expect(inspectedHistory.database.isOpen).toBe(true);
+});
+
+it('routes explicit SQLite rebuild through maintenance ownership and waits for readiness', async () => {
+  const db = openSqlite({ path: root(), syncs: false, schema: { types: {
+    Probe: { required: [], search: { fields: { title: 1 } } },
+  }, relations: {}, roles: [] } }); opened.push(db);
+  const e = createEarsEngine({ database: db });
+  e.create('Probe', { id: 'Probe-one', title: 'needle' });
+  const before = e.lastCommit();
+  const rebuild = databaseStorage(SQLITE).rebuildIndexes!(db);
+  expect(() => e.create('Probe', { id: 'Probe-blocked' })).toThrow(expect.objectContaining({ code: 'WRITE_PAUSED' }));
+  await rebuild;
+  expect(e.query('Probe').search('needle', { fuzzy: false }).ids()).toEqual(['Probe-one']);
+  expect(e.lastCommit()).toBe(before);
+  e.create('Probe', { id: 'Probe-after', title: 'after' });
+  expect(e.query('Probe').count()).toBe(2);
+  expect(databaseStorage(ELMDB).rebuildIndexes).toBeUndefined();
 });

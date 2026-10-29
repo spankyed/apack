@@ -26,6 +26,17 @@ export function openDatabase({ schema, ...options }: DatabaseOptions): EarsDatab
   return new SqliteDatabase({ ...options, ...(schema ? { schema: toElmdbSchema(schema) } : {}) });
 }
 
+/** Rebuild derived indexes from primary data, excluding other writes until current generations are ready. */
+export async function rebuildIndexes(database: EarsDatabase): Promise<void> {
+  if (!(database instanceof SqliteDatabase)) {
+    throw Object.assign(new Error('SQLite index rebuilding requires a SQLite database owner'), { code: 'UNSUPPORTED' });
+  }
+  await database.withExclusiveWrites(async () => {
+    database.rebuildIndexes();
+    await database.indexesReady();
+  });
+}
+
 export interface TemporaryDatabases {
   open(schema: EngineSchema): { database: EarsDatabase; dispose(): void };
   disposeAll(): void;
