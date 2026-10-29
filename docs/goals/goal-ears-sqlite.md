@@ -281,7 +281,13 @@ Recovery correction is committed at 964f1e1fd2 and published in 60d4283f68 with 
 Do not promote before exact success. Next diagnose actual native ranking/recency
 plans and remaining costs, preserving every failed cohort and the entire phase 3–7 scope. The next pinned
 `text-plan.mjs` diagnostic is preregistered in the benchmark README: actual SQL/plans, binding/JS split, ten
-samples per path, one 10k profile, no retry; this is diagnosis, not a new qualification cohort. Preserve every failed cohort and all remaining
+samples per path, one 10k profile, no retry. It completed: broad execution is almost entirely native SQL
+with three entity lookups; recency returns/hydrates all 10k candidates. See [actual plan evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-plans/README.md).
+The local immutable-sequence correction removes redundant ranking/output entity joins and passes
+**484 SQLite / 289 native**, five builds, types/API reports, lint/imports and an actual-plan removal control
+(three old seeks versus at most one). See [sequence evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-sequence/README.md).
+Next run the preregistered prefix/sequence/sequence/prefix cost cohort on its committed source. Recency stays an
+explicit separate requirement; this diagnosis is not qualification. Preserve every failed cohort and all remaining
 phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the

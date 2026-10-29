@@ -38,6 +38,19 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native text pr
     expect(query().pickOne(['name'])).toEqual({ id: 'Row-0', name: 'needle' }); expect(statements.at(-1)?.returnedRows).toBe(1);
     expect(query().exists()).toBe(true); expect(statements.at(-1)?.returnedRows).toBe(1);
   });
+  it('ranks a prefix without relooking up every accepted entity', () => {
+    const { db, e } = open(); seed(e);
+    const all = db.all.bind(db), plans: string[][] = [];
+    vi.spyOn(db, 'all').mockImplementation((sql, args) => {
+      const rows = all(sql, args);
+      if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) plans.push(db.sql.prepare('EXPLAIN QUERY PLAN ' + sql)
+        .all(...(args ?? [])).map((row: any) => String(row.detail)));
+      return rows;
+    });
+    expect(e.query('Row').search('needle', { fuzzy: false }).limit(7).ids()).toEqual(Array.from({ length: 7 }, (_, i) => `Row-${i}`));
+    expect(plans).toHaveLength(1);
+    expect(plans[0]!.filter(detail => detail.includes('SEARCH e USING')).length).toBeLessThanOrEqual(1);
+  });
   it('keeps filters, cursors and reorderings in their original pipeline scope', () => {
     const { db, e } = open(); seed(e, 'Row', 16); const statements = observe(db);
     const query = () => e.query('Row').search('needle', { fuzzy: false });

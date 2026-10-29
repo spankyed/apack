@@ -267,3 +267,14 @@ all samples, actual facade SQL/parameters/native EXPLAIN QUERY PLAN, binding tim
 facade time. Capture plans after timing. Use normal built entries and native hashes; stop on setup or answer
 failure, with one 180-second process bound and no automatic retries. This diagnoses SQL versus JS cost and
 ranking materialization; it does not replace the failed cohort, discard cold samples or qualify latency.
+
+### Entity-sequence ranking correction cohort
+
+The retained actual-plan diagnostic shows three entity seeks along the broad ranking path. After the
+carry-sequence correction passes functional and native-plan removal checks, run exactly **prefix / sequence /
+sequence / prefix**, four fresh processes in one disposable Linux container, unchanged two CPUs/6 GiB and
+180 seconds per process. Prefix is 76b1aa2765; sequence is the new converged source. Copy the identical
+`text-shape.mjs` fixture to both: all 10k data, point/conjunction/group/exclusion/OR, broad, highlights,
+recency and 1000 writes remain. Retain all samples, answers, plans/provenance, bytes/RSS/WAL/heartbeat and
+build/admission costs. No retry or discarded samples. This compares a changed execution plan, not a rerun
+to replace the failed prefix or 100k/FULL qualification. Recency is still the generic-value path.

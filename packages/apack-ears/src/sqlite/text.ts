@@ -192,24 +192,24 @@ export class SqliteText {
         if (details) args.push(open, close, open, close);
         args.push(ownerMask ? `(${clause.match}) AND owner : (${ownerMask})` : clause.match);
         args.push(...filtered);
-        return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,
+        return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,e.seq,
           -bm25(${table},0,0,0,1,1,0)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
           ${details ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
           FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ${match} AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
           AND ${eligible})`;
       });
       const single = clauses.length === 1, source = single ? 'c0' : 'matches';
-      const combined = single ? 'accepted AS (SELECT id,max(score) score,min(owner) owner FROM c0 GROUP BY id)' :
+      const combined = single ? 'accepted AS (SELECT id,max(score) score,min(owner) owner,min(seq) seq FROM c0 GROUP BY id)' :
         `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
-         clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner FROM matches WHERE negative=0 GROUP BY clause,id),
-         accepted AS (SELECT id,sum(score) score,min(owner) owner FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
+         clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner,min(seq) seq FROM matches WHERE negative=0 GROUP BY clause,id),
+         accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
       const ranked = nativeLimit === undefined ? '' : `, ranked AS MATERIALIZED
-        (SELECT a.id,a.score,a.owner FROM accepted a JOIN entities e ON e.id=a.id ORDER BY a.score DESC,e.seq LIMIT ?)`;
+        (SELECT a.id,a.score,a.owner,a.seq FROM accepted a ORDER BY a.score DESC,a.seq LIMIT ?)`;
       if (nativeLimit !== undefined) args.push(nativeLimit);
       return this.db.all(`WITH ${ctes.join(',')}, ${combined}${ranked}
         SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? 'accepted' : 'ranked'} a
-        JOIN entities e ON e.id=a.id ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
-        ORDER BY a.score DESC,e.seq${details ? ',m.docid,m.clause' : ''}`, args);
+        ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
+        ORDER BY a.score DESC,a.seq${details ? ',m.docid,m.clause' : ''}`, args);
     };
     let open = '\u0001', close = '\u0002';
     // The read request owns a snapshot across both statements. Score the entity prefix before fetching
