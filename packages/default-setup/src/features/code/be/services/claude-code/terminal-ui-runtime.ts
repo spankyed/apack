@@ -1,3 +1,4 @@
+import { claudeTerminalBackgroundRuntime } from './terminal-background-runtime.ts'
 import { claudeTerminalSandboxNetworkRuntime } from './terminal-sandbox-network-runtime.ts'
 import { claudeTerminalManagedSecurityRuntime } from './terminal-managed-security-runtime.ts'
 import { claudeTerminalAutocompactOfferRuntime } from './terminal-autocompact-offer-runtime.ts'
@@ -527,6 +528,7 @@ ${claudeTerminalManagedSecurityRuntime}
 ${claudeTerminalAutocompactOfferRuntime}
 ${claudeTerminalRefusalRuntime}
 ${claudeTerminalSettingsRuntime}
+${claudeTerminalBackgroundRuntime}
 function nativeBillingNotice(n){
  const binding=originalContext??n.runtime.ey();
  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native notice is not ready');
@@ -723,6 +725,7 @@ function restoreNativePlanContext(n,context,sessionId){
 async function control(request,abort){
  const n=await initialize();
  if(request.subtype==='apack_checkpoint_cost')return checkpointNativeCost(n,request.session_id);
+ if(request.subtype==='apack_ui_background_review')return nativeBackgroundReview(n,request);
  if(request.subtype==='apack_ui_settings')return nativeSettings(n,request,abort);
  if(request.subtype==='apack_ui_parent_command')return nativeParentCommand(n,request);
  if(typeof request.client_id==='string'&&clients.has(request.client_id)&&!['ui_attach','ui_detach'].includes(request.subtype)&&!clientViewCurrent(n,request.client_id))throw Error('Native UI client belongs to a different selected view');

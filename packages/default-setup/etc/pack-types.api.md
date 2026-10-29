@@ -493,6 +493,21 @@ interface ClaudeAgentHandback {
     warning?: string;
 }
 
+interface ClaudeBackgroundReview {
+    revision: string;
+    title: string;
+    paragraphs: string[];
+    confirmLabel: string;
+    cancelLabel: string;
+    defaultFocus: 'cancel' | 'confirm';
+}
+
+interface ClaudeBackgroundReviewState {
+    status: 'error' | 'loading' | 'pending' | 'ready';
+    review?: ClaudeBackgroundReview;
+    problem?: string;
+}
+
 /** Original background job identity is distinct from the parent app conversation. */
 interface ClaudeBackgroundSession {
     id: string;
@@ -2288,6 +2303,7 @@ type ClaudeUiMountState = ({
             id: string;
             commandName: string;
         };
+        backgroundReview?: ClaudeBackgroundReviewState;
         settings?: ClaudeSettingsView;
         output?: {
             messageId: string;
@@ -2679,6 +2695,14 @@ type ClaudeUiViewRequest = ({
     mountId: string;
     sequence: number;
 } & ClaudeUiActionKeyRequest) | {
+    type: 'CLAUDE_UI_BACKGROUND_REVIEW';
+    threadId: string;
+    mountId: string;
+    revision: number;
+    panelId: string;
+    sourceRevision: string;
+    decision: 'cancel' | 'confirm';
+} | {
     type: 'CLAUDE_UI_SETTINGS';
     threadId: string;
     mountId: string;
@@ -8605,6 +8629,27 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         title: string;
         confirmLabel: string;
         commandName?: string | undefined;
+    }>;
+    backgroundReview(options: {
+        client_id: string;
+        panel_id: string;
+    } & ({
+        operation: "read";
+    } | {
+        operation: "cancel" | "confirm";
+        revision: string;
+    })): Promise<{
+        open: boolean;
+        review?: {
+            revision: string;
+            title: string;
+            paragraphs: string[];
+            confirmLabel: string;
+            cancelLabel: string;
+            defaultFocus: "cancel" | "confirm";
+        } | undefined;
+    } | {
+        answered: true;
     }>;
     settings(options: {
         client_id: string;

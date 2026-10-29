@@ -20,7 +20,7 @@ export interface ClaudeUiOwner {
   readonly sessionId?: string
   readonly billing?: import('../../../common/native-billing.ts').ClaudeBillingObservation
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'settings' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'managedSettingsDiagnostics' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'backgroundReview' | 'settings' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'managedSettingsDiagnostics' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -77,10 +77,14 @@ export function mountClaudeUi(options: {
       if (panelState?.status === 'panel' && panelState.panel) {
         const result = await owner.handle.ui.agentPanel({ client_id: client.client_id, panel_id: panelState.panel.id, operation: 'read' })
         if (!current()) return
+        if (agentInput === panelState && result.open && panelState.panel.commandName === 'background' && panelState.backgroundReview?.status !== 'pending') {
+          const response = await owner.handle.ui.backgroundReview({ client_id: client.client_id, panel_id: panelState.panel.id, operation: 'read' })
+          if (current() && agentInput === panelState && 'open' in response) panelState.backgroundReview = { status: 'ready', review: response.review }
+        }
         if (agentInput === panelState && !result.open) agentInput = { revision: panelState.revision, status: 'panel_done' }
       }
       messages.refresh(); publish(lastState)
-    } catch (error) { if (current()) { agentProblem = error instanceof Error ? error.message : 'Agent conversation could not refresh'; publish(lastState) } }
+    } catch (error) { if (current()) { agentProblem = error instanceof Error ? error.message : 'Agent conversation could not refresh'; if (agentInput?.status === 'panel' && agentInput.panel?.commandName === 'background') agentInput.backgroundReview = { ...agentInput.backgroundReview, status: 'error', problem: agentProblem }; publish(lastState) } }
     finally { agentReading = false }
   }
 
@@ -318,6 +322,17 @@ export function mountClaudeUi(options: {
         else agentInput = { revision, status: 'done', receipt: { messageId: result.messageId } }
         publish(lastState); if (agentInput.status === 'done') void refreshAgent()
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Agent input failed' }; publish(lastState) } }
+    },
+    async backgroundReview(revision: number, panelId: string, sourceRevision: string, decision: 'confirm' | 'cancel') {
+      const state = agentInput
+      if (!current() || state?.status !== 'panel' || state.panel?.id !== panelId || state.panel.commandName !== 'background' || state.revision !== revision || state.backgroundReview?.review?.revision !== sourceRevision || state.backgroundReview.status === 'pending') return
+      state.backgroundReview = { ...state.backgroundReview, status: 'pending', problem: undefined }; publish(lastState)
+      try {
+        await owner.handle.ui.backgroundReview({ client_id: client.client_id, panel_id: panelId, operation: decision, revision: sourceRevision })
+        if (current() && agentInput === state && decision === 'cancel') { agentInput = { revision, status: 'panel_done' }; publish(lastState) }
+      } catch (error) {
+        if (current() && agentInput === state) { state.backgroundReview = { ...state.backgroundReview!, status: 'error', problem: error instanceof Error ? error.message : 'Native background review failed' }; publish(lastState) }
+      }
     },
     async settings(revision: number, panelId: string, requestId: string, action: import('../../../common/native-settings.ts').ClaudeSettingsOperation) {
       const cancelling = action.kind === 'editor' && action.command.action === 'cancel'

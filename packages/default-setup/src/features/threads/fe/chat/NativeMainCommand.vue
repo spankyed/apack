@@ -1,5 +1,6 @@
 <template>
-  <NativeHelpPanel v-if="state?.status === 'panel' && state.panel?.commandName === 'help'" :key="state.panel.id" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
+  <NativeBackgroundReview v-if="state?.status === 'panel' && state.panel?.commandName === 'background'" :key="state.panel.id" :panel-id="state.panel.id" :state="state.backgroundReview" @answer="emit('background', $event)" />
+  <NativeHelpPanel v-else-if="state?.status === 'panel' && state.panel?.commandName === 'help'" :key="state.panel.id" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
   <NativeSettingsPanel v-else-if="state?.status === 'panel' && state.panel && ['config','model','status','usage','theme'].includes(state.panel.commandName)" :key="state.panel.id" :subject="state.panel.commandName === 'model' ? 'model' : state.panel.commandName === 'theme' ? 'theme' : 'settings'" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
   <NativeCommandPanel v-else-if="state?.status === 'panel' && state.panel" :name="state.panel.commandName" :owner-id="ownerId" :output="output" @input="emit('panel', $event)" @close="emit('panel')" @resize="emit('resize', $event)" />
   <section v-else-if="state?.status === 'command_output' && state.output && !dismissed" aria-label="Native command output" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
@@ -16,6 +17,7 @@
   <p v-else-if="state?.status === 'pending'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">Running native command…</p>
 </template>
 <script setup lang="ts">
+import NativeBackgroundReview from './NativeBackgroundReview.vue'
 import { nextTick, ref, watch } from 'vue'
 import type { ClaudeUiMountState } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
@@ -24,7 +26,7 @@ import NativeCommandPanel from './NativeCommandPanel.vue'
 import NativeSettingsPanel from './NativeSettingsPanel.vue'
 import NativeHelpPanel from './NativeHelpPanel.vue'
 const props = defineProps<{ state?: ClaudeUiMountState['agentInput']; frame?: ClaudeUiTranscriptFrame; ownerId: string; output: readonly { sequence: number; text: string }[]; dismissed: boolean; expanded: boolean }>()
-const emit = defineEmits<{ settings: [action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: { columns: number; rows: number }]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
+const emit = defineEmits<{ background: [request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }]; settings: [action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: { columns: number; rows: number }]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
 const cancel = ref<HTMLButtonElement>()
 watch(() => props.state?.status, async status => { if (status === 'confirmation') { await nextTick(); cancel.value?.focus({ preventScroll: true }) } })
 </script>
