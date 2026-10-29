@@ -286,8 +286,17 @@ with three entity lookups; recency returns/hydrates all 10k candidates. See [act
 The local immutable-sequence correction removes redundant ranking/output entity joins and passes
 **484 SQLite / 289 native**, five builds, types/API reports, lint/imports and an actual-plan removal control
 (three old seeks versus at most one). See [sequence evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-sequence/README.md).
-Next run the preregistered prefix/sequence/sequence/prefix cost cohort on its committed source. Recency stays an
-explicit separate requirement; this diagnosis is not qualification. Preserve every failed cohort and all remaining
+The preregistered four-process cost cohort completed: broad ~17.1 versus ~18.6 ms, highlights ~18.3 versus
+~19.8 ms, recency ~46 versus ~48 ms; all answers pass, no samples/retries discarded. Broad/highlight/recency
+p99 still miss 16 ms. See [sequence cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/sequence-cost/README.md).
+Next implement native recency value ranking before the prefix: preserve numeric/Date/missing/non-numeric
+values, one clock, base-score tie order, multi-type/global/pipeline scope, complete highlighted hits and units.
+The scalar codec accepts finite numeric/Date cells; investigate nonfinite recency options separately instead
+of silently changing their existing generic behavior. Prove actual returned-row/value-decoding bounds and
+removal controls, then preregister a new cost comparison. Metadata WITHOUT ROWID is only an unmeasured
+possible diagnostic, not a chosen layout change. Before Windows qualification, switch the two new ordinary
+recovery alias fixture links to Windows junctions as the existing storage fixture does (crash tests are POSIX-only).
+Recency and every phase 3–7 requirement remain required; none of these diagnostics is qualification. Preserve every failed cohort and all remaining
 phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
