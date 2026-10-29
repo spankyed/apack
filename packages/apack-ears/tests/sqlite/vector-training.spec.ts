@@ -15,16 +15,17 @@ const schema=(model='fixture'):EngineSchema=>({types:{Row:{required:[],embed:{fr
 function fixture(count=512) {
   const path=mkdtempSync(join(tmpdir(),'ears-vector-training-'));
   const db=new SqliteDatabase({path,syncs:false,schema:toElmdbSchema(schema())}),e=createEarsEngine({database:db});
+  const index=new SqliteVectorIndex(db,process.env.EARS_VEC1_EXTENSION!);
   const trainer=new SqliteVectorTraining(db,process.env.EARS_VEC1_EXTENSION!);held.push({db,trainer,path});
   e.transact(()=>{for(let i=0;i<count;i++)e.create('Row',{title:String(i)});});
   const pending=e.pendingEmbeddings('Row',{limit:1000});
   e.embed(pending.chunks.map((c,i)=>({...c,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((i+1)*(j+1)*1.71))})));
-  return {db,e,trainer,job:db.indexBuilds.jobs().find(j=>j.kind==='vector')!};
+  return {db,e,index,trainer,job:db.indexBuilds.jobs().find(j=>j.kind==='vector')!};
 }
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EARS_VEC1_EXTENSION)('native vector training ownership',()=>{
   it('yields the foreground, preserves logical commits and returns an installable identified model',async()=>{
-    const {db,e,trainer,job}=fixture(),sequence=db.sequence;
+    const {db,e,index,trainer,job}=fixture(),sequence=db.sequence;
     let yielded=false;const turn=new Promise<void>(resolve=>setImmediate(()=>{yielded=true;resolve();}));
     const pending=trainer.train(job);e.create('Row',{title:'foreground while training'});
     const result=await pending;await turn;expect(yielded).toBe(true);
@@ -32,7 +33,6 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(result.modelSha256).toBe(createHash('sha256').update(result.model).digest('hex'));
     expect(result.extensionSha256).toMatch(/^[a-f0-9]{64}$/);expect(result.workerSha256).toMatch(/^[a-f0-9]{64}$/);
     expect(result.sourceCommitHex).toMatch(/^[A-F0-9]+$/);
-    const index=new SqliteVectorIndex(db,process.env.EARS_VEC1_EXTENSION!);
     db.sql.exec('BEGIN IMMEDIATE');index.admit(job,result.model);db.commitWrite();
     for(let ready=false;!ready;){db.sql.exec('BEGIN IMMEDIATE');ready=index.step(job.generation,32);db.commitWrite();}
     expect(index.candidates(job.generation,Buffer.from(Float32Array.from(Array(128).fill(1)).buffer),100)).toHaveLength(100);
@@ -43,7 +43,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const {db,e,trainer,job}=fixture();
     const pending=trainer.train(job),refused=expect(pending).rejects.toMatchObject({code:'SCHEMA_CHANGED'});
     e.admin.setSchema(schema('changed'));await refused;
-    expect(db.get("SELECT 1 FROM sqlite_schema WHERE name LIKE 'ann_%'")).toBeUndefined();
+    expect(db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name GLOB 'ann_[0-9]*'")).toBeUndefined();
   });
 
   it('serializes workers, drains cancellation and permits a fresh attempt',async()=>{

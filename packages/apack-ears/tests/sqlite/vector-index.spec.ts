@@ -31,7 +31,10 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     const first=e.create('Row',{title:'one\n\ntwo'}).id(),second=e.create('Row',{title:'three'}).id();embed();
     const sequence=db.sequence;write(()=>index.admit(job,model));
     expect(db.sequence).toBe(sequence);expect(()=>index.candidates(job.generation,bytes(vector(1)),100)).toThrow(expect.objectContaining({code:'INDEX_BUILDING'}));
+    const all=db.all.bind(db);let plan:Array<Record<string,any>>=[];
+    db.all=(sql,parameters=[])=>{if(sql.startsWith('WITH page AS MATERIALIZED'))plan=all('EXPLAIN QUERY PLAN '+sql,parameters);return all(sql,parameters);};
     expect(write(()=>index.step(job.generation,1))).toBe(false);
+    expect(plan.some(row=>String(row.detail).includes('chunk_native_admission')&&String(row.detail).includes('embedding_id>?'))).toBe(true);
     expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(1);
     // Updating an already-visited vector and adding new owners must both survive later backfill.
     const pending=e.pendingEmbeddings('Row',{limit:1000});expect(pending.chunks).toHaveLength(0);
@@ -75,6 +78,13 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     expect(snapshot.candidates(job.generation,bytes(vector(1)),100)).toEqual(expected);
     expect(reopened.sequence).toBe(sequence);
     expect(()=>snapshot.step(job.generation,1)).toThrow(expect.objectContaining({code:'UNIT_REQUIRED'}));
+  });
+
+  it('refuses an implicit cursor-index build on a populated store',()=>{
+    const {db,e}=fixture();e.create('Row',{title:'incumbent'});
+    db.sql.exec('DROP INDEX chunk_native_admission');
+    expect(()=>new SqliteVectorIndex(db,process.env.EARS_VEC1_EXTENSION!)).toThrow(expect.objectContaining({code:'MAINTENANCE_REQUIRED'}));
+    expect(e.query('Row').count()).toBe(1);
   });
 
   it('rolls back refused admission and rejects stale generations and unsafe writer use',()=>{

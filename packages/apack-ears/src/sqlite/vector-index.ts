@@ -16,6 +16,12 @@ export class SqliteVectorIndex {
   constructor(db: SqliteDatabase, extension: string) {
     this.db = db;
     db.sql.loadExtension(extension);
+    const indexed=db.get("SELECT 1 FROM sqlite_schema WHERE type='index' AND name='chunk_native_admission'");
+    if(!indexed) {
+      if(db.readOnly)fail('CORRUPT','Missing native admission cursor index');
+      if(db.get('SELECT 1 FROM chunks LIMIT 1'))fail('MAINTENANCE_REQUIRED','Prepare the native admission cursor index offline before enabling it on a populated store');
+      db.sql.exec('CREATE INDEX chunk_native_admission ON chunks(generation,embedding_id) WHERE embedding_id IS NOT NULL');
+    }
     if (!db.readOnly) db.sql.exec(`CREATE TABLE IF NOT EXISTS vector_indexes(
       generation INTEGER PRIMARY KEY,state TEXT NOT NULL CHECK(state IN ('building','ready')),
       after_id INTEGER NOT NULL,model_sha256 TEXT NOT NULL);`);
@@ -58,10 +64,11 @@ export class SqliteVectorIndex {
     const name = table(generation), state = this.db.get('SELECT * FROM vector_indexes WHERE generation=?', [generation]);
     if (!state) fail('CORRUPT', 'Missing native vector admission');
     if (state!.state === 'ready') return true;
-    const rows = this.db.all(`SELECT v.id,coalesce(p.normalized,v.embedding) embedding,e.seq,1-e.trashed active
-      FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
-      LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE c.generation=? AND v.id>?
-      ORDER BY v.id LIMIT ?`, [generation, state!.after_id, limit]);
+    const rows = this.db.all(`WITH page AS MATERIALIZED (
+      SELECT entity_id,embedding_id FROM chunks WHERE generation=? AND embedding_id>? ORDER BY embedding_id LIMIT ?)
+      SELECT v.id,coalesce(p.normalized,v.embedding) embedding,e.seq,1-e.trashed active
+      FROM page c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
+      LEFT JOIN embedding_search p ON p.embedding_id=v.id`, [generation, state!.after_id, limit]);
     for (const row of rows) {
       if (!Number.isSafeInteger(row.id) || !Number.isSafeInteger(row.seq)) fail('CORRUPT', 'Invalid native vector identity');
       this.db.run(`DELETE FROM ${name} WHERE rowid=?`, [BigInt(row.id)]);
