@@ -148,6 +148,42 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('shared backgro
     drain(resumed.db); expect(resumed.db.get('SELECT 1 FROM index_gc LIMIT 1')).toBeUndefined();
   });
 
+  it('keeps healthy search, watches and primary writes available beside a failed vector replacement', async () => {
+    const { db, e } = seed(); e.admin.setSchema(indexed); await db.indexesReady();
+    const pending = e.pendingEmbeddings('Row', { limit: 1000 });
+    e.embed(pending.chunks.map(chunk => ({ ...chunk, model: pending.model, vector: [1, 0, 0] })));
+    const previous = searchJobs(db).find(job => job.kind === 'vector')!;
+    e.admin.setSchema({ ...indexed, types: { Row: { ...indexed.types.Row,
+      embed: { from: ['title', 'absent'], model: 'fixture', dims: 3 },
+    } } });
+    const refile = db.search.refileIndex.bind(db.search);
+    const fault = vi.spyOn(db.search, 'refileIndex').mockImplementation((...args) => {
+      if (args[2].kind === 'vector') throw Error('replacement failed');
+      return refile(...args);
+    });
+    expect(db.indexBuilds.step()).toBe('failed'); fault.mockRestore();
+    await expect(db.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+    expect(() => e.query('Row').near([1, 0, 0]).ids()).toThrow(expect.objectContaining({ code: 'INDEX_FAILED' }));
+    expect(e.query('Row').search('needle', { fuzzy: false }).count()).toBe(150);
+    expect(e.query('Row').containing('needle').count()).toBe(150);
+    const seen: number[] = [];
+    const watch = e.watch(() => e.query('Row').search('changed', { fuzzy: false }).count(), count => seen.push(count));
+    try {
+      await e.admin.watchesSettled();
+      e.write('Row-0').set('title', 'changed title');
+      await e.admin.watchesSettled();
+      expect(seen).toEqual([0, 1]);
+      expect(e.query('Row').search('needle', { fuzzy: false }).count()).toBe(149);
+      expect(e.query('Row').containing('changed').ids()).toEqual(['Row-0']);
+      expect(e.getAttr('Row-0', 'title')).toBe('changed title');
+      expect(db.get('SELECT count(*) n FROM chunks WHERE generation=? AND embedding IS NOT NULL', [previous.generation])!.n).toBe(150);
+      expect(db.indexBuilds.step()).toBe('idle');
+    } finally { watch.stop(); }
+    db.close(); const resumed = open(db.path); await resumed.db.indexesReady();
+    expect(resumed.e.query('Row').search('changed', { fuzzy: false }).ids()).toEqual(['Row-0']);
+    expect(resumed.e.pendingEmbeddings('Row')).toMatchObject({ count: 1, chunks: [{ id: 'Row-0', text: 'changed title' }] });
+  });
+
   it('rolls back a failed batch and resumes its committed cursor on a fresh owner', async () => {
     const { db, e } = seed(); e.admin.setSchema(indexed);
     const job = searchJobs(db)[0], table = searchTable(job), refile = db.search.refileIndex.bind(db.search);
