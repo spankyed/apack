@@ -304,8 +304,9 @@ Normal app composition does not activate this service. Cancellation waits for wo
 host owners must drain it before replacement/deletion. Next implement persistent attempt/
 model states, scheduler/restart ownership, incumbent-preserving model refresh, host draining,
 final EARS owner aggregation and readiness/watch/retirement/audit/rebuild/restore paths.
-The platform workflow now requires the ten cases and pinned native build provenance; its
-new exact-tip run still needs dispatch/completion. Earlier platform green predates this slice.
+The platform workflow now requires the ten cases and pinned native build provenance;
+[40960736926](https://github.com/spankyed/apack/actions/runs/40960736926) is running on exact
+`4575088eed`. Earlier platform green predates this slice.
 Normal native distribution/fork selection and all frozen fresh/app/resource/full Strict gates
 remain required. The active integrated vector path still fails broad responsiveness.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
