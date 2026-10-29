@@ -259,6 +259,12 @@ checks after the failure remain unrun. No production dependency changed; see
 [ANN gate evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/sqlite-vec-ann-compat/README.md).
 Evaluate another native strategy and its ownership/update costs; this failed prerequisite is not adoption
 or a disposition of the unmet broad responsiveness requirement.
+Exploratory same-model vec1 IVF probes complete: 32 probes meet broad/10% sampled recall and heartbeat
+but fail 1% recall (0.947); 64 probes meet sampled recall but miss heartbeat. Neither passes the full
+matrix. No dependency changed. [Probe evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vec1-ivf-probes/README.md)
+requires the next prerequisite to measure arbitrary SQL owner-IN scopes, whose upstream comparison
+loops may multiply metadata cost. Constant range filters do not qualify actual EARS scopes. Fresh
+frozen queries and complete integrated/admission/platform checks remain required before acceptance.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
 the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
