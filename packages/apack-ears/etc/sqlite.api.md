@@ -4,6 +4,9 @@
 
 ```ts
 
+// @public
+export function auditDatabase(database: EarsDatabase): Promise<SqliteAuditReport>;
+
 // @public (undocumented)
 export function createTemporaryDatabases(): TemporaryDatabases;
 
@@ -26,6 +29,26 @@ export function openDatabase(input: DatabaseOptions): EarsDatabase;
 
 // @public
 export function rebuildIndexes(database: EarsDatabase): Promise<void>;
+
+// @public (undocumented)
+export interface SqliteAuditReport {
+    // (undocumented)
+    checkedEntities: number;
+    // (undocumented)
+    checkedRelations: number;
+    // (undocumented)
+    comparedIndexes: number;
+    // (undocumented)
+    issueCount: number;
+    // (undocumented)
+    issues: string[];
+    // (undocumented)
+    ok: boolean;
+    // (undocumented)
+    scope: 'primary-values-and-active-derived-indexes';
+    // (undocumented)
+    sequence: number;
+}
 
 // @public (undocumented)
 export interface TemporaryDatabases {
