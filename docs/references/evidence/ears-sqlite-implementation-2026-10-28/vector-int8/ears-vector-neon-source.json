@@ -1,0 +1,11 @@
+{
+  "commit": "4e814ce3a31031514ac9ea986d432fd8531f8822",
+  "files": {
+    "vector-quantized.mjs": "4525b68839cae4d8b1c5b86ed4328b3e6cdcb1498bc451842f5caac523826967",
+    "load-metrics.ts": "2f6ac8f834e561cc7473bbec06bdb364e692bf6de8f9d998523cd05bd0c80795",
+    "package.json": "89c47db7851f89caec72da4f215ebc21cf1e294aeef3b45d2583562d846ab035",
+    "vector-corpus.mjs": "ccde028d33d583a385aeace07192073d0163e94ddadba0fee7a540c8ce0e3d53"
+  },
+  "strategy": "l2-unit",
+  "nativeSource": "sqlite-vec v0.1.9/e9f598ab official verified amalgamation; compare same-source O3 and O3+NEON"
+}

@@ -1,0 +1,9 @@
+{
+  "tag": "v0.1.9",
+  "commit": "e9f598abfa0c06b328d8fe5da9c3760cce74be10",
+  "archiveSha256": "3acd67cb4aff080c7050926fd3cf8227905fe5b7ee3829d8ee5024ab1283cf61",
+  "files": {
+    "extracted/sqlite-vec.h": "8e4d7bfcd779c89bd19a6b2959fce24ee391b2eaf79a85a979377a36627cb060",
+    "extracted/sqlite-vec.c": "ba081a47fa02eadc3cf6b16c314b695b84081269349aac722b4efa338fe8fd85"
+  }
+}

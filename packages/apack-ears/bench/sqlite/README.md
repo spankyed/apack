@@ -416,3 +416,16 @@ Also build a same-source/plain -O3 binary with the identical compiler and header
 cohort stops or completes, run one plain 10k diagnostic (expected failures retained, no restart) to
 separate the explicit NEON flag from other prebuilt/compiler differences. The runner records each
 exit independently and never retries either binary. This control is not another acceptance cohort.
+
+
+The exact-source NEON control stops before corpus timing because its full-range int8 distance fails.
+A direct scalar/NEON check at 8/35/1568 dimensions returns 254 in scalar but NULL in NEON for +127
+versus -127. Source squares differences into signed 16-bit lanes before widening. Both return 180 for
++90 versus -90. This is an actual restricted-domain requirement, not a transaction failure.
+Before measuring `l2-safe`, derive its scale as floor(sqrt(INT16_MAX)/2)=90 and bound every encoded
+coordinate, including norm padding, to [-90,90]. Then every coordinate difference is at most 180 and
+its square <=32400 fits. Keep normalization/constant norm, 32 padding slots, 64 candidates, all original
+truth/recall/latency controls and source/binary pins. Public Float32 inputs stay unrestricted by this
+internal encoding bound. Run this one bounded variant through 1k/10k/100k, stop on first miss, retain
+the rejected full-range strategy, and perform the paired plain 10k control. No production optimized
+binary is selected; shipping or exposing unrestricted int8 NEON would remain incorrect in this release.

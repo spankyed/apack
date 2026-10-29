@@ -10,20 +10,22 @@ import { startHeartbeat, loadedNativeBindings } from './load-metrics.ts';
 import { DIMENSIONS, corpusGenerator, exactTop, norm, checkCorpusMath } from './vector-corpus.mjs';
 const require = createRequire(import.meta.url), Database = require('better-sqlite3');
 const [size, output, requestedStrategy] = process.argv.slice(2), n = Number(size), dimensions = DIMENSIONS, candidates = 64, strategy = requestedStrategy ?? 'cosine';
-assert(['cosine', 'l2-unit'].includes(strategy));
+assert(['cosine', 'l2-unit', 'l2-safe'].includes(strategy));
+// Largest symmetric integer range whose squared differences fit the pinned NEON kernel's signed 16-bit lane.
+const componentScale = strategy === 'l2-safe' ? Math.floor(Math.sqrt(32767) / 2) : 127;
 assert(process.platform === 'linux' && [1000, 10000, 100000].includes(n) && output && !existsSync(output));
 const hash = value => createHash('sha256').update(value).digest('hex');
 const bytes = vector => Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);
 function quantize(vector, stored = true) {
-  if (strategy === 'l2-unit') {
+  if (strategy !== 'cosine') {
     const magnitude = norm(vector); assert(Number.isFinite(magnitude) && magnitude > 0);
     const result = new Int8Array(vector.length + 32); let squared = 0;
     for (let i = 0; i < vector.length; i++) {
-      assert(Number.isFinite(vector[i])); result[i] = Math.max(-127, Math.min(127, Math.round(vector[i] * (127 / magnitude)))); squared += result[i] ** 2;
+      assert(Number.isFinite(vector[i])); result[i] = Math.max(-componentScale, Math.min(componentScale, Math.round(vector[i] * (componentScale / magnitude)))); squared += result[i] ** 2;
     }
     if (stored) {
-      const radius = Math.ceil(127 + Math.sqrt(vector.length) / 2); let remaining = radius ** 2 - squared; assert(remaining >= 0);
-      for (let i = vector.length; i < result.length && remaining; i++) { const value = Math.min(127, Math.floor(Math.sqrt(remaining))); result[i] = value; remaining -= value ** 2; }
+      const radius = Math.ceil(componentScale + Math.sqrt(vector.length) / 2); let remaining = radius ** 2 - squared; assert(remaining >= 0);
+      for (let i = vector.length; i < result.length && remaining; i++) { const value = Math.min(componentScale, Math.floor(Math.sqrt(remaining))); result[i] = value; remaining -= value ** 2; }
       assert.equal(remaining, 0, 'integer norm padding exhausted');
     }
     return Buffer.from(result.buffer);
@@ -36,7 +38,7 @@ function quantize(vector, stored = true) {
 const constraints = Object.fromEntries(['cpu.max', 'memory.max', 'memory.swap.max'].map(name => [name, readFileSync('/sys/fs/cgroup/' + name, 'utf8').trim()]));
 assert.equal(constraints['cpu.max'], '200000 100000'); assert.equal(constraints['memory.max'], String(6 * 1024 ** 3)); assert.equal(constraints['memory.swap.max'], '0');
 const report = { source: process.env.EARS_VECTOR_SOURCE, qualification: false, scope: 'native primitive counterfactual; one vector per owner; no EARS integration',
-  n, dimensions, candidates, strategy, node: process.version, constraints, profiles: [], fixtureHash: hash(readFileSync(new URL('./vector-corpus.mjs', import.meta.url))),
+  n, dimensions, candidates, strategy, componentScale, node: process.version, constraints, profiles: [], fixtureHash: hash(readFileSync(new URL('./vector-corpus.mjs', import.meta.url))),
   driverHash: hash(readFileSync(new URL(import.meta.url))) };
 const save = () => writeFileSync(output, JSON.stringify(report));
 const summary = values => { const sorted = [...values].sort((a, b) => a - b); return { count: sorted.length,
@@ -50,7 +52,7 @@ function open(file, d) {
   db.pragma('journal_mode=WAL'); db.pragma('synchronous=OFF');
   if (d) db.exec(`CREATE TABLE raw(id INTEGER PRIMARY KEY,embedding BLOB NOT NULL,live INTEGER NOT NULL,bucket INTEGER NOT NULL,in_ten INTEGER NOT NULL);
     CREATE INDEX raw_ten ON raw(live,in_ten); CREATE INDEX raw_one ON raw(live,bucket);
-    CREATE VIRTUAL TABLE quantized USING vec0(embedding int8[${strategy === 'l2-unit' ? d + 32 : d}] distance_metric=${strategy === 'l2-unit' ? 'l2' : 'cosine'},live boolean);`);
+    CREATE VIRTUAL TABLE quantized USING vec0(embedding int8[${strategy !== 'cosine' ? d + 32 : d}] distance_metric=${strategy !== 'cosine' ? 'l2' : 'cosine'},live boolean);`);
   return db;
 }
 function operations(db) {
@@ -89,14 +91,15 @@ function operations(db) {
   };
 }
 function checkMetricIdentity() {
-  if (strategy !== 'l2-unit') return;
+  if (strategy === 'cosine') return;
   const generate = corpusGenerator('mixed');
   for (const input of [new Float32Array([1, 0, 0]), new Float32Array([2 ** 120, 0, 0]), new Float32Array([2 ** -140, 0, 0]),
     new Float32Array([1, 1, 1]), ...Array.from({ length: 16 }, (_, i) => generate(i))]) {
     const stored = new Int8Array(quantize(input).buffer), query = new Int8Array(quantize(input, false).buffer);
-    const radius = Math.ceil(127 + Math.sqrt(input.length) / 2);
+    const radius = Math.ceil(componentScale + Math.sqrt(input.length) / 2);
     assert.equal(stored.reduce((sum, value) => sum + value ** 2, 0), radius ** 2);
     assert(query.subarray(input.length).every(value => value === 0));
+    assert(stored.every(value => Math.abs(value) <= componentScale)); assert(query.every(value => Math.abs(value) <= componentScale));
     const dot = stored.reduce((sum, value, i) => sum + value * query[i], 0);
     const distance = stored.reduce((sum, value, i) => sum + (value - query[i]) ** 2, 0);
     assert.equal(distance, radius ** 2 + query.reduce((sum, value) => sum + value ** 2, 0) - 2 * dot);
