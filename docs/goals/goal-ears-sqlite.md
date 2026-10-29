@@ -195,17 +195,22 @@ to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No m
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published integration/remote is
-**31c6c751b5ae7f3206a6a2948bf4c44d36a24e0e**, including primary vector ownership, lossless raw
-restoration/replacement, public archive API and selected-store host publication/import/preview.
-Existing draft #286 is updated around the final implementation and actual remaining requirements.
-Its focused [SQLite platform run 40891758576](https://github.com/spankyed/apack/actions/runs/40891758576)
-completed SUCCESS on exactly 31c6c751b5. Linux x64/macOS arm64 pass 596 EARS / 131 host
-cases; Windows x64 passes 595 / 118, with all skipped cases retained. Every platform executes five public
-snapshot and nine maintenance cases. Host logical archive cases are 10/10 on Linux/macOS and 9/10 on
-Windows; its directory-sync case is explicitly skipped. The ordinary app job is deliberately skipped.
-Runtime/native receipts, verification and lossless compressed raw reports are retained under
+**203ab2c32ce03f533b6382f744b689fe70dbac8a**, including CLI logical dump/load, shared lock ownership
+fixes, witnessed archive publication recovery and standalone staged CLI checks. Existing draft #286
+is updated around the final implementation and actual remaining requirements.
+Its focused [SQLite platform run 40897144759](https://github.com/spankyed/apack/actions/runs/40897144759)
+is confirmed live on exactly 203ab2c32c across Linux x64, macOS arm64 and Windows x64. Poll the same run,
+never redispatch merely because observation expires. Its gate explicitly requires eight CLI logical
+command cases, both publication-kill cases, five staged CLI process checks, all five public snapshot
+cases, applicable host logical cases, nine maintenance cases and existing EARS/host contracts.
+The ordinary app job is intentionally skipped for this focused suite. This is not the full Strict gate.
+Previous focused [40891758576](https://github.com/spankyed/apack/actions/runs/40891758576) completed
+SUCCESS on exactly 31c6c751b5. Linux x64/macOS arm64 passed 596 EARS /131 host cases; Windows x64
+passed 595/118 with all skipped cases retained. Each executed five public snapshots and nine maintenance
+cases; host logical cases are 10/10 on Linux/macOS and 9/10 on Windows with explicit directory-sync skip.
+Runtime/native receipts, verification and lossless raw reports are retained in
 [archive platform evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/logical-archive/platform-40891758576/README.md).
-Do not redispatch this unchanged source. This gate predates new local CLI commands and the lock fix.
+It predates new CLI/lock work; do not claim that work covered by this older green or rerun unchanged 31c.
 Previous focused [40873999402](https://github.com/spankyed/apack/actions/runs/40873999402) completed
 SUCCESS on exactly 34c612ab84 and is retained as historical platform proof, not the new archive gate.
 Canonical/helper BASE remain at exact full-green **6cf6c8349e**. Runtime base/native pins remain
@@ -374,7 +379,7 @@ safe retry without deleting old private scratch. These prove process-kill behavi
 Convergence source 5dcd8c9c88 passes all 45 CLI /27 host logical/kill/ownership cases, staged process
 smoke, five builds, CLI/host types, lint and import rules. The probe is owned by CLI test support.
 The platform gate now requires eight CLI logical cases, both kill cases and five staged binary checks;
-these descendants still need their own exact-source publication/run. Canonical remains 6cf.
+these descendants are published at 203ab2c32c with the live exact-source run above. Canonical remains 6cf.
 Next complete isolated installed CLI and app operations, preserve selected-store/media ownership,
 qualify process death before/during staging/publication and protected populated replacement, and complete
 actual copied-profile conversion plus representative duration/memory/disk/platform evidence. Keep partial
