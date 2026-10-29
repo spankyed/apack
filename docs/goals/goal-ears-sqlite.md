@@ -195,13 +195,17 @@ to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No m
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published integration/remote is
-**34c612ab84d176a1ae4107dbc815892470694181**, including the vector diagnostics and maintenance/audit
-implementation. Existing draft #286 is updated with actual checks and unresolved requirements.
-Its focused [SQLite platform run 40873999402](https://github.com/spankyed/apack/actions/runs/40873999402)
-completed SUCCESS on exactly 34c612ab84: Linux x64, macOS arm64 and Windows x64 all pass. App acceptance's
-ordinary check job is deliberately skipped for this focused dispatch. Each platform must execute all nine
-real maintenance command cases in addition to selected EARS/host contracts; evidence verifies nonvacuity.
-Retain that exact run; do not dispatch duplicates. It is not the full strict chain.
+**31c6c751b5ae7f3206a6a2948bf4c44d36a24e0e**, including primary vector ownership, lossless raw
+restoration/replacement, public archive API and selected-store host publication/import/preview.
+Existing draft #286 is updated around the final implementation and actual remaining requirements.
+Its focused [SQLite platform run 40891758576](https://github.com/spankyed/apack/actions/runs/40891758576)
+is confirmed live on exactly 31c6c751b5: Linux x64, macOS arm64 and Windows x64 are in native setup.
+Poll that same run; do not redispatch because an observation expires. The ordinary app check job is
+intentionally skipped for this focused suite. Every platform must execute the five public snapshot
+cases and ten host logical archive cases (only Windows directory-sync case may skip), all nine actual
+maintenance commands and existing EARS/host contracts; the verifier enforces nonvacuity.
+Previous focused [40873999402](https://github.com/spankyed/apack/actions/runs/40873999402) completed
+SUCCESS on exactly 34c612ab84 and is retained as historical platform proof, not the new archive gate.
 Canonical/helper BASE remain at exact full-green **6cf6c8349e**. Runtime base/native pins remain
 98386b36a1/6ab2f69; master ref 3d2929177d has only the previously reviewed two plan documents.
 Published maintenance includes app-only rebuild/audit ownership, offline primary/runs/all selection,
@@ -353,7 +357,8 @@ primary commit/data unchanged; preview fully verifies/audits and runs the releva
 without replacement. Physical-backup validation still requires the primary database. The focused
 platform workflow now includes these real host logical and backup-storage cases and requires all five
 public EARS snapshot cases plus all ten host logical cases (only Windows directory-sync case may skip).
-The next publication will target the existing draft and focused platform gate; canonical remains 6cf.
+This implementation is published at 31c6c751b5 through existing draft #286 with the live focused platform
+gate above; canonical remains 6cf. No newer full-Strict/native or adoption result is claimed.
 Next expose the verified path through real CLI/app operations, preserve selected-store/media ownership,
 qualify process death before/during staging/publication and protected populated replacement, and complete
 actual copied-profile conversion plus representative duration/memory/disk/platform evidence. Keep partial
