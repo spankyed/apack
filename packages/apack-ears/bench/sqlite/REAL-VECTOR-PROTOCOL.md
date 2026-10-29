@@ -52,3 +52,17 @@ scopes, updates, samples and budgets. This tests whether removing bucket selecti
 at acceptable cost. It is a separately identified follow-on, not a replacement for failed IVF results.
 Use the same model-reuse control for a fresh IVF comparison. No claim of one model's generality,
 training-repeat stability, or EARS integration follows from this matrix.
+
+## Existing sqlite-vec dependency control
+
+Before adding another native dependency, run `vec0-binary-256` and `vec0-binary-1024`
+through the same harness, truth, scopes, updates, passes and budgets. Use the already-pinned
+sqlite-vec `vec_quantize_binary` and a `vec0` bit[1536] table with scope/active metadata
+filters applied before K. Preserve canonical Float32 values in a separate ordinary SQLite
+table and rerank retrieved rows with native `vec_distance_cosine`, with owner ordinal as
+the deterministic final tie breaker. Query cost includes query quantization, native scan,
+canonical lookup, exact reranking and result materialization/sorting. There is no trained
+transform. For updates, replace the derived binary row within the same transaction as
+the canonical update. Retain load/update/disk/RSS costs and any unsupported behavior.
+Metadata filtering in this primitive control does not qualify arbitrary EARS owner-ID
+candidate sets, multiple chunks, units, watches or model/generation admission.
