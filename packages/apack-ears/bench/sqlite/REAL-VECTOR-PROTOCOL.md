@@ -88,3 +88,23 @@ Keep all phases, eligibility, queries, passes, limits and acceptance budgets unc
 Record actual cache size and database location; retain earlier results separately.
 This is a controlled production-configuration follow-on, not proof of cold storage,
 physical durability, main-app performance or arbitrary filesystem behavior.
+
+## Integrated EARS gate
+
+Run `real-vector-ears.mjs` first with 1,000 rows as a smoke check, then the full 99,900-row
+fixture. Use the actual EARS engine and SqliteDatabase, FULL durability, its 64 MiB cache,
+private container database storage and the original resource limits. Create synthetic
+owners in ordinal order (128 per unit), embed through EARS in batches of 64, and trash
+ordinal multiples of 97 through EARS. Retain separate load costs. Verify canonical bytes
+against the input projection before and after the prescribed updates; never normalize storage.
+
+On the full fixture, exercise prefix cohorts 1k/10k/99,900 and all original scopes/phases,
+100 queries, first pass plus three timed passes. The full unfiltered cohort uses the normal
+type-root query; smaller prefixes and scoped cohorts use the ordinary explicit-ID query.
+Scope IDs are prepared once outside timing, while EARS query construction, transport,
+native selection/owner aggregation/reranking and returned hits remain inside timing.
+Apply the same 1% vector updates through EARS in batches of 64; this is not a matched
+single-transaction primitive update comparison. Keep every sample and failing cohort.
+All original recall, query/heartbeat, resource and remaining goal requirements remain.
+This fixture does not establish app-pack, hybrid, streaming/watch, multi-chunk performance,
+cold reopen, other-platform or integrated elmdb comparison acceptance.
