@@ -1,7 +1,6 @@
 # EARS query efficiency
 
-Status: planned, 2026-10-29. Documentation only. Surveyed apack `master` at
-`98386b36a18d244c19ffb501830b990ed49f7653`; inspect current source before implementation.
+Status: done, 2026-10-29: [the readings](../references/evidence/ears-query-efficiency.md).
 
 ## Outcome and ownership
 
@@ -95,6 +94,11 @@ with a concrete reopening trigger. Broader planner or API work requires its own 
 
 ## Current handoff
 
-Plan only; no measurements or implementation changes. Next: inspect current query call sites, select
-the bounded query set and establish reproducible baselines without touching active developer data.
-The earlier application-performance plan remains a separate, unimplemented deliverable.
+Done, 2026-10-29: [the readings](../references/evidence/ears-query-efficiency.md).
+- Admitted: the chat page (thread open), the thread list (a view that refreshes repeatedly) and notes search, with
+  message search's short page fixed beside them.
+- The chat page took one elmdb change (its `docs/roadmap/query-work-efficiency.md`); the rest were caller-only.
+- The list's re-runs on fields it doesn't show remain, owned by its surface's published contract.
+- The library's reads per row are recorded with a reopening trigger.
+
+The application-performance plan remains a separate, unimplemented deliverable.

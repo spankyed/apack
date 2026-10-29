@@ -81,10 +81,48 @@ C's answer is short: 15 results where 25 and 45 messages match, because the five
 into the plan, before `limit(20)`. The thread and topic of each hit are read in two reads over all hit ids, not two
 for each hit. Target: 20 results whenever 20 non-marker messages match, in at most 3 crossings.
 
+## Results
+
+The same spec and fixture, after the fixes (`93d6daf6b7`, `89728905f0`) and against elmdb's `session/bounded-walk`
+(its PR #16), load 12 to 14:
+
+| Candidate | Crossings a run (×1 / ×2) | Work that grows | Median ms (×1 / ×2) |
+|---|---|---|---|
+| A. `chatPage(thread, 50)` | 2 / 2 | none: the hop yields the window, 54 edges, at either size | 1.9 → 0.20 / 3.4 → 0.18 |
+| B. `listed()` | 100 → 2 / 200 → 2 | none in crossings; still whole rows | 1.4 → 0.70 / 2.4 → 1.28 |
+| C. `searchMessages('deploy')` | 31 → 4 / 31 → 4 | none | 0.55 → 0.73 / 0.57 → 0.97 |
+| D. notes `search('note 1')` | 501 → 3 / 1,001 → 3 | none in crossings | 4.9 → 1.9 / 10.3 → 3.4 |
+
+At 4,000 messages the chat page is 6.36 → 0.17 ms.
+
+Each disposition against its target:
+
+- **A, kept.** The page's work no longer depends on thread length. An earlier message's status change no longer runs
+  the page again, since the page reads none of it. Answers are unchanged: the threads specs, an empty thread, a short
+  one, and a queued message after a bulk add longer than the window.
+- **B, kept in part.** Crossings met their target. Re-runs on a field the list doesn't show did not: the list's rows
+  are its surface's published `ThreadEntity`s (`fe/contract.ts`, `lists.list`), so narrowing them changes a contract
+  other features read. That is not this plan's to change. Reopen with a contract that names the fields the list and
+  board show.
+- **C, kept, its target missed by one crossing.** It answers 20 whenever 20 non-marker messages match, where it
+  answered 15. When the first 20 matches hold markers, it asks again with a doubled limit: 4 crossings, not 3, and the
+  bigger search costs about 0.2 to 0.4 ms.
+- **D, kept.** Three crossings at any size. The tree and the trash summarise through the same reads, so they take 3
+  crossings too, where they took 2N + 1.
+
+Guards (`query-work.spec.ts`), each shown failing with its fix reverted (the file put back by its hash):
+- the chat page reading every message: the first message's change was a commit the page skipped;
+- the list's parent per thread: 41 and 81 crossings;
+- search cut before its markers: 15 results;
+- notes summarised one at a time: 121 and 241 crossings;
+- the bulk add leaving its queued message behind: the page of two missed it.
+
+`npm run spec` passed 974 tests.
+
 ## Not admitted
 
-- **The library's `findDocument` and `engineFolderContents`, and the notes `tree`.** They do reads per row of the
-  same kind, but none is one of the three scenarios. Reopen on a library or notes-tree measurement of its own.
+- **The library's `findDocument` and `engineFolderContents`.** They do reads per row of the same kind, but neither is
+  one of the three scenarios. Reopen on a library measurement of its own.
 - **`addMessage`'s sibling scan.** It reads every message's status on each message it adds, to move queued ones last:
   O(M) on the write path. Reopen once the bounded backward walk lands, which it could use.
 
