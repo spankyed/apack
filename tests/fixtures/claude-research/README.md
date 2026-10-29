@@ -156,3 +156,8 @@ exact Unicode DOM receipts do not prove CJK glyph rendering or physical OS candi
 view/wrapper hashes and byte/UTF-16 ranges. The sandbox host is implemented but lacks positive
 native/app acceptance: the current offline image lacks bwrap/socat and denies user namespaces.
 Do not treat source inspection or mocked consent as a successful sandboxed-tool journey.
+
+`src/analysis/native-return-dialogs.mjs <immutable-module> [...]` separately inventories background
+session confirmation, cold-resume quota, return compaction and newer-model suggestion producers,
+gates and effects. The newer-model line notification bypasses the dialog store. Source sites
+prove neither native eligibility nor default-app support; no original implementation is executed.
