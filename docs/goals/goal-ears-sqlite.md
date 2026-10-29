@@ -318,7 +318,10 @@ implementation starts at 2ae8af5939: internal logical stream codec, typed raw re
 count/hash, linear fragmented input, frame limits and cleanup/error controls. Focused disposable
 codec validation passes 13 cases, build/types/lint. Traversal 4c5c1fa690 adds private snapshot/typed raw
 field/metadata/relation/embedding export; initial fixture setup omitted required fields on a sparse row,
-corrected by explicit optional flags. Validation is active in ears-logical-export-optional. Public export,
+corrected by explicit optional flags; all 17 codec/export cases, build/types/lint pass. Stage 2de0b153f4
+spools records into a new isolated SQLite file and seals only after footer/counter verification; its initial
+relation statement has an arity setup failure, corrected and validating in ears-logical-stage-columns.
+This is a sealed ingestion spool, not a restored/audited app store. Public export,
 embedding restore, staging and host publication remain required per docs/plans/ears-sqlite-storage.md.
 See [archive evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/logical-archive/README.md). See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
 qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public

@@ -405,3 +405,10 @@ collision, interrupted staging and populated replacement, all selected stores, a
 conversion/reopen. Measure large-field peak memory and output/staging disk, and retain source/native pins.
 This contract specifies the remaining implementation; it does not declare export/import complete or replace
 the full app/operational/adoption gates in the goal.
+
+Archive ingestion now spools raw records into a separate `archive.sqlite3`, with a terminal verified seal,
+identity constraints and counter checks. It cannot be mistaken for an EARS profile's `data.sqlite3`. A seal
+proves wire/identity completeness, not schema/cell/embedding semantics or full audit; constructing the actual
+staging EARS store remains a separate required operation. In particular, do not fabricate negative or
+arbitrary derived generations to hide restored primary embeddings. Resolve authoritative embedding
+representation and raw restoration explicitly, then audit the completed store before publication.
