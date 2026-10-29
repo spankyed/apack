@@ -140,23 +140,28 @@ export async function exportDatabase(
 
 export type DatabaseImportResult = Pick<BackupContents, 'databases' | 'missingDatabases' | 'unknownEntityTypes'>;
 
+export interface DatabaseImportOptions {
+  skipUnknownDatabases?: boolean;
+  entityTypes?: Iterable<string>;
+  log?: BackupLog;
+  validate?: (ears: Ears) => void;
+  /** Hydrate and accept the installed data before the rollback copy can be removed. */
+  accept?: (result: DatabaseImportResult) => Promise<void>;
+  /** Reload the previous data after a refused installation has been restored. */
+  restored?: () => Promise<void>;
+  /** Runs only after the candidate validates; the app uses this to suspend and refresh settings. */
+  withReplacement?: (replace: () => Promise<DatabaseImportResult>) => Promise<DatabaseImportResult>;
+}
+
 /** Keep previous files until both installation and the caller's acceptance succeed. */
-export async function importDatabase(
-  stores: BackupStores,
-  backupPath: string,
-  mediaPath: string,
-  { skipUnknownDatabases = false, entityTypes = [], log = defaultLog, validate, accept, restored, withReplacement = replace => replace() }:
-    {
-      skipUnknownDatabases?: boolean; entityTypes?: Iterable<string>; log?: BackupLog;
-      validate?: (ears: Ears) => void;
-      /** Hydrate and accept the installed data before the rollback copy can be removed. */
-      accept?: (result: DatabaseImportResult) => Promise<void>;
-      /** Reload the previous data after a refused installation has been restored. */
-      restored?: () => Promise<void>;
-      /** Runs only after the candidate validates; the app uses this to suspend and refresh settings. */
-      withReplacement?: (replace: () => Promise<DatabaseImportResult>) => Promise<DatabaseImportResult>;
-    } = {},
-): Promise<DatabaseImportResult> {
+export function importDatabase(stores: BackupStores, backupPath: string, mediaPath: string,
+  options: DatabaseImportOptions = {}): Promise<DatabaseImportResult> {
+  return importBackup(stores, backupPath, mediaPath, options, readBackup);
+}
+
+async function importBackup(stores: BackupStores, backupPath: string, mediaPath: string,
+  { skipUnknownDatabases = false, entityTypes = [], log = defaultLog, validate, accept, restored, withReplacement = replace => replace() }: DatabaseImportOptions,
+  inspect: typeof readBackup): Promise<DatabaseImportResult> {
   const temporary = await fs.mkdtemp(path.join(path.dirname(stores.lmdb.path), '.apack-import-'));
   const candidate = path.join(temporary, 'candidate');
   const rollback = path.join(temporary, 'rollback');
@@ -165,7 +170,7 @@ export async function importDatabase(
     await fs.copy(backupPath, candidate);
     let contents: BackupContents;
     try {
-      contents = readBackup(candidate, entityTypes, validate,
+      contents = inspect(candidate, entityTypes, validate,
         Object.fromEntries(Object.entries(stores).map(([name, store]) => [name, store.format])));
     } catch (error) {
       if (error instanceof Error && error.message.includes(candidate)) {
@@ -235,11 +240,26 @@ export async function importDatabase(
   }
 }
 
+export type LogicalDatabaseArchives = Partial<Record<DatabaseName, string>>;
+
+/** Stage and inspect logical archives without replacing any live data; media remains separately owned. */
+export function readLogicalBackup(stores: BackupStores, archives: LogicalDatabaseArchives,
+  entityTypes: Iterable<string> = [], validate?: (ears: Ears) => void): Promise<BackupContents> {
+  return withLogicalBackup(stores, archives, (candidate, names) => Promise.resolve(readSelectedBackup(candidate, entityTypes, validate,
+    Object.fromEntries(Object.entries(stores).map(([name, store]) => [name, store.format])), names)));
+}
+
 /** Stage every selected logical archive before entering the ordinary protected import coordinator.
  * Logical archives do not own media; this operation preserves the incumbent media directory.
  */
-export async function importLogicalDatabase(stores: BackupStores, archives: Partial<Record<DatabaseName, string>>,
-  mediaPath: string, options: Parameters<typeof importDatabase>[3] = {}): Promise<DatabaseImportResult> {
+export function importLogicalDatabase(stores: BackupStores, archives: LogicalDatabaseArchives,
+  mediaPath: string, options: DatabaseImportOptions = {}): Promise<DatabaseImportResult> {
+  return withLogicalBackup(stores, archives, (candidate, names) => importBackup(stores, candidate, mediaPath, options,
+    (dir, types, validate, formats) => readSelectedBackup(dir, types, validate, formats, names)));
+}
+
+async function withLogicalBackup<T>(stores: BackupStores, archives: LogicalDatabaseArchives,
+  use: (candidate: string, names: DatabaseName[]) => Promise<T>): Promise<T> {
   const entries = Object.entries(archives).map(([name, file]) => {
     if (!isKnownDatabase(name) || typeof file !== 'string') throw new Error(`Invalid logical archive selection: ${name}`);
     const store = stores[name];
@@ -250,7 +270,7 @@ export async function importLogicalDatabase(stores: BackupStores, archives: Part
   });
   if (!entries.length) throw new Error('Select at least one logical archive');
   const root = await fs.mkdtemp(path.join(path.dirname(stores.lmdb.path), '.apack-logical-import-'));
-  let result: DatabaseImportResult | undefined, failed = false, failure: unknown;
+  let result: T | undefined, failed = false, failure: unknown;
   try {
     const candidate = path.join(root, 'candidate');
     await fs.mkdir(candidate, { mode: 0o700 });
@@ -258,9 +278,10 @@ export async function importLogicalDatabase(stores: BackupStores, archives: Part
       const staged = await entry.stage(fs.createReadStream(entry.file), path.join(root, 'stage-' + entry.name));
       await fs.rename(staged.path, path.join(candidate, entry.name));
     }
-    await fs.writeJson(path.join(candidate, 'metadata.json'), { databases: entries.map(entry => entry.name), includesMedia: false,
+    const names = entries.map(entry => entry.name);
+    await fs.writeJson(path.join(candidate, 'metadata.json'), { databases: names, includesMedia: false,
       storageFormats: Object.fromEntries(entries.map(entry => [entry.name,entry.store.format])) });
-    result = await importDatabase(stores, candidate, mediaPath, options);
+    result = await use(candidate, names);
   } catch (error) { failed = true; failure = error; }
   try { await fs.remove(root); }
   catch (cleanup) {
@@ -339,6 +360,11 @@ export interface BackupContents {
  */
 export function readBackup(dir: string, entityTypes: Iterable<string> = [], validate?: (ears: Ears) => void,
   expectedFormats: Partial<Record<DatabaseName, string>> = {}): BackupContents {
+  return readSelectedBackup(dir, entityTypes, validate, expectedFormats, ['lmdb']);
+}
+
+function readSelectedBackup(dir: string, entityTypes: Iterable<string> = [], validate: ((ears: Ears) => void) | undefined,
+  expectedFormats: Partial<Record<DatabaseName, string>> = {}, required: readonly DatabaseName[]): BackupContents {
   const metadataFile = path.join(dir, 'metadata.json');
   if (!fs.existsSync(metadataFile)) throw new Error(`${dir} isn't a backup: it has no metadata.json`);
   let metadata: { timestamp?: unknown; databases?: unknown; appVersion?: unknown; storageFormats?: unknown };
@@ -352,10 +378,10 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   const unknownDatabases = metadata.databases.filter((name) => !isKnownDatabase(String(name))).map(String);
   const listed = metadata.databases.filter((name) => isKnownDatabase(String(name))) as DatabaseName[];
   const missingDatabases = listed.filter((name) => !backupStorage(path.join(dir, name)));
-  if (!listed.includes('lmdb')) throw new Error("The backup doesn't include the database (lmdb)");
+  for (const name of required) if (!listed.includes(name)) throw new Error(`The backup doesn't include the database (${name})`);
   // A listed database whose folder isn't there was empty when the backup was made, and the import skips it too
   const databases = listed.filter((name) => !missingDatabases.includes(name));
-  if (!databases.includes('lmdb')) throw new Error(`The backup's lmdb folder is missing or has no supported database data file`);
+  for (const name of required) if (!databases.includes(name)) throw new Error(`The backup's ${name} folder is missing or has no supported database data file`);
 
   for (const name of databases) {
     const expected = expectedFormats[name];
@@ -380,12 +406,12 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   for (const name of databases) {
     if (name !== 'lmdb') refusing(() => openBackupDatabase(path.join(dir, name), name).close());
   }
-  const database = refusing(() => openBackupDatabase(path.join(dir, 'lmdb'), 'lmdb'));
+  const database = databases.includes('lmdb') ? refusing(() => openBackupDatabase(path.join(dir, 'lmdb'), 'lmdb')) : undefined;
   try {
     // An engine over the backup's files, held to the schema they hold, since what a backup holds is what is being asked
-    const engine = createEarsEngine({ database });
-    validate?.(engine);
-    const perType = new Map(Object.entries(engine.admin.countEntities()));
+    const engine = database ? createEarsEngine({ database }) : undefined;
+    if (engine) validate?.(engine);
+    const perType = new Map(Object.entries(engine?.admin.countEntities() ?? {}));
     const known = new Set(entityTypes);
     const counts = [...known].sort()
       .flatMap((type) => (perType.has(type) ? [[type, perType.get(type)!] as [string, number]] : []));
@@ -405,7 +431,7 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
       counts,
     };
   } finally {
-    database.close();
+    database?.close();
   }
 }
 

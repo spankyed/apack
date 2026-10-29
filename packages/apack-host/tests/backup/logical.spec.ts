@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createEarsEngine, type EarsDatabase } from '@apackdev/ears';
 import { openDatabase, stageLogicalSnapshot } from '@apackdev/ears/sqlite';
-import { databaseBackupStore, exportLogicalDatabase, importLogicalDatabase, type BackupStores } from '../../src/backup/index.ts';
+import { databaseBackupStore, exportLogicalDatabase, importLogicalDatabase, readLogicalBackup, type BackupStores } from '../../src/backup/index.ts';
 const roots: string[] = [], databases: EarsDatabase[] = [];
 afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); for (const db of databases.splice(0)) db.close(); for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 const root = () => { const value = fs.mkdtempSync(path.join(tmpdir(), 'apack-logical-backup-')); roots.push(value); return value; };
@@ -102,5 +102,31 @@ it('retains the ordinary recovery journal after an uncertain logical replacement
   const recovery = fs.readdirSync(f.parent).filter(name => name.startsWith('.apack-import-')); expect(recovery).toHaveLength(1);
   expect(fs.existsSync(path.join(f.parent, recovery[0]!, 'recovery.json'))).toBe(true);
   expect(fs.existsSync(path.join(f.parent, recovery[0]!, 'rollback/lmdb/data.sqlite3'))).toBe(true);
+  expect(fs.readdirSync(f.parent).filter(name => name.startsWith('.apack-logical-import-'))).toEqual([]);
+});
+
+it('imports only run history without replacing or advancing the primary database', async () => {
+  const f = fixture(), source = open(path.join(f.parent, 'source-runs'), 'RunNode'), history = open(path.join(f.parent, 'runHistory'), 'RunNode');
+  source.e.create('RunNode', { id: 'RunNode-candidate' }); history.e.create('RunNode', { id: 'RunNode-incumbent' });
+  const file = path.join(f.parent, 'history.ears'); await exportLogicalDatabase(source.db, file);
+  const stores = { ...f.stores, runHistory: databaseBackupStore(history.db, history.e) }, before = f.current.e.lastCommit();
+  const replace = vi.spyOn(f.current.db, 'replaceWith'), validate = vi.fn(() => { throw Error('Unrelated primary validator must not run'); });
+  const preview = await readLogicalBackup(stores, { runHistory: file }, [], validate);
+  expect(preview).toMatchObject({ databases: ['runHistory'], counts: [], hasMedia: false });
+  expect(history.e.query('RunNode').ids()).toEqual(['RunNode-incumbent']);
+  await importLogicalDatabase(stores, { runHistory: file }, f.media, { log, validate });
+  expect(validate).not.toHaveBeenCalled(); expect(replace).not.toHaveBeenCalled();
+  expect(f.current.e.lastCommit()).toBe(before); expect(f.current.e.query('Row').ids()).toEqual(['Row-incumbent']);
+  expect(history.e.query('RunNode').ids()).toEqual(['RunNode-candidate']);
+});
+it('fully validates preview archives and primary acceptance without touching either live store', async () => {
+  const f = fixture(); await exportLogicalDatabase(f.source.db, f.archive);
+  const before = f.current.e.lastCommit(), replace = vi.spyOn(f.current.db, 'replaceWith'), validate = vi.fn();
+  const preview = await readLogicalBackup(f.stores, { lmdb: f.archive }, ['Row'], validate);
+  expect(preview).toMatchObject({ databases: ['lmdb'], counts: [['Row', 1]], hasMedia: false }); expect(validate).toHaveBeenCalledOnce();
+  await expect(readLogicalBackup(f.stores, { lmdb: f.archive }, [], () => { throw Error('preview validation refused'); })).rejects.toThrow('preview validation refused');
+  const bytes = fs.readFileSync(f.archive); fs.writeFileSync(f.archive, bytes.subarray(0, -1));
+  await expect(readLogicalBackup(f.stores, { lmdb: f.archive })).rejects.toThrow('Truncated');
+  expect(replace).not.toHaveBeenCalled(); expect(f.current.e.lastCommit()).toBe(before);
   expect(fs.readdirSync(f.parent).filter(name => name.startsWith('.apack-logical-import-'))).toEqual([]);
 });
