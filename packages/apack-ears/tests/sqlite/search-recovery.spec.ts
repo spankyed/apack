@@ -107,7 +107,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
   it('reports undecodable primary values outside every search input', async () => {
     const { db, e } = seed(), before = e.lastCommit();
     expect(db.run("UPDATE value_overflow SET kind='object',value=? WHERE entity_id=? AND field='body'",
-      [Buffer.from([0xc1]), 'Other-large']).changes).toBe(1);
+      [Buffer.from([0x81]), 'Other-large']).changes).toBe(1); // Truncated one-entry MessagePack map.
     const report = await auditSqliteDatabase(db);
     expect(report).toMatchObject({ ok: false, checkedEntities: 3, issueCount: 1, comparedIndexes: 0 });
     expect(report.issues).toEqual(['Other-large: primary values cannot be decoded']);
