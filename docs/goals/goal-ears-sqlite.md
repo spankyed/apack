@@ -15,7 +15,7 @@ recorded on pinned source in disposable environments, and a draft PR is ready fo
 an adoption decision. Commit usable checkpoints. Do not silently drop requirements.
 ```
 
-Status: active contract integration and storage implementation, 2026-10-28.
+Status: active candidate integration and qualification, 2026-10-29.
 Branch: `session/ears-sqlite`. Checkout: `monorepo-worktrees.noindex/sqlite-evaluation`.
 The original `session/sqlite-evaluation` branch preserves the experiment at `4a3fe698f8`.
 
@@ -189,8 +189,13 @@ platform claims must identify their actual tested scope.
 The goal remains active. All scope, phases and acceptance above remain required. Publication is the existing
 [draft PR #286](https://github.com/spankyed/apack/pull/286), branch `session/ears-sqlite`; no merge/adoption,
 release or version update is authorized. Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`.
-Source through `e64609d105` is published; later benchmark source `0fe78fc8de` adds the pinned sqlite-vec
-comparison and production-cache/filesystem controls. Inspect actual source, branch and process state before resuming.
+Runtime source `de48f5a924` implements the first ordinary-projection/native owner-candidate vector slice.
+Disposable Linux ARM64 validation passes all 606 SQLite EARS cases, 135 affected host/storage cases,
+package builds, EARS types/API, lint/imports and three meaningful negative controls. The plain-Node source
+loading regression is fixed; earlier failures and corrected package-provenance refusal are retained in
+[vector integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-integration/README.md).
+No integrated real-corpus performance result or newer full Strict is established. Inspect actual source,
+branch and process state before resuming.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` stays at exact full-green `6cf6c8349e`,
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs successful.
@@ -226,9 +231,14 @@ Vec0 is cheaper for broad K=256 but expensive at K=1,024, consistent with its re
 selection. No profiler attribution or application qualification is established. See
 [layout control evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/real-vector-matrix/sqlite-vec/README.md).
 
-Next checkpoint: implement ordinary derived binary codes, native candidate selection/reranking and exact
-fallback through EARS using the existing dependency, with no extra virtual-table lifecycle for this slice.
-This is not final broad-search acceptance: retain and resolve its failed responsiveness gate.
+The first integrated slice uses ordinary derived projections, native owner candidates and exact reranking
+with the existing dependency. Canonical bytes remain primary; units/savepoints/watches, owner chunk
+aggregation, exact fallback, numeric extremes, cascade deletion, audit and rebuild have affected functional proof.
+
+Next checkpoint: measure and qualify this actual EARS path on the sealed real corpus, including its joins,
+owner aggregation, structured transport and update units. Then resolve broad-search responsiveness and
+execution/admission ownership with measured evidence. Do not use selective primitive wins as acceptance
+for the integrated path or its unresolved broad gate.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
 model/generation/hash freshness, own-unit/savepoint reads, watches, audit/rebuild/restore, representative real
 recall/update/resource/latency and heartbeat budgets. Preserve canonical Float32 bytes and original failures.
