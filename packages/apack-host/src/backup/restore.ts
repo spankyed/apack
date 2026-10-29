@@ -40,6 +40,14 @@ function sessionPath(userDataDir: string, session: string): string {
   const parent = path.dirname(_appDataPaths(userDataDir).lmdb), dir = path.join(parent, session);
   directory(parent); directory(dir); return dir;
 }
+// Backend paths may canonicalize ancestor aliases, while the selected profile retains the caller's spelling.
+// Match the physical parent and fixed leaf separately: an arbitrary database-leaf symlink is not a destination.
+function sameDestination(actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string' || !path.isAbsolute(actual)) return false;
+  const source = path.resolve(actual), destination = path.resolve(expected);
+  return path.basename(source) === path.basename(destination)
+    && fs.realpathSync(path.dirname(source)) === fs.realpathSync(path.dirname(destination));
+}
 function preparation(userDataDir: string, dir: string, completed = false): Preparation {
   const file = path.join(dir, completed ? 'recovered.json' : 'recovery.json');
   const value = readJson(file) as Partial<Preparation> | null, paths = _appDataPaths(userDataDir);
@@ -48,10 +56,10 @@ function preparation(userDataDir: string, dir: string, completed = false): Prepa
   const seen = new Set<string>();
   for (const store of value.stores) {
     if (!store || !['lmdb', 'runHistory'].includes(store.name) || seen.has(store.name)
-      || store.path !== paths[store.name] || typeof store.format !== 'string') throw new Error(`Import preparation does not match this profile: ${file}`);
+      || !sameDestination(store.path, paths[store.name]) || typeof store.format !== 'string') throw new Error(`Import preparation does not match this profile: ${file}`);
     databaseStorage(store.format); seen.add(store.name);
   }
-  if (value.mediaPath !== undefined && value.mediaPath !== paths.media) throw new Error(`Import media does not match this profile: ${file}`);
+  if (value.mediaPath !== undefined && !sameDestination(value.mediaPath, paths.media)) throw new Error(`Import media does not match this profile: ${file}`);
   return value as Preparation;
 }
 
@@ -105,7 +113,7 @@ export function restoreImportRecovery(target: { userDataDir: string; apiPortFile
     const record = preparation(target.userDataDir, dir), paths = _appDataPaths(target.userDataDir);
     if (record.stores.some(store => store.format !== target.storageFormat)) throw new Error('Select the retained databases’ storage format before recovery');
     directory(path.join(dir, 'rollback'));
-    const entries = [...record.stores.map(store => ({ name: store.name as string, destination: store.path,
+    const entries = [...record.stores.map(store => ({ name: store.name as string, destination: paths[store.name],
       dataFile: databaseStorage(store.format).dataFile, format: store.format })),
     ...(record.mediaPath ? [{ name: 'media', destination: paths.media, dataFile: '', format: '' }] : [])];
     const stage = path.join(dir, 'restore-stage'), interrupted = path.join(dir, 'interrupted'), planFile = path.join(dir, 'restore.json');

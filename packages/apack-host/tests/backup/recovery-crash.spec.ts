@@ -94,17 +94,20 @@ async function run(action: string, root: string, format: string, boundary: strin
   return JSON.parse(result.stdout);
 }
 
-it.skipIf(process.platform === 'win32').each([
-  ['elmdb/1', 'move'], ['elmdb/1', 'publish'], ['sqlite/1', 'move'], ['sqlite/1', 'publish'],
-])('recovers %s after SIGKILL at %s without exposing a partially restored profile', async (format, boundary) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-real-import-crash-')); roots.push(root);
+it.skipIf(process.platform === 'win32').each(
+  ['elmdb/1', 'sqlite/1'].flatMap(format => ['move', 'publish'].flatMap(boundary =>
+    [false, true].map(alias => [format, boundary, alias] as const))),
+)('recovers %s after SIGKILL at %s (alias=%s) without exposing a partially restored profile', async (format, boundary, alias) => {
+  const physical = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-real-import-crash-')); roots.push(physical);
+  const root = alias ? path.join(physical, 'profile-alias') : physical;
+  if (alias) fs.symlinkSync(physical, root, 'dir');
   await run('import', root, format!, boundary!, true);
   expect(fs.readFileSync(path.join(root, 'killed-at'), 'utf8')).toBe('import-committed');
   expect(await run('inspect', root, format!, boundary!)).toMatchObject({ primary: ['Row-candidate'], history: ['RunNode-before'], media: 'incumbent', primaryOpen: 'RECOVERY_REQUIRED', historyOpen: 'RECOVERY_REQUIRED' });
   await run('kill-recovery', root, format!, boundary!, true);
   expect(fs.readFileSync(path.join(root, 'killed-at'), 'utf8')).toBe('recovery-' + boundary);
   expect(await run('inspect', root, format!, boundary!)).toMatchObject({ primaryOpen: 'RECOVERY_REQUIRED', historyOpen: 'RECOVERY_REQUIRED', sessions: [{ status: 'restoring' }] });
-  expect(await run('recover', root, format!, boundary!)).toMatchObject({ primary: ['Row-before'], history: ['RunNode-before'], media: 'incumbent', primaryOpen: null, historyOpen: null, result: { status: 'recovered' }, interrupted: ['Row-candidate'], retained: ['Row-before'], writer: null });
+  expect(await run('recover', alias ? fs.realpathSync(physical) : root, format!, boundary!)).toMatchObject({ primary: ['Row-before'], history: ['RunNode-before'], media: 'incumbent', primaryOpen: null, historyOpen: null, result: { status: 'recovered' }, interrupted: ['Row-candidate'], retained: ['Row-before'], writer: null });
 });
 
 it.skipIf(process.platform === 'win32')('refuses a separate live reader and reclaims its claim after SIGKILL', async () => {

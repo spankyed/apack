@@ -266,10 +266,13 @@ The functional checkpoint is published at 7cba75f431 with exact gate 40814018368
 or performance acceptance. Keep canonical on 585dcafccf until that exact gate succeeds.
 Local ranked-prefix/late-highlight-fetch checkpoint passes **483 SQLite / 289 native** EARS cases, five
 builds, types/API reports, lint/imports and five removal controls. See [prefix evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-prefixes/README.md).
-Its preregistered six-process cost cohort remains unexecuted. Published gate 40814018368 has failed app/recovery
-validation: elmdb canonical destination paths do not string-match aliased caller paths on macOS. One native
-job was still live at the last poll. Fix the real physical-profile identity check, preserve foreign/leaf-link
-refusals and exercise both backends plus interrupted resume before a new exact gate. Do not promote. Preserve every failed cohort and all remaining
+Its preregistered six-process cost cohort is running on pinned prefix source 76b1aa2765. Published gate
+40814018368 is terminal FAILURE: five jobs pass; app/recovery fails two elmdb path-alias cases. The local
+physical-parent/fixed-leaf correction passes five builds, types, **95 recovery/import/storage cases**,
+lint/imports and twelve baseline-failing alias controls; real SIGKILL also covers symlinked profiles and
+resume through another spelling for both backends. Foreign/leaf-link refusals and reader exclusion remain.
+See [recovery alias evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-aliases/README.md).
+Archive the cost cohort before publishing one new exact gate; do not promote before exact success. Preserve every failed cohort and all remaining
 phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the

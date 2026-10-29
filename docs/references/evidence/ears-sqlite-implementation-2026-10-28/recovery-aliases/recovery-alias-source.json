@@ -1,0 +1,8 @@
+{
+  "base": "76b1aa2765beabf80ea4260ec7565105facc7153",
+  "changedFiles": [
+    "packages/apack-host/src/backup/restore.ts",
+    "packages/apack-host/tests/backup/recovery.spec.ts"
+  ],
+  "sha256": "fad89168f2dff95f4852160898ddefce1beb7d5d1dba69a3b138a2aee7fd3c02"
+}

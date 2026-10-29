@@ -44,7 +44,9 @@ without replay. Host composition closes affected stores and suppresses settled s
 `database/open.ts` refuses writable startup while a preparation exists; read-only forensic opens remain available.
 `backup/restore.ts` owns explicit offline restoration: stage/validate retained incumbents, persist a restore plan,
 quarantine interrupted live directories, publish verified stages and rename the preparation only after every entry
-settles. The CLI exposes it as `db recover`; completed sessions are never replayed. Full crash/filesystem
+settles. Recovery matches the selected profile by physical parent and fixed destination leaf, allowing ancestor
+aliases while refusing foreign profiles and database-leaf symlinks. Publication uses the selected profile paths.
+The CLI exposes it as `db recover`; completed sessions are never replayed. Full crash/filesystem
 qualification remains in the SQLite goal; never delete a preparation simply to bypass that refusal. These leases do not exclude a separate process or promise a single
 cross-store read snapshot. Managed read-only store opens register private metadata claims via
 `database/recovery-lock.ts` until close. Recovery publishes its exclusion before checking claims; readers publish

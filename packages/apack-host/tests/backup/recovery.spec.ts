@@ -75,6 +75,71 @@ it.each(['move-incumbent', 'publish-incumbent'] as const)('resumes after interru
   expect(ids(f.paths.runHistory, f.format, 'RunNode')).toEqual(['RunNode-before']);
 });
 
+
+// Exercise alias spelling on Linux too; macOS /var -> /private/var exposed this with real import records.
+function aliasedFixture(format: string, recordAlias: boolean) {
+  const f = fixture(format), alias = path.join(f.target.userDataDir, 'profile-alias');
+  fs.symlinkSync(f.target.userDataDir, alias, 'dir');
+  const target = { ...resolveAppEnvironment({ env: 'test', userDataDir: recordAlias ? fs.realpathSync(f.target.userDataDir) : alias }), storageFormat: format };
+  const paths = _appDataPaths(target.userDataDir), recorded = _appDataPaths(recordAlias ? alias : fs.realpathSync(f.target.userDataDir));
+  prepareImportRecovery(f.dir, [{ name: 'lmdb', path: recorded.lmdb, format }, { name: 'runHistory', path: recorded.runHistory, format }], recorded.media);
+  return { ...f, target, paths, originalTarget: f.target };
+}
+
+it.each(['elmdb/1', 'sqlite/1'].flatMap(format => [false, true].flatMap(recordAlias =>
+  ['complete', 'move-incumbent', 'publish-incumbent'].map(boundary => ({ format, recordAlias, boundary })))))
+('restores $format through parent aliases (recordAlias=$recordAlias) at $boundary', ({ format, recordAlias, boundary }) => {
+  const f = aliasedFixture(format, recordAlias), failure = new Error('interrupted alias recovery');
+  expect(listImportRecoveries(f.target.userDataDir)[0]?.status).toBe('pending');
+  if (boundary !== 'complete') {
+    const rename = fs.renameSync.bind(fs);
+    const destination = boundary === 'move-incumbent'
+      ? path.join(path.dirname(f.paths.lmdb), f.session, 'interrupted/lmdb') : f.paths.lmdb;
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      rename(from, to);
+      if (String(to) === destination) throw failure;
+    });
+    syncBuiltinESMExports();
+    expect(() => restoreImportRecovery(f.target, f.session)).toThrow(failure);
+    spy.mockRestore(); syncBuiltinESMExports();
+    expect(listImportRecoveries(f.target.userDataDir)[0]?.status).toBe('restoring');
+  }
+  // A resumed operator may select the same physical profile through another spelling.
+  expect(restoreImportRecovery(f.originalTarget, f.session).status).toBe('recovered');
+  expect(ids(f.paths.lmdb, format)).toEqual(['Row-before']);
+  expect(ids(f.paths.runHistory, format, 'RunNode')).toEqual(['RunNode-before']);
+  expect(ids(path.join(f.dir, 'interrupted/lmdb'), format)).toEqual(['Row-before', 'Row-interrupted']);
+  expect(fs.readFileSync(path.join(f.paths.media, 'asset'), 'utf8')).toBe('incumbent');
+  expect(listImportRecoveries(f.target.userDataDir)[0]?.status).toBe('recovered');
+});
+
+it.each(['elmdb/1', 'sqlite/1'])('parent aliases preserve managed reader exclusion for %s', format => {
+  const f = aliasedFixture(format, false);
+  const reader = openRunHistory(_appDataPaths(f.originalTarget.userDataDir).runHistory, { readOnly: true, storageFormat: format });
+  try { expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile'); }
+  finally { reader.database.close(); }
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+});
+
+it.each(['foreign-parent', 'different-leaf', 'relative', 'leaf-symlink'] as const)
+('does not admit %s as a recovery destination through an alias', kind => {
+  const f = aliasedFixture('sqlite/1', false), marker = path.join(f.dir, 'recovery.json');
+  const record = JSON.parse(fs.readFileSync(marker, 'utf8'));
+  if (kind === 'foreign-parent') {
+    const foreign = path.join(f.target.userDataDir, 'foreign'); fs.mkdirSync(foreign);
+    record.stores[0].path = path.join(foreign, path.basename(f.paths.lmdb));
+  } else if (kind === 'different-leaf') record.stores[0].path = path.join(path.dirname(f.paths.lmdb), 'other');
+  else if (kind === 'relative') record.stores[0].path = path.relative(process.cwd(), f.paths.lmdb);
+  else {
+    const moved = f.paths.lmdb + '-moved'; fs.renameSync(f.paths.lmdb, moved); fs.symlinkSync(moved, f.paths.lmdb, 'dir');
+  }
+  fs.writeFileSync(marker, JSON.stringify(record));
+  expect(() => restoreImportRecovery(f.target, f.session)).toThrow(kind === 'leaf-symlink' ? 'ordinary directory' : 'does not match this profile');
+  expect(fs.existsSync(path.join(f.dir, 'interrupted/lmdb'))).toBe(false);
+  expect(fs.existsSync(marker)).toBe(true);
+  expect(ids(f.paths.lmdb, f.format)).toEqual(['Row-before', 'Row-interrupted']);
+});
+
 it('restores the original absence of media', () => {
   const f = fixture('sqlite/1', false); restoreImportRecovery(f.target, f.session);
   expect(fs.existsSync(f.paths.media)).toBe(false);
