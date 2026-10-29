@@ -63,7 +63,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite authori
     expect(Object.is((row.packet as number[])[0], -0)).toBe(true);
     expect(row.nil).toBeNull(); expect(Object.hasOwn(row, '__proto__')).toBe(true);
     expect(db.get("SELECT value FROM value_overflow WHERE entity_id=? AND field='packet'", ['Imported-one'])!.value).toEqual(Buffer.from(packet));
-    expect(db.get("SELECT kind,value FROM value_members WHERE entity_id=? AND field='packet'", ['Imported-one'])).toEqual({ kind: 'num', value: 0 });
+    expect(db.get("SELECT kind,value=0 AS matches_zero FROM value_members WHERE entity_id=? AND field='packet'", ['Imported-one'])).toEqual({ kind: 'num', matches_zero: 1 });
   });
 
   it('validates a raw payload before replacing its incumbent value', () => {
