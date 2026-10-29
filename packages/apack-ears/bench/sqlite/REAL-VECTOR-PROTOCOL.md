@@ -108,3 +108,11 @@ single-transaction primitive update comparison. Keep every sample and failing co
 All original recall, query/heartbeat, resource and remaining goal requirements remain.
 This fixture does not establish app-pack, hybrid, streaming/watch, multi-chunk performance,
 cold reopen, other-platform or integrated elmdb comparison acceptance.
+
+If integrated budgets fail, `diagnose` mode loads the same full fixture but runs only the
+first ten queries in each scope, initially. Capture native plans and wall/CPU costs per
+database call. For the combined candidate/rerank statement, separately execute the same
+candidate SQL and a rerank over those bounded owner IDs, requiring identical answers.
+These counterfactuals run after the original statement on warmer caches; their costs
+are diagnostic, do not add up to an independent attribution, and cannot qualify the
+original latency/heartbeat gates. Preserve the full uninstrumented matrix first.

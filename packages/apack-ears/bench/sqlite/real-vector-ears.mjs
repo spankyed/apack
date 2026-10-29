@@ -11,8 +11,9 @@ import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
 import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
 
-const [corpusPath, truthFile, sizeArg, output] = process.argv.slice(2), size = Number(sizeArg);
+const [corpusPath, truthFile, sizeArg, output, mode] = process.argv.slice(2), size = Number(sizeArg);
 assert([1000,99900].includes(size) && output && !existsSync(output));
+assert(mode === undefined || mode === 'diagnose');
 assert.equal(endianness(),'LE');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const manifestBytes = readFileSync(join(corpusPath,'manifest.json')), manifest = JSON.parse(manifestBytes);
@@ -24,7 +25,7 @@ const bytes = 1536*4, vector = i => Array.from(new Float32Array(corpus.buffer,co
 const queryVectors = Array.from({length:100},(_,q)=>Array.from(new Float32Array(queries.buffer,queries.byteOffset+q*bytes,1536)));
 const path = mkdtempSync(join(tmpdir(),'ears-real-vector-'));
 const report = {protocol:'ears-integrated-real-vector/1',qualification:false,source:process.env.EARS_TEST_SOURCE,
-  size,truthSha256:sha(truthBytes),manifestSha256:sha(manifestBytes),node:process.version,arch:process.arch,
+  size,diagnostic:mode==='diagnose',truthSha256:sha(truthBytes),manifestSha256:sha(manifestBytes),node:process.version,arch:process.arch,
   platform:process.platform,batches:{create:128,embed:64,update:64},cohorts:[]};
 const save = () => writeFileSync(output,JSON.stringify(report,null,2)+'\n');
 const pct = (values,p) => [...values].sort((a,b)=>a-b)[Math.max(0,Math.ceil(values.length*p)-1)] ?? null;
@@ -69,6 +70,52 @@ try {
     return count;
   }
   report.initialCanonicalRowsVerified=canonicalHash(false); report.filesAfterLoad=files(); save();
+  if(mode==='diagnose') {
+    report.sql=[];report.diagnostics=[];
+    const originalAll=db.all.bind(db), originalGet=db.get.bind(db), known=new Map();let stages;
+    const describe=value=>value instanceof Uint8Array?{kind:'bytes',length:value.byteLength,sha256:sha(value)}:
+      typeof value==='string'?{kind:'string',length:value.length}:{kind:typeof value,value};
+    const capture=(method,operation)=>(sql,parameters=[])=>{
+      const begin=performance.now(),cpu=process.resourceUsage(),answer=operation(sql,parameters),end=process.resourceUsage();
+      if(stages) {
+        let id=known.get(sql);
+        if(id===undefined) {
+          id=known.size;known.set(sql,id);
+          report.sql.push({id,method,sql,parameters:parameters.map(describe),
+            plan:db.sql.prepare('EXPLAIN QUERY PLAN '+sql).all(...parameters)});
+        }
+        stages.push({id,ms:performance.now()-begin,userCpuUs:end.userCPUTime-cpu.userCPUTime,
+          systemCpuUs:end.systemCPUTime-cpu.systemCPUTime,rows:Array.isArray(answer)?answer.length:answer?1:0});
+        const split=sql.indexOf(') SELECT c.entity_id id,1-min');
+        if(split>=0) {
+          const first=parameters.findIndex(value=>value instanceof Uint8Array);
+          const candidatesSql=sql.slice(0,split)+') SELECT entity_id FROM candidates';
+          const before=performance.now(),owners=originalAll(candidatesSql,parameters.slice(0,first+1));
+          const candidatesMs=performance.now()-before;
+          const rerankSql='WITH candidates AS MATERIALIZED (SELECT value entity_id FROM json_each(?)) '+sql.slice(split+2);
+          const rerankParams=[JSON.stringify(owners.map(row=>row.entity_id)),...parameters.slice(first+1)];
+          const rerankAt=performance.now(),reranked=originalAll(rerankSql,rerankParams),rerankMs=performance.now()-rerankAt;
+          assert.deepEqual(reranked,answer);
+          stages.push({kind:'separate-counterfactual',candidatesMs,rerankMs,owners:owners.length,
+            candidatesPlan:db.sql.prepare('EXPLAIN QUERY PLAN '+candidatesSql).all(...parameters.slice(0,first+1)),
+            rerankPlan:db.sql.prepare('EXPLAIN QUERY PLAN '+rerankSql).all(...rerankParams)});
+        }
+      }
+      return answer;
+    };
+    db.all=capture('all',originalAll);db.get=capture('get',originalGet);
+    try {
+      for(const percent of [100,10,1]) {
+        const selected=ids.filter((_,i)=>i%100<percent&&i%97!==0);
+        for(let q=0;q<10;q++) {
+          stages=[];
+          const at=performance.now(),hits=(percent===100?e.query('Row'):e.query.ids(selected)).near(queryVectors[q],{k:10}).hits();
+          report.diagnostics.push({percent,q,wallMs:performance.now()-at,stages,ordinals:hits.map(hit=>Number(hit.id.slice(4)))});
+          stages=undefined;save();
+        }
+      }
+    } finally {db.all=originalAll;db.get=originalGet;}
+  } else {
   for(const phase of ['initial','updated']) {
     if(phase==='updated') {
       started=performance.now();
@@ -100,6 +147,7 @@ try {
         record.passes.push(result);save();console.log(JSON.stringify({phase,size:cohortSize,percent,pass,meanRecall:result.meanRecall,latency:result.latencyMs}));
       }
     }
+  }
   }
   report.maxRssKiB=process.resourceUsage().maxRSS; report.filesAfterQueries=files();report.completed=true;save();
 } catch(error) {report.failure={message:error.message,stack:error.stack};save();throw error;}
