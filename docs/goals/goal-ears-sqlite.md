@@ -195,12 +195,14 @@ to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No m
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; publication stays on existing draft #286.
-The exact **ab148afb550245d80cc2f11e5e4c604d6a4315ae** focused
-[40913131660](https://github.com/spankyed/apack/actions/runs/40913131660) completed SUCCESS across Linux x64,
+The exact **a6d0753ea3bcf13a173395b40204b7e31c24a765** focused
+[40916171413](https://github.com/spankyed/apack/actions/runs/40916171413) completed SUCCESS across Linux x64,
 macOS arm64 and Windows x64. Every host executes all five actual native-producer profile groups, seven dump cases
-and existing EARS/host/archive/CLI gates, including the corrected canonical/aliased output-parent case. Linux also
+and all five process-kill ingestion/publication boundaries plus existing EARS/host/archive/CLI gates, including
+the canonical/aliased output-parent case. Linux also
 builds the real starter pack/API and passes the native-controlled three-boot/API/pack/live-view/restart gate.
-Complete nested reports/receipts and explicit skips are retained in `logical-archive/platform-40913131660`.
+Complete nested reports/receipts and explicit skips are retained in `logical-archive/platform-40916171413`.
+Previous ab148afb55 /40913131660 is retained as an earlier green before the five kill controls.
 The optional Codex executable is absent in native and SQLite API runs; diagnostics retain that limitation.
 This is focused qualification, not a newer full Strict or renderer/installed/resource/performance result.
 Earlier **3c1d7ff859** [40908544589](https://github.com/spankyed/apack/actions/runs/40908544589) failed only the
@@ -855,3 +857,21 @@ checks pass. Evidence is `logical-archive/profile-crash`. New platform CI requir
 native producer/source receipts; that new exact-source terminal result remains required. No physical power-loss,
 large-resource, arbitrary filesystem, renderer/installed-distribution, latency/relevance/recall or full-Strict/adoption
 completion follows. Keep the entire goal active and production composition on elmdb.
+
+Vector strategy work remains diagnostic. **4e391f9358** passes tiny SQLite vec1 version 0.8 controls in four
+layouts: none, flat, IVF/uncompressed and IVF/binary. Own writes/savepoints/rollback, reader snapshots/later
+visibility, metadata/dynamic owner IN before K, read-only compacted backup and reopen pass on pinned upstream
+814fd8ef4d42d6567f1613a66f556c8194764d06 with actual native hashes in `vec1-compat`. No EARS execution or
+production dependency changes follow from these tiny controls; high-dimensional recall/performance, training,
+write/admission, multi-chunk/large-k/hybrid, scalar extremes and packaging still require qualification.
+
+Recipe **290b902f2c** acquires the pinned public publisher-labeled current-model Qdrant corpus privately: all
+100,000 source IDs unique, finite nonzero 1,536-dimensional Float64 values projected to canonical Float32,
+99,900 corpus vectors plus 100 held-out queries. All original LFS hashes/byte sizes verify; shards are deleted
+after projection and no payload is committed. Observed acquisition RSS 351,624 KiB, peak owned payload
+1,035,444,688 bytes under the existing 2-CPU/6-GiB/no-swap caps. Tool/image/output hashes and source attribution
+are retained in `real-vector-acquisition`; private sealed cache is `/private/tmp/ears-vector-corpus-cache/qdrant-3small-v1`.
+The pinned card declares no license; these receipts do not grant redistribution rights. No API keys/model calls
+are used. Next preregister and run independent Float64 exact truth over stored Float32 values and the fixed native
+strategy matrix, keeping all original recall/latency/heartbeat and remaining phase 3–7 requirements. Do not use
+synthetic or tiny compatibility results as real-model adoption evidence.
