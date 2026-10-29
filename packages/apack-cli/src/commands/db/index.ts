@@ -4,6 +4,7 @@ import { dbExec, dbQuery, EXEC_USAGE, QUERY_USAGE } from './code';
 import { VERIFY_USAGE } from './backup-verify';
 import { dbRecover, RECOVER_USAGE } from './recover';
 import { dbRebuild, REBUILD_USAGE } from './rebuild';
+import { dbAudit, AUDIT_USAGE } from './audit';
 import { dbBackup, BACKUP_USAGE } from './backup';
 import { dbExport, EXPORT_USAGE } from './export';
 import { dbInspect, INSPECT_USAGE } from './inspect';
@@ -21,6 +22,7 @@ const COMMANDS: Record<string, { run: (args: string[], io: DbIo) => Promise<void
   runs: { run: dbRuns, usage: RUNS_USAGE },
   recover: { run: dbRecover, usage: RECOVER_USAGE },
   rebuild: { run: dbRebuild, usage: REBUILD_USAGE },
+  audit: { run: dbAudit, usage: AUDIT_USAGE },
   backup: { run: dbBackup, usage: BACKUP_USAGE },
   export: { run: dbExport, usage: EXPORT_USAGE },
   import: { run: dbImport, usage: IMPORT_USAGE },
@@ -45,6 +47,7 @@ Commands:
   backup verify <dir>   Check backup readability and completeness
   recover               Inspect interrupted imports; explicitly restore retained incumbents
   rebuild [--force]     Rebuild SQLite candidate derived indexes from primary data
+  audit [--json]        Inspect SQLite candidate primary values and derived indexes
   export --out <dir>    Each entity type's entities to a file
   import <backup-dir>   Replace the database with a backup (lists the change; --force makes it)
   reset                 Delete all data, as Reset Database does (lists it; --force deletes)

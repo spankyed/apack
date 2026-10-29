@@ -10,6 +10,8 @@ import { join } from 'node:path';
 import type { EarsDatabase } from '../database.ts';
 import { toElmdbSchema, type EngineSchema } from '../schema.ts';
 import { SqliteDatabase } from './database.ts';
+import { auditSqliteDatabase, type SqliteAuditReport } from './audit.ts';
+export type { SqliteAuditReport } from './audit.ts';
 
 /** Format provenance; opening the files performs validation. Format 1 changes in place before release. */
 export { DATABASE_FORMAT } from './format.ts';
@@ -35,6 +37,14 @@ export async function rebuildIndexes(database: EarsDatabase): Promise<void> {
     database.rebuildIndexes();
     await database.indexesReady();
   });
+}
+
+/** Inspect primary values and derived indexes using private snapshots; never repairs the source. */
+export async function auditDatabase(database: EarsDatabase): Promise<SqliteAuditReport> {
+  if (!(database instanceof SqliteDatabase)) {
+    throw Object.assign(new Error('SQLite audit requires a SQLite database owner'), { code: 'UNSUPPORTED' });
+  }
+  return auditSqliteDatabase(database);
 }
 
 export interface TemporaryDatabases {
