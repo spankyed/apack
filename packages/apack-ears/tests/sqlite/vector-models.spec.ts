@@ -20,7 +20,9 @@ function own(path:string,fresh=false) {
   const e=createEarsEngine({database:db}),job=db.indexBuilds.jobs().find(j=>j.kind==='vector')!;
   const write=<T>(fn:()=>T):T=>{db.sql.exec('BEGIN IMMEDIATE');try{const result=fn();db.commitWrite();return result;}catch(error){if(db.sql.inTransaction)db.sql.exec('ROLLBACK');throw error;}};
   const seed=(count:number)=>{
-    e.transact(()=>{for(let i=0;i<count;i++)e.create('Row',{title:String(i)});});
+    const first=Number(db.get('SELECT count(*) n FROM entities')!.n);
+    // Pending vectors are ordered by ID; earlier query limits use creation sequence. Keep those aligned.
+    e.transact(()=>{for(let i=first;i<first+count;i++)e.create('Row',{id:`Row-${String(i).padStart(6,'0')}`,title:String(i)});});
     let offset=0;
     for(;;) {
       const pending=e.pendingEmbeddings('Row',{limit:1000});if(!pending.chunks.length)break;
