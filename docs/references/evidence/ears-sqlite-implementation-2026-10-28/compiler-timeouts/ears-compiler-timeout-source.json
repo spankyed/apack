@@ -1,0 +1,5 @@
+{
+  "commit": "e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614",
+  "sha256": "2f25bbbec016b5ba1f8e972587e5f36259d881f1149242e6126b5c98cb2e3b01",
+  "purpose": "Instrumented focused Linux compiler-stage diagnostic; not acceptance"
+}

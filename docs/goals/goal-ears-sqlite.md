@@ -204,9 +204,14 @@ after a committed cursor witness. Exact Linux validation passes 492 SQLite / 289
 cases, types/builds/lint/imports and the cursor-removal negative control. A tiny Windows VM Node probe
 confirms signal reporting only; corrected Windows recovery still needs CI. See
 [Windows/platform evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-portability/README.md).
-Next diagnose the independent 240-second dependency-graph hook and 140-second build-registry case before
-another integrated gate. Do not relax deadlines or rerun unchanged source into acceptance. No owned Linux
-container remains; no VM scratch process or file remains from the signal probe.
+The correction is published at **e452d67ae1** on integration/remote; canonical remains at exact green 60d.
+The two compiler fixtures pass all seven cases with original budgets in a stage-instrumented Linux run,
+which does not explain the hosted macOS failure. The existing focused macOS workflow is live at exact
+e452d67ae1: [40834826426](https://github.com/spankyed/apack/actions/runs/40834826426). Poll it, do not
+duplicate dispatch. See [compiler timeout evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/compiler-timeouts/README.md).
+Do not relax deadlines or rerun unchanged source into acceptance. Next implement the preregistered bounded
+typo checkpoint in the storage plan while preserving the independent compiler failure until diagnosed or
+qualified. No owned Linux container remains; no VM scratch process or file remains from the signal probe.
 
 The runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/
 storage cases, lint/imports/API reports and native hydration/selected-plan controls. The fixed four-process
