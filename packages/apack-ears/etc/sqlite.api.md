@@ -24,6 +24,9 @@ export interface DatabaseOptions {
 // @public (undocumented)
 export function openDatabase(input: DatabaseOptions): EarsDatabase;
 
+// @public
+export function rebuildIndexes(database: EarsDatabase): Promise<void>;
+
 // @public (undocumented)
 export interface TemporaryDatabases {
     // (undocumented)
