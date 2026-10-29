@@ -425,6 +425,9 @@ This representation stores one BLOB per identity rather than duplicating the BLO
 
 The prerelease format-one policy still applies: an older candidate whose chunks contain vector BLOBs refuses
 opening rather than silently creating empty primary storage. Export using that original source and explicitly
-convert a copy. No ordinary app profile or elmdb format is migrated. The query join's cost, dormant-identity
+convert a copy. No ordinary app profile or elmdb format is migrated. The vector join now has a measured covering-index path that avoids the input grouping sort. The fixed
+warmed 10k diagnostic at c23a82301b records 59.34/57.57/39.43 ms inline/referenced/covered medians, with
+identical exact answers; see the archive evidence. Its earlier incomplete-index baseline is retained
+without treating its observed difference as a causal join cost. Dormant-identity
 resource bounds and large restored/replaced stores need measured qualification; this design does not waive
 existing vector latency/recall/resource or recovery gates.

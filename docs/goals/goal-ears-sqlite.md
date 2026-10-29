@@ -336,9 +336,15 @@ passes all 589 SQLite cases, build/types/lint and every paired layout answer/fac
 inline / referenced / covered broad-query medians are 59.34 / 57.57 / 39.43 ms; these are warmed synthetic
 native-plan diagnostics, not responsiveness acceptance. The covered plan removes the input grouping sort.
 Raw populated replacement now shares validated logical traversal and preserves original composite bytes,
-dormant embeddings and destination monotonic commits. Adding the measured covering index with actual
-facade plan/removal and missing-index recovery controls is the next focused checkpoint; no latency target
-is relaxed and no full/platform/host convergence is implied by this EARS-only success.
+dormant embeddings and destination monotonic commits. Production covering-index source 8522a921df passes all 149 affected archive/value/vector/search-build/
+recovery/operational/plain-Node cases plus build/types/lint, including the unforced facade plan, removal
+control and missing-index recovery. The full 589-case gate remains pinned to preceding c23a82301b.
+No latency target is relaxed and no full/platform/host convergence is implied by these EARS-only checks.
+The next deliverable is app-only archive composition and host-owned output/staging publication: validate
+API reports, collision/IO cleanup, and actual interruption/populated replacement through the existing
+recovery coordinator. Keep partially restored directories private until audit and publication complete;
+never direct a partial-ingestion or pre-audit staging artifact into an application profile. Preserve
+lossless bytes, selected stores/media ownership and source/destination commit/stale-handle semantics.
 Public archive/host publication, interruption, copied-profile conversion and resource/platform qualification
 remain required per docs/plans/ears-sqlite-storage.md. Canonical/publication refs above remain unchanged.
 See [archive evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/logical-archive/README.md). See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
