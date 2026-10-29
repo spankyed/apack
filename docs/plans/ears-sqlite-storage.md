@@ -345,3 +345,19 @@ completed on a2de2944a1 with all sizes/answers: 100k selective medians ~3–3.5 
 the original scan is ~138–144 / ~294–299 ms. Small profiles and maximum-length tokens still regress
 against the scan, and broad latency remains high. Preserve every result; architecture bounding and this
 correction are implemented, while complete app/corpus/resource acceptance stays open.
+
+## Explicit offline membership repair
+
+Local candidate 00c462a0bb extends explicit index rebuild admission to reconstruct `value_members` from
+authoritative array cells. SQLite owns the native scan, JSON expansion and deduplicated insertion; one
+registered deterministic callback decodes each array using the same scalar member rules as ordinary writes.
+The deletion/reconstruction and generation admission share one writer transaction. Other snapshots therefore
+see incumbent or complete membership; failure in later search admission rolls the entire repair back.
+Primary values and logical commit identity stay unchanged. Dynamic schema admission does not take this path.
+
+This is explicit offline maintenance, not a new interactive index-admission implementation. Its transaction
+scans all list-bearing overflow values, and a single large array can require memory proportional to that array.
+It can hold the writer and block its calling thread for the full scan. Qualification must record duration,
+peak memory, WAL/disk growth and interruption behavior on representative profiles before claiming acceptable
+maintenance limits. The CLI holds managed profile exclusion; same-handle ownership does not exclude unmanaged
+writers or certify arbitrary filesystems. Validation is pending; no performance target is waived.

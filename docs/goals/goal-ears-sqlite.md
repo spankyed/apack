@@ -300,7 +300,10 @@ real CLI maintenance cases, API generation and lint/imports. The generated API r
 635b6d76af. This converged maintenance checkpoint is published through 34c612ab84 to the existing draft branch;
 canonical stays at exact full-green 6cf. Native own-embedding visibility remains an unresolved baseline
 discrepancy; do not claim the newer shared native suite or full gate passes.
-Public rebuild still needs a correct generationless membership repair/publication design. Poll that same handle. The audit is not yet public
+New local 00c462a0bb implements atomic offline membership reconstruction in the rebuild admission
+transaction, using a native SQL scan plus per-array decoding; all-SQLite validation is active in
+ears-membership-repair (exec 57250). It still needs measured duration/memory/WAL and interruption
+qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
 Complete audit and lossless logical export remain required.
