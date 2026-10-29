@@ -24,3 +24,18 @@ Baseline load: create 12.32 s, embeddings 29.16 s, 1% vector update 0.50 s. Base
 Setup failures are retained separately and precede any database work: the raw seed resolved Ajv 6 instead of EARS’s lockfile Ajv 8.20; a metadata probe used sqlite-vec’s unexported package.json subpath; the corrected probe then detected the stale seed. The final disposable setup makes its own dependency copy, reconciles npm with scripts disabled, proves the tracked lockfile unchanged and records exact versions/native hashes. No production dependency or assertion changed to resolve setup.
 
 Still open: broad and 10% responsiveness, tighter integrated plans and owner scope handling, native execution/admission ownership, representative search/vector/hybrid/relevance/update/resource work, matched current elmdb comparison, all remaining goal phases 3–7 and final architecture/adoption review. No newer full Strict or adoption is claimed.
+
+## Owner-only rerank follow-on
+
+Source `f8a5706b1e` retains only candidate-owner membership and type/index/generation for outer reranking. Owner eligibility has already been evaluated in the same request snapshot. All 606 SQLite EARS/135 host cases, builds, types/API, lint/imports and three negative plan/probe/outer-scope controls pass. The complete unchanged matrix and canonical-byte checks pass; all sampled mean recalls remain at least 0.999.
+
+| Phase | 100k scope | Mean recall | Query p95 ms | Heartbeat p99 ms |
+|---|---:|---:|---:|---:|
+| initial | 100% | 1.000 | 85.33 | 127.92 |
+| initial | 10% | 1.000 | 28.86 | 30.36 |
+| initial | 1% | 1.000 | 13.32 | 17.76 |
+| updated | 100% | 1.000 | 61.97 | 68.10 |
+| updated | 10% | 0.999 | 29.18 | 30.70 |
+| updated | 1% | 1.000 | 13.67 | 14.81 |
+
+Selective 10% cost falls modestly, while broad tails vary and still fail responsiveness. The broad initial median per timed pass is 56–60 ms with worse tails in passes two/three; no causal attribution of those tails is established. Do not claim a universal speedup or discard slower samples. Next remove native-to-JavaScript-to-native candidate-scope materialization and qualify filter/limit/traversal semantics and performance. All original failed budgets and remaining goal requirements stay open.
