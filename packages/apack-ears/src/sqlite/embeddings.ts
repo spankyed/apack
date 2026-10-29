@@ -17,7 +17,8 @@ export function validateEmbeddingBytes(bytes: Uint8Array, dimensions: number): v
   if (!nonzero) fail('Invalid Float32 cosine embedding');
 }
 export class SqliteEmbeddings {
-  constructor(private readonly db: SqliteDatabase) {}
+  private readonly db: SqliteDatabase;
+  constructor(db: SqliteDatabase) { this.db = db; }
   initialize(): void {
     // Pre-adoption candidates with generation-owned bytes require explicit export using their original code.
     // Refuse before creating anything; absence must never silently turn stored primary vectors into pending work.

@@ -74,7 +74,8 @@ export async function* encodeLogicalSnapshot(sequence: number, records: Iterable
 class Bytes {
   private held: Uint8Array = new Uint8Array(0);
   private offset = 0;
-  constructor(private readonly input: AsyncIterator<Uint8Array>) {}
+  private readonly input: AsyncIterator<Uint8Array>;
+  constructor(input: AsyncIterator<Uint8Array>) { this.input = input; }
   async read(size: number, eof = false): Promise<Buffer | undefined> {
     let output: Buffer | undefined, copied = 0;
     while (copied < size) {
