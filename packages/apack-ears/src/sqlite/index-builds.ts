@@ -2,6 +2,7 @@
 // Primary values remain authoritative; incomplete value indexes fall back, search reports readiness explicitly.
 import { createHash } from 'node:crypto';
 import type { SqliteDatabase } from './database.ts';
+import type { SqliteVectorModels, SqliteModelStep } from './vector-models.ts';
 
 export type SqliteIndexKind = 'value' | 'text' | 'trigram' | 'vector';
 export interface SqliteIndexSpec {
@@ -39,6 +40,8 @@ export class SqliteIndexBuilds {
   private retry?: NodeJS.Timeout;
   private stopped = false;
   private pending = false;
+  private vectorModels?:SqliteVectorModels;
+  private stoppingModels?:Promise<void>;
   private preferGC = false;
   private readonly retries = new Set<number>();
   private readonly waiters = new Set<{ resolve(): void; reject(error: unknown): void }>();
@@ -63,6 +66,18 @@ export class SqliteIndexBuilds {
       CREATE INDEX IF NOT EXISTS index_build_state ON index_builds(state,generation);`);
     this.reload();
   }
+  attachVectorModels(models:SqliteVectorModels):void {
+    if(this.vectorModels&&this.vectorModels!==models)fail('BACKGROUND_OWNER_EXISTS','A model owner is already attached');
+    this.vectorModels=models;this.wake();
+  }
+  detachVectorModels(models:SqliteVectorModels,stopping:Promise<void>):void {
+    if(this.vectorModels!==models)return;
+    this.vectorModels=undefined;this.stoppingModels=stopping;
+    void stopping.catch(error=>{this.lastError??=error;});
+    const error=Object.assign(new Error('Native model owner stopped'),{code:'CANCELLED'});
+    for(const waiter of this.waiters)waiter.reject(error);
+    this.waiters.clear();this.timer?.unref();this.retry?.unref();
+  }
   private key(type: string, field: string): string { return JSON.stringify([type, field]); }
   private specKey(index: SqliteIndexSpec): string { return JSON.stringify([index.type, index.kind, index.name]); }
   private job(row: Record<string, any>): SqliteIndexJob {
@@ -86,7 +101,7 @@ export class SqliteIndexBuilds {
       ORDER BY g.generation LIMIT 1`);
   }
   private hasWork(): boolean {
-    return this.retries.size > 0 || this.db.get("SELECT 1 FROM index_builds WHERE state='building' LIMIT 1") !== undefined ||
+    return !!this.vectorModels?.hasWork() || this.retries.size > 0 || this.db.get("SELECT 1 FROM index_builds WHERE state='building' LIMIT 1") !== undefined ||
       this.nextGC() !== undefined;
   }
   /** Prepare caches while admission can still roll back. Acceptance after COMMIT performs no IO. */
@@ -95,7 +110,7 @@ export class SqliteIndexBuilds {
     const retries = new Set(rows.filter(row => this.retries.has(Number(row.generation))).map(row => Number(row.generation)));
     return { generations: new Map(rows.filter(row => row.kind === 'value').map(row =>
       [this.key(String(row.type), String(row.name)), Number(row.generation)])), retries,
-      pending: retries.size > 0 || rows.some(row => row.state === 'building') || this.nextGC() !== undefined };
+      pending: !!this.vectorModels?.hasWork() || retries.size > 0 || rows.some(row => row.state === 'building') || this.nextGC() !== undefined };
   }
   acceptState(state: SqliteIndexState): void {
     this.generations = state.generations; this.pending = state.pending;
@@ -165,7 +180,8 @@ export class SqliteIndexBuilds {
       if (!this.canRun()) fail('UNIT_OPEN', 'Commit or abort the open unit before waiting for indexes');
       const unfinished = this.jobs().filter(job => job.state !== 'ready');
       this.checkRevision();
-      if (!unfinished.length) return Promise.resolve();
+      const modelFailure=this.vectorModels?.failure();if(modelFailure)throw modelFailure;
+      if (!unfinished.length&&!this.vectorModels?.hasWork()) return Promise.resolve();
       if (this.stopped) throw this.lastError ?? Object.assign(new Error('Index scheduler is stopped'), { code: 'CLOSED' });
       const failed = unfinished.find(job => job.state === 'failed' && !this.retries.has(job.generation));
       if (failed) fail('INDEX_FAILED', String(failed.error));
@@ -179,12 +195,14 @@ export class SqliteIndexBuilds {
     try {
       const unfinished = this.jobs().filter(job => job.state !== 'ready');
       const failed = unfinished.find(job => job.state === 'failed' && !this.retries.has(job.generation));
-      if (!failed && unfinished.length) return;
-      for (const waiter of this.waiters) failed ? waiter.reject(Object.assign(new Error(String(failed.error)), { code: 'INDEX_FAILED' })) : waiter.resolve();
+      const modelFailure=this.vectorModels?.failure();
+      if (!failed && !modelFailure && (unfinished.length||this.vectorModels?.hasWork())) return;
+      for (const waiter of this.waiters) failed ? waiter.reject(Object.assign(new Error(String(failed.error)), { code: 'INDEX_FAILED' })) : modelFailure?waiter.reject(modelFailure):waiter.resolve();
       this.waiters.clear(); this.timer?.unref(); this.retry?.unref();
     } catch (error) { this.lastError = error; this.pending = false; this.stop(); }
   }
   wake(): void {
+    if(!this.stopped&&this.db.isOpen&&this.vectorModels?.hasWork())this.pending=true;
     this.settle();
     if (!this.pending || this.stopped || this.db.readOnly || !this.db.isOpen || this.timer || this.retry || !this.canRun()) return;
     this.timer = setImmediate(() => {
@@ -201,19 +219,24 @@ export class SqliteIndexBuilds {
   stop(error?: unknown): void {
     if (error !== undefined) this.lastError = error;
     this.stopped = true;
+    const models=this.vectorModels;this.vectorModels=undefined;
+    if(models){this.stoppingModels=models.stop();void this.stoppingModels.catch(error=>{this.lastError??=error;});}
     if (this.timer) clearImmediate(this.timer);
     if (this.retry) clearTimeout(this.retry);
     this.timer = undefined; this.retry = undefined;
     for (const waiter of this.waiters) waiter.reject(this.lastError ?? Object.assign(new Error('The database is closed'), { code: 'CLOSED' }));
     this.waiters.clear();
   }
+  async drain():Promise<void> {
+    this.stop();await this.stoppingModels;
+  }
   /** Explicit maintenance cannot enqueue work on an owner that requires reopen. */
   assertRunning(): void {
     if (this.stopped) throw this.lastError ?? Object.assign(new Error('Index scheduler is stopped; reopen the database'), { code: 'CLOSED' });
   }
-  step(): 'progress' | 'idle' | 'paused' | 'busy' | 'failed' {
+  step(): 'progress' | 'idle' | 'paused' | 'busy' | 'failed' | 'waiting' {
     if (this.stopped || !this.db.isOpen || this.db.readOnly || !this.canRun()) return 'paused';
-    let begun = false, job: SqliteIndexJob | undefined, changed: string | undefined;
+    let begun = false, job: SqliteIndexJob | undefined, changed: string | undefined, nativeStep:SqliteModelStep|undefined;
     try {
       this.db.sql.exec('BEGIN IMMEDIATE'); begun = true; this.checkRevision();
       const gc = this.preferGC ? this.nextGC() : undefined;
@@ -237,9 +260,16 @@ export class SqliteIndexBuilds {
         this.db.run('UPDATE index_builds SET after_seq=?,state=?,error=NULL WHERE generation=?', [after, ready ? 'ready' : 'building', job.generation]);
         if (ready && job.kind !== 'value') changed = job.type;
         this.preferGC = true;
+      } else if(!gc&&(nativeStep=this.vectorModels?.step())?.progressed) {
+        changed=nativeStep.changedType;this.preferGC=true;
       } else {
         const retired = gc ?? this.nextGC();
-        if (!retired) { this.db.sql.exec('ROLLBACK'); this.pending = false; this.settle(); return 'idle'; }
+        if (!retired) {
+          this.db.sql.exec('ROLLBACK');begun=false;
+          this.pending=this.hasWork();
+          if(this.pending&&this.vectorModels){this.vectorModels.start();return 'waiting';}
+          this.settle();return 'idle';
+        }
         const old = this.job({ ...retired, state: 'ready', after_seq: 0, through_seq: 0, error: null });
         let complete: boolean;
         if (old.kind === 'value') complete = Number(this.db.run(`DELETE FROM field_index WHERE rowid IN
@@ -248,7 +278,7 @@ export class SqliteIndexBuilds {
         if (complete) this.db.run('DELETE FROM index_gc WHERE generation=?', [old.generation]);
         this.preferGC = false;
       }
-      this.db.commitWrite();
+      this.db.commitWrite();nativeStep?.accept();
       if (job) this.retries.delete(job.generation);
       if (changed) this.db.indexesChanged(changed);
       this.settle(); return 'progress';

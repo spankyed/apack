@@ -68,6 +68,7 @@ export class SqliteDatabase implements EarsDatabase {
   private readonly writeLease = createWriteLease();
   private opened = true;
   private readonly closeController = new AbortController();
+  private vectorTrainingOwner?: symbol;
   get closeSignal(): AbortSignal { return this.closeController.signal; }
   private faulted?: Error;
   private active?: SqliteUnit;
@@ -224,6 +225,12 @@ export class SqliteDatabase implements EarsDatabase {
 
   get isOpen() {
     return this.opened;
+  }
+  claimVectorTrainingOwner(): () => void {
+    this.writable();
+    if(this.vectorTrainingOwner)fail('BACKGROUND_OWNER_EXISTS','A native model owner already exists on this connection');
+    const token=Symbol('vector training owner');this.vectorTrainingOwner=token;
+    return ()=>{if(this.vectorTrainingOwner===token)this.vectorTrainingOwner=undefined;};
   }
   get schema() {
     return this.schemaPresent ? this.clone(this.heldSchema) : null;
@@ -1438,6 +1445,13 @@ export class SqliteDatabase implements EarsDatabase {
 
   async durable() {
     this.assertOpen();
+  }
+  /** Storage owners drain workers before replacing/removing files; close remains synchronous. */
+  async drainBackground():Promise<void> {
+    if(!this.opened)return;
+    this.writeLease.assertWritable();
+    if(this.active)fail('UNIT_OPEN','End the open unit before draining background work');
+    await this.indexBuilds.drain();
   }
   close() {
     if (!this.opened) return;

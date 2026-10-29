@@ -82,7 +82,15 @@ jobs:
         run: >-
           node --import tsx packages/apack-cli/tests/_support/logical-cli.mjs
           .temp/sqlite-platform/logical-cli.json 2>&1 | tee .temp/sqlite-platform/logical-cli.log
+      - name: Verify Windows Rust linker
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $linker = (Get-Command link.exe -CommandType Application).Source
+          Write-Host "Rust linker: $linker"
+          if ($linker -match '[\\/]Git[\\/]usr[\\/]bin[\\/]') { throw "Git's link.exe must not shadow the MSVC linker" }
       - name: Build matching native dump producer
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         working-directory: vendor/elmdb
         run: |
           rustup show active-toolchain
