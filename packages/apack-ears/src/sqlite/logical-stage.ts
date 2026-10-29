@@ -41,7 +41,7 @@ export async function stageLogicalSnapshot(chunks: AsyncIterable<Uint8Array>, de
     const statements = {
       meta: db.prepare('INSERT INTO meta VALUES (?,?)'), identity: db.prepare('INSERT INTO identities VALUES (?)'),
       entity: db.prepare('INSERT INTO entities VALUES (?,?,?,?,?)'), value: db.prepare('INSERT INTO logical_values VALUES (?,?,?,?)'),
-      relation: db.prepare('INSERT INTO relations VALUES (?,?,?,?,?,?,?)'), embedding: db.prepare('INSERT INTO embeddings VALUES (?,?,?,?,?,?,?)'),
+      relation: db.prepare('INSERT INTO relations(id,kind,source,target,seq,info) VALUES (?,?,?,?,?,?)'), embedding: db.prepare('INSERT INTO embeddings VALUES (?,?,?,?,?,?,?)'),
     };
     const counts: LogicalStage['counts'] = { meta: 0, entity: 0, value: 0, relation: 0, embedding: 0 };
     let header: LogicalHeader | undefined;
