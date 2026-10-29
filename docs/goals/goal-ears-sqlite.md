@@ -321,8 +321,10 @@ field/metadata/relation/embedding export; initial fixture setup omitted required
 corrected by explicit optional flags; all 17 codec/export cases, build/types/lint pass. Stage 2de0b153f4
 spools records into a new isolated SQLite file and seals only after footer/counter verification; its initial
 relation statement arity failure is corrected; all 24 codec/export/stage cases, build/types/lint pass.
-New raw-cell restoration 64eca270d4 is validating in ears-raw-cell-restore (exec 47189), retaining
-raw payloads by logical name without normalizing composite bytes or enforcing current row rules.
+Raw-cell restoration 64eca270d4 with fixture corrections at bcf1fee8d2 passes all 34 focused
+codec/export/stage/value cases, build/types and lint in disposable Linux. Original fixture failures
+are retained. Raw payloads are restored by logical name without normalizing composite bytes or
+enforcing current row rules.
 This is a sealed ingestion spool, not a restored/audited app store. Public export,
 embedding restore, staging and host publication remain required per docs/plans/ears-sqlite-storage.md.
 See [archive evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/logical-archive/README.md). See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
