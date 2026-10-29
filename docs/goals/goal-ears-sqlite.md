@@ -206,21 +206,23 @@ and the preparation's parent are synced before the first live replacement; injec
 live data. See [import recovery evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/import-recovery/README.md)
 for exact archives, source comparison, prior failures and qualified limits. No owned Linux container remains live.
 
-Published recovery tip is now **d9e23b00b7df22124e59625ea8c5de266860c583** on the existing draft branch and
-clean detached `integration-FyE9XZ`. Its single exact
+Recovery checkpoint **d9e23b00b7df22124e59625ea8c5de266860c583** had the exact
 [strict run 40796822583](https://github.com/spankyed/apack/actions/runs/40796822583) completed FAILURE: five jobs passed; app/rest failed five recovery crash cases because child processes
 inherited the source condition and plain Node refused SDK namespaces. Preserve that failure; do not promote.
 The local fix strips only the source condition using the existing helper, asserts built package resolution,
 and passes 73 focused Linux recovery/storage cases with the inherited source flag; removing the fix
 reproduces all five failures. Package builds, host types and lint pass. See
 [recovery launch evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-launch/README.md).
-Published descendant **e5fe7ea16bee7b96acaa495fe132ad65fe766a7c** is on the existing draft branch and clean
-integration checkout. Its exact [strict run 40804552364](https://github.com/spankyed/apack/actions/runs/40804552364)
+Descendant **e5fe7ea16bee7b96acaa495fe132ad65fe766a7c** had the exact [strict run 40804552364](https://github.com/spankyed/apack/actions/runs/40804552364)
 completed FAILURE in producers: benchmark Vitest lacked the required source condition; consumers were skipped.
 Both benchmark/root EARS configs now declare it and pass the actual Linux import guard. Preserve that failure;
-no replacement strict run is dispatched yet. The local helper
+the failed run remains retained. The local helper
 already exists with BASE 585dcafccf and exact-success guards; the user's renewed approval does not bypass them.
-Local continuation includes diagnostics beyond the published tip; keep that distinct from CI source.
+Latest published functional checkpoint is **7cba75f4311d4f20b4f86b1ac8f46355913c2a08**, on the existing
+`session/ears-sqlite` branch and clean detached integration checkout. Its single exact strict gate is
+[40814018368](https://github.com/spankyed/apack/actions/runs/40814018368); poll that handle rather than dispatching
+duplicates. Do not promote canonical before exact success. Local continuation/handoff beyond this published
+tip is distinct from CI source; no master merge, release or adoption occurred.
 
 Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's representative search corpus before
 tuning. Phase 4 now preregisters `tests/fixtures/search-relevance.json`: 28 repository-domain documents and
@@ -238,7 +240,7 @@ snapshot preceding the sole parameter-property-to-field-assignment loader correc
 for exact source patches, setup/config/loader failures and qualified limits. The earlier
 [corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md)
 retains fixture corrections and pre-fix failures. No query budget or useful-result expectation was weakened.
-Local functional checkpoint is **026b6b18b0b786f5cc732ffb83982b2b90d37ca1**, clean and unpublished. Its
+Earlier functional checkpoint **026b6b18b0b786f5cc732ffb83982b2b90d37ca1** introduced the string representation. Its
 preregistered old/new/new/old 10k text-shape cohort completed all four expected-answer trials. Cross-field
 p50 regresses from ~0.29 ms to ~20 ms because common clause matches materialize before intersection; broad
 queries are ~1.9× slower, readiness ~3.3× slower, main database ~25% larger, while name writes remain close.
@@ -260,8 +262,8 @@ The complete preregistered six-process owner cohort fixes medium queries to ~3.1
 rowid ~69 ms; point conjunctions ~0.7 ms, private owner bytes ~3% above the preceding string shape. Broad
 limited reads remain ~28 ms versus legacy ~15 ms, unaccepted. See
 [owner cost and exact functional proof](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-cost/README.md).
-Publish this functional checkpoint on the existing draft branch and run one exact strict integration gate;
-that is not adoption or performance acceptance. Keep canonical on 585dcafccf until that exact gate succeeds.
+The functional checkpoint is published at 7cba75f431 with exact gate 40814018368 above. This is not adoption
+or performance acceptance. Keep canonical on 585dcafccf until that exact gate succeeds.
 Next implement safe adjacent text-limit/top-k pushdown before match expansion/JS return. Preserve recency,
 later filters, multiple types, complete highlights and the unchanged relevance corpus; check actual native
 returned-row bounds, then preregister a new cost comparison. Preserve every failed cohort and all remaining
