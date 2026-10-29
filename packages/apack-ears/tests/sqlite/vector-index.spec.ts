@@ -32,10 +32,11 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     const sequence=db.sequence;write(()=>index.admit(job,model));
     expect(db.sequence).toBe(sequence);expect(()=>index.candidates(job.generation,bytes(vector(1)),100)).toThrow(expect.objectContaining({code:'INDEX_BUILDING'}));
     expect(write(()=>index.step(job.generation,1))).toBe(false);
+    expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(1);
     // Updating an already-visited vector and adding new owners must both survive later backfill.
     const pending=e.pendingEmbeddings('Row',{limit:1000});expect(pending.chunks).toHaveLength(0);
     const old=db.get('SELECT * FROM embedding_values WHERE entity_id=? ORDER BY chunk LIMIT 1',[first])!;
-    e.embed([{id:first,index:old.index_name,chunk:old.chunk,hash:old.hash,model:old.model,vector:vector(1)}]);
+    e.embed([{id:first,chunk:old.chunk,hash:old.hash,model:old.model,vector:vector(1)}]);
     const third=e.create('Row',{title:'four'}).id();embed();
     while(!write(()=>index.step(job.generation,1))) { /* bounded caller-owned slices */ }
     const answers=index.candidates(job.generation,bytes(vector(1)),100);
