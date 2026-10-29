@@ -10,3 +10,17 @@ export interface ClaudeBackgroundSession {
   waitingFor?: string
 }
 export type ClaudeBackgroundSessionRequest = { operation: 'refresh' } | { operation: 'stop'; id: string; pid: number }
+
+export interface ClaudeBackgroundReview {
+  revision: string
+  title: string
+  paragraphs: string[]
+  confirmLabel: string
+  cancelLabel: string
+  defaultFocus: 'confirm' | 'cancel'
+}
+export interface ClaudeBackgroundReviewState {
+  status: 'loading' | 'ready' | 'pending' | 'error'
+  review?: ClaudeBackgroundReview
+  problem?: string
+}

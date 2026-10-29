@@ -358,3 +358,13 @@ it('reads print-owner policy diagnostics through its owned projection without te
  const request=vi.fn();const ui=createClaudeUiControls(Promise.resolve({capabilities:['ui_surface_v1']}),{request},undefined,projection)
  await expect(ui.managedSettingsDiagnostics('print-view')).resolves.toEqual([warning]);expect(projection.managedSettingsDiagnostics).toHaveBeenCalledWith('print-view');expect(request).not.toHaveBeenCalled()
 })
+
+
+it('does not treat background snapshots as decision acknowledgements or the reverse', async () => {
+  const request = vi.fn(async () => ({ open: true } as unknown)), ui = createClaudeUiControls(Promise.resolve({ capabilities: ['ui_surface_v1', 'apack_native_view_v1'] }), { request })
+  const identity = { client_id: 'client', panel_id: crypto.randomUUID() }
+  await expect(ui.backgroundReview({ ...identity, operation: 'read' })).resolves.toEqual({ open: true })
+  await expect(ui.backgroundReview({ ...identity, operation: 'confirm', revision: crypto.randomUUID() })).rejects.toThrow()
+  request.mockResolvedValue({ answered: true })
+  await expect(ui.backgroundReview({ ...identity, operation: 'read' })).rejects.toThrow()
+})

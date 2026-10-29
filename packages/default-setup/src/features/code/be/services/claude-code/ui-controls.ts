@@ -197,6 +197,14 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
         z.object({ kind: z.literal('confirmation'), id: z.string().uuid(), title: z.string().max(16384), confirmLabel: z.string().max(16384), commandName: z.string().max(256).optional() }).strict(),
       ]).parse(await request({ subtype: 'apack_ui_agent_dispatch', ...valid }))
     },
+    async backgroundReview(options: { client_id: string; panel_id: string } & ({ operation: 'read' } | { operation: 'confirm' | 'cancel'; revision: string })) {
+      const identity = { client_id: clientId.parse(options.client_id), panel_id: z.string().uuid().parse(options.panel_id) }
+      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native background panel capability is unavailable')
+      const action = options.operation === 'read' ? { operation: 'read' as const } : { operation: z.enum(['confirm', 'cancel']).parse(options.operation), revision: z.string().uuid().parse(options.revision) }
+      const value = await request({ subtype: 'apack_ui_background_review', ...identity, ...action })
+      if (action.operation === 'read') return z.object({ open: z.boolean(), review: z.object({ revision: z.string().uuid(), title: z.string().max(16384), paragraphs: z.array(z.string().max(32000)).max(16), confirmLabel: z.string().max(16384), cancelLabel: z.string().max(16384), defaultFocus: z.enum(['confirm', 'cancel']) }).strict().optional() }).strict().parse(value)
+      return z.object({ answered: z.literal(true) }).strict().parse(value)
+    },
     async settings(options: { client_id: string; panel_id: string; action: ClaudeSettingsOperation }) {
       const valid = z.object({ client_id: clientId, panel_id: z.string().uuid(), action: claudeSettingsOperation }).strict().parse(options)
       const { action, ...identity } = valid

@@ -219,6 +219,11 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     if (view.pendingPrompt?.requestId === event.requestId && view.pendingPrompt.kind === event.kind) view.pendingPrompt.finish(event)
     return
   }
+  if (event.type === 'CLAUDE_UI_BACKGROUND_REVIEW') {
+    if (!view || !validId(event.panelId) || !validId(event.sourceRevision) || !['confirm', 'cancel'].includes(event.decision)) return
+    bind(view); void view.mount?.backgroundReview(event.revision, event.panelId, event.sourceRevision, event.decision)
+    return
+  }
   if (event.type === 'CLAUDE_UI_SETTINGS') {
     if (!view || !validId(event.panelId) || !validId(event.requestId)) return
     bind(view); void view.mount?.settings(event.revision, event.panelId, event.requestId, event.action)

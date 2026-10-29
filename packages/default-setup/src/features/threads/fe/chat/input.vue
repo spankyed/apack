@@ -110,7 +110,7 @@
                     v-for="btn in leftButtons"
                     :key="btn.action"
                     @select="handleButtonClick(btn.action)"
-                    :disabled="(btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp') && submitting"
+                    :disabled="(btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && submitting"
                     class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
                     :class="btn.class"
                   >
@@ -129,7 +129,7 @@
                 class="hidden @lg:block p-2 transition-colors text-neutral-500"
                 :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
                 :aria-label="btn.label"
-                :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp') && submitting)"
+                :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && submitting)"
                 :title="btn.label"
                 @click="handleButtonClick(btn.action)"
               >
@@ -285,6 +285,7 @@ const props = defineProps<{
   statusLineCwd?: string
   nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; attachmentId?: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
   nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply
+  nativeBackground?: boolean
   nativeSubmit?: (text: string, references: MessageReferences) => Promise<ClaudeComposerSubmitResult>
   nativeUi?: ClaudeUiMountState
 }>()
@@ -736,6 +737,7 @@ const leftButtons = computed<ActionButton[]>(() => {
     { icon: ListTodo, label: 'Claude tasks', action: 'native-tasks' },
     { icon: Plug, label: 'Claude MCP servers', action: 'native-mcp' },
   )
+  if (props.nativeBackground && props.nativeSubmit && props.nativePrompt) buttons.push({ icon: ListTodo, label: 'Run session in background', action: 'native-background' })
   if(props.currentMode === 'Claude Code' && props.currentThread?.id) buttons.push({icon:Plug,label:'Claude channels',action:'claude-channels'})
   // Note: In expanded view, 'quick-message' is rendered via QuickPromptsPopup instead
   if (speechSupported.value) {
@@ -765,6 +767,7 @@ const handleButtonClick = (action: string) => {
   if(action === 'claude-channels'){channelsOpen.value=true;return}
   if (action === 'native-model') { void openNativePanel('/model'); return }
   if (action === 'native-themes') { void openNativePanel('/theme'); return }
+  if (action === 'native-background') { if (props.nativeBackground) void openNativePanel('/background'); return }
   if (action === 'native-settings') { void openNativePanel('/config'); return }
   if (action === 'native-tasks') { void openNativePanel('/tasks'); return }
   if (action === 'native-mcp') { void openNativePanel('/mcp'); return }
@@ -844,8 +847,8 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
   return refs
 }
 
-async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp' | '/theme') {
-  const label = command === '/theme' ? 'themes' : command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
+async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp' | '/theme' | '/background') {
+  const label = command === '/background' ? 'background session review' : command === '/theme' ? 'themes' : command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
   const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
   if (props.disabled || submitting.value || !editor || !bridge || !submit) return
   const epoch = composerEpoch, revision = bridge.revision
