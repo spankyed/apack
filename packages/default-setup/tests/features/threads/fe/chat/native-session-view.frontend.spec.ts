@@ -224,3 +224,19 @@ it.each([true, false])('distinguishes a verified managed-policy exit from anothe
   f.publish({ ...f.snapshot, output: [{ sequence: 2, text: 'Managed settings were not approved; exiting without applying them.' }], state: replacement }); await nextTick()
   expect(f.root.textContent).toContain('Claude Code disconnected unexpectedly.')
 })
+
+
+it('keeps sandbox decisions tied to the displayed host and withdraws unavailable persistence', async () => {
+  const f=await fixture()
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+  const notice={id:'network',revision:'network-revision',sessionId:'session',kind:'sandbox_network_access' as const,title:'Network request outside of sandbox',paragraphs:['Host: <script>review.example</script>','Allow this connection?'],choices:[{value:'sandbox_allow' as const,label:'Yes'},{value:'sandbox_remember' as const,label:'Remember original rule'},{value:'sandbox_deny' as const,label:'No'}]}
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick()
+  const card=f.root.querySelector('[aria-label="Claude sandbox network request"]')!;expect(card.querySelector('script')).toBeNull();expect(card.textContent).toContain(notice.paragraphs[0])
+  const stale=card.querySelectorAll<HTMLButtonElement>('button')[0]!
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,revision:'replacement',choices:[notice.choices[0]!,notice.choices[2]!]}}})
+  const count=actor.send.mock.calls.length;stale.click();expect(actor.send.mock.calls.length).toBe(count);await nextTick()
+  expect(card.querySelectorAll('button')).toHaveLength(2);card.querySelector<HTMLButtonElement>('button')!.click()
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_TERMINAL_NOTICE',notice:{id:notice.id,revision:'replacement',sessionId:'session',decision:'sandbox_allow'}}))
+  card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(actor.send.mock.calls.at(-1)![0].notice.decision).toBe('sandbox_cancel')
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:undefined}});await nextTick();expect(f.root.querySelector('[aria-label="Claude sandbox network request"]')).toBeNull()
+})
