@@ -2,46 +2,46 @@
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
     <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
-    <section v-if="!active && view?.state?.notice && view.state.notice.kind !== 'managed_settings_security' && view.state.notice.kind !== 'sandbox_network_access'" :data-native-notice="view.state.notice.kind" :aria-label="view.state.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : view.state.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : view.state.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : view.state.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : view.state.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': view.state.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(view.state.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : view.state.notice.kind === 'goal_proposal' ? 'goal_decline' : view.state.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : view.state.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+    <section v-for="panel in noticePanels" :key="panel.key" :data-native-notice="panel.notice.kind" :aria-label="panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
-        <header v-if="view.state.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
-          <h3>{{ view.state.notice.title }}</h3>
-          <a v-if="view.state.notice.helpUrl" :href="view.state.notice.helpUrl" target="_blank" rel="noopener noreferrer">Learn more</a>
+        <header v-if="panel.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
+          <h3>{{ panel.notice.title }}</h3>
+          <a v-if="panel.notice.helpUrl" :href="panel.notice.helpUrl" target="_blank" rel="noopener noreferrer">Learn more</a>
           <button type="button" class="native-button native-button--launch" :disabled="inputPending" @click="open"><span aria-hidden="true" class="native-command">›_</span> Use native interface</button>
         </header>
-        <h3 v-else>{{ view.state.notice.title }}</h3>
-        <template v-if="view.state.notice.kind === 'plugin_hint' || view.state.notice.kind === 'lsp_recommendation'">
-          <p class="native-notice__identity">{{ view.state.notice.pluginName }} · {{ view.state.notice.marketplaceName }}</p>
-          <PopoverRoot :key="view.state.notice.revision">
+        <h3 v-else>{{ panel.notice.title }}</h3>
+        <template v-if="panel.notice.kind === 'plugin_hint' || panel.notice.kind === 'lsp_recommendation'">
+          <p class="native-notice__identity">{{ panel.notice.pluginName }} · {{ panel.notice.marketplaceName }}</p>
+          <PopoverRoot :key="panel.notice.revision">
             <PopoverTrigger as-child><button type="button" class="native-notice__details">About this plugin</button></PopoverTrigger>
             <PopoverPortal>
-              <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" :aria-label="view.state.notice.kind === 'lsp_recommendation' ? 'LSP plugin details' : 'Plugin details'" class="claude-native-lsp-details">
+              <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" :aria-label="panel.notice.kind === 'lsp_recommendation' ? 'LSP plugin details' : 'Plugin details'" class="claude-native-lsp-details">
                 <header><h3>About this plugin</h3><PopoverClose as-child><button type="button" aria-label="Close plugin details">Close</button></PopoverClose></header>
-                <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
+                <p v-for="(paragraph, index) in panel.notice.paragraphs" :key="index">{{ paragraph }}</p>
               </PopoverContent>
             </PopoverPortal>
           </PopoverRoot>
         </template>
         <template v-else>
-          <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index">{{ paragraph }}</p>
-          <p v-if="view.state.notice.kind === 'auto_mode_server_fallback'" class="native-notice__url">{{ view.state.notice.helpUrl }}</p>
+          <p v-for="(paragraph, index) in panel.notice.paragraphs" :key="index">{{ paragraph }}</p>
+          <p v-if="panel.notice.kind === 'auto_mode_server_fallback'" class="native-notice__url">{{ panel.notice.helpUrl }}</p>
         </template>
       </div>
       <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
-      <div v-if="view.state.notice.kind === 'autocompact_offer'" class="native-notice__actions" role="group" aria-label="Autocompact size">
-        <button type="button" class="native-button" :disabled="noticePending || !view.state.notice.canPrevious" @click="answerNotice('compact_previous')">Smaller</button>
-        <output aria-label="Selected token limit">{{ view.state.notice.selectedTokens.toLocaleString() }} tokens</output>
-        <button type="button" class="native-button" :disabled="noticePending || !view.state.notice.canNext" @click="answerNotice('compact_next')">Larger</button>
+      <div v-if="panel.notice.kind === 'autocompact_offer'" class="native-notice__actions" role="group" aria-label="Autocompact size">
+        <button type="button" class="native-button" :disabled="noticePending || !panel.notice.canPrevious" @click="answerNotice(panel, 'compact_previous')">Smaller</button>
+        <output aria-label="Selected token limit">{{ panel.notice.selectedTokens.toLocaleString() }} tokens</output>
+        <button type="button" class="native-button" :disabled="noticePending || !panel.notice.canNext" @click="answerNotice(panel, 'compact_next')">Larger</button>
       </div>
       <div class="native-notice__actions">
-        <template v-if="view.state.notice.kind !== 'auto_mode_server_fallback'">
-          <button v-for="choice in view.state.notice.choices" :key="choice.value" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(choice.value)">{{ choice.label }}</button>
-          <button v-if="view.state.notice.kind === 'refusal_fallback_prompt'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice('cancelled')">Cancel</button>
-          <button v-if="view.state.notice.kind === 'autocompact_offer'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice('compact_dismiss')">Not now</button>
+        <template v-if="panel.notice.kind !== 'auto_mode_server_fallback'">
+          <button v-for="choice in panel.notice.choices" :key="choice.value" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(panel, choice.value)">{{ choice.label }}</button>
+          <button v-if="panel.notice.kind === 'refusal_fallback_prompt'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'cancelled')">Cancel</button>
+          <button v-if="panel.notice.kind === 'autocompact_offer'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'compact_dismiss')">Not now</button>
         </template>
         <template v-else>
-          <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice('interrupt')">Cancel</button>
-          <button type="button" class="native-button native-button--return" :disabled="noticePending" @click="answerNotice('continue')">{{ noticePending ? 'Continuing…' : 'Continue in auto mode' }}</button>
+          <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'interrupt')">Cancel</button>
+          <button type="button" class="native-button native-button--return" :disabled="noticePending" @click="answerNotice(panel, 'continue')">{{ noticePending ? 'Continuing…' : 'Continue in auto mode' }}</button>
         </template>
       </div>
     </section>
@@ -99,7 +99,7 @@
 </template>
 <script setup lang="ts">
 import { claudeBillingText } from '#features/code/common/native-billing.ts'
-import type { ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
+import { isClaudeNativeNoticeDecision, type ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
@@ -117,6 +117,7 @@ const actor: ThreadsState = useSurface()
 const mountId = crypto.randomUUID()
 const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
+
 const noticePending = computed(() => view.value?.noticeAnswer?.status === 'pending' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision)
 const noticeProblem = computed(() => view.value?.noticeAnswer?.status === 'error' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision ? view.value.noticeAnswer.problem : undefined)
 const managedPolicyExit = ref<{ ownerId: string; afterSequence: number }>()
@@ -136,10 +137,10 @@ function answerSandboxNetwork(response: ClaudeNativeNoticeResponse) {
   if (!state || notice?.kind !== 'sandbox_network_access' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
 }
-function answerNotice(decision: ClaudeNativeNoticeResponse['decision']) {
+function answerNotice(panel: (typeof noticePanels.value)[number], decision: ClaudeNativeNoticeResponse['decision']) {
   const state = view.value?.state, notice = state?.notice
-  if (!state || !notice || noticePending.value) return
-  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: { id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision } })
+  if (!state || !notice || active.value || noticePending.value || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision } })
 }
 const workspaceName = computed(() => view.value?.state?.cwd?.split(/[\\/]/).filter(Boolean).at(-1) || 'Current workspace')
 const launchProblem = computed(() => managedPolicyDeclined.value ? 'Claude Code closed because you declined the managed settings.' : view.value?.problem || view.value?.state?.problem || (view.value?.state?.status === 'error' ? 'Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.' : undefined))
@@ -175,6 +176,13 @@ const dismissed = ref(false)
 const requested = ref(false)
 const ended = computed(() => ['exited', 'error'].includes(view.value?.state?.status ?? ''))
 const active = computed(() => !!view.value?.state && !view.value.opening && requested.value && !dismissed.value)
+// Rendered actions retain their original owner and revision until Vue replaces the panel.
+const noticePanels = computed(() => {
+  if (active.value) return []
+  const state = view.value?.state, notice = state?.notice
+  if (!state || !notice || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access') return []
+  return [{ key: JSON.stringify([state.ownerId, notice.sessionId, notice.id, notice.kind]), ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId, kind: notice.kind, notice }]
+})
 const viewport = ref<HTMLElement>()
 let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: ResizeObserver | undefined
 let attachedOwner: string | undefined
