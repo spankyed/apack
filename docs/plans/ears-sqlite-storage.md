@@ -483,3 +483,30 @@ and never guesses that another directory is abandoned. After stopping all export
 retained output, an operator can remove leftover `.apack-logical-export-*` directories. These process-kill
 checks do not prove directory persistence under power loss. Interrupted ingestion/semantic rebuild and
 large-profile disk/resource/power-loss qualification remain separate requirements.
+
+### Explicit developer conversion from elmdb
+
+`packages/apack-ears/scripts/convert-elmdb-dump.ts` is an offline developer tool, outside the public
+package entries and normal app startup. A matching pinned Rust `elmdb dump <copied-store> <new-file>`
+produces its input. Run the converter only in a disposable environment, with a new private output container:
+
+```sh
+node --import tsx packages/apack-ears/scripts/convert-elmdb-dump.ts copied.dump new-private-container
+```
+
+The result names `new-private-container/store`, a closed SQLite store. The tool validates the native
+version/schema/framing/count/EOF, imports in batches of at most 1,000 loads or approximately 8 MiB of
+encoded input (one frame may exceed that), rebuilds derived indexes, reopens and audits. It preserves
+original composite field and relation-info MessagePack payloads, avoiding re-encoding loss such as nested
+Float64 negative zero. It refuses integers JavaScript cannot represent exactly. Memory still scales with
+the largest native frame (currently limited to 1 GiB), its decoded values and the current batch.
+
+Failure removes only its newly reserved output container; existing destinations and the input file remain
+caller-owned. The native dump's footer has a count, not a checksum; retain producer provenance and a hash
+of trusted input. Conversion starts a new commit history and preserves ordering rather than physical
+internal sequence numbers. Entity/relation IDs, logical counters and reusable embeddings must survive.
+This tool alone does not convert an entire application profile, publish a live replacement, transfer media
+or establish interruption/resource/platform qualification. Full copied-profile conversion and app reopen
+remain acceptance requirements. The explicit interoperability probe is
+`tests/_support/elmdb-conversion-native.ts`; it requires the matching native CLI and compares real copied
+source rows, trash, relations, search, embeddings and counters, including unchanged source data hashes.

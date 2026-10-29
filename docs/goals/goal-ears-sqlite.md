@@ -195,19 +195,20 @@ to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No m
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published integration/remote is
-**203ab2c32ce03f533b6382f744b689fe70dbac8a**, including CLI logical dump/load, shared lock ownership
+**29c2cf746cc6f421c5036465c2b983bfde9eec37**, including installed-package qualification, CLI logical dump/load, shared lock ownership
 fixes, witnessed archive publication recovery and standalone staged CLI checks. Existing draft #286
 is updated around the final implementation and actual remaining requirements.
-Its focused [SQLite platform run 40897144759](https://github.com/spankyed/apack/actions/runs/40897144759)
-completed FAILURE on exactly 203ab2c32c: Linux x64 and macOS arm64 succeeded; Windows
-passed all 122 collected host assertions but reported an unhandled Vitest worker RPC timeout
-(`onTaskUpdate`). The run is failed; Windows CLI/binary verification did not run. Its reports
-and logs are retained under archive evidence `windows-rpc-40897144759`. The cause is unisolated.
-The next changed-source qualification caps host workers at two to match the declared CPU budget;
-this is a control, not evidence that worker count caused the failure. Its gate explicitly requires eight CLI logical
-command cases, both publication-kill cases, five staged CLI process checks, all five public snapshot
-cases, applicable host logical cases, nine maintenance cases and existing EARS/host contracts.
-The ordinary app job is intentionally skipped for this focused suite. This is not the full Strict gate.
+Its focused [SQLite platform run 40902946880](https://github.com/spankyed/apack/actions/runs/40902946880)
+completed SUCCESS on exactly 29c2cf746c across Linux x64, macOS arm64 and Windows x64. Every platform
+executes eight logical CLI command cases, both publication-kill controls, five staged CLI process checks,
+five public snapshot cases and nine maintenance cases. Windows passes 595 EARS /122 host cases;
+all reports, runtime/native receipts and explicit skips are retained in archive evidence
+`platform-40902946880`. The ordinary app job is intentionally skipped; this is not the full Strict gate.
+Previous [40897144759](https://github.com/spankyed/apack/actions/runs/40897144759) failed on exactly
+203ab2c32c: Linux/macOS succeeded, while Windows passed all 122 collected host assertions but reported
+an unhandled Vitest worker RPC timeout before CLI/binary verification. Raw evidence is retained under
+`windows-rpc-40897144759`. The new source caps host workers at two, matching the declared CPU budget,
+without relaxing assertions or timeouts. The prior cause remains unisolated despite the new green.
 Previous focused [40891758576](https://github.com/spankyed/apack/actions/runs/40891758576) completed
 SUCCESS on exactly 31c6c751b5. Linux x64/macOS arm64 passed 596 EARS /131 host cases; Windows x64
 passed 595/118 with all skipped cases retained. Each executed five public snapshots and nine maintenance
@@ -383,7 +384,7 @@ safe retry without deleting old private scratch. These prove process-kill behavi
 Convergence source 5dcd8c9c88 passes all 45 CLI /27 host logical/kill/ownership cases, staged process
 smoke, five builds, CLI/host types, lint and import rules. The probe is owned by CLI test support.
 The platform gate now requires eight CLI logical cases, both kill cases and five staged binary checks;
-these descendants are published at 203ab2c32c with the failed exact-source run above. Canonical remains 6cf.
+these descendants are included in published 29c2cf746c with the successful focused gate above. Canonical remains 6cf.
 Next complete isolated installed CLI and app operations, preserve selected-store/media ownership,
 qualify process death before/during staging/publication and protected populated replacement, and complete
 actual copied-profile conversion plus representative duration/memory/disk/platform evidence. Keep partial
@@ -804,3 +805,12 @@ logical CLI checks from an isolated consumer, verifies installed native/regex pr
 retains the generated lockfile and tarball hashes. The staged counterpart, five package builds,
 lint and import checks also pass. Evidence is `logical-archive/installed-repository-command-verified`.
 This does not qualify installed macOS/Windows, signed Electron, full app resources or the full Strict gate.
+
+Developer conversion draft at **bc1dcdfbcd4bd46c7831157564e6a92791a5e498** passes six focused native-dump
+framing/preservation/refusal tests, EARS typecheck, five package builds, lint and import checks in capped
+disposable Linux. It retains raw composite payloads, including an explicitly encoded Float64 negative zero,
+and removes owned staging after late failures following committed batches. The matching pinned 6ab2f69 Rust CLI is built in a private disposable target and its real interoperability
+probe passes: typed rows/order/trash, relation info, search, reusable embeddings and logical counters agree;
+original and copied native data hashes remain unchanged. Raw success/failure evidence and producer hashes
+are retained under `logical-archive/elmdb-conversion`.
+This database converter does not satisfy the remaining whole-profile conversion/app-reopen requirement.

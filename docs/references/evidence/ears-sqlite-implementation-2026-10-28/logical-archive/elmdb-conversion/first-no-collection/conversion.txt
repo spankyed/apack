@@ -1,0 +1,9 @@
+
+ RUN  v3.2.7 /metrics
+
+No test files found, exiting with code 1
+
+filter: packages/apack-ears/tests/sqlite/elmdb-conversion.spec.ts
+include: tests/**/*.spec.ts
+exclude:  **/node_modules/**
+

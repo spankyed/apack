@@ -206,6 +206,8 @@ Held by the types and the engine specs, which say more than a rule over names co
 
 ## Scripts
 
+- `scripts/convert-elmdb-dump.ts`: explicit developer-only native logical-dump conversion into a new private SQLite container, with raw composite preservation, rebuild, reopen and audit. Never imported by boot or public entries. See the SQLite storage plan for scope and qualification.
+
 - `npm run typecheck -w @apackdev/ears` (`npm run typecheck:ears` at the root): `tsc --noEmit` over `src`, `tests` and `bench`.
 - `npm test -w @apackdev/ears` (part of `npm run test:unit`), `npm run bench -w @apackdev/ears`.
 - `npm run build:package -w @apackdev/ears` (the repo's `scripts/build-package.ts`, shared with `@apackdev/sdk`, part of `npm run packages:build`): `dist/` from `tsconfig.package.json`, checking every export target was built. `npm run packages:check` runs publint and attw on it.
