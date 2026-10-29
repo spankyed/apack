@@ -193,10 +193,10 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, published through **645905f3421036305e5beb23e44140ad7c8749f4**.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, published through **6d52e97ca7c49c382c258ee2aa52234d6d36dd79**.
 Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
-Integration/remote is **645905f3421036305e5beb23e44140ad7c8749f4**. Canonical/helper BASE stay at exact green 60d until a corrected full gate passes.
+Integration/remote is **6d52e97ca7c49c382c258ee2aa52234d6d36dd79**. Canonical/helper BASE stay at exact green 60d until a corrected full gate passes.
 
 The earlier **b25a985c8cebdf898b86cb915bca2600ba03782a** [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212)
 is terminal FAILURE. Producers, both integration shards, both native shards and SQLite Linux/macOS passed.
@@ -213,7 +213,7 @@ lint and import checks; see [evidence](../references/evidence/ears-sqlite-implem
 The local high-dimensional harness at **9e64045eaf** passed its 1k held-out smoke on both backends
 (384 requests each; SQLite exact, native mixed unfiltered mean recall about 0.97). Its first 10k SQLite
 clustered profile passed exactness but missed heartbeat p99 (57.91 ms /16 ms), stopping the cohort.
-Other 10k/100k trials remain unrun. These local benchmarks are not in published 645905f342 yet.
+Other 10k/100k trials remain unrun. These benchmarks and their evidence are included in published 6d52e97ca7.
 See [vector evidence and next diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md).
 High-dimensional execution-strategy acceptance and real-corpus resource qualification remain open.
 
@@ -221,9 +221,12 @@ Focused macOS [40851475766](https://github.com/spankyed/apack/actions/runs/40851
 SUCCESS at published 645905f342: one original bundled-editor case ran and passed after complete builds.
 This does not establish the prior broad failure's cause. No UI product change or deadline relaxation
 was made. Its output is retained in [editor evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bundled-editor/README.md).
-The next publication adds the local vector evidence, file-backed console diagnostics and broad-fixture
-failure trace configuration, then needs one exact full strict gate to validate the Windows correction
-and broad composition. Keep canonical at 60d until that exact gate succeeds.
+Published 6d52e97ca7 includes the vector evidence, file-backed console diagnostics and broad-fixture
+failure trace configuration. Its one exact [Strict chain 40853782865](https://github.com/spankyed/apack/actions/runs/40853782865)
+is confirmed live. Poll that handle without duplicate dispatches to validate the Windows correction and
+broad composition. Keep canonical/helper BASE at 60d until that exact gate succeeds.
+Master advanced independently to 3d2929177d with exactly two new documentation plans (application-performance
+and ears-query-efficiency); inspected, not merged or edited. Candidate runtime/native pins remain 98386b36a1/6ab2f69.
 
 Next vector checkpoint: execute the preregistered 10k actual-plan/scalar/vec0 counterfactual from
 [vector evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md)
