@@ -1340,7 +1340,7 @@ export class SqliteDatabase implements EarsDatabase {
             this.save(r, unit.changes, before);
           }
         } else
-          fail("UNSUPPORTED", `SQLite load ${load.load} is not implemented`);
+          fail("UNSUPPORTED", "Unknown SQLite load");
       }
       // Unchecked import deliberately permits invalid data, just as the existing admin API does.
       this.putMeta("commit", this.sequence + 1);
