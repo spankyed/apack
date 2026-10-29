@@ -214,7 +214,10 @@ The local fix strips only the source condition using the existing helper, assert
 and passes 73 focused Linux recovery/storage cases with the inherited source flag; removing the fix
 reproduces all five failures. Package builds, host types and lint pass. See
 [recovery launch evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-launch/README.md).
-Publish this descendant on the existing branch and run one exact strict gate before canonical promotion.
+Published descendant **e5fe7ea16bee7b96acaa495fe132ad65fe766a7c** is on the existing draft branch and clean
+integration checkout. Its exact [strict run 40804552364](https://github.com/spankyed/apack/actions/runs/40804552364)
+was dispatched once and is queued/running; poll that handle before canonical promotion. The local helper
+already exists with BASE 585dcafccf and exact-success guards; the user's renewed approval does not bypass them.
 Local continuation includes diagnostics beyond the published tip; keep that distinct from CI source.
 
 Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's representative search corpus before
