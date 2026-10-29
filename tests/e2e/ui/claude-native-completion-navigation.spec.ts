@@ -92,6 +92,27 @@ test('uses original native completion rows with keyboard navigation in main and 
     const list=appPage.getByRole('group',{name:'Claude suggestions',exact:true}),buttons=list.getByRole('button')
     await expect(buttons).toHaveCount(3)
     for(let row=0;row<3;row++){await expect(buttons.nth(row)).toContainText(labels[row]!);await expect(buttons.nth(row)).toContainText(descriptions[row]!)}
+    const cdp=await appPage.context().newCDPSession(appPage)
+    const composition=[]
+    try {
+      for(const width of [1100,680]) {
+        await appPage.setViewportSize({width,height:width===680?600:900})
+        await replace(editor,prefix);await expect(buttons).toHaveCount(3)
+        const before=await snapshot(editor),preview='にほん'
+        await cdp.send('Input.imeSetComposition',{text:preview,selectionStart:preview.length,selectionEnd:preview.length})
+        await expect(editor).toContainText(preview)
+        await expect(list).toHaveCount(0)
+        expect((await context()).turns).toBe(beforeTurns)
+        const size={width,height:width===680?600:900},file='native-completion-ime-'+owner+'-'+width+'.png'
+        const png=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+        await writeFile(testInfo.outputPath(file),Buffer.from(png,'base64'));captures.push({owner,width,file})
+        await cdp.send('Input.imeSetComposition',{text:'',selectionStart:0,selectionEnd:0})
+        await expect(editor).toHaveText(prefix)
+        expect(await snapshot(editor)).toEqual(before)
+        await expect(buttons).toHaveCount(3)
+        composition.push({width,preview,cancelled:await snapshot(editor),original:before,completionWithdrawn:true,noSubmittedTurn:true})
+      }
+    } finally {await cdp.detach()}
     const original=await snapshot(editor)
     await editor.press('ArrowDown');await expect(buttons.nth(0)).toBeFocused()
     await buttons.nth(0).press('End');await expect(buttons.nth(2)).toBeFocused()
@@ -116,7 +137,7 @@ test('uses original native completion rows with keyboard navigation in main and 
     const text='Review '+['#release-public','#release-internal','#release-checklist'][index]
     await expect(editor).toHaveText(text);await expect(editor).toBeFocused();await expect(list).toHaveCount(0)
     expect((await context()).turns).toBe(beforeTurns)
-    interactions.push({owner,index,text,original,dismissed,selected:await snapshot(editor),dismissPreservedDocumentAndCaret:true,descriptionsRetained:true,keyboardSelection:true,noSubmittedTurn:true})
+    interactions.push({owner,index,text,original,dismissed,composition,selected:await snapshot(editor),dismissPreservedDocumentAndCaret:true,descriptionsRetained:true,keyboardSelection:true,noSubmittedTurn:true})
     return text
   }
   // The closure is used only after the Agent region is mounted below.
