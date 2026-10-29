@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import resource
 import shutil
 import urllib.request
 
@@ -42,6 +43,8 @@ args = parser.parse_args()
 if platform.system() != 'Linux' or not (Path('/.dockerenv').exists() or os.environ.get('GITHUB_ACTIONS') == 'true'):
     raise SystemExit('Use a disposable Linux environment')
 assert np.__version__ == '2.5.4' and pa.__version__ == '26.0.0'
+limits = {name: Path('/sys/fs/cgroup', name).read_text().strip() for name in ('cpu.max','memory.max','memory.swap.max')}
+assert limits == {'cpu.max':'200000 100000','memory.max':str(6 * 1024**3),'memory.swap.max':'0'}
 assert sum(size for _, size, _ in SHARDS) < 2 * 10**9
 output = args.output.resolve()
 output.mkdir(mode=0o700)  # Refuse an incumbent, including an interrupted prior acquisition.
@@ -52,8 +55,9 @@ manifest = {'protocol': 'ears-public-real-vectors/1', 'repository': 'https://hug
     'recipeSha256': digest(Path(__file__)), 'privatePayloadOnly': True,
     'attribution': 'Published by Qdrant; DBpedia-derived entity embeddings. No dataset payload or source text is redistributed by this recipe.',
     'licenseNote': 'The pinned Qdrant card declares no license. This private research acquisition is not permission to redistribute the corpus.',
-    'shards': []}
+    'limits': limits, 'peakOwnedPayloadBytes': 0, 'shards': []}
 row_count = 0
+seen_ids = set()
 counts = {'corpus': 0, 'queries': 0}
 streams = {}
 try:
@@ -79,6 +83,7 @@ try:
                 if downloaded % (64 * 1024 * 1024) == 0:
                     print(json.dumps({'shard': filename, 'downloadedBytes': downloaded}), flush=True)
         assert downloaded == expected_size and sha.hexdigest() == expected_hash, 'Public source hash/size mismatch'
+        manifest['peakOwnedPayloadBytes'] = max(manifest['peakOwnedPayloadBytes'], sum(p.stat().st_size for p in output.iterdir()))
         shard_rows = 0
         parquet = pq.ParquetFile(file)
         try:
@@ -87,12 +92,13 @@ try:
                 assert column.null_count == 0
                 assert np.all(pc.list_value_length(column).to_numpy() == DIMENSIONS)
                 values = column.flatten()
-                assert values.null_count == 0
+                assert values.null_count == 0 and values.type == pa.float64()
                 matrix = values.to_numpy().astype('<f4', copy=False).reshape(batch.num_rows, DIMENSIONS)
                 assert np.isfinite(matrix).all() and np.any(matrix != 0, axis=1).all()
                 ids = batch.column(batch.schema.get_field_index('_id')).to_pylist()
                 for index, source_id in enumerate(ids):
-                    assert isinstance(source_id, str)
+                    assert isinstance(source_id, str) and source_id not in seen_ids
+                    seen_ids.add(source_id)
                     kind = 'queries' if row_count % 1000 == 0 else 'corpus'
                     vector_file, id_file = streams[kind]
                     vector_file.write(matrix[index].tobytes())
@@ -102,6 +108,8 @@ try:
                     shard_rows += 1
         finally:
             parquet.close()
+        manifest['peakOwnedPayloadBytes'] = max(manifest['peakOwnedPayloadBytes'], sum(p.stat().st_size for p in output.iterdir()))
+        assert manifest['peakOwnedPayloadBytes'] < 1200 * 1024**2
         file.unlink()  # Keep peak disk bounded: only this shard plus the growing projection.
         manifest['shards'].append({'path': 'data/' + filename, 'bytes': expected_size, 'sha256': expected_hash, 'rows': shard_rows})
         print(json.dumps({'projectedShard': filename, 'rows': row_count, 'counts': counts}), flush=True)
@@ -111,6 +119,8 @@ try:
             stream.close()
     streams.clear()
     manifest['sourceRows'] = row_count
+    manifest['uniqueSourceIds'] = len(seen_ids)
+    manifest['maxRssKiB'] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     manifest['counts'] = counts
     manifest['files'] = {file.name: {'bytes': file.stat().st_size, 'sha256': digest(file)} for file in output.iterdir() if file.is_file()}
     for kind, count in counts.items():
