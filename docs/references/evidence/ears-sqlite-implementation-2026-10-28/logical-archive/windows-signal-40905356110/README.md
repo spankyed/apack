@@ -1,0 +1,5 @@
+# Windows signal termination timeout
+
+Focused platform run 40905356110 at exact 2ca3b0c276f419d0d5e0d3da3e9255ec035ef478 completed FAILURE. Linux x64/macOS arm64 succeeded (602 EARS /135 host). Windows passed all six new native-dump conversion cases; its host step passed 121 cases but the forced SIGQUIT lock-reclamation case timed out at 30 seconds. Later CLI/verification steps did not run. This is distinct from the older worker RPC timeout. Reports/logs and hashes remain retained; do not rerun this source unchanged or call the run green.
+
+The child harness previously treated claim-file existence as readiness, even though the file is visible before acquisition/handler setup returns. New source requires an explicit child-ready witness after setup and adds a three-second forced-exit diagnostic, retaining every signal, stale-claim witness and reclamation assertion. That closes an actual harness readiness gap; it does not establish the cause of this Windows timeout. Linux's fifteen applicable cases pass; Windows awaits changed-source CI qualification.

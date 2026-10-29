@@ -510,3 +510,36 @@ or establish interruption/resource/platform qualification. Full copied-profile c
 remain acceptance requirements. The explicit interoperability probe is
 `tests/_support/elmdb-conversion-native.ts`; it requires the matching native CLI and compares real copied
 source rows, trash, relations, search, embeddings and counters, including unchanged source data hashes.
+
+### New private application profile from a stopped native copy
+
+The developer wrapper `scripts/convert-sqlite-profile.ts` converts an explicitly named stopped profile copy
+into a new private output container, using the matching native CLI. Parent directories must already exist:
+
+```sh
+node scripts/with-source.mjs node --import tsx scripts/convert-sqlite-profile.ts \
+  /absolute/source-copy /absolute/new-conversion-container /absolute/matching/elmdb
+```
+
+The returned path is `new-conversion-container/profile`. Before that final name exists, the wrapper copies
+app-owned `apack/` files into `.profile-incomplete`, exports/converts primary and existing history, rebuilds
+and audits both, and reopens them through normal host composition. It reads stored settings and validates
+materialized installed-pack metadata through that composition. Only then does a same-container directory
+rename give the completed profile its final name. Do not point an app at `.profile-incomplete` or the outer
+container. A killed conversion may leave private scratch; inspect it after stopping tools and retry in a new
+container rather than guessing an interrupted directory is safe to reuse. No automatic resume is implemented.
+
+The source's managed writer claim is held throughout; a running source app, pending import recovery,
+existing output, overlapping/aliased source/output, mixed/invalid native stores and links/special files refuse.
+The wrapper requires materialized source content and preserves encrypted secret bytes without promising
+cross-machine decryption. Media, per-pack data, settings, installed enablement metadata and sealed pack
+files transfer; browser/Chromium state outside `apack/`, stale runtime tokens/endpoints and lock/reader claims
+do not. Primary data and app-owned source payloads stay unchanged; normal LMDB/managed lock metadata may
+change. Missing history stays absent until ordinary boot creates it. Failure removes only owned incomplete
+output; a complete profile survives a later source-lock cleanup error with `completedPath` reported.
+
+The Linux gate at cedeb1f362 passes five actual native-producer profile groups, seven dump cases and fifteen
+host lock cases, plus types/builds/static checks. It uses a sealed **data-only** pack fixture and normal host
+reopen, not executable pack activation or a complete API/Electron/renderer boot. Process-kill during profile
+conversion, physical/resource faults, supported-platform results and actual app acceptance remain required.
+The platform workflow now requires this probe, exact source/native producer receipts and all seven dump cases.

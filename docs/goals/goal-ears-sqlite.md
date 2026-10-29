@@ -195,10 +195,16 @@ to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No m
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published integration/remote is
-**29c2cf746cc6f421c5036465c2b983bfde9eec37**, including installed-package qualification, CLI logical dump/load, shared lock ownership
+**2ca3b0c276f419d0d5e0d3da3e9255ec035ef478**, including native dump conversion, installed-package qualification, CLI logical dump/load, shared lock ownership
 fixes, witnessed archive publication recovery and standalone staged CLI checks. Existing draft #286
 is updated around the final implementation and actual remaining requirements.
-Its focused [SQLite platform run 40902946880](https://github.com/spankyed/apack/actions/runs/40902946880)
+Its focused [40905356110](https://github.com/spankyed/apack/actions/runs/40905356110) completed FAILURE:
+Linux/macOS passed 602 EARS /135 host; Windows passed all six dump-conversion cases but the forced
+SIGQUIT lock-reclamation case timed out (121 other host cases passed). Later Windows CLI/verification
+steps did not run. Evidence is `logical-archive/windows-signal-40905356110`. New source adds a child-ready
+witness after setup and a stricter bounded exit diagnostic without removing signal/reclamation assertions.
+This fixes a real readiness gap; the Windows timeout cause remains unisolated.
+The previous focused [SQLite platform run 40902946880](https://github.com/spankyed/apack/actions/runs/40902946880)
 completed SUCCESS on exactly 29c2cf746c across Linux x64, macOS arm64 and Windows x64. Every platform
 executes eight logical CLI command cases, both publication-kill controls, five staged CLI process checks,
 five public snapshot cases and nine maintenance cases. Windows passes 595 EARS /122 host cases;
@@ -806,11 +812,16 @@ retains the generated lockfile and tarball hashes. The staged counterpart, five 
 lint and import checks also pass. Evidence is `logical-archive/installed-repository-command-verified`.
 This does not qualify installed macOS/Windows, signed Electron, full app resources or the full Strict gate.
 
-Developer conversion draft at **bc1dcdfbcd4bd46c7831157564e6a92791a5e498** passes six focused native-dump
-framing/preservation/refusal tests, EARS typecheck, five package builds, lint and import checks in capped
-disposable Linux. It retains raw composite payloads, including an explicitly encoded Float64 negative zero,
-and removes owned staging after late failures following committed batches. The matching pinned 6ab2f69 Rust CLI is built in a private disposable target and its real interoperability
-probe passes: typed rows/order/trash, relation info, search, reusable embeddings and logical counters agree;
-original and copied native data hashes remain unchanged. Raw success/failure evidence and producer hashes
-are retained under `logical-archive/elmdb-conversion`.
-This database converter does not satisfy the remaining whole-profile conversion/app-reopen requirement.
+Developer profile conversion at **cedeb1f362144069d1f5808ae49608a7a0ca14cc** passes five actual matching-native
+producer groups, seven framing/preservation/refusal cases and fifteen host lock cases, five builds, EARS/root/probe
+types and lint/import rules in capped disposable Linux ARM64 / Node 23.11.1. It converts primary/history into a new
+private profile, preserves settings/typed/search/vector and media/secrets/pack-owned bytes, reopens through normal
+host composition and retains a later write across reopen. Original source data/payload hashes stay unchanged.
+The data-only installed pack fixture is sealed and admitted normally; no executable pack runtime is activated.
+Late invalid history cleans owned staging; managed writers/apps, existing output, overlap/aliases and linked
+content refuse. Native canonical shortCode:null exposed by real Settings/history is normalized to omitted absence
+only in conversion, with strict validation retained. Both initial failures are recorded under
+`logical-archive/profile-conversion`. The platform workflow now requires this real native-producer gate on each
+host; its new exact-source terminal result is still required. Next qualify conversion interruption/resources and
+boot the actual API/app with executable packs on the converted profile, preserving all remaining phase 3–7 budgets,
+renderer/SDK/installed-platform/recall/relevance/full-validation and adoption requirements. Normal boot stays elmdb.
