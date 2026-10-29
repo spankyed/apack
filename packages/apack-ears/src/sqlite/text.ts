@@ -66,6 +66,17 @@ function mergeRanges(ranges: number[][]): number[][] {
 export class SqliteText {
   private readonly db: SqliteDatabase;
   constructor(db: SqliteDatabase) { this.db = db; }
+  private presentAlternatives(job: SqliteIndexJob, term: string): string[] {
+    const words = typoAlternatives(term);
+    if (!words.length) return words;
+    const table = searchTable(job);
+    // Alternatives are ASCII words. Native presence preserves the index's tokenizer/stemmer without
+    // carrying hundreds of empty branches through every ranked posting. EXISTS stops at the first hit.
+    const present = new Set(this.db.all(`SELECT alternative.value term FROM json_each(?) alternative
+      WHERE EXISTS (SELECT 1 FROM ${table} WHERE ${table} MATCH ('{body aliases} : "' || alternative.value || '"'))`,
+    [JSON.stringify(words)]).map(row => String(row.term)));
+    return words.filter(word => present.has(word));
+  }
   structure(job: SqliteIndexJob): SqliteSearchStructure {
     const table = searchTable(job);
     return { types: [job.type], indexes: [job], objects: [['table', table],
@@ -146,7 +157,7 @@ export class SqliteText {
       const phrase = token.startsWith('"'), raw = token.replace(/^"|"$/g, ''), normalized = fold(raw);
       if (!normalized) continue;
       const prefix = options.prefix && !phrase && position === tokens.length - 1 ? '*' : '';
-      const expanded = !phrase && !prefix && options.fuzzy !== false ? typoAlternatives(normalized) : [];
+      const expanded = !phrase && !prefix && options.fuzzy !== false ? this.presentAlternatives(job, normalized) : [];
       const words = prefix || phrase ? [raw] : [...new Set([raw, ...expanded])];
       const match = words.map(word => `(body : ${quote(word)}${prefix} OR aliases : ${quote(identifierParts(word).text || word)}${prefix})`).join(' OR ');
       const selected = (field === undefined ? fields : [field]).filter(f => !options.fields?.length || options.fields.includes(f))

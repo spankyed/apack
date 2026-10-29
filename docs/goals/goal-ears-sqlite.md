@@ -220,9 +220,16 @@ The functional correction is committed at **9beb23ebc9**. Its preregistered four
 growth cohort completed all 1k/10k/100k profiles and expected answers. At 100k, exact/typo medians improve
 ~135–149 to ~13–15 ms, but broad reads regress ~300 to ~1320 ms; small profiles and maximum-token queries
 also regress. This strategy is **not accepted**. See [typo growth cost](../references/evidence/ears-sqlite-implementation-2026-10-28/typo-cost/README.md).
-Next isolate full versus presence-pruned MATCH input on the same profile, for unscored count and the actual
-scored native SQL, before choosing a correction. Preserve the independent broad compiler failure until
-diagnosed or qualified. No owned Linux cohort remains;
+The [native counterfactual](../references/evidence/ears-sqlite-implementation-2026-10-28/typo-native-plan/README.md)
+isolates redundant MATCH branches: exact rows/scores remain equal while broad 10k scored SQL falls
+137 to 15 ms and count 27 to 0.6 ms, excluding pruning overhead. Native dictionary point alternatives
+were checked but not selected; a uniform MATCH-presence path preserves the actual tokenizer/stemmer.
+The local [presence correction](../references/evidence/ears-sqlite-implementation-2026-10-28/present-typos/README.md)
+passes **511 SQLite / 289 native**, 95 focused cases, types/builds/API/lint/imports and four negative
+controls, including actual loss of the read snapshot. End-to-end cost remains pending. Next execute the
+preregistered six-process scan/presence/unpruned/unpruned/presence/scan cohort from the storage plan,
+with identical existing fixture and all three sizes. Preserve the independent broad compiler failure
+until diagnosed or qualified. No owned Linux cohort remains;
 no VM scratch process or file remains from the signal probe.
 
 The published pre-typo runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/

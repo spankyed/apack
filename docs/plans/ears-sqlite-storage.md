@@ -320,3 +320,22 @@ Before claiming a speedup,
 preregister a fixed-order growth cohort with default fuzzy enabled, useful-answer checks, warm/cold reads,
 large/absent/exact/typo inputs and memory/bytes costs. Functional passage alone does not accept latency or
 replace the realistic search, vector and complete-app criteria in the goal.
+
+The first [default-fuzzy growth cohort](../references/evidence/ears-sqlite-implementation-2026-10-28/typo-cost/README.md)
+completed but rejects unpruned alternatives: broad 100k reads regress from about 300 to 1320 ms, despite
+selective improvements. The [native counterfactual](../references/evidence/ears-sqlite-implementation-2026-10-28/typo-native-plan/README.md)
+preserves exact native rows/scores after removing alternatives with no posting, isolating redundant MATCH
+branches as a major cost. The correction probes only query-generated alternatives through native MATCH
+EXISTS over body/aliases before building the scored expression. It uses the request's read snapshot,
+preserves English stemming and alias tokenization, and retains original alternative order. This is
+zero-match pruning, not an exact-first fallback; field/candidate restrictions cannot lose useful results.
+No vocabulary view, replicated dictionary, persistent spelling index or new tokenizer is introduced.
+Stemming/alias, probe-plan/query-work and two-handle snapshot safeguards accompany the correction.
+
+Before execution, fix the follow-up cohort order **scan / presence / unpruned / unpruned / presence / scan**,
+with e452d67ae1 / validated presence checkpoint / 9beb23ebc9 pinned in a source manifest. Use the identical
+0ba7b955b8 growth fixture, all 1k/10k/100k profiles, OFF, twelve warm calls plus first invocation for all ten
+paths, normal built entries, two CPUs/6 GiB and the existing 180-second process bound. Include native probe
+time in the normal facade timings. Keep all original failed-strategy results and every new sample, check
+the expected answers and actual loaded JS/native hashes, and stop on the first failure. Do not qualify
+real-app/cold-store/language/memory budgets from this diagnostic alone.

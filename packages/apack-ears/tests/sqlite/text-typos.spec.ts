@@ -9,9 +9,9 @@ import { SqliteDatabase } from '../../src/sqlite/database.ts';
 const schema: EngineSchema = { types: { Row: { required: [], search: { fields: { name: 3, body: 1 } } } }, relations: {}, roles: [] };
 const stores: SqliteDatabase[] = [], paths: string[] = [];
 afterEach(() => { vi.restoreAllMocks(); for (const db of stores.splice(0)) db.close(); for (const path of paths.splice(0)) rmSync(path, { recursive: true, force: true }); });
-function open(path?: string, readOnly = false) {
+function open({ path, readOnly = false, definition = schema }: { path?: string; readOnly?: boolean; definition?: EngineSchema } = {}) {
   if (!path) { path = mkdtempSync(join(tmpdir(), 'ears-text-typos-')); paths.push(path); }
-  const db = new SqliteDatabase({ path, syncs: false, ...(readOnly ? { readOnly } : { schema: toElmdbSchema(schema) }) });
+  const db = new SqliteDatabase({ path, syncs: false, ...(readOnly ? { readOnly } : { schema: toElmdbSchema(definition) }) });
   stores.push(db); return { db, e: createEarsEngine({ database: db }) };
 }
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('bounded candidate typos', () => {
@@ -73,22 +73,56 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('bounded candid
       await e.admin.watchesSettled(); expect(seen.at(-1)).toEqual([]);
       e.write('Row-a').set('name', 'database'); await e.admin.watchesSettled(); expect(seen.at(-1)).toEqual(['Row-a']);
     } finally { watch.stop(); }
-    db.close(); const reader = open(db.path, true); expect(reader.e.query('Row').search('databse').ids()).toEqual(['Row-a']);
+    db.close(); const reader = open({ path: db.path, readOnly: true }); expect(reader.e.query('Row').search('databse').ids()).toEqual(['Row-a']);
+  });
+  it('checks native presence with the same Porter stemmer and identifier columns as matching', () => {
+    const definition: EngineSchema = { ...schema, types: { Row: { required: [], search: { fields: { name: 3, body: 1 }, stem: 'en' } } } };
+    const { e } = open({ definition });
+    e.create('Row', { id: 'Row-release', name: 'releases' }); e.create('Row', { id: 'Row-code', name: 'openDatabaseStore' });
+    expect(e.query('Row').search('relases').ids()).toEqual(['Row-release']);
+    expect(e.query('Row').search('databse').ids()).toEqual(['Row-code']);
+    expect(e.query('Row').search('relases', { fuzzy: false }).ids()).toEqual([]);
+  });
+  it('keeps presence pruning and final ranking in one snapshot across another handle committing', () => {
+    const { db, e } = open(); e.create('Row', { id: 'Row-a', name: 'database' });
+    const writer = new SqliteDatabase({ path: db.path, syncs: false }); stores.push(writer);
+    const other = createEarsEngine({ database: writer }), all = db.all.bind(db); let committed = false;
+    vi.spyOn(db, 'all').mockImplementation((sql, args) => {
+      const rows = all(sql, args);
+      if (!committed && sql.includes('FROM json_each(?) alternative')) {
+        committed = true;
+        other.transact(() => { other.write('Row-a').set('name', 'other'); other.create('Row', { id: 'Row-b', name: 'database' }); });
+      }
+      return rows;
+    });
+    const [hit] = e.query('Row').search('databse').limit(1).hits({ fields: ['name'], highlights: true });
+    expect(committed).toBe(true); expect(hit?.id).toBe('Row-a');
+    expect(hit?.row).toEqual({ id: 'Row-a', name: 'database' }); expect(hit?.highlights).toEqual({ name: [[0, 0, 8]] });
+    expect(e.query('Row').search('databse').ids()).toEqual(['Row-b']);
   });
   it('uses native MATCH with query work independent of unrelated vocabulary growth', () => {
     const { db, e } = open(); e.create('Row', { id: 'Row-db', name: 'database' });
-    const all = db.all.bind(db), matches: Array<{ sql: string; args: unknown[]; plan: string[] }> = [];
+    const all = db.all.bind(db), matches: Array<{ sql: string; args: unknown[]; plan: string[] }> = [],
+      probes: Array<{ args: unknown[]; returnedRows: number; plan: string[] }> = [];
     vi.spyOn(db, 'all').mockImplementation((sql, args) => {
       if (/\b(?:FROM|JOIN)\s+fts_[a-f0-9]+_vocab\b/i.test(sql)) throw Error('Vocabulary enumeration must not reach JavaScript');
       if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) matches.push({ sql, args: [...(args ?? [])],
         plan: db.sql.prepare('EXPLAIN QUERY PLAN ' + sql).all(...(args ?? [])).map((row: any) => String(row.detail)) });
-      return all(sql, args);
+      const rows = all(sql, args);
+      if (sql.includes('FROM json_each(?) alternative')) probes.push({ args: [...(args ?? [])], returnedRows: rows.length,
+        plan: db.sql.prepare('EXPLAIN QUERY PLAN ' + sql).all(...(args ?? [])).map((row: any) => String(row.detail)) });
+      return rows;
     });
     const query = () => e.query('Row').search('databse').limit(1).ids();
     expect(query()).toEqual(['Row-db']); const before = matches.at(-1)!;
     e.transact(() => { for (let i = 0; i < 1000; i++) e.create('Row', { name: 'lexicon' + i.toString(16).padStart(8, '0') }); });
     expect(query()).toEqual(['Row-db']); const after = matches.at(-1)!;
     expect(after.sql).toBe(before.sql); expect(after.args).toEqual(before.args);
+    expect(probes).toHaveLength(2); expect(probes[1]?.args).toEqual(probes[0]?.args);
+    expect(probes.every(probe => probe.returnedRows === 1)).toBe(true);
+    expect(probes.every(probe => probe.plan.some(detail => /EXISTS VIRTUAL TABLE INDEX \d+:M\d/.test(detail)))).toBe(true);
+    const terms = [...String(after.args[0]).matchAll(/body : "([^"]+)"/g)].map(match => match[1]);
+    expect(terms).toEqual(['databse', 'database']);
     expect(after.plan.some(detail => detail.includes('VIRTUAL TABLE INDEX') && detail.includes('M'))).toBe(true);
     expect(db.all("SELECT name FROM sqlite_schema WHERE name LIKE '%_vocab'")).toEqual([]);
   });
