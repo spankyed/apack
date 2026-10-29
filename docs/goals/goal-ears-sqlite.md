@@ -194,11 +194,13 @@ Disposable Linux ARM64 validation passes all 606 SQLite EARS cases, 135 affected
 package builds, EARS types/API, lint/imports and three meaningful negative controls. The plain-Node source
 loading regression is fixed; earlier failures and corrected package-provenance refusal are retained in
 [vector integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-integration/README.md).
-Runtime `a4a49fba10` additionally fixes a measured vector-plan regression: candidate membership drives
+Runtime `a4a49fba10` fixes a measured vector-plan regression: candidate membership drives
 canonical lookups, and the threshold probe stops at 4,097 rows. All 606/135 affected cases, build/type/API,
 lint/import and two negative plan/probe controls pass. The full integrated real-corpus matrix now exists;
-its remaining budget failures are recorded below. No newer full Strict is established. Inspect actual source,
-branch and process state before resuming.
+its remaining budget failures are recorded below. Runtime `d28c296edb` keeps vector owner scopes in SQLite; all 607/135 affected cases and the new shared
+scoped-query contract on pinned elmdb pass, with four negative controls. Native-scope full real-corpus
+results retain high recall but still miss responsiveness. No newer full Strict is established. Inspect
+actual source, branch and process state before resuming.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` stays at exact full-green `6cf6c8349e`,
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs successful.
@@ -244,9 +246,15 @@ heartbeat p99 is still 58.37 ms versus 16 ms. The 10% scope is 35.29 ms query p9
 1% is 13.31/14.68 ms. These are actual EARS query/update paths, not whole-app or cold/installed acceptance.
 See [integrated real-vector evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/integrated-real-vectors/README.md).
 
-Next checkpoint: remove redundant outer owner-eligibility work after candidate membership, then resolve
-remaining native scope materialization and broad execution/admission responsiveness with measured evidence.
-Do not relax the original budgets or substitute selective wins for broad/application acceptance.
+Owner-only reranking (`f8a5706b1e`) and native SQL scopes (`d28c296edb`) are implemented and measured.
+The latest full matrix has initial 100k p95 61.14 ms broad /28.55 ms at 10% /12.56 ms at 1%; heartbeat
+p99 is 64.32/37.02/14.39 ms. High sampled recall does not pass the missing 16 ms responsiveness gate.
+
+Next checkpoint: qualify a native ANN strategy's transaction, rollback, snapshot, filter-before-K,
+backup/reopen, update and resource behavior independently before any dependency adoption. Preserve the
+correct SQL scope path and investigate native admission/execution ownership; do not relax budgets.
+Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
+the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
 model/generation/hash freshness, own-unit/savepoint reads, watches, audit/rebuild/restore, representative real
 recall/update/resource/latency and heartbeat budgets. Preserve canonical Float32 bytes and original failures.

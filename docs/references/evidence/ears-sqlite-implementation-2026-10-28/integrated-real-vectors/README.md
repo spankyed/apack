@@ -39,3 +39,20 @@ Source `f8a5706b1e` retains only candidate-owner membership and type/index/gener
 | updated | 1% | 1.000 | 13.67 | 14.81 |
 
 Selective 10% cost falls modestly, while broad tails vary and still fail responsiveness. The broad initial median per timed pass is 56–60 ms with worse tails in passes two/three; no causal attribution of those tails is established. Do not claim a universal speedup or discard slower samples. Next remove native-to-JavaScript-to-native candidate-scope materialization and qualify filter/limit/traversal semantics and performance. All original failed budgets and remaining goal requirements stay open.
+
+## Native owner scope follow-on
+
+Source `d28c296edb` passes request-owned SQL entity scopes directly to vector selection. Public synchronous EARS contracts stay unchanged. Filters, earlier limits, outgoing/recursive graph traversal and like are covered by a new shared contract, passing on both SQLite and pinned elmdb. All 607 SQLite EARS and 135 affected host/storage cases, build/type/API/lint/import checks pass. Four negative controls include restoring the JavaScript ID roundtrip, which fails the new bounded-materialization guard.
+
+The full matrix retains all 18 scope/phase/cohort groups and byte checks. Mean recall remains at least 0.999, but the responsiveness gate still fails. Native scope ownership removes allocations/transport; it does not remove the linear binary scan or establish a material latency win in every group.
+
+| Phase | 100k scope | Recall | Query p95 ms | Heartbeat p99 ms |
+|---|---:|---:|---:|---:|
+| initial | 100% | 1.000 | 61.14 | 64.32 |
+| initial | 10% | 1.000 | 28.55 | 37.02 |
+| initial | 1% | 1.000 | 12.56 | 14.39 |
+| updated | 100% | 1.000 | 59.84 | 64.52 |
+| updated | 10% | 0.999 | 28.16 | 30.16 |
+| updated | 1% | 1.000 | 12.59 | 13.83 |
+
+Next evaluate native ANN transaction/filter compatibility independently before changing dependencies. Keep the current correct native SQL path and all failed budgets explicit. Native scope predicates can be evaluated for both threshold probing and selection; expensive compound predicates and app workloads still require qualification. No native/full Strict green, dependency adoption or overall performance acceptance follows.
