@@ -253,6 +253,12 @@ p99 is 64.32/37.02/14.39 ms. High sampled recall does not pass the missing 16 ms
 Next checkpoint: qualify a native ANN strategy's transaction, rollback, snapshot, filter-before-K,
 backup/reopen, update and resource behavior independently before any dependency adoption. Preserve the
 correct SQL scope path and investigate native admission/execution ownership; do not relax budgets.
+A scratch-only test of `sqlite-vec@0.1.10-alpha.4` DiskANN fails hard filtering and an exact-match
+retrieval fixture, while matching flat controls pass. It rejects metadata columns. Unit/snapshot/backup
+checks after the failure remain unrun. No production dependency changed; see
+[ANN gate evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/sqlite-vec-ann-compat/README.md).
+Evaluate another native strategy and its ownership/update costs; this failed prerequisite is not adoption
+or a disposition of the unmet broad responsiveness requirement.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
 the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
