@@ -1,0 +1,17 @@
+{
+  "neon": [
+    {
+      "n": 1000,
+      "passed": true
+    },
+    {
+      "n": 10000,
+      "passed": true
+    },
+    {
+      "n": 100000,
+      "passed": false
+    }
+  ],
+  "plainControlPassed": false
+}

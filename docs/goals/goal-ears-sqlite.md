@@ -191,7 +191,7 @@ The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the 
 [strict run 40819583704](https://github.com/spankyed/apack/actions/runs/40819583704) completed SUCCESS, all six jobs.
 The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation` from
 585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
-master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
+master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or daily-Mac native build occurred.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
 Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
@@ -223,16 +223,13 @@ This does not establish the prior broad failure's cause. No UI product change or
 was made. Its output is retained in [editor evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bundled-editor/README.md).
 Published 6d52e97ca7 includes the vector evidence, file-backed console diagnostics and broad-fixture
 failure trace configuration. Its one exact [Strict chain 40853782865](https://github.com/spankyed/apack/actions/runs/40853782865)
-is confirmed live, with Windows EARS passed (523 cases/one platform skip) but host failed six fixture
-cases. That source cannot be promoted. Child imports used a raw drive path and a relative-destination
-fixture was absolute across different drives; corrected fixtures and explicit forced-termination reclaim
-cases pass 47 focused Linux cases plus host types/lint/import checks. See [Windows host evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-host/README.md).
-Focused Windows [40857266870](https://github.com/spankyed/apack/actions/runs/40857266870) is terminal
-SUCCESS on published 6cf6c8349e: 46 passed/4 explicit platform skips, including all four forced kills,
-simultaneous acquisition and relative-destination refusal. Full gate 40853782865 remains on older 6d;
-producers, SQLite macOS/Linux, integration-2 and app-and-rest pass, including the bundled editor. Native-1,
-native-2 and integration-1 are confirmed live. Poll those exact handles; the Windows-failed source cannot
-be promoted. Once terminal, run one corrected full gate on the converged source. Canonical/helper BASE stays 60d.
+is terminal FAILURE: eight jobs passed; only Windows host fixtures failed. That source cannot be promoted.
+The corrected source 6cf6c8349e has focused Windows [40857266870](https://github.com/spankyed/apack/actions/runs/40857266870)
+SUCCESS (46 passed/4 explicit skips), including forced-kill reclaim, simultaneous acquisition and
+relative-destination refusal. Its exact full [Strict chain 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941)
+is live: producers, all three SQLite platforms, integration-2 and native-2 passed; integration-1,
+app-and-rest and native-1 remain running. Poll this same run. Canonical stays at 60d until all jobs pass.
+See [Windows host evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-host/README.md).
 Master advanced independently to 3d2929177d with exactly two new documentation plans (application-performance
 and ears-query-efficiency); inspected, not merged or edited. Candidate runtime/native pins remain 98386b36a1/6ab2f69.
 
@@ -245,8 +242,15 @@ No dependency is changed. Stable libSQL 0.5.29 isolated probes show that single-
 the process while explicit positional arrays complete, function registration is unsupported, and the
 read-only constructor option accepts writes. Tiny-fixture ANN misses need further isolation; no corruption
 claim is made. These are direct-integration gaps, not adoption results.
-Next preregister and test vec0 int8 candidates with Float32 reranking inside the existing pinned extension;
-retain per-vector quantization, scoped recall, own-write/savepoint/reopen and large-k/chunk requirements.
+The int8 candidate experiments are now recorded through local source 53e625f2ef. Cosine and plain
+L2 missed the 10k heartbeat gate. A same-source NEON build exposed signed-16 overflow for unrestricted
+int8 L2; a constrained [-90,90] encoding passes the 10k cohort but misses the first 100k cohort's heartbeat
+(39.65 ms /16 ms), despite sampled recall 1.0 and unfiltered median 40.09 ms. Mixed 100k remains unrun
+under the stop rule. All seven transaction controls pass, using atomic DELETE+INSERT because pinned
+vec0 int8 UPDATE rejects its own encoded representation. No production integration or dependency change
+is justified yet. See [retained bounded-domain experiment](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-int8/neon-safe/README.md).
+Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
+continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
 Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.
 See [vector evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md). Full phases 3–7 remain required, including real embeddings and
 representative app budgets; no scope is deferred by the focused success or synthetic smoke.
