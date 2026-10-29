@@ -89,8 +89,16 @@ jobs:
           $linker = (Get-Command link.exe -CommandType Application).Source
           Write-Host "Rust linker: $linker"
           if ($linker -match '[\\/]Git[\\/]usr[\\/]bin[\\/]') { throw "Git's link.exe must not shadow the MSVC linker" }
-      - name: Build matching native dump producer
-        shell: ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
+      - name: Build matching native dump producer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: vendor/elmdb
+        run: |
+          rustup show active-toolchain
+          cargo build --locked --release -p elmdb-cli
+      - name: Build matching native dump producer (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
         working-directory: vendor/elmdb
         run: |
           rustup show active-toolchain
