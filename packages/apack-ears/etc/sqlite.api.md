@@ -24,6 +24,9 @@ export interface DatabaseOptions {
     syncs?: boolean;
 }
 
+// @public
+export function exportLogicalSnapshot(database: EarsDatabase, options?: SqliteLogicalSnapshotOptions): AsyncIterable<Uint8Array>;
+
 // @public (undocumented)
 export function openDatabase(input: DatabaseOptions): EarsDatabase;
 
@@ -49,6 +52,23 @@ export interface SqliteAuditReport {
     // (undocumented)
     sequence: number;
 }
+
+// @public (undocumented)
+export interface SqliteLogicalSnapshotOptions {
+    maxFrameBytes?: number;
+}
+
+// @public (undocumented)
+export interface SqliteStagedSnapshot {
+    // (undocumented)
+    audit: SqliteAuditReport;
+    path: string;
+    // (undocumented)
+    sequence: number;
+}
+
+// @public
+export function stageLogicalSnapshot(chunks: AsyncIterable<Uint8Array>, directory: string, options?: SqliteLogicalSnapshotOptions): Promise<SqliteStagedSnapshot>;
 
 // @public (undocumented)
 export interface TemporaryDatabases {
