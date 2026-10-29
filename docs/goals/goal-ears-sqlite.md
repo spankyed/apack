@@ -194,9 +194,9 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 1a0f664d01 to 585dcafccf; its BASE is now 585dcafccf. App master/native remain pinned to 98386b36a1 / 6ab2f69.
 No master merge, adoption, local compiler or native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, clean at local checkpoint **0a09dafa64**
-before this handoff update. Latest local runtime **2d0bdcbde9** (484 SQLite / 289 native) and its complete
-four-process cost evidence are not yet published; the exact CI source remains 60d4283f68. Run 40819583704
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, clean at local runtime checkpoint **0f57770e1f**
+before the following evidence update. Native recency passes **491 SQLite / 289 native**, and its complete
+four-process cost evidence is retained below; these newer local changes are not yet published; the exact CI source remains 60d4283f68. Run 40819583704
 now has producers SUCCESS and all five consumers live. No owned Linux container remains. Next implement
 the native recency checkpoint specified below; do not restart that CI or promote a different source.
 
@@ -301,9 +301,12 @@ the preceding generic behavior. It passes **491 SQLite / 289 native**, five buil
 lint/imports, 75 focused cases and a candidate-hydration removal control. Native row bounds, dynamic-slot
 overflow retention, read-only reopen, units/rollback/watches and concurrent score/highlight snapshots are
 covered. See [native recency evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-recency/README.md).
-Next execute the preregistered sequence/recency/recency/sequence cost cohort on the committed source, using
-the identical expanded fixture (including recency highlights) for both controls. Preserve all failures and
-unchanged budgets; functional proof does not accept its cost. Metadata WITHOUT ROWID is only an unmeasured
+The preregistered four-process cost cohort completed: recency ~28 versus ~46 ms, recency highlights
+~35 versus ~80 ms. Other query/write costs and main-file bytes remain close; sampled RSS is lower but
+unbounded. All expected answers pass; a post-timing premature-prefix control fails with the wrong winner.
+See [recency cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-cost/README.md).
+Next capture the changed native timestamp/ranking plan, including recency highlights, before choosing
+another correction. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
 possible diagnostic, not a chosen layout change. Before Windows qualification, switch the two new ordinary
 recovery alias fixture links to Windows junctions as the existing storage fixture does (crash tests are POSIX-only).
 Recency and every phase 3–7 requirement remain required; none of these diagnostics is qualification. Preserve every failed cohort and all remaining
