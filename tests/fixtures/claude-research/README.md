@@ -136,3 +136,13 @@ skipping both app builds. It does not establish ordinary-composer support.
 they do not establish full feature parity or replace final F1–F5 acceptance. CI retains original
 run records, proofs, synthetic model requests, screenshots and traces. Download and inspect the
 resulting artifact before claiming app acceptance on that runner.
+
+The managed-settings startup profile has its own bounded entry,
+`src/integration/apack-managed-security-app.mjs <checkout> <binary> <fresh-profile> trust|reject`.
+Run it inside the same prepared, locked offline Linux/Xvfb boundary and existing Electron preload,
+with the read-only Linux 2.1.302 binary, 6 GiB memory/equal swap and two CPUs. Supply a separate fresh
+empty `apack-terminal-owner-app-*` directory for each choice; primary checkouts and shared dependencies
+are refused. The fixture uses original key approval and first-party acquisition, not injected dialogs
+or eligibility overrides. It verifies normal/compact review, native Trust/helper or Exit effects,
+retained draft, original journal/print cost, same-session recovery and owned exits. Inspect captures
+and independently query the closed app database; broader policy/lifetime and F1–F5 remain separate.

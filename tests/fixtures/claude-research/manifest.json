@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "60f32a3cef3ef1996cf64019f3f9ed9796ce9dc1",
+  "researchCommit": "6854a51847bcb7eaf741a5f17acd36dc3574cbdb",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -72,6 +72,7 @@
     "src/integration/apack-hook.mjs": "a1d0402d74ce64271a336fbee7794681aa50a7aba524060d6227cb3184d7e7fa",
     "src/integration/apack-interrupt.mjs": "2fb034eb638f50ce74570a989917aa341b4c6be810fe84601727e18aaab8335d",
     "src/integration/apack-launch.mjs": "ecceba81f3e83caced3840fb66811c4d522003032185ef07a64477f58f8528d9",
+    "src/integration/apack-managed-security-app.mjs": "fdaafaac3d659c5220409ad527a7d878c03f59d9718cedb14605d471b2c44c52",
     "src/integration/apack-mcp.mjs": "a01e12e6a45341aaa4dc8703a7ed7b724d7ba8eef92cb86cc7c973ef42cd9de3",
     "src/integration/apack-multi-turn.mjs": "e6b638a23df3e7b2f9590d47934c44bfe767212dce30d2322636158689d7ac66",
     "src/integration/apack-owner-cron.mjs": "5052ce662e9f893312a005a4815bad0b05e73a194636f1e42caa5354405510bb",
@@ -231,6 +232,7 @@
     "src/protocol/native-managed-files.mjs": "98ece77fe5a7ac98330991e4d9647c8d3761d26833aa52ca10fe912ef5b170ab",
     "src/protocol/native-managed-media-fixture.mjs": "765e83b1996ef41b2da56f3f2c934fe5394eff125c4f06bc39b63deb81363be2",
     "src/protocol/native-managed-model-proof.mjs": "982e7ad0d739dab9aef540f7bab27398beea9984303e347f665b51aea3268c38",
+    "src/protocol/native-managed-security-fixture.mjs": "a7a705167311062c8a1a0ae92804fee3866aeeaf2a6e88062522dedfde1fc322",
     "src/protocol/native-mcp-form-app-fixture.mjs": "77f2a5127575771404d2f7dba5c775eb2e3fc7b99d0b1395ed1945925a6bb938",
     "src/protocol/native-mcp-renderer-inspector.mjs": "3f49da84d9b2861412f989b1b0a14c28a2aabbca1ace1af507dc6d6a34a49c29",
     "src/protocol/native-mcp-url-app-fixture.mjs": "fe08e89c73578735d7e481edc97573877e22a61e9532b1a1f0abb13ea01a4651",
@@ -355,5 +357,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "4e6f9e27aca4fd0854f317967d45c31c5d04ff19c641ba10d444ad85551de21e"
+  "archiveSha256": "f80b1299925386d316301bbc9d460e76d1798d367e2b9051f67f7565c7b7ff90"
 }
