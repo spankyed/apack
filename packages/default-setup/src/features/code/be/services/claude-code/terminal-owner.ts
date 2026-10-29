@@ -13,6 +13,7 @@ import { ClaudeNativeQuestionRenderSchema, type ClaudeNativeQuestionRender, type
 import { isClaudeNativeDescendant } from './native-process-ownership.ts'
 import { PermissionModeSchema } from './types.ts'
 import { createClaudeNativeJournalReader, type ClaudeNativeJournalBatch } from './terminal-journal.ts'
+import { parseClaudeNativeContinuation, type ClaudeNativeContinuation } from './terminal-session.ts'
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
 import { access, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
@@ -125,6 +126,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const output: { sequence: number; text: string }[] = []
   let sequence = 0, outputSize = 0, terminal: pty.IPty | undefined, closed = false
   let status: ClaudeNativeTerminalState['status'] = 'starting'
+  let continuation: ClaudeNativeContinuation | undefined
   let exitCode: number | undefined, stopping = false, changingModel = false, changingPermission = false
   let modelSelection = options.model
   const exitObservers: (() => Promise<void>)[] = []
@@ -270,7 +272,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       } finally { operatingMcpForm = false; finish() }
     }
     return {
-      get state() { return { messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return bridge.session.metadata?.modelSelection ?? modelSelection },
       get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
@@ -328,6 +330,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       async readJournal() {
         const batch = await readJournal(bridge.transcripts, { final: closed })
         for (const entry of batch.entries) {
+          const nextContinuation = parseClaudeNativeContinuation(entry.row, bridge.projection.sessionId)
+          if (nextContinuation) continuation = nextContinuation
           const metadata = bridge.session.metadata
           if (entry.sessionId !== bridge.projection.sessionId || !metadata) continue
           if (entry.row.type === 'cost-state' && typeof entry.row.totalCostUSD === 'number' && Number.isFinite(entry.row.totalCostUSD) && entry.row.totalCostUSD >= 0) {
