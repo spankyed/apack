@@ -309,7 +309,8 @@ state/retry checks; all 37 recovery cases, build/types/lint pass. Fixed populate
 whole rebuild is 3.57 s OFF /22.23 s FULL; membership SQL is about 1.2 s in both. These single synthetic
 samples are not acceptance or repair-only peak memory/WAL. New ad2cd0eab5 avoids empty value backfills
 only for explicit offline repair, using a conservative native absence proof; correctness validation is
-active in ears-offline-empty-index (exec 55320). See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
+passes all 38 recovery cases, build/types/lint. The unchanged fixed cost cohort is active on exactly
+ad2cd0eab5 in ears-membership-cost-optimized; poll its existing handle. See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
 qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
