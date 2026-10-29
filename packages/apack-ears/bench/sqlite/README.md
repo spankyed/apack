@@ -429,3 +429,21 @@ truth/recall/latency controls and source/binary pins. Public Float32 inputs stay
 internal encoding bound. Run this one bounded variant through 1k/10k/100k, stop on first miss, retain
 the rejected full-range strategy, and perform the paired plain 10k control. No production optimized
 binary is selected; shipping or exposing unrestricted int8 NEON would remain incorrect in this release.
+
+## Offline membership repair cost protocol
+
+`membership-repair.mjs` measures the actual app-only rebuild entry on fresh 1k, 10k and 100k profiles,
+OFF and FULL commits. Fix the six-process order before execution: 1k OFF/FULL, 10k FULL/OFF,
+100k OFF/FULL. One process per profile; no repeats, discarded failures or performance target chosen afterward.
+Run only in disposable Linux with two CPUs/6 GiB/no swap. Inputs are eight mixed list members (including
+duplicates/null/boolean/numeric-zero) and a 2048-character overflow body per entity, committed in 256-row
+seed units. This is repetitive synthetic storage, not a representative app corpus or codec/entropy survey.
+
+Delete only the duplicate-tag membership (one entry per entity), retaining the other populated membership
+records, then time the native membership statement and complete offline rebuild
+separately. Record seed time, actual synchronous/journal modes, file/WAL/page sizes, before/after process
+memory and cumulative maxRSS/CPU (including seed); do not label cumulative peaks as repair-only memory.
+Check all duplicate-tag matches, a selective group, representative retained primary fields, unchanged
+logical commit, membership count and stale-handle refusal. Stop at the first correctness/setup failure;
+retain it. No latency/resource ceiling is preregistered for this cost diagnosis, so completion is not
+maintenance acceptance. OFF/FULL are different policies, not matched acknowledgments against elmdb.
