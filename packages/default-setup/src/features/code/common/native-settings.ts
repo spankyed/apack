@@ -1,0 +1,83 @@
+import { z } from 'zod'
+
+export const claudeSettingValue = z.union([z.boolean(), z.string().max(16384), z.number().finite(), z.null()])
+export const claudeSettingsTab = z.enum(['Status', 'Config', 'Usage', 'Stats'])
+const nativeReading = z.number().finite()
+export const claudeSettingsStats = z.object({
+  view: z.enum(['Overview', 'Models']).optional(), range: z.enum(['all', '7d', '30d']).optional(), loading: z.boolean(),
+  copyState: z.enum(['idle','pending','saved','error']).optional(),
+  insight: z.string().max(16384).optional(),
+  calendar: z.string().max(16384).optional(),
+  outcome: z.enum(['success', 'empty', 'error', 'loading', 'unavailable']), problem: z.string().max(16384).optional(),
+  data: z.object({
+    totalSessions: nativeReading, totalMessages: nativeReading, totalDays: nativeReading, activeDays: nativeReading,
+    streaks: z.object({currentStreak:nativeReading,longestStreak:nativeReading,currentStreakStart:z.string().max(128).nullable().optional(),longestStreakStart:z.string().max(128).nullable().optional(),longestStreakEnd:z.string().max(128).nullable().optional()}).strict().optional(),
+    longestSession: z.object({sessionId:z.string().max(1024),duration:nativeReading,messageCount:nativeReading,timestamp:z.string().max(128)}).strict().nullable().optional(),
+    firstSessionDate:z.string().max(128).nullable().optional(),lastSessionDate:z.string().max(128).nullable().optional(),peakActivityDay:z.string().max(128).nullable().optional(),peakActivityHour:nativeReading.nullable().optional(),
+    dailyModelTokens:z.array(z.object({date:z.string().max(128),tokensByModel:z.record(z.string().max(1024),nativeReading)}).strict()).max(10000).optional(),
+    allTimeActivity:z.array(z.object({date:z.string().max(128),messageCount:nativeReading,sessionCount:nativeReading,toolCallCount:nativeReading}).strict()).max(10000).optional(),
+    modelUsage: z.record(z.string().max(1024), z.object({inputTokens:nativeReading,outputTokens:nativeReading,cacheReadInputTokens:nativeReading,cacheCreationInputTokens:nativeReading,costUSD:nativeReading}).strict()),
+    dailyActivity: z.array(z.object({date:z.string().max(64),messageCount:nativeReading,sessionCount:nativeReading,toolCallCount:nativeReading}).strict()).max(10000),
+  }).strict().optional(),
+}).strict()
+export const claudeSettingsFrame = z.object({
+  selectedTab: claudeSettingsTab,
+  tabs: z.array(claudeSettingsTab).length(4),
+  hidden: z.boolean(),
+  usage: z.object({startedAt:nativeReading,context:z.object({window:nativeReading,tokens:nativeReading.optional(),percent:nativeReading.optional()}).strict(),cost:z.object({usd:nativeReading}).strict().optional(),rateLimits:z.array(z.object({kind:z.string().max(1024),percentUsed:nativeReading,resetsAt:z.string().max(128).optional()}).strict()).max(128)}).strict().optional(),
+  stats: claudeSettingsStats.optional(),
+  diagnostics: z.array(z.string().max(65536)).max(128).optional(),
+  status: z.array(z.array(z.object({ label: z.string().max(16384), value: z.string().max(65536) }).strict()).max(128)).max(16).optional(),
+}).strict()
+export const claudeSettingsEditor = z.discriminatedUnion('kind', [
+  z.object({kind:z.literal('information'),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536),description:z.string().max(65536)}).strict(),
+  z.object({kind:z.literal('choice'),description:z.string().max(65536).optional(),consent:z.object({links:z.array(z.string().url().max(4096)).max(16).optional(),description:z.string().max(65536),cancelLabel:z.string().max(65536),defaultFocusValue:z.string().min(1).max(16384).optional()}).strict().optional(),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536).optional(),value:z.string().max(16384).optional(),previewValue:z.string().max(16384).optional(),model:z.object({draftEffort:z.string().max(128).optional(),focusValue:z.string().max(16384).optional(),description:z.string().max(65536),effortText:z.string().max(65536),canAdjustEffort:z.boolean(),fastModeNotice:z.string().max(65536).optional()}).strict().optional(),canPreview:z.boolean().optional(),canToggleSyntax:z.boolean().optional(),preview:z.object({theme:z.object({text:z.string().max(128),inverseText:z.string().max(128)}).strict(),text:z.string().max(200000),ansi:z.string().max(200000).optional(),lines:z.array(z.string().max(16384)).max(256),caption:z.string().max(65536)}).strict().optional(),disabled:z.boolean(),options:z.array(z.object({value:z.string().max(16384),label:z.string().max(65536),description:z.string().max(65536).optional(),descriptionAnsi:z.string().max(65536).optional(),disabled:z.boolean(),canEdit:z.boolean().optional(),canReset:z.boolean().optional()}).strict()).max(256)}).strict(),
+  z.object({kind:z.literal('group'),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536),description:z.string().max(200000).optional(),disabled:z.boolean(),rows:z.array(z.object({key:z.string().max(4096),label:z.string().max(65536),kind:z.enum(['boolean','choice']),value:z.union([z.boolean(),z.string().max(16384)]),disabled:z.boolean(),options:z.array(z.object({value:z.string().max(16384),label:z.string().max(65536),disabled:z.boolean()}).strict()).max(256).optional()}).strict()).max(64)}).strict(),
+  z.object({kind:z.literal('form'),live:z.object({id:z.string().min(1).max(128),feedback:z.object({text:z.string().max(65536),tone:z.enum(['success','error'])}).strict().optional()}).strict().optional(),consent:z.object({links:z.array(z.string().url().max(4096)).max(16).optional(),cancelLabel:z.string().max(65536),focusField:z.literal('answer'),problem:z.string().max(65536).optional()}).strict().optional(),revision:z.string().regex(/^[a-f0-9]{64}$/),title:z.string().max(65536),description:z.string().max(65536).optional(),submitLabel:z.string().max(65536),fields:z.array(z.object({key:z.string().max(4096),label:z.string().max(65536),value:z.string().max(16384)}).strict()).max(64)}).strict(),
+])
+export type ClaudeSettingsEditor = z.infer<typeof claudeSettingsEditor>
+export const claudeHelpTab = z.enum(['General', 'Commands', 'Custom commands'])
+export const claudeHelpSnapshot = z.object({selectedTab:claudeHelpTab,tabs:z.array(claudeHelpTab).length(3),paragraphs:z.array(z.string().max(65536)).max(4096),commands:z.array(z.object({name:z.string().max(4096),label:z.string().max(4096),description:z.string().max(65536)}).strict()).max(2048),links:z.array(z.string().url().max(4096)).max(32)}).strict()
+export const claudeSettingsSnapshot = z.object({
+  help: claudeHelpSnapshot.optional(),
+  frame: claudeSettingsFrame.optional(),
+  editor: claudeSettingsEditor.optional(),
+  commitPending: z.boolean().optional(),
+  refreshPending: z.boolean().optional(),
+  dismissible: z.boolean().optional(),
+  revision: z.string().regex(/^[a-f0-9]{64}$/),
+  rows: z.array(z.object({
+    key: z.string().min(1).max(4096), label: z.string().max(16384), description: z.string().max(16384).optional(),
+    kind: z.enum(['boolean', 'choice', 'text', 'number']), value: claudeSettingValue,
+    options: z.array(z.string().max(16384)).max(256).optional(),
+    editorAvailable: z.boolean().optional(),
+    isLocked: z.boolean(), lockReason: z.string().max(16384).optional(),
+  }).strict()).max(256),
+}).strict()
+export type ClaudeSettingsStats = z.infer<typeof claudeSettingsStats>
+export type ClaudeSettingsSnapshot = z.infer<typeof claudeSettingsSnapshot>
+export type ClaudeSettingValue = z.infer<typeof claudeSettingValue>
+export const claudeSettingsEditorCommand = z.discriminatedUnion('action', [
+  z.object({action:z.literal('change'),formId:z.string().min(1).max(128),key:z.string().max(4096),value:z.string().max(16384)}).strict(),
+  z.object({action:z.literal('setGroup'),key:z.string().max(4096),value:z.union([z.boolean(),z.string().max(16384)])}).strict(),
+  z.object({action:z.literal('select'),value:z.string().max(16384)}).strict(),
+  z.object({action:z.literal('preview'),value:z.string().max(16384)}).strict(),
+  z.object({action:z.enum(['themeEdit','themeReset']),value:z.string().max(16384)}).strict(),
+  z.object({action:z.literal('toggleSyntax')}).strict(),
+  z.object({action:z.literal('focusModel'),value:z.string().max(16384)}).strict(),
+  z.object({action:z.literal('adjustEffort'),direction:z.enum(['left','right'])}).strict(),
+  z.object({action:z.literal('save'),values:z.record(z.string().max(4096),z.string().max(16384)).refine(values=>Object.keys(values).length<=64)}).strict(),
+  z.object({action:z.literal('cancel')}).strict(),
+])
+export const claudeSettingsOperation = z.discriminatedUnion('kind', [
+  z.object({kind:z.literal('helpTab'),revision:z.string().regex(/^[a-f0-9]{64}$/),tab:claudeHelpTab}).strict(),
+  z.object({kind:z.literal('read')}).strict(),
+  z.object({kind:z.literal('stats'),revision:z.string().regex(/^[a-f0-9]{64}$/),action:z.enum(['Overview','Models','cycleDates','copy'])}).strict(),
+  z.object({kind:z.literal('tab'),revision:z.string().regex(/^[a-f0-9]{64}$/),tab:claudeSettingsTab}).strict(),
+  z.object({kind:z.literal('write'),revision:z.string().regex(/^[a-f0-9]{64}$/),key:z.string().min(1).max(4096),value:claudeSettingValue}).strict(),
+  z.object({kind:z.literal('open'),revision:z.string().regex(/^[a-f0-9]{64}$/),key:z.string().min(1).max(4096)}).strict(),
+  z.object({kind:z.literal('editor'),revision:z.string().regex(/^[a-f0-9]{64}$/),editorRevision:z.string().regex(/^[a-f0-9]{64}$/),command:claudeSettingsEditorCommand}).strict(),
+])
+export type ClaudeSettingsOperation = z.infer<typeof claudeSettingsOperation>
+
+export type ClaudeSettingsView = { requestId: string; status: 'pending' | 'ready' | 'error'; snapshot?: ClaudeSettingsSnapshot; problem?: string; savedKey?: string }

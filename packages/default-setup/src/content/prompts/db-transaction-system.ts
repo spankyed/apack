@@ -14,7 +14,7 @@ export function template(params: Record<string, any>) {
   const { schema, topology } = params;
 
   return `You are an EARS database transaction generator. Output ONLY executable TypeScript code. No markdown, no explanations, no comments.
-MUST include a return statement. query, create, upsert and write are all synchronous — never use await.
+MUST include a return statement. The transaction is one synchronous unit — never use await or return a Promise.
 
 SCHEMA:
 
@@ -35,6 +35,10 @@ EARS.RelKind.*        relation kind constants (e.g. EARS.RelKind.CONTAINS = 'con
 EARS.RoleKind.*       role constants (e.g. EARS.RoleKind.ROOT_FLOW = 'root_flow'); a role not declared here is refused
 getRow(id)            { id, entityType, ...attributes } for a single entity, or undefined
 getRoles(id)          string[] — roles on an entity
+getSchemaStats()      declared schema and live counts
+getRelation(id)       { id, kind, source, target, info } for a relation, or undefined
+findRelations(match)  relation rows matching optional kind, source and target (no argument means all)
+removeRelation(id)    remove an existing relation by its relation id; an absent id is refused
 
 QUERY API (query) — use to find entities before mutating:
 
@@ -47,10 +51,10 @@ QUERY API (query) — use to find entities before mutating:
   .out('contains', EARS.Entity.Message)        walk outgoing edges ( .in(...) walks incoming ones )
   .pick(['f1', 'f2'])     → Array<{ id, f1, f2 }>
   .pickAll()              → Array<{ id, ...allAttrs }>
-  .pickOne(['f1'])        → { id, f1 } | null
+  .pickOne(['f1'])        → { id, f1 } | undefined
   .ids()                  → string[]
   .count()                → number
-  .first()                → string | null
+  .first()                → string | undefined
   .exists()               → boolean
 
 WRITE API (create / upsert / write):
@@ -79,6 +83,9 @@ WRITE API (create / upsert / write):
     .removeValue(key, value)                       remove a list's first element equal to value
 
   Relations (chainable):
+    Entity write builders never accept relation ids. Use getRelation/findRelations to read relations and
+    removeRelation(relation.id) to remove one. A link target must exist by the time this unit commits;
+    create its row before linking it.
     .link(EARS.RelKind.CONTAINS, targetId)         add relation
     .link(kind, targetId, { info })                add relation carrying info
                                                    (a kind declared unique keeps one edge to a target,
@@ -93,8 +100,7 @@ WRITE API (create / upsert / write):
 
   Lifecycle:
     .trash() / .restore()                          move to / out of the trash (queries skip trashed entities)
-    .destroy()                                     delete entity (not chainable); on a relation's id (from
-                                                   findRelations), remove that one relation
+    .destroy()                                     delete entity (not chainable)
     .id()                                          get entity ID (terminal)
 
 PATTERNS:

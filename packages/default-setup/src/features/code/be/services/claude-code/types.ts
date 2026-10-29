@@ -1,3 +1,4 @@
+import type { ClaudeHooks } from './hooks.ts'
 /**
  * Type definitions + Zod schemas for the Claude Code stream-json wire protocol.
  *
@@ -11,6 +12,7 @@
  */
 
 import { z } from 'zod'
+import { ClaudeRateLimitInfoSchema } from '../../../common/native-billing.ts'
 
 // ─── Primitives ──────────────────────────────────────────────────────────────
 
@@ -39,7 +41,7 @@ export type PermissionMode = z.infer<typeof PermissionModeSchema>
 export const ThinkingSchema = z.enum(['enabled', 'adaptive', 'disabled'])
 export type Thinking = z.infer<typeof ThinkingSchema>
 
-export const EffortSchema = z.enum(['low', 'medium', 'high', 'max'])
+export const EffortSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max'])
 export type Effort = z.infer<typeof EffortSchema>
 
 export const SettingScopeSchema = z.enum(['user', 'project', 'local'])
@@ -122,7 +124,7 @@ export interface SystemInitLine extends SystemLine {
 /** Rate limit warnings. */
 export const RateLimitLineSchema = withUuid.extend({
   type: z.literal('rate_limit_event'),
-  rate_limit_info: z.object({}).passthrough(),
+  rate_limit_info: ClaudeRateLimitInfoSchema,
 }).passthrough()
 export type RateLimitLine = z.infer<typeof RateLimitLineSchema>
 
@@ -134,10 +136,13 @@ export const ToolUseSummaryLineSchema = withUuid.extend({
 }).passthrough()
 export type ToolUseSummaryLine = z.infer<typeof ToolUseSummaryLineSchema>
 
-/** Final result line — marks turn completion. */
+/** Native result: per-input usage/duration_ms, with cumulative process cost/modelUsage. */
 export const ResultLineSchema = withUuid.extend({
   type: z.literal('result'),
   subtype: z.string(),
+  /** Correlates a host input; autonomous results can omit it. */
+  user_message_uuid: z.string().optional(),
+  queued_turn_count: z.number().int().nonnegative().optional(),
   is_error: z.boolean().optional(),
   duration_ms: z.number().optional(),
   duration_api_ms: z.number().optional(),
@@ -182,6 +187,17 @@ export type ControlCancelLine = z.infer<typeof ControlCancelLineSchema>
 export const KeepAliveLineSchema = z.object({ type: z.literal('keep_alive') })
 export type KeepAliveLine = z.infer<typeof KeepAliveLineSchema>
 
+/** Native input queue lifecycle; command_uuid identifies the submitted user message. */
+export const CommandLifecycleLineSchema = z.object({
+  type: z.literal('command_lifecycle'),
+  command_uuid: z.string(),
+  state: z.enum(['queued', 'started', 'completed', 'cancelled', 'discarded', 'refused']),
+  ran_ahead: z.literal(true).optional(),
+  uuid: z.string(),
+  session_id: z.string(),
+}).passthrough()
+export type CommandLifecycleLine = z.infer<typeof CommandLifecycleLineSchema>
+
 /** Fallthrough catch-all: the CLI adds new top-level types regularly. */
 export const UnknownLineSchema = z.object({ type: z.string() }).passthrough()
 export type UnknownLine = z.infer<typeof UnknownLineSchema>
@@ -211,6 +227,7 @@ export type KnownStreamLine =
   | ControlResponseLine
   | ControlCancelLine
   | KeepAliveLine
+  | CommandLifecycleLine
   | ParseErrorLine
 
 /**
@@ -292,12 +309,14 @@ export type ControlRequestHandler = (
 // ─── Query options ───────────────────────────────────────────────────────────
 
 /**
- * Every option supported by `claude --print`. Grouped by concern.
+ * Typed launch options exposed by this wrapper. Grouped by concern.
  *
  * These translate 1:1 to CLI flags via `argsFromOptions()` — if you add a
  * field here, add the mapping there and a unit test covering it.
  */
 export interface QueryOptions {
+  /** Native hook callbacks registered during initialization. */
+  hooks?: ClaudeHooks
   // Turn content — string for text-only, UserInputMessage for text + images
   prompt?: string | UserInputMessage
 
@@ -309,6 +328,8 @@ export interface QueryOptions {
 
   // Model / behaviour
   model?: string
+  /** Offer account models not yet recognized by the pinned native runtime. Explicit opt-in. */
+  includeUnsupportedModels?: boolean
   fallbackModel?: string
   effort?: Effort
   thinking?: Thinking
@@ -321,6 +342,8 @@ export interface QueryOptions {
 
   // Permissions
   permissionMode?: PermissionMode
+  /** Make a later user-requested bypass switch available without starting in bypass mode. */
+  allowDangerouslySkipPermissions?: boolean
   dangerouslySkipPermissions?: boolean
   allowedTools?: string[]
   disallowedTools?: string[]
@@ -334,6 +357,8 @@ export interface QueryOptions {
 
   // MCP / plugins / dirs
   mcpConfig?: string[]
+  /** Explicit native channel selection; original policy and allowlist still govern admission. */
+  channels?: string[]
   strictMcpConfig?: boolean
   pluginDir?: string[]
   addDir?: string[]
@@ -394,6 +419,8 @@ export interface QueryOptions {
 /** User message written to stdin during a stream-json conversation. */
 export interface UserInputMessage {
   type: 'user'
+  /** Stable native command identity for lifecycle tracking and queued-message cancellation. */
+  uuid?: string
   message: {
     role: 'user'
     content: string | Array<Record<string, unknown>>

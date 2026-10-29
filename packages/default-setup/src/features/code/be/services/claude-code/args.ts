@@ -1,3 +1,4 @@
+import { copyClaudeChannelSelection } from '../../../common/native-channels.ts'
 /**
  * Pure translation from `QueryOptions` to the argv the CLI expects.
  *
@@ -26,6 +27,7 @@ export function argsFromOptions(opts: QueryOptions): string[] {
 
   // ─── Model / behaviour ────────────────────────────────────────────────────
   if (opts.model) args.push('--model', opts.model)
+  if (opts.includeUnsupportedModels) args.push('--include-unsupported-models')
   if (opts.fallbackModel) args.push('--fallback-model', opts.fallbackModel)
   if (opts.effort) args.push('--effort', opts.effort)
   if (opts.thinking) args.push('--thinking', opts.thinking)
@@ -38,6 +40,7 @@ export function argsFromOptions(opts: QueryOptions): string[] {
 
   // ─── Permissions ──────────────────────────────────────────────────────────
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode)
+  if (opts.allowDangerouslySkipPermissions) args.push('--allow-dangerously-skip-permissions')
   if (opts.dangerouslySkipPermissions) args.push('--dangerously-skip-permissions')
   if (opts.allowedTools?.length) args.push('--allowed-tools', ...opts.allowedTools)
   if (opts.disallowedTools?.length) args.push('--disallowed-tools', ...opts.disallowedTools)
@@ -70,6 +73,7 @@ export function argsFromOptions(opts: QueryOptions): string[] {
 
   // ─── MCP / plugins / dirs ─────────────────────────────────────────────────
   if (opts.mcpConfig?.length) args.push('--mcp-config', ...opts.mcpConfig)
+  if (opts.channels?.length) args.push('--channels', ...copyClaudeChannelSelection(opts.channels))
   if (opts.strictMcpConfig) args.push('--strict-mcp-config')
   if (opts.pluginDir?.length) {
     for (const dir of opts.pluginDir) args.push('--plugin-dir', dir)
@@ -78,7 +82,7 @@ export function argsFromOptions(opts: QueryOptions): string[] {
 
   // ─── Settings ─────────────────────────────────────────────────────────────
   if (opts.settings) args.push('--settings', opts.settings)
-  if (opts.settingSources?.length) args.push('--setting-sources', opts.settingSources.join(','))
+  if (opts.settingSources !== undefined) args.push('--setting-sources', opts.settingSources.join(','))
 
   // ─── Structured output ────────────────────────────────────────────────────
   if (opts.jsonSchema !== undefined) args.push('--json-schema', JSON.stringify(opts.jsonSchema))

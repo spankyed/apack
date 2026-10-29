@@ -7,7 +7,9 @@
  * and fail with "Invalid API key · Fix external API key".
  */
 
-import { buildChildEnv } from '#features/code/be/services/claude-code/runner.ts'
+import { getEventListeners, once } from 'node:events'
+import { tmpdir } from 'node:os'
+import { buildChildEnv, spawnStream } from '#features/code/be/services/claude-code/runner.ts'
 
 describe('buildChildEnv', () => {
   const originalKey = process.env.ANTHROPIC_API_KEY
@@ -43,22 +45,79 @@ describe('buildChildEnv', () => {
     expect(process.env.ANTHROPIC_API_KEY).toBe('sk-ant-dev-placeholder')
   })
 
-  it('sets ENABLE_TOOL_SEARCH=0 so deferred tools (ExitPlanMode, …) are always in Claude\'s initial tools list', () => {
-    // Regression guard for the plan-mode UX breakage: Claude Code's
-    // tool-search mode defaults to enabled, which hides every tool
-    // tagged `shouldDefer: true` (including ExitPlanMode) from Claude
-    // on the first turn. Without this env var, plan-mode sessions
-    // never fire our ExitPlanMode approval flow because Claude can't
-    // actually call the tool. See the leaked-source comment in
-    // runner.ts's `buildChildEnv` for the full chain.
-    const env = buildChildEnv()
-    expect(env.ENABLE_TOOL_SEARCH).toBe('0')
+  it('preserves the native default instead of forcing tool search off', () => {
+    const env = buildChildEnv({ ENABLE_TOOL_SEARCH: undefined })
+    expect(env.ENABLE_TOOL_SEARCH).toBeUndefined()
   })
 
-  it('sets ENABLE_TOOL_SEARCH=0 even when caller passes an override', () => {
-    const override = { FOO: 'bar' }
-    const env = buildChildEnv(override)
-    expect(env.FOO).toBe('bar')
-    expect(env.ENABLE_TOOL_SEARCH).toBe('0')
+  it.each(['true', '0', 'auto:10'])('honors explicit native tool-search configuration %s', setting => {
+    expect(buildChildEnv({ ENABLE_TOOL_SEARCH: setting }).ENABLE_TOOL_SEARCH).toBe(setting)
   })
 })
+
+describe('spawnStream termination', () => {
+  const ignoringChild = `process.on('SIGTERM', () => {}); process.on('SIGINT', () => {}); console.log(JSON.stringify({ready:true})); setInterval(() => {}, 1000)`
+
+  it.each(['abort', 'kill'] as const)('settles a child that ignores SIGTERM after %s', async source => {
+    const controller = new AbortController()
+    const handle = await spawnStream(['-e', ignoringChild], { cliPath: process.execPath, cwd: tmpdir(), signal: controller.signal })
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      await expect(handle.lines[Symbol.asyncIterator]().next()).resolves.toMatchObject({ value: { ok: true, value: { ready: true } } })
+      if (source === 'abort') controller.abort()
+      else handle.kill()
+      const result = await Promise.race([handle.done(), new Promise<never>((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('child did not exit after termination')), 2500)
+      })])
+      expect(result.signal).toBe('SIGKILL')
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+    } finally {
+      if (deadline) clearTimeout(deadline)
+      handle.child.kill('SIGKILL')
+      await handle.done()
+    }
+  }, 5000)
+
+  it('removes the abort listener when the child exits normally', async () => {
+    const controller = new AbortController()
+    const handle = await spawnStream(['-e', 'process.exit(0)'], { cliPath: process.execPath, cwd: tmpdir(), signal: controller.signal })
+    expect((await handle.done()).exitCode).toBe(0)
+    expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+    controller.abort()
+  })
+})
+
+describe('spawnStream input failure', () => {
+  it('settles a live child after its input pipe fails', async () => {
+    const child = `require('node:fs').closeSync(0); console.log(JSON.stringify({ready:true})); setInterval(() => {}, 1000)`
+    const handle = await spawnStream(['-e', child], { cliPath: process.execPath, cwd: tmpdir() })
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    try {
+      await expect(handle.lines[Symbol.asyncIterator]().next()).resolves.toMatchObject({ value: { ok: true, value: { ready: true } } })
+      const inputError = once(handle.child.stdin!, 'error')
+      const settled = (async () => {
+        handle.write({ type: 'fixture' })
+        await inputError
+        return handle.done()
+      })()
+      const exit = await Promise.race([settled, new Promise<never>((_, reject) => {
+        deadline = setTimeout(() => reject(new Error('child stayed alive after stdin failed')), 2000)
+      })])
+      expect(exit.signal).toBe('SIGTERM')
+      expect(handle.write({ type: 'late' })).toBe(false)
+    } finally {
+      if (deadline) clearTimeout(deadline)
+      handle.child.kill('SIGKILL')
+      await handle.done()
+    }
+  }, 5000)
+})
+
+ it('retains bounded stderr including final writes before close', async () => {
+  const handle = await spawnStream(['-e', "process.stderr.write('x'.repeat(200000)); process.stderr.end('late diagnostic');"], {cliPath: process.execPath, cwd: tmpdir()})
+  const result = await handle.done()
+  expect(result.exitCode).toBe(0)
+  expect(result.stderr).toContain('[stderr truncated:')
+  expect(result.stderr.endsWith('late diagnostic')).toBe(true)
+  expect(Buffer.byteLength(result.stderr)).toBeLessThan(64 * 1024 + 100)
+ })

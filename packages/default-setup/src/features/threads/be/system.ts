@@ -1,8 +1,17 @@
+import { parseClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts';
+import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
+import { readSavedClaudeNativeLaunch, readClaudePlanRestoreMode } from '#features/code/be/services/claude-code/native-launch.ts';
+import { prepareClaudeNativeInput } from './claude-native-input.ts';
+import { syncClaudeTerminalThread } from './claude-terminal-sync.ts';
+import { createClaudeTerminalViews } from './claude-terminal-views.ts';
+import { registerThreadTeardown } from './thread-teardown.ts';
+import { submitClaudeParentCommand, handleClaudeUiView, suspendClaudeUiThreadViews } from './claude-ui.ts';
 import { featureSettings } from '#generated/settings.ts';
 
 import { sendToSystem } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
-import { setup } from 'xstate';
+import { setup, fromPromise, spawnChild } from 'xstate';
+import { runThreadHistoryOperation, type ThreadHistoryOperationInput } from './history-operation.ts';
 import { answer } from './answer.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
 
@@ -20,6 +29,33 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
+const terminalHistory = new WeakMap<Awaited<ReturnType<typeof services.cli.claudeCode.openNativeTerminal>>, ReturnType<typeof syncClaudeTerminalThread>>();
+const terminalViews = createClaudeTerminalViews({
+  continuation(key) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    return state?.sessionId ? parseClaudeNativeContinuation({ ...state.nativeContinuation, type: 'continued-in' }, state.sessionId) : undefined;
+  },
+  background: (continuation, request, key) => services.cli.claudeCode.backgroundSession(continuation, request,
+    { cwd: repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd, timeoutMs: 15000 }),
+  beforeViewChange: (_client, threadId) => suspendClaudeUiThreadViews(threadId),
+  command: submitClaudeParentCommand,
+  accepted: (owner, receipt, references) => terminalHistory.get(owner)?.acceptSubmission(receipt, references),
+  prepareInput: (text, references) => prepareClaudeNativeInput(text, references, services.chat.resolveReferences),
+  get: key => services.cli.claudeCode.getNativeTerminal(key),
+  async open(key, signal) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    if (state?.historyError || state?.forkPending || state?.forkFrom || state?.revertTo) throw new Error('Complete or reset the pending history change before opening the native interface');
+    const resume = readSavedClaudeNativeLaunch(state);
+    const prePlanMode = readClaudePlanRestoreMode(state);
+    const owner = await services.cli.claudeCode.openNativeTerminal(key, {...(resume ? {resume} : {}), ...(prePlanMode ? {prePlanMode} : {}), signal});
+    terminalHistory.set(owner, syncClaudeTerminalThread(key as EARS.EntityId, owner, () => {
+      const current = services.cli.claudeCode.getNativeTerminal(key);
+      return current === owner;
+    }, () => services.cli.claudeCode.getNativeLaunch(key)));
+    return owner;
+  },
+});
+registerThreadTeardown(key => terminalViews.clear(key));
 const logger = createLogger('threads');
 export const threadsSpec = defineSystem<Contract>();
 
@@ -73,8 +109,15 @@ function reportThreadOperationError(
 export const threadsSystem = setup({
   types: threadsSpec.types,
   actors: {
+    historyOperation: fromPromise(async ({input, signal}: {input: ThreadHistoryOperationInput; signal: AbortSignal}) => runThreadHistoryOperation(input, signal)),
   },
   actions: threadsSpec.actions({
+    claudeTerminalView: ({ event, client, reply }) => {
+      if (event.type === 'CLAUDE_TERMINAL_MOUNT' || event.type === 'CLAUDE_TERMINAL_UNMOUNT' || event.type === 'CLAUDE_TERMINAL_OPEN' || event.type === 'CLAUDE_TERMINAL_CANCEL_OPEN' || event.type === 'CLAUDE_TERMINAL_SUBMIT' || event.type === 'CLAUDE_TERMINAL_INPUT' || event.type === 'CLAUDE_TERMINAL_RESIZE' || event.type === 'CLAUDE_TERMINAL_CLOSE' || event.type === 'CLAUDE_TERMINAL_BACKGROUND' || event.type === 'CLAUDE_TERMINAL_TASK' || event.type === 'CLAUDE_TERMINAL_NOTICE' || event.type === 'CLAUDE_TERMINAL_MCP_FORM' || event.type === 'CLAUDE_TERMINAL_MCP_URL') terminalViews.handle(event, client, reply);
+    },
+    claudeUiView: ({ event, client, reply }) => {
+      if (event.type === 'CLAUDE_UI_TRANSCRIPT_LAYOUT' || event.type === 'CLAUDE_UI_BACKGROUND_REVIEW' || event.type === 'CLAUDE_UI_SETTINGS' || event.type === 'CLAUDE_UI_COMMAND_PANEL' || event.type === 'CLAUDE_UI_COMMAND_DECISION' || event.type === 'CLAUDE_UI_AGENT_INPUT' || event.type === 'CLAUDE_UI_CLIENT' || event.type === 'CLAUDE_UI_NOTICE' || event.type === 'CLAUDE_UI_SCROLL' || event.type === 'CLAUDE_UI_PANE' || event.type === 'CLAUDE_UI_MOUNT' || event.type === 'CLAUDE_UI_UNMOUNT' || event.type === 'CLAUDE_UI_KEY' || event.type === 'CLAUDE_UI_PRESS' || event.type === 'CLAUDE_UI_FIELD' || event.type === 'CLAUDE_UI_FOCUS' || event.type === 'CLAUDE_PROMPT_HOST_RESPONSE' || event.type === 'CLAUDE_PROMPT_EDIT' || event.type === 'CLAUDE_PROMPT_AUTOCOMPLETE') handleClaudeUiView(event, client, reply);
+    },
     // ---- Thread management actions ----
     createThread: ({ event, reply }) => {
       const thread = threadsSpec.typeOf('CREATE_THREAD', event);
@@ -102,6 +145,16 @@ export const threadsSystem = setup({
     },
     visitThread: ({ event }) => {
       repository.threadCommands.markAsVisited(threadsSpec.typeOf('VIEW_THREAD', event).threadId as EARS.EntityId);
+    },
+    setClaudeChannels: ({event}) => {
+      const {threadId,channels}=threadsSpec.typeOf('SET_CLAUDE_CHANNELS',event);
+      try {
+        if(services.cli.claudeCode.getNativeTerminal(threadId)||services.cli.claudeCode.isConversationBusy(threadId))throw Error('Stop the native session and wait for current work before changing channels');
+        const thread=repository.threadQueries.byId(threadId as EARS.EntityId);
+        if(!thread)throw Error('Conversation no longer exists');
+        const context={...thread.context,claudeCode:{...thread.context?.claudeCode,channelSelection:copyClaudeChannelSelection(channels)}};
+        repository.threadCommands.update(thread.id,{context});
+      }catch(error){reportThreadOperationError('update',error,threadId);}
     },
     updateThreadField: ({ event, reply }) => {
       const { key, value, threadId } = threadsSpec.typeOf('UPDATE_THREAD_FIELD', event);
@@ -339,6 +392,12 @@ export const threadsSystem = setup({
         threadId = result.threadId;
         started = true;
 
+        // A first slash command consumes the draft's project just like a first message.
+        // Save it before broadcasting the thread so another window can continue there.
+        if (mode === 'Claude Code' && cwdOverride) {
+          repository.threadCommands.update(threadId, { context: { claudeCode: { cwd: cwdOverride } } });
+        }
+
         logger.info('Created new thread for user command', {
           threadId,
           command,
@@ -380,169 +439,234 @@ export const threadsSystem = setup({
         logger.error('forwardUserCommand failed', { error: err });
       }
     },
-    forkThread: ({ event, reply }) => {
-      const { messageId, threadId, threadTopic } = threadsSpec.typeOf('FORK_THREAD', event);
-      if (!threadId) return;
-
-      let result: { id: EARS.EntityId } | undefined;
-      const forkContext: Record<string, any> = {};
-
-      try {
-        const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-        const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
-        const sourceUserMessagesAfterFork = sourceIndex >= 0
-          ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
-          : 0;
-        const originalTopic = threadTopic || 'Untitled';
-
-        const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
-        const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
-
-        result = services.chat.createThread({ topic: forkTopic, instructions: '' });
-        if (!result) throw new Error('Failed to create thread');
-
-        repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
-
-        repository.chatCommands.copyMessagesUpTo({
-          sourceThreadId: threadId as EARS.EntityId,
-          targetThreadId: result.id,
-          upToMessageId: messageId,
-        });
-
-        // Set forkPending on the NEW thread so chat actions queue messages
-        // until the async handle-fork actions finish persisting session state.
-        const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
-        const sourceContext = (sourceThread as any)?.context ?? {};
-        for (const [key, value] of Object.entries(sourceContext)) {
-          if (value && typeof value === 'object') {
-            forkContext[key] = { forkPending: true };
-          }
-        }
-        if (Object.keys(forkContext).length > 0) {
-          repository.threadCommands.update(result.id, { context: forkContext });
-        }
-
-        services.chat.showThread(result.id, { reply });
-
-        sendToSystem('brain', {
-          type: 'TRIGGER_BRAIN_EVENT',
-          eventType: 'thread.fork',
-          payload: {
-            sourceThreadId: threadId,
-            sourceMessageId: messageId,
-            newThreadId: result.id,
-            sourceUserMessagesAfterFork,
-          },
-        });
-      } catch (err) {
-        logger.error('forkThread failed', { error: err });
-        // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
-        if (result && Object.keys(forkContext).length > 0) {
-          const clearContext = Object.fromEntries(
-            Object.keys(forkContext).map(key => [key, { forkPending: undefined }])
-          );
-          repository.threadCommands.update(result.id, { context: clearContext });
-        }
-      }
-    },
-    revertThread: ({ event }) => {
-      try {
-      const { messageId, threadId, restoreFiles, userCliUuid } = threadsSpec.typeOf('REVERT_THREAD', event);
-      const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-
-      // Stop active processes before soft-deleting so nothing races
-      // against the deletion (e.g. a stream consumer writing to messages).
-      runThreadTeardown(threadId);
-
-      const deletion = repository.chatCommands.softDeleteMessagesAfter({
-        threadId: threadId as EARS.EntityId,
-        messageId: messageId as EARS.EntityId,
-      });
-      const deletedIds = new Set(deletion.deletedIds);
-      const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
-      const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
-
-      // Determine which agent flows had messages deleted so each flow can
-      // skip its revert handler when it isn't affected.
-      const agents = {
-        claudeCode: deletedMessages.some((m: any) =>
-          m.context?.cliUuid || m.context?.agent === 'Claude Code'
-        ),
-        codex: deletedMessages.some((m: any) =>
-          m.context?.agent === 'Codex'
-        ),
-      };
-      const codexDeletedUserMessageCount = agents.codex
-        ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
-        : 0;
-
-      // Unified `thread.revert` brain event — the `kind` discriminator
-      // tells the claude-code flow which variant to run.
-      sendToSystem('brain', {
-        type: 'TRIGGER_BRAIN_EVENT',
-        eventType: 'thread.revert',
-        payload: {
-          threadId,
-          messageId,
-          kind: restoreFiles ? 'rewind' : 'revert',
-          deletedMessageIds: deletion.deletedIds,
-          deletedUserMessageCount,
-          agents,
-          codexDeletedUserMessageCount,
-          ...(restoreFiles && userCliUuid ? { userCliUuid } : {}),
+    forkThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, reply}) => {
+      const request = threadsSpec.typeOf('FORK_THREAD', event);
+      const threadId = request.threadId ?? '';
+      const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
+      return { request: {kind: 'fork' as const, threadId, messageId: request.messageId},
+        snapshot: readSnapshot(), readSnapshot,
+        rejected: (error: unknown) => {
+          logger.warn('History validation rejected fork', {threadId, error: errorMessage(error)});
+          if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not fork: ${errorMessage(error)}`, blocks: [], forkable: false});
         },
-      });
-      } catch (err) {
-        logger.error('revertThread failed', { error: err });
-      }
-    },
-    summarizeThread: ({ event }) => {
-      try {
-      const { messageId, threadId } = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
-      const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+        commit: () => {
+          const { messageId, threadId, threadTopic } = threadsSpec.typeOf('FORK_THREAD', event);
+          if (!threadId) return;
 
-      // Stop active processes before soft-deleting (same as revert).
-      runThreadTeardown(threadId);
+          let result: { id: EARS.EntityId } | undefined;
+          const forkContext: Record<string, any> = {};
 
-      // Matches Claude Code's native `direction: 'from'` — the pivot and
-      // everything after it disappear from the visible transcript, then a
-      // synthetic `/compact` turn runs against the truncated session.
-      const deletion = repository.chatCommands.softDeleteMessagesAfter({
-        threadId: threadId as EARS.EntityId,
-        messageId: messageId as EARS.EntityId,
-      });
-      const deletedIds = new Set(deletion.deletedIds);
-      const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
-      const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+          try {
+            const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+            const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
+            const sourceUserMessagesAfterFork = sourceIndex >= 0
+              ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
+              : 0;
+            const originalTopic = threadTopic || 'Untitled';
 
-      const agents = {
-        claudeCode: deletedMessages.some((m: any) =>
-          m.context?.cliUuid || m.context?.agent === 'Claude Code'
-        ),
-        codex: deletedMessages.some((m: any) =>
-          m.context?.agent === 'Codex'
-        ),
+            const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
+            const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
+
+            result = services.chat.createThread({ topic: forkTopic, instructions: '' });
+            if (!result) throw new Error('Failed to create thread');
+
+            repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
+
+            repository.chatCommands.copyMessagesUpTo({
+              sourceThreadId: threadId as EARS.EntityId,
+              targetThreadId: result.id,
+              upToMessageId: messageId,
+            });
+
+            // Set forkPending on the NEW thread so chat actions queue messages
+            // until the async handle-fork actions finish persisting session state.
+            const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
+            const sourceContext = (sourceThread as any)?.context ?? {};
+            for (const [key, value] of Object.entries(sourceContext)) {
+              if (value && typeof value === 'object') {
+                forkContext[key] = { forkPending: true };
+              }
+            }
+            if (Object.keys(forkContext).length > 0) {
+              repository.threadCommands.update(result.id, { context: forkContext });
+            }
+
+            services.chat.showThread(result.id, { reply });
+
+            sendToSystem('brain', {
+              type: 'TRIGGER_BRAIN_EVENT',
+              eventType: 'thread.fork',
+              payload: {
+                sourceThreadId: threadId,
+                sourceMessageId: messageId,
+                newThreadId: result.id,
+                sourceUserMessagesAfterFork,
+              },
+            });
+          } catch (err) {
+            logger.error('forkThread failed', { error: err });
+            // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
+            if (result && Object.keys(forkContext).length > 0) {
+              const clearContext = Object.fromEntries(
+                Object.keys(forkContext).map(key => [key, { forkPending: undefined }])
+              );
+              repository.threadCommands.update(result.id, { context: clearContext });
+            }
+          }
+        },
       };
-      const codexDeletedUserMessageCount = agents.codex
-        ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
-        : 0;
+    }) }),
+    revertThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, reply}) => {
+      const request = threadsSpec.typeOf('REVERT_THREAD', event);
+      const threadId = request.threadId ?? '';
+      const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
+      return { request: {kind: 'revert' as const, threadId, messageId: request.messageId, restoreFiles: request.restoreFiles, userMessageId: request.userCliUuid},
+        snapshot: readSnapshot(), readSnapshot,
+        rejected: (error: unknown) => {
+          logger.warn('History validation rejected revert', {threadId, error: errorMessage(error)});
+          if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not revert: ${errorMessage(error)}`, blocks: [], forkable: false});
+        },
+        commit: () => {
+          try {
+          const { messageId, threadId, restoreFiles, userCliUuid } = threadsSpec.typeOf('REVERT_THREAD', event);
+          const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
 
-      sendToSystem('brain', {
-        type: 'TRIGGER_BRAIN_EVENT',
-        eventType: 'thread.revert',
-        payload: { threadId, messageId, kind: 'summarize', deletedMessageIds: deletion.deletedIds, deletedUserMessageCount, agents, codexDeletedUserMessageCount },
-      });
-      } catch (err) {
-        logger.error('summarizeThread failed', { error: err });
-      }
-    },
+          // Stop active processes before soft-deleting so nothing races
+          // against the deletion (e.g. a stream consumer writing to messages).
+          runThreadTeardown(threadId);
+
+          const deletion = repository.chatCommands.softDeleteMessagesAfter({
+            threadId: threadId as EARS.EntityId,
+            messageId: messageId as EARS.EntityId,
+          });
+          const deletedIds = new Set(deletion.deletedIds);
+          const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
+          const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+
+          // Determine which agent flows had messages deleted so each flow can
+          // skip its revert handler when it isn't affected.
+          const agents = {
+            claudeCode: deletedMessages.some((m: any) =>
+              m.context?.cliUuid || m.context?.agent === 'Claude Code'
+            ),
+            codex: deletedMessages.some((m: any) =>
+              m.context?.agent === 'Codex'
+            ),
+          };
+          const codexDeletedUserMessageCount = agents.codex
+            ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
+            : 0;
+
+          services.chat.showThread(threadId as EARS.EntityId, { reply });
+
+          // Unified `thread.revert` brain event — the `kind` discriminator
+          // tells the claude-code flow which variant to run.
+          sendToSystem('brain', {
+            type: 'TRIGGER_BRAIN_EVENT',
+            eventType: 'thread.revert',
+            payload: {
+              threadId,
+              messageId,
+              kind: restoreFiles ? 'rewind' : 'revert',
+              deletedMessageIds: deletion.deletedIds,
+              deletedUserMessageCount,
+              agents,
+              codexDeletedUserMessageCount,
+              ...(restoreFiles && userCliUuid ? { userCliUuid } : {}),
+            },
+          });
+          } catch (err) {
+            logger.error('revertThread failed', { error: err });
+          }
+        },
+      };
+    }) }),
+    summarizeThread: spawnChild('historyOperation', { input: threadsSpec.input(({event, reply}) => {
+      const request = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
+      const threadId = request.threadId ?? '';
+      const readSnapshot = () => JSON.stringify({thread: repository.threadQueries.byId(threadId as EARS.EntityId),
+        messages: repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages});
+      return { request: {kind: 'summarize' as const, threadId, messageId: request.messageId},
+        snapshot: readSnapshot(), readSnapshot,
+        rejected: (error: unknown) => {
+          logger.warn('History validation rejected summarize', {threadId, error: errorMessage(error)});
+          if (threadId) services.chat.sendBlockMessage({threadId: threadId as EARS.EntityId, text: `Could not summarize: ${errorMessage(error)}`, blocks: [], forkable: false});
+        },
+        commit: () => {
+          try {
+          const { messageId, threadId } = threadsSpec.typeOf('SUMMARIZE_THREAD', event);
+          const beforeMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+
+          // Stop active processes before soft-deleting (same as revert).
+          runThreadTeardown(threadId);
+
+          // Matches Claude Code's native `direction: 'from'` — the pivot and
+          // everything after it disappear from the visible transcript, then a
+          // synthetic `/compact` turn runs against the truncated session.
+          const deletion = repository.chatCommands.softDeleteMessagesAfter({
+            threadId: threadId as EARS.EntityId,
+            messageId: messageId as EARS.EntityId,
+          });
+          const deletedIds = new Set(deletion.deletedIds);
+          const deletedMessages = beforeMessages.filter((m: any) => deletedIds.has(m.id));
+          const deletedUserMessageCount = deletedMessages.filter((m: any) => m.sender === 'user').length;
+
+          const agents = {
+            claudeCode: deletedMessages.some((m: any) =>
+              m.context?.cliUuid || m.context?.agent === 'Claude Code'
+            ),
+            codex: deletedMessages.some((m: any) =>
+              m.context?.agent === 'Codex'
+            ),
+          };
+          const codexDeletedUserMessageCount = agents.codex
+            ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
+            : 0;
+
+          services.chat.showThread(threadId as EARS.EntityId, { reply });
+
+          sendToSystem('brain', {
+            type: 'TRIGGER_BRAIN_EVENT',
+            eventType: 'thread.revert',
+            payload: { threadId, messageId, kind: 'summarize', deletedMessageIds: deletion.deletedIds, deletedUserMessageCount, agents, codexDeletedUserMessageCount },
+          });
+          } catch (err) {
+            logger.error('summarizeThread failed', { error: err });
+          }
+        },
+      };
+    }) }),
     pauseTurn: ({ event }) => {
       const { threadId } = threadsSpec.typeOf('PAUSE_TURN', event);
+      const state = repository.threadQueries.byId(threadId as EARS.EntityId)?.context?.claudeCode;
+      // Interactive native work can outlive its original print flow. Dialog cancellation still belongs to that flow.
+      if (services.cli.claudeCode.getNativeTerminal(threadId) && !state?.pendingControlRequest) {
+        void services.action.executeIfFound('CC: Pause Turn', { threadId }).then(result => {
+          if (result?.success !== true) logger.warn('Native Pause refused', { threadId, reason: result?.reason ?? 'Pause action unavailable' });
+        }).catch(error => logger.error('Native Pause failed', { threadId, error: errorMessage(error) }));
+        return;
+      }
       sendToSystem('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'user.thread.pause',
         payload: { threadId },
       });
+    },
+    setClaudePermissionMode: async ({ event, reply }) => {
+      // A chooser outcome belongs only to the window that requested it.
+      if (!reply) return;
+      const { threadId, mode } = threadsSpec.typeOf('SET_CLAUDE_PERMISSION_MODE', event);
+      try {
+        const result = await services.action.executeIfFound('CC: Update Permission Mode', { threadId, mode });
+        reply({ type: 'CLAUDE_PERMISSION_MODE_RESULT', threadId,
+          success: result?.success === true,
+          ...(result?.success === true ? {} : { reason: result?.reason ?? 'Permission action is unavailable' }),
+        });
+      } catch (error) {
+        reply({ type: 'CLAUDE_PERMISSION_MODE_RESULT', threadId, success: false, reason: errorMessage(error) });
+      }
     },
     forwardBrainEvent: ({ event }) => {
       const { eventType, payload } = threadsSpec.typeOf('FORWARD_BRAIN_EVENT', event);
@@ -552,7 +676,10 @@ export const threadsSystem = setup({
       try {
       const { messageId, threadId, response } = threadsSpec.typeOf('INTERACTIVE_MSG_RESPONSE', event);
 
-      if (!repository.chatQueries.messageById(messageId as EARS.EntityId)) return;
+      const message = repository.chatQueries.messageById(messageId as EARS.EntityId);
+      if (!message || !repository.chatQueries.hasMessageInThread(messageId as EARS.EntityId, threadId as EARS.EntityId)) return;
+      // Retired one-shot decisions cannot regain authority through a delayed frontend response.
+      if (message.responseTimestamp && (message.context?.claudeNativeQuestion || message.blocks?.some(block => block.type === 'question' || block.type === 'approval'))) return;
 
       repository.chatCommands.updateMessageBlockResponse({
         messageId: messageId as EARS.EntityId,
@@ -561,8 +688,7 @@ export const threadsSystem = setup({
 
       // Compute aside text for autoHide messages
       let asideText: string | undefined;
-      const message = repository.chatQueries.messageById(messageId as EARS.EntityId);
-      if (message?.autoHide) {
+      if (message.autoHide) {
         asideText = generateAsideText(message, response);
         write(messageId as EARS.EntityId).set('asideText', asideText);
       }
@@ -592,6 +718,38 @@ export const threadsSystem = setup({
     initial: 'idle',
     context: () => ({}),
     on: {
+      CLAUDE_TERMINAL_MOUNT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_UNMOUNT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_CANCEL_OPEN: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_SUBMIT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_INPUT: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_RESIZE: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_BACKGROUND: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_TASK: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_NOTICE: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_MCP_URL: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_MCP_FORM: { actions: 'claudeTerminalView' },
+      CLAUDE_TERMINAL_CLOSE: { actions: 'claudeTerminalView' },
+      CLAUDE_UI_BACKGROUND_REVIEW: { actions: 'claudeUiView' },
+      CLAUDE_UI_SETTINGS: { actions: 'claudeUiView' },
+      CLAUDE_UI_COMMAND_PANEL: { actions: 'claudeUiView' },
+      CLAUDE_UI_COMMAND_DECISION: { actions: 'claudeUiView' },
+      CLAUDE_UI_AGENT_INPUT: { actions: 'claudeUiView' },
+      CLAUDE_UI_MOUNT: { actions: 'claudeUiView' },
+      CLAUDE_UI_UNMOUNT: { actions: 'claudeUiView' },
+      CLAUDE_UI_KEY: { actions: 'claudeUiView' },
+      CLAUDE_UI_PRESS: { actions: 'claudeUiView' },
+      CLAUDE_PROMPT_HOST_RESPONSE: { actions: 'claudeUiView' },
+      CLAUDE_UI_NOTICE: { actions: 'claudeUiView' },
+      CLAUDE_UI_TRANSCRIPT_LAYOUT: { actions: 'claudeUiView' },
+      CLAUDE_UI_SCROLL: { actions: 'claudeUiView' },
+      CLAUDE_UI_PANE: { actions: 'claudeUiView' },
+      CLAUDE_UI_FOCUS: { actions: 'claudeUiView' },
+      CLAUDE_UI_CLIENT: { actions: 'claudeUiView' },
+      CLAUDE_UI_FIELD: { actions: 'claudeUiView' },
+      CLAUDE_PROMPT_AUTOCOMPLETE: { actions: 'claudeUiView' },
+      CLAUDE_PROMPT_EDIT: { actions: 'claudeUiView' },
       FEATURE_SETTINGS_UPDATED: {
         actions: 'handleSettingsUpdate',
       },
@@ -616,6 +774,7 @@ export const threadsSystem = setup({
           VIEW_THREAD: {
             actions: 'visitThread',
           },
+          SET_CLAUDE_CHANNELS: {actions: 'setClaudeChannels'},
           UPDATE_THREAD_FIELD: {
             actions: 'updateThreadField',
           },
@@ -662,6 +821,7 @@ export const threadsSystem = setup({
           PAUSE_TURN: {
             actions: 'pauseTurn',
           },
+          SET_CLAUDE_PERMISSION_MODE: { actions: 'setClaudePermissionMode' },
           FORWARD_BRAIN_EVENT: {
             actions: 'forwardBrainEvent',
           },

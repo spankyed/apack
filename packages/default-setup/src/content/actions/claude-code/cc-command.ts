@@ -1,3 +1,4 @@
+import { replayQueuedMessage } from './_helpers/stream-consumer.ts';
 /**
  * CC: Run Command — dispatcher for lightweight cc- commands (info, config, passthrough).
  *
@@ -7,8 +8,8 @@
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
-import type { Services, Z } from '#generated/services.ts';
-import { getClaudeState, persistClaudeState, updateChatState } from './_helpers/thread-context.ts';
+import type { Services, Z, EntityId } from '#generated/services.ts';
+import { getClaudeState, persistClaudeState, updateChatState, dequeueMessage } from './_helpers/thread-context.ts';
 import { DONT_BYPASS } from './_helpers/auto-approve.ts';
 
 export const meta: ActionMeta = {
@@ -37,7 +38,6 @@ type Handler = (
 
 const PASSTHROUGH: Record<string, { cmd: string; defaultArgs?: string[] }> = {
   doctor: { cmd: 'doctor' },
-  mcp:    { cmd: 'mcp', defaultArgs: ['list'] },
   agents: { cmd: 'agents' },
 };
 
@@ -53,10 +53,12 @@ function makePassthroughHandler(spec: { cmd: string; defaultArgs?: string[] }): 
 // ── Handler registry ────────────────────────────────────────────────
 
 const handlers: Record<string, Handler> = {
+  mcp: handleMcp,
   sessions: handleSessions,
   config: handleConfig,
   status: handleStats,
   model: handleModel,
+  models: handleModels,
   memory: handleMemory,
   skills: handleSkills,
   stats: handleStats,
@@ -190,17 +192,69 @@ async function handleConfig(
   }
 }
 
+async function handleModels(args: string[], services: Services, threadId?: string): Promise<{ text: string }> {
+  const includeUnsupportedModels = args.length === 2 && args[0] === 'start' && args[1] === '--include-unsupported-models';
+  if (!includeUnsupportedModels && (args.length > 1 || (args.length === 1 && args[0] !== 'start'))) return { text: 'Usage: cc-models [start [--include-unsupported-models]]' };
+  const prior = threadId ? getClaudeState(services, threadId) : undefined;
+  const cwd = prior?.cwdOverride || prior?.cwd || services.cli.claudeCode.getWorkingDir();
+  const conversation = threadId ? services.cli.claudeCode.getConversation(threadId) : undefined;
+  const native = threadId ? services.cli.claudeCode.getNativeTerminal(threadId) : undefined;
+  const matchingNative = native?.state.cwd === cwd ? native : undefined;
+  const handle = conversation?.owner.sessionCwd === cwd ? conversation.owner.handle : undefined;
+  if (!matchingNative && !handle && args[0] !== 'start') return { text: 'No matching native conversation is running. Use cc-models start to read with a temporary native process. Starting and closing it can run configured session hooks.' };
+  const nativeSessionId = matchingNative?.state.sessionId;
+  const catalog = matchingNative ? await matchingNative.getModels({ includeUnsupportedModels }) : handle && !includeUnsupportedModels ? await handle.getModels() : await services.cli.claudeCode.getModels({ cwd, ...(includeUnsupportedModels ? { includeUnsupportedModels: true } : {}) });
+  if (matchingNative && (services.cli.claudeCode.getNativeTerminal(threadId!) !== matchingNative || matchingNative.state.sessionId !== nativeSessionId)) return { text: 'Claude conversation changed while reading its model catalog.' };
+  const rows = catalog.models.map(model => {
+    const capabilities = [
+      ['Effort', model.supportsEffort], ['Adaptive thinking', model.supportsAdaptiveThinking],
+      ['Fast mode', model.supportsFastMode], ['Auto mode', model.supportsAutoMode], ['Thinking off', model.supportsThinkingOff],
+    ].filter(([, value]) => typeof value === 'boolean').map(([label, value]) => `${label}: ${value ? 'yes' : 'no'}`);
+    const details = [model.description, model.supportedEffortLevels ? `Effort levels: ${model.supportedEffortLevels.join(', ') || '(none)'}` : undefined, ...capabilities];
+    return `${model.value}: ${model.displayName}${model.disabled === true ? ' [unavailable]' : ''}${model.resolvedModel ? ` (${model.resolvedModel})` : ''}${details.filter(Boolean).map(detail => `\n  ${detail}`).join('')}`;
+  });
+  return { text: `${rows.join('\n') || 'Native catalog is empty.'}\n\nUse cc-model <alias or model id> for this thread; acknowledged selection and last reported model are separate. This catalog is not an exhaustive list of custom model IDs and does not identify the active selection.` };
+}
+
 async function handleModel(
   args: string[],
   services: Services,
+  threadId?: string,
 ): Promise<{ text: string; data?: any }> {
-  const settings = await services.cli.claudeCode.readSettings();
-  if (args.length === 0) {
-    return { text: settings.model || '(using default model)' };
+  if (!threadId) return { text: 'Select a thread before choosing its Claude model.' };
+  const prior = getClaudeState(services, threadId);
+  if (args.length === 0) return { text: `Selected: ${prior?.modelOverride || 'default'}\nLast reported: ${prior?.model || '(not yet reported)'}` };
+  if (args.length !== 1) return { text: 'Usage: cc-model <alias or model id>' };
+  const selection = args[0]!;
+  const native = services.cli.claudeCode.getNativeTerminal(threadId);
+  if (native) {
+    if (native.busy) return { text: 'Wait for the Claude conversation to become idle before changing model.' };
+    const cwd = prior?.cwdOverride || prior?.cwd || services.cli.claudeCode.getWorkingDir();
+    if (native.state.cwd !== cwd) return { text: 'The native conversation directory does not match this project.' };
+    const sessionId = native.state.sessionId;
+    const accepted = await native.setModel(selection);
+    if (services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== sessionId) return { text: 'Claude conversation changed while choosing the model.' };
+    persistClaudeState(services, threadId, { modelOverride: accepted.selection });
+    return { text: `${accepted.notice}\n\nModel selection accepted: ${accepted.selection}. The next turn will report the effective model.` };
   }
-  settings.model = args[0];
-  await services.cli.claudeCode.writeSettings(settings);
-  return { text: `Model set to: ${args[0]}` };
+  const conversation = services.cli.claudeCode.getConversation(threadId);
+  if (conversation) {
+    if (conversation.owner.busy) return { text: 'Wait for the Claude conversation to become idle before changing model.' };
+    const cwd = prior?.cwdOverride || prior?.cwd || services.cli.claudeCode.getWorkingDir();
+    if (conversation.owner.sessionCwd !== cwd) return { text: 'The native conversation directory does not match this project. Start a conversation in this project before changing its model.' };
+    try {
+      await conversation.owner.handle.setModel(selection);
+      persistClaudeState(services, threadId, { modelOverride: selection });
+      return { text: `Model selection accepted: ${selection}. The next turn will report the effective model.` };
+    } finally {
+      if (!conversation.owner.busy && !conversation.owner.closing) {
+        const queued = dequeueMessage(services, threadId);
+        if (queued) await replayQueuedMessage(services, threadId as EntityId, queued, services.logger);
+      }
+    }
+  }
+  persistClaudeState(services, threadId, { modelOverride: selection });
+  return { text: `Model selected for the next launch: ${selection}. Claude will validate it when starting.` };
 }
 
 async function handleMemory(
@@ -249,6 +303,31 @@ async function handleStats(
   return { text: lines.join('\n'), data: { version, auth, settings } };
 }
 
+async function handleMcp(args: string[], services: Services, threadId?: string) {
+  const status = args.length === 0 || args[0] === 'list' || args[0] === 'status';
+  const operation = args[0] === 'reconnect' || args[0] === 'enable' || args[0] === 'disable' ? args[0] : undefined;
+  if (operation && (args.length !== 2 || !args[1]?.trim())) return { text: 'Usage: cc-mcp reconnect|enable|disable <server-name>' };
+  if (status && args.length > 1) return { text: 'Usage: cc-mcp [status|list]' };
+  if ((status || operation) && threadId) {
+    const native = services.cli.claudeCode.getNativeTerminal(threadId);
+    const conversation = native ? undefined : services.cli.claudeCode.getConversation(threadId);
+    const owner = native ?? conversation?.owner.handle;
+    if (owner) {
+      const sessionId = native?.state.sessionId ?? conversation?.owner.sessionId;
+      const result = operation ? await owner.controlMcpServer(args[1]!, operation) : await owner.getMcpStatus();
+      if (native ? services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== sessionId
+        : services.cli.claudeCode.getConversation(threadId) !== conversation || conversation?.owner.sessionId !== sessionId)
+        return { text: 'The Claude conversation changed while reading MCP status.' };
+      const rows = result.mcpServers.map(server => `${server.name}: ${server.status}${server.serverInfo ? ` — ${server.serverInfo.name} ${server.serverInfo.version}` : ''}${server.tools?.length ? `\n  Tools: ${server.tools.map(tool => tool.name).join(', ')}` : ''}`);
+      return { text: `Live MCP connections:\n${rows.join('\n') || 'No MCP servers in this conversation.'}`, data: result };
+    }
+  }
+  if (operation) return { text: 'No live Claude conversation. Start a conversation before controlling its MCP connections.' };
+  if (args[0] === 'status') return { text: 'No live Claude conversation. Use cc-mcp list to inspect saved configuration.' };
+  const output = await makePassthroughHandler({ cmd: 'mcp', defaultArgs: ['list'] })(args, services, threadId);
+  return status ? { ...output, text: `Saved MCP configuration:\n${output.text}` } : output;
+}
+
 async function handleRename(
   args: string[],
   services: Services,
@@ -260,22 +339,30 @@ async function handleRename(
   const sessionId = ccState?.sessionId;
   if (!sessionId) return { text: 'No active session — run a Claude Code turn first.' };
 
-  let newTitle: string;
-
-  if (args.length > 0) {
-    newTitle = args.join(' ');
+  let newTitle: string, nativeNotice: string | undefined;
+  const native = services.cli.claudeCode.getNativeTerminal(threadId);
+  if (native) {
+    if (native.state.sessionId !== sessionId) return { text: 'The native conversation changed. Retry rename on the current session.' };
+    const result = await native.renameSession(args.join(' '));
+    if (services.cli.claudeCode.getNativeTerminal(threadId) !== native || native.state.sessionId !== sessionId)
+      return { text: 'The native conversation changed before rename could be reflected in this thread.' };
+    newTitle = result.title; nativeNotice = result.message;
   } else {
-    newTitle = await generateTitle(services, threadId);
+    newTitle = args.length > 0 ? args.join(' ') : await generateTitle(services, threadId);
+    const conversation = services.cli.claudeCode.getConversation(threadId);
+    if (conversation) {
+      await conversation.owner.handle.renameSession(newTitle, sessionId);
+      if (services.cli.claudeCode.getConversation(threadId) !== conversation || getClaudeState(services, threadId)?.sessionId !== sessionId)
+        return { text: 'The Claude conversation changed before rename could be reflected in this thread.' };
+    }
+    else await services.cli.claudeCode.renameSession(sessionId, newTitle, {
+      ...(ccState.cwd && { cwd: ccState.cwd }),
+    });
   }
-
-  // /rename is REPL-only — doesn't work via `claude -p`. Use direct JSONL rename.
-  await services.cli.claudeCode.renameSession(sessionId, newTitle, {
-    ...(ccState.cwd && { cwd: ccState.cwd }),
-  });
 
   services.repository.threadCommands.update(threadId as any, { topic: newTitle });
 
-  return { text: `Renamed to: ${newTitle}` };
+  return { text: nativeNotice ?? `Renamed to: ${newTitle}` };
 }
 
 async function generateTitle(services: Services, threadId: string): Promise<string> {

@@ -49,11 +49,14 @@
           No matching items
         </div>
       </template>
+      <CompletionRows :offer="nativeOffer" :selected-index="selectedIndex - hostRowCount" @hover="selectedIndex = hostRowCount + $event" />
     </div>
   </Teleport>
 </template>
 
 <script setup lang="ts">
+import CompletionRows from '@apackdev/ui/components/tiptap/CompletionRows'
+import { getEditorCompletionOffer } from '@apackdev/sdk/fe'
 import { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { referenceSuggestionKey, type ReferenceSuggestionState } from './reference-suggestion.ts'
@@ -65,7 +68,9 @@ const props = defineProps<{
   variant?: 'full' | 'chat'
 }>()
 
-const selectedIndex = ref(0)
+const nativeOffer = computed(() => getEditorCompletionOffer(props.editor).value)
+const hostRowCount = computed(() => level.value === 'category' ? filteredCategories.value.length : items.value.length)
+const selectedIndex = ref(-1)
 const popupEl = ref<HTMLElement | null>(null)
 const popupStyle = ref<Record<string, string>>({ bottom: '0px', left: '0px' })
 
@@ -116,14 +121,18 @@ watch([query, level], ([q, lvl]) => {
     categoryQuery: q,
   })
   props.editor.view.dispatch(tr)
-  selectedIndex.value = 0
+  selectedIndex.value = hostRowCount.value ? 0 : -1
 })
 
 const itemQuery = computed(() => (level.value === 'items' ? query.value : ''))
 const { items, categories } = useReferenceItems(selectedCategory, itemQuery, isActive)
 
 watch([filteredCategories, items, level], () => {
-  selectedIndex.value = 0
+  selectedIndex.value = hostRowCount.value ? 0 : -1
+}, { immediate: true })
+watch(() => nativeOffer.value?.id, () => {
+  nextTick(updatePosition)
+  if (selectedIndex.value >= hostRowCount.value) selectedIndex.value = hostRowCount.value ? 0 : -1
 })
 
 function updatePosition() {
@@ -199,7 +208,7 @@ function handleKeyDown(event: KeyboardEvent) {
   if (!isActive.value) return
 
   const currentList = level.value === 'category' ? filteredCategories.value : items.value
-  const maxIndex = Math.max(0, currentList.length - 1)
+  const maxIndex = currentList.length + (nativeOffer.value?.rows.length ?? 0) - 1
 
   switch (event.key) {
     case 'ArrowDown':
@@ -220,6 +229,7 @@ function handleKeyDown(event: KeyboardEvent) {
     case 'Tab':
       event.preventDefault()
       event.stopPropagation()
+      if (selectedIndex.value >= currentList.length) { nativeOffer.value?.rows[selectedIndex.value - currentList.length]?.select(); break }
       if (level.value === 'category') {
         const cat = filteredCategories.value[selectedIndex.value]
         if (cat) selectCategory(cat.id)
@@ -232,6 +242,7 @@ function handleKeyDown(event: KeyboardEvent) {
     case 'Escape':
       event.preventDefault()
       event.stopPropagation()
+      nativeOffer.value?.dismiss()
       deactivateAndClean()
       break
 

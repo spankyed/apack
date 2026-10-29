@@ -7,6 +7,7 @@
  */
 
 import { argsFromOptions } from '#features/code/be/services/claude-code/args.ts'
+import { EffortSchema } from '#features/code/be/services/claude-code/types.ts'
 import type { QueryOptions } from '#features/code/be/services/claude-code/types.ts'
 
 /** Assert that `needles` appear in `haystack` in the given order (contiguous). */
@@ -60,6 +61,7 @@ describe('argsFromOptions', () => {
       [{ model: 'sonnet' }, ['--model', 'sonnet']],
       [{ fallbackModel: 'haiku' }, ['--fallback-model', 'haiku']],
       [{ effort: 'high' }, ['--effort', 'high']],
+      [{ effort: 'xhigh' }, ['--effort', 'xhigh']],
       [{ thinking: 'enabled' }, ['--thinking', 'enabled']],
       [{ maxThinkingTokens: 1024 }, ['--max-thinking-tokens', '1024']],
       [{ maxTurns: 10 }, ['--max-turns', '10']],
@@ -97,6 +99,15 @@ describe('argsFromOptions', () => {
     it('emits --dangerously-skip-permissions only when flagged', () => {
       expect(argsFromOptions({}).includes('--dangerously-skip-permissions')).toBe(false)
       expect(argsFromOptions({ dangerouslySkipPermissions: true }).includes('--dangerously-skip-permissions')).toBe(true)
+    })
+
+    it('makes bypass available only when requested, without selecting it as the starting mode', () => {
+      const args = argsFromOptions({ allowDangerouslySkipPermissions: true, permissionMode: 'default' })
+      expect(args).toContain('--allow-dangerously-skip-permissions')
+      expectContains(args, ['--permission-mode', 'default'])
+      expect(args).not.toContain('--dangerously-skip-permissions')
+      expect(argsFromOptions({})).not.toContain('--allow-dangerously-skip-permissions')
+      expect(argsFromOptions({ allowDangerouslySkipPermissions: false })).not.toContain('--allow-dangerously-skip-permissions')
     })
 
     it('spreads allowedTools / disallowedTools', () => {
@@ -180,6 +191,15 @@ describe('argsFromOptions', () => {
     })
   })
 
+  it('preserves an explicit empty setting-source selection rather than inheriting defaults', () => {
+    expectContains(argsFromOptions({ settingSources: [] }), ['--setting-sources', ''])
+    expect(argsFromOptions({})).not.toContain('--setting-sources')
+  })
+
+  it('accepts xhigh through the public effort schema', () => {
+    expect(EffortSchema.parse('xhigh')).toBe('xhigh')
+  })
+
   describe('structured output', () => {
     it('JSON-stringifies jsonSchema', () => {
       const schema = { type: 'object', properties: { x: { type: 'number' } } }
@@ -234,4 +254,16 @@ describe('argsFromOptions', () => {
       expect(argsFromOptions({ [key]: false } as Partial<QueryOptions>)).not.toContain(flag)
     })
   })
+})
+
+it('passes explicit approved-channel selection as native argv without development-channel bypass', () => {
+  const args = argsFromOptions({channels:['plugin:review@owned','plugin:notes@owned']})
+  expectContains(args,['--channels','plugin:review@owned','plugin:notes@owned'])
+  expect(args).not.toContain('--dangerously-load-development-channels')
+  expect(argsFromOptions({channels:[]})).not.toContain('--channels')
+})
+
+it('rejects a channel selector that could introduce a different CLI flag',()=>{
+ expect(()=>argsFromOptions({channels:['--dangerously-load-development-channels']})).toThrow('not CLI flags')
+ expect(()=>argsFromOptions({channels:['review\nother']})).toThrow('not CLI flags')
 })

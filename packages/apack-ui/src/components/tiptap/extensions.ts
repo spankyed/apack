@@ -95,7 +95,8 @@ export function createExtensions({ mode, variant = 'full', placeholder, injected
           { itemName: 'taskItem', wrapperNames: ['taskList'] },
         ],
       },
-      ...(!cfg.richFormatting && { heading: false, strike: false, trailingNode: false }),
+      // Chat input must retain heading syntax when native prompt APIs parse Markdown.
+      ...(!cfg.richFormatting && { strike: false, trailingNode: false }),
     }),
     // Blockquote is loaded unconditionally (custom input rule is `|<space>`,
     // not `>`, so it doesn't collide with `>`-typed chat input). This ensures

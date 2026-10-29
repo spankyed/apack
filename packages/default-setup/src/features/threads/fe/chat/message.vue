@@ -1,11 +1,18 @@
 <template>
   <div
+    v-if="!groupedSuppressed"
+    :data-chat-message="message.id"
+    :data-native-selection-row="selectionRowId"
     :data-message-id="message.id"
     :class="[
-      'flex pb-3 animate-fade-in w-full',
+      'relative flex pb-3 animate-fade-in w-full',
       isMarker ? 'justify-center' : (isUser || isCollapsedAsideAsUser) ? 'justify-end' : 'justify-start'
     ]"
   >
+    <!-- Measure against the transcript width; native expansion can change the drawn bubble's width. -->
+    <div v-if="hasNativeUserFrame" ref="originalUserBody" inert aria-hidden="true" class="pointer-events-none invisible absolute left-4 right-4 top-3 leading-relaxed text-[15px]">
+      <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
+    </div>
     <!-- Marker message: compact divider with toggle -->
     <div v-if="isMarker" class="flex items-center gap-3 w-full px-4 py-1">
       <div class="flex-1 h-px bg-neutral-700/50"></div>
@@ -20,7 +27,7 @@
       <div class="flex-1 h-px bg-neutral-700/50"></div>
     </div>
 
-    <div v-else class="group max-w-full min-w-0">
+    <div v-else class="group max-w-full min-w-0" :class="{ 'w-full': hasNativeToolFrame }">
       <!-- Aside: collapsed interactive message (click to expand) -->
       <div v-if="message.autoHide && message.asideText && !expanded"
            class="text-xs italic py-1 px-2 cursor-pointer hover:bg-neutral-800/50 rounded transition-colors"
@@ -141,8 +148,9 @@
         ]"
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
+
         <!-- Attachments: files then images, horizontal scroll -->
-        <div v-if="message.references?.files?.length || message.references?.images?.length"
+        <div v-if="message.references?.files?.length || message.references?.images?.length" ref="attachmentStrip"
           class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin">
           <ImageThumbnail v-for="(img, index) in message.references.images" :key="'i-'+index"
             :src="img.url" :name="img.name" @click="$emit('open-lightbox', img.url)" />
@@ -150,20 +158,37 @@
             :file="file" class="flex-shrink-0" />
         </div>
 
+        <div v-if="message.references?.context?.length" class="mb-2 flex flex-wrap gap-1.5" aria-label="Attached context">
+          <span v-for="reference in message.references.context" :key="`${reference.refType}:${reference.refId}`"
+            :title="`${reference.refType}: ${reference.label}`"
+            class="inline-flex max-w-full items-center gap-1.5 rounded-md border border-neutral-700/50 bg-neutral-900/60 px-2 py-1 text-xs text-neutral-300">
+            <span v-if="reference.shortCode" class="shrink-0 font-mono text-neutral-500">{{ reference.shortCode }}</span>
+            <span class="truncate">{{ reference.label }}</span>
+          </span>
+        </div>
+
         <!-- Tool-activity blocks render ABOVE text so the work log
              appears before the model's commentary, not after it. -->
-        <InteractionContainer
-          v-if="toolActivityBlocks.length > 0"
-          class="mb-2"
-          :blocks="toolActivityBlocks"
-          :message-id="message.id"
-          :is-disabled="!!message.responseTimestamp"
-          :response="message.blockResponse"
-        />
+        <template v-for="entry in aboveTextBlocks" :key="entry.blockIndex">
+          <ThinkingBlock v-if="entry.thinking" class="mb-2" v-bind="entry.thinking"
+            @view="open => reportBlockView(entry.blockIndex, open)">
+            <template v-for="part in thinkingParts(entry.blockIndex, entry.thinking)" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
+              <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="part.frame"
+                @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
+              <pre v-else class="m-0 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-neutral-400">{{ part.text }}</pre>
+            </template>
+          </ThinkingBlock>
+          <InteractionContainer v-else class="mb-2" :blocks="[entry.block]" :message-id="message.id"
+            :is-disabled="!!message.responseTimestamp" :response="message.blockResponse" />
+        </template>
 
         <!-- Message content -->
-        <div class="leading-relaxed text-[15px]">
-          <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
+        <div data-chat-message-content class="leading-relaxed text-[15px]">
+          <template v-for="part in nativeParts" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
+            <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="part.frame"
+              @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
+            <TiptapEditor v-else mode="viewer" variant="chat" :model-value="part.text" />
+          </template>
         </div>
 
         <!-- Other block types (approval, choice, etc.) render BELOW text -->
@@ -188,9 +213,8 @@
         <!-- Truncation overlay for long user messages -->
         <div v-if="isUser && isTruncated && !userExpanded"
           class="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-neutral-800 via-neutral-800/90 to-transparent flex items-end justify-center pb-2 pointer-events-none">
-          <span class="text-xs text-neutral-400 flex items-center gap-1">
-            <ChevronDown :size="14" /> Click to view
-          </span>
+          <button v-if="hasNativeUserFrame" type="button" aria-label="Expand user message" class="pointer-events-auto flex items-center gap-1 rounded px-2 py-1 text-xs text-neutral-300 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-blue-400" @click.stop="userExpanded = true"><ChevronDown :size="14" /> Expand message</button>
+          <span v-else class="text-xs text-neutral-400 flex items-center gap-1"><ChevronDown :size="14" /> Click to view</span>
         </div>
       </div>
       </div>
@@ -214,9 +238,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUpdated, watch } from 'vue'
+import { computed, ref, onUpdated, watch, provide, h } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
+import NativeToolDrawing from './NativeToolDrawing.vue'
+import NativeToolGroups from './NativeToolGroups.vue'
+import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawings.ts'
+import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
+import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
+import type { ThinkingBlockProps } from '#features/threads/be/types.ts'
+import { claudeNativeMessageParts, claudeThinkingMessageParts } from './native-message-parts.ts'
+import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
@@ -226,12 +258,18 @@ import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 
 interface ChatMessageProps {
   message: MessageEntity
+  nativeFrames?: ClaudeUiTranscriptFrame[]
+  nativeViewId?: string
   isTyping?: boolean
   isTail?: boolean
   isClaudeCodeThread?: boolean
 }
 
 interface ChatMessageEmits {
+  (e: 'native-ui-press', actionId: string, href?: string): void
+  (e: 'native-ui-field', event: ClaudeUiFieldEvent): void
+  (e: 'native-ui-block-view', view: { messageId: string; blockIndex: number; open: boolean }): void
+  (e: 'native-ui-message-view', view: { messageId: string; isExpanded: boolean }): void
   (e: 'revert', messageId: string): void
   (e: 'revert-with-files', messageId: string): void
   (e: 'fork', messageId: string): void
@@ -248,12 +286,47 @@ const props = withDefaults(defineProps<ChatMessageProps>(), {
 })
 
 const emit = defineEmits<ChatMessageEmits>()
+provide(claudeToolDrawings, {
+  groups: (toolUseIds,fallback) => h(NativeToolGroups,{toolUseIds},{default:({ids}:{ids:readonly string[]})=>fallback(ids)}),
+  render: (component, toolUseId, fallback) => h(NativeToolDrawing, { component, toolUseId }, fallback),
+  frames: computed(() => (props.nativeFrames ?? []).filter(frame => (frame.component === 'ToolResult' || frame.component === 'ToolUse' || frame.component === 'ToolProgress' || frame.component === 'ToolGroup'))),
+  press: (id, href) => emit('native-ui-press', id, href),
+  field: event => emit('native-ui-field', event),
+  expanded: id => { const index = toolBlockIndex(id); return index >= 0 ? blockExpansion.get(index) : undefined },
+  release: id => { const index = toolBlockIndex(id); if (index >= 0) emit('native-ui-block-view', { messageId: props.message.id, blockIndex: index, open: false }) },
+  view: (id, open) => { const index = toolBlockIndex(id); if (index >= 0) reportBlockView(index, open) },
+})
+
+
+const hasNativeToolFrame = computed(() => (props.nativeFrames ?? []).some(frame => ['ToolUse', 'ToolResult', 'ToolProgress', 'ToolGroup'].includes(frame.component)))
+
+const groupedSuppressed = computed(() => {
+  if(props.message.text?.trim()||!props.message.blocks?.length||props.message.blocks.some(block=>block.type!=='tool-activity'))return false
+  const groups=(props.nativeFrames??[]).filter(frame=>frame.component==='ToolGroup'&&frame.body.status==='live')
+  return props.message.blocks.every(block=>block.props.entries?.length&&block.props.entries.every((entry:{id:string})=>groups.some(group=>group.component==='ToolGroup'&&group.tools[0]?.id!==entry.id&&group.tools.some(tool=>tool.id===entry.id))))
+})
+const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
+
+const blockExpansion = new Map<number, boolean>()
+function toolBlockIndex(id: string) { return props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1 }
+function reportBlockView(blockIndex: number, open: boolean) {
+  blockExpansion.set(blockIndex, open)
+  emit('native-ui-block-view', { messageId: props.message.id, blockIndex, open })
+}
+watch(() => props.nativeViewId, () => {
+  for (const [blockIndex, open] of blockExpansion) emit('native-ui-block-view', { messageId: props.message.id, blockIndex, open })
+}, { flush: 'post' })
 
 const expanded = ref(false)
 const forking = ref(false)
 const revertMenu = useContextMenu()
 
 const isUser = computed(() => props.message.sender === 'user')
+const selectionRowId = computed(() => {
+  const context = props.message.context
+  if (!props.isClaudeCodeThread || !['user', 'assistant'].includes(props.message.sender) || Array.isArray(context?.claudeNativeMessages) && context.claudeNativeMessages.length > 1) return undefined
+  return typeof context?.cliUuid === 'string' ? context.cliUuid : undefined
+})
 const statusIndicator = computed(() => {
   if (!isUser.value || !props.message.status) return null
   if (props.message.status === 'queued') return { label: 'Queued', dotClass: 'bg-amber-500 animate-pulse', textClass: 'text-neutral-400' }
@@ -278,10 +351,20 @@ const bubbleRef = ref<HTMLElement | null>(null)
 const userExpanded = ref(false)
 const isTruncated = ref(false)
 const MAX_USER_MSG_HEIGHT = 200
+const originalUserBody = ref<HTMLElement | null>(null), attachmentStrip = ref<HTMLElement | null>(null)
+const hasNativeUserFrame = computed(() => isUser.value && nativeParts.value.some(part => part.kind === 'native' && part.frame.component === 'UserMessage'))
+
+watch([() => props.message.id, () => props.isClaudeCodeThread, () => isUser.value, () => isTruncated.value, () => userExpanded.value], () => {
+  if (isUser.value && props.isClaudeCodeThread) emit('native-ui-message-view', { messageId: props.message.id, isExpanded: !isTruncated.value || userExpanded.value })
+}, { immediate: true })
 
 function checkTruncation() {
   if (bubbleRef.value && isUser.value) {
-    isTruncated.value = bubbleRef.value.scrollHeight > MAX_USER_MSG_HEIGHT
+    if (hasNativeUserFrame.value && !originalUserBody.value?.scrollHeight) return
+    const height = hasNativeUserFrame.value && originalUserBody.value
+      ? originalUserBody.value.scrollHeight + (attachmentStrip.value ? attachmentStrip.value.offsetHeight + 8 : 0) + 26
+      : bubbleRef.value.scrollHeight
+    isTruncated.value = height > MAX_USER_MSG_HEIGHT
   }
 }
 
@@ -293,6 +376,12 @@ watch(bubbleRef, (el, _prev, onCleanup) => {
   checkTruncation()
   onCleanup(() => observer.disconnect())
 }, { immediate: true })
+
+watch(originalUserBody, (element, _prior, onCleanup) => {
+  if (!element) return
+  const observer = new ResizeObserver(checkTruncation); observer.observe(element); checkTruncation()
+  onCleanup(() => observer.disconnect())
+})
 
 onUpdated(checkTruncation)
 
@@ -324,9 +413,14 @@ const asideContext = computed(() => {
 // Split blocks by type so tool-activity and thinking render above text while
 // other block types (approval, choice, etc.) render below text.
 const ABOVE_TEXT_BLOCKS = new Set(['tool-activity', 'thinking'])
-const toolActivityBlocks = computed(() =>
-  (props.message.blocks ?? []).filter((b: any) => ABOVE_TEXT_BLOCKS.has(b.type))
-)
+function thinkingProps(block: { type: string; props?: unknown }): ThinkingBlockProps | undefined {
+  if (block.type !== 'thinking' || !block.props || typeof block.props !== 'object') return
+  const value = block.props as Partial<ThinkingBlockProps>
+  if (typeof value.content !== 'string' || typeof value.label !== 'string' || (value.state !== 'streaming' && value.state !== 'done')) return
+  return value as ThinkingBlockProps
+}
+const aboveTextBlocks = computed(() => (props.message.blocks ?? []).map((block, blockIndex) => ({ block, blockIndex, thinking: thinkingProps(block) })).filter(entry => ABOVE_TEXT_BLOCKS.has(entry.block.type)))
+const thinkingParts = (blockIndex: number, block: ThinkingBlockProps) => claudeThinkingMessageParts(props.message.id, blockIndex, block, props.isClaudeCodeThread ? props.nativeFrames : [])
 const otherBlocks = computed(() =>
   (props.message.blocks ?? []).filter((b: any) => !ABOVE_TEXT_BLOCKS.has(b.type))
 )

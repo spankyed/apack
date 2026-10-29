@@ -20,6 +20,7 @@ export interface ToolActivityEntry {
   /** One-line output summary if the tool reported one. */
   outputSummary?: string;
   /** Optional full details revealed when the row is expanded. */
+  handbacks?: import('#features/code/common/native-handback.ts').ClaudeAgentHandback[];
   details?: { input?: unknown; output?: string; error?: string };
 }
 

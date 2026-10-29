@@ -1,3 +1,4 @@
+import type { ClaudeMcpForm } from '#features/code/common/mcp-elicitation-form.ts';
 /**
  * Helpers for reading/writing `thread.context.claudeCode` and toggling
  * the `claude-code` tag.
@@ -14,6 +15,7 @@
  */
 
 import type { Services, EntityId } from '#generated/services.ts';
+import type { ContextUsageData } from './context-usage.ts';
 import { resolvePlanDraft } from './plan-artifact.ts';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -35,6 +37,7 @@ export type PermissionMode =
 export type ChatState = 'idle' | 'working' | 'paused' | 'error' | 'success';
 
 export interface QueuedMessage {
+  channels?: string[];
   text: string;
   mode?: string;
   phase?: string;
@@ -45,6 +48,8 @@ export interface QueuedMessage {
 }
 
 export interface PendingControlRequest {
+  /** Correlation for the original live terminal dialog, never a print control request. */
+  nativeTerminal?: { genericTool?: import('#features/code/common/native-tool-permission.ts').ClaudeGenericToolPermissionApproval; tool?: import('#features/code/common/native-tool-permission.ts').ClaudeToolPermissionApproval; workflow?: import('#features/code/common/native-workflow-approval.ts').ClaudeWorkflowApproval; ownerId: string; sessionId: string; dialogId: string; revision: string; requestId?: string; title?: string; plan?: import('#features/code/common/native-plan.ts').ClaudePlanPresentation; review?: import('#features/code/common/native-file-approval.ts').ClaudeFileApprovalReview; file?: import('#features/code/common/native-file-approval.ts').ClaudeFileApprovalPresentation; cwd?: string; question?: string; reason?: string; problem?: string; presentation?: import('#features/code/common/native-question.ts').ClaudeQuestionPresentation };
   /** The CLI's request_id for the control_response. */
   requestId: string;
   /** The messageId of the approval/choice block sent to the user. */
@@ -56,6 +61,8 @@ export interface PendingControlRequest {
 }
 
 export interface ClaudeCodeThreadState {
+  channelSelection?: string[];
+  nativeLaunch?: import('#features/code/common/native-launch.ts').ClaudeNativeLaunch;
   sessionId?: string;
   /** History of previous sessionIds (oldest first), populated when compaction/fork/revert replaces the active session. */
   previousSessionIds?: string[];
@@ -66,6 +73,8 @@ export interface ClaudeCodeThreadState {
   // ─── Persistent session data (single source of truth) ──────────────
   /** Model name reported by the CLI ("claude-sonnet-4-6" etc.). */
   model?: string;
+  /** Requested per-thread selection, distinct from native reported model. */
+  modelOverride?: string;
   /** Epoch ms when the session was first created. */
   startedAt?: number;
   /** Number of turns executed in this session. */
@@ -80,16 +89,20 @@ export interface ClaudeCodeThreadState {
   recentTools?: Array<{ name: string; summary: string; at: number }>;
   /** Permission policy for the next turn. */
   permissionMode?: PermissionMode;
+  /** Native acknowledged mode to restore when leaving Plan across process ownership changes. */
+  prePlanMode?: PermissionMode;
   /** Whether to run in a git worktree for isolated file mutations. */
   useWorktree?: boolean;
   /** Whether the current sessionId was created with --worktree. */
   sessionWorktree?: boolean;
   /** Human-readable error when the session is broken (e.g. JSONL deleted). */
   sessionError?: string;
+  /** Failed history changes block continuation until an explicit reset/resume or successful retry. */
+  historyError?: string;
   /** Threshold percentages that have already fired an alert (avoids re-alerting). */
   alertedThresholds?: number[];
   /** Full context usage breakdown from CLI `/context` query. */
-  contextUsage?: any;
+  contextUsage?: ContextUsageData;
 
   // ─── Ephemeral coordination state ──────────────────────────────────
   /** True while a chat action invocation is actively running on this thread. */
@@ -105,6 +118,10 @@ export interface ClaudeCodeThreadState {
    * is routed.
    */
   pendingControlRequest?: PendingControlRequest;
+  pendingElicitation?: {
+    requestId: string; approvalMessageId: string; ownerPid?: number;
+    serverName: string; mode: 'form' | 'url'; form?: ClaudeMcpForm; message: string;
+  };
   /**
    * Set when the chat action detects no CWD is configured and sends a
    * directory-picker block. Stores the original message params so the
@@ -118,6 +135,7 @@ export interface ClaudeCodeThreadState {
     model?: string;
     allowedTools?: string[];
     disallowedTools?: string[];
+    channels?: string[];
     systemPrompt?: string;
     messageId?: string;
     references?: any;
@@ -370,6 +388,38 @@ export function dequeueMessage(services: Services, threadId: string): QueuedMess
   return msg;
 }
 
+/** Retire only this original MCP input; independent tool approvals keep their lifetime. */
+export function cancelPendingElicitation(services: Services, threadId: string, requestId: string): boolean {
+  const pending = getClaudeState(services, threadId)?.pendingElicitation;
+  if (!pending || pending.requestId !== requestId) return false;
+  services.chat.updateMessageState(pending.approvalMessageId as EntityId, { responseTimestamp: Date.now(), blockResponse: { cancelled: true } });
+  persistClaudeState(services, threadId, { pendingElicitation: undefined });
+  return true;
+}
+
+/** Retire only the approval named by a native cancellation; other requests may still be live. */
+export function cancelPendingControlRequest(services: Services, threadId: string, requestId: string): boolean {
+  const pending = getClaudeState(services, threadId)?.pendingControlRequest;
+  if (!pending || pending.requestId !== requestId) return false;
+  services.chat.updateMessageState(pending.approvalMessageId as any, {
+    responseTimestamp: Date.now(), blockResponse: { cancelled: true },
+  } as any);
+  if (pending.toolName === 'ExitPlanMode') resolvePlanDraft(services, threadId as EntityId, 'rejected');
+  persistClaudeState(services, threadId, { pendingControlRequest: undefined });
+  return true;
+}
+
+/** A response belongs to its process; do not turn a lost request into a model prompt. */
+export function expirePendingControlRequest(services: Services, threadId: string, requestId: string): void {
+  if (!cancelPendingControlRequest(services, threadId, requestId)) return;
+  setRunning(services, threadId, false);
+  updateChatState(services, threadId as EntityId, 'error');
+  const text = 'This Claude Code request expired before your response could be sent. Start a new turn to continue.';
+  services.chat.sendBlockMessage({ threadId: threadId as EntityId, text, forkable: false,
+    blocks: [{ type: 'note', props: { content: text, variant: 'warning', label: 'Request expired' } }],
+  });
+}
+
 /**
  * Kill the CLI handle, invalidate any pending interactive block, resolve
  * plan drafts, and clear all mid-turn flags. Shared by pause-turn, deny-tool,
@@ -387,12 +437,12 @@ export function killTurn(services: Services, threadId: string): void {
     approvalMessageId: prior?.pendingControlRequest?.approvalMessageId ?? null,
   });
 
-  // Kill CLI subprocess.
-  const handle = (services.cli as any).claudeCode.getHandle(threadId);
+  // Stop the process that owns this thread, including an interactive native handoff.
+  const handle = services.cli.claudeCode.getNativeTerminal(threadId) ?? services.cli.claudeCode.getHandle(threadId);
   if (handle) {
     try { handle.kill(); } catch { /* already gone */ }
-    (services.cli as any).claudeCode.clearHandle(threadId);
   }
+  services.cli.claudeCode.clearHandle(threadId);
 
   // Reject plan draft if killed during ExitPlanMode approval.
   if (prior?.pendingControlRequest?.toolName === 'ExitPlanMode') {
@@ -411,6 +461,8 @@ export function killTurn(services: Services, threadId: string): void {
       blockResponse: { cancelled: true },
     } as any);
   }
+
+  if (prior?.pendingElicitation) cancelPendingElicitation(services, threadId, prior.pendingElicitation.requestId);
 
   // Invalidate queued message so the user knows to resend.
   const queued = dequeueMessage(services, threadId);

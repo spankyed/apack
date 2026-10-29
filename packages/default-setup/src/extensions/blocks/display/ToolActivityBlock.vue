@@ -1,9 +1,14 @@
 <template>
-  <div class="rounded-lg border border-neutral-700 bg-neutral-800/40 overflow-hidden">
+  <NativeGroups v-if="!skipNativeGroups" :tool-use-ids="entries.map(entry => entry.id)">
+    <template #default="{ ids }"><ToolActivityBlock v-if="ids.length" v-bind="props" :entries="entries.filter(entry => ids.includes(entry.id))" :label="ids.length === entries.length ? label : ''" :skip-native-groups="true" /></template>
+  </NativeGroups>
+  <div v-else :data-native-tool-activity="nativeGrouped ? undefined : true" :data-native-tool-ids="nativeGrouped ? undefined : entries.map(entry => entry.id).join(' ')" class="rounded-lg border border-neutral-700 bg-neutral-800/40 overflow-hidden">
     <!-- Header row: chevron + icon + label + badge/spinner -->
     <button
+      v-if="!nativeGrouped"
       type="button"
       class="w-full flex items-baseline gap-2 px-3 py-2 text-left hover:bg-neutral-700/40 transition-colors"
+      :aria-expanded="isOpen"
       @click="isOpen = !isOpen"
     >
       <ChevronRight
@@ -20,10 +25,14 @@
       <span class="flex-1 min-w-8" />
       <template v-if="previewEntry">
         <span class="text-[11px] text-neutral-500 flex-shrink-0">{{ previewEntry.tool }}</span>
-        <span class="text-[11px] text-neutral-600 truncate font-mono text-right min-w-0">{{ previewEntry.summary }}</span>
+        <span class="text-[11px] text-neutral-600 truncate font-mono text-right min-w-0">{{ toolInputSummary(previewEntry) }}</span>
       </template>
       <!-- <span v-if="badge" class="text-xs text-neutral-500 flex-shrink-0 tabular-nums">{{ badge }}</span> -->
     </button>
+
+    <template v-for="entry in entries" :key="'report-'+entry.id">
+      <NativeAgentHandback v-for="report in entry.handbacks ?? []" :key="JSON.stringify([report.taskId, report.runId])" :report="report" class="mx-3 mb-3" />
+    </template>
 
     <!-- Artifact ref link — shown below the header when set (Phase C diff) -->
     <button
@@ -46,40 +55,58 @@
       <div
         v-for="(entry, index) in entries"
         :key="entry.id || index"
-        class="px-3 py-1.5 text-xs flex items-center gap-2 border-b border-neutral-800/60 last:border-0 hover:bg-neutral-800/40 cursor-default"
+        :data-native-agent-id="entry.nativeAgent?.id" :data-native-tool-use-id="entry.id"
+        class="px-3 py-2 text-xs border-b border-neutral-800/60 last:border-0 hover:bg-neutral-800/40 cursor-default"
         :class="{ 'opacity-50 line-through': entry.status === 'denied' }"
       >
-        <!-- Status icon -->
-        <Check v-if="entry.status === 'ok'" class="w-3 h-3 text-emerald-500 flex-shrink-0" />
-        <Loader2 v-else-if="entry.status === 'running'" class="w-3 h-3 text-neutral-400 animate-spin flex-shrink-0" />
-        <X v-else-if="entry.status === 'denied'" class="w-3 h-3 text-neutral-500 flex-shrink-0" />
-        <AlertCircle v-else-if="entry.status === 'error'" class="w-3 h-3 text-red-500 flex-shrink-0" />
+        <div class="flex min-w-0 items-center gap-2">
+          <NativeToolDrawing component="ToolUse" :tool-use-id="entry.id">
+          <!-- Status icon -->
+          <Check v-if="entry.status === 'ok'" class="w-3 h-3 text-emerald-500 flex-shrink-0" />
+          <Loader2 v-else-if="entry.status === 'running'" class="w-3 h-3 text-neutral-400 animate-spin flex-shrink-0" />
+          <X v-else-if="entry.status === 'denied'" class="w-3 h-3 text-neutral-500 flex-shrink-0" />
+          <AlertCircle v-else-if="entry.status === 'error'" class="w-3 h-3 text-red-500 flex-shrink-0" />
 
-        <!-- Tool name -->
-        <span class="font-mono text-neutral-300 min-w-[4.5rem] flex-shrink-0">{{ entry.tool }}</span>
+          <!-- Tool name -->
+          <span class="font-mono text-neutral-300 min-w-[4.5rem] flex-shrink-0">{{ entry.tool }}</span>
 
-        <!-- Summaries -->
-        <div class="flex-1 min-w-0">
-          <JsonHoverPopup :value="entry.details?.input" :label="entry.tool" width="trigger">
-            <div class="text-neutral-400 truncate font-mono text-left" dir="rtl">{{ entry.summary }}</div>
-          </JsonHoverPopup>
-          <JsonHoverPopup
-            v-if="entry.outputSummary && entry.status !== 'running'"
-            :value="entry.details?.output || entry.details?.error"
-            :label="`${entry.tool} output`"
-            width="trigger"
-          >
-            <div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div>
-          </JsonHoverPopup>
+          <!-- Summaries -->
+          <div class="flex-1 min-w-0">
+            <JsonHoverPopup :value="entry.details?.input" :label="entry.tool" width="trigger">
+              <div class="text-neutral-400 truncate font-mono text-left" :dir="entry.tool === 'LSP' ? 'ltr' : 'rtl'">{{ toolInputSummary(entry) }}</div>
+            </JsonHoverPopup>
+            <JsonHoverPopup
+              v-if="entry.outputSummary && entry.status !== 'running' && !entry.nativeAgent && !entry.nativeResult"
+              :value="entry.details?.output || entry.details?.error"
+              :label="`${entry.tool} output`"
+              width="trigger"
+            >
+              <div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div>
+            </JsonHoverPopup>
+          </div>
+
+          </NativeToolDrawing>
+          <!-- Duration badge -->
+          <span v-if="entry.durationMs != null" class="text-neutral-500 text-[10px] tabular-nums flex-shrink-0 min-w-[2.5rem] text-right">
+            {{ formatDuration(entry.durationMs) }}
+          </span>
+          <span v-else-if="entry.status === 'running'" class="text-neutral-500 text-[10px] flex-shrink-0">
+            running
+          </span>
         </div>
-
-        <!-- Duration badge -->
-        <span v-if="entry.durationMs != null" class="text-neutral-500 text-[10px] tabular-nums flex-shrink-0 min-w-[2.5rem] text-right">
-          {{ formatDuration(entry.durationMs) }}
-        </span>
-        <span v-else-if="entry.status === 'running'" class="text-neutral-500 text-[10px] flex-shrink-0">
-          running
-        </span>
+        <NativeToolDrawing component="ToolProgress" :tool-use-id="entry.id" />
+        <NativeToolDrawing v-if="entry.nativeResult" component="ToolResult" :tool-use-id="entry.id" class="mt-1">
+          <JsonHoverPopup v-if="entry.outputSummary && !entry.nativeAgent" :value="entry.details?.output || entry.details?.error" :label="`${entry.tool} output`" width="trigger"><div class="truncate text-[10px] text-neutral-500">{{ entry.outputSummary }}</div></JsonHoverPopup>
+        </NativeToolDrawing>
+        <section v-if="entry.nativeAgent" class="mt-2 min-w-0 rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-2" aria-label="Native agent status">
+          <div class="flex min-w-0 items-center justify-between gap-2 text-[10px] text-neutral-500">
+            <span class="min-w-0 truncate" :title="entry.nativeAgent.name">{{ entry.nativeAgent.name }}</span><span class="shrink-0">{{ entry.nativeAgent.status }}</span>
+          </div>
+          <div role="status" :aria-label="`Claude agent ${entry.nativeAgent.name} status`" :tabindex="entry.nativeAgent.statusText ? 0 : -1" class="mt-1 max-h-28 min-w-0 overflow-y-auto overscroll-contain rounded text-[11px] leading-4 focus-visible:outline focus-visible:outline-blue-400" data-testid="native-agent-status-text">
+            <NativeStatusText v-if="entry.nativeAgent.statusText" :text="entry.nativeAgent.statusText" />
+          </div>
+          <NativeTaskControls v-if="entry.nativeAgent.ownerId && entry.nativeAgent.sessionId" :task="{ ...entry.nativeAgent, ownerId: entry.nativeAgent.ownerId, sessionId: entry.nativeAgent.sessionId }" />
+        </section>
       </div>
     </div>
   </div>
@@ -87,20 +114,17 @@
 
 <script setup lang="ts">
 import { sendToSurface } from '#generated/events.ts'
-import { ref, computed, watch, nextTick } from 'vue'
+import { type PropType, ref, computed, watch, nextTick, inject, onMounted, onBeforeUnmount, defineComponent } from 'vue'
 import { ChevronRight, Wrench, Check, Loader2, X, AlertCircle, ArrowRight } from 'lucide-vue-next'
 import JsonHoverPopup from '@apackdev/ui/components/JsonHoverPopup'
 import { computeLabel } from './tool-activity-label.ts'
+import { toolInputSummary } from './tool-input-summary.ts'
 
-interface ToolActivityEntry {
-  id: string
-  tool: string
-  summary: string
-  status: 'running' | 'ok' | 'denied' | 'error'
-  durationMs?: number
-  outputSummary?: string
-  details?: { input?: unknown; output?: string; error?: string }
-}
+import type { ToolActivityEntry } from '#features/threads/be/types.ts'
+import { claudeToolDrawings } from './native-tool-drawings.ts'
+import NativeTaskControls from './NativeTaskControls.vue'
+import NativeAgentHandback from './NativeAgentHandback.vue'
+import NativeStatusText from './NativeStatusText.vue'
 
 interface ArtifactRef {
   artifactId: string
@@ -112,23 +136,44 @@ interface Props {
   label: string
   state: 'streaming' | 'done' | 'error'
   defaultOpen?: boolean
+  skipNativeGroups?: boolean
+  nativeGrouped?: boolean
+  nativeExpansion?: boolean
   artifactRef?: ArtifactRef
   phase?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   defaultOpen: false,
+  nativeExpansion: undefined,
 })
+
+const nativeDrawings = inject(claudeToolDrawings, undefined)
+const NativeGroups = defineComponent({
+  props:{toolUseIds:{type:Array as PropType<string[]>,required:true}},
+  setup(props,{slots}){return()=>nativeDrawings?.groups(props.toolUseIds,ids=>slots.default?.({ids}))??slots.default?.({ids:props.toolUseIds})},
+})
+// The owning message supplies its native renderer; this display block owns no feature UI.
+const NativeToolDrawing = defineComponent({
+  props: { toolUseId: { type: String, required: true }, component: { type: String as PropType<'ToolUse' | 'ToolResult' | 'ToolProgress'>, required: true } },
+  setup(props, { slots }) { return () => nativeDrawings?.render(props.component, props.toolUseId, slots.default ?? (() => [])) ?? slots.default?.() },
+})
+
+onMounted(() => { if (props.skipNativeGroups && !props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, isOpen.value) })
+onBeforeUnmount(() => { if (props.skipNativeGroups && !props.nativeGrouped && props.entries[0]) nativeDrawings?.release(props.entries[0].id) })
 
 // User toggle wins once they interact; we only auto-open on error-state
 // transitions (P3 of the design doc).
-const isOpen = ref(props.defaultOpen)
+const isOpen = ref(props.nativeExpansion ?? (props.entries[0] ? nativeDrawings?.expanded(props.entries[0].id) : undefined) ?? props.defaultOpen)
+watch(() => props.nativeExpansion, open => { if(open !== undefined)isOpen.value=open })
+watch(isOpen, open => { if (props.skipNativeGroups && !props.nativeGrouped && props.entries[0]) nativeDrawings?.view(props.entries[0].id, open) })
+
 const listEl = ref<HTMLElement | null>(null)
 let userHasToggled = false
 let userHasScrolled = false
 
 watch(() => props.state, (next, prev) => {
-  if (next === 'error' && prev !== 'error' && !userHasToggled) {
+  if (!props.nativeGrouped && next === 'error' && prev !== 'error' && !userHasToggled) {
     isOpen.value = true
   }
 })

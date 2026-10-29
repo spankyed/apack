@@ -1,0 +1,209 @@
+import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { stripVTControlCharacters as _stripVTControlCharacters } from 'node:util'
+import { pathToFileURL } from 'node:url'
+import { test, expect } from '@apackdev/testing'
+const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
+test('runs native Client state props input and lifetime inside the app', async ({ app, appPage, electronApp }, testInfo) => {
+  test.setTimeout(90000)
+  const nativeWindow=await electronApp.browserWindow(appPage)
+  async function capture({path}:{path:string}){
+    const size=appPage.viewportSize()!
+    await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+    const result=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},size)
+    expect(result.size).toEqual(size)
+    await writeFile(path,Buffer.from(result.png,'base64'))
+  }
+  expect(process.env.HOME).toBe(workspace)
+  const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
+  const restriction = planScenario === 'managed-clear'
+  const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
+  const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
+  await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
+  await app.navigate('host/settings')
+  await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
+  const provider = appPage.getByText('Claude Code CLI', { exact: true }).locator('..').locator('..').locator('..')
+  await provider.getByPlaceholder('Path override (auto-detected if empty)').fill(launcher!)
+  await appPage.waitForTimeout(700)
+  await app.navigate('default-setup/threads')
+  await appPage.evaluate(({ cwd, phase }) => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase }) }, { cwd: workspace!, phase: 'Edit' })
+  const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
+  async function command(name: string, args = '') {
+    const editor = card.locator('[contenteditable="true"]')
+    await editor.fill(''); await editor.pressSequentially('/' + name)
+    await appPage.locator('.command-suggestion-popup').getByText('/' + name, { exact: true }).click()
+    if (args) await editor.pressSequentially(args)
+    await card.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect(editor).toHaveText('')
+  }
+  await command('cc-set-dir', workspace!)
+  await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
+  await card.getByRole('button', { name: 'Send', exact: true }).click()
+  const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
+  await expect.poll(async () => (await context()).turns).toBe(1)
+  const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
+  const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
+  await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
+  await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
+  const input = section.locator('textarea.xterm-helper-textarea')
+  let theme = false, security = false, navigated = false, trusted = false
+  await expect.poll(async () => {
+    const current = await context(), native = current.native
+    const text = native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
+    const screen = recognizeOnboardingPrompt(text, workspace)
+    if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
+    else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
+    else if (screen === 'workspace-trust' && !navigated) { navigated = true; await input.press('ArrowDown') }
+    else if (screen === 'workspace-trust-selected' && navigated && !trusted) { trusted = true; await input.press('Enter') }
+    return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('AppNativeMain ' + sessionId))
+  }, { timeout: 25000, intervals: [250] }).toBe(true)
+  await expect(card).toBeHidden()
+  const boundNativePid = (await context()).native.state.nativePid
+  await section.getByRole('button', {name:'Back to conversation',exact:true}).click()
+  await appPage.setViewportSize({width:1000,height:1000})
+  await card.getByRole('button',{name:'Session tools',exact:true}).click()
+  const fieldScenario=planScenario==='client-fields'
+  const composer=card.locator('[contenteditable="true"]')
+  if(fieldScenario){
+    const regions=card.locator('[data-native-client]'),left=regions.nth(0),right=regions.nth(1)
+    await expect(regions).toHaveCount(2)
+    const a=left.getByRole('textbox',{name:'A draft',exact:true}),b=right.getByRole('textbox',{name:'B draft',exact:true})
+    await expect(a).toBeVisible();await expect(b).toBeVisible()
+    await composer.fill('Composer draft survives Client updates')
+    await a.fill('LeftDraft');await b.fill('RightDraft')
+    await expect(a).toHaveValue('LeftDraft');await expect(b).toHaveValue('RightDraft')
+    const completed=async()=>JSON.parse(await readFile(join(workspace!,'native-client-field-completed.json'),'utf8').catch(error=>{if(error.code==='ENOENT')return '[]';throw error}))
+    await expect.poll(async()=>(await completed()).filter((e:any)=>['LeftDraft','RightDraft'].includes(e.value)&&e.elapsed>=50).length).toBe(2)
+    await left.getByRole('combobox',{name:'A choice',exact:true}).press('Enter');await appPage.keyboard.press('End');await appPage.keyboard.press('Enter')
+    await left.getByRole('combobox').press('Enter');await expect(appPage.getByRole('option').last()).toHaveAttribute('aria-selected','true');await appPage.keyboard.press('Escape')
+    await right.getByRole('combobox').press('Enter');await expect(appPage.getByRole('option').first()).toHaveAttribute('aria-selected','true');await appPage.keyboard.press('Escape')
+    await a.fill('RewriteField');await expect(a).toHaveValue('NativeRewritten');await expect(b).toHaveValue('RightDraft')
+    await a.focus()
+    await a.evaluate(element=>{
+      const input=element as HTMLTextAreaElement
+      input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
+      input.value='に';input.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true,data:'に'}))
+      input.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'Enter',isComposing:true}))
+    })
+    await expect(a).toHaveValue('に');await expect(a).toBeFocused()
+    await a.evaluate(element=>{
+      const input=element as HTMLTextAreaElement;input.value='日本語'
+      input.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:'日本語'}))
+      input.dispatchEvent(new InputEvent('input',{bubbles:true,data:'日本語'}))
+    })
+    await expect.poll(async()=> (await completed()).filter((e:any)=>e.value==='日本語').length).toBe(1)
+    await expect(a).toHaveValue('日本語');await expect(a).toBeFocused()
+    await a.press('Enter');await expect(left).toContainText('submitted=日本語')
+    await expect(composer).toHaveText('Composer draft survives Client updates')
+    await left.focus();await left.press('Space');await expect(left).toContainText('key=space')
+    await expect(left).toBeFocused();await left.press('Control+c');await expect(left).not.toBeFocused()
+    await left.focus();await left.press('Control+d');await expect(left).not.toBeFocused()
+    await expect(left).toContainText('key=space');await expect(right).toContainText('key=none')
+    await a.scrollIntoViewIfNeeded()
+    await capture({path:testInfo.outputPath('apack-native-client-fields-wide.png')})
+    await left.getByRole('combobox').scrollIntoViewIfNeeded()
+    await capture({path:testInfo.outputPath('apack-native-client-fields-choices.png')})
+    await appPage.setViewportSize({width:680,height:900})
+    await expect(a).toHaveValue('日本語');await expect(b).toHaveValue('RightDraft')
+    await b.scrollIntoViewIfNeeded()
+    await capture({path:testInfo.outputPath('apack-native-client-fields-compact.png')})
+  }else{
+  const region=card.locator('[data-native-client]')
+  await expect(region).toContainText('label=initial')
+  await expect(region).toContainText('count=0')
+  const clientLabel=region.getByText(/^Native Client label=/)
+  async function showClientLabel(){
+    await clientLabel.scrollIntoViewIfNeeded()
+    await expect.poll(()=>clientLabel.evaluate(element=>{
+      let left=0,right=innerWidth,top=0,bottom=innerHeight
+      for(let parent=element.parentElement;parent;parent=parent.parentElement){const style=getComputedStyle(parent),box=parent.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(style.overflowX)){left=Math.max(left,box.left);right=Math.min(right,box.right)}if(/auto|scroll|hidden|clip/.test(style.overflowY)){top=Math.max(top,box.top);bottom=Math.min(bottom,box.bottom)}}
+      return [...element.getClientRects()].some(box=>{const x1=Math.max(left,box.left),x2=Math.min(right,box.right),y1=Math.max(top,box.top),y2=Math.min(bottom,box.bottom);return x2>x1&&y2>y1&&element.contains(document.elementFromPoint(x1+Math.min(10,(x2-x1)/2),(y1+y2)/2))})
+    })).toBe(true)
+  }
+  await showClientLabel()
+  await expect.poll(()=>region.textContent()).not.toContain('room=0x0')
+  await capture({path:testInfo.outputPath('apack-native-client-initial.png')})
+  const id=await region.getAttribute('data-native-client')
+  await region.getByRole('button',{name:'Increment Client',exact:true}).click()
+  await expect(region).toContainText('count=1')
+  await composer.fill('Composer draft survives Client updates')
+  await region.focus();await region.press('k')
+  await expect(region).toContainText('key=k')
+  await expect(region).toContainText('label=reply')
+  await expect(region.locator('[data-native-client-text-input]')).toBeFocused()
+  await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-client-message.json'),'utf8')).data.key).toBe('k')
+  await card.getByRole('button',{name:'Update Client props',exact:true}).click()
+  await expect(region).toContainText('label=changed')
+  await expect(region).toContainText('count=1')
+  expect(await region.getAttribute('data-native-client')).toBe(id)
+  await region.scrollIntoViewIfNeeded()
+  const point=await region.evaluate(element=>{
+    const bounds=element.getBoundingClientRect();let left=Math.max(0,bounds.left),right=Math.min(innerWidth,bounds.right),top=Math.max(0,bounds.top),bottom=Math.min(innerHeight,bounds.bottom)
+    for(let parent=element.parentElement;parent;parent=parent.parentElement){const style=getComputedStyle(parent),clip=parent.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(style.overflowX)){left=Math.max(left,clip.left);right=Math.min(right,clip.right)}if(/auto|scroll|hidden|clip/.test(style.overflowY)){top=Math.max(top,clip.top);bottom=Math.min(bottom,clip.bottom)}}
+    const x=left+Math.min(15,(right-left)/2),y=top+Math.min(10,(bottom-top)/2)
+    return{x,y,outsideX:bounds.left-20,outsideY:Math.min(innerHeight-2,bounds.bottom+10),visible:element.contains(document.elementFromPoint(x,y)),width:right-left,height:bottom-top}
+  })
+  expect(point.visible).toBe(true);expect(point.width).toBeGreaterThan(0);expect(point.height).toBeGreaterThan(0)
+  await capture({path:testInfo.outputPath('apack-native-client-before-drag.png')})
+  await appPage.mouse.move(point.x,point.y);await appPage.mouse.down()
+  await appPage.mouse.move(point.outsideX,point.outsideY)
+  await expect.poll(()=>region.textContent()).toMatch(/xy=-[0-9]+,/)
+  await appPage.mouse.up()
+  await region.focus();await region.press('Escape');await expect(composer).toBeFocused()
+  await expect(composer).toHaveText('Composer draft survives Client updates')
+  await showClientLabel()
+  await capture({path:testInfo.outputPath('apack-native-client-interactive.png')})
+  const wideColumns=Number((await region.textContent())!.match(/room=(\d+)x/)![1])
+  await appPage.setViewportSize({width:680,height:900})
+  await expect.poll(async()=>Number((await region.textContent())?.match(/room=(\d+)x/)?.[1]??0)).toBeLessThan(wideColumns)
+  await expect(region).toContainText('count=1')
+  await showClientLabel()
+  await capture({path:testInfo.outputPath('apack-native-client-compact.png')})
+  const collapseProof: any[]=[]
+  for(const width of [1100,680]){
+    await appPage.setViewportSize({width,height:width===1100?900:600})
+    const keyboard=region.locator('[data-native-client-text-input]')
+    await keyboard.focus()
+    await keyboard.evaluate(element=>{element.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));element.dispatchEvent(new CompositionEvent('compositionupdate',{bubbles:true,data:'withdrawn'}))})
+    const before=JSON.parse(await readFile(join(workspace!,'native-client-message.json'),'utf8'))
+    await card.getByRole('button',{name:'Session tools',exact:true}).click()
+    await expect(region).toBeHidden()
+    await keyboard.evaluate(element=>{element.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:'withdrawn'}));element.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'x'}))})
+    expect(JSON.parse(await readFile(join(workspace!,'native-client-message.json'),'utf8'))).toEqual(before)
+    await expect(composer).toHaveText('Composer draft survives Client updates')
+    await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport({ratio:.99})
+    await capture({path:testInfo.outputPath(`apack-native-client-collapsed-${width}.png`)})
+    await card.getByRole('button',{name:'Session tools',exact:true}).click()
+    expect(await region.getAttribute('data-native-client')).toBe(id)
+    await expect(region).toContainText('count=1')
+    const freshKey=width===1100?'y':'z'
+    await keyboard.focus();await keyboard.press(freshKey)
+    await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-client-message.json'),'utf8')).data.key).toBe(freshKey)
+    await showClientLabel()
+    await capture({path:testInfo.outputPath(`apack-native-client-reopened-${width}.png`)})
+    collapseProof.push({width,id,hiddenInputRefused:true,stateRetained:true,freshKey,sessionId,nativePid:(await context()).native.state.nativePid})
+  }
+  await writeFile(join(workspace!,'native-client-collapse-proof.json'),JSON.stringify(collapseProof,null,2))
+  await card.getByRole('button',{name:'Toggle Client',exact:true}).click();await expect(region).toHaveCount(0)
+  await card.getByRole('button',{name:'Toggle Client',exact:true}).click();await expect(region).toContainText('count=0')
+  expect(await region.getAttribute('data-native-client')).not.toBe(id)
+  await showClientLabel()
+  await capture({path:testInfo.outputPath('apack-native-client-remounted.png')})
+  await expect(composer).toHaveText('Composer draft survives Client updates')
+  }
+  expect((await context()).native.state.nativePid).toBe(boundNativePid)
+  await composer.fill('Continue after native Client verification.')
+  await card.getByRole('button',{name:'Send',exact:true}).click()
+  await expect.poll(async()=>{const c=await context();return c.native?.state.busy===false&&c.messages.some((m:any)=>m.context?.claudeTerminalMessage&&m.text==='Fixture completed.')}).toBe(true)
+  await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+  await section.getByRole('button',{name:'Stop session',exact:true}).click()
+  await expect.poll(async()=> (await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/)
+  const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
+  await composer.fill('Continue the same session after layout verification.')
+  await card.getByRole('button',{name:'Send',exact:true}).click()
+  await expect.poll(async()=> (await context()).claude.chatState).toBe('success')
+  expect((await context()).sessionId).toBe(sessionId)
+  expect(errors).toEqual([])
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,...(fieldScenario?{nativeClientFieldIsolation:true,nativeClientFieldRewrite:true,nativeClientFieldSubmit:true,nativeClientEmbeddedComposition:true,nativeClientKeyRelease:true}:{nativeClientState:true,nativeClientProps:true,nativeClientKey:true,nativeClientPost:true,nativeClientCapture:true,nativeClientRemount:true}),nativeClientDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
+})

@@ -1,12 +1,27 @@
+import { backgroundSession } from './claude-code/background-sessions.ts'
+import { parseMcpElicitationForm, validateMcpElicitationForm } from '../../common/mcp-elicitation-form.ts'
+import type { ClaudeNativeLaunch } from '../../common/native-launch.ts'
+import { prepareClaudeNativeTerminal } from './claude-code/terminal-owner.ts'
+import type { ClaudeNativeTerminalOwner } from './claude-code/terminal-owner.ts'
+import type { ClaudeNativeTerminalHandoffOptions } from './claude-code/handle-store.ts'
+import { getModels } from './claude-code/models.ts'
+import type { ClaudeModelCatalog } from './claude-code/host-controls.ts'
+import type { ClaudeConversation, ClaudeTurnConsumer } from './claude-code/conversation.ts'
+import { getSessionPlan, type ClaudeSessionPlanOptions } from './claude-code/plan.ts'
+import type { ClaudePlan } from './claude-code/host-controls.ts'
+import './thread-history.ts'
+import { renameSession, validateSessionResumeTarget, getSessionFileRewindPreview, rewindSessionFiles, type ClaudeSessionFileRewindOptions, type ClaudeSessionResumeTargetOptions } from './claude-code/session-controls.ts'
 import { featureSettings } from '#generated/settings.ts';
 
 import { GitRepository } from '#features/code/be/services/git.ts'
 import * as ghCli from '#features/code/be/services/gh-cli.ts'
 import type { GitStatusFile, GhPullRequest, GhPRComment, GhReviewThread } from '#features/code/be/types.ts'
+import { getSessionContextUsage, type ClaudeSessionContextOptions } from './claude-code/context.ts'
+import type { ClaudeFileRewind, ClaudeContextUsage } from './claude-code/host-controls.ts'
 import { claudeCode } from './claude-code/index.ts'
 import type { QueryOptions, QueryHandle, AuthStatus, SessionInfo, SessionListOptions, SessionTranscriptEntry, SessionViewOptions } from './claude-code/index.ts'
 import type { ExecOnceOptions, ExecOnceResult } from './claude-code/runner.ts'
-import { storeHandle, getHandle, clearHandle } from './claude-code/handle-store.ts'
+import { storeHandle, getHandle, clearHandle, getNativeLaunch, openNativeTerminal, getNativeTerminal, openConversation, getConversation, isConversationBusy, closeIdleConversation, isCurrentTurn } from './claude-code/handle-store.ts'
 import { codexExec } from './codex/runner.ts'
 import type { CodexExecOptions, CodexExecResult } from './codex/runner.ts'
 import { testCli, isCliName } from '../utils/resolve-cli.ts'
@@ -36,13 +51,28 @@ export interface CliServiceType {
   }
   /**
    * Claude Code wrapper. Highlights only — the full surface (sessions, mcp,
-   * surfaces, skills, …) is available via `import { claudeCode } from
-   * '#features/code/be/services/claude-code/index.ts'`.
+   * plugins, skills, …) is available from '#features/code/be/services/claude-code/index.ts'.
    */
   /** Clear-cache resolve + exec test — same path as the Settings test button. */
   testCli(provider: string): Promise<{ success: true; resolvedPath: string } | { success: false; error: string }>
   claudeCode: {
+    backgroundSession: typeof backgroundSession
+    parseMcpElicitationForm: typeof parseMcpElicitationForm
+    validateMcpElicitationForm: typeof validateMcpElicitationForm
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
+    openConversation(key: string, launchKey: string, opts: Omit<QueryOptions, 'cwd' | 'prompt'> & { cwd?: string; accountedCostUsd?: number }, consumeAutonomous: ClaudeTurnConsumer): Promise<ClaudeConversation>
+    getConversation(key: string): { owner: ClaudeConversation; launchKey: string } | undefined
+    isConversationBusy(key: string): boolean
+    isCurrentTurn(key: string, handle: QueryHandle): boolean
+    closeIdleConversation(key: string): Promise<boolean>
+    /** Read a saved session's native plan without a prompt or transcript writes. */
+    getPlan(opts: Omit<ClaudeSessionPlanOptions, 'cwd'> & { cwd?: string }): Promise<ClaudePlan>
+    /** Read a saved session's native context summary without a prompt or transcript writes. */
+    getContextUsage(opts: Omit<ClaudeSessionContextOptions, 'cwd'> & { cwd?: string }): Promise<ClaudeContextUsage>
+    /** Validate native fork/resume membership without a prompt or persisted fork. */
+    validateResumeTarget(opts: Omit<ClaudeSessionResumeTargetOptions, 'cwd'> & { cwd?: string }): Promise<void>
+    getFileRewindPreview(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
+    rewindFiles(opts: Omit<ClaudeSessionFileRewindOptions, 'cwd'> & {cwd?: string}): Promise<ClaudeFileRewind>
     version(): Promise<string>
     authStatus(): Promise<AuthStatus>
     listSessions(opts?: SessionListOptions): Promise<SessionInfo[]>
@@ -62,8 +92,12 @@ export interface CliServiceType {
     storeHandle(key: string, handle: QueryHandle): void
     /** Retrieve a stored query handle by key (typically threadId). */
     getHandle(key: string): QueryHandle | undefined
-    /** Clear a stored handle (call on query end to avoid leaking references). */
+    /** Release an owned turn; idle process controls remain available until close/teardown. */
     clearHandle(key: string): void
+    /** Explicitly move an idle live conversation into its native terminal interface. */
+    openNativeTerminal(key: string, options?: ClaudeNativeTerminalHandoffOptions): Promise<ClaudeNativeTerminalOwner>
+    getNativeLaunch(key: string): Promise<ClaudeNativeLaunch | undefined>
+    getNativeTerminal(key: string): ClaudeNativeTerminalOwner | undefined
     /**
      * Low-level one-shot CLI invocation. Used by `CC: Handle Revert` to run
      * `claude --resume <sid> --rewind-files <uuid>` for file-rewind on revert.
@@ -74,11 +108,13 @@ export interface CliServiceType {
     readSettings(): Promise<Record<string, any>>
     /** Write the CLI's user-scope settings.json (~/.claude/settings.json). */
     writeSettings(settings: Record<string, any>): Promise<void>
+    /** Native model discovery can run session hooks when a temporary process is explicitly requested. */
+    getModels(opts?: { cwd?: string; includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
     /** List skill files from user (~/.claude/skills/) and project (.claude/skills/) dirs. */
     listSkills(): Promise<Array<{ name: string; scope: string; path: string }>>
     /** List memory/CLAUDE.md files from known locations. */
     listMemoryFiles(): Promise<Array<{ name: string; scope: string; path: string }>>
-    /** Rename a Claude Code session by appending a metadata entry to its JSONL file. */
+    /** Rename a Claude Code session through the native process. */
     renameSession(id: string, title: string, opts?: { cwd?: string }): Promise<void>
     /** Check whether a session JSONL file exists under the given (or default) project directory. */
     sessionExists(id: string, opts?: { cwd?: string }): Promise<boolean>
@@ -165,6 +201,9 @@ function createCliService(): CliServiceType {
       },
     },
     claudeCode: {
+      backgroundSession,
+      parseMcpElicitationForm,
+      validateMcpElicitationForm,
       query(opts) {
         const cwd = opts.cwd ?? resolveCwd()
         // Default replayUserMessages=true so the CLI emits post-persistence
@@ -177,6 +216,37 @@ function createCliService(): CliServiceType {
         // `replayUserMessages: false` explicitly (spread order honors it).
         return claudeCode.query({ replayUserMessages: true, ...opts, cwd })
       },
+      openConversation(key, launchKey, opts, consumeAutonomous) {
+        const { accountedCostUsd = 0, ...queryOptions } = opts
+        return openConversation(key, launchKey, () => claudeCode.query({ ...queryOptions, cwd: opts.cwd ?? resolveCwd(),
+          prompt: undefined, keepStdinOpen: true, surfaceControlRequests: true, replayUserMessages: true }), consumeAutonomous, accountedCostUsd)
+      },
+      getConversation,
+      openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal, async launch => {
+        const { sessionId, columns: _columns, rows: _rows, ...queryOptions } = launch
+        const handle = await claudeCode.query({ ...queryOptions, resume: sessionId, keepStdinOpen: true, noSessionPersistence: true })
+        try {
+          const settings = await handle.getSettings(), permissionMode = await handle.getPermissionMode()
+          if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')
+          return { settings, permissionMode }
+        } finally { await handle.close() }
+      }) },
+      getNativeLaunch,
+      getNativeTerminal,
+      isConversationBusy,
+      isCurrentTurn,
+      closeIdleConversation,
+      getPlan(opts) {
+        return getSessionPlan({ ...opts, cwd: opts.cwd ?? resolveCwd() })
+      },
+      getContextUsage(opts) {
+        return getSessionContextUsage({ ...opts, cwd: opts.cwd ?? resolveCwd() })
+      },
+      validateResumeTarget(opts) {
+        return validateSessionResumeTarget({ ...opts, cwd: opts.cwd ?? resolveCwd() })
+      },
+      getFileRewindPreview(opts) { return getSessionFileRewindPreview({...opts, cwd: opts.cwd ?? resolveCwd()}) },
+      rewindFiles(opts) { return rewindSessionFiles({...opts, cwd: opts.cwd ?? resolveCwd()}) },
       version() {
         return claudeCode.system.version()
       },
@@ -209,12 +279,20 @@ function createCliService(): CliServiceType {
       },
       async readSettings() {
         const settingsPath = path.join(configDir(), 'settings.json')
+        let raw: string
         try {
-          const raw = await fs.promises.readFile(settingsPath, 'utf-8')
-          return JSON.parse(raw)
-        } catch {
-          return {}
+          raw = await fs.promises.readFile(settingsPath, 'utf-8')
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return {}
+          throw error
         }
+        let settings: unknown
+        try { settings = JSON.parse(raw) }
+        catch { throw new Error('Claude Code settings.json is not valid JSON; repair it before editing.') }
+        if (settings === null || typeof settings !== 'object' || Array.isArray(settings)) {
+          throw new Error('Claude Code settings.json must contain an object; repair it before editing.')
+        }
+        return settings as Record<string, any>
       },
       async writeSettings(settings) {
         const settingsPath = path.join(configDir(), 'settings.json')
@@ -226,6 +304,9 @@ function createCliService(): CliServiceType {
           }
           throw err
         }
+      },
+      getModels(opts) {
+        return getModels({ cwd: opts?.cwd ?? resolveCwd(), ...(opts?.includeUnsupportedModels !== undefined ? { includeUnsupportedModels: opts.includeUnsupportedModels } : {}) })
       },
       async listSkills() {
         const results: Array<{ name: string; scope: string; path: string }> = []
@@ -286,7 +367,7 @@ function createCliService(): CliServiceType {
       },
       async renameSession(id, title, opts) {
         const cwd = opts?.cwd ?? resolveCwd()
-        await claudeCode.sessions._experimental_rename(id, title, { cwd })
+        await renameSession({ sessionId: id, title, cwd })
       },
       async sessionExists(id, opts) {
         const cwd = opts?.cwd ?? resolveCwd()

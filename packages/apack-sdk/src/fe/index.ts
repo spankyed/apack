@@ -11,7 +11,7 @@ export type { _HostBridge } from './electron-api.ts';
 export type { SpeechEvent } from './speech-event.ts';
 export type { Surface, SurfaceDefinition, SurfaceInbox, SurfaceInboxAudiences, SurfaceLifecycleEvent, SurfaceStateOf, RouteComponents } from './surface.ts'
 export type { PackFEFeature, PackFERegistration } from './pack-fe-registration.ts'
-export { surfaceStorage, useSurfaceStorage, type SurfaceStorage } from './surface-storage.ts'
+export { surfaceStorage, surfaceSessionStorage, useSurfaceStorage, type SurfaceStorage } from './surface-storage.ts'
 export { useSurfaceDraft } from './surface-draft.ts'
 export { pasteIntoElement } from './input-paste.ts'
 export { SurfaceScope, useSurface } from './actor-system.ts'
@@ -71,3 +71,5 @@ export { getStepDeclarations, getStepDeclaration, getStepBinding, onStepsChanged
 export type { ArtifactFrontendBinding, BlockFrontendBinding } from './viewer-bindings.ts';
 export { getArtifactDeclarations, getArtifactDeclaration, getArtifactBinding, useArtifactDeclarations } from './artifact-reader.ts';
 export { getBlockDeclarations, getBlockDeclaration, getBlockBinding, useBlockDeclarations } from './block-reader.ts';
+
+export { getEditorCompletionOffer, setEditorCompletionOffer, getEditorCommandSuggestionsEnabled, holdEditorCommandSuggestions, type EditorCompletionRow, type EditorCompletionOffer } from './editor-completions.ts'

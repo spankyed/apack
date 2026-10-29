@@ -1,8 +1,8 @@
 /**
  * Claude Code Chat — the main conversational action.
  *
- * Starts a Claude Code CLI query, stores the handle, and kicks off a
- * fire-and-forget stream consumer that processes events in the background.
+ * Reuses or starts a per-thread Claude Code process and registers a
+ * turn consumer that processes events in the background.
  * The action returns immediately so the brain's step actor is not blocked
  * for the duration of the CLI session.
  *
@@ -14,6 +14,7 @@
  * `mode === 'Claude Code'`.
  */
 
+import { copyClaudeChannelSelection } from '../../../features/code/common/native-channels.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, Z, EntityId } from '#generated/services.ts';
@@ -21,7 +22,7 @@ import { createStreamWriter } from './_helpers/stream-writer.ts';
 import { createToolActivityWriter } from './_helpers/tool-activity-writer.ts';
 import { createThinkingWriter } from './_helpers/thinking-writer.ts';
 import { getClaudeState, persistClaudeState, setRunning, enqueueMessage, killTurn, ensureSessionMarker, updateChatState, extractStaleSessionId, markSessionBroken } from './_helpers/thread-context.ts';
-import { consumeStream, finalizeSessionError } from './_helpers/stream-consumer.ts';
+import { consumeConversationTurn, finalizeSessionError } from './_helpers/stream-consumer.ts';
 import { buildSessionBootstrapPrompt } from '../_helpers/session-bootstrap.ts';
 
 export const meta: ActionMeta = {
@@ -35,6 +36,7 @@ export const meta: ActionMeta = {
     phase: { type: 'string', description: 'Sub-phase within mode (Plan/Edit/review)', required: false },
     model: { type: 'string', description: 'Override Claude model (alias or full id)', required: false },
     allowedTools: { type: 'array', description: 'Tools allowed without prompting', required: false },
+    channels: { type: 'array', description: 'Explicit Claude channel server/plugin selection; native policy and allowlist govern admission', required: false },
     disallowedTools: { type: 'array', description: 'Tools always denied', required: false },
     systemPrompt: { type: 'string', description: 'Extra system prompt to append', required: false },
     messageId: { type: 'string', description: 'User message entity ID (for queued-state UI)', required: false },
@@ -83,9 +85,10 @@ export async function action(
     threadId,
     text,
     phase,
-    model,
+    model: requestedModel,
     allowedTools,
     disallowedTools,
+    channels: requestedChannels,
     systemPrompt,
     messageId: userMessageId,
     references,
@@ -97,6 +100,7 @@ export async function action(
     model?: string;
     allowedTools?: string[];
     disallowedTools?: string[];
+    channels?: string[];
     systemPrompt?: string;
     messageId?: string;
     references?: any;
@@ -111,39 +115,23 @@ export async function action(
 
   // Resume any prior conversation parked on this thread.
   const prior = getClaudeState(services, threadId);
+  let channels: string[] | undefined;
+  try { channels = requestedChannels === undefined ? (prior?.channelSelection ?? prior?.nativeLaunch?.channels)?.slice() : copyClaudeChannelSelection(requestedChannels); }
+  catch (error) { return {success: false, error: error instanceof Error ? error.message : String(error)}; }
+  if (requestedChannels !== undefined && services.cli.claudeCode.getNativeTerminal(threadId)) return {success: false, error: 'Stop the native session before changing channel selection'};
+  const selection = requestedModel ?? prior?.modelOverride;
+  const model = selection === 'default' ? undefined : selection;
+  if (prior?.historyError) {
+    services.chat.sendBlockMessage({threadId, text: `Cannot continue after a failed history change: ${prior.historyError} Reset or resume a session before continuing.`, blocks: [], forkable: false});
+    return {success: false, error: 'history change unresolved'};
+  }
   let resumeSessionId = prior?.sessionId || undefined;
   let forkFrom = prior?.forkFrom;
   let revertTo = prior?.revertTo;
 
-  // Guard: fork/revert requires a valid sessionId to resume from.
-  // If sessionId is missing (race with stream-consumer), drop the
-  // fork/revert intent and start a fresh session instead.
   if ((forkFrom || revertTo) && !resumeSessionId) {
-    log.warn('[revert-guard] fork/revert requested but no sessionId — starting fresh', {
-      threadId,
-      hadForkFrom: !!forkFrom,
-      hadRevertTo: !!revertTo,
-      revertCliUuid: revertTo?.cliUuid ?? null,
-      forkCliUuid: forkFrom?.cliUuid ?? null,
-      fullPriorState: JSON.stringify(prior ?? {}),
-    });
-    persistClaudeState(services, threadId, {
-      revertTo: undefined,
-      forkFrom: undefined,
-    });
-    // Notify the user — their revert/fork intent was silently dropped.
-    services.chat.sendBlockMessage({
-      threadId,
-      text: '⚠️ Could not revert — session data is unavailable. Starting a fresh session.',
-      blocks: [{ type: 'note', props: {
-        content: 'The revert point could not be found because the session was lost. Your next message will start a new conversation.',
-        variant: 'warning',
-        label: 'Revert Skipped',
-      }}],
-      forkable: false,
-    });
-    forkFrom = undefined;
-    revertTo = undefined;
+    services.chat.sendBlockMessage({threadId, text: 'Cannot apply the requested history change because its native session is unavailable. Reset or resume a session before continuing.', blocks: [], forkable: false});
+    return {success: false, error: 'history session unavailable'};
   }
 
   log.debug('resume state resolved', {
@@ -157,7 +145,7 @@ export async function action(
   // Queue the message until CC: Handle Fork finishes persisting state.
   if (prior?.forkPending) {
     log.debug('fork in progress — queuing message', { threadId });
-    enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
+    enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references, channels });
     if (userMessageId) {
       services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
     }
@@ -172,12 +160,18 @@ export async function action(
     pendingToolName: prior?.pendingControlRequest?.toolName ?? null,
   });
 
+  if (services.cli.claudeCode.isConversationBusy(threadId) && !prior?.pendingControlRequest && !prior?.pendingElicitation && !prior?.isRunning) {
+    enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references, channels });
+    if (userMessageId) services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
+    return { success: true, queued: true };
+  }
+
   if (prior?.isRunning) {
     // Handle exists → CLI process is genuinely running, queue the message
-    const handleExists = !!(services.cli as any).claudeCode.getHandle(threadId);
+    const handleExists = services.cli.claudeCode.isConversationBusy(threadId);
     if (handleExists) {
       log.debug('action already running — queuing message', { threadId });
-      enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references });
+      enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references, channels });
       if (userMessageId) {
         services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
       }
@@ -188,14 +182,14 @@ export async function action(
     setRunning(services, threadId, false);
   }
 
-  // If the turn is paused on a permission prompt (isRunning=false but
-  // pendingControlRequest exists), kill the old CLI subprocess so the old
+  // If the turn is paused on permission or MCP input, kill the old
+  // CLI subprocess so its input retires and the old
   // consumer exits cleanly, then proceed with this message as a new turn.
-  if (prior?.pendingControlRequest) {
+  if (prior?.pendingControlRequest || prior?.pendingElicitation) {
     log.info('[concurrency-guard] killing paused turn — will invalidate approval block', {
       threadId,
-      toolName: prior.pendingControlRequest.toolName,
-      approvalMessageId: prior.pendingControlRequest.approvalMessageId,
+      toolName: prior.pendingControlRequest?.toolName ?? 'MCP input',
+      approvalMessageId: prior.pendingControlRequest?.approvalMessageId ?? prior.pendingElicitation?.approvalMessageId,
     });
     killTurn(services, threadId);
   }
@@ -206,7 +200,7 @@ export async function action(
   // Race guard: if a parallel invocation (from a duplicate flow actor)
   // already stored a CLI handle for this thread, bail out to prevent
   // creating orphaned "Thinking…" placeholder messages.
-  const existingHandle = (services.cli as any).claudeCode.getHandle(threadId);
+  const existingHandle = services.cli.claudeCode.isConversationBusy(threadId);
   if (existingHandle) {
     log.warn('[concurrency-guard] parallel invocation detected — bailing', { threadId });
     return { success: false, error: 'parallel invocation' };
@@ -261,6 +255,7 @@ export async function action(
         model,
         allowedTools,
         disallowedTools,
+        channels,
         systemPrompt,
         messageId: userMessageId,
         references,
@@ -292,7 +287,9 @@ export async function action(
 
   // Read the user's current permission-mode and worktree choices.
   const activePermissionMode = prior?.permissionMode ?? 'acceptEdits';
-  const effectivePermissionMode = phase === 'Plan' ? 'plan' : activePermissionMode;
+  const effectivePermissionMode = phase === 'Plan' ? 'plan' : phase === 'Edit' && activePermissionMode === 'plan' ? prior?.prePlanMode ?? 'default' : activePermissionMode;
+  const prePlanMode = effectivePermissionMode === 'plan' ? activePermissionMode === 'plan' ? prior?.prePlanMode : activePermissionMode : undefined;
+  const startupPermissionMode = effectivePermissionMode === 'plan' ? prePlanMode ?? 'default' : effectivePermissionMode;
   const useWorktree = prior?.useWorktree ?? false;
   log.debug('active settings', { permissionMode: effectivePermissionMode, worktree: useWorktree });
 
@@ -300,6 +297,15 @@ export async function action(
   // because --worktree shifts the project bucket the JSONL is looked up from.
   // Treat undefined sessionWorktree as non-worktree (pre-tracking sessions).
   if (resumeSessionId && (prior?.sessionWorktree ?? false) !== useWorktree) {
+    if (forkFrom || revertTo) {
+      const reason = 'The worktree setting changed. Reset or resume a session before changing history.';
+      persistClaudeState(services, threadId, {historyError: reason});
+      setRunning(services, threadId, false);
+      updateChatState(services, threadId, 'error');
+      toolActivity.finalise('error');
+      writer.finalize(reason);
+      return {success: false, error: 'history worktree mismatch', messageId: currentMessageId};
+    }
     log.info('[worktree] session/toggle mismatch — clearing session', {
       threadId, resumeSessionId,
       sessionWorktree: prior?.sessionWorktree, useWorktree,
@@ -355,7 +361,9 @@ export async function action(
       revertTo: revertTo?.cliUuid ?? null,
       forkFrom: forkFrom?.cliUuid ?? null,
       forkSession: !!(forkFrom || revertTo),
-      permissionMode: effectivePermissionMode,
+      permissionMode: startupPermissionMode,
+      // Make the user's live bypass toggle available; this does not select bypass mode.
+      allowDangerouslySkipPermissions: true,
       hasSystemPrompt: !!composedSystemPrompt,
       imageCount: resolved.imageBlocks.filter((b: any) => b.type === 'image').length,
       fileCount: references?.files?.length ?? 0,
@@ -395,6 +403,7 @@ export async function action(
           threadId, resumeSessionId, revertTo: revertTo?.cliUuid ?? null,
         });
         const isRevert = !!revertTo;
+        if (forkFrom || revertTo) persistClaudeState(services, threadId, {historyError: 'The native session project directory is unavailable.'});
         toolActivity.finalise('error');
         setRunning(services, threadId, false);
         updateChatState(services, threadId, 'idle');
@@ -427,73 +436,87 @@ export async function action(
         writer.finalize(isRevert
           ? '⚠️ Could not revert — the CLI session file no longer exists on disk. It may have been cleaned up by the Claude CLI.'
           : '⚠️ Could not resume — the CLI session file no longer exists on disk.');
-        markSessionBroken(services, threadId, `Session ${resumeSessionId} file missing`);
+        if (forkFrom || revertTo) {
+          persistClaudeState(services, threadId, {historyError: `Session ${resumeSessionId} file missing`});
+          updateChatState(services, threadId, 'error');
+        } else markSessionBroken(services, threadId, `Session ${resumeSessionId} file missing`);
         return { success: false, error: 'session file missing', messageId: currentMessageId };
       }
     }
 
-    const handle = await services.cli.claudeCode.query({
+    const options = {
       ...(sessionCwd && { cwd: sessionCwd }),
-      prompt,
       resume: resumeSessionId,
       model,
       includePartialMessages: true,
-      permissionMode: effectivePermissionMode,
+      permissionMode: startupPermissionMode,
+      // Make the user's live bypass toggle available; this does not select bypass mode.
+      allowDangerouslySkipPermissions: true,
       allowedTools: allowedTools ?? DEFAULT_ALLOWED_TOOLS,
       disallowedTools,
+      channels,
       appendSystemPrompt: composedSystemPrompt,
       surfaceControlRequests: true,
-      env: { CLAUDE_CODE_COORDINATOR_MODE: '1' },
-      ...(useWorktree && { worktree: true }),
+      ...(useWorktree && { worktree: true as const }),
       ...(addDirs.length > 0 && { addDir: addDirs }),
       // Fork/revert: create a new CLI session JSONL file, truncated to the
       // fork/revert point via --resume-session-at.
       ...((forkFrom || revertTo) && { forkSession: true }),
       ...(revertTo && { resumeSessionAt: revertTo.cliUuid }),
       ...(forkFrom?.cliUuid && { resumeSessionAt: forkFrom.cliUuid }),
-    } as any);
-
-    // Store the handle so "CC: Route Response" and the stream consumer
-    // can write control_responses back to the CLI's stdin.
-    (services.cli as any).claudeCode.storeHandle(threadId, handle);
-
-    log.debug('query handle received, kicking off stream consumer');
-
-    // Fire-and-forget: the stream consumer runs in the background,
-    // processing events until the CLI stream ends. The action returns
-    // immediately so the brain's step actor is freed.
-    consumeStream(handle, {
-      services, threadId, text, phase, userMessageId,
-      resumeSessionId: resumeSessionId ?? undefined,
-      sessionCwd: sessionCwd ?? undefined,
-      isFork: !!(forkFrom || revertTo),
-      revertCliUuid: revertTo?.cliUuid,
-      forkCliUuid: forkFrom?.cliUuid,
-      useWorktree,
-    }, {
-      writer, toolActivity, thinking, messageId: currentMessageId as EntityId,
-    }).catch((err) => {
-      // Safety net — consumeStream has its own try/catch, but guard
-      // against truly unexpected escapes. Mirror its cleanup path.
-      log.error('consumeStream escaped error boundary', { err: err?.message });
-      (services.cli as any).claudeCode.clearHandle(threadId);
-      setRunning(services, threadId, false);
-      updateChatState(services, threadId, 'idle');
-      services.emitter.broadcastToSurface('default-setup/threads', {
-        type: 'FLASH_CHAT_STATE', threadId, stateId: 'error', durationMs: 3000,
-      });
-    });
+    };
+    const launchKey = JSON.stringify({ cwd: sessionCwd, model, allowedTools: options.allowedTools,
+      disallowedTools, channels, appendSystemPrompt: composedSystemPrompt, worktree: useWorktree, addDir: addDirs });
+    let conversation = services.cli.claudeCode.getConversation(threadId);
+    const previousLaunch = conversation ? JSON.parse(conversation.launchKey) : undefined;
+    const existingKey = previousLaunch ? JSON.stringify({
+      cwd: conversation!.owner.sessionCwd ?? previousLaunch.cwd,
+      model: conversation!.owner.modelSelection ?? previousLaunch.model,
+      allowedTools: previousLaunch.allowedTools, disallowedTools: previousLaunch.disallowedTools, channels: previousLaunch.channels,
+      appendSystemPrompt: previousLaunch.appendSystemPrompt, worktree: previousLaunch.worktree,
+      addDir: previousLaunch.addDir,
+    }) : undefined;
+    if (conversation && (existingKey !== launchKey || forkFrom || revertTo
+      || (conversation.owner.sessionId && conversation.owner.sessionId !== resumeSessionId))) {
+      if (!await services.cli.claudeCode.closeIdleConversation(threadId)) throw new Error('Claude conversation changed while preparing this input');
+      conversation = undefined;
+    }
+    const owner = conversation?.owner ?? await services.cli.claudeCode.openConversation(threadId, launchKey, { ...options, accountedCostUsd: resumeSessionId && !options.forkSession ? prior?.totalCostUsd ?? 0 : 0 },
+      turn => consumeConversationTurn(turn, { services, threadId, text: '',
+        sessionCwd: services.cli.claudeCode.getConversation(threadId)?.owner.sessionCwd ?? sessionCwd, useWorktree,
+        phase: getClaudeState(services, threadId)?.permissionMode === 'plan' ? 'Plan' : undefined }));
+    const acknowledgedMode = conversation || effectivePermissionMode === 'plan'
+      ? await owner.handle.setPermissionMode(effectivePermissionMode)
+      : await owner.handle.getPermissionMode();
+    if (acknowledgedMode !== effectivePermissionMode) throw new Error('Native composer permission mode was not acknowledged');
+    if (services.cli.claudeCode.getConversation(threadId)?.owner !== owner || owner.closing) throw new Error('Claude conversation changed while applying composer phase');
+    persistClaudeState(services, threadId, { permissionMode: acknowledgedMode, prePlanMode: acknowledgedMode === 'plan' ? prePlanMode : undefined });
+    if (owner.busy) {
+      enqueueMessage(services, threadId, { text, mode: params.mode as string, phase, messageId: userMessageId, references, channels });
+      if (userMessageId) services.chat.updateMessageState(userMessageId as any, { status: 'queued' } as any);
+      thinking.finalise();
+      toolActivity.finalise('done');
+      writer.finalize('Message queued while Claude Code continues its native work.');
+      return { success: true, queued: true };
+    }
+    owner.start(prompt, turn => consumeConversationTurn(turn, {
+      services, threadId, text, phase, userMessageId, submittedPrompt: promptText,
+      resumeSessionId: resumeSessionId ?? undefined, sessionCwd,
+      isFork: !!(forkFrom || revertTo), revertCliUuid: revertTo?.cliUuid,
+      forkCliUuid: forkFrom?.cliUuid, useWorktree,
+    }, { writer, toolActivity, thinking, messageId: currentMessageId as EntityId }));
 
     return { success: true, streaming: true };
   } catch (err: any) {
     const message = err?.message || 'Claude Code query failed to start';
     log.error('chat action failed to start query', { message, stack: err?.stack });
+    if ((forkFrom || revertTo) && getClaudeState(services, threadId)?.sessionId === resumeSessionId) persistClaudeState(services, threadId, {historyError: message});
     toolActivity.finalise('error');
     setRunning(services, threadId, false);
 
     // ─── Session-not-found: clear stale sessionId, mark session broken ──
     if (extractStaleSessionId(message)) {
-      finalizeSessionError(services, threadId as EntityId, writer, message, undefined, { isRevert: !!revertTo });
+      finalizeSessionError(services, threadId as EntityId, writer, message, undefined, { isHistoryChange: !!(revertTo || forkFrom) });
       // Emit cc.stream.completed so CC: Turn Completed can run bookkeeping
       // (turn counts, cost tracking). Without this, the turn is "lost" from
       // the flow's perspective.

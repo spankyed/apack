@@ -1,3 +1,4 @@
+import type { ClaudeUiMountState, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from '#features/code/be/services/claude-code/ui-presentation.ts';
 export type * from './export-types.ts';
 import { type BaseEntity, EARS, type PackShapes, type ShortCodeOf } from '#generated/ears.ts';
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
@@ -30,7 +31,12 @@ export interface ToolActivityEntry {
   durationMs?: number;
   /** One-line output summary if the tool reported one (e.g. "3 matches"). */
   outputSummary?: string;
+  /** Native agent matched by structured journal identity, independent of the Agent call's launch result. */
+  nativeAgent?: { id: string; ownerId?: string; sessionId?: string; name: string; status: string; statusText?: string };
+  /** Exact original result row; structured output remains owned by the native process. */
+  nativeResult?: { uuid: string; sessionId: string };
   /** Optional full details revealed when the row is expanded. */
+  handbacks?: import('#features/code/common/native-handback.ts').ClaudeAgentHandback[];
   details?: { input?: unknown; output?: string; error?: string };
 }
 
@@ -51,6 +57,7 @@ export interface ToolActivityBlockProps {
 export interface ThinkingBlockProps {
   /** Accumulated thinking text. */
   content: string;
+  nativeMessages?: readonly import('../../../content/actions/claude-code/_helpers/thinking-types.ts').ClaudeNativeThinkingMessage[];
   /** Collapsed header label (e.g. "Thinking…" or "Thought for 3s"). */
   label: string;
   /** Block state — drives spinner visibility. */
@@ -114,6 +121,9 @@ export interface MessageReferences {
  * the union, because every emit matches one of its arms.
  */
 export type BlockResponse =
+  | { buttonId: 'accept' | 'decline' | 'cancel'; content?: Record<string, import('#features/code/common/mcp-elicitation-form.ts').ClaudeMcpFormValue> }
+  | { validationFailed: true }
+  | { nativeQuestionAnswer: import('#features/code/common/native-question.ts').ClaudeQuestionAnswer; nativeQuestionRenderToken?: string; nativeQuestionDraftStarted?: boolean }
   /** Approval buttons: InteractionContainer `handleApprove`/`handleDeny`. */
   | { approved: boolean; reason?: string }
   /** Cancel path: InteractionContainer `handleCancel`. */
@@ -168,6 +178,8 @@ export interface MessageEntity extends BaseEntity {
  */
 export interface ThreadContext {
   claudeCode?: {
+    nativeContinuation?: import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation
+    retiredNativeMessages?: import('#features/code/common/native-notice.ts').ClaudeNativeMessageRetirements
     sessionId?: string;
     lastTurnAt?: number;
     cwd?: string;
@@ -480,6 +492,29 @@ export type AgentSettings = ThreadsSettings['chat'];
 
 // System-private entity type
 
+export type ClaudeUiMountRequest = { type: 'CLAUDE_UI_MOUNT'; promptFocused: boolean; threadId: string; mountId: string; resumeKey?: string; nativeView?: import('#features/code/common/native-terminal.ts').ClaudeNativeAgentUiTarget; messageIds?: string[]; userExpansion?: Record<string, boolean>; blockExpansion?: Record<string, number[]> }
+
+export type ClaudeUiViewRequest =
+  | ({ type: 'CLAUDE_UI_KEY'; threadId: string; mountId: string; sequence: number } & import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeUiActionKeyRequest)
+  | { type: 'CLAUDE_UI_BACKGROUND_REVIEW'; threadId: string; mountId: string; revision: number; panelId: string; sourceRevision: string; decision: 'confirm' | 'cancel' }
+  | { type: 'CLAUDE_UI_SETTINGS'; threadId: string; mountId: string; revision: number; panelId: string; requestId: string; action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation }
+  | { type: 'CLAUDE_UI_COMMAND_PANEL'; threadId: string; mountId: string; revision: number; panelId: string; text?: string }
+  | { type: 'CLAUDE_UI_COMMAND_DECISION'; threadId: string; mountId: string; revision: number; commandId: string; decision: 'confirm' | 'cancel' }
+  | { type: 'CLAUDE_UI_AGENT_INPUT'; threadId: string; mountId: string; revision: number; text: string }
+  | ({ type: 'CLAUDE_PROMPT_HOST_RESPONSE'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudePromptHostResponse)
+  | ({ type: 'CLAUDE_UI_FOCUS'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent)
+  | ({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE'; threadId: string; mountId: string } & ClaudePromptCompletionRequest)
+  | ({ type: 'CLAUDE_PROMPT_EDIT'; threadId: string; mountId: string } & ClaudePromptEdit)
+  | ({ type: 'CLAUDE_UI_NOTICE'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiNoticeEvent)
+  | ({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiTranscriptLayout)
+  | ({ type: 'CLAUDE_UI_SCROLL'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiScrollEvent)
+  | ({ type: 'CLAUDE_UI_PANE'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiPaneEvent)
+  | ClaudeUiMountRequest
+  | { type: 'CLAUDE_UI_UNMOUNT'; threadId: string; mountId: string; resumeKey?: string }
+  | ({ type: 'CLAUDE_UI_CLIENT'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiClientEvent)
+  | ({ type: 'CLAUDE_UI_FIELD'; threadId: string; mountId: string } & import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFieldEvent)
+  | { type: 'CLAUDE_UI_PRESS'; threadId: string; mountId: string; actionId: string; href?: string };
+
 /**
  * A message a search of the threads matched: where it is, and a window of its text around the first match, with each
  * match's place in the window, start and end in UTF-16 units, as a string's indexes count them
@@ -498,10 +533,13 @@ export interface MessageSearchResult {
 }
 
 export type IncomingThreadsEvents =
+  | import('./claude-terminal-views.ts').ClaudeTerminalViewRequest
+  | ClaudeUiViewRequest
   // Thread management events
   | { type: 'CREATE_THREAD'; topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }
   | { type: 'VIEW_THREAD'; threadId: string }
   | { type: 'UPDATE_THREAD_STATUS'; threadId: string; status: string }
+  | { type: 'SET_CLAUDE_CHANNELS'; threadId: string; channels: string[] }
   | { type: 'UPDATE_THREAD_FIELD'; threadId: string; key: string; value: any }
   | { type: 'DELETE_THREAD'; threadId: string }
   | { type: 'SET_THREAD_PARENT'; childIds: string[]; parentId: string }
@@ -518,6 +556,7 @@ export type IncomingThreadsEvents =
   | { type: 'USER_COMMAND'; command: string; text: string; mode?: string; phase?: string; threadId?: string; references?: { images?: { url: string; name: string }[]; files?: { name: string; path: string; typeLabel: string; isImage: boolean }[]; context?: { refType: 'thread' | 'document' | 'note' | 'task' | 'tasklist' | 'folder'; refId: string; shortCode: string; label: string }[] }; cwdOverride?: string }
   | { type: 'TOGGLE_COMPACTED'; markerId: string; compacted: boolean }
   | { type: 'DELETE_MESSAGE'; messageId: string }
+  | { type: 'SET_CLAUDE_PERMISSION_MODE'; threadId: string; mode: PermissionMode }
   | { type: 'FORWARD_BRAIN_EVENT'; eventType: string; payload?: any }
   /** What a window's chat starts from: answered with \`CHAT_STARTED\` */
   | { type: 'GET_CHAT_START' }
@@ -530,6 +569,15 @@ export type IncomingThreadsEvents =
  * window's asks and writes, and the few notifications a flow sends a window, none of which carries a row.
  */
 export type OutgoingThreadsEvents =
+  | { type: 'CLAUDE_UI_KEY_RESULT'; threadId: string; mountId: string; sequence: number; handled: boolean; actionKeys?: ClaudeUiMountState['actionKeys'] }
+  | { type: 'CLAUDE_PERMISSION_MODE_RESULT'; threadId: string; success: boolean; reason?: string }
+  | import('./claude-terminal-views.ts').ClaudeTerminalViewReply
+  | { type: 'CLAUDE_PROMPT_COMPLETIONS'; threadId: string; mountId: string; result: ClaudePromptCompletionReply }
+  | { type: 'CLAUDE_PROMPT_STATE'; threadId: string; mountId: string; result: ClaudePromptReply }
+  | { type: 'CLAUDE_PROMPT_HOST_REQUEST'; threadId: string; mountId: string; request: import('#generated/types.ts').ClaudePromptHostRequest }
+  | { type: 'CLAUDE_UI_FOCUS_STATE'; threadId: string; mountId: string; result: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply }
+  | { type: 'CLAUDE_UI_STATE'; threadId: string; mountId: string; resumeKey: string; attachmentId?: string; state: ClaudeUiMountState }
+  | { type: 'CLAUDE_UI_LEASE_EXPIRED'; threadId: string; mountId: string; resumeKey: string }
   /** The thread a \`CREATE_THREAD\` made, for the window that asked to mark */
   | { type: 'THREAD_CREATED'; id: EARS.EntityId }
   /** Any other write landed */
@@ -549,7 +597,7 @@ export type OutgoingThreadsEvents =
   | { type: 'THREADS_IMPORT_FAILED'; errors: string[] }
   // A flow's notifications to every window: what the chat's input offers, and a state flashed beside a thread
   | { type: 'SET_MODE'; mode: string }
-  | { type: 'SET_PHASE'; phase: string }
+  | { type: 'SET_PHASE'; phase: string; threadId?: string; source?: 'native' }
   | { type: 'FLASH_CHAT_STATE'; threadId: string; stateId: string; durationMs?: number }
 
 export interface ThreadsContext {}

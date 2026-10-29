@@ -1,5 +1,7 @@
 # An undeclared name must not answer with the database
 
+> Archive: this records earlier design and behavior. Examples use current EARS names; descriptions of former behavior are historical, not current guarantees.
+
 Status: implemented, in the order Part 3 (`5c178411a`), Part 2 (`ef68c3f3f`), Part 1 (`644471264`). Parts 3
 and 2 make the console answer correctly; Part 1 is the message naming the known types and `--schema-from`,
 which the engine cannot write once [`ears-public-api.md`](ears-public-api.md) makes it refuse `undefined`
@@ -40,13 +42,13 @@ one says it is not a constraint.
 
 **What is real is that an undeclared entity name returns the whole database.** `consoleEars`
 (`apack-sdk/src/database-console/index.ts:95`) builds the console's `EARS` namespace by spreading plain
-objects, so a name nobody declared reads `undefined` — and `qx(undefined)` means "every entity", which is a
+objects, so a name nobody declared reads `undefined` — and `query(undefined)` means "every entity", which is a
 declared, documented feature (`apack-ears/src/query.ts:287`), used by eight callers and by the console's own
 shipped examples. Measured against a data dir with its `host-packs/` removed:
 
 | | result |
 |---|---|
-| `qx(EARS.Entity.Note).pickAll().length`, as the app wrote the dir | `2` |
+| `query(EARS.Entity.Note).pickAll().length`, as the app wrote the dir | `2` |
 | the same, with no pack snapshots to declare `Note` | **`607`** — every row in the database |
 | the same, with `--schema-from` naming a snapshot | `2` |
 
@@ -56,15 +58,15 @@ A wrong answer, not an error. Three things make it worse than it first looks:
   Database surface, and the **LLM `query` step** (`default-setup/src/extensions/steps/query/runtime.ts:65`),
   which inspects the result only for `"<name> is not defined"` and so records 607 rows as a success.
 - **One click produces it.** The Database surface's Schema panel lists entity types from the *data*
-  (`getAllEntityTypes`), and selecting one generates `qx(EARS.Entity.<thatName>)`
+  (`getAllEntityTypes`), and selecting one generates `query(EARS.Entity.<thatName>)`
   (`default-setup/src/features/database/fe/constants.ts:19`). Any type present on disk that no registered
   pack declares is one click from a whole-database query.
-- **`qx` is not where this plan fixes it.** `qx('Note')` with `Note` undeclared returns `[]` — harmless,
+- **the former query shorthand is not where this plan fixes it.** `query('Note')` with `Note` undeclared returns `[]` — harmless,
   because `resolveStart` falls through to the id branch (`query.ts:66-68`). Only `undefined` returns
   everything. There are two defects behind that: the namespace hands back `undefined`, which this plan
   removes, and the engine accepts it, which
   [`ears-public-api.md`](ears-public-api.md#2-one-argument-one-meaning) removes by splitting the
-  no-argument form into `qx.all()`. They are complementary — the namespace is where a usable message can be
+  no-argument form into `query.all()`. They are complementary — the namespace is where a usable message can be
   written, the engine is the backstop — and this plan lands first (see
   [Deliberately not doing](#deliberately-not-doing)).
 
@@ -74,7 +76,7 @@ That is right for entity *names* and unsound as a replacement, on three counts:
 
 1. **Relation-kind aliases are unrecoverable.** `EARS.RelKind.PARENT_OF` is `'parent_of'`; the data holds
    only the value. No amount of observation produces the alias.
-2. **An observed set can never hold a type with zero rows**, and `tx(type)` on a name the engine does not
+2. **An observed set can never hold a type with zero rows**, and `create(type)` on a name the engine does not
    know writes a row literally named after the type (`transaction.ts:28-38`) — so the first entity of any
    type could never be created. That is the corruption the write refusal already blocks, not a degradation.
 3. **Observation launders corruption into declaration.** `getAllEntityTypes` is prefix-derived
@@ -176,7 +178,7 @@ these counts, and nothing declares them" is more use than today's one-paragraph 
    were behaviour — *"A name the console doesn't know reads as undefined, which queries everything"*. Nothing
    asserts it. Assert that it throws, and delete that comment. Reverting the Proxy must fail the test.
 2. **The 607, end to end.** On a copy of a data dir with `host-packs/` removed,
-   `qx(EARS.Entity.Note).pickAll().length` must error naming `--schema-from` rather than answering `607`;
+   `query(EARS.Entity.Note).pickAll().length` must error naming `--schema-from` rather than answering `607`;
    with `--schema-from` it answers `2`.
 3. **Observed widening.** The same dir without the flag: `EARS.Entity.Note` resolves, because `Note` rows
    exist, while `EARS.RelKind.PARENT_OF` throws, because an alias cannot be observed.
@@ -192,15 +194,15 @@ these counts, and nothing declares them" is more use than today's one-paragraph 
 - **Not making `--schema-from` repeatable.** A directory covers N packs with one flag, and the case
   repeatability was for — a second built-in pack — does not exist. `multiple: true` has precedent one file
   away (`apack-cli/src/commands/db/export.ts:9`) if that changes.
-- **Not making `qx` reject `undefined` _here_.** `qx()` with no start is a declared overload, documented,
+- **Not making the former query shorthand reject `undefined` _here_.** `query.all()` with no start is a declared overload, documented,
   and used by eight callers and by the console's shipped examples, so retiring it is a public-API change
   with its own call-site migration. [`ears-public-api.md`](ears-public-api.md#2-one-argument-one-meaning)
-  owns it, splitting the no-argument form into `qx.all()` so that `qx(undefined)` is an unregistered type
-  and throws. Nothing about `qx` prevents that: `setIds` re-enters with `start === undefined` on every
+  owns it, splitting the no-argument form into `query.all()` so that `query(undefined)` is an unregistered type
+  and throws. Nothing about the former query shorthand prevents that: `setIds` re-enters with `start === undefined` on every
   chained step (`query.ts:74-75`), but it re-enters the internal `qxImpl` with `known` already resolved,
-  and the public `qx` is a one-argument wrapper over it (`query.ts:276`), so the chained path never reaches
+  and the public the former query shorthand is a one-argument wrapper over it (`query.ts:276`), so the chained path never reaches
   the public entry. What decides the layer is sequencing, not capability — this plan fixes a wrong answer
-  that ships today, in two files; that one rewrites every `qx`/`tx` call site in 59 files behind four
+  that ships today, in two files; that one rewrites every the former query shorthand/the former write shorthand call site in 59 files behind four
   phases.
 - **Not swapping `getRegisteredEntityTypes` or `readBackup`'s yardstick to observed** — the regression is
   concrete and named in part 2.

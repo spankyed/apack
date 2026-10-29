@@ -6,11 +6,6 @@
  * organised per-project. This module reads those files directly for list /
  * view / get, and uses file operations for rm.
  *
- * The `_experimental_*` functions (rename, tag, fork) reverse-engineer the
- * CLI's JSONL metadata format and may silently do the wrong thing if the CLI
- * changes its on-disk layout. They stay experimental until we either add
- * golden-file tests against a real CLI or migrate to a supported path.
- *
  * Important: session JSONL files can be large (multi-MB). `view()` parses
  * them fully, so callers should paginate (`limit`/`offset`) on long sessions.
  */
@@ -20,9 +15,6 @@ import * as path from 'path'
 import * as os from 'os'
 import * as readline from 'readline'
 
-import { createLogger } from '@apackdev/sdk/logger'
-
-const logger = createLogger('claude-code-sessions')
 
 // ─── Directory discovery ─────────────────────────────────────────────────────
 
@@ -103,57 +95,30 @@ export interface SessionViewOptions {
 
 // ─── Internals ────────────────────────────────────────────────────────────────
 
-const CHUNK_SIZE = 4096
-
-/**
- * Extract a session title from a JSONL file by reading head + tail chunks.
- * Mirrors the CLI's `parseSessionInfoFromLite()` pattern — checks for
- * `customTitle` first, falls back to `aiTitle`.
- */
-async function extractTitle(filePath: string, fileSize: number): Promise<string | undefined> {
-  let fh: fs.promises.FileHandle | undefined
+/** Stream native metadata without retaining transcript rows or guessing from bucket names. */
+async function readSessionMetadata(file: string, sessionId: string): Promise<{ cwd?: string; title?: string }> {
+  const input = fs.createReadStream(file, { encoding: 'utf8' })
+  const lines = readline.createInterface({ input, crlfDelay: Infinity })
+  let cwd: string | undefined
+  let customTitle: string | undefined
+  let aiTitle: string | undefined
   try {
-    fh = await fs.promises.open(filePath, 'r')
-    const headBuf = Buffer.alloc(Math.min(CHUNK_SIZE, fileSize))
-    await fh.read(headBuf, 0, headBuf.length, 0)
-    const head = headBuf.toString('utf8')
-
-    let tail = head
-    if (fileSize > CHUNK_SIZE) {
-      const tailBuf = Buffer.alloc(Math.min(CHUNK_SIZE, fileSize))
-      await fh.read(tailBuf, 0, tailBuf.length, fileSize - tailBuf.length)
-      tail = tailBuf.toString('utf8')
+    for await (const line of lines) {
+      let row: SessionTranscriptEntry
+      try { row = JSON.parse(line) } catch { continue }
+      if (!row || typeof row !== 'object') continue
+      if (!cwd && typeof row.cwd === 'string' && path.isAbsolute(row.cwd)) cwd = row.cwd
+      if (row.sessionId !== sessionId) continue
+      if (row.type === 'custom-title' && typeof row.customTitle === 'string') customTitle = row.customTitle
+      if (row.type === 'ai-title' && typeof row.aiTitle === 'string') aiTitle = row.aiTitle
     }
-
-    // Check tail first (titles are appended), then head
-    return extractJsonField(tail, 'customTitle')
-      ?? extractJsonField(head, 'customTitle')
-      ?? extractJsonField(tail, 'aiTitle')
-      ?? extractJsonField(head, 'aiTitle')
-  } catch {
-    return undefined
+    return { cwd, title: customTitle || aiTitle || undefined }
   } finally {
-    await fh?.close()
+    lines.close()
+    input.destroy()
   }
 }
 
-/** Extract a JSON string field value by simple string search (no full parse). */
-function extractJsonField(text: string, key: string): string | undefined {
-  for (const pattern of [`"${key}":"`, `"${key}": "`]) {
-    const idx = text.lastIndexOf(pattern)
-    if (idx < 0) continue
-    const start = idx + pattern.length
-    let i = start
-    while (i < text.length) {
-      if (text[i] === '\\') { i += 2; continue }
-      if (text[i] === '"') return text.slice(start, i)
-      i++
-    }
-  }
-  return undefined
-}
-
-/** Read all sessions from a bucket directory. `cwd` is stored on each SessionInfo for context. */
 async function listBucket(bucketPath: string, cwd?: string): Promise<SessionInfo[]> {
   let files: string[]
   try {
@@ -171,12 +136,16 @@ async function listBucket(bucketPath: string, cwd?: string): Promise<SessionInfo
     const stat = await fs.promises.stat(file).catch(() => null)
     if (!stat) continue
     const id = name.replace(/\.jsonl$/, '')
-    const title = await extractTitle(file, stat.size)
+    let metadata: Awaited<ReturnType<typeof readSessionMetadata>>
+    try { metadata = await readSessionMetadata(file, id) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
+    }
     infos.push({
       id,
       file,
-      cwd,
-      title,
+      cwd: cwd ?? metadata.cwd,
+      title: metadata.title,
       modifiedAt: stat.mtime,
       size: stat.size,
     })
@@ -210,9 +179,7 @@ export async function listAll(opts: { limit?: number } = {}): Promise<SessionInf
   for (const d of dirents) {
     if (!d.isDirectory()) continue
     const bucketPath = path.join(projectsDir, d.name)
-    // Best-effort cwd: derive from bucket dir name (replace leading hyphens with slashes)
-    const approxCwd = '/' + d.name.replace(/^-/, '').replace(/-/g, '/')
-    let sessions = await listBucket(bucketPath, approxCwd)
+    let sessions = await listBucket(bucketPath)
     if (opts.limit) {
       sessions.sort((a, b) => b.modifiedAt.getTime() - a.modifiedAt.getTime())
       sessions = sessions.slice(0, opts.limit)
@@ -305,52 +272,9 @@ export async function remove(
   await fs.promises.rm(subdir, { recursive: true, force: true })
 }
 
-// ─── Experimental write operations ───────────────────────────────────────────
-//
-// These three write synthetic metadata lines into session JSONL files. The
-// on-disk format is reverse-engineered, so upstream changes will break them
-// silently. They live under `_experimental_` prefixes so call sites see the
-// risk in their import lines, and they log a one-time warning on first use.
-
 /** Reject IDs that could escape the project bucket via path traversal. */
 function assertSafeId(id: string): void {
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
     throw new Error(`Invalid session ID: ${JSON.stringify(id)}`)
   }
-}
-
-const _experimentalWarned = new Set<string>()
-function warnExperimental(name: string): void {
-  if (_experimentalWarned.has(name)) return
-  _experimentalWarned.add(name)
-  logger.warn(
-    `claudeCode.sessions.${name}() is experimental — the JSONL metadata format is reverse-engineered and may break with CLI upgrades. Prefer the CLI's own UI for now.`,
-  )
-}
-
-/**
- * Rename a session by appending a metadata entry. @experimental
- *
- * @see warnExperimental — logs once per process on first call.
- */
-export async function _experimental_rename(
-  id: string,
-  title: string,
-  opts: { cwd?: string } = {},
-): Promise<void> {
-  assertSafeId(id)
-  warnExperimental('_experimental_rename')
-  await appendMetadata(id, { type: 'metadata', customTitle: title, updatedAt: new Date().toISOString() }, opts)
-}
-
-// ─── Internals ───────────────────────────────────────────────────────────────
-
-async function appendMetadata(
-  id: string,
-  entry: Record<string, unknown>,
-  opts: { cwd?: string },
-): Promise<void> {
-  const cwd = opts.cwd ?? process.cwd()
-  const file = path.join(projectBucket(cwd), `${id}.jsonl`)
-  await fs.promises.appendFile(file, JSON.stringify(entry) + '\n')
 }

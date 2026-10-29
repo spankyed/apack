@@ -1,0 +1,209 @@
+<template>
+  <section ref="approvalElement" @keydown="handleKeydown" @pointerdown="interacted = true" class="native-tool-approval" :aria-label="`${toolName} approval`" :data-testid="`native-${toolName.toLowerCase()}-approval`">
+    <header>
+      <span class="eyebrow">Permission needed</span>
+      <h2>{{ title }}</h2>
+    </header>
+    <div ref="detailsElement" class="details" @focusin="ensureFocusedField" @input="ensureFocusedField" @change="ensureFocusedField" tabindex="0" :aria-label="`${toolName} request details`">
+      <p class="question">{{ question }}</p>
+      <template v-if="workflow">
+        <p class="reason">Dynamic workflows can run multiple subagents and consume substantial tokens.</p>
+        <p v-if="workflow.withheld" role="note">Claude withheld this script. Approval is unavailable; deny or send feedback.</p>
+        <template v-else>
+          <p v-if="workflow.description" data-testid="native-workflow-description"><NativeStatusText :text="workflow.description" /></p>
+          <button v-if="workflow.summary" type="button" class="workflow-preview-toggle" :disabled="controlsDisabled" :aria-expanded="!showRawWorkflow" @click="rawWorkflow = !showRawWorkflow">{{ showRawWorkflow ? 'View workflow summary' : 'View raw script' }}</button>
+          <p v-if="workflow.summaryUnavailable" role="note">The workflow summary exceeds the preview limit. Review the raw script.</p>
+          <section v-if="workflow.summary && !showRawWorkflow" aria-label="Workflow summary" data-testid="native-workflow-summary">
+            <p>This workflow will run subagents across these phases:</p>
+            <ol class="workflow-phases">
+              <li v-for="(phase, index) in workflow.summary" :key="index">
+                <h3>{{ phase.title }}</h3>
+                <p v-if="phase.detail">{{ phase.detail }}</p>
+                <ul v-if="phase.prompts.length"><li v-for="(prompt, promptIndex) in phase.prompts" :key="promptIndex">{{ prompt }}</li></ul>
+              </li>
+            </ol>
+          </section>
+          <code v-else data-testid="native-workflow-script">{{ workflow.script }}</code>
+        </template>
+        <template v-if="workflow.canEdit"><button type="button" class="workflow-preview-toggle" :disabled="controlsDisabled" @click="emit('edit-workflow')">Edit in native interface</button><p class="reason">Press Ctrl+G there to open your configured editor, then return here to review before approving.</p></template>
+        <code v-if="workflow.args" data-testid="native-workflow-args">{{ workflow.args }}</code>
+      </template>
+      <dl v-else-if="tool" class="tool-details">
+        <template v-for="(detail, index) in tool.details" :key="index"><dt>{{ detail.label }}</dt><dd><NativePermissionText :text="detail.value" :ansi="detail.ansi" /></dd></template>
+      </dl>
+      <code v-else :data-testid="toolName === 'Bash' ? 'native-bash-command' : 'native-read-path'">{{ toolName === 'Bash' ? command : filePath }}</code>
+      <section v-if="review" class="change-review" :aria-label="review.notebook ? 'Proposed notebook change' : 'Proposed file change'" data-testid="native-file-review">
+        <p v-if="review.notebook" data-testid="native-notebook-operation" class="change-label">{{ review.notebook.editMode === 'delete' ? 'Delete cell' : review.notebook.editMode === 'insert' ? 'Insert cell' : 'Replace cell' }}<template v-if="review.notebook.cellId"> · {{ review.notebook.editMode === 'insert' ? 'After cell' : 'Cell' }} {{ review.notebook.cellId }}</template><template v-else-if="review.notebook.editMode === 'insert'"> · At notebook start</template><template v-if="review.notebook.cellType"> · {{ review.notebook.cellType }}</template></p>
+        <p v-if="review.withheld" role="note">{{ review.notice || 'Claude withheld the proposed change; it cannot be reviewed here.' }}</p>
+        <template v-else>
+          <p v-if="review.notice" role="note">{{ review.notice }}</p>
+          <template v-if="review.before !== undefined"><p class="change-label">Before</p><code data-testid="native-file-before" class="before">{{ review.before }}</code></template>
+          <p v-if="review.notebook?.editMode === 'delete'" role="note">This cell will be removed.</p>
+          <template v-else><p class="change-label">{{ review.before === undefined ? review.notebook ? 'New cell' : 'New file' : 'After' }}</p><code data-testid="native-file-after" class="after">{{ review.after }}</code></template>
+          <p v-if="review.replaceAll" role="note">Replace all matching occurrences</p>
+        </template>
+      </section>
+      <p v-if="tool && !tool.ready" role="status" class="reason">Waiting for Claude’s approval controls…</p>
+      <p v-if="cwd" class="reason">Working directory</p>
+      <code v-if="cwd" data-testid="native-bash-cwd">{{ cwd }}</code>
+      <p v-if="reason" class="reason">{{ reason }}</p>
+      <details v-if="standingChoices.length" :open="!!file || !!workflow || !!tool" class="standing-permission">
+        <summary>Remember permission or change mode</summary>
+        <label>Approval choice
+          <select v-model="selectedChoice" :aria-label="`${toolName} approval choice`" :disabled="controlsDisabled">
+            <option v-if="tool ? tool.choices.some(choice => choice.value === 'yes') : !workflow || workflow.choices.some(choice => choice.value === 'yes')" value="yes">{{ tool?.choices.find(choice => choice.value === 'yes')?.label ?? workflow?.choices.find(choice => choice.value === 'yes')?.label ?? file?.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' }}</option>
+            <option v-for="choice in standingChoices" :key="choice.value" :value="choice.value">{{ choice.label }}</option>
+          </select>
+        </label>
+        <p v-if="file && selectedFileChoice && (selectedChoice !== 'yes' || selectedFileChoice.label !== 'Yes')" class="permission-choice-description" data-testid="native-file-permission-choice-description">{{ selectedFileChoice.label }}</p>
+        <p v-if="tool && selectedToolChoice && selectedChoice !== 'yes'" class="permission-choice-description" data-testid="native-tool-permission-choice-description">{{ selectedToolChoice.label }}</p>
+        <p v-if="choiceDescriptions?.[selectedChoice]" class="permission-choice-description">{{ choiceDescriptions[selectedChoice] }}</p>
+        <label v-if="currentChoice && 'prefix' in currentChoice && currentChoice.prefix !== undefined">Command prefix
+          <input v-model="prefix" aria-label="Remembered command prefix" maxlength="4000" :disabled="controlsDisabled" />
+        </label>
+      </details>
+      <details v-if="!tool || tool.choices.some(choice => choice.feedback)">
+        <summary>{{ tool ? 'Add feedback' : 'Add a reason for denying' }}</summary>
+        <textarea v-model="feedback" :aria-label="tool ? 'Feedback for Claude' : 'Reason for denying'" rows="2" maxlength="4000" :disabled="controlsDisabled || !!tool && !selectedToolChoice?.feedback" />
+      </details>
+    </div>
+    <footer>
+      <button type="button" class="cancel" :disabled="canCancel === undefined ? disabled : controlsDisabled || !canCancel" @click="cancel">Cancel</button>
+      <div class="decisions">
+        <button type="button" ref="denyElement" class="deny" :disabled="controlsDisabled || !!tool && !tool.choices.some(choice => choice.value === 'no')" @click="deny">Deny</button>
+        <button type="button" ref="approveElement" class="approve" :disabled="controlsDisabled || !!tool && !tool.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow') || selectedChoice !== 'yes' && !currentChoice || !!workflow && !workflow.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow')" @click="approve">{{ tool ? selectedChoice === 'yes' ? tool.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' : 'Continue' : workflow ? workflow.choices.find(choice => choice.value === selectedChoice)?.label ?? 'Allow' : selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
+      </div>
+    </footer>
+  </section>
+</template>
+
+<script setup lang="ts">
+import type { ClaudeToolPermissionApproval } from '#features/code/common/native-tool-permission.ts'
+import NativePermissionText from './NativePermissionText.vue'
+import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
+import type { ClaudeWorkflowApproval } from '#features/code/common/native-workflow-approval.ts'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
+import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
+const props = withDefaults(defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: string; choiceDescriptions?: Record<string, string>; defaultFocusValue?: string; canCancel?: boolean; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>(), { canCancel: undefined })
+const emit = defineEmits<{ respond: [response: { approved: boolean; cancelled?: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: []; 'edit-workflow': [] }>()
+const rawWorkflow = ref<boolean>()
+const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)
+watch(() => props.workflow?.token, () => { rawWorkflow.value = undefined })
+const detailsElement = ref<HTMLElement>()
+const approvalElement = ref<HTMLElement>(), denyElement = ref<HTMLButtonElement>(), approveElement = ref<HTMLButtonElement>()
+const interacted = ref(false)
+let initialFocusApplied = false
+let resizeObserver: ResizeObserver | undefined, focusFrame: number | undefined
+function ensureFocusedField() {
+  if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
+  focusFrame = requestAnimationFrame(() => {
+    focusFrame = undefined
+    const details = detailsElement.value, field = document.activeElement
+    if (!details || !(field instanceof HTMLElement) || !details.contains(field) || !field.matches('input,select,textarea')) return
+    const box = details.getBoundingClientRect(), bounds = field.getBoundingClientRect()
+    // A native select truncates long grants. Keep its full source scope in view as well.
+    const scope = props.file && field.matches('select') ? details.querySelector('[data-testid="native-file-permission-choice-description"]')?.getBoundingClientRect() : undefined
+    const bottom = scope && scope.bottom - bounds.top <= box.height - 16 ? scope.bottom : bounds.bottom
+    if (bottom > box.bottom - 8) details.scrollTop += bottom - box.bottom + 8
+    else if (bounds.top < box.top + 8) details.scrollTop -= box.top + 8 - bounds.top
+  })
+}
+onMounted(() => {
+  window.addEventListener('resize', ensureFocusedField)
+  if (typeof ResizeObserver === 'undefined') return
+  resizeObserver = new ResizeObserver(ensureFocusedField)
+  if (detailsElement.value) resizeObserver.observe(detailsElement.value)
+})
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', ensureFocusedField)
+  if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
+})
+const feedback = ref('')
+const selectedChoice = ref('yes'), prefixDrafts = reactive<Record<string, string>>({})
+const permission = computed(() => props.workflow ?? props.file ?? props.tool)
+const selectedToolChoice = computed(() => props.tool?.choices.find(choice => choice.value === selectedChoice.value))
+const controlsDisabled = computed(() => props.disabled || permission.value?.ready === false)
+const standingChoices = computed(() => (props.tool ? props.tool.choices : props.toolName === 'Bash' ? props.bash?.choices : permission.value?.choices)?.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [])
+const selectedFileChoice = computed(() => props.file?.choices.find(choice => choice.value === selectedChoice.value))
+const currentChoice = computed(() => standingChoices.value.find(choice => choice.value === selectedChoice.value))
+const prefix = computed({ get: () => prefixDrafts[selectedChoice.value] ?? (currentChoice.value && 'prefix' in currentChoice.value ? currentChoice.value.prefix : '') ?? '', set: value => { prefixDrafts[selectedChoice.value] = value } })
+watch(() => [controlsDisabled.value, props.defaultFocusValue] as const, async () => {
+  if (initialFocusApplied || interacted.value || controlsDisabled.value || props.defaultFocusValue === undefined) return
+  await nextTick()
+  if (initialFocusApplied || interacted.value || controlsDisabled.value) return
+  const button = props.defaultFocusValue === 'no' ? denyElement.value : approveElement.value
+  if (!button || button.disabled || !approvalElement.value?.isConnected) return
+  button.focus({ preventScroll: true })
+  initialFocusApplied = true
+}, { immediate: true, flush: 'post' })
+function cancel() {
+  if (props.canCancel === undefined) { if (!props.disabled) emit('pause'); return }
+  if (controlsDisabled.value || !props.canCancel || !props.tool) return
+  emit('respond', { approved: false, cancelled: true, choice: '', choiceToken: props.tool.token })
+}
+function handleKeydown(event: KeyboardEvent) {
+  interacted.value = true
+  if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.target instanceof HTMLSelectElement || props.canCancel === undefined || !props.canCancel || controlsDisabled.value) return
+  event.preventDefault()
+  event.stopPropagation()
+  cancel()
+}
+function deny() {
+  if (controlsDisabled.value) return
+  if (props.tool) {
+    const no = props.tool.choices.find(choice => choice.value === 'no'); if (!no) return
+    emit('respond', { approved: false, choice: no.value, choiceToken: props.tool.token, ...(no.feedback && feedback.value ? { reason: feedback.value } : {}) }); return
+  }
+  emit('respond', { approved: false, reason: feedback.value.trim() || undefined, ...(permission.value ? { choice: 'no', choiceToken: permission.value.token } : {}) })
+}
+function approve() {
+  if (controlsDisabled.value) return
+  if (permission.value) {
+    const choice = permission.value.choices.find(choice => choice.value === selectedChoice.value)
+    if (choice) emit('respond', { approved: choice.decision === 'allow', choice: choice.value, choiceToken: permission.value.token, ...(props.tool && choice.feedback && feedback.value ? { reason: feedback.value } : {}) })
+    return
+  }
+  const choice = props.bash?.choices.find(choice => choice.value === selectedChoice.value)
+  emit('respond', { approved: true, ...(choice ? { choice: choice.value, choiceToken: choice.token, ...(choice.prefix !== undefined ? { prefix: prefix.value } : {}) } : {}) })
+}
+</script>
+
+<style scoped>
+.native-tool-approval { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; overflow: hidden; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; background: #232323; color: #e5e5e5; }
+header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 8px; }
+.eyebrow { color: #b8a887; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.details { flex: 0 1 auto; min-height: 0; overflow-y: auto; padding: 0 16px 10px; font-size: 12px; line-height: 1.5; }
+.question { margin: 0 0 6px; color: #aaa; }
+.tool-details { margin: 0; }
+.tool-details dt { margin-top: 8px; color: #aaa; }
+.tool-details dd { margin: 4px 0 0; padding: 8px 10px; border-radius: 6px; background: #191919; white-space: pre-wrap; overflow-wrap: anywhere; }
+code { white-space: pre-wrap; display: block; overflow-wrap: anywhere; padding: 8px 10px; border-radius: 6px; background: #191919; font-size: 11px; }
+.change-review { margin-top: 10px; }
+.change-label { margin: 8px 0 4px; color: #aaa; }
+code.before { border-left: 2px solid #d28c8c; }
+code.after { border-left: 2px solid #8fba99; }
+.reason { margin: 8px 0; color: #aaa; overflow-wrap: anywhere; }
+details { margin-top: 10px; color: #aaa; }
+summary { cursor: pointer; font-size: 11px; }
+select, input { display: block; width: 100%; margin-top: 6px; padding: 6px; border: 1px solid #555; border-radius: 6px; background: #191919; color: #eee; }
+.permission-choice-description { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; color: #ddd; }
+.standing-permission label { display: block; margin-top: 8px; }
+textarea { display: block; width: 100%; margin-top: 6px; padding: 6px; resize: vertical; border: 1px solid #555; border-radius: 6px; background: #191919; color: #eee; }
+footer { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-top: 1px solid rgb(255 255 255 / .07); }
+.decisions { display: flex; gap: 8px; }
+button { border-radius: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer; }
+button:focus-visible, summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: default; }
+.cancel { color: #aaa; background: transparent; }
+.deny { background: #3b3b3b; color: #eee; }
+.approve { background: #e5e5e5; color: #202020; }
+button:hover:not(:disabled) { filter: brightness(1.12); }
+.workflow-preview-toggle { align-self: flex-start; margin-block: .5rem; padding: .35rem .6rem; border: 1px solid #ffffff26; border-radius: .4rem; font-size: .75rem; }
+.workflow-phases { padding-left: 1.25rem; list-style: decimal; }
+.workflow-phases > li { margin-block: .75rem; }
+.workflow-phases h3 { font-weight: 600; }
+.workflow-phases ul { margin-top: .35rem; padding-left: 1.25rem; list-style: disc; }
+</style>

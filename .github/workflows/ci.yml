@@ -30,6 +30,15 @@ on:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
         type: string
         default: ''
+      claude_research:
+        description: Run one pinned Claude actual-app acceptance journey on disposable macOS
+        type: boolean
+        default: false
+      claude_research_case:
+        description: Claude native app journey or selected Agent/field milestone
+        type: choice
+        options: [native-action-keys, native-action-contexts, action-keys-app, action-contexts-app, action-dialog-app, action-panes-app, agent-source, field-bounds, agent-and-fields, source-fill, everyday]
+        default: agent-source
       strict_chain:
         description: Run only the full strict chain with two cores on a disposable macOS runner
         type: boolean
@@ -68,13 +77,13 @@ on:
   #   branches: [master]
 
 concurrency:
-  group: ci-${{ github.ref }}-${{ inputs.app_acceptance && 'app' || '' }}-${{ inputs.strict_chain && 'strict' || '' }}-${{ inputs.compiler_windows && 'windows' || '' }}-${{ inputs.compiler_macos && 'macos' || '' }}-${{ inputs.compiler_linux && 'linux' || '' }}
+  group: ci-${{ github.ref }}-${{ inputs.claude_research && 'claude-research' || '' }}-${{ inputs.app_acceptance && 'app' || '' }}-${{ inputs.strict_chain && 'strict' || '' }}-${{ inputs.compiler_windows && 'windows' || '' }}-${{ inputs.compiler_macos && 'macos' || '' }}-${{ inputs.compiler_linux && 'linux' || '' }}
   # Native diagnostic results must finish; full CI still supersedes older runs.
-  cancel-in-progress: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
+  cancel-in-progress: ${{ !inputs.app_acceptance && !inputs.claude_research && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
 
 jobs:
   check:
-    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
+    if: ${{ !inputs.app_acceptance && !inputs.claude_research && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
     runs-on: macos-14
     timeout-minutes: 25
 
@@ -170,7 +179,7 @@ jobs:
   # Builds tests/packs/external-pack with the apack CLI and runs its Playwright
   # suite from the pack dir against the built app — the third-party pack path.
   external-pack-e2e:
-    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
+    if: ${{ !inputs.app_acceptance && !inputs.claude_research && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
     runs-on: macos-14
     timeout-minutes: 30
 
@@ -251,3 +260,11 @@ jobs:
     uses: ./.github/workflows/compiler-linux.yml
     with:
       test_name: ${{ inputs.compiler_linux_test || '' }}
+
+  claude-research:
+    if: ${{ inputs.claude_research }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/claude-research.yml
+    with:
+      case: ${{ inputs.claude_research_case || 'agent-source' }}

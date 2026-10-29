@@ -9,7 +9,9 @@ export interface OnboardingState {
 
 export function getOnboardingState(services: Services, threadId: EntityId): OnboardingState | null {
   const thread = services.repository.threadQueries.byId(threadId) as any;
-  return thread?.context?.onboarding ?? null;
+  const state = thread?.context?.onboarding;
+  // Steps edit a working copy; persistOnboardingState owns the database write.
+  return state ? { ...state, data: { ...state.data } } : null;
 }
 
 export function persistOnboardingState(services: Services, threadId: EntityId, state: OnboardingState) {

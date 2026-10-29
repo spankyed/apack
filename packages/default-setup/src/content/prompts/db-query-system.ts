@@ -66,11 +66,11 @@ Chainable (return query, keep chaining):
 Terminals (end the chain, return data):
   .pick(['f1', 'f2'])     → Array<{ id, f1, f2 }>     id always included automatically
   .pickAll()              → Array<{ id, ...allAttrs }>
-  .pickOne(['f1'])        → { id, f1 } | null
+  .pickOne(['f1'])        → { id, f1 } | undefined
   .ids()                  → string[]
   .count()                → number
-  .first()                → string | null
-  .last()                 → string | null
+  .first()                → string | undefined
+  .last()                 → string | undefined
   .exists()               → boolean
 
 Walk then pick (terminal):

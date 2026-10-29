@@ -16,9 +16,11 @@
     <!-- Main Area -->
     <div class="flex flex-grow overflow-hidden" :style="{ paddingRight: canShowPanel && panelSizes.inspectionWidth === 0 ? '2px' : '0' }">
         <div class="flex flex-col flex-grow overflow-hidden" :style="{ minWidth: '350px', width: canShowPanel && panelSizes.inspectionWidth > 0 ? `calc(100% - ${panelSizes.inspectionWidth}px)` : '100%' }">
+            <!-- Intrinsic chat minimums constrain the split without rewriting its saved proportions. -->
             <!-- Canvas Area — always rendered; collapses to just its header when chat is maximized -->
             <!-- Canvas Area — empty draggable header during onboarding, normal otherwise -->
             <CanvasArea
+            ref="canvasArea"
             data-onboarding-id="canvas-area"
             :header-only="isOnboarding || chatMaximized"
             @crumb-click="(target: string, info?: any) => send({ type: 'TRAIL_CLICK', target, info })"
@@ -26,7 +28,7 @@
             @menu-action="handleMenuAction"
             :style="isOnboarding || chatMaximized
                 ? { flex: '0 0 auto', height: 'auto' }
-                : { height: `${panelSizes.canvasHeight}%` }"
+                : { flex: `${panelSizes.canvasHeight} 1 0%`, height: 'auto', minHeight: '40px' }"
             :breadcrumbs="isOnboarding ? [] : breadcrumbs"
             :menu-items="isOnboarding ? [] : allMenuItems"
             :label="`${canvasSurface.label} Canvas`"
@@ -51,7 +53,7 @@
                 class="relative"
                 :style="isOnboarding || chatMaximized
                     ? { flex: '1 1 0%', minHeight: 0 }
-                    : { height: `calc(${100 - panelSizes.canvasHeight}% - 4px)` }"
+                    : { flex: `${100 - panelSizes.canvasHeight} 1 0%`, height: 'auto', minHeight: panelSizes.canvasHeight >= 93 ? 0 : 'auto', maxHeight: 'calc(100% - 46px)', overflow: panelSizes.canvasHeight >= 93 ? 'hidden' : 'visible' }"
             >
                 <!-- The chat is the default pack's, so there is none until a pack has claimed the default -->
                 <SurfacePane v-if="defaultSurface" :surface="defaultSurface" area="chat" />
@@ -223,9 +225,10 @@ const handleMenuAction = (event: ContextMenuItem['event']) => {
   notifySurfaceActor(applicationState.system.get(surfaceId), surfaceId, event)
 }
 
+const canvasArea = ref<InstanceType<typeof CanvasArea>>()
 const MIN_CHAT_HEIGHT = 180 // px — enough for chat input to remain visible
 
-const getMainAreaHeight = () => window.innerHeight - 50 // Approximate, accounting for toolbar
+const getMainAreaHeight = () => (canvasArea.value?.$el as HTMLElement | undefined)?.parentElement?.clientHeight ?? window.innerHeight
 
 // Guard so drag-to-restore only fires once per maximized drag
 let maxRestored = false
@@ -237,7 +240,8 @@ const handleCanvasResize = (delta: number) => {
   }
   maxRestored = false
   const mainAreaHeight = getMainAreaHeight()
-  const currentHeightPx = (panelSizes.value.canvasHeight / 100) * mainAreaHeight
+  // A chat minimum can make the visible canvas smaller than its saved proportion.
+  const currentHeightPx = (canvasArea.value?.$el as HTMLElement | undefined)?.getBoundingClientRect().height ?? (panelSizes.value.canvasHeight / 100) * mainAreaHeight
   const newHeightPx = currentHeightPx + delta
   const maxCanvasPercent = ((mainAreaHeight - MIN_CHAT_HEIGHT) / mainAreaHeight) * 100
   const newHeightPercent = Math.min(maxCanvasPercent, (newHeightPx / mainAreaHeight) * 100)

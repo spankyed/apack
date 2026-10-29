@@ -3,7 +3,7 @@ import type { TiptapMode, TiptapVariant } from './extensions.ts'
 export interface EditorConfig {
   editable: boolean
   fullExtensions: boolean       // Tables, TaskList, Details, SubDocLinks, Blockquote, ResizableImage
-  richFormatting: boolean       // Headings, strike, horizontalRule, trailingNode (false = disabled)
+  richFormatting: boolean       // Strike, horizontalRule, trailingNode (false = disabled)
   markdownHtml: boolean         // Markdown HTML support
   markdownBreaks: boolean       // Single \n → <br> (for chat viewer where Claude uses single newlines)
   listShiftEnter: boolean       // Shift+Enter → new bullet

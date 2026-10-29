@@ -33,6 +33,11 @@ export async function action(
   }
 
   try {
+    if (!await services.cli.claudeCode.closeIdleConversation(threadId)) {
+      const error = 'Pause the current Claude turn before resetting its session.';
+      services.chat.sendBlockMessage({ threadId, text: error, blocks: [] });
+      return { success: false, error };
+    }
     clearClaudeState(services, threadId);
     services.chat.sendBlockMessage({
       threadId,

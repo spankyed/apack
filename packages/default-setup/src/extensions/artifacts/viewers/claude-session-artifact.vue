@@ -1,20 +1,20 @@
 <template>
-  <div class="max-w-2xl">
-    <div class="rounded-md bg-neutral-850 border border-neutral-800 animate-fade-in">
+  <div class="w-full max-w-2xl">
+    <div class="overflow-hidden rounded-xl border border-white/[0.06] bg-transparent animate-fade-in">
       <!-- Header -->
-      <div class="flex items-center gap-2 px-3 py-2 border-b border-neutral-800">
-        <Wrench :size="14" class="text-neutral-400" />
-        <h3 class="text-sm font-medium text-neutral-200">Claude Code session</h3>
+      <div class="flex items-center gap-2.5 px-4 py-3">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-neutral-400"><Wrench :size="15" class="text-neutral-400" /></span>
+        <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-neutral-200" title="Claude Code session">Claude Code</h3>
         <button
           v-if="content.sessionId"
-          @click="openTerminalTab"
+          @click="openConversation"
           class="text-neutral-500 hover:text-neutral-300 transition-colors p-1"
-          title="Open in terminal"
+          title="Open conversation"
         >
-          <Terminal :size="12" />
+          <MessageSquare :size="12" />
         </button>
-        <span class="flex-1" />
-        <span class="flex items-center gap-1.5">
+
+        <span class="flex shrink-0 items-center gap-1.5 px-1 py-0.5">
           <span class="relative inline-block w-2 h-2" :title="content.chatState">
             <span
               :class="[
@@ -75,11 +75,18 @@
         >Clear</button>
       </div>
 
-      <!-- Key/value grid -->
-      <div class="px-3 py-3 space-y-2 text-xs">
-        <div class="grid grid-cols-[5rem_1fr] gap-x-3 gap-y-2">
+      <!-- Keep diagnostics available without dominating the conversation. -->
+      <details class="group border-t border-white/[0.06] text-xs">
+        <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-neutral-400 transition-colors hover:bg-white/[0.025] focus-visible:outline focus-visible:outline-blue-400 [&::-webkit-details-marker]:hidden">
+          <span class="min-w-0 flex-1 truncate font-medium text-neutral-300">{{ content.model || 'Model unavailable' }}</span>
+          <span class="tabular-nums">{{ content.turns ?? 0 }} turns</span>
+          <span class="tabular-nums">${{ (content.totalCostUsd ?? 0).toFixed(3) }}</span>
+          <span class="text-neutral-500 group-open:text-neutral-300">Details <span aria-hidden="true" class="inline-block transition-transform group-open:rotate-180">⌄</span></span>
+        </summary>
+      <div class="px-4 pb-4 pt-2 space-y-4 text-xs">
+        <div class="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3">
           <span class="text-neutral-500">Model</span>
-          <span class="text-neutral-200 font-mono truncate">{{ content.model || '—' }}</span>
+          <span class="text-neutral-100 font-medium truncate">{{ content.model || '—' }}</span>
 
           <span class="text-neutral-500">Session</span>
           <div class="flex items-center gap-2">
@@ -97,7 +104,7 @@
             </button>
           </div>
 
-          <span class="text-neutral-500">CWD</span>
+          <span class="text-neutral-500">Workspace</span>
           <span class="text-neutral-200 font-mono truncate" :title="content.cwd">
             {{ shortenCwd(content.cwd) || '—' }}
           </span>
@@ -130,7 +137,7 @@
         </div>
 
         <!-- Context usage breakdown (from CLI /context query) -->
-        <details v-if="ctx" class="pt-2 mt-2 border-t border-neutral-800 text-neutral-500 ml-1">
+        <details v-if="ctx" class="pt-4 mt-4 border-t border-white/[0.06] text-neutral-400">
           <summary class="text-[10px] uppercase tracking-wide cursor-pointer select-none hover:text-neutral-400 [&::marker]:mr-1">
             &nbsp;Context
             <span class="float-right text-xs tabular-nums normal-case tracking-normal" :class="ctx.percentage >= 90 ? 'text-red-400' : ctx.percentage >= 75 ? 'text-yellow-400' : 'text-neutral-400'">{{ ctx.percentage }}%</span>
@@ -186,7 +193,7 @@
         </details>
 
         <!-- Recent tools (last 3, collapsible) -->
-        <details v-if="recentTools.length" class="pt-2 mt-2 border-t border-neutral-800 text-neutral-500 ml-1">
+        <details v-if="recentTools.length" class="pt-4 mt-4 border-t border-white/[0.06] text-neutral-400">
           <summary class="text-[10px] uppercase tracking-wide cursor-pointer select-none hover:text-neutral-400 [&::marker]:mr-1">&nbsp;Recent</summary>
           <div class="mt-1 px-3">
             <div
@@ -201,21 +208,33 @@
           </div>
         </details>
 
-        <!-- Permission mode — segmented control. Takes effect on next turn. -->
+        <!-- Selection follows the acknowledged native mode. -->
         <div class="pt-2 mt-2 border-t border-neutral-800">
           <div class="flex items-center justify-between mb-1.5">
             <span class="text-[10px] uppercase tracking-wide text-neutral-500">Permission</span>
             <span class="text-[10px] text-neutral-600">{{ permissionDescription }}</span>
           </div>
+          <PopoverRoot>
+            <PopoverTrigger as-child>
+              <button type="button" class="flex w-full items-center justify-between rounded-md border border-neutral-700 bg-neutral-900/40 px-2.5 py-1.5 text-xs text-neutral-300 hover:bg-neutral-800">
+                <span>Permissions: {{ permissionOptions.find(option => option.value === permissionMode)?.label ?? permissionMode }}</span>
+                <ChevronDown :size="12" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverPortal>
+              <PopoverContent aria-label="Claude Code permissions" side="bottom" align="start" :side-offset="6" :collision-padding="16" class="z-50 w-[22rem] max-w-[calc(100vw-2rem)] max-h-[var(--reka-popover-content-available-height)] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-3 shadow-xl">
+                <p class="mb-2 text-xs font-medium text-neutral-200">Claude Code permissions</p>
           <div class="flex rounded-md border border-neutral-700 overflow-hidden">
             <button
               v-for="opt in permissionOptions"
               :key="opt.value"
               type="button"
               @click="selectPermissionMode(opt.value)"
+              :disabled="!!permissionChange?.call"
+              :aria-pressed="permissionMode === opt.value"
               :title="opt.tooltip"
               :class="[
-                'flex-1 px-2 py-1 text-xs font-medium transition-colors border-r border-neutral-700 last:border-r-0',
+                'flex-1 px-2 py-1 text-xs font-medium transition-colors border-r border-neutral-700 last:border-r-0 disabled:opacity-50 disabled:cursor-wait',
                 permissionMode === opt.value
                   ? (opt.value === 'bypassPermissions'
                     ? 'bg-yellow-600 text-yellow-50'
@@ -226,6 +245,11 @@
               {{ opt.label }}
             </button>
           </div>
+          <p v-if="permissionChange?.call" role="status" class="mt-1.5 text-xs text-neutral-400">Waiting for Claude…</p>
+          <p v-else-if="permissionChange?.reason" role="alert" class="mt-1.5 text-xs text-amber-300 break-words">{{ permissionChange.reason }}</p>
+              </PopoverContent>
+            </PopoverPortal>
+          </PopoverRoot>
         </div>
 
         <!-- Worktree toggle -->
@@ -253,17 +277,19 @@
           </div>
         </div>
       </div>
+      </details>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Wrench, Copy, Check, Terminal } from 'lucide-vue-next'
+import { Wrench, Copy, Check, MessageSquare, ChevronDown } from 'lucide-vue-next'
+import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent } from 'reka-ui'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { openSurface } from '#generated/fe.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { sendToSystem, sendToSurface } from '#generated/events.ts'
 
 
 type PermissionMode =
@@ -404,14 +430,9 @@ async function copySessionId() {
   } catch { /* clipboard denied */ }
 }
 
-function openTerminalTab() {
-  // The code surface routes a terminal.* event to its terminals
-  openSurface('code', {
-    type: 'terminal.CREATE',
-    target: 'tab',
-    command: `claude --resume ${content.value.sessionId}`,
-    cwd: content.value.cwd || undefined,
-  })
+function openConversation() {
+  const threadId = currentThreadId.value
+  if (threadId) openSurface('threads', { type: 'OPEN_THREAD_CHAT', threadId })
 }
 
 // ─── Permission mode segmented control ─────────────────────────────────
@@ -452,6 +473,9 @@ const permissionDescription = computed(
   () => permissionOptions.find(o => o.value === permissionMode.value)?.description ?? '',
 )
 
+const permissionChanges = useSurfaceState('threads', s => s.permissionModeChanges)
+const permissionChange = computed(() => permissionChanges.value[currentThreadId.value ?? ''])
+
 function selectPermissionMode(mode: PermissionMode) {
   if (mode === permissionMode.value) return
   const threadId = currentThreadId.value
@@ -459,11 +483,7 @@ function selectPermissionMode(mode: PermissionMode) {
     console.warn('[claude-session-artifact] no current thread; cannot update permission mode')
     return
   }
-  sendToSystem('threads', {
-    type: 'FORWARD_BRAIN_EVENT',
-    eventType: 'user.update.permissionMode',
-    payload: { threadId, mode },
-  })
+  sendToSurface('threads', { type: 'SET_CLAUDE_PERMISSION_MODE', threadId, mode })
 }
 
 function clearGoal() {

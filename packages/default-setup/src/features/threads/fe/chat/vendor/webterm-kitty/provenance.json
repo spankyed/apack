@@ -1,0 +1,98 @@
+{
+  "repository": "https://github.com/Gaurav-Gosain/webterm",
+  "commit": "45eb443009edc506e8be8308fa9007740f4bb451",
+  "license": "MIT",
+  "fit": {
+    "version": "0.12.0-beta.290",
+    "integrity": "sha512-mJ77s82VhARA8XhuWcUnWYKAZkEDzSnCzgBrT9qjHJlHWr+G5duDZcOBnxnVVNtp21LDKaONr3c7IxuLii1XNg=="
+  },
+  "adaptations": [
+    "Only the standalone Kitty graphics module is included.",
+    "Imports use explicit .ts paths and the isolated APC-capable Claude terminal xterm dependency.",
+    "KittyOptions is copied from the upstream interface without unrelated terminal types.",
+    "Pinned xterm ambient declarations use the npm alias module name; no API types are changed.",
+    "Per-image decode tokens prevent older asynchronous PNG/RGBA decodes from replacing later transmissions or reviving deleted/reset/evicted images.",
+    "Screen erase clears physical placements and placeholder cells but retains Unicode virtual prototypes, as required for native resize redraws.",
+    "Matching MIT FitAddon source uses the isolated terminal type and the published bundle default scrollbar width (14); its redundant package API interface is omitted."
+  ],
+  "files": [
+    {
+      "name": "overlay.ts",
+      "upstream": "src/kitty/overlay.ts",
+      "originalSha256": "331dc356c470355dfc0b24eaa6853096d85bc5bfbe36ea4cbe5175c3a59779c9",
+      "adaptedSha256": "95bec94ffe09deb6c70f40ff859107c1b675272034a8b71934d5abe44544ac8d"
+    },
+    {
+      "name": "protocol.ts",
+      "upstream": "src/kitty/protocol.ts",
+      "originalSha256": "be235fcff383d03af10c5c1a6e873a8de296923b44fa01cd803aed4d4c4d4b48",
+      "adaptedSha256": "be235fcff383d03af10c5c1a6e873a8de296923b44fa01cd803aed4d4c4d4b48"
+    },
+    {
+      "name": "xterm-adapter.ts",
+      "upstream": "src/kitty/xterm-adapter.ts",
+      "originalSha256": "4201cb6adcaf3673f36e6ccef0208e208d5fdcafb44abd6d5e37cd15f6d84824",
+      "adaptedSha256": "01168bc971d4b3606844fd6c0e7aec995f69ea2661a5e8598d177ca0b2923c4d"
+    },
+    {
+      "name": "placeholders.ts",
+      "upstream": "src/kitty/placeholders.ts",
+      "originalSha256": "8b7a748e0b1cc6f6471804bf4109c44fc32a0222996cf5cdfb3959a1f66b5f9a",
+      "adaptedSha256": "a19e08c33a5091c80e3787945bbcf5f62d5f4b957e116c17a56dcb6eae98d7d3"
+    },
+    {
+      "name": "placeholder-glyph.ts",
+      "upstream": "src/kitty/placeholder-glyph.ts",
+      "originalSha256": "b409957e0633c21f63475a90e7e363b8d144b4eaafbb6df0a514e116a78b0991",
+      "adaptedSha256": "e2ba1c96a9af23f1ff959dd7f9b920dee55771dcb5138a5007d2af435e19609b"
+    },
+    {
+      "name": "placeholder-font.ts",
+      "upstream": "src/kitty/placeholder-font.ts",
+      "originalSha256": "325b4e1d713a67bd9a44802d4aa419dcf94e0ca12eac818bd12435af1520cf97",
+      "adaptedSha256": "325b4e1d713a67bd9a44802d4aa419dcf94e0ca12eac818bd12435af1520cf97"
+    },
+    {
+      "name": "index.ts",
+      "upstream": "src/kitty/index.ts",
+      "originalSha256": "e9d32b4da7d1362ab2d333ac7ea55e01c2f4b9749d8c9a1195804d8a6c79ed9c",
+      "adaptedSha256": "0fb47a07305f1cddabf34ce4823c2ddc7b62a1a951a91549c0ecdf84bbc340a9"
+    },
+    {
+      "name": "options.ts",
+      "upstream": "src/types.ts#KittyOptions",
+      "originalSha256": "7e52e441d57f6cf0f2df0eadcd41f7e5a648993749981b9aafe9b2199b5aa216",
+      "adaptedSha256": "e00165bdf4450007842bf95b7cbb064198bf24b1af2e457f8d2f6d84dd9b3502"
+    },
+    {
+      "name": "xterm.d.ts",
+      "upstream": "@xterm/xterm@6.1.0-beta.290/typings/xterm.d.ts",
+      "originalSha256": "4ce38dedfd77d310412ccc56c905a39b25db1e9b630d4f668cbdba771b81542d",
+      "adaptedSha256": "499c7aa2ec30e9bef1c2fd8ee132b097d72430d9689141d6b3119096811cbda2"
+    },
+    {
+      "name": "XTERM-LICENSE",
+      "upstream": "@xterm/xterm@6.1.0-beta.290/LICENSE",
+      "originalSha256": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd",
+      "adaptedSha256": "b569f629d00f2626a8100df2a1798210535621e42164dfd426a6fe5aac7b0ccd"
+    },
+    {
+      "name": "fit.ts",
+      "upstream": "@xterm/addon-fit@0.12.0-beta.290/src/FitAddon.ts",
+      "originalSha256": "3c507c9439d5c471438166a957166ed403bb9b52ea01b26ea01ce3b960c6a16b",
+      "adaptedSha256": "5404adb038e162322c9e87214b12d068b6d344de59033b9660bfcd4405d75ea2"
+    },
+    {
+      "name": "FIT-LICENSE",
+      "upstream": "@xterm/addon-fit@0.12.0-beta.290/LICENSE",
+      "originalSha256": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f",
+      "adaptedSha256": "e256f01188af527e4d06d21d06fbf785ae9c50d4b328bf03cbe0ba7f0aa4228f"
+    },
+    {
+      "name": "LICENSE",
+      "upstream": "LICENSE",
+      "originalSha256": "b58750e8dcb0e264d490fa37b514bda2b5f43bec1938edebbc9d7870b192f682",
+      "adaptedSha256": "b58750e8dcb0e264d490fa37b514bda2b5f43bec1938edebbc9d7870b192f682"
+    }
+  ]
+}
