@@ -277,8 +277,10 @@ it passes all 26 recovery cases/build/types but fails cleanup lint. Corrected 47
 FTS posting integrity checks on a private writable snapshot and a postings-only corruption regression;
 that run fails one of 27 recovery cases on retired corrupt-FTS cleanup. Corrected 3f643dccb9 destroys a
 retired group on exactly SQLITE_CORRUPT_VTAB and adds explicit incumbent recovery; all 27 recovery cases,
-build/types/lint pass. New ffc095eebf adds primary decoding/orphans and bounded retained issues; validation
-is active in ears-audit-primary (exec 87160). Poll that same handle. The audit is not yet public
+build/types/lint pass. Primary decoding/orphans and bounded retained issues pass all 29 recovery cases at 8b58886b20, with
+build/types/lint. The earlier failed fixture used a valid msgpackr special object; its corrected truncated
+map is retained with both results. New cdb961fb87 adds metadata identity and embedding representation
+checks; validation is active in ears-audit-metadata. Poll that same handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
 Complete audit and lossless logical export remain required.
