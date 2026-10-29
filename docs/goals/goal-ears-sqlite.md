@@ -194,8 +194,8 @@ The guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-e
 to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No master merge, adoption,
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with unpublished vector/operational tests, rebuild host/CLI wiring and selected-store implementation through 59d9275045; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
-Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with unpublished vector/operational tests and maintenance/audit implementation through 8db6c28fe7; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
+Published functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
 Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE are now at exact green 6cf6c8349e.
 
@@ -284,7 +284,9 @@ checks; all 31 recovery cases, build/types/lint pass. New 2fd2e376a6 independent
 membership in the audit copy; 536/537 SQLite cases pass, with only a new persisted -0 preservation
 expectation wrong before audit runs. Corrected tests compare the persisted value and add real cleanup
 failures; initial test types fail on receiver annotations, fixed in the subsequent source. Complete SQLite
-validation is active in ears-audit-cleanup-typed.
+validation at 965301274c passes all 539 SQLite cases across 39 files, build/types/lint.
+New public app-only audit export and offline CLI wiring 8db6c28fe7 is validating in ears-audit-cli
+(exec 54207), including real temporary-profile no-repair/finding tests and API report generation.
 Public rebuild still needs a correct generationless membership repair/publication design. Poll that same handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
