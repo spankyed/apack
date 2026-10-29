@@ -197,12 +197,14 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   const transaction = ({ transaction }: { transaction: import('@tiptap/pm/state').Transaction }) => {
     if (transaction.docChanged || transaction.selectionSet) publish(transaction.getMeta('claude-prompt-by'))
   }
+  // Preedit can begin before ProseMirror publishes a document or selection change.
+  const compositionStart = () => { dismissSuggestion(); retireCompletions() }
   const compositionEnd = () => { intent(); publish() }
   const destroyed = () => { stopCaretReveal(); finishPending(false) }
   editor.on('destroy', destroyed)
   editor.on('transaction', transaction)
   dom.addEventListener('compositionend', compositionEnd)
-  dom.addEventListener('compositionstart', dismissSuggestion)
+  dom.addEventListener('compositionstart', compositionStart)
   dom.addEventListener('keydown', acceptSuggestion, true)
   window.addEventListener('blur', dismissSuggestion)
   publish()
@@ -265,14 +267,14 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       const pending = completionPending
       if (!pending || disposed || editor.isDestroyed || reply.revision !== pending.revision) return
       completionPending = undefined
-      if (reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
+      if (editor.view.composing || reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
       completionOffer = { ...pending, id: crypto.randomUUID(), result: reply.result }
       completion?.update(reply.result.suggestions, completionOffer.id)
     },
     dismissCompletions() { retireCompletions() },
     selectCompletion(index: number, offerId: string): boolean {
       const offer = completionOffer, row = offer?.result.suggestions[index]
-      if (!offer || offer.id !== offerId || !row || disposed || editor.isDestroyed || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection) || offer.result.start === undefined) return false
+      if (!offer || offer.id !== offerId || !row || disposed || editor.isDestroyed || editor.view.composing || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection) || offer.result.start === undefined) return false
       const { snapshot, result } = offer, start = result.start!
       const next = rewriteClaudePromptDocument(snapshot, { text: snapshot.text.slice(0, start) + row.text + snapshot.text.slice(snapshot.cursor), cursor: start + row.text.length }, serialize, parse)
       retireCompletions()
@@ -294,7 +296,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       dom.ownerDocument.removeEventListener('selectionchange', selectionChanged, true)
       dom.removeEventListener('keydown', formattingKey, true)
       dom.removeEventListener('compositionend', compositionEnd)
-      dom.removeEventListener('compositionstart', dismissSuggestion)
+      dom.removeEventListener('compositionstart', compositionStart)
       dom.removeEventListener('keydown', acceptSuggestion, true)
       window.removeEventListener('blur', dismissSuggestion)
     },

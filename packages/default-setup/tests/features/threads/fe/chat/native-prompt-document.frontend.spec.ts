@@ -744,3 +744,35 @@ it('returns focus from a dismissed notice after restoration without stealing ano
   editor.commands.clearContent();target.blur();expect(bridge.fillDraft({mode:'replace',text:'Original',ifEmpty:true,focus:true},bridge.revision)).toBe(true);expect(focus).toHaveBeenCalledOnce();
  }finally{bridge.dispose();target.remove();focused.mockRestore();}
 });
+
+
+it.each(['pending', 'offered'] as const)('retires %s completion ownership when composition starts before a document change', state => {
+  editor.commands.setContent('#rel')
+  editor.commands.setTextSelection(5)
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  try {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+    const revision = request.mock.lastCall![0].revision
+    const reply = { revision, status: 'ready' as const, result: { start: 0, suggestions: [{ text: '#release', label: 'Release review' }] } }
+    if (state === 'offered') bridge.receiveCompletions(reply)
+    const oldOffer = update.mock.lastCall?.[1]
+    const doc = editor.state.doc, selection = editor.state.selection
+    editor.view.dom.dispatchEvent(new CompositionEvent('compositionstart'))
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.eq(selection)).toBe(true)
+    if (state === 'pending') bridge.receiveCompletions(reply)
+    expect(update).toHaveBeenLastCalledWith([])
+    if (oldOffer) expect(bridge.selectCompletion(0, oldOffer)).toBe(false)
+    expect(serialize(editor.state.doc)).toBe('#rel')
+    editor.view.dom.dispatchEvent(new CompositionEvent('compositionend'))
+    const fresh = send.mock.lastCall![0]
+    bridge.receive({ revision: fresh.revision, status: 'applied', frame: { text: fresh.text, cursor: fresh.cursor } })
+    bridge.receiveCompletions({ ...reply, revision: request.mock.lastCall![0].revision })
+    const freshOffer = update.mock.lastCall![1]
+    expect(freshOffer).toBeTruthy()
+    expect(bridge.selectCompletion(0, freshOffer)).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose() }
+})
