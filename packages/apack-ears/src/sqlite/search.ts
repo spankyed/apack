@@ -70,7 +70,7 @@ export class SqliteSearch {
     return [
       { types: text.map(j => j.type), indexes: text, objects: [['table', 'text_meta']] },
       { types: vectors.map(j => j.type), indexes: vectors, objects: [['table', 'chunks']] },
-      { types: [], indexes: [], objects: [['index', 'chunk_pending'], ['index', 'chunk_reuse'], ['index', 'chunk_generation'], ['index', 'text_generation']] },
+      { types: [], indexes: [], objects: [['index', 'chunk_pending'], ['index', 'chunk_vectors'], ['index', 'chunk_reuse'], ['index', 'chunk_generation'], ['index', 'text_generation']] },
       ...text.map(job => this.texts.structure(job)), ...this.trigrams.structures(schema),
     ];
   }
@@ -95,6 +95,7 @@ export class SqliteSearch {
       chunk INTEGER NOT NULL,model TEXT NOT NULL,dims INTEGER NOT NULL,hash TEXT NOT NULL,text TEXT NOT NULL,
       embedding_id INTEGER,PRIMARY KEY(entity_id,index_name,generation,chunk));
       CREATE INDEX IF NOT EXISTS chunk_pending ON chunks(type,index_name,generation,entity_id,chunk) WHERE embedding_id IS NULL;
+      CREATE INDEX IF NOT EXISTS chunk_vectors ON chunks(type,index_name,generation,entity_id,embedding_id) WHERE embedding_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS chunk_generation ON chunks(generation);
       CREATE INDEX IF NOT EXISTS text_generation ON text_meta(generation);
       CREATE INDEX IF NOT EXISTS chunk_reuse ON chunks(embedding_id);`);

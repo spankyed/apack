@@ -48,6 +48,7 @@ const components: Array<[string, 'TABLE' | 'INDEX' | 'TRIGGER', (text: string, t
   ['text metadata', 'TABLE', () => 'text_meta'],
   ['vector chunks', 'TABLE', () => 'chunks'],
   ['pending vector index', 'INDEX', () => 'chunk_pending'],
+  ['ready vector index', 'INDEX', () => 'chunk_vectors'],
   ['vector reuse index', 'INDEX', () => 'chunk_reuse'],
   ['vector retirement index', 'INDEX', () => 'chunk_generation'],
   ['text retirement index', 'INDEX', () => 'text_generation'],

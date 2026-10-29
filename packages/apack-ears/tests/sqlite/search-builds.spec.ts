@@ -92,6 +92,25 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('shared backgro
     expect(pending.some(row => String(row.detail).includes('chunk_pending'))).toBe(true);
   });
 
+  it('executes exact vectors through a covering lookup without sorting the input groups', async () => {
+    const { db, e } = seed(); e.admin.setSchema(indexed); await db.indexesReady();
+    const pending = e.pendingEmbeddings('Row', { limit: 1000 });
+    e.embed(pending.chunks.map(chunk => ({ ...chunk, model: pending.model, vector: [1, 0, 0] })));
+    const plans = () => {
+      const explained = e.query('Row').near([1, 0, 0]).explain();
+      if (explained.backend !== 'sqlite') throw Error('Expected SQLite vector plan');
+      return explained.statements.flatMap(statement => statement.plan.map(row => row.detail));
+    };
+    const selected = plans();
+    expect(selected.some(detail => detail.includes('COVERING INDEX chunk_vectors'))).toBe(true);
+    expect(selected.some(detail => detail.includes('FOR GROUP BY'))).toBe(false);
+    const before = e.query('Row').near([1, 0, 0]).ids();
+    db.sql.exec('DROP INDEX chunk_vectors');
+    const without = plans();
+    expect(without.some(detail => detail.includes('FOR GROUP BY'))).toBe(true);
+    expect(e.query('Row').near([1, 0, 0]).ids()).toEqual(before);
+  });
+
   it('reruns a pending watch after readiness without inventing a logical commit or publishing a partial result', async () => {
     const { db, e } = seed(); e.admin.setSchema(indexed);
     const seen: string[][] = [], errors: unknown[] = [], commits: number[] = [];

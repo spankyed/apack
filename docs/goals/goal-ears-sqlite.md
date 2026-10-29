@@ -330,11 +330,15 @@ build/types/lint. It constructs a separate store, preserves raw composite payloa
 reopens/builds/audits before success, and cleans owned staging on semantic/IO refusal. Primary embedding
 storage is independent of derived generations, with explicit legacy-candidate refusal. Unchecked vector
 loads and a fixed paired layout diagnostic are committed at da8c356d66; its full SQLite suite passes
-588 cases with build/types/lint. Its single registered layout process completed all answer controls, but omitted original inline secondary
-indexes; the observed broad-query difference cannot be attributed to the join. Retain this incomplete
-baseline and run the separately fixed corrected-index/covering-index diagnostic before adoption. A subsequent replacement
-review found decode/re-encode could normalize composite bytes; raw transactional replacement and its
-populated-incumbent test are being prepared and still need their own exact-source check.
+588 cases with build/types/lint. Its first layout process omitted original inline secondary indexes;
+retain that incomplete baseline without attributing its difference to the join. Corrected c23a82301b
+passes all 589 SQLite cases, build/types/lint and every paired layout answer/facade control. At 10k,
+inline / referenced / covered broad-query medians are 59.34 / 57.57 / 39.43 ms; these are warmed synthetic
+native-plan diagnostics, not responsiveness acceptance. The covered plan removes the input grouping sort.
+Raw populated replacement now shares validated logical traversal and preserves original composite bytes,
+dormant embeddings and destination monotonic commits. Adding the measured covering index with actual
+facade plan/removal and missing-index recovery controls is the next focused checkpoint; no latency target
+is relaxed and no full/platform/host convergence is implied by this EARS-only success.
 Public archive/host publication, interruption, copied-profile conversion and resource/platform qualification
 remain required per docs/plans/ears-sqlite-storage.md. Canonical/publication refs above remain unchanged.
 See [archive evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/logical-archive/README.md). See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
