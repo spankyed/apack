@@ -67,6 +67,20 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('primary embedd
     expect(db.get('SELECT count(*) n FROM embedding_values')!.n).toBe(1); expect(db.get('SELECT hash FROM embedding_values')!.hash).toBe(pending.chunks[0]!.hash);
     e.write('Row-one').destroy(); expect(db.get('SELECT count(*) n FROM embedding_values')!.n).toBe(0);
   });
+  it('loads raw embeddings by identity, ignores absent entities, and leaves stale content pending', () => {
+    const { db, e } = fixture(), chunk = db.get('SELECT chunk,hash,model,index_name FROM chunks')!;
+    db.bulkLoad([{ load: 'embedding', id: 'Row-absent', index: chunk.index_name, chunk: 0, hash: 'absent', model: 'fixture', vector: [0, 0, 0] }]);
+    expect(db.get('SELECT count(*) n FROM embedding_values')!.n).toBe(1);
+    db.bulkLoad([{ load: 'embedding', id: 'Row-one', index: chunk.index_name, chunk: 0, hash: chunk.hash, model: 'fixture', vector: [0, 1, 0] }]);
+    expect(e.pendingEmbeddings('Row').count).toBe(0); expect(e.query('Row').near([0, 1, 0]).hits()[0]!.score).toBeCloseTo(1);
+    db.bulkLoad([{ load: 'embedding', id: 'Row-one', index: chunk.index_name, chunk: 0, hash: 'obsolete-content', model: 'fixture', vector: [1, 0, 0] }]);
+    expect(db.get('SELECT hash FROM embedding_values')!.hash).toBe('obsolete-content');
+    expect(e.pendingEmbeddings('Row').count).toBe(1); expect(e.query('Row').near([1, 0, 0]).ids()).toEqual([]);
+    const before = db.all('SELECT * FROM embedding_values'), commit = db.sequence;
+    expect(() => db.bulkLoad([{ load: 'embedding', id: 'Row-one', index: chunk.index_name, chunk: 0, hash: chunk.hash, model: 'fixture', vector: [0, 0, 0] }]))
+      .toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+    expect(db.all('SELECT * FROM embedding_values')).toEqual(before); expect(db.sequence).toBe(commit);
+  });
   it('refuses missing primary storage rather than rebuilding it as empty', () => {
     const { db, path } = fixture(); db.sql.exec('DROP TABLE embedding_values'); db.close();
     expect(() => new SqliteDatabase({ path, syncs: false })).toThrow(expect.objectContaining({ code: 'CORRUPT' }));

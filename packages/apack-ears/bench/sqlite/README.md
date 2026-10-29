@@ -447,3 +447,16 @@ Check all duplicate-tag matches, a selective group, representative retained prim
 logical commit, membership count and stale-handle refusal. Stop at the first correctness/setup failure;
 retain it. No latency/resource ceiling is preregistered for this cost diagnosis, so completion is not
 maintenance acceptance. OFF/FULL are different policies, not matched acknowledgments against elmdb.
+
+### Primary embedding layout diagnostic
+
+Before first execution, `embedding-layout.mjs` fixes fresh 1k then 10k clustered 1536-dimensional profiles,
+OFF commits, and eight held-out queries across all-live, ten-percent and one-percent candidates. Run one
+process in disposable Linux with two CPUs/6 GiB and a 180-second bound, stopping at the first failure.
+Normal EARS calls populate the referenced layout; a diagnostic-only inline table copies identical chunks
+and bytes. Compare the same exact grouped cosine SQL in order **inline / linked / linked / inline** for
+every query/filter, recording every first/warm call and plans. Both must match independent exact truth
+and an untimed current facade control. Capture source/fixture/corpus/vector/native hashes, files and RSS.
+This isolates query-layout cost on warmed synthetic data; it does not compare old/new complete app runtime,
+prove a cold-store bound, resolve the existing heartbeat failures or certify durability. The temporary
+duplicate table's bytes and process-wide RSS are not production-layout peak memory or disk measurements.

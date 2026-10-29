@@ -33,7 +33,7 @@ import { RESERVED_ATTRIBUTES } from "../errors.ts";
 import { sameValue } from "../utils.ts";
 import { executeQuery } from "./query.ts";
 import { SqliteIndexBuilds, type SqliteIndexSpec } from "./index-builds.ts";
-import { SqliteEmbeddings } from './embeddings.ts';
+import { SqliteEmbeddings, encodeEmbeddingVector } from './embeddings.ts';
 import { SqliteSearch } from "./search.ts";
 import { SqliteValues, type SqliteValueLayout } from "./values.ts";
 import { createSchemaValidator } from "./schema-validation.ts";
@@ -1326,6 +1326,12 @@ export class SqliteDatabase implements EarsDatabase {
             load.info === undefined ? null : this.pack(load.info),
           ]);
           unit.changes.add(`kind:${load.kind}`);
+        } else if (load.load === 'embedding') {
+          if (this.get('SELECT 1 FROM entities WHERE id=?', [load.id])) {
+            const row = { id: load.id, index: load.index, chunk: load.chunk, hash: load.hash, model: load.model,
+              dimensions: load.vector.length, bytes: encodeEmbeddingVector(load.vector, load.vector.length) };
+            this.embeddings.replace(row); this.embeddings.relink(row);
+          }
         } else if (load.load === "unset") {
           const r = this.row(load.id);
           if (r) {

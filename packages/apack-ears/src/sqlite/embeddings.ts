@@ -16,6 +16,14 @@ export function validateEmbeddingBytes(bytes: Uint8Array, dimensions: number): v
   }
   if (!nonzero) fail('Invalid Float32 cosine embedding');
 }
+export function encodeEmbeddingVector(vector: number[], dimensions: number): Buffer {
+  if (vector.length !== dimensions || vector.some(value => !Number.isFinite(value)))
+    throw Object.assign(new Error('Invalid vector dimension/value'), { code: 'VALUE_INVALID' });
+  const bytes = Buffer.from(Float32Array.from(vector).buffer);
+  try { validateEmbeddingBytes(bytes, dimensions); }
+  catch (cause) { throw Object.assign(new Error('Cosine vectors require finite Float32 components and a nonzero direction', { cause }), { code: 'VALUE_INVALID' }); }
+  return bytes;
+}
 export class SqliteEmbeddings {
   private readonly db: SqliteDatabase;
   constructor(db: SqliteDatabase) { this.db = db; }
@@ -52,8 +60,9 @@ export class SqliteEmbeddings {
     return id;
   }
   /** Relink freshly derived chunks after raw import; mismatched content/model/dimensions remain pending. */
-  relink(): void {
+  relink(chunk?: Pick<SqliteEmbedding, 'id' | 'index' | 'chunk'>): void {
     this.db.run(`UPDATE chunks SET embedding_id=(SELECT v.id FROM embedding_values v WHERE v.entity_id=chunks.entity_id
-      AND v.index_name=chunks.index_name AND v.chunk=chunks.chunk AND v.hash=chunks.hash AND v.model=chunks.model AND v.dims=chunks.dims)`);
+      AND v.index_name=chunks.index_name AND v.chunk=chunks.chunk AND v.hash=chunks.hash AND v.model=chunks.model AND v.dims=chunks.dims)
+      ${chunk ? 'WHERE entity_id=? AND index_name=? AND chunk=?' : ''}`, chunk ? [chunk.id,chunk.index,chunk.chunk] : []);
   }
 }
