@@ -194,16 +194,19 @@ Disposable Linux ARM64 validation passes all 606 SQLite EARS cases, 135 affected
 package builds, EARS types/API, lint/imports and three meaningful negative controls. The plain-Node source
 loading regression is fixed; earlier failures and corrected package-provenance refusal are retained in
 [vector integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-integration/README.md).
-No integrated real-corpus performance result or newer full Strict is established. Inspect actual source,
+Runtime `a4a49fba10` additionally fixes a measured vector-plan regression: candidate membership drives
+canonical lookups, and the threshold probe stops at 4,097 rows. All 606/135 affected cases, build/type/API,
+lint/import and two negative plan/probe controls pass. The full integrated real-corpus matrix now exists;
+its remaining budget failures are recorded below. No newer full Strict is established. Inspect actual source,
 branch and process state before resuming.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` stays at exact full-green `6cf6c8349e`,
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs successful.
 Only an exact full Strict green may advance it. Focused platform
-[40916171413](https://github.com/spankyed/apack/actions/runs/40916171413) is successful on exact `a6d0753ea3`
+[40931742502](https://github.com/spankyed/apack/actions/runs/40931742502) is successful on exact `b814f7722d`
 for Linux x64/macOS ARM64/Windows x64, including five native profile groups, seven dump cases, five real
 process-kill boundaries and existing EARS/host/archive/CLI checks. Linux additionally passes the real
-native-controlled starter-pack/API/live-view/restart lifecycle. These greens do not cover later vector tooling.
+native-controlled starter-pack/API/live-view/restart lifecycle. This focused green covers the first vector integration, but not the later SQL plan/probe repair or performance acceptance.
 Runtime/native pins remain `98386b36a1`/`6ab2f69`. Reviewed master `3d2929177d` differs only in two plan docs;
 reconcile any later changes deliberately. Preserve the other agent's source/build state. Compile/full validation
 only in disposable Linux/CI, one local expensive container at a time, two CPUs/6 GiB/no swap.
@@ -235,10 +238,15 @@ The first integrated slice uses ordinary derived projections, native owner candi
 with the existing dependency. Canonical bytes remain primary; units/savepoints/watches, owner chunk
 aggregation, exact fallback, numeric extremes, cascade deletion, audit and rebuild have affected functional proof.
 
-Next checkpoint: measure and qualify this actual EARS path on the sealed real corpus, including its joins,
-owner aggregation, structured transport and update units. Then resolve broad-search responsiveness and
-execution/admission ownership with measured evidence. Do not use selective primitive wins as acceptance
-for the integrated path or its unresolved broad gate.
+Two full real-corpus matrices complete, retaining all scopes/phases and raw samples. Mean recall is
+0.999–1.0. At 100k initial broad query p95 improves from 304.41 ms to 55.63 ms after the repair, but
+heartbeat p99 is still 58.37 ms versus 16 ms. The 10% scope is 35.29 ms query p95 /41.92 ms heartbeat;
+1% is 13.31/14.68 ms. These are actual EARS query/update paths, not whole-app or cold/installed acceptance.
+See [integrated real-vector evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/integrated-real-vectors/README.md).
+
+Next checkpoint: remove redundant outer owner-eligibility work after candidate membership, then resolve
+remaining native scope materialization and broad execution/admission responsiveness with measured evidence.
+Do not relax the original budgets or substitute selective wins for broad/application acceptance.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
 model/generation/hash freshness, own-unit/savepoint reads, watches, audit/rebuild/restore, representative real
 recall/update/resource/latency and heartbeat budgets. Preserve canonical Float32 bytes and original failures.

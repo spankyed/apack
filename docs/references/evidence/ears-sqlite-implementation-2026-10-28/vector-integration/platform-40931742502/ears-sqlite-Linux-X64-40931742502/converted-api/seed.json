@@ -1,0 +1,26 @@
+{
+  "source": "b814f7722da442a9c4e1fda88014ee11e0859672",
+  "context": {
+    "env": "test",
+    "appName": "apack-test",
+    "userDataDir": "/tmp/ears-converted-api-vxtv8lo9/native-source",
+    "appDir": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack",
+    "packsDir": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack/packs",
+    "installedPacksFile": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack/installed-packs.json",
+    "apiPortFile": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack/api-port",
+    "apiTokenFile": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack/api-token",
+    "urlScheme": "apack"
+  },
+  "paths": {
+    "lmdb": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack/ears-db",
+    "runHistory": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack/run-history",
+    "secretsFile": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack/secrets.json",
+    "media": "/tmp/ears-converted-api-vxtv8lo9/native-source/apack/media"
+  },
+  "hashes": {
+    "primary": "3bba4bc08b76c3e7c569e3d05bf440cd99e08980c9f9fa5de2aeaf4e2f54388e",
+    "runs": "5561bc520049e4a9b1b5530b31196783a13e5d1e360402b8eab70161e32058be",
+    "media": "2f36a18044fe854573fe6b8f0ca00cf19e31a929c8cd0724e647a714f4c5e935"
+  },
+  "shippedIntegritySha256": "e875279486393c9c296c66e691c5d24ae54dead0733d9216067eab544190cecb"
+}
