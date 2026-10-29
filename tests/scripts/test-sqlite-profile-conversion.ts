@@ -10,21 +10,26 @@ import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { findDatabaseWriter, holdDatabaseWriteLock, openAppDatabase, openRunHistory, publishRunningApp, storedSettings } from '@apackdev/host/database';
+import { writeInstalledPackFixture, sealPack } from '../../packages/apack-host/tests/packs/runtime/build-fixture.ts';
 import { convertSqliteProfile } from '../../scripts/convert-sqlite-profile.ts';
 
 const [producer, receipt, ...extra] = process.argv.slice(2);
 if (!producer || !receipt || extra.length) throw new Error('Usage: test-sqlite-profile-conversion.ts <matching-elmdb-cli> <new-receipt.json>');
 assert(!existsSync(receipt));
 const root = mkdtempSync(join(tmpdir(), 'ears-profile-conversion-'));
-const report: { source?: string; producer: string; checks: string[]; converted?: unknown; sourceHashes?: unknown } = {
-  source: process.env.EARS_TEST_SOURCE, producer: resolve(producer), checks: [],
+const report: { source?: string; producer: string; producerSha256: string; enginePin: string; runtime: {node: string; platform: string; arch: string}; checks: string[]; converted?: unknown; sourceHashes?: unknown } = {
+  source: process.env.EARS_TEST_SOURCE, producer: resolve(producer),
+  producerSha256: createHash('sha256').update(readFileSync(producer)).digest('hex'),
+  enginePin: readFileSync('vendor/elmdb.rev', 'utf8').trim(),
+  runtime: { node: process.version, platform: process.platform, arch: process.arch }, checks: [],
 };
 const save = () => writeFileSync(receipt, JSON.stringify(report, null, 2) + '\n');
 const bytes = new Uint8Array([0, 255, 42]), settings = { appearance: { theme: 'dark' }, developerConversion: true };
 function hashes(profile: string) {
   const paths = _appDataPaths(profile), context = resolveAppEnvironment({ env: 'test', userDataDir: profile });
   return Object.fromEntries([join(paths.lmdb, 'data.mdb'), join(paths.runHistory, 'data.mdb'), join(paths.media, 'asset.bin'),
-    paths.secretsFile, join(context.appDir, 'pack-data/example/value'), join(context.appDir, 'packs/materialized/marker')]
+    paths.secretsFile, context.installedPacksFile, join(context.appDir, 'pack-data/example/value'),
+    ...['marker','apack.json','integrity.json','types/snapshot.json','runtime/index.cjs','runtime/fe.js'].map(name => join(context.appDir, 'packs/materialized', name))]
     .filter(existsSync).map(file => [relative(profile, file), createHash('sha256').update(readFileSync(file)).digest('hex')]));
 }
 function fixture(name: string, history = true) {
@@ -48,7 +53,10 @@ function fixture(name: string, history = true) {
   mkdirSync(paths.media); writeFileSync(join(paths.media, 'asset.bin'), bytes);
   writeFileSync(paths.secretsFile, '{"encrypted":"opaque-fixture"}');
   mkdirSync(join(context.appDir, 'pack-data/example'), { recursive: true }); writeFileSync(join(context.appDir, 'pack-data/example/value'), 'pack-owned bytes');
-  mkdirSync(join(context.appDir, 'packs/materialized'), { recursive: true }); writeFileSync(join(context.appDir, 'packs/materialized/marker'), 'materialized pack bytes');
+  const pack = join(context.appDir, 'packs/materialized');
+  writeInstalledPackFixture(pack, { id: 'materialized', name: 'Materialized data-only fixture', version: '1.0.0', data: { entities: { Row: {} } } });
+  writeFileSync(join(pack, 'marker'), 'materialized pack bytes'); sealPack(pack);
+  writeFileSync(context.installedPacksFile, JSON.stringify({ packs: [{ id: 'materialized', enabled: true, installedFrom: 'fixture/local' }] }));
   writeFileSync(context.apiTokenFile, 'stale runtime token, not a transferable secret');
   return { source, paths, context, output: join(root, name + '-converted') };
 }
@@ -62,9 +70,13 @@ try {
   for (const [from, to] of [[join(f.paths.media, 'asset.bin'), join(converted.media, 'asset.bin')], [f.paths.secretsFile, converted.secretsFile],
     [join(f.context.appDir, 'pack-data/example/value'), join(copied.appDir, 'pack-data/example/value')],
     [join(f.context.appDir, 'packs/materialized/marker'), join(copied.appDir, 'packs/materialized/marker')]]) assert.deepEqual(readFileSync(to), readFileSync(from));
+  for (const [name, expected] of Object.entries(before)) if (!name.endsWith('data.mdb'))
+    assert.equal(createHash('sha256').update(readFileSync(join(result.path, name))).digest('hex'), expected);
   assert(!existsSync(copied.apiTokenFile)); assert(!existsSync(join(converted.lmdb, 'data.mdb'))); assert(!existsSync(join(converted.runHistory, 'data.mdb')));
   const app = await openAppDatabase({ env: 'test', userDataDir: result.path, storageFormat: 'sqlite/1' });
   try {
+    assert(app.schema.packs.some(pack => pack.id === 'materialized'));
+    assert(app.schema.getRegisteredEntityTypes().has('Row'));
     assert.deepEqual(storedSettings(app.ears), settings);
     assert.deepEqual(app.ears.getAttr('Row-one', 'bytes'), bytes); assert.deepEqual(app.ears.getAttr('Row-one', 'at'), new Date(1234));
     assert.equal(app.ears.getAttr('Row-one', 'large'), 'x'.repeat(256000));

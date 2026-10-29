@@ -19,7 +19,7 @@ if (mode === 'verify') {
   const report = file => JSON.parse(readFileSync(join(evidence, file), 'utf8'));
   const passedIn = (value, pattern) => value.testResults.flatMap(test => pattern.test(test.name.replaceAll('\\', '/'))
     ? test.assertionResults.filter(result => result.status === 'passed') : []).length;
-  const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json');
+  const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
@@ -29,6 +29,8 @@ if (mode === 'verify') {
     logicalCommandCasesPassed: passedIn(cli, /\/tests\/commands\/db-logical\.spec\.ts$/),
     logicalCrashCasesPassed: passedIn(host, /\/tests\/backup\/logical-crash\.spec\.ts$/),
     builtLogicalChecks: builtCli.checks.length,
+    profileConversionChecks: profile.checks.length,
+    nativeDumpCasesPassed: passedIn(ears, /\/tests\/sqlite\/elmdb-conversion\.spec\.ts$/),
     logicalSnapshotCasesPassed: passedIn(ears, /\/tests\/sqlite\/logical-snapshot\.spec\.ts$/),
     logicalHostCasesPassed: logical.filter(test => test.status === 'passed').length,
     logicalHostSkipped: logicalSkipped.map(test => ({ name: test.fullName, status: test.status })),
@@ -40,6 +42,14 @@ if (mode === 'verify') {
   assert.equal(result.logicalCrashCasesPassed, 2, 'Both parent-issued archive publication kill cases must execute');
   assert.equal(builtCli.source, source, 'Built CLI must match the candidate source');
   assert(!builtCli.failure && result.builtLogicalChecks === 5, 'All separate-process staged CLI checks must pass');
+  assert.equal(profile.source, source, 'Profile conversion must run against exact candidate source');
+  assert.equal(profile.enginePin, readFileSync('vendor/elmdb.rev', 'utf8').trim());
+  assert(/^[a-f0-9]{64}$/.test(profile.producerSha256), 'Retain the actual native dump producer hash');
+  assert.equal(result.profileConversionChecks, 5, 'All real native profile conversion and refusal controls must run');
+  assert.equal(profile.converted.format, 'sqlite/1');
+  assert.deepEqual(profile.converted.stores.map(store => store.name), ['primary', 'runs']);
+  assert(profile.converted.stores.every(store => store.audit.ok), 'Both converted stores must pass audit');
+  assert.equal(result.nativeDumpCasesPassed, 7, 'All native dump framing and preservation cases must execute');
   assert.equal(result.logicalSnapshotCasesPassed, 5, 'All public snapshot API cases must execute');
   assert.equal(logical.length, 10, 'All host logical publication/preview/replacement cases must be collected');
   assert.equal(result.logicalHostCasesPassed, platform() === 'win32' ? 9 : 10, 'All platform-applicable logical archive cases must pass');

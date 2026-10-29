@@ -75,6 +75,16 @@ jobs:
         run: >-
           node --import tsx packages/apack-cli/tests/_support/logical-cli.mjs
           .temp/sqlite-platform/logical-cli.json 2>&1 | tee .temp/sqlite-platform/logical-cli.log
+      - name: Build matching native dump producer
+        run: cargo build --locked --release -p elmdb-cli --manifest-path vendor/elmdb/Cargo.toml
+      - name: Explicit copied-profile conversion and host reopen
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: |
+          producer=vendor/elmdb/target/release/elmdb
+          if [ "$RUNNER_OS" = Windows ]; then producer="$producer.exe"; fi
+          node scripts/with-source.mjs node --import tsx tests/scripts/test-sqlite-profile-conversion.ts \
+            "$producer" .temp/sqlite-platform/profile-conversion.json 2>&1 | tee .temp/sqlite-platform/profile-conversion.log
       - name: Verify candidate cases actually ran
         run: node .github/scripts/ears-sqlite-platform.mjs verify
       - name: Retain SQLite platform evidence
