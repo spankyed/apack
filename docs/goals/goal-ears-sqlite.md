@@ -292,18 +292,22 @@ is frozen before new queries are evaluated; files/oracle still need generation. 
 implement actual candidate generation/admission/transaction ownership with an explicit
 maintenance/distribution decision, then qualify the complete fresh and integrated gates.
 No more primitive result alone can establish the required final execution design.
-The first internal [generation admission slice](../references/evidence/ears-sqlite-implementation-2026-10-28/native-generation-admission/README.md)
-now exists in `src/sqlite/vector-index.ts`. It captures actual EARS mutations through
-transactional triggers, backfills bounded batches and atomically publishes readiness.
-Source `b654f8050b` passes 610 EARS cases plus builds/types/API/static checks; the later
-`5ecb60b12b` adds a passing read-only backup case and four intended failing mutations.
-The class is not activated by normal app composition; automatic training, scheduler
-ownership, final EARS query aggregation and normal native packaging remain unfinished.
-Lifecycle checks used original upstream vec1, not the membership patch; binary hashes
-were not captured in these runs and must enter the integrated build gate. The prior
-three-platform green predates this class. Next connect persistent training/admission
-with bounded writer work, then close freshness/watch/retirement/audit/rebuild/restore
-and native distribution gaps before fresh full integration qualification.
+Internal generation storage and [background training ownership](../references/evidence/ears-sqlite-implementation-2026-10-28/native-training-worker/README.md)
+now exist in `vector-index.ts`/`vector-training.ts`. Runtime `7478a0fc34` passes 617 EARS,
+135 host/storage, ten native lifecycle cases, builds/types/API/static and two mutation
+controls. A deterministic old-snapshot barrier found and fixed a real stale-result omission.
+The cursor now uses an indexed bounded ID page before BLOB lookup; a missing index on a
+populated store requires explicit offline preparation. Workers return identified bounded
+models without holding the foreground writer. Actual extension/source/image hashes are
+retained; these checks use original vec1, not the scratch membership patch.
+Normal app composition does not activate this service. Cancellation waits for worker exit;
+host owners must drain it before replacement/deletion. Next implement persistent attempt/
+model states, scheduler/restart ownership, incumbent-preserving model refresh, host draining,
+final EARS owner aggregation and readiness/watch/retirement/audit/rebuild/restore paths.
+The platform workflow now requires the ten cases and pinned native build provenance; its
+new exact-tip run still needs dispatch/completion. Earlier platform green predates this slice.
+Normal native distribution/fork selection and all frozen fresh/app/resource/full Strict gates
+remain required. The active integrated vector path still fails broad responsiveness.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
 the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,

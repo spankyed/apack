@@ -450,9 +450,21 @@ The [lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-
 covers actual EARS mutation/rollback, bounded admission, a read-only compacted backup
 and negative controls on original upstream vec1. It does not select a native fork or
 establish automatic admission, performance, normal packaging or platform qualification.
-The next integration must give persistent training to a background owner without holding
-a foreground writer, connect readiness/watch and retirement/rebuild/restore/audit paths,
-and capture native build hashes. Keep the complete goal and fresh validation gates.
+`sqlite/vector-training.ts` now isolates training in a read-only worker and validates the
+vector generation again after completion. Its samples/input budget and returned model are
+bounded; total native memory and timing still require measurement. The owner supplies trusted
+paths, serializes workers and awaits actual exit on cancellation. Close signals cancellation,
+but host storage must explicitly drain before replacement/deletion; native C need not stop
+immediately. The [worker evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-training-worker/README.md)
+retains a real stale-snapshot failure, its fix, negative controls and exact native hashes.
+
+Projection backfill first pages IDs using `chunk_native_admission`, then loads only that page's
+vectors. Missing cursor indexes on populated stores require explicit offline preparation.
+The remaining integration must persist training attempts/models, own scheduler/restart and
+incumbent-preserving refresh, connect readiness/watch and retirement/rebuild/restore/audit,
+and deliver normal native loading/distribution. The new platform gate requires the native
+lifecycle cases; neither it nor these local cases establish performance or final adoption.
+Keep the complete goal and frozen fresh validation gates.
 
 ### App and host archive composition
 
