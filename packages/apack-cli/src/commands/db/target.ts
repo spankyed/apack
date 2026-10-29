@@ -136,7 +136,7 @@ const reason = (error: unknown) => (errorMessage(error));
  * Runs `use` with the database and closes it after, whatever happens. Closing syncs what the command committed to
  * disk, so a failure there is reported — but never in place of what the command hit first.
  */
-export async function withDatabase<T>(db: AppDatabase, use: () => Promise<T> | T): Promise<T> {
+export async function withDatabase<T>(db: Pick<AppDatabase, 'close'>, use: () => Promise<T> | T): Promise<T> {
   let result: T;
   let failure: unknown;
   try {

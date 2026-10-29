@@ -66,7 +66,7 @@ const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 
  * from starting over it. Any other failure (a full disk, a permission, the system's lock table) says nothing about the
  * files and throws, as it does opened read-only.
  */
-export function openRunHistory(dir: string, { readOnly, storageFormat = configuredDatabaseFormat() }: { readOnly?: boolean; storageFormat?: string } = {}): RunsDatabase {
+export function openRunHistory(dir: string, { readOnly, storageFormat = configuredDatabaseFormat(), replaceUnreadable = true }: { readOnly?: boolean; storageFormat?: string; replaceUnreadable?: boolean } = {}): RunsDatabase {
   if (!readOnly) assertNoImportRecovery(dir);
   const open = (): RunsDatabase => {
     const database = openProfileDatabase(dir, readOnly, () => databaseStorage(storageFormat).open({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) }));
@@ -75,7 +75,7 @@ export function openRunHistory(dir: string, { readOnly, storageFormat = configur
   try {
     return open();
   } catch (error) {
-    if (readOnly || !fs.existsSync(dir) || !UNREADABLE_CODES.includes((error as { code?: unknown })?.code)) throw error;
+    if (readOnly || !replaceUnreadable || !fs.existsSync(dir) || !UNREADABLE_CODES.includes((error as { code?: unknown })?.code)) throw error;
     const aside = `${dir}.unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}`;
     fs.renameSync(dir, aside);
     logger.warn(`The run history at ${dir} couldn't be opened (${errorMessage(error)}): it was moved to ${aside}, and a new one started`);
