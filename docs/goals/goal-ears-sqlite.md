@@ -305,8 +305,11 @@ transaction, using a native SQL scan plus per-array decoding; all-SQLite validat
 c030c21b8d passes all 540 SQLite cases, build/types/lint. The initial callback type-narrowing failure
 is retained. New 32d07ab0d2 adds real parent-kill witnesses before/after repair COMMIT and reopened
 state/retry checks; all 37 recovery cases, build/types/lint pass. Fixed populated-cost protocol
-2952e038df is now active in ears-membership-cost (exec 64242), with six fresh 1k/10k/100k OFF/FULL
-profiles and no post-hoc budget or sample retries. Poll that same handle. It still needs measured duration/memory/WAL and interruption
+2952e038df completes all six fresh 1k/10k/100k OFF/FULL profiles with correctness checks. At 100k,
+whole rebuild is 3.57 s OFF /22.23 s FULL; membership SQL is about 1.2 s in both. These single synthetic
+samples are not acceptance or repair-only peak memory/WAL. New ad2cd0eab5 avoids empty value backfills
+only for explicit offline repair, using a conservative native absence proof; correctness validation is
+active in ears-offline-empty-index (exec 55320). See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
 qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
