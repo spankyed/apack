@@ -213,7 +213,10 @@ clean detached `integration-FyE9XZ`. Its single exact
 success. Local continuation contains documentation beyond the published tip; keep that distinct from CI source.
 
 Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's representative search corpus before
-tuning. Preserve every existing phase 3–7 criterion. Phase 5/6 app/media ownership, raw/unmanaged readers,
+tuning. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
+`runtime-control.mjs`: same two-CPU quota/6 GiB, ABBA order, 500 fixed samples per path, first-150/remaining-350
+strata, cgroup counters/GC/CPU profiles and no discarded cold samples. This is diagnostic only; it cannot
+replace the failed admission cohort. Run it once in disposable Linux and retain every process and failure. Preserve every existing phase 3–7 criterion. Phase 5/6 app/media ownership, raw/unmanaged readers,
 directory-creation hierarchy, read-only mounts, filesystem/power-loss/platform and large-copy resource
 qualification remain required before adoption. Never delete a pending preparation to bypass startup.
 The earlier 431 SQLite / 256 native suite and real WAL-sync evidence remains in
@@ -373,7 +376,7 @@ The a889531dd1 gate is green and that exact checkpoint has been privately promot
 
 ### Next deliverables and full remaining scope
 
-Publish the current evidence descendant and run one exact strict gate, retaining the unresolved aggregate timeout; canonical remains on green a889531dd1 until that newer gate succeeds. The predeclared diagnostic
+The latency failures below remain unresolved; publication/canonical state is owned by Current handoff above. The predeclared diagnostic
 pair at 201a2c8cbb is complete: heartbeat checks and EARS types pass, but both 100k OFF diagnostics miss latency
 limits. Full-watch / query-watch-free heartbeat p99 is 97.40 / 44.73 ms; scalar lookup p99 38.03 / 20.46 ms.
 During cleanup scalar lookups consume 35.83 / 33.24 s, against 5.18 / 4.55 s inside background batches. Query

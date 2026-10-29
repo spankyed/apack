@@ -142,3 +142,31 @@ and spans for watched reads, foreground operations/lookups and background batche
 watch scheduling can change; neither outcome qualifies the original workload. Preserve both outcomes and
 correlate overdue timer intervals with spans before attributing stalls or changing production scheduling.
 No FULL retry, batch tuning, target change or reduced-size replacement is part of this diagnostic pair.
+
+### Runtime quota diagnostic (predeclared)
+
+The fixed-work sentinel left cold/runtime/host causes unisolated. Before another qualification run, execute
+exactly four fresh 100k profiles in order **quota-only, affinity-two, affinity-two, quota-only**. All remain in
+one owned Linux container with the existing `--cpus 2 --memory 6g`; affinity-two additionally pins the child
+and its threads to the first two CPUs in its initial allowed mask. Do not remove the quota, increase memory,
+change database/query code, calibrate loop work or rerun a favorable subset. Stop on setup/correctness failure;
+retain every completed process and failure. The pinned runtime/dependency image is unchanged.
+
+`runtime-control.mjs` uses normal built EARS entries, the previous fresh 100k seed, actual generated SQL and
+three-million-iteration integer loop, twenty alternating forward/reverse blocks of 25 calls per mode
+(500 samples each). Retain all samples; separately report ordinals 0–149 and 150–499 for each mode, with that
+boundary chosen before execution from the prior first-143-call observation. These are call-age strata, not
+cold disk: seeding and SQL capture precede timing. No sample is removed from whole-run statistics.
+
+Record actual CPU/memory constraints, per-call cgroup CPU counters, process CPU, GC spans and a CPU profile.
+Counter reads bracket a wider interval than the timed operation; their deltas include that instrumentation
+and all processes in the container, not just main-thread execution. The own-group throttling counters do not
+exclude ancestor throttling or guest/host descheduling when zero. The outer counters also include assertion
+and sampling work between calls. GC overlap and throttling association do not establish exclusive causality.
+Profiling/instrumentation differs from the earlier sentinel, equally in both variants; four sequential processes
+cannot certify host scheduling or production behavior. This diagnostic has no watches or admission work and
+cannot supersede the failed 100k cohort or its original 16 ms targets. FULL and actual-app acceptance remain open.
+
+The [kernel's cgroup CPU interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files)
+defines quota periods and throttling counters; [Docker's CPU limits](https://docs.docker.com/engine/containers/resource_constraints/#configure-the-default-cfs-scheduler)
+distinguish bandwidth limits from CPU affinity. This is a hypothesis to test, not an attribution of the old miss.
