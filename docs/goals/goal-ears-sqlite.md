@@ -290,9 +290,17 @@ the old slow path. No final responsiveness, native adoption or integrated claim 
 [Fresh validation protocol](../../packages/apack-ears/bench/sqlite/REAL-VECTOR-FRESH-PROTOCOL.md)
 is frozen before new queries are evaluated; the [independent fresh oracle](../references/evidence/ears-sqlite-implementation-2026-10-28/fresh-vector-oracle/README.md)
 now covers eighteen cohorts with 54 scalar checks and the 101-ordinal exclusion union.
-Next run the actual integrated native EARS path against that truth with fresh training and
-SQL scopes, keeping frozen budgets and every failed configuration. Complete the explicit
-maintenance/distribution decision and remaining integrated gates before adoption.
+The [actual fresh EARS matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/fresh-native-ears/README.md)
+at `71810414e8` now completes: all eighteen cohorts pass mean recall (minimum 0.972),
+but responsiveness fails. Broad 100k timed p95 is roughly 19 ms; large filtered groups
+are roughly 139–149 ms. Admission heartbeat p99 is 24.34 ms. The independent verifier
+rejects the full matrix on unchanged gates and rejects corrupted evidence. `dacd2093ca`
+profiles native filtered SQL at about 121–124 ms, scope/count/rerank overhead separately,
+and COMMIT as 20.05 of 27.84 s of admission (maximum 385.69 ms). Model installation and
+observed GC are small. Next remove unneeded native candidate BLOB projections, improve
+scope/count/rerank plans, qualify native membership/distribution and test off-thread
+PASSIVE checkpoints while preserving FULL logical durability and bounded WAL/drain safety.
+Keep the failed matrix and frozen ANN settings/budgets; no retuning or adoption follows.
 No more primitive result alone can establish the required final execution design.
 Internal generation storage, background training and a durable shared-scheduler model queue
 now exist in `vector-index.ts`, `vector-training.ts` and `vector-models.ts`.
@@ -310,15 +318,13 @@ strengthened best-chunk/expansion mutation controls. These are not real-corpus r
 Normal app composition does not activate this service. Automatic eligibility admission,
 incumbent-preserving physical model refresh, host drain-before-replacement/deletion, final
 multi-chunk/filter/tie/freshness qualification and complete audit/rebuild/restore integration remain required.
-The earlier [platform run 40960736926](https://github.com/spankyed/apack/actions/runs/40960736926)
-on `4575088eed` passed Linux/macOS; Windows passed its 616 EARS cases, including all ten
-then-existing native cases, but failed later because Rust selected Git's `link.exe`.
-The producer now uses PowerShell on Windows and checks linker selection. The workflow also
-requires all seven current durable-model cases. [Run 40967406799](https://github.com/spankyed/apack/actions/runs/40967406799) is terminal
-on `88b05e0bfa`: Linux/macOS pass; Windows passes 621 EARS cases (one POSIX-only skip)
-but its new linker check erroneously inspects both discovered executable paths. The
-correction selects the first MSVC path and sets Cargo's target-specific linker explicitly.
-A successor must qualify this correction and all seven current durable-model cases.
+[Platform 40969207041](https://github.com/spankyed/apack/actions/runs/40969207041) passes
+Linux/macOS/Windows on `ae156ce242`, with all seventeen native cases, producer conversion,
+process-kill boundaries and per-host verification. The Windows linker fix is exercised.
+Counts: 624 EARS/135 host on Linux/macOS; 623 EARS/122 host on Windows with explicit
+POSIX/directory-sync omissions. Linux covers the converted API restart/live-pack gate.
+Text receipts and original failed runs remain in scheduler evidence. Later benchmark-only
+commits are not retroactively qualified by this exact run. Final exact-tip gates remain.
 Normal native distribution/fork selection and all frozen fresh/app/resource/full Strict gates
 remain required. The active integrated vector path still fails broad responsiveness.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;

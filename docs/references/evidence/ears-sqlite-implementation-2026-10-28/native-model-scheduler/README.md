@@ -74,3 +74,17 @@ order, requires MSVC and sets Cargo's target-specific linker to that exact path.
 [PowerShell command lookup](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/get-command).
 A new platform run must qualify the correction and seven current durable-model cases.
 Artifact receipts/hashes and text results are retained without copying native binaries.
+
+
+[Platform 40969207041](https://github.com/spankyed/apack/actions/runs/40969207041)
+passes all three hosts on `ae156ce242`: each executes five generation, five worker and
+seven model cases and completes native producer conversion, five profile process-kill
+boundaries and final platform verification. Linux/macOS pass 624 EARS cases; Windows
+passes 623 with one POSIX-only skip. Host counts are 135 Linux/macOS and 122 Windows;
+Windows explicitly skips published-directory sync coverage. Linux additionally verifies
+one native baseline/API boot, two converted SQLite boots, three live pack updates and
+restart preservation. The Windows linker correction is exercised successfully. Text
+receipts, per-host native binary hashes and detailed verification are retained under
+`platform-40969207041/`. This is not Electron/signed installation, arbitrary filesystem,
+performance or full Strict acceptance. Later benchmark/profiler-only commits are not
+retroactively described as tested by this exact run.

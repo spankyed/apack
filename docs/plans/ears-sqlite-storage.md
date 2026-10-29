@@ -474,6 +474,13 @@ physical model refresh, host drain before file replacement/deletion, complete re
 audit ownership, and normal native loading/distribution. The new platform gate requires the native
 lifecycle cases; neither it nor these local cases establish performance or final adoption.
 Keep the complete goal and frozen fresh validation gates.
+The [fresh integrated matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/fresh-native-ears/README.md)
+now completes all eighteen cohorts with mean recall >=0.972, but fails responsiveness
+and 10k broad latency. Native filtered SQL dominates large scopes; count/rerank plans
+also cost measurable time. Admission profiling identifies COMMIT as the dominant tail,
+not model installation or observed GC. Investigate projection pruning, scope execution,
+native membership and off-thread SQLite PASSIVE checkpoints without relaxing FULL logical
+durability. Frozen parameters, original failures and remaining app/resource gates stay intact.
 
 ### App and host archive composition
 
