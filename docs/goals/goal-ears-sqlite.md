@@ -248,9 +248,12 @@ plus owner-index rowid constraints for subsequent clauses, and positive-owner co
 It passes **473/473 SQLite**, 98 focused cases, EARS build/types/lint, a native-plan removal control and the
 unchanged relevance corpus. Its preceding adaptive snapshot also passes five builds/imports and 42 native
 search cases. See [native-conjunction evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-conjunctions/README.md).
-Next execute the new preregistered six-process legacy/materialized/selective/selective/materialized/legacy
-comparison, with both rare/common and 100-owner/common word orders, exclusions and OR. Cost is unmeasured
-for this correction. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
+The preregistered six-process comparison completed all expected-answer trials at **aadd721d43**. Point/common
+improves to ~0.7 ms, but the 100-owner case worsens to ~68 ms (both word orders), versus legacy ~0.5 ms and
+unpruned ~20 ms. This correction is not accepted. See
+[conjunction cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/conjunction-cost/README.md).
+Next qualify FTS-owned owner-term intersection instead of repeated rowid-constrained MATCH, with a bounded
+native mask and correctness-preserving fallback; retain all query/phrase/highlight and storage/build criteria. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
 rest of phases 4–7 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
