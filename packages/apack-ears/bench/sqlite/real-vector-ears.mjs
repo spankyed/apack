@@ -6,6 +6,7 @@ import { endianness, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as pause } from 'node:timers/promises';
 import { getLoadablePath } from 'sqlite-vec';
+import { PerformanceObserver } from 'node:perf_hooks';
 import { createEarsEngine } from '../../src/index.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { SqliteVectorModels } from '../../src/sqlite/vector-models.ts';
@@ -14,8 +15,8 @@ import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
 
 const [corpusPath, truthFile, sizeArg, output, mode] = process.argv.slice(2), size = Number(sizeArg);
 assert([1000,99900].includes(size) && output && !existsSync(output));
-assert(mode === undefined || mode === 'diagnose' || mode === 'native-fresh');
-const fresh=mode==='native-fresh';
+assert(mode === undefined || ['diagnose','native-fresh','native-diagnose'].includes(mode));
+const fresh=mode==='native-fresh'||mode==='native-diagnose',diagnostic=mode==='diagnose'||mode==='native-diagnose';
 if(fresh)assert(process.env.EARS_VEC1_EXTENSION,'A trusted original native extension is required');
 assert.equal(endianness(),'LE');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -39,7 +40,7 @@ if(fresh) {
 const queryVectors = Array.from({length:100},(_,q)=>fresh?vector(queryOrdinals[q]):Array.from(new Float32Array(queries.buffer,queries.byteOffset+q*bytes,1536)));
 const path = mkdtempSync(join(tmpdir(),'ears-real-vector-'));
 const report = {protocol:'ears-integrated-real-vector/1',qualification:false,source:process.env.EARS_TEST_SOURCE,
-  size,diagnostic:mode==='diagnose',partition:fresh?'fresh':'original',native:fresh,
+  size,diagnostic,partition:fresh?'fresh':'original',native:fresh,
   querySha256:fresh?truth.queriesSha256:manifest.files['queries.f32'].sha256,exclusionsSha256:fresh?truth.exclusionsSha256:null,truthSha256:sha(truthBytes),manifestSha256:sha(manifestBytes),node:process.version,arch:process.arch,
   platform:process.platform,batches:{create:128,embed:64,update:64},cohorts:[]};
 const save = () => writeFileSync(output,JSON.stringify(report,null,2)+'\n');
@@ -92,11 +93,24 @@ try {
     assert.equal(db.get(`SELECT count(*) n FROM chunks c JOIN entities e ON e.id=c.entity_id
       WHERE c.generation=? AND e.trashed=0`,[job.generation]).n,
       truth.cohorts.find(c=>c.size===size&&c.phase==='initial'&&c.scopePercent===100).eligible);
-    const pulse=startHeartbeat(1),admissionAt=performance.now(),sequence=db.sequence;
+    const pulse=startHeartbeat(1),admissionAt=performance.now(),sequence=db.sequence,trace=[],gc=[],restore=[];
+    let observer,finished;
+    if(diagnostic) {
+      const measure=(target,name,label)=>{
+        const original=target[name];target[name]=function(...args){const at=performance.now();try{return original.apply(this,args);}finally{trace.push({stage:label,atMs:at-admissionAt,ms:performance.now()-at});}};
+        restore.push(()=>{target[name]=original;});
+      };
+      measure(models,'start','worker-launch');measure(models.index,'admit','native-admit');
+      measure(models.index,'step','native-projection');measure(db,'commitWrite','writer-commit');
+      measure(db.indexBuilds,'step','scheduler-step');
+      observer=new PerformanceObserver(entries=>{for(const entry of entries.getEntries())gc.push({atMs:entry.startTime-admissionAt,ms:entry.duration});});
+      observer.observe({entryTypes:['gc']});
+    }
     db.sql.exec('BEGIN IMMEDIATE');try{models.enqueue(job);db.commitWrite();}catch(error){if(db.sql.inTransaction)db.sql.exec('ROLLBACK');throw error;}
-    try{await db.indexesReady();}finally{pulse.stop();}
+    try{await db.indexesReady();}finally{finished=performance.now();pulse.stop();}
+    if(observer){await pause(0);observer.disconnect();for(const reset of restore)reset();}
     assert.equal(db.sequence,sequence);
-    report.modelAdmission={ms:performance.now()-admissionAt,heartbeatMs:summary(pulse.delaysMs),heartbeatSamples:pulse.delaysMs,
+    report.modelAdmission={ms:finished-admissionAt,...(diagnostic?{trace,gc}:{}),heartbeatMs:summary(pulse.delaysMs),heartbeatSamples:pulse.delaysMs,
       state:db.get('SELECT state,model_sha256,samples,source_commit_hex,extension_sha256,native_version,worker_sha256 FROM vector_training WHERE generation=?',[job.generation]),
       files:files()};assert.equal(report.modelAdmission.state.state,'ready');
     const candidates=models.index.candidates.bind(models.index);
@@ -104,7 +118,14 @@ try {
     save();console.log(JSON.stringify({stage:'native-model-ready',samples:report.modelAdmission.state.samples,ms:report.modelAdmission.ms}));
   }
 
-  if(mode==='diagnose') {
+  const queryFor=(cohortSize,percent,selected)=>{
+    if(!fresh)return cohortSize===size&&percent===100?e.query('Row'):e.query.ids(selected);
+    let query=e.query('Row');
+    if(cohortSize!==size)query=query.where(cohortSize===1000?'prefix1000':'prefix10000',true);
+    if(percent!==100)query=query.where(percent===10?'scope10':'scope1',true);
+    return query;
+  };
+  if(diagnostic) {
     report.sql=[];report.diagnostics=[];
     const originalAll=db.all.bind(db), originalGet=db.get.bind(db), known=new Map();let stages;
     const describe=value=>value instanceof Uint8Array?{kind:'bytes',length:value.byteLength,sha256:sha(value)}:
@@ -139,12 +160,12 @@ try {
     };
     db.all=capture('all',originalAll);db.get=capture('get',originalGet);
     try {
-      for(const percent of [100,10,1]) {
-        const selected=ids.filter((_,i)=>i%100<percent&&i%97!==0&&!excluded.has(i));
+      for(const cohortSize of (fresh?[1000,10000,99900].filter(n=>n<=size):[size])) for(const percent of [100,10,1]) {
+        const selected=ids.slice(0,cohortSize).filter((_,i)=>i%100<percent&&i%97!==0&&!excluded.has(i));
         for(let q=0;q<10;q++) {
           stages=[];
-          const at=performance.now(),hits=(percent===100?e.query('Row'):e.query.ids(selected)).near(queryVectors[q],{k:10}).hits();
-          report.diagnostics.push({percent,q,instrumentedWallMs:performance.now()-at,stages,ordinals:hits.map(hit=>Number(hit.id.slice(4)))});
+          const at=performance.now(),hits=queryFor(cohortSize,percent,selected).near(queryVectors[q],{k:10}).hits();
+          report.diagnostics.push({size:cohortSize,percent,q,instrumentedWallMs:performance.now()-at,stages,ordinals:hits.map(hit=>Number(hit.id.slice(4)))});
           stages=undefined;save();
         }
       }
@@ -167,13 +188,7 @@ try {
         try {
           for(let q=0;q<100;q++) {
             const begin=performance.now();
-            let query=root?e.query('Row'):e.query.ids(selected);
-            if(fresh) {
-              query=e.query('Row');
-              if(cohortSize!==size)query=query.where(cohortSize===1000?'prefix1000':'prefix10000',true);
-              if(percent!==100)query=query.where(percent===10?'scope10':'scope1',true);
-            }
-            const hits=query.near(queryVectors[q],{k:10}).hits();
+            const hits=queryFor(cohortSize,percent,selected).near(queryVectors[q],{k:10}).hits();
             const ms=performance.now()-begin,ordinals=hits.map(hit=>Number(hit.id.slice(4))),answer=expected.answers[q].ordinals;
             assert.equal(ordinals.length,answer.length);assert.equal(new Set(ordinals).size,ordinals.length);
             assert(ordinals.every(i=>i>=0&&i<cohortSize&&i%100<percent&&i%97!==0&&!excluded.has(i)));
@@ -189,7 +204,7 @@ try {
     }
   }
   }
-  if(fresh) {
+  if(fresh&&!diagnostic) {
     report.gates=report.cohorts.map(cohort=>({size:cohort.size,phase:cohort.phase,scopePercent:cohort.scopePercent,
       passes:cohort.passes.map(pass=>({pass:pass.pass,recall:pass.meanRecall>=.95,heartbeat:pass.heartbeatMs.p99<=16,
         diagnosticLatency:cohort.size<10000||pass.latencyMs.p95<=(cohort.size===10000?100:200)}))}));
