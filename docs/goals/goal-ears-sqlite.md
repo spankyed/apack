@@ -205,10 +205,13 @@ actual source, branch and process state before resuming.
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` stays at exact full-green `6cf6c8349e`,
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs successful.
 Only an exact full Strict green may advance it. Focused platform
-[40931742502](https://github.com/spankyed/apack/actions/runs/40931742502) is successful on exact `b814f7722d`
-for Linux x64/macOS ARM64/Windows x64, including five native profile groups, seven dump cases, five real
-process-kill boundaries and existing EARS/host/archive/CLI checks. Linux additionally passes the real
-native-controlled starter-pack/API/live-view/restart lifecycle. This focused green covers the first vector integration, but not the later SQL plan/probe repair or performance acceptance.
+[40947780198](https://github.com/spankyed/apack/actions/runs/40947780198) is successful on exact `5ddcf922b7`
+for Linux x64/macOS ARM64/Windows x64, including the SQL plan/probe/owner/scope changes,
+five native profile groups, seven dump cases, five real process-kill boundaries and existing
+EARS/host/archive/CLI checks. Linux additionally passes the actual native-controlled starter-pack/API/
+live-view/restart lifecycle. Exact [receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-40947780198/README.md)
+retain counts, native/source hashes and explicit skips. Later commits are benchmark/evidence only.
+This does not establish performance acceptance or final full Strict.
 Runtime/native pins remain `98386b36a1`/`6ab2f69`. Reviewed master `3d2929177d` differs only in two plan docs;
 reconcile any later changes deliberately. Preserve the other agent's source/build state. Compile/full validation
 only in disposable Linux/CI, one local expensive container at a time, two CPUs/6 GiB/no swap.
