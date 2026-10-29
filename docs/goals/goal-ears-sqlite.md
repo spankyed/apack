@@ -194,7 +194,7 @@ The guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-e
 to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No master merge, adoption,
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with unpublished vector/operational tests and maintenance/audit implementation through 8db6c28fe7; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with vector/operational tests and maintenance/audit implementation through 635b6d76af, preparing publication; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
 Published functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
 Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE are now at exact green 6cf6c8349e.
@@ -285,8 +285,11 @@ membership in the audit copy; 536/537 SQLite cases pass, with only a new persist
 expectation wrong before audit runs. Corrected tests compare the persisted value and add real cleanup
 failures; initial test types fail on receiver annotations, fixed in the subsequent source. Complete SQLite
 validation at 965301274c passes all 539 SQLite cases across 39 files, build/types/lint.
-New public app-only audit export and offline CLI wiring 8db6c28fe7 is validating in ears-audit-cli
-(exec 54207), including real temporary-profile no-repair/finding tests and API report generation.
+Public audit export/CLI wiring 8db6c28fe7 passes five builds, EARS/host/CLI types, 16 host cases, nine
+real CLI maintenance cases, API generation and lint/imports. The generated API report is committed at
+635b6d76af. This converged maintenance checkpoint is preparing publication to the existing draft branch;
+canonical stays at exact full-green 6cf. Native own-embedding visibility remains an unresolved baseline
+discrepancy; do not claim the newer shared native suite or full gate passes.
 Public rebuild still needs a correct generationless membership repair/publication design. Poll that same handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
