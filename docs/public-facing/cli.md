@@ -65,6 +65,24 @@ The backend’s direct read-only snapshot API is unchanged. Directory durability
 this command is not a universal power-loss guarantee.
 
 
+The SQLite candidate also supports lossless database-only archives. Set `APACK_STORAGE_FORMAT=sqlite/1`
+and name an isolated profile explicitly. `apack db dump --data-dir <profile> --primary <new-file>` writes
+one primary archive; add `--runs <new-file>` for a separate history archive, or name only `--runs`.
+Quit the app first. Output parents must exist, each target must be new and outside the source profile,
+and a selected history store must already exist. Each completed file is an independent verified snapshot;
+if a later export fails, completed files are retained and named. These archives preserve typed/raw values,
+relations, counters and reusable embeddings; `db export` JSON/CSV remains a display format.
+
+`apack db load --data-dir <profile> --primary <file> [--runs <file>]` fully verifies, rebuilds, audits and
+checks the selected archives against the installed settings contract without replacing data. It uses
+private staging space and may take substantial disk/time; memory can scale with the largest individual
+value. Add `--force` to replace the selected stores through the protected import/recovery path. A history-only
+load leaves primary data and its commit unchanged. Every selected input validates before replacement;
+unknown outcomes retain incumbent recovery copies for `db recover`. Media, packs and secrets are not part
+of these files, and current media is preserved. Use `db backup` for a full database-and-media backup.
+Archive publication requires hard-link support; unsupported filesystems refuse. Directory durability and
+Windows inherited permissions depend on the host/filesystem; this is not a universal power-loss guarantee.
+
 `apack pack outdated [--profile <name>] [--json]` checks GitHub-installed packs for newer releases compatible with the profile’s recorded app version. Beta profiles include prereleases. Local/URL installs and app-shipped packs are reported as unmanaged. A failed check exits nonzero; finding an update alone does not. CLI GitHub installs record their source for subsequent checks; uninstall removes that record.
 
 `apack pack upgrade <id> [--profile <name>]` upgrades a GitHub-installed pack to its newest compatible release. Close the app first. The recorded app version and pack format are required. Checksums, pack identity/version, host compatibility, build format, enabled dependencies, and installed packs that depend on it are checked before replacement. Local/URL installs and app-managed packs are not upgraded by this command. A user-managed fork at an app-default ID can use its recorded GitHub source.

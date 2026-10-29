@@ -60,6 +60,16 @@ Desktop app `install [version]`, `upgrade [version]` and `uninstall` share `app/
 | `doctor [--channel <name>]` | `commands/doctor.ts` | Read-only production/beta bundle, data, and API-listener checks; shared bundle validation with app installation |
 | `cache clean [--all]` | `commands/cache-clean.ts` | Reclaim downloaded beta builds, keeping the newest unless --all; tests use temporary caches |
 
+The SQLite candidate's `db dump`/`db load` commands live in `commands/db/logical.ts`. `--primary <file>`
+and/or `--runs <file>` explicitly map independent database archives to existing profile stores. Dump holds
+managed offline exclusion, opens all selected stores before output, preflights distinct/new external paths
+and uses host exclusive publication. Load fully validates preview by default; `--force` uses the existing
+host logical import coordinator once, including its pre-publication validation hook. History-only import
+must not advance primary. Settings validation is shared with physical import in `backup-validation.ts`;
+path alias resolution is shared with physical backup in `target.ts`. No logical archive owns media,
+packs or secrets. The real profile cases are `tests/commands/db-logical.spec.ts`; complete installed CLI,
+process-interruption and large-profile acceptance stay in the SQLite goal.
+
 `src/app/pack-host.ts` owns executable selection. `--host` / `APACK_HOST` always mean a checkout or `.app` path; `--host beta` / `APACK_HOST=beta` mean a downloaded pack-authoring host. Command flags take precedence over environment selectors. Conflicting selectors are refused.
 
 - `resolveRepositoryHost`: validate the repository entry point’s own checkout; no selector or release fallback.

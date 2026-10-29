@@ -456,5 +456,21 @@ rewriting an unrelated primary store. Inspection also runs the primary applicati
 is selected, making it usable for a genuine dry run. Import retains write exclusion, incumbent copies,
 watch notifications, acceptance rollback and `COMMIT_UNKNOWN` recovery. Logical archives contain database
 data only; current media remains untouched, and packs/secrets are separately owned. Full backup/media
-composition, user-facing CLI commands, interruption/large-profile/real-conversion and packaged-platform
+composition, interruption/large-profile/real-conversion and packaged-platform
 qualification remain required; these APIs alone do not complete those gates.
+
+### CLI logical archives
+
+`db dump --primary <new-file> [--runs <new-file>]` and `db load --primary <file> [--runs <file>]`
+expose explicit per-store archives; either flag may stand alone. Dump takes managed offline exclusion,
+requires a named profile and new distinct external outputs, opens all selected stores before any output,
+and retains/names completed independent archives if a later selected export fails. Each file uses host
+exclusive publication; the command does not promise an atomic multi-file artifact or cross-store snapshot.
+
+Load stages/audits and validates application settings for a dry run. `--force` performs the same verification
+once through the host coordinator and announces validation from its pre-replacement hook; it does not
+stage/build/audit twice in the forced invocation. All selected existing stores are opened before staging,
+and history-only load preserves primary commit/data. Unknown outcomes use existing retained import recovery.
+Logical archives do not replace the physical backup's media ownership; media/packs/secrets remain separate.
+Real profile command checks, actual built CLI and packaged/interruption/resource/copy-conversion acceptance
+are distinct closing checks. Public command documentation does not imply those final gates have passed.

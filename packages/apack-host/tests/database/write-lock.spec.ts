@@ -186,6 +186,29 @@ describe('the database write lock', () => {
     );
   });
 
+  it('preserves an incumbent after repeated refused acquisitions in the same process', () => {
+    const dir = tempDir('write-lock-');
+    const first = hold(dir, 'incumbent');
+    const before = fs.readFileSync(lockFile(dir), 'utf8');
+    for (let i = 0; i < 3; i++) {
+      expect(() => holdDatabaseWriteLock(dir, 'refused contender')).toThrow('incumbent');
+      expect(fs.readFileSync(lockFile(dir), 'utf8')).toBe(before);
+      expect(findDatabaseWriter(dir)).toBe(`incumbent (pid ${process.pid})`);
+    }
+    first.release(); expect(findDatabaseWriter(dir)).toBeNull();
+  });
+
+  it('does not release a later acquisition in the same PID even with an identical timestamp', () => {
+    const dir = tempDir('write-lock-'), first = hold(dir, 'first');
+    const before = JSON.parse(fs.readFileSync(lockFile(dir), 'utf8'));
+    fs.rmSync(lockFile(dir));
+    const second = hold(dir, 'second');
+    const current = JSON.parse(fs.readFileSync(lockFile(dir), 'utf8')); current.since = before.since;
+    fs.writeFileSync(lockFile(dir), JSON.stringify(current));
+    first.release(); expect(findDatabaseWriter(dir)).toBe(`second (pid ${process.pid})`);
+    second.release(); expect(findDatabaseWriter(dir)).toBeNull();
+  });
+
   it('takes over a lock whose process has exited', () => {
     const dir = tempDir('write-lock-');
     fs.writeFileSync(lockFile(dir), JSON.stringify({ pid: exitedPid(), machine: os.hostname(), what: 'a tool that died' }));
