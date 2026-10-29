@@ -79,7 +79,7 @@ it.each(['move-incumbent', 'publish-incumbent'] as const)('resumes after interru
 // Exercise alias spelling on Linux too; macOS /var -> /private/var exposed this with real import records.
 function aliasedFixture(format: string, recordAlias: boolean) {
   const f = fixture(format), alias = path.join(f.target.userDataDir, 'profile-alias');
-  fs.symlinkSync(f.target.userDataDir, alias, 'dir');
+  fs.symlinkSync(f.target.userDataDir, alias, process.platform === 'win32' ? 'junction' : 'dir');
   const target = { ...resolveAppEnvironment({ env: 'test', userDataDir: recordAlias ? fs.realpathSync(f.target.userDataDir) : alias }), storageFormat: format };
   const paths = _appDataPaths(target.userDataDir), recorded = _appDataPaths(recordAlias ? alias : fs.realpathSync(f.target.userDataDir));
   prepareImportRecovery(f.dir, [{ name: 'lmdb', path: recorded.lmdb, format }, { name: 'runHistory', path: recorded.runHistory, format }], recorded.media);
@@ -131,7 +131,7 @@ it.each(['foreign-parent', 'different-leaf', 'relative', 'leaf-symlink'] as cons
   } else if (kind === 'different-leaf') record.stores[0].path = path.join(path.dirname(f.paths.lmdb), 'other');
   else if (kind === 'relative') record.stores[0].path = path.relative(process.cwd(), f.paths.lmdb);
   else {
-    const moved = f.paths.lmdb + '-moved'; fs.renameSync(f.paths.lmdb, moved); fs.symlinkSync(moved, f.paths.lmdb, 'dir');
+    const moved = f.paths.lmdb + '-moved'; fs.renameSync(f.paths.lmdb, moved); fs.symlinkSync(moved, f.paths.lmdb, process.platform === 'win32' ? 'junction' : 'dir');
   }
   fs.writeFileSync(marker, JSON.stringify(record));
   expect(() => restoreImportRecovery(f.target, f.session)).toThrow(kind === 'leaf-symlink' ? 'ordinary directory' : 'does not match this profile');

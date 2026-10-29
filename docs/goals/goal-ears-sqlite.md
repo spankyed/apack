@@ -307,8 +307,8 @@ unbounded. All expected answers pass; a post-timing premature-prefix control fai
 See [recency cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-cost/README.md).
 Next run the preregistered changed-source `text-plan.mjs` diagnosis (one 10k profile, ten samples/path,
 including recency highlights and actual FTS VDBE programs) before choosing another correction. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
-possible diagnostic, not a chosen layout change. Before Windows qualification, switch the two new ordinary
-recovery alias fixture links to Windows junctions as the existing storage fixture does (crash tests are POSIX-only).
+possible diagnostic, not a chosen layout change. The ordinary recovery alias fixtures now use Windows junctions, matching the existing storage fixture;
+actual Windows recovery/platform qualification remains required (crash tests are POSIX-only).
 Recency and every phase 3–7 requirement remain required; none of these diagnostics is qualification. Preserve every failed cohort and all remaining
 phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
