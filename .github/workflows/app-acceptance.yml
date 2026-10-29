@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, cli, build, integration, packaged]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged]
         default: all
       test:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
@@ -29,7 +29,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  sqlite:
+    if: ${{ inputs.suite == 'sqlite' }}
+    uses: ./.github/workflows/ears-sqlite.yml
   check:
+    if: ${{ inputs.suite != 'sqlite' }}
     runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45

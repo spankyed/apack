@@ -62,6 +62,11 @@ jobs:
           tests/database/open-app-database.spec.ts tests/database/write-lock.spec.ts
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/host.json
           2>&1 | tee .temp/sqlite-platform/host.log
+      - name: Offline SQLite maintenance commands
+        run: >-
+          npm test -w @apackdev/cli -- tests/commands/db-rebuild.spec.ts
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/cli-maintenance.json
+          2>&1 | tee .temp/sqlite-platform/cli-maintenance.log
       - name: Verify candidate cases actually ran
         run: node .github/scripts/ears-sqlite-platform.mjs verify
       - name: Retain SQLite platform evidence

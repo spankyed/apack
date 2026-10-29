@@ -19,12 +19,15 @@ if (mode === 'verify') {
   const report = file => JSON.parse(readFileSync(join(evidence, file), 'utf8'));
   const passedIn = (value, pattern) => value.testResults.flatMap(test => pattern.test(test.name.replaceAll('\\', '/'))
     ? test.assertionResults.filter(result => result.status === 'passed') : []).length;
-  const ears = report('ears.json'), host = report('host.json');
+  const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const result = { source, earsPassed: ears.numPassedTests, sqliteCasesPassed: passedIn(ears, /\/tests\/sqlite\//),
     selectedTextPassed: selected.filter(test => test.status === 'passed').length, selectedTextTotal: selected.length,
+    maintenanceCasesPassed: passedIn(cli, /\/tests\/commands\/db-rebuild\.spec\.ts$/),
     hostPassed: host.numPassedTests, recoveryCasesPassed: passedIn(host, /\/backup\/recovery\.spec\.ts$/) };
   save('verification.json', result);
+  assert(result.maintenanceCasesPassed >= 9 && cli.numFailedTests === 0,
+    'All nine actual offline maintenance command cases must execute and pass');
   assert(selected.length > 0 && selected.every(test => test.status === 'passed') && result.recoveryCasesPassed > 0,
     'SQLite-selected text cases and recovery must execute and pass; native fallback is insufficient');
 } else {
