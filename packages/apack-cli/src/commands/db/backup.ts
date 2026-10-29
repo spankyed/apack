@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { findRunningApp, holdDatabaseWriteLock, openRunHistory } from '@apackdev/host/database';
 import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
 import { readHostCompatibility } from '@apackdev/host/packs';
-import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
+import { openTarget, parseDbArgs, realDestination, TARGET_USAGE, withDatabase, type DbIo } from './target';
 
 export const BACKUP_USAGE = [
   'Usage: apack db backup --out <dir> [options]', VERIFY_USAGE, '',
@@ -12,12 +12,6 @@ export const BACKUP_USAGE = [
   'The destination must not exist. Installed packs and secrets are not included.',
   '', '  --out <dir>            New backup directory (required)', TARGET_USAGE,
 ].join('\n');
-
-/** Resolve symlinks even when the final path does not exist yet. */
-function realDestination(file: string): string {
-  if (fs.existsSync(file)) return fs.realpathSync(file);
-  return path.join(realDestination(path.dirname(file)), path.basename(file));
-}
 
 export async function dbBackup(args: string[], io: DbIo): Promise<void> {
   if (args[0] === 'verify') return dbBackupVerify(args.slice(1), io);

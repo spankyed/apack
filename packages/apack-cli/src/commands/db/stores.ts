@@ -1,4 +1,4 @@
-// Select existing profile stores before maintenance starts; run history is never replaced by this path.
+// Select existing profile stores before maintenance starts; unreadable history is never moved aside.
 import { existsSync } from 'node:fs';
 import { openRunHistory, type AppDatabase } from '@apackdev/host/database';
 import type { EarsDatabase } from '@apackdev/ears';

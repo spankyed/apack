@@ -1,5 +1,6 @@
 // What every `apack db` command shares: the data dir it targets, and opening its database offline
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { resolveAppEnvironment, APP_ENVS, type AppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import { configuredDatabaseFormat, findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
@@ -8,6 +9,12 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { cliDirs } from '../../app/pack-host';
 import { resolveStoredProfile } from '../../app/profiles';
 import { defaultDataEnv } from '../../utils';
+
+/** Resolve output aliases even when the final path does not exist yet. */
+export function realDestination(file: string): string {
+  if (fs.existsSync(file)) return fs.realpathSync(file);
+  return path.join(realDestination(path.dirname(file)), path.basename(file));
+}
 
 /** Where a command's lines go: results on stdout, what it targets and warnings on stderr */
 export interface DbIo {

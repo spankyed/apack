@@ -6,6 +6,7 @@ import { dbRecover, RECOVER_USAGE } from './recover';
 import { dbRebuild, REBUILD_USAGE } from './rebuild';
 import { dbAudit, AUDIT_USAGE } from './audit';
 import { dbBackup, BACKUP_USAGE } from './backup';
+import { dbDump, dbLoad, DUMP_USAGE, LOAD_USAGE } from './logical';
 import { dbExport, EXPORT_USAGE } from './export';
 import { dbInspect, INSPECT_USAGE } from './inspect';
 import { dbRepl, REPL_USAGE } from './repl';
@@ -25,6 +26,8 @@ const COMMANDS: Record<string, { run: (args: string[], io: DbIo) => Promise<void
   audit: { run: dbAudit, usage: AUDIT_USAGE },
   backup: { run: dbBackup, usage: BACKUP_USAGE },
   export: { run: dbExport, usage: EXPORT_USAGE },
+  dump: { run: dbDump, usage: DUMP_USAGE },
+  load: { run: dbLoad, usage: LOAD_USAGE },
   import: { run: dbImport, usage: IMPORT_USAGE },
   reset: { run: dbReset, usage: RESET_USAGE },
   'clear-settings': { run: dbClearSettings, usage: CLEAR_SETTINGS_USAGE },
@@ -49,6 +52,8 @@ Commands:
   rebuild [--force]     Rebuild SQLite candidate derived indexes from primary data
   audit [--json]        Inspect SQLite candidate primary values and derived indexes
   export --out <dir>    Each entity type's entities to a file
+  dump --primary <file> Lossless SQLite logical archives (--runs may also be named)
+  load --primary <file> Validate logical archives; --force replaces selected stores
   import <backup-dir>   Replace the database with a backup (lists the change; --force makes it)
   reset                 Delete all data, as Reset Database does (lists it; --force deletes)
   clear-settings        Destroy the Settings rows, so defaults come back (lists them; --force destroys)

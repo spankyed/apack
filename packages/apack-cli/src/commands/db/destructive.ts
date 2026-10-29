@@ -2,9 +2,7 @@
 // change unless given --force
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { resolveAppEnvironment } from '@apackdev/sdk/env';
-import { readInstalledContributionCatalog, disabledPackIds } from '@apackdev/host/packs';
-import { createSettingsBackupValidator } from '@apackdev/host/settings';
+import { settingsBackupValidator } from './backup-validation';
 import type { EARS } from '@apackdev/ears';
 import { databaseBackupStore, importDatabase, readBackup, type BackupLog } from '@apackdev/host/backup';
 import { openRunHistory, type AppDatabase } from '@apackdev/host/database';
@@ -189,9 +187,7 @@ export async function dbImport(args: string[], io: DbIo): Promise<void> {
   const db = await openTarget(target, { write: force, command: 'import' }, io);
   const done = await withDatabase(db, async () => {
     // The backup is checked before anything changes
-    const environment = resolveAppEnvironment({ env: target.env, userDataDir: db.userDataDir });
-    const catalog = readInstalledContributionCatalog(environment.packsDir, disabledPackIds(environment.installedPacksFile));
-    const validate = createSettingsBackupValidator(catalog.settings());
+    const validate = settingsBackupValidator(db, target.env);
     const backup = readBackup(backupDir, db.schema.getRegisteredEntityTypes(), validate, { lmdb: db.database.format, runHistory: db.database.format });
     const skipUnknown = values['skip-unknown'] as boolean;
     if (backup.unknownDatabases.length > 0 && !skipUnknown) {
