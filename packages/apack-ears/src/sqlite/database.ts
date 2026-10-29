@@ -1167,18 +1167,6 @@ export class SqliteDatabase implements EarsDatabase {
   }
   assertWriteAuthority() { this.writeLease.assertWritable(); }
   invalidateLayouts() { this.layouts.clear(); }
-  private eachRow(fn: (row: Data, seq: number) => void) {
-    let after = -1;
-    for (;;) {
-      const page = this.all(
-        "SELECT id,type,seq FROM entities WHERE seq>? ORDER BY seq LIMIT 256",
-        [after]
-      );
-      if (!page.length) break;
-      const rows = this.hydrate(page as Array<{id:string;type:string}>);
-      for (let i = 0; i < page.length; i++) { fn(rows[i], page[i].seq); after = page[i].seq; }
-    }
-  }
   private indexSpecs(schema: Data): SqliteIndexSpec[] {
     const indexes: SqliteIndexSpec[] = [];
     for (const [type, definition] of Object.entries(schema.types) as Array<[string, Data]>) {
