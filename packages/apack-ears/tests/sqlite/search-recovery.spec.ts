@@ -52,6 +52,27 @@ const components: Array<[string, 'TABLE' | 'INDEX' | 'TRIGGER', (text: string, t
 ];
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing search storage recovery', () => {
+  it('rebuilds damaged postings in fresh generations without changing primary commits', async () => {
+    const { db, e, text } = seed();
+    const stale = open(db.path, true);
+    const before = e.lastCommit();
+    const old = db.indexBuilds.jobs().map(job => job.generation);
+    db.run(`DELETE FROM ${text} WHERE rowid IN (SELECT rowid FROM ${text} WHERE ${text} MATCH ?)`, ['needle']);
+    expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual([]);
+    db.rebuildIndexes();
+    expect(e.lastCommit()).toBe(before);
+    expect(db.indexBuilds.jobs().every(job => !old.includes(job.generation))).toBe(true);
+    expect(() => stale.e.query('Row').count()).toThrow(expect.objectContaining({ code: 'SCHEMA_CHANGED' }));
+    expect(() => e.query('Row').search('needle').ids()).toThrow(expect.objectContaining({ code: 'INDEX_BUILDING' }));
+    await db.indexesReady();
+    expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual(['Row-one']);
+    expect(e.query('Row').containing('needle').ids()).toEqual(['Row-one']);
+    expect(e.pendingEmbeddings('Row').count).toBe(0);
+    expect(e.query('Row').near([1, 0, 0], { k: 1 }).ids()).toEqual(['Row-one']);
+    expect(e.getAttr('Other-large', 'body')).toBe('unrelated '.repeat(10000));
+    expect(e.lastCommit()).toBe(before);
+  });
+
   it.each(components)('refuses read-only and reconstructs %s in a private background generation', async (_label, kind, name) => {
     const { db, text, tri } = seed(), path = db.path, sequence = db.sequence;
     db.close();

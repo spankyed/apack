@@ -1238,6 +1238,25 @@ export class SqliteDatabase implements EarsDatabase {
       this.abortFailedOperation(e);
     }
   }
+  /** Admit fresh derived generations without changing primary data or its logical commit identity. */
+  rebuildIndexes(): void {
+    this.writable();
+    if (this.active) fail('UNIT_OPEN', 'Commit or abort the open unit before rebuilding indexes');
+    this.sql.exec('BEGIN IMMEDIATE');
+    try {
+      this.checkRevision();
+      const jobs = this.indexBuilds.jobs();
+      this.indexBuilds.restart(jobs);
+      this.search.ensure(this.heldSchema);
+      this.putMeta('schemaRevision', this.heldRevision + 1);
+      const state = this.indexBuilds.readState();
+      this.commitWrite();
+      this.heldRevision++;
+      this.indexBuilds.acceptState(state);
+      this.indexBuilds.wake();
+      for (const type of new Set(jobs.map(job => job.type))) this.indexesChanged(type);
+    } catch (error) { this.abortFailedOperation(error); }
+  }
   reset() {
     const unit = this.begin();
     try {
