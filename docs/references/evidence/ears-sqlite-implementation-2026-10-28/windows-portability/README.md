@@ -1,5 +1,9 @@
 # Windows candidate portability — 2026-10-29
 
+Later [actual Windows validation](../windows-call-sites/README.md) confirms the asset and parent-kill
+corrections, but exposes the assertion-only call-site fix as incomplete. The collector itself needs
+path normalization before engine-frame filtering; that follow-up preserves this attempt and its limits.
+
 Exact published source a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c completed
 [Strict chain 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) with seven passing
 jobs and two failures. macOS arm64 and Linux x64 each pass the built Node probe, all **492 SQLite / 95 host

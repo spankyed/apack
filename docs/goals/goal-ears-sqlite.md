@@ -197,8 +197,9 @@ Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Current fu
 **a2de2944a1**, published with its converged typo-cost evidence at
 **b25a985c8cebdf898b86cb915bca2600ba03782a** on integration/remote. Its single exact
 [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212) is confirmed live;
-Linux's candidate lane has succeeded, other jobs remain in progress. Poll this exact handle without
-duplicate dispatches and keep canonical/helper BASE at green 60d until the complete exact gate succeeds.
+macOS/Linux candidate lanes pass 511 EARS / 95 host cases; Windows has 509 passing, one skipped and one
+failed call-site case. Producers pass and five consumer jobs remain live/queued. Poll this exact handle
+without duplicate dispatches; this source cannot be promoted. Canonical/helper BASE stay at green 60d.
 The preceding published gate source **a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**
 contains runtime f426f938f8 and the explicit three-platform SQLite lane. Its single exact
 [strict run 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) is
@@ -255,6 +256,15 @@ build/highlight trial remains retained. Hosted macOS arm64 and Linux x64 pass th
 95 host cases; Windows passes the probe but needs the correction above. After resolving the exact gate,
 qualify the now-bounded typo behavior's real-app cost and broader useful-result coverage;
 full performance, relevance/vector, app/operational/packaging acceptance remains open.
+
+The [new Windows finding](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-call-sites/README.md)
+shows the assertion-only path correction was incomplete: the collector selected its own engine frame.
+The local two-line path normalization now happens before engine exclusion/shortening, with the strict
+assertion restored and three independent stack fixtures. It passes **514 SQLite / 292 native**, nine
+focused cases per backend, types/builds/API/lint/imports and an old-source control failing both raw
+Windows fixtures. Text/presence source and the cost cohort are unchanged. Commit this correction/evidence;
+await the remaining exact b25 jobs and inspect other failures before publishing another exact gate.
+The corrected collector still needs real Windows CI, and Windows host recovery has not yet run.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
 `db recover`, resumable offline incumbent restoration, forensic retention and managed-reader exclusion.
