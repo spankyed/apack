@@ -8,10 +8,10 @@ import { setTimeout as pause } from 'node:timers/promises';
 import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
 
 const require = createRequire(import.meta.url), Database = require('better-sqlite3');
-const [extensionFile, corpusPath, truthFile, sizeArg, mode, output] = process.argv.slice(2);
+const [extensionFile, corpusPath, truthFile, sizeArg, mode, output, modelCache] = process.argv.slice(2);
 const size = Number(sizeArg), extension = resolve(extensionFile);
 assert([1000,10000,99900].includes(size));
-assert(['flat','ivf-bq-256','ivf-bq-1024'].includes(mode));
+assert(['flat','ivf-bq-256','ivf-bq-1024','scan-bq-256','scan-bq-1024'].includes(mode));
 assert(output && !existsSync(output) && !existsSync(output + '.sqlite3'));
 const sha = data => createHash('sha256').update(data).digest('hex');
 const truthBytes = readFileSync(truthFile), truth = JSON.parse(truthBytes);
@@ -42,14 +42,30 @@ try {
   if (mode === 'flat') {
     db.prepare("INSERT INTO corpus(cmd,arg) VALUES('rebuild',?)").run(JSON.stringify({index:'flat',distance:'cos'}));
   } else {
-    db.exec('CREATE TABLE training(v BLOB NOT NULL)');
-    const insert = db.prepare('INSERT INTO training VALUES (?)'), count = Math.min(20000,size);
-    db.transaction(()=>{for(let i=0;i<count;i++)insert.run(vector(Math.floor(i*size/count)));})();
-    const started = performance.now();
-    const model = db.prepare('SELECT vec1_train(v,?) model FROM training').get(JSON.stringify({distance:'cos',quantizer:'bq',nbucket:64,nthread:1})).model;
-    report.training = {rows:count,ms:performance.now()-started,bytes:model.byteLength}; save();
+    const count = Math.min(20000,size);
+    const parameters = {distance:'cos',quantizer:'bq',nbucket:mode.startsWith('scan-')?0:64,nthread:1};
+    const identity = {manifestSha256:sha(manifestBytes),extensionSha256:report.extensionSha256,size,parameters,rows:count};
+    let model;
+    if(modelCache && existsSync(modelCache)) {
+      const cached = JSON.parse(readFileSync(modelCache+'.json','utf8'));
+      assert.deepEqual(cached.identity,identity);
+      model = readFileSync(modelCache); assert.equal(sha(model),cached.sha256);
+      report.training = {...cached.training,reused:true};
+    } else {
+      db.exec('CREATE TABLE training(v BLOB NOT NULL)');
+      const insert = db.prepare('INSERT INTO training VALUES (?)');
+      db.transaction(()=>{for(let i=0;i<count;i++)insert.run(vector(Math.floor(i*size/count)));})();
+      const started = performance.now();
+      model = db.prepare('SELECT vec1_train(v,?) model FROM training').get(JSON.stringify(parameters)).model;
+      report.training = {rows:count,ms:performance.now()-started,bytes:model.byteLength,reused:false};
+      if(modelCache) {
+        writeFileSync(modelCache,model,{flag:'wx'});
+        writeFileSync(modelCache+'.json',JSON.stringify({identity,sha256:sha(model),training:report.training}),{flag:'wx'});
+      }
+      db.exec('DROP TABLE training');
+    }
+    report.modelSha256 = sha(model); report.training.parameters = parameters; save();
     db.prepare("INSERT INTO corpus(cmd,arg) VALUES('rebuild',?)").run(model);
-    db.exec('DROP TABLE training');
   }
   const insert = db.prepare('INSERT INTO corpus(rowid,v,scope,active) VALUES (?,?,?,?)');
   let started = performance.now();

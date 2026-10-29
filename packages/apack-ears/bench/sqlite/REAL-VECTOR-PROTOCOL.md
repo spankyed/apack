@@ -37,3 +37,18 @@ Primitive success still requires EARS integration and native execution, transact
 savepoint visibility, filtering before K, multiple chunks/owner aggregation, model freshness,
 large K, numerical extremes, bounded background admission and update latency, real application
 workloads and every supported platform. Failure does not authorize weakening those requirements.
+
+## Follow-on matrix after initial IVF failures
+
+The original independent-training runs at 1k and 10k missed recall, including broad searches.
+Keep those results. Because each invocation trained independently, their candidate-limit differences
+are not a controlled comparison of K alone. The follow-on matrix reuses the identical hashed model
+within each cohort/family for both candidate limits. Retain the model privately with its training
+identity; only hashes and timing receipts enter Git.
+
+Add `scan-bq-256` and `scan-bq-1024`: the same binary quantizer with **zero coarse buckets**, scanning
+all compressed vectors before exact reranking. Keep 256/1,024 candidates and all other original
+scopes, updates, samples and budgets. This tests whether removing bucket selection restores recall
+at acceptable cost. It is a separately identified follow-on, not a replacement for failed IVF results.
+Use the same model-reuse control for a fresh IVF comparison. No claim of one model's generality,
+training-repeat stability, or EARS integration follows from this matrix.
