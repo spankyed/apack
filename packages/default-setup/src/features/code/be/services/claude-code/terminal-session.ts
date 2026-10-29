@@ -59,3 +59,20 @@ export function createClaudeTerminalSession(sessionId: string) {
     },
   }
 }
+
+export interface ClaudeNativeContinuation {
+  sessionId: string
+  continuedInSessionId: string
+  timestamp: string
+}
+
+/** A native journal link identifies a new session without retargeting the original owner. */
+export function parseClaudeNativeContinuation(value: unknown, sessionId: string): ClaudeNativeContinuation | undefined {
+  const entry = object(value)
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu
+  if (!uuid.test(sessionId) || entry?.type !== 'continued-in' || entry.sessionId !== sessionId
+    || typeof entry.continuedInSessionId !== 'string' || !uuid.test(entry.continuedInSessionId)
+    || entry.continuedInSessionId.toLowerCase() === sessionId.toLowerCase()
+    || typeof entry.timestamp !== 'string' || !Number.isFinite(Date.parse(entry.timestamp))) return
+  return { sessionId, continuedInSessionId: entry.continuedInSessionId, timestamp: entry.timestamp }
+}

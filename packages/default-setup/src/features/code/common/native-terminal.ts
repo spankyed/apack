@@ -45,6 +45,7 @@ export interface ClaudeNativeTerminalState {
   /** Authenticated native executable beneath that launcher. */
   nativePid?: number
   exitCode?: number
+  continuation?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation
   preview?: { turnId: string; output: string }
   busy: boolean
   /** Native pending-work counts, independent of prompt submission readiness. */
