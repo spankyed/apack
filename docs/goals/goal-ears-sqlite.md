@@ -218,11 +218,13 @@ completed FAILURE in producers: benchmark Vitest lacked the required source cond
 Both benchmark/root EARS configs now declare it and pass the actual Linux import guard. Preserve that failure;
 the failed run remains retained. The local helper
 already exists with BASE 585dcafccf and exact-success guards; the user's renewed approval does not bypass them.
-Latest published functional checkpoint is **7cba75f4311d4f20b4f86b1ac8f46355913c2a08**, on the existing
-`session/ears-sqlite` branch and clean detached integration checkout. Its single exact strict gate is
-[40814018368](https://github.com/spankyed/apack/actions/runs/40814018368); poll that handle rather than dispatching
-duplicates. Do not promote canonical before exact success. Local continuation/handoff beyond this published
-tip is distinct from CI source; no master merge, release or adoption occurred.
+Latest published candidate is **60d4283f682f3e44e12088352e04e39532ffc3d7**, on the existing
+`session/ears-sqlite` branch and clean detached integration checkout. It includes ranked prefixes, retained
+costs and the physical-profile recovery correction. Its single exact strict gate is
+[40819583704](https://github.com/spankyed/apack/actions/runs/40819583704), confirmed in progress; poll that handle
+rather than dispatching duplicates. Prior 7cba75f431 / 40814018368 is terminal FAILURE (five jobs pass; app/rest
+exposes the corrected alias bug). Do not promote canonical before exact success. Local continuation/handoff
+beyond the published tip is distinct from CI source; no master merge, release or adoption occurred.
 
 Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's representative search corpus before
 tuning. Phase 4 now preregisters `tests/fixtures/search-relevance.json`: 28 repository-domain documents and
@@ -262,8 +264,9 @@ The complete preregistered six-process owner cohort fixes medium queries to ~3.1
 rowid ~69 ms; point conjunctions ~0.7 ms, private owner bytes ~3% above the preceding string shape. Broad
 limited reads remain ~28 ms versus legacy ~15 ms, unaccepted. See
 [owner cost and exact functional proof](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-cost/README.md).
-The functional checkpoint is published at 7cba75f431 with exact gate 40814018368 above. This is not adoption
-or performance acceptance. Keep canonical on 585dcafccf until that exact gate succeeds.
+The earlier owner-postings checkpoint was published at 7cba75f431; its failed gate is retained above.
+The current publication includes the following prefix/recovery corrections. No performance acceptance or
+adoption is claimed. Keep canonical on 585dcafccf until the current exact gate succeeds.
 Local ranked-prefix/late-highlight-fetch checkpoint passes **483 SQLite / 289 native** EARS cases, five
 builds, types/API reports, lint/imports and five removal controls. See [prefix evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-prefixes/README.md).
 The preregistered six-process cost cohort completed on pinned prefix source 76b1aa2765: broad p50 ~18.5 ms
@@ -274,8 +277,8 @@ physical-parent/fixed-leaf correction passes five builds, types, **95 recovery/i
 lint/imports and twelve baseline-failing alias controls; real SIGKILL also covers symlinked profiles and
 resume through another spelling for both backends. Foreign/leaf-link refusals and reader exclusion remain.
 See [recovery alias evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-aliases/README.md).
-Recovery correction is committed at 964f1e1fd2. Publish the completed functional/cost checkpoint and run one
-new exact strict gate; do not promote before exact success. Next diagnose actual native ranking/recency
+Recovery correction is committed at 964f1e1fd2 and published in 60d4283f68 with exact gate 40819583704.
+Do not promote before exact success. Next diagnose actual native ranking/recency
 plans and remaining costs, preserving every failed cohort and the entire phase 3–7 scope. Preserve every failed cohort and all remaining
 phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
