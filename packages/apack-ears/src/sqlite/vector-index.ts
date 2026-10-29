@@ -82,7 +82,7 @@ export class SqliteVectorIndex {
   }
   /** Chunk candidates only; final owner aggregation/reranking remains the query owner's responsibility. */
   candidates(generation: number, vector: Uint8Array, limit: number, scope: SqliteEntityScope | null = null,
-    exclude?: string): Array<Record<string, any>> {
+    exclude?: string, projection:'owners'|'chunks'='chunks'): Array<Record<string, any>> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 4096) fail('VALUE_INVALID', 'Invalid native candidate limit');
     if(!this.db.get("SELECT 1 FROM index_builds WHERE generation=? AND kind='vector'",[generation]))
       fail('SCHEMA_CHANGED','Native vector generation was retired');
@@ -90,8 +90,10 @@ export class SqliteVectorIndex {
     if (state?.state !== 'ready') fail('INDEX_BUILDING', 'Native vector projection is not ready');
     const filter = scope || exclude ? `owner IN (SELECT e.seq FROM entities e WHERE
       ${scope ? `e.id IN (${scope.sql})` : 'e.trashed=0'} AND e.id!=?)` : 'active=1';
-    return this.db.all(`SELECT rowid embedding_id,owner,vec1_cos_distance(v,?) distance FROM ${name}(?,?) WHERE ${filter}`,
-      [Buffer.from(vector),Buffer.from(vector),JSON.stringify({K:limit,nprobe:32}),
+    // Owner admission does not need native Float32 payloads or a second exact distance calculation.
+    const columns=projection==='owners'?'owner':'rowid embedding_id,owner,vec1_cos_distance(v,?) distance';
+    return this.db.all(`SELECT ${columns} FROM ${name}(?,?) WHERE ${filter}`,
+      [...(projection==='owners'?[]:[Buffer.from(vector)]),Buffer.from(vector),JSON.stringify({K:limit,nprobe:32}),
         ...(scope || exclude ? [...(scope?.parameters ?? []),exclude ?? ''] : [])]);
   }
   collect(generation:number,limit:number):boolean {

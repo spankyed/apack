@@ -45,6 +45,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     while(!write(()=>index.step(job.generation,1))) { /* bounded caller-owned slices */ }
     const answers=index.candidates(job.generation,bytes(vector(1)),100);
     expect(answers).toHaveLength(4);
+    expect(index.candidates(job.generation,bytes(vector(1)),100,null,undefined,'owners')).toEqual(answers.map(({owner})=>({owner})));
     expect(answers.find(a=>a.embedding_id===old.id)!.distance).toBeCloseTo(0);
     expect(new Set(answers.map(a=>Number(a.owner)))).toEqual(new Set(db.all('SELECT seq FROM entities WHERE id IN (?,?,?)',[first,second,third]).map(r=>r.seq)));
     expect(index.candidates(job.generation,bytes(vector(1)),1,{sql:'SELECT id FROM entities WHERE id=?',parameters:[third]})).toHaveLength(1);

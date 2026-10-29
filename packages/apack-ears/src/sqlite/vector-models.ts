@@ -56,7 +56,7 @@ export class SqliteVectorModels {
     if(this.stopped||this.db.get('SELECT state FROM vector_training WHERE generation=?',[generation])?.state!=='ready')return;
     // A chunk cap is not an owner cap: expand when one owner has many close chunks.
     for(let limit=256;limit<=4096;limit*=2) {
-      const rows=this.index.candidates(generation,vector,limit,scope,exclude);
+      const rows=this.index.candidates(generation,vector,limit,scope,exclude,'owners');
       const owners=[...new Set(rows.map(row=>Number(row.owner)))];
       if(owners.some(owner=>!Number.isSafeInteger(owner)||owner<1))fail('CORRUPT','Invalid native candidate owner');
       if(owners.length>=256)return owners;
