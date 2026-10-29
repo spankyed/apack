@@ -97,6 +97,7 @@ export class SqliteVectorTraining {
           if(typeof answer!=='object')return fail('CORRUPT','Invalid native training reply');
           const reply=answer as Record<string,unknown>;
           if(reply.ok!==true)return fail(typeof reply.code==='string'?reply.code:'TRAINING_FAILED',String(reply.message));
+          this.current(job);
           const model=reply.model,samples=reply.samples,sourceCommitHex=reply.sourceCommitHex,
             extensionSha256=reply.extensionSha256,nativeVersion=reply.nativeVersion,modelSha256=reply.modelSha256;
           if(!(model instanceof Uint8Array)||!model.byteLength||model.byteLength>16*1024*1024||
