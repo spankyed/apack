@@ -187,16 +187,17 @@ platform claims must identify their actual tested scope.
 ## Current handoff
 
 The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for
-`session/ears-sqlite`. Latest exact published green is **60d4283f682f3e44e12088352e04e39532ffc3d7**:
-[strict run 40819583704](https://github.com/spankyed/apack/actions/runs/40819583704) completed SUCCESS, all six jobs.
-The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation` from
-585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
-master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or daily-Mac native build occurred.
+`session/ears-sqlite`. Latest exact published green is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**:
+[Strict chain 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941) completed SUCCESS,
+all nine jobs, including SQLite Linux/macOS/Windows, both integration shards, both native shards and app-and-rest.
+The guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation` from 60d4283f68
+to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No master merge, adoption,
+release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
 Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
-Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE stay at exact green 60d until a corrected full gate passes.
+Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE are now at exact green 6cf6c8349e.
 
 The earlier **b25a985c8cebdf898b86cb915bca2600ba03782a** [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212)
 is terminal FAILURE. Producers, both integration shards, both native shards and SQLite Linux/macOS passed.
@@ -227,8 +228,7 @@ is terminal FAILURE: eight jobs passed; only Windows host fixtures failed. That 
 The corrected source 6cf6c8349e has focused Windows [40857266870](https://github.com/spankyed/apack/actions/runs/40857266870)
 SUCCESS (46 passed/4 explicit skips), including forced-kill reclaim, simultaneous acquisition and
 relative-destination refusal. Its exact full [Strict chain 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941)
-is live: producers, all three SQLite platforms, integration-2 and native-2 passed; integration-1,
-app-and-rest and native-1 remain running. Poll this same run. Canonical stays at 60d until all jobs pass.
+completed SUCCESS, all nine jobs. Canonical is promoted to precisely this source; later local source needs its own checks.
 See [Windows host evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-host/README.md).
 Master advanced independently to 3d2929177d with exactly two new documentation plans (application-performance
 and ears-query-efficiency); inspected, not merged or edited. Candidate runtime/native pins remain 98386b36a1/6ab2f69.
@@ -249,6 +249,10 @@ int8 L2; a constrained [-90,90] encoding passes the 10k cohort but misses the fi
 under the stop rule. All seven transaction controls pass, using atomic DELETE+INSERT because pinned
 vec0 int8 UPDATE rejects its own encoded representation. No production integration or dependency change
 is justified yet. See [retained bounded-domain experiment](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-int8/neon-safe/README.md).
+Local regression source **45e5e360f4** adds vector own-write/savepoint/outer rollback checks. Disposable
+Linux builds/types and all 17 SQLite vector cases pass; pinned native passes 16 but fails the new unit
+sequence. The exact failing internal checkpoint still needs isolation; do not relax or skip the assertion.
+See [vector unit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-unit/README.md).
 Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
 continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
 Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.
