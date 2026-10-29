@@ -152,8 +152,14 @@ export class SqliteSearch {
       this.db.sql.exec(structure.reset!);
     } else {
       const table = searchTable(job), docs = table + '_docs';
-      if (job.kind === 'text' ? !this.texts.collect(job, limit) :
-        Number(this.db.run(`DELETE FROM ${docs} WHERE rowid IN (SELECT rowid FROM ${docs} LIMIT ?)`, [limit]).changes) >= limit) return false;
+      try {
+        if (job.kind === 'text' ? !this.texts.collect(job, limit) :
+          Number(this.db.run(`DELETE FROM ${docs} WHERE rowid IN (SELECT rowid FROM ${docs} LIMIT ?)`, [limit]).changes) >= limit) return false;
+      } catch (error) {
+        // A retired derived group is disposable. Its broken postings may prevent row-by-row deletion;
+        // let FTS5 destroy that group, while surfacing every other error and any failed DROP.
+        if ((error as { code?: string })?.code !== 'SQLITE_CORRUPT_VTAB' || !this.db.sql.inTransaction) throw error;
+      }
       this.db.sql.exec(structure.reset!);
     }
     if (job.kind === 'text') return Number(this.db.run('DELETE FROM text_meta WHERE rowid IN (SELECT rowid FROM text_meta WHERE generation=? LIMIT ?)', [job.generation, limit]).changes) < limit;

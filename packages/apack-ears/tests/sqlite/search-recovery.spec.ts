@@ -99,6 +99,9 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(report.issues.some(issue => issue.includes('trigram posting integrity failed'))).toBe(true);
     expect(e.query('Row').containing('needle').ids()).toEqual([]);
     expect(e.lastCommit()).toBe(before);
+    db.rebuildIndexes(); await db.indexesReady();
+    expect(e.query('Row').containing('needle').ids()).toEqual(['Row-one']);
+    expect(e.lastCommit()).toBe(before);
   });
 
   it('refuses rebuild on read-only, open-unit and stopped owners without changing the catalog', () => {
