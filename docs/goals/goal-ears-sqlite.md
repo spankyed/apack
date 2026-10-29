@@ -316,8 +316,11 @@ negative control passes in full source 5efda35064: all 544 SQLite cases, build/t
 repair/optimization work still needs host/CLI/platform convergence; canonical remains 6cf. The next
 implementation starts at 2ae8af5939: internal logical stream codec, typed raw records, terminal
 count/hash, linear fragmented input, frame limits and cleanup/error controls. Focused disposable
-validation is active in ears-logical-format. It is not public export/import yet; source snapshot traversal,
-embedding restore, staging and host publication remain required per docs/plans/ears-sqlite-storage.md. See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
+codec validation passes 13 cases, build/types/lint. Traversal 4c5c1fa690 adds private snapshot/typed raw
+field/metadata/relation/embedding export; initial fixture setup omitted required fields on a sparse row,
+corrected by explicit optional flags. Validation is active in ears-logical-export-optional. Public export,
+embedding restore, staging and host publication remain required per docs/plans/ears-sqlite-storage.md.
+See [archive evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/logical-archive/README.md). See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
 qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
