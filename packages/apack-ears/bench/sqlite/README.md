@@ -401,3 +401,18 @@ Check integer norm/distance identities, zero query padding and scaled/sparse/den
 before timing. Source v0.1.9 has a conditional NEON L2 path; do not infer that the tested binary uses
 it, or that a speedup is caused by it, without runtime/build evidence. This remains a primitive
 counterfactual with multi-chunk/large-k and integrated EARS/resource/app requirements still open.
+
+
+The l2-unit cohort likewise stopped at 10k heartbeat p99 22.34ms, despite exact recall on sampled calls.
+Before another strategy change, fix the next control: same upstream v0.1.9/e9f598ab source, same l2-unit
+encoding/64 candidates/data/targets, private Linux `-O3 -DSQLITE_VEC_ENABLE_NEON` extension build only.
+The npm binary's vec_debug reports blank build flags; upstream's Makefile enables NEON by default only
+for Darwin arm64. This motivates a build-configuration control, not an assumed cause. Verify release
+archive digest, source/header/native hashes, compiler command/version and runtime flags; all controls
+must pass again. Run 1k/10k/100k once and stop on first miss. The diagnostic-only EARS_VECTOR_EXTENSION
+path selects this private artifact; normal production loading and dependency lockfiles remain unchanged.
+
+Also build a same-source/plain -O3 binary with the identical compiler and headers. After the NEON
+cohort stops or completes, run one plain 10k diagnostic (expected failures retained, no restart) to
+separate the explicit NEON flag from other prebuilt/compiler differences. The runner records each
+exit independently and never retries either binary. This control is not another acceptance cohort.

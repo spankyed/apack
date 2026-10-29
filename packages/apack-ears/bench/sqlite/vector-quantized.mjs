@@ -44,8 +44,8 @@ const summary = values => { const sorted = [...values].sort((a, b) => a - b); re
 const paths = ['all', 'tenPercent', 'onePercent'];
 const eligible = (i, path) => i % 17 !== 0 && (path === 'all' || (path === 'tenPercent' ? i % 100 < 10 : i % 100 === 0));
 function open(file, d) {
-  const db = new Database(file), extension = getLoadablePath(); db.loadExtension(extension);
-  report.vectorExtension = { path: extension, sha256: hash(readFileSync(extension)), version: db.prepare('SELECT vec_version() v').get().v };
+  const db = new Database(file), extension = process.env.EARS_VECTOR_EXTENSION ?? getLoadablePath(); db.loadExtension(extension);
+  report.vectorExtension = { path: extension, sha256: hash(readFileSync(extension)), version: db.prepare('SELECT vec_version() v').get().v, debug: db.prepare('SELECT vec_debug() v').get().v };
   report.nativeBindingsWhileOpen = loadedNativeBindings([extension]);
   db.pragma('journal_mode=WAL'); db.pragma('synchronous=OFF');
   if (d) db.exec(`CREATE TABLE raw(id INTEGER PRIMARY KEY,embedding BLOB NOT NULL,live INTEGER NOT NULL,bucket INTEGER NOT NULL,in_ten INTEGER NOT NULL);
