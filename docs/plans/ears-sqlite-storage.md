@@ -481,6 +481,12 @@ also cost measurable time. Admission profiling identifies COMMIT as the dominant
 not model installation or observed GC. Investigate projection pruning, scope execution,
 native membership and off-thread SQLite PASSIVE checkpoints without relaxing FULL logical
 durability. Frozen parameters, original failures and remaining app/resource gates stay intact.
+Owner-only native projection now omits unused vector payload/distance calculation, without
+material sampled speedup. A bounded materialized eligibility page shares count and exact
+scoring for small sets, with a scalar witness against duplicate scope evaluation. Source
+`25668da288` passes 625 EARS/135 host cases; [diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-projection-scope/README.md)
+show a small exact-query improvement but no overall acceptance and worse broad samples.
+Further shared execution/native membership/checkpoint work remains required.
 
 ### App and host archive composition
 

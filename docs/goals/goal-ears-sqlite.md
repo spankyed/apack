@@ -297,9 +297,16 @@ are roughly 139–149 ms. Admission heartbeat p99 is 24.34 ms. The independent v
 rejects the full matrix on unchanged gates and rejects corrupted evidence. `dacd2093ca`
 profiles native filtered SQL at about 121–124 ms, scope/count/rerank overhead separately,
 and COMMIT as 20.05 of 27.84 s of admission (maximum 385.69 ms). Model installation and
-observed GC are small. Next remove unneeded native candidate BLOB projections, improve
-scope/count/rerank plans, qualify native membership/distribution and test off-thread
-PASSIVE checkpoints while preserving FULL logical durability and bounded WAL/drain safety.
+observed GC are small. [Projection/shared-scope work](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-projection-scope/README.md)
+now passes 625 EARS/135 host plus seventeen native cases. Owner-only native projection
+has no material speedup; bounded shared count/exact eligibility reduces a sampled small
+exact query from 20.91 to 16.72 ms, while broad samples are worse and large filtered
+queries remain 134–143 ms. A deterministic fixture fixes an initial scoped-limit failure;
+the old duplicate-evaluation path fails the new scalar witness. No acceptance is claimed.
+Next consolidate remaining scope/count/rerank work in one SQL execution frame, qualify
+native membership/distribution and test off-thread PASSIVE checkpoints while preserving
+FULL logical durability and bounded WAL/drain safety. Integrate the pinned concurrent
+master snapshot deliberately before final current-baseline claims.
 Keep the failed matrix and frozen ANN settings/budgets; no retuning or adoption follows.
 No more primitive result alone can establish the required final execution design.
 Internal generation storage, background training and a durable shared-scheduler model queue

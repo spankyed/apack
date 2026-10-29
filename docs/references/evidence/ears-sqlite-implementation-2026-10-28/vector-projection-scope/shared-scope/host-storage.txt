@@ -1,0 +1,92 @@
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/backup/recovery.spec.ts tests/backup/recovery-crash.spec.ts tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/backup/logical.spec.ts tests/backup/logical-crash.spec.ts tests/backup/storage.spec.ts tests/database/storage.spec.ts tests/database/open-app-database.spec.ts tests/database/write-lock.spec.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=/results/host.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/database/write-lock.spec.ts (15 tests) 1487ms
+   ✓ the database write lock > is taken by one of several tools that ask for it at the same moment  819ms
+stderr | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Imported lmdb
+[database:backup] Imported runHistory
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Restored media assets
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Import completed
+
+stderr | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+ ✓ tests/backup/recovery.spec.ts (34 tests) 8254ms
+   ✓ restores both sqlite/1 stores and media, preserves forensic copies, and never replays completed recovery  1311ms
+   ✓ resumes after interruption immediately following publish-incumbent  302ms
+   ✓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'move-incumbent'  369ms
+   ✓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'publish-incumbent'  302ms
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Imported lmdb
+[database:backup] Imported runHistory
+
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Restored media assets
+
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Import completed
+
+ ✓ tests/database/open-app-database.spec.ts (14 tests) 185ms
+ ✓ tests/backup/storage.spec.ts (23 tests) 7374ms
+   ✓ Host backup storage sqlite/1 > opens real primary/run-history backups and uses the files even when metadata claims another format  693ms
+   ✓ Host backup storage sqlite/1 > restores both populated stores and media when application acceptance refuses  595ms
+   ✓ Host backup storage sqlite/1 > restores the primary when replacing the second store refuses  668ms
+   ✓ Host backup storage sqlite/1 > restores a replacement which committed before reporting NOT_DURABLE  636ms
+   ✓ Host backup storage sqlite/1 > keeps readable incumbent copies when replacement and restoration both fail  503ms
+   ✓ Host backup storage sqlite/1 > refuses cross-format import before validation, replacement or media changes  520ms
+   ✓ Host backup storage sqlite/1 > checks the second store format before validating or replacing the primary  439ms
+   ✓ Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings  612ms
+   ✓ Host backup storage sqlite/1 > refuses invalid settings through appData before replacing either live store  531ms
+   ✓ Host backup storage sqlite/1 > refuses ambiguous physical files regardless of backup metadata  549ms
+ ✓ tests/backup/logical.spec.ts (10 tests) 7578ms
+   ✓ exclusively publishes a complete private archive readable through the app-only staging API  783ms
+   ✓ reports a published but unsynchronized directory truthfully and retains its complete archive  559ms
+   ✓ replaces a populated store through the existing coordinator and preserves separately owned media  594ms
+   ✓ validates all selected stores before replacing either, then imports primary and run history together  2212ms
+   ✓ restores the incumbent when acceptance refuses a logical import  609ms
+   ✓ retains the ordinary recovery journal after an uncertain logical replacement  573ms
+   ✓ imports only run history without replacing or advancing the primary database  1046ms
+   ✓ fully validates preview archives and primary acceptance without touching either live store  949ms
+ ✓ tests/backup/import-transaction.spec.ts (6 tests) 145ms
+stderr | tests/backup/import.spec.ts > restores the incumbent when installing the imported data fails
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stderr | tests/backup/import.spec.ts > preserves the recovery error and a durable copy when import and restoring both fail
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+ ✓ tests/backup/import.spec.ts (6 tests) 634ms
+ ✓ tests/database/storage.spec.ts (16 tests) 826ms
+   ✓ selects both real stores and preserves the profile when selection is omitted on reopen  378ms
+   ✓ blocks writable recovery opens without salvaging either sqlite/1 store  338ms
+ ✓ tests/backup/recovery-crash.spec.ts (9 tests) 36661ms
+   ✓ recovers elmdb/1 after SIGKILL at move (alias=false) without exposing a partially restored profile  3989ms
+   ✓ recovers elmdb/1 after SIGKILL at move (alias=true) without exposing a partially restored profile  3895ms
+   ✓ recovers elmdb/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile  4101ms
+   ✓ recovers elmdb/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile  3401ms
+   ✓ recovers sqlite/1 after SIGKILL at move (alias=false) without exposing a partially restored profile  4383ms
+   ✓ recovers sqlite/1 after SIGKILL at move (alias=true) without exposing a partially restored profile  4335ms
+   ✓ recovers sqlite/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile  4260ms
+   ✓ recovers sqlite/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile  4391ms
+   ✓ refuses a separate live reader and reclaims its claim after SIGKILL  3905ms
+ ✓ tests/backup/logical-crash.spec.ts (2 tests) 1861ms
+   ✓ retains exclusive complete archive semantics when killed before publication  806ms
+   ✓ retains exclusive complete archive semantics when killed after publication  1055ms
+
+ Test Files  10 passed (10)
+      Tests  135 passed (135)
+   Start at  23:25:57
+   Duration  50.20s (transform 1.41s, setup 37ms, collect 6.62s, tests 65.01s, environment 1ms, prepare 493ms)
+
+JSON report written to /results/host.json
