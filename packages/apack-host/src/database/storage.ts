@@ -2,7 +2,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DATABASE_FORMAT as ELMDB_FORMAT, openDatabase as openElmdb, type DatabaseOptions } from '@apackdev/ears/lmdb';
-import { DATABASE_FORMAT as SQLITE_FORMAT, openDatabase as openSqlite, rebuildIndexes as rebuildSqliteIndexes, auditDatabase as auditSqliteDatabase } from '@apackdev/ears/sqlite';
+import { DATABASE_FORMAT as SQLITE_FORMAT, openDatabase as openSqlite, rebuildIndexes as rebuildSqliteIndexes, auditDatabase as auditSqliteDatabase, exportLogicalSnapshot as exportSqliteSnapshot, stageLogicalSnapshot as stageSqliteSnapshot } from '@apackdev/ears/sqlite';
 import { APP_ENVS, appDataDirFor } from '@apackdev/sdk/env';
 import type { EarsDatabase } from '@apackdev/ears';
 
@@ -14,6 +14,10 @@ export interface DatabaseStorage {
   rebuildIndexes?(database: EarsDatabase): Promise<void>;
   /** Snapshot-based inspection; a finding never implicitly repairs primary or derived data. */
   audit?(database: EarsDatabase): ReturnType<typeof auditSqliteDatabase>;
+  /** Lossless primary stream; host file publication remains separate. */
+  exportLogicalSnapshot?: typeof exportSqliteSnapshot;
+  /** Creates a closed, fully validated store inside a new caller-owned staging container. */
+  stageLogicalSnapshot?: typeof stageSqliteSnapshot;
 }
 
 function refuseForeignFile(dir: string, name: string): void {
@@ -26,7 +30,7 @@ const elmdb: DatabaseStorage = { format: ELMDB_FORMAT, dataFile: 'data.mdb', ope
   refuseForeignFile(options.path, 'data.sqlite3');
   return openElmdb(options);
 } };
-const sqlite: DatabaseStorage = { format: SQLITE_FORMAT, dataFile: 'data.sqlite3', rebuildIndexes: rebuildSqliteIndexes, audit: auditSqliteDatabase, open(options) {
+const sqlite: DatabaseStorage = { format: SQLITE_FORMAT, dataFile: 'data.sqlite3', rebuildIndexes: rebuildSqliteIndexes, audit: auditSqliteDatabase, exportLogicalSnapshot: exportSqliteSnapshot, stageLogicalSnapshot: stageSqliteSnapshot, open(options) {
   refuseForeignFile(options.path, 'data.mdb');
   return openSqlite(options);
 } };

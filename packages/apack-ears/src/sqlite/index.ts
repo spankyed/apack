@@ -13,6 +13,8 @@ import { SqliteDatabase } from './database.ts';
 import { auditSqliteDatabase, type SqliteAuditReport } from './audit.ts';
 export type { SqliteAuditReport } from './audit.ts';
 
+export { exportLogicalSnapshot, stageLogicalSnapshot, type SqliteLogicalSnapshotOptions, type SqliteStagedSnapshot } from './logical-snapshot.ts';
+
 /** Format provenance; opening the files performs validation. Format 1 changes in place before release. */
 export { DATABASE_FORMAT } from './format.ts';
 

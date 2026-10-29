@@ -1,3 +1,4 @@
+export { exportLogicalDatabase } from './logical.ts';
 export { listImportRecoveries, restoreImportRecovery, type ImportRecovery } from './restore.ts';
 import fs from 'fs-extra';
 import path from 'node:path';
@@ -232,6 +233,42 @@ export async function importDatabase(
   } finally {
     if (!preserveRollback) await fs.remove(temporary);
   }
+}
+
+/** Stage every selected logical archive before entering the ordinary protected import coordinator.
+ * Logical archives do not own media; this operation preserves the incumbent media directory.
+ */
+export async function importLogicalDatabase(stores: BackupStores, archives: Partial<Record<DatabaseName, string>>,
+  mediaPath: string, options: Parameters<typeof importDatabase>[3] = {}): Promise<DatabaseImportResult> {
+  const entries = Object.entries(archives).map(([name, file]) => {
+    if (!isKnownDatabase(name) || typeof file !== 'string') throw new Error(`Invalid logical archive selection: ${name}`);
+    const store = stores[name];
+    if (!store) throw new Error(`No destination database for ${name}`);
+    const storage = databaseStorage(store.format);
+    if (!storage.stageLogicalSnapshot) throw new Error(`Logical import is not implemented for ${storage.format}`);
+    return { name, file, store, stage: storage.stageLogicalSnapshot };
+  });
+  if (!entries.length) throw new Error('Select at least one logical archive');
+  const root = await fs.mkdtemp(path.join(path.dirname(stores.lmdb.path), '.apack-logical-import-'));
+  let result: DatabaseImportResult | undefined, failed = false, failure: unknown;
+  try {
+    const candidate = path.join(root, 'candidate');
+    await fs.mkdir(candidate, { mode: 0o700 });
+    for (const entry of entries) {
+      const staged = await entry.stage(fs.createReadStream(entry.file), path.join(root, 'stage-' + entry.name));
+      await fs.rename(staged.path, path.join(candidate, entry.name));
+    }
+    await fs.writeJson(path.join(candidate, 'metadata.json'), { databases: entries.map(entry => entry.name), includesMedia: false,
+      storageFormats: Object.fromEntries(entries.map(entry => [entry.name,entry.store.format])) });
+    result = await importDatabase(stores, candidate, mediaPath, options);
+  } catch (error) { failed = true; failure = error; }
+  try { await fs.remove(root); }
+  catch (cleanup) {
+    throw Object.assign(new AggregateError(failed ? [failure, cleanup] : [cleanup], 'Logical import staging cleanup failed', { cause: failed ? failure : cleanup }),
+      { code: (failure as {code?: unknown})?.code, recoveryPath: (failure as {recoveryPath?: unknown})?.recoveryPath });
+  }
+  if (failed) throw failure;
+  return result!;
 }
 
 export async function readBackupSummary(backupPath: string) {
