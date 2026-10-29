@@ -104,6 +104,28 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(e.lastCommit()).toBe(before);
   });
 
+  it('reports undecodable primary values outside every search input', async () => {
+    const { db, e } = seed(), before = e.lastCommit();
+    expect(db.run("UPDATE value_overflow SET kind='object',value=? WHERE entity_id=? AND field='body'",
+      [Buffer.from([0xc1]), 'Other-large']).changes).toBe(1);
+    const report = await auditSqliteDatabase(db);
+    expect(report).toMatchObject({ ok: false, checkedEntities: 3, issueCount: 1, comparedIndexes: 0 });
+    expect(report.issues).toEqual(['Other-large: primary values cannot be decoded']);
+    expect(e.lastCommit()).toBe(before);
+    expect(() => e.getAttr('Other-large', 'body')).toThrow();
+  });
+
+  it('counts all orphan primary values while retaining at most 100 issue messages', async () => {
+    const { db } = seed();
+    for (let i = 0; i < 150; i++) db.run("INSERT INTO value_overflow VALUES (?,'field','text','orphan')", [`Other-orphan-${i}`]);
+    const report = await auditSqliteDatabase(db);
+    expect(report.ok).toBe(false);
+    expect(report.issueCount).toBe(150);
+    expect(report.issues).toHaveLength(100);
+    expect(report.issues.every(issue => issue.includes('orphan overflow value'))).toBe(true);
+    expect(db.get("SELECT count(*) n FROM value_overflow WHERE value='orphan'")!.n).toBe(150);
+  });
+
   it('refuses rebuild on read-only, open-unit and stopped owners without changing the catalog', () => {
     const { db, e } = seed();
     const jobs = db.indexBuilds.jobs(), before = e.lastCommit();
