@@ -3,6 +3,7 @@ import { closeSync, fstatSync, mkdirSync, openSync, readSync, rmSync } from 'nod
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Unpackr } from 'msgpackr';
+import { entityTypeOf } from '../src/ids.ts';
 import type { Load } from '../src/storage.ts';
 import { SqliteDatabase } from '../src/sqlite/database.ts';
 import { auditSqliteDatabase } from '../src/sqlite/audit.ts';
@@ -55,6 +56,52 @@ function load(value: unknown): Load {
   return value as unknown as Load;
 }
 
+// Decode map contents with msgpackr's public byte offsets, retaining opaque field payloads.
+// Only the map header is interpreted here; msgpackr owns all value/type/extension decoding.
+function mapPayloads(encoded: Buffer, unpacker: Unpackr): Map<string, Buffer> {
+  let count: number, header: number;
+  if ((encoded[0] & 0xf0) === 0x80) { count = encoded[0] & 15; header = 1; }
+  else if (encoded[0] === 0xde) { count = encoded.readUInt16BE(1); header = 3; }
+  else if (encoded[0] === 0xdf) { count = encoded.readUInt32BE(1); header = 5; }
+  else return invalid('expected a native map');
+  const result = new Map<string, Buffer>();
+  if (!count) { if (encoded.length !== header) return invalid('trailing map bytes'); return result; }
+  let key: string | undefined, seen = 0;
+  unpacker.unpackMultiple(encoded.subarray(header), (value: unknown, start = 0, end = 0) => {
+    if (++seen > count * 2) return invalid('trailing map values');
+    if (seen % 2) {
+      if (typeof value !== 'string' || result.has(value)) return invalid('invalid or duplicate map key');
+      key = value;
+    } else result.set(key!, encoded.subarray(header + start, header + end));
+  });
+  if (seen !== count * 2) return invalid('incomplete map');
+  return result;
+}
+interface ImportRecord { load: Load; payloads: Map<string, Buffer> }
+function restorePayloads(db: SqliteDatabase, batch: ImportRecord[], unpacker: Unpackr): void {
+  db.sql.exec('BEGIN IMMEDIATE');
+  try {
+    for (const item of batch) {
+      const value = item.load;
+      if (value.load === 'entity') {
+        const layout = db.values.layout(entityTypeOf(value.id as Parameters<typeof entityTypeOf>[0]));
+        if (!layout) return invalid('missing imported entity layout');
+        for (const [field, raw] of mapPayloads(item.payloads.get('fields')!, unpacker)) {
+          const held = value.fields[field];
+          // Scalars already retain their representation through the typed value writer. Composite blobs
+          // must keep the original bytes: re-encoding with msgpackr can erase nested Float64 negative zero.
+          if (Array.isArray(held) || object(held)) db.values.restoreCell(layout, value.id, field, Array.isArray(held) ? 'array' : 'object', raw);
+        }
+      } else if (value.load === 'relation' && value.info !== undefined)
+        db.run('UPDATE relations SET info=? WHERE id=?', [item.payloads.get('info')!, value.id]);
+    }
+    db.commitWrite();
+  } catch (error) {
+    if (db.sql.inTransaction) db.sql.exec('ROLLBACK');
+    throw error;
+  }
+}
+
 /** Owns only a newly reserved container; success returns its closed, independently reopened/audited store. */
 export async function convertElmdbDump(file: string, directory: string) {
   const fd = openSync(file, 'r');
@@ -88,15 +135,18 @@ export async function convertElmdbDump(file: string, directory: string) {
     const path = join(resolve(directory), 'store');
     database = new SqliteDatabase({ path, ...(schema ? { schema: schema as object } : {}) });
     const unpacker = new Unpackr({ useRecords: false, mapsAsObjects: false });
-    let count = 0, batch: Load[] = [], batchBytes = 0;
-    const flush = () => { if (batch.length) database!.bulkLoad(batch); batch = []; batchBytes = 0; };
+    let count = 0, batch: ImportRecord[] = [], batchBytes = 0;
+    const flush = () => {
+      if (batch.length) { database!.bulkLoad(batch.map(item => item.load)); restorePayloads(database!, batch, unpacker); }
+      batch = []; batchBytes = 0;
+    };
     for (;;) {
       const size = length();
       if (size === 0xffffffff) break;
       const encoded = bytes(size);
       let decoded: unknown;
       try { decoded = unpacker.unpack(encoded); } catch { return invalid('load MessagePack'); }
-      batch.push(load(normalize(decoded))); batchBytes += size; count++;
+      batch.push({ load: load(normalize(decoded)), payloads: mapPayloads(encoded, unpacker) }); batchBytes += size; count++;
       if (batch.length >= 1000 || batchBytes >= 8 * 1024 ** 2) flush();
     }
     if (bytes(8).readBigUInt64LE() !== BigInt(count) || offset !== stat.size) return invalid('load count or trailing bytes');

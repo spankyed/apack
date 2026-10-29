@@ -16,7 +16,13 @@ function dump(loads: unknown[], schemaValue: unknown = schema) {
   const count = Buffer.alloc(8); count.writeBigUInt64LE(BigInt(loads.length));
   const packer = new Packr({ useRecords: false });
   return Buffer.concat([Buffer.from('ELMDBDMP'), length(1), frame(Buffer.from(schemaValue ? JSON.stringify(schemaValue) : '')),
-    ...loads.map(value => frame(packer.pack(value))), length(0xffffffff), count]);
+    ...loads.map(value => {
+      // Rust's serializer preserves Float64 -0. msgpackr normally canonicalizes it to integer zero;
+      // construct that exact native payload rather than accidentally testing an already lossy fixture.
+      const encoded = Buffer.from(packer.pack(value)), sentinel = Buffer.from('cb400921fb54442d18', 'hex');
+      for (let at = encoded.indexOf(sentinel); at >= 0; at = encoded.indexOf(sentinel, at + 9)) Buffer.from('cb8000000000000000', 'hex').copy(encoded, at);
+      return frame(encoded);
+    }), length(0xffffffff), count]);
 }
 function fixture(data: Buffer) {
   const root = mkdtempSync(join(tmpdir(), 'ears-convert-')); roots.push(root);
@@ -28,7 +34,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('explicit elmdb
   it('reopens an audited store, retains typed values, trash/order/relations/counters and leaves input unchanged', async () => {
     const at = new Date('2024-01-02T03:04:05.000Z');
     const f = fixture(dump([
-      { load: 'entity', id: 'Row-second', fields: { text: 'retained', at, bytes: Buffer.from([0, 255]), nested: { zero: -0 }, shortCode: 'ROW-9', __proto__: null }, trashed: false },
+      { load: 'entity', id: 'Row-second', fields: { text: 'retained', at, bytes: Buffer.from([0, 255]), nested: { zero: Math.PI }, shortCode: 'ROW-9', __proto__: null }, trashed: false },
       { load: 'entity', id: 'Row-first', fields: { text: 'trashed', trashedAt: 42 }, trashed: true },
       { load: 'relation', id: 'Relation-edge', kind: 'custom', source: 'Row-second', target: 'Row-first', info: { at } },
       { load: 'sequence', name: 'shortCode:Row', next: 20 },
