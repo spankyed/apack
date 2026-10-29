@@ -276,8 +276,9 @@ Internal audit slice 9e1df259e2 compares streamed active derived contents with r
 it passes all 26 recovery cases/build/types but fails cleanup lint. Corrected 475c8de8f1 also adds native
 FTS posting integrity checks on a private writable snapshot and a postings-only corruption regression;
 that run fails one of 27 recovery cases on retired corrupt-FTS cleanup. Corrected 3f643dccb9 destroys a
-retired group on exactly SQLITE_CORRUPT_VTAB and adds explicit incumbent recovery; validation is active
-in ears-audit-retirement (exec 37621). Poll that same handle. The audit is not yet public
+retired group on exactly SQLITE_CORRUPT_VTAB and adds explicit incumbent recovery; all 27 recovery cases,
+build/types/lint pass. New ffc095eebf adds primary decoding/orphans and bounded retained issues; validation
+is active in ears-audit-primary (exec 87160). Poll that same handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
 Complete audit and lossless logical export remain required.
