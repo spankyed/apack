@@ -194,7 +194,7 @@ The guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-e
 to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No master merge, adoption,
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with unpublished vector/operational tests and evidence through b035b537d4; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
 Current functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
 **7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
 Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE are now at exact green 6cf6c8349e.
@@ -257,6 +257,11 @@ Retained-reader source **8c04a6bca0** passes disposable Linux EARS build/types, 
 checkpoint case and lint. A pinned read-only snapshot retains its old rows and blocks TRUNCATE while
 writes grow WAL; release permits truncation to zero. Sustained resource limits, FULL checkpoint latency,
 external ownership and platform qualification remain open. See [WAL reader evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-readers/README.md).
+Failed-vector isolation source **b035b537d4** passes EARS build/types, the selected real-EARS case and
+lint in disposable Linux. Healthy text/trigram reads, text-watch delivery and primary writes remain
+available while the failed replacement retains its predecessor; reopen reuses unchanged embeddings and
+leaves only the changed owner pending. This closes that focused availability proof, not arbitrary
+corruption or resource qualification. See [index availability evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/index-availability/README.md).
 Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
 continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
 Keep authoritative embeddings, candidate/trash scope, unit rollback, generation ownership and recovery requirements intact.
