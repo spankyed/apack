@@ -5312,7 +5312,7 @@ declare const actionQueries: {
     };
 };
 
-/** Add several messages to a thread at once, leaving queued messages where they are (a bulk import) */
+/** Add several messages to a thread at once (a bulk import), moving its queued messages after them once */
 declare function addMessagesToThread(params: {
     threadId: EARS.EntityId;
     messages: Array<{
