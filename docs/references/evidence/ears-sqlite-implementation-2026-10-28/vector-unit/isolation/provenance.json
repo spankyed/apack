@@ -1,0 +1,6 @@
+{
+  "source": "a434e10716798f29124cee18714914c9cb04333b",
+  "sourceArchiveSha256": "a054f0253e8784e9538ef92fefd371ef2f0fa1672440a0040c8390150c2e5d08",
+  "rawSourceLabel": "vector-unit-checkpoint-isolation",
+  "result": "SQLite 17 pass; native 16 pass, outer own-embedding replacement fails before nested unit"
+}
