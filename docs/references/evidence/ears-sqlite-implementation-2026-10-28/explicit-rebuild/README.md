@@ -1,0 +1,7 @@
+# Explicit derived-generation rebuild
+
+Source 3ac7b231e1 adds SqliteDatabase.rebuildIndexes, an internal candidate maintenance operation. It checks writable/unit/revision ownership, retires current generations, admits fresh ones, ensures physical search structures, and commits a new schema revision atomically. It preserves the primary logical commit and publishes derived visibility transitions. Existing cooperative scheduling rebuilds authoritative inputs; valid embeddings can be reused by content/model/dimension identity. No production composition or public pack API changes.
+
+Disposable capped Linux passes EARS build/types, all 23 search-recovery cases and root lint. The new case deletes an actual FTS posting while keeping the table structurally present, observes the wrong empty answer, rebuilds, and verifies restored text/substrings/vector results, stale-reader refusal, unchanged primary data/commit and no unnecessary embedding work. Neighboring real missing-table/index/trigger recovery cases also pass.
+
+This is the first maintenance slice, not complete tooling. Public app-owned construction/CLI wiring, explicit refusal/fault controls, semantic audit, lossless logical export/import and copied-profile conversion remain required. A complete audited recovery must distinguish trustworthy authoritative embeddings from derived acceleration; rebuilding cannot recover primary data that no longer exists. Scheduler-fatal state/reopen behavior and resource limits need qualification before exposing this operation broadly.
