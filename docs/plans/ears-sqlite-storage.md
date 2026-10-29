@@ -281,22 +281,23 @@ The unchanged shared relevance corpus and targeted identifier/list/rollback/reop
 Linux; source-loading and whole-suite results are owned by the current goal handoff. The preregistered
 shape, conjunction, owner, prefix, sequence and recency cohorts have run and retain all samples, bytes,
 name-update costs, failures and mixed results. They compare SQLite revisions rather than establish a
-matched elmdb performance qualification. Full vocabulary fuzzy expansion remains an implementation gap.
-The next bounded-typo checkpoint below must remove it without weakening useful-result expectations.
+matched elmdb performance qualification. Query-derived typo alternatives now replace the vocabulary scan;
+the bounded-typo checkpoint below records behavior and its remaining resource/usefulness qualification.
 This does not replace the failed 100k admission qualification or any phase 4–7 requirement. See the
 [corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md).
 
-### Bounded typo checkpoint: preregistered candidate behavior
+### Bounded typo checkpoint: candidate behavior
 
-Replace dictionary enumeration with query-derived one-edit alternatives executed by native FTS. The
+The behavior and useful-result cases were preregistered before implementation. Dictionary enumeration
+is replaced with query-derived one-edit alternatives executed by native FTS. The
 candidate supports insertion, deletion, substitution and adjacent transposition for folded ASCII letter/
-digit query tokens of length 5–32. Each token generates at most `73 * length + 35` distinct alternatives
+digit query tokens of length 5–32. Each token generates at most `73 * length + 35` alternatives
 before duplicate removal (at most 2371 at length 32), independent of database vocabulary size. Query terms
 outside that range or alphabet remain literal; quoted phrases and the final prefix term remain literal.
 `fuzzy: false` disables alternatives. Accent folding remains the existing query adaptation and native FTS
 still owns matching, optional English stemming, ranking and highlights. No dictionary, extra posting
-structure, native extension or request/result codec is added. Remove the unused vocabulary virtual table
-from the format-one layout and its physical recovery inventory in the same implementation checkpoint.
+structure, native extension or request/result codec is added. The unused vocabulary virtual table is
+removed from the format-one layout and its physical recovery inventory in the same checkpoint.
 
 This is a deliberate candidate behavior change: two independent edits on long words are no longer
 supported, while one adjacent transposition works at length 5–8 too. Short, very long and non-ASCII terms
@@ -308,14 +309,14 @@ Always include the permitted alternatives, even when the literal term exists. An
 would make spelling decisions depend on other documents; it is not part of this checkpoint. Preserve
 field restrictions, boolean/exclusion semantics, list-phrase boundaries, candidate scopes, trash, units,
 watch delivery, reopen and complete UTF-16 highlights. All existing shared useful-result cases stay
-unchanged. Add cases before implementation for each edit position/kind, mixed-case/accent folding,
+unchanged. Cases were added before implementation for each edit position/kind, mixed-case/accent folding,
 known-word neighbors, transposition, two-independent-edit refusal, the 4/5 and 32/33 boundaries, unsupported
 scripts, explicit opt-out, quoted/prefix behavior and field/boolean/candidate restrictions.
 
-Closing proof must inspect actual native MATCH expressions/plans and refuse any vocabulary enumeration;
-verify query work is unchanged when unrelated indexed vocabulary grows. Include negative controls that
-remove typo alternatives and restore the old vocabulary scan. Run the full EARS suites for both pinned
-backends plus affected recovery/build/types/lint checks in disposable Linux. Before claiming a speedup,
+The [bounded typo proof](../references/evidence/ears-sqlite-implementation-2026-10-28/bounded-typos/README.md)
+passes 18 new cases, the unchanged shared corpus, actual native MATCH/growth checks, both removal controls,
+509 SQLite / 289 native cases and affected recovery/build/types/API/lint checks in disposable Linux.
+Before claiming a speedup,
 preregister a fixed-order growth cohort with default fuzzy enabled, useful-answer checks, warm/cold reads,
 large/absent/exact/typo inputs and memory/bytes costs. Functional passage alone does not accept latency or
 replace the realistic search, vector and complete-app criteria in the goal.

@@ -39,7 +39,6 @@ const components: Array<[string, 'TABLE' | 'INDEX' | 'TRIGGER', (text: string, t
   ['trigram owner index', 'INDEX', (_t, g) => g + '_docs_entity'],
   ...['ai', 'ad', 'au'].map(suffix => ['trigram trigger ' + suffix, 'TRIGGER', (_t: string, g: string) => g + '_docs_' + suffix] as typeof components[number]),
   ['text table', 'TABLE', t => t],
-  ['text vocabulary', 'TABLE', t => t + '_vocab'],
   ['text documents', 'TABLE', t => t + '_docs'],
   ['text owner index', 'INDEX', t => t + '_docs_entity'],
   ['text metadata', 'TABLE', () => 'text_meta'],

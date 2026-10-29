@@ -75,7 +75,8 @@ Existing EARS builders, transactions, typed facades and observers are reused.
 
 The candidate is unfinished: value/text/vector/trigram admission uses shared persistent background generations
 with explicit search readiness, and declarations validate through Ajv plus structural checks. Error and real IO
-qualification remain incomplete; fuzzy expansion scans the vocabulary; vectors use exact scalar scans; backup publication,
+qualification remain incomplete; bounded query-derived typo alternatives need cost/usefulness qualification;
+vectors use exact scalar scans; backup publication,
 OS I/O failure semantics, permissions, migration and cross-platform packaging are not qualified. It is not a
 second production backend. A passing EARS suite is a feasibility signal, not complete elmdb feature parity.
 

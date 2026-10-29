@@ -139,7 +139,7 @@ export interface Embedding {
 export interface SearchOptions<F extends string = string> {
   /** The query's last word matches the words it starts, as a search box does while it is typed in */
   prefix?: boolean;
-  /** A word of five letters or more also matches one an edit away, nine or more two; on unless false */
+  /** Expand individual words using the backend's documented typo tolerance; on unless false. Phrases stay literal. */
   fuzzy?: boolean;
   /** Any of the query's clauses matching is enough, rather than every one */
   any?: boolean;

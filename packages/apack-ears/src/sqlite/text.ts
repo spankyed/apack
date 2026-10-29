@@ -10,6 +10,24 @@ const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
 const fold = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
 const fail = (message: string): never => { throw Object.assign(new Error(message), { code: 'CORRUPT' }); };
 
+/** Query-derived work stays independent of indexed vocabulary; unsupported tokens retain literal matching. */
+function typoAlternatives(term: string): string[] {
+  if (!/^[a-z0-9]{5,32}$/.test(term)) return [];
+  const alternatives = new Set<string>(), alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i <= term.length; i++) {
+    const before = term.slice(0, i), after = term.slice(i);
+    for (const letter of alphabet) {
+      alternatives.add(before + letter + after);
+      if (i < term.length && letter !== term[i]) alternatives.add(before + letter + after.slice(1));
+    }
+    if (i < term.length) alternatives.add(before + after.slice(1));
+    if (i + 1 < term.length && term[i] !== term[i + 1])
+      alternatives.add(before + term[i + 1] + term[i] + term.slice(i + 2));
+  }
+  alternatives.delete(term);
+  return [...alternatives];
+}
+
 /** Only insert spaces; original UTF-16 offsets are recovered by subtracting preceding insertions. */
 function identifierParts(source: string): { text: string; spaces: number[] } {
   const cuts = [...source.matchAll(/(?:\p{Ll}|\p{N})(?=\p{Lu})|\p{Lu}(?=\p{Lu}\p{Ll})/gu)]
@@ -50,17 +68,16 @@ export class SqliteText {
   constructor(db: SqliteDatabase) { this.db = db; }
   structure(job: SqliteIndexJob): SqliteSearchStructure {
     const table = searchTable(job);
-    return { types: [job.type], indexes: [job], objects: [['table', table], ['table', table + '_vocab'],
+    return { types: [job.type], indexes: [job], objects: [['table', table],
       ['table', table + '_docs'], ['index', table + '_docs_entity'],
       ...['data', 'idx', 'content', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const)],
-      reset: `DROP TABLE IF EXISTS ${table}_vocab; DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;` };
+      reset: `DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;` };
   }
   ensure(job: SqliteIndexJob): void {
     const table = searchTable(job), index = job.definition;
     if (index.stem && index.stem !== 'en') throw Object.assign(new Error('SQLite text indexes support English stemming only'), { code: 'UNSUPPORTED' });
     this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,
       tokenize='${index.stem ? 'porter ' : ''}unicode61 remove_diacritics 2');
-      CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},col);
       CREATE TABLE IF NOT EXISTS ${table}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS ${table}_docs_entity ON ${table}_docs(entity_id,field,element);`);
   }
@@ -119,16 +136,6 @@ export class SqliteText {
     const nativeLimit = recency && !nativeRecency ? undefined : limit;
     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
     if (!tokens.length) return [];
-    const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT DISTINCT term FROM ${table}_vocab WHERE col IN ('body','aliases')`).map(row => String(row.term));
-    const distance = (a: string, b: string): number => {
-      let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-      for (let i = 1; i <= a.length; i++) {
-        const row = [i];
-        for (let j = 1; j <= b.length; j++) row[j] = Math.min(row[j - 1]! + 1, prev[j]! + 1, prev[j - 1]! + Number(a[i - 1] !== b[j - 1]));
-        prev = row;
-      }
-      return prev[b.length]!;
-    };
     const clauses: Clause[] = [], groups: number[][] = [[]];
     for (const [position, rawToken] of tokens.entries()) {
       if (rawToken === 'OR') { if (groups.at(-1)!.length) groups.push([]); continue; }
@@ -138,9 +145,8 @@ export class SqliteText {
       if (colon >= 0) token = token.slice(colon + 1);
       const phrase = token.startsWith('"'), raw = token.replace(/^"|"$/g, ''), normalized = fold(raw);
       if (!normalized) continue;
-      const max = normalized.length >= 9 ? 2 : normalized.length >= 5 ? 1 : 0;
-      const expanded = !phrase && max ? vocabulary.filter(term => Math.abs(term.length - normalized.length) <= max && distance(term, normalized) <= max) : [];
       const prefix = options.prefix && !phrase && position === tokens.length - 1 ? '*' : '';
+      const expanded = !phrase && !prefix && options.fuzzy !== false ? typoAlternatives(normalized) : [];
       const words = prefix || phrase ? [raw] : [...new Set([raw, ...expanded])];
       const match = words.map(word => `(body : ${quote(word)}${prefix} OR aliases : ${quote(identifierParts(word).text || word)}${prefix})`).join(' OR ');
       const selected = (field === undefined ? fields : [field]).filter(f => !options.fields?.length || options.fields.includes(f))

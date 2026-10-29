@@ -209,16 +209,22 @@ The two compiler fixtures pass all seven cases with original budgets in a stage-
 which does not explain the hosted macOS failure. The existing focused macOS workflow is live at exact
 e452d67ae1: [40834826426](https://github.com/spankyed/apack/actions/runs/40834826426). Poll it, do not
 duplicate dispatch. See [compiler timeout evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/compiler-timeouts/README.md).
-Do not relax deadlines or rerun unchanged source into acceptance. Next implement the preregistered bounded
-typo checkpoint in the storage plan while preserving the independent compiler failure until diagnosed or
-qualified. No owned Linux container remains; no VM scratch process or file remains from the signal probe.
+Do not relax deadlines or rerun unchanged source into acceptance. The local bounded typo implementation
+now removes vocabulary enumeration and its unused virtual table, following the behavior/18 cases
+preregistered at 5e72c2dc14. It passes **509 SQLite / 289 native**, 93 focused cases including the unchanged
+shared corpus, five builds, types/API reports/lint/imports and two failing removal controls. Its growth
+case proves identical query work after unrelated vocabulary growth; no latency or memory acceptance is
+claimed. See [bounded typo evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bounded-typos/README.md).
+Next preregister/measure default-fuzzy growth costs while observing the exact focused macOS run; preserve
+the independent broad compiler failure until diagnosed or qualified. No owned Linux container remains;
+no VM scratch process or file remains from the signal probe.
 
-The runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/
+The published pre-typo runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/
 storage cases, lint/imports/API reports and native hydration/selected-plan controls. The fixed four-process
 indexed cohort improves recency highlights ~35 to ~27 ms; ID-only recency is mixed, and one slower indexed
 build/highlight trial remains retained. Hosted macOS arm64 and Linux x64 pass the built probe and 492 EARS /
 95 host cases; Windows passes the probe but needs the correction above. After resolving the exact gate,
-prioritize bounded fuzzy behavior, useful-result cases and native candidate-work proof before implementation;
+qualify the now-bounded typo behavior's cost and broader useful-result coverage;
 full performance, relevance/vector, app/operational/packaging acceptance remains open.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
@@ -334,15 +340,15 @@ plan guard now fails on the old full-scan join and passes indexed probes. See [s
 The preregistered materialized/indexed/indexed/materialized cohort completed with all answers passing:
 recency highlights ~27 versus ~35 ms; ID-only recency mixed, and one indexed trial has slower build and
 highlight tails. No sample was discarded or causal explanation inferred. See [selection cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/selection-cost/README.md).
-Next prioritize bounded fuzzy search: specify/review its behavior and useful-result cases
-before implementation, prove native candidate work avoids a full vocabulary scan, and evaluate relevance
-and growth costs. No current correctness or diagnostic result closes that requirement. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
+The bounded typo checkpoint above now specifies candidate behavior and removes the vocabulary scan with
+native-query/growth and negative proof. Default-fuzzy cost and broader relevance remain unqualified.
+All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
 possible diagnostic, not a chosen layout change. The ordinary recovery alias fixtures now use Windows junctions, matching the existing storage fixture;
 actual Windows recovery/platform qualification remains required (crash tests are POSIX-only).
 Recency and every phase 3–7 requirement remain required; none of these diagnostics is qualification. Preserve every failed cohort and all remaining
 phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
-100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
+100k heartbeat/FULL gate. Bounded-typo cost/usefulness, larger relevance/languages, vector qualification and the
 rest of phases 4–7 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
 `runtime-control.mjs`: same two-CPU quota/6 GiB, ABBA order, 500 fixed samples per path, first-150/remaining-350
 strata, cgroup counters/GC/CPU profiles and no discarded cold samples. This is diagnostic only; it cannot
