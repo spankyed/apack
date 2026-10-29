@@ -122,3 +122,8 @@ jobs:
           path: |
             ${{ runner.temp }}/strict-chain.log
             node_modules/.cache/apack-chain/runs/
+
+  sqlite-candidate:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ears-sqlite.yml

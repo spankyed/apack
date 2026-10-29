@@ -199,8 +199,12 @@ adds indexed timestamp selection after finite native recency and sequence rankin
 native hydration/selected-plan controls. Newer local work is not yet published. Its preregistered
 materialized/indexed/indexed/materialized cohort completed all four trials: recency highlights ~27 versus
 ~35 ms, ID-only recency mixed (30.1 / 25.6 versus 27.2 / 27.5 ms), with one noisier indexed build/highlight
-trial retained. No owned Linux container remains. Publish this converged checkpoint and dispatch one new
-exact gate; no latency/resource acceptance is claimed. Further canonical advancement requires that new exact source
+trial retained. No owned Linux container remains. The strict workflow now includes an explicit SQLite candidate lane for macOS arm64, Windows x64 and
+Linux x64. Its commands/probe pass locally: five builds, 492 SQLite cases, 95 host cases, syntax/YAML/lint,
+actual built FTS/recency/regex/vec/read-only backup and a real 289-case native-control report rejected by
+the strengthened selected-suite verifier. The initial weak guard and subsequent lint failure are retained.
+See [platform-lane evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-lane/README.md).
+Hosted target-platform execution is not yet claimed. Publish and dispatch one new exact strict gate; no latency/resource acceptance is claimed. Further canonical advancement requires that new exact source
 and successful gate. Next prioritize bounded fuzzy work as specified below; full goal acceptance remains open.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit

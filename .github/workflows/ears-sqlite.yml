@@ -1,0 +1,74 @@
+name: SQLite candidate
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ears-sqlite-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sqlite:
+    name: sqlite (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            arch: arm64
+          - os: windows-latest
+            arch: x64
+          - os: ubuntu-24.04
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    # Cold native dependency setup plus the functional suites; individual test deadlines remain unchanged.
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+      EARS_EVALUATION_BACKEND: sqlite
+      EARS_PLATFORM_ARCH: ${{ matrix.arch }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - name: Prepare evidence
+        run: node -e "require('node:fs').mkdirSync('.temp/sqlite-platform',{recursive:true})"
+      - uses: ./.github/actions/elmdb
+      - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+      - name: Build matching packages
+        run: npm run packages:build
+      - name: Built SQLite runtime and read-only backup
+        run: node .github/scripts/ears-sqlite-platform.mjs probe 2>&1 | tee .temp/sqlite-platform/runtime.log
+      - name: SQLite-selected EARS contracts
+        run: >-
+          npm test -w @apackdev/ears -- --reporter=default --reporter=json
+          --outputFile=../../.temp/sqlite-platform/ears.json 2>&1 | tee .temp/sqlite-platform/ears.log
+      - name: Host recovery and storage contracts
+        run: >-
+          npm test -w @apackdev/host -- tests/backup/recovery.spec.ts tests/backup/recovery-crash.spec.ts
+          tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/database/storage.spec.ts
+          tests/database/open-app-database.spec.ts tests/database/write-lock.spec.ts
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/host.json
+          2>&1 | tee .temp/sqlite-platform/host.log
+      - name: Verify candidate cases actually ran
+        run: node .github/scripts/ears-sqlite-platform.mjs verify
+      - name: Retain SQLite platform evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
+          path: .temp/sqlite-platform/
+          include-hidden-files: true
+          if-no-files-found: warn
