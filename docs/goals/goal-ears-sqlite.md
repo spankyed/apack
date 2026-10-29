@@ -294,20 +294,26 @@ maintenance/distribution decision, then qualify the complete fresh and integrate
 No more primitive result alone can establish the required final execution design.
 Internal generation storage, background training and a durable shared-scheduler model queue
 now exist in `vector-index.ts`, `vector-training.ts` and `vector-models.ts`.
-Runtime `bf9738ecf7` passes 622 EARS, 135 host/storage and fifteen native lifecycle cases,
+Runtime `fa0362f0af` passes 623 EARS, 135 host/storage and sixteen native lifecycle cases,
 builds/types/API/static checks in disposable Linux. [Scheduler evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-scheduler/README.md)
 retains exact sources and checks. Attempts are committed before read-only workers launch;
 completed models remain available until the result transaction commits. Restart recovery is
 explicit under the managed exclusive writer. Projection and retirement use bounded batches,
 and readiness shares the existing scheduler without advancing logical commit identity.
+Ready attached models now feed actual EARS near/hybrid vector execution with bounded
+chunk-to-owner expansion and canonical exact reranking; unready/insufficient native owners
+retain the existing fallback. A 4,608-vector EARS fixture covers native invocation and unit
+visibility, not real-corpus recall/latency acceptance.
 Normal app composition does not activate this service. Automatic eligibility admission,
 incumbent-preserving physical model refresh, host drain-before-replacement/deletion, final
-EARS owner aggregation and complete audit/rebuild/restore integration remain required.
+multi-chunk/filter/tie/freshness qualification and complete audit/rebuild/restore integration remain required.
 The earlier [platform run 40960736926](https://github.com/spankyed/apack/actions/runs/40960736926)
 on `4575088eed` passed Linux/macOS; Windows passed its 616 EARS cases, including all ten
 then-existing native cases, but failed later because Rust selected Git's `link.exe`.
 The producer now uses PowerShell on Windows and checks linker selection. The workflow also
-requires all five durable-model cases. Those changes still require a new exact-tip platform run.
+requires all five durable-model cases. [Run 40967406799](https://github.com/spankyed/apack/actions/runs/40967406799) is live on
+`88b05e0bfa` after static platform-shell corrections; it covers the scheduler checkpoint,
+not the newer EARS routing case. Final exact-tip platform qualification remains required.
 Normal native distribution/fork selection and all frozen fresh/app/resource/full Strict gates
 remain required. The active integrated vector path still fails broad responsiveness.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;

@@ -32,3 +32,22 @@ audit/rebuild/restore integration or real-corpus responsiveness/recall acceptanc
 vec1 is used here; no benchmark membership patch or private corpus/model is checked in.
 The production path remains elmdb and the current integrated SQLite vector query still
 misses broad responsiveness. Full final Strict/platform/app acceptance remains open.
+
+## Actual EARS candidate routing
+
+Runtime `fa0362f0af` passes 623 EARS, 135 affected host/storage and sixteen focused
+native cases, builds/types/API/static checks and all four mutation controls. The
+`query-routing/` receipts retain exact source/provenance/results. Large eligible queries
+now ask the attached ready model owner for bounded native candidates, expand repeated
+chunk owners, and rerank every selected owner's current canonical chunks with stable
+sequence ties. Eligibility is reapplied during reranking. Small scopes and large K
+remain exact; an absent/unready owner or insufficient distinct native owners retains
+the ordinary binary-owner path. Normal app composition still does not activate models.
+
+The new 4,608-vector EARS test proves actual native invocation, current top-hit scoring,
+scoped and large-K fallback, and own-unit trash/rollback visibility. It is a functional
+fixture, not representative recall, multi-chunk quality, latency or heartbeat acceptance.
+Further multi-chunk/tie/filter/freshness qualification, physical model refresh and native
+packaging remain required. The host import path inspected here replaces data logically
+inside the open connection; it does not physically swap that handle's files. Future
+physical replacement/deletion owners still must await worker drain.

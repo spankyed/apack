@@ -443,8 +443,12 @@ Chunk triggers capture ordinary foreground changes, including writes behind the 
 backfill cursor. Trash changes update that owner's native rows in the same transaction.
 Canonical bytes stay in `embedding_values`; native rows are derived. Readiness publishes
 after backfill, without a logical data commit. A nonempty group cannot be dropped through
-the retirement operation. Candidate queries apply owner scopes before K but do not yet
-own final EARS owner aggregation/reranking.
+the retirement operation. Candidate queries apply owner scopes before K. When a model owner is attached and ready,
+EARS expands its chunk budget from 256 to at most 4096 until at least 256 distinct owners
+are available, then reranks all current canonical chunks for those owners with stable
+entity-sequence ties. Too few native owners retain the ordinary owner-level fallback.
+Small scopes, large K and unsupported dimensions remain exact. This is internal candidate
+routing, not a performance/recall acceptance or automatic activation decision.
 
 The [lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-generation-admission/README.md)
 covers actual EARS mutation/rollback, bounded admission, a read-only compacted backup
@@ -460,9 +464,14 @@ retains a real stale-snapshot failure, its fix, negative controls and exact nati
 
 Projection backfill first pages IDs using `chunk_native_admission`, then loads only that page's
 vectors. Missing cursor indexes on populated stores require explicit offline preparation.
-The remaining integration must persist training attempts/models, own scheduler/restart and
-incumbent-preserving refresh, connect readiness/watch and retirement/rebuild/restore/audit,
-and deliver normal native loading/distribution. The new platform gate requires the native
+The shared scheduler now persists attempt/model states, claims attempts before worker launch,
+acknowledges responses only after result COMMIT, resumes committed work after reopen and
+joins native readiness/watch notification and bounded retirement. Explicit restart recovery
+requires the managed exclusive writer. [Scheduler evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-scheduler/README.md)
+retains rollback, stale-attempt and acknowledgement mutation controls.
+The remaining integration must provide automatic eligibility admission, incumbent-preserving
+physical model refresh, host drain before file replacement/deletion, complete rebuild/restore/
+audit ownership, and normal native loading/distribution. The new platform gate requires the native
 lifecycle cases; neither it nor these local cases establish performance or final adoption.
 Keep the complete goal and frozen fresh validation gates.
 
