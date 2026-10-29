@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import NativeDatabase from 'better-sqlite3';
 import { createEarsEngine, type EngineSchema } from '../../src/index.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
@@ -146,15 +146,48 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
   it('detects stale list membership independently of the copied acceleration table', async () => {
     const { db, e } = seed();
     e.write('Row-one').set('tags', ['needle', 'needle', null, false, 0, -0, 3, { nested: true }]);
+    const persisted = e.getAttr('Row-one', 'tags');
     expect((await auditSqliteDatabase(db)).ok).toBe(true);
     const before = e.lastCommit();
     expect(db.run("DELETE FROM value_members WHERE entity_id=? AND field='tags' AND kind='text'", ['Row-one']).changes).toBe(1);
     const report = await auditSqliteDatabase(db);
     expect(report.ok).toBe(false);
     expect(report.issues).toContain('Derived list membership differs from primary arrays');
-    expect(e.getAttr('Row-one', 'tags')).toEqual(['needle', 'needle', null, false, 0, -0, 3, { nested: true }]);
+    expect(e.getAttr('Row-one', 'tags')).toEqual(persisted);
     expect(e.lastCommit()).toBe(before);
     expect(db.get("SELECT 1 FROM value_members WHERE entity_id=? AND field='tags' AND kind='text'", ['Row-one'])).toBeUndefined();
+  });
+
+  it('removes failed audit scratch and releases write ownership after a snapshot failure', async () => {
+    const { db, e } = seed(), failure = new Error('audit snapshot IO');
+    let scratch = '';
+    const fault = vi.spyOn(db, 'backup').mockImplementation(path => { scratch = dirname(path); throw failure; });
+    await expect(auditSqliteDatabase(db)).rejects.toBe(failure); fault.mockRestore();
+    expect(scratch).not.toBe(''); expect(existsSync(scratch)).toBe(false);
+    e.create('Other', { id: 'Other-after-audit' });
+    expect(e.query('Other').count()).toBe(2);
+  });
+
+  it('preserves the audit failure together with snapshot close failure and still removes scratch', async () => {
+    const { db, e } = seed(), primary = new Error('private second snapshot failed'), cleanup = new Error('snapshot close failed');
+    const backup = SqliteDatabase.prototype.backup, close = SqliteDatabase.prototype.close;
+    let failed = false, scratch = '';
+    const copying = vi.spyOn(SqliteDatabase.prototype, 'backup').mockImplementation(function(path) {
+      if (this !== db) { failed = true; scratch = dirname(path); throw primary; }
+      return backup.call(this, path);
+    });
+    const closing = vi.spyOn(SqliteDatabase.prototype, 'close').mockImplementation(function() {
+      close.call(this); if (failed && this !== db) throw cleanup;
+    });
+    let error: unknown;
+    try { await auditSqliteDatabase(db); } catch (failure) { error = failure; }
+    copying.mockRestore(); closing.mockRestore();
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toEqual([primary, cleanup]);
+    expect((error as AggregateError).cause).toBe(primary);
+    expect(scratch).not.toBe(''); expect(existsSync(scratch)).toBe(false);
+    expect(e.query('Row').count()).toBe(2);
+    e.create('Other', { id: 'Other-after-cleanup' });
   });
 
   it('refuses rebuild on read-only, open-unit and stopped owners without changing the catalog', () => {
