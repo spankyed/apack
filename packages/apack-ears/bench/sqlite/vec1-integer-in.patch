@@ -1,0 +1,45 @@
+--- vec1.c
++++ vec1.c
+@@ -7991,6 +7991,42 @@
+       if( op==0 ){
+         /* No entries will match. Set the "filtered-out" bit for all rows. */
+         memset(pBitmask->a, 0xFF, pBitmask->n);
++      }else if( op==VEC1_OP_IN && rval>=8 ){
++        int lo = aRval[0], hi = aRval[0];
++        i64 span;
++        int ii;
++        for(ii=1; ii<rval; ii++){
++          lo = MIN(lo, aRval[ii]);
++          hi = MAX(hi, aRval[ii]);
++        }
++        span = (i64)hi - (i64)lo + 1;
++        if( span<=1048576 ){
++          u8 *aMatch = (u8*)vec1MallocZero((span+7)/8);
++          if( aMatch==0 ){
++            rc = SQLITE_NOMEM;
++          }else{
++            for(ii=0; ii<rval; ii++){
++              i64 bit = (i64)aRval[ii] - lo;
++              aMatch[bit/8] |= (1 << (bit%8));
++            }
++            for(ii=0; ii<nEntry; ii++){
++              const u8 *a = &pMeta->a[VEC1_META_SZHDR];
++              int v = szInt==1 ? (int)a[ii]
++                  : (int)vec1GetU32(&a[ii*sizeof_u32]);
++              i64 bit = (i64)v - lo;
++              if( bit<0 || bit>=span || !(aMatch[bit/8] & (1 << (bit%8))) ){
++                pBitmask->a[ii/8] |= (1 << (ii%8));
++              }
++            }
++            sqlite3_free(aMatch);
++          }
++        }else if( szInt==4 ){
++          const int *a = (const int*)&pMeta->a[VEC1_META_SZHDR];
++          vec1MetaFilterScan4ByteArray(a, pBitmask->a, nEntry, rval, aRval, op);
++        }else{
++          const u8 *a = (const u8*)&pMeta->a[VEC1_META_SZHDR];
++          vec1MetaFilterScan1ByteArray(a, pBitmask->a, nEntry, rval, aRval, op);
++        }
+       }else if( szInt==4 ){
+         const int *a = (const int*)&pMeta->a[VEC1_META_SZHDR];
+         vec1MetaFilterScan4ByteArray(a, pBitmask->a, nEntry, rval, aRval, op);

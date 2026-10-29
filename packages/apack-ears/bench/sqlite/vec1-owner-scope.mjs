@@ -31,7 +31,10 @@ const report = {protocol:'ears-vec1-owner-scope/1',source:process.env.EARS_TEST_
 const save = () => writeFileSync(output,JSON.stringify(report,null,2)+'\n');
 const file = '/metrics/owner-scope.sqlite3', bytes = 1536*4;
 assert(!existsSync(file));
-const id = ordinal => '00000000-0000-4000-8000-'+String(ordinal).padStart(12,'0');
+const ownerStorage=process.env.EARS_VEC1_OWNER_STORAGE ?? 'uuid';
+assert(['uuid','integer'].includes(ownerStorage));
+report.ownerStorage=ownerStorage;
+const id = ordinal => ownerStorage==='integer' ? BigInt(ordinal+1) : '00000000-0000-4000-8000-'+String(ordinal).padStart(12,'0');
 let db;
 try {
   db = new Database(file); db.loadExtension(extension);
@@ -39,7 +42,7 @@ try {
   report.loadedNative = loadedNativeBindings([extension]);
   report.sqlite = db.prepare('SELECT sqlite_version() v').get().v;
   report.version = db.prepare('SELECT vec1_info() v').get().v;
-  db.exec('CREATE TABLE owners(id TEXT PRIMARY KEY,scope INTEGER NOT NULL,active INTEGER NOT NULL); CREATE INDEX eligible ON owners(active,scope,id)');
+  db.exec(`CREATE TABLE owners(id ${ownerStorage==='integer'?'INTEGER':'TEXT'} PRIMARY KEY,scope INTEGER NOT NULL,active INTEGER NOT NULL); CREATE INDEX eligible ON owners(active,scope,id)`);
   db.exec('CREATE VIRTUAL TABLE corpus USING vec1(v,scope,active,owner)');
   db.prepare("INSERT INTO corpus(cmd,arg) VALUES('rebuild',?)").run(model);
   const owner = db.prepare('INSERT INTO owners VALUES (?,?,?)');
