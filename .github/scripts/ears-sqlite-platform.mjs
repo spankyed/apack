@@ -49,7 +49,7 @@ if (mode === 'verify') {
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.extension)).digest('hex'),nativeGeneration.extensionSha256);
   assert.equal(result.nativeGenerationCasesPassed,5,'All native generation lifecycle cases must execute');
   assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
-  assert.equal(result.nativeModelCasesPassed,5,'All durable native model admission cases must execute');
+  assert.equal(result.nativeModelCasesPassed,6,'All durable native model admission cases must execute');
 
   assert(result.maintenanceCasesPassed >= 9 && cli.numFailedTests === 0,
     'All nine actual offline maintenance command cases must execute and pass');

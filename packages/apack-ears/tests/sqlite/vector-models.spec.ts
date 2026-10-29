@@ -21,8 +21,12 @@ function own(path:string,fresh=false) {
   const write=<T>(fn:()=>T):T=>{db.sql.exec('BEGIN IMMEDIATE');try{const result=fn();db.commitWrite();return result;}catch(error){if(db.sql.inTransaction)db.sql.exec('ROLLBACK');throw error;}};
   const seed=(count:number)=>{
     e.transact(()=>{for(let i=0;i<count;i++)e.create('Row',{title:String(i)});});
-    const pending=e.pendingEmbeddings('Row',{limit:1000});
-    e.embed(pending.chunks.map((c,i)=>({...c,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((i+1)*(j+1)*1.71))})));
+    let offset=0;
+    for(;;) {
+      const pending=e.pendingEmbeddings('Row',{limit:1000});if(!pending.chunks.length)break;
+      e.embed(pending.chunks.map((c,i)=>({...c,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((offset+i+1)*(j+1)*1.71))})));
+      offset+=pending.chunks.length;
+    }
   };
   return {db,models,e,job,write,seed};
 }
@@ -47,6 +51,27 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
       expect(db.get('SELECT count(*) n FROM embedding_values')!.n).toBe(512);
       expect(()=>models.index.candidates(job.generation,Buffer.from(Float32Array.from(Array(128).fill(1)).buffer),1)).toThrow(expect.objectContaining({code:'SCHEMA_CHANGED'}));
     }finally{off();}
+  });
+
+  it('routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility',async()=>{
+    const {db,e,models,job,write}=fixture(4608);
+    const vector=Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71));
+    const native=vi.spyOn(models.index,'candidates');
+    const original=e.query('Row').near(vector,{k:1}).ids();expect(native).not.toHaveBeenCalled();
+    write(()=>models.enqueue(job));await db.indexesReady();
+    const hits=e.query('Row').near(vector,{k:20}).hits();
+    expect(native).toHaveBeenCalled();expect(hits).toHaveLength(20);expect(hits[0]!.id).toBe(original[0]);
+    expect(hits[0]!.score).toBeCloseTo(1);
+    native.mockClear();
+    expect(e.query.ids(original[0]!).near(vector,{k:1}).ids()).toEqual(original);
+    expect(native).not.toHaveBeenCalled();
+    e.query('Row').near(vector,{k:33}).ids();expect(native).not.toHaveBeenCalled();
+    expect(()=>e.transact(()=>{
+      e.write(original[0]!).trash();expect(e.query('Row').near(vector,{k:1}).ids()).not.toContain(original[0]);
+      throw Error('rollback native query');
+    })).toThrow('rollback native query');
+    expect(e.query('Row').near(vector,{k:1}).ids()).toEqual(original);
+    expect(db.get('SELECT count(*) n FROM embedding_values')!.n).toBe(4608);
   });
 
   it('retains a completed model when its result transaction rolls back before acknowledgement',async()=>{

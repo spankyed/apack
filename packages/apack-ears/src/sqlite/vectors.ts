@@ -54,6 +54,17 @@ export class SqliteVectors {
     const count = Number(this.db.get(`SELECT count(*) n FROM (SELECT 1 FROM chunks c JOIN entities e ON e.id=c.entity_id
       WHERE ${eligible} LIMIT 4097)`, bindings)!.n);
     if (count <= 4096) return exact();
+    const owners=this.db.indexBuilds.nativeVectorOwners(generation,query,scope,exclude);
+    if(owners) {
+      const rows=this.db.all(`SELECT c.entity_id id,
+        1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score
+        FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
+        LEFT JOIN embedding_search p ON p.embedding_id=v.id
+        WHERE c.entity_id IN (SELECT id FROM entities WHERE seq IN (SELECT value FROM json_each(?)))
+          AND ${eligible} GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`,
+        [query,JSON.stringify(owners),...bindings,k]);
+      return rows.length<k?exact():rows;
+    }
     // Candidate owners already passed eligibility in this read snapshot. Probe only their current chunks.
     const rows = this.db.all(`WITH candidates AS MATERIALIZED (
       SELECT c.entity_id FROM chunks c JOIN embedding_search p ON p.embedding_id=c.embedding_id
