@@ -217,14 +217,18 @@ Other 10k/100k trials remain unrun. These local benchmarks are not in published 
 See [vector evidence and next diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md).
 High-dimensional execution-strategy acceptance and real-corpus resource qualification remain open.
 
-Next checkpoint: poll the exact live [focused macOS acceptance 40851475766](https://github.com/spankyed/apack/actions/runs/40851475766)
-on published 645905f342, using the existing App acceptance workflow's `bundled-ui` selector. Retain Playwright failure traces and console errors while preserving
-the original assertion/deadlines. The Linux reproduction completed its builds and launched Electron,
-but failed main-window readiness before the test body; it supplies no editor behavior proof.
-Both setup attempts are retained in [evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bundled-editor/README.md).
-Establish the cause/baseline boundary, correct verified candidate issues, then dispatch one exact strict
-gate on converged source. After gate triage, continue all remaining phase 3–7 requirements below;
-no scope is deferred by this checkpoint.
+Focused macOS [40851475766](https://github.com/spankyed/apack/actions/runs/40851475766) completed
+SUCCESS at published 645905f342: one original bundled-editor case ran and passed after complete builds.
+This does not establish the prior broad failure's cause. No UI product change or deadline relaxation
+was made. Its output is retained in [editor evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bundled-editor/README.md).
+The next publication adds the local vector evidence, file-backed console diagnostics and broad-fixture
+failure trace configuration, then needs one exact full strict gate to validate the Windows correction
+and broad composition. Keep canonical at 60d until that exact gate succeeds.
+
+Next vector checkpoint: execute the preregistered 10k actual-plan/scalar/vec0 counterfactual from
+[vector evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-shape/README.md)
+before selecting an indexing change. Full phases 3–7 remain required, including real embeddings and
+representative app budgets; no scope is deferred by the focused success or synthetic smoke.
 
 The preceding published gate source **a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**
 contains runtime f426f938f8 and the explicit three-platform SQLite lane. Its single exact

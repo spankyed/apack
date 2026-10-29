@@ -1,6 +1,7 @@
 // A pack that bundles its own @apackdev/ui (apack.json fe.bundleUi): its editor shares the host's
 // ProseMirror and tiptap core. Run via `npm run test:external-pack` from the repo root.
 import { test, expect } from '@apackdev/testing';
+import { writeFile } from 'node:fs/promises';
 
 test('renders and edits with its bundled @apackdev/ui editor', async ({ appPage, app }, testInfo) => {
   const errors: string[] = [];
@@ -18,6 +19,8 @@ test('renders and edits with its bundled @apackdev/ui editor', async ({ appPage,
     // Two ProseMirror copies fail here ("Adding different instances of a keyed surface", instanceof checks)
     expect(errors).toEqual([]);
   } finally {
-    await testInfo.attach('bundled-editor-console-errors', { body: JSON.stringify(errors), contentType: 'application/json' });
+    const path = testInfo.outputPath('console-errors.json');
+    await writeFile(path, JSON.stringify(errors));
+    await testInfo.attach('bundled-editor-console-errors', { path, contentType: 'application/json' });
   }
 });
