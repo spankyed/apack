@@ -42,7 +42,8 @@ function open(file, d) {
 function operations(db) {
   const writeCosts = { rawMs: 0, quantizeMs: 0, derivedMs: 0, rows: 0 };
   const rawPut = db.prepare('INSERT INTO raw VALUES(?,?,?,?,?)'), quantPut = db.prepare('INSERT INTO quantized(rowid,embedding,live) VALUES(?,vec_int8(?),?)');
-  const rawUpdate = db.prepare('UPDATE raw SET embedding=? WHERE id=?'), quantUpdate = db.prepare('UPDATE quantized SET embedding=vec_int8(?) WHERE rowid=?');
+  const rawUpdate = db.prepare('UPDATE raw SET embedding=? WHERE id=?'), liveOf = db.prepare('SELECT live FROM raw WHERE id=?'),
+    quantDelete = db.prepare('DELETE FROM quantized WHERE rowid=?');
   const scope = path => path === 'all' ? '' : path === 'tenPercent' ? ' AND in_ten=1' : ' AND bucket=0';
   const lookup = Object.fromEntries(paths.slice(1).map(path => [path, db.prepare('SELECT id FROM raw WHERE live=1' + scope(path))]));
   const knn = db.prepare('SELECT rowid,distance FROM quantized WHERE embedding MATCH vec_int8(?) AND k=? AND live=1 ORDER BY distance');
@@ -58,7 +59,8 @@ function operations(db) {
     },
     update(id, vector) {
       const a = performance.now(); rawUpdate.run(bytes(vector), id); const b = performance.now(), encoded = quantize(vector), c = performance.now();
-      quantUpdate.run(encoded, BigInt(id)); writeCosts.rawMs += b - a; writeCosts.quantizeMs += c - b; writeCosts.derivedMs += performance.now() - c; writeCosts.rows++;
+      // Direct int8 UPDATE fails in the pinned extension; both row replacement statements share the caller's transaction.
+      quantDelete.run(BigInt(id)); quantPut.run(BigInt(id), encoded, BigInt(liveOf.get(id).live)); writeCosts.rawMs += b - a; writeCosts.quantizeMs += c - b; writeCosts.derivedMs += performance.now() - c; writeCosts.rows++;
     },
     native(vector, k = 1) { return knn.all(quantize(vector), BigInt(k)); },
     search(path, vector, k = 10) {
@@ -81,7 +83,8 @@ function checkTransactions() {
     db.exec('BEGIN'); op.update(1, new Float32Array([-1, 0, 0])); assert.equal(top(), 2);
     db.exec('SAVEPOINT nested'); db.exec('DELETE FROM raw WHERE id=2; DELETE FROM quantized WHERE rowid=2'); assert.equal(top(), 3);
     db.exec('ROLLBACK TO nested; RELEASE nested'); assert.equal(top(), 2); db.exec('ROLLBACK'); assert.equal(top(), 1);
-    db.exec('BEGIN'); db.exec('UPDATE raw SET live=0 WHERE id=1; UPDATE quantized SET live=0 WHERE rowid=1'); assert.equal(top(), 2);
+    db.exec('BEGIN'); db.exec('UPDATE raw SET live=0 WHERE id=1; DELETE FROM quantized WHERE rowid=1');
+    db.prepare('INSERT INTO quantized(rowid,embedding,live) VALUES(1,vec_int8(?),0)').run(quantize(q)); assert.equal(top(), 2);
     db.exec('ROLLBACK'); assert.equal(top(), 1);
     writer = open(file); const other = operations(writer); db.exec('BEGIN'); assert.equal(top(), 1);
     writer.transaction(() => other.update(1, new Float32Array([-1, 0, 0])))(); assert.equal(top(), 1);
