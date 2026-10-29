@@ -1,0 +1,39 @@
+# Real-model vector strategy comparison
+
+This is a native execution decision gate, followed by integration qualification, not an adoption gate.
+Freeze this protocol before collecting strategy timings. Keep failing samples and configurations.
+
+Use the sealed private Qdrant projection described in `acquire-real-vectors.py`: 99,900
+1536-dimensional corpus vectors and 100 held-out queries. Do not redistribute payloads or source IDs.
+The publisher's model label is not independent model provenance. No external model calls are needed.
+
+`real-vector-oracle.py` independently computes Float64 cosine over the canonical stored Float32 values.
+It imports neither SQLite nor the candidate extensions. Compare prefixes of 1,000, 10,000 and 99,900
+rows. Eligibility is corpus ordinal modulo 100 below 100, 10 or 1 respectively, with rows whose
+ordinal modulo 97 is zero treated as trash. This excludes trash before limiting results.
+Tie order is ascending corpus ordinal. Return up to ten eligible owners.
+The update phase replaces every row whose ordinal modulo 100 equals 7 with the original corpus
+vector at `(ordinal + 31337) % 99900`; queries remain held out. Smaller cohorts deliberately include
+updates sourced from outside their prefix. This is a vector-only fixture, one chunk per owner.
+
+Compare vec1 flat exact and trained IVF binary quantization against this truth, preserving original
+Float32 bytes for exact reranking. Fix IVF at 64 buckets and 16 probes, separately retrieving 256
+and 1,024 candidates before exact reranking. Train with one thread on at most 20,000 evenly spaced
+corpus rows, never held-out queries. Record training, initial load, update, database/model sizes and
+query costs separately. Do not tune on these queries after seeing results. Report unsupported or
+insufficient-training configurations explicitly. Retain raw query samples, candidate counts and
+answers for every phase/scope/cohort. A flat baseline miss is a correctness failure to investigate.
+
+One capped disposable Linux container at a time: two CPUs, 6 GiB RAM, no swap; read-only source,
+corpus and dependency mounts, private result/database paths. Record tool/source/native hashes.
+Use one untimed pass followed by three timed passes over all 100 queries, including exact reranking
+and eligibility handling. Record first pass separately, latency p50/p95/p99 and an independently
+scheduled 1 ms main-thread heartbeat. Scheduling/GC stalls remain in the samples.
+
+Mean recall@10 must be at least 0.95 for each scope/phase/cohort, with per-query distribution retained.
+Diagnostic query p95 limits remain 100 ms at 10k and 200 ms at 100k; main-thread heartbeat p99 remains
+16 ms. These diagnostic limits do not replace stricter goal requirements or app responsiveness gates.
+Primitive success still requires EARS integration and native execution, transactional own-write and
+savepoint visibility, filtering before K, multiple chunks/owner aggregation, model freshness,
+large K, numerical extremes, bounded background admission and update latency, real application
+workloads and every supported platform. Failure does not authorize weakening those requirements.
