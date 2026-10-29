@@ -194,8 +194,12 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Current functional runtime is
-**a2de2944a1**, with its converged typo-cost evidence below; publish its clean descendant through the
-existing draft only. The preceding published gate source **a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**
+**a2de2944a1**, published with its converged typo-cost evidence at
+**b25a985c8cebdf898b86cb915bca2600ba03782a** on integration/remote. Its single exact
+[Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212) is confirmed live;
+Linux's candidate lane has succeeded, other jobs remain in progress. Poll this exact handle without
+duplicate dispatches and keep canonical/helper BASE at green 60d until the complete exact gate succeeds.
+The preceding published gate source **a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**
 contains runtime f426f938f8 and the explicit three-platform SQLite lane. Its single exact
 [strict run 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) is
 terminal FAILURE: seven jobs pass; Windows has three portability failures, and integration-2 has two
@@ -232,11 +236,17 @@ six-process [presence-cost cohort](../references/evidence/ears-sqlite-implementa
 completed all sizes and 2340 expected-answer requests: 100k exact/typo medians ~3–3.5 ms versus scan
 ~138–144, broad ~164–166 versus ~294–299 (rejected unpruned ~1280). Small profiles and maximum-token
 cases still regress against the original scan. Observed process memory falls but is not bounded; full
-performance/relevance/app acceptance remains open. Next publish the converged implementation/evidence
-through the existing draft and run one exact Strict chain with the explicit three-platform lane. The
+performance/relevance/app acceptance remains open. The new exact Strict chain above includes the explicit
+three-platform lane and must qualify the corrected Windows paths as well as the full repository. The
 independent broad compiler failure remains retained; its focused macOS/Linux cases pass, cause unisolated.
 Canonical must stay at exact green 60d until the new exact gate succeeds. No owned Linux cohort remains;
 no VM scratch process or file remains from the signal probe.
+
+While the gate runs, prepare phase 4's real/high-dimensional vector qualification and phase 3's remaining
+admission diagnosis without advancing the remote/integration input. [Real-vector reconnaissance](../references/evidence/ears-sqlite-implementation-2026-10-28/real-vector-selection/README.md)
+identifies a public precomputed 1536-dimensional fixture matching the shipped embedding model, including
+the correct vector column and pinned metadata revision. It is metadata only: no fixture payload or API
+call, no approved real-vector/recall result, and no inference-key access. Full phase 3–7 scope stays required.
 
 The published pre-typo runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/
 storage cases, lint/imports/API reports and native hydration/selected-plan controls. The fixed four-process
