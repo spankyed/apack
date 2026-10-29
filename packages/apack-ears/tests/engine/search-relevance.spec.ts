@@ -9,7 +9,7 @@ interface RelevanceCase {
   required: string[]; forbidden: string[]; first?: string;
   highlights?: { id: string; field: string; ranges: number[][] };
 }
-const fixture: { documents: Array<{ id: string; name: string; body: unknown; tags: unknown[]; at?: number }>; cases: RelevanceCase[] } =
+const fixture: { documents: Array<{ id: `${string}-${string}`; name: string; body: unknown; tags: unknown[]; at?: number }>; cases: RelevanceCase[] } =
   JSON.parse(readFileSync(new URL('../fixtures/search-relevance.json', import.meta.url), 'utf8'));
 let e: EarsEngine;
 beforeAll(() => {
