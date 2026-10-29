@@ -197,8 +197,8 @@ No master merge, adoption, local compiler or native build occurred.
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, clean at local runtime checkpoint **0f57770e1f**
 before the following evidence update. Native recency passes **491 SQLite / 289 native**, and its complete
 four-process cost evidence is retained below; these newer local changes are not yet published; the exact CI source remains 60d4283f68. Run 40819583704
-now has producers SUCCESS and all five consumers live. No owned Linux container remains. Next implement
-the native recency checkpoint specified below; do not restart that CI or promote a different source.
+now has producers SUCCESS and all five consumers live. No owned Linux container remains. Next inspect the changed
+native recency execution plan specified below; do not restart that CI or promote a different source.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
 `db recover`, resumable offline incumbent restoration, forensic retention and managed-reader exclusion.
@@ -305,8 +305,8 @@ The preregistered four-process cost cohort completed: recency ~28 versus ~46 ms,
 ~35 versus ~80 ms. Other query/write costs and main-file bytes remain close; sampled RSS is lower but
 unbounded. All expected answers pass; a post-timing premature-prefix control fails with the wrong winner.
 See [recency cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-cost/README.md).
-Next capture the changed native timestamp/ranking plan, including recency highlights, before choosing
-another correction. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
+Next run the preregistered changed-source `text-plan.mjs` diagnosis (one 10k profile, ten samples/path,
+including recency highlights and actual FTS VDBE programs) before choosing another correction. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
 possible diagnostic, not a chosen layout change. Before Windows qualification, switch the two new ordinary
 recovery alias fixture links to Windows junctions as the existing storage fixture does (crash tests are POSIX-only).
 Recency and every phase 3–7 requirement remain required; none of these diagnostics is qualification. Preserve every failed cohort and all remaining

@@ -290,3 +290,12 @@ for both highlighted modes. Recency uses the existing createdAt timestamps and o
 Retain every sample, answer, native hash/entrypoint, bytes/WAL/RSS, heartbeat and binding counts. Stop on
 setup or correctness failure; no discarded cold samples or automatic retry. This measures the changed
 native ranking path, not acceptance of phase 3's failed 100k/FULL gate, fuzzy, real corpus or app budgets.
+
+### Native recency execution-plan diagnosis
+
+After the completed native-recency cost cohort, run one changed-source 10k `text-plan.mjs` profile, same
+resources and 180-second process bound. Preserve ten consecutive samples for every preceding path and
+add ten recency-highlight reads. Capture actual native plans plus VDBE programs for FTS statements after
+timing, with binding/total time, row counts, answers, source/native hashes and normal built entries. No
+retry or discarded samples. This diagnoses timestamp selection, projection and ranking work; it does not
+rerun qualification or establish a cause before the actual plans are inspected.

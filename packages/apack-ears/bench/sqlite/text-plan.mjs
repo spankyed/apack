@@ -40,24 +40,26 @@ try {
   }
   const now = Date.now();
   for (const [name, query, extra] of [['point', 'ticket42'], ['crossField', 'ticket42 ready'], ['medium', 'group7 ready'],
-    ['broad', 'storage'], ['highlights', 'storage'], ['recency', 'storage', { recency: { field: 'createdAt', halfLife: 3600000, now } }], ['unlimited', 'storage']]) {
+    ['broad', 'storage'], ['highlights', 'storage'], ['recency', 'storage', { recency: { field: 'createdAt', halfLife: 3600000, now } }], ['recencyHighlights', 'storage', { recency: { field: 'createdAt', halfLife: 3600000, now } }], ['unlimited', 'storage']]) {
+    const highlighted = name === 'highlights' || name === 'recencyHighlights';
     for (let ordinal = 0; ordinal < 10; ordinal++) {
       await new Promise(resolve => setImmediate(resolve));
       current = { name, ordinal, bindings: [] };
       const start = performance.now(), builder = e.query('Row').search(query, { fuzzy: false, ...extra });
-      const answer = name === 'highlights' ? builder.limit(10).hits({ fields: ['name'], highlights: true }) : (name === 'unlimited' ? builder : builder.limit(10)).ids();
+      const answer = highlighted ? builder.limit(10).hits({ fields: ['name'], highlights: true }) : (name === 'unlimited' ? builder : builder.limit(10)).ids();
       current.totalMs = performance.now() - start;
       current.bindingMs = current.bindings.reduce((sum, binding) => sum + binding.ms, 0);
       current.remainderMs = current.totalMs - current.bindingMs;
-      const ids = name === 'highlights' ? answer.map(hit => hit.id) : answer;
+      const ids = highlighted ? answer.map(hit => hit.id) : answer;
       if (name === 'point' || name === 'crossField') assert.deepEqual(ids, ['Row-42']);
       else if (name === 'medium') assert.deepEqual(ids, Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`));
       else { assert.equal(ids.length, name === 'unlimited' ? n : 10); assert.equal(new Set(ids).size, ids.length); }
-      if (name === 'highlights') for (const hit of answer) assert.deepEqual(hit.highlights.tags, [[1, 0, 7]]);
+      if (highlighted) for (const hit of answer) assert.deepEqual(hit.highlights.tags, [[1, 0, 7]]);
       samples.push(current); current = undefined;
     }
   }
-  const plans = [...queries.values()].map(query => ({ ...query, plan: db.sql.prepare('EXPLAIN QUERY PLAN ' + query.sql).all(...query.parameters) }));
+  const plans = [...queries.values()].map(query => ({ ...query, plan: db.sql.prepare('EXPLAIN QUERY PLAN ' + query.sql).all(...query.parameters),
+    ...(query.sql.startsWith('WITH c') ? { program: db.sql.prepare('EXPLAIN ' + query.sql).all(...query.parameters) } : {}) }));
   writeFileSync(output, JSON.stringify({ qualification: false, n, node: process.version, sqlite: db.get('SELECT sqlite_version() version').version,
     entries, constraints, nativeBindings: loadedNativeBindings(), samples, queries: plans }));
 } finally { db?.close(); rmSync(root, { recursive: true, force: true }); }
