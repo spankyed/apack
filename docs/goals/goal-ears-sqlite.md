@@ -193,19 +193,19 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. Integration and remote also remain at that source;
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Latest local runtime **f426f938f8**
-adds indexed timestamp selection after finite native recency and sequence ranking. It passes **492 SQLite /
-289 native**, 76 focused cases, five builds, EARS/host types, 34 recovery cases, lint/imports/API reports and
-native hydration/selected-plan controls. Newer local work is not yet published. Its preregistered
-materialized/indexed/indexed/materialized cohort completed all four trials: recency highlights ~27 versus
-~35 ms, ID-only recency mixed (30.1 / 25.6 versus 27.2 / 27.5 ms), with one noisier indexed build/highlight
-trial retained. No owned Linux container remains. The strict workflow now includes an explicit SQLite candidate lane for macOS arm64, Windows x64 and
-Linux x64. Its commands/probe pass locally: five builds, 492 SQLite cases, 95 host cases, syntax/YAML/lint,
-actual built FTS/recency/regex/vec/read-only backup and a real 289-case native-control report rejected by
-the strengthened selected-suite verifier. The initial weak guard and subsequent lint failure are retained.
-See [platform-lane evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-lane/README.md).
-Hosted target-platform execution is not yet claimed. Publish and dispatch one new exact strict gate; no latency/resource acceptance is claimed. Further canonical advancement requires that new exact source
-and successful gate. Next prioritize bounded fuzzy work as specified below; full goal acceptance remains open.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Published candidate is now
+**a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**, on the existing remote branch and clean detached integration.
+It contains runtime f426f938f8 plus all completed cost evidence and the explicit three-platform SQLite lane.
+Its single exact [strict run 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) was
+confirmed queued; poll that handle rather than dispatching duplicates. Canonical/helper BASE remain at
+previous green 60d4283f68 until this new exact source succeeds. No owned Linux container remains.
+
+The runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/
+storage cases, lint/imports/API reports and native hydration/selected-plan controls. The fixed four-process
+indexed cohort improves recency highlights ~35 to ~27 ms; ID-only recency is mixed, and one slower indexed
+build/highlight trial remains retained. Hosted macOS arm64, Windows x64 and Linux x64 candidate execution is
+pending. Next prioritize bounded fuzzy behavior, useful-result cases and native candidate-work proof before
+implementation; full performance, relevance/vector, app/operational/packaging acceptance remains open.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
 `db recover`, resumable offline incumbent restoration, forensic retention and managed-reader exclusion.
