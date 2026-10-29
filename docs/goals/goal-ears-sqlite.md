@@ -262,9 +262,13 @@ or a disposition of the unmet broad responsiveness requirement.
 Exploratory same-model vec1 IVF probes complete: 32 probes meet broad/10% sampled recall and heartbeat
 but fail 1% recall (0.947); 64 probes meet sampled recall but miss heartbeat. Neither passes the full
 matrix. No dependency changed. [Probe evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vec1-ivf-probes/README.md)
-requires the next prerequisite to measure arbitrary SQL owner-IN scopes, whose upstream comparison
-loops may multiply metadata cost. Constant range filters do not qualify actual EARS scopes. Fresh
-frozen queries and complete integrated/admission/platform checks remain required before acceptance.
+now includes the [owner-scope prerequisite](../references/evidence/ears-sqlite-implementation-2026-10-28/vec1-owner-scope/README.md):
+UUID owner-IN filtering takes roughly 2.5 seconds at 10% and 270 ms at 1%, despite identical candidate
+results. Constant range filters do not qualify actual EARS scopes; this vec1 path is unsuitable for
+graph-sized arbitrary scopes. Before owning another extension/fork, test smaller vec0 chunks in the
+already-pinned stable dependency: its repeated-minimum per-chunk selection is a concrete cost
+hypothesis. Fresh frozen queries and complete integrated/admission/platform checks remain required
+before acceptance. No strategy selection or adoption is established.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
 the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
