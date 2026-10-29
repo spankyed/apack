@@ -543,3 +543,20 @@ host lock cases, plus types/builds/static checks. It uses a sealed **data-only**
 reopen, not executable pack activation or a complete API/Electron/renderer boot. Process-kill during profile
 conversion, physical/resource faults, supported-platform results and actual app acceptance remain required.
 The platform workflow now requires this probe, exact source/native producer receipts and all seven dump cases.
+
+### Actual API lifecycle on a converted native profile
+
+After building matching packages, the starter pack and API, the disposable Linux gate is:
+
+```sh
+python3 tests/scripts/test-sqlite-converted-api.py \
+  --producer /absolute/matching/elmdb --output /absolute/new-evidence-directory
+```
+
+The gate uses only synthetic temporary data. It boots the real starter pack on native storage, updates a Prompt
+through authenticated RPC and observes the real pack view, stops the API, converts the resulting native profile,
+then boots SQLite twice and verifies further updates/restart persistence. Offline inspection verifies typed/large
+values, settings, history and media and unchanged native source hashes. It records observed optional Codex
+executable absence rather than claiming all pack integrations work; JSON fatal API reports refuse. It is a built
+Node API gate, not an Electron/renderer or installed-distribution certificate. The Linux platform job requires it,
+while every platform separately requires the native-producer profile conversion/refusal probe.

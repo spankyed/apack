@@ -194,16 +194,18 @@ The guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-e
 to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No master merge, adoption,
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published integration/remote is
-**2ca3b0c276f419d0d5e0d3da3e9255ec035ef478**, including native dump conversion, installed-package qualification, CLI logical dump/load, shared lock ownership
-fixes, witnessed archive publication recovery and standalone staged CLI checks. Existing draft #286
-is updated around the final implementation and actual remaining requirements.
-Its focused [40905356110](https://github.com/spankyed/apack/actions/runs/40905356110) completed FAILURE:
-Linux/macOS passed 602 EARS /135 host; Windows passed all six dump-conversion cases but the forced
-SIGQUIT lock-reclamation case timed out (121 other host cases passed). Later Windows CLI/verification
-steps did not run. Evidence is `logical-archive/windows-signal-40905356110`. New source adds a child-ready
-witness after setup and a stricter bounded exit diagnostic without removing signal/reclamation assertions.
-This fixes a real readiness gap; the Windows timeout cause remains unisolated.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; publication stays on existing draft #286.
+The last dispatched checkpoint **3c1d7ff85966589129eeeaab9455e6a827f86c60** has terminal focused
+[40908544589](https://github.com/spankyed/apack/actions/runs/40908544589) FAILURE: Linux x64 and Windows x64
+pass all five real native profile groups and seven dump cases plus host/CLI/archive gates. macOS passes ordinary
+contracts but its profile probe incorrectly compares canonical `/private/var/...` with lexical `/var/...` immediately
+after conversion. Source corrects that assertion and adds an intentionally aliased output-parent success case,
+retaining every overlap/refusal control. Evidence is `logical-archive/macos-path-40908544589`. The Windows
+explicit child-ready/stricter exit harness passes; the earlier timeout cause remains unisolated. The producer build
+now runs inside the pinned native checkout with explicit toolchain reporting. No newer full Strict success is claimed.
+Previously [40905356110](https://github.com/spankyed/apack/actions/runs/40905356110) at 2ca3b0c276 failed the
+Windows forced-SIGQUIT case (121 other host cases and all six then-current dump cases passed); its raw evidence
+remains `logical-archive/windows-signal-40905356110`.
 The previous focused [SQLite platform run 40902946880](https://github.com/spankyed/apack/actions/runs/40902946880)
 completed SUCCESS on exactly 29c2cf746c across Linux x64, macOS arm64 and Windows x64. Every platform
 executes eight logical CLI command cases, both publication-kill controls, five staged CLI process checks,
@@ -825,3 +827,18 @@ only in conversion, with strict validation retained. Both initial failures are r
 host; its new exact-source terminal result is still required. Next qualify conversion interruption/resources and
 boot the actual API/app with executable packs on the converted profile, preserving all remaining phase 3–7 budgets,
 renderer/SDK/installed-platform/recall/relevance/full-validation and adoption requirements. Normal boot stays elmdb.
+
+Actual native-controlled API lifecycle at **4cafaec5d66ce8d63ef6ee1bf5f8f7215221c4cd** passes in disposable
+Linux ARM64 / Node 23.11.1: build the matching real starter pack/API, boot native and mutate a Prompt through
+authenticated RPC/its real pack system and live view, explicitly convert that now-real native profile, then boot
+SQLite twice with two further live-view updates and retained writes across restart. Reopened inspection preserves
+binary bytes, Date, a 256 KiB field, settings, history and media; native source data hashes stay unchanged. All three
+boots exit zero with increasing watch commits. The five profile groups pass with an intentionally aliased output
+parent; five package builds, actual starter/API builds and lint/import checks pass. Evidence and earlier failed
+Buffer class assertion are retained under `logical-archive/converted-api`. The optional Codex executable is absent
+in both native and SQLite runs and its startup action fails; diagnostics record that environment limitation, so
+complete pack health/external inference is not claimed. Any JSON __fatal API report refuses the gate.
+Linux CI now requires this real native-controlled API lifecycle on exact source; all hosts require the profile
+conversion probe. Their new terminal results remain required. Electron/renderer, installed/signed platform
+coverage, conversion interruption/resources, existing failed latency/relevance/recall budgets, full validation and
+final adoption review remain required. Keep the complete phase 3–7 scope and production elmdb selection.

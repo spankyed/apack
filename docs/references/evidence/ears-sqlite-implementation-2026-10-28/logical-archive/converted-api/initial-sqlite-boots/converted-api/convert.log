@@ -1,0 +1,21 @@
+{
+  "path": "/tmp/ears-converted-api-7j0jure5/converted/profile",
+  "source": "/tmp/ears-converted-api-7j0jure5/native-source",
+  "format": "sqlite/1",
+  "stores": [
+    {
+      "name": "primary",
+      "loads": 4,
+      "audit": {
+        "ok": true
+      }
+    },
+    {
+      "name": "runs",
+      "loads": 2,
+      "audit": {
+        "ok": true
+      }
+    }
+  ]
+}

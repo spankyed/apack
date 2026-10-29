@@ -1,0 +1,1 @@
+f806c50f279053640a6d6d8af4927bfa2a793b00: native API/RPC/live-view boot passes, then inspection rejects Buffer versus Uint8Array class identity despite equal bytes. Actual archive commit/hash is retained in archive-provenance.json; raw source labels are descriptive, not revision hashes. No completed native-controlled conversion is claimed.
