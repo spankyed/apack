@@ -65,6 +65,18 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     expect(db.get("SELECT 1 FROM sqlite_schema WHERE name LIKE 'ann_%'")).toBeUndefined();
   });
 
+  it('reopens the native generation in a read-only EARS backup with an owner-supplied extension',()=>{
+    const {db,e,index,job,model,write,embed}=fixture();e.create('Row',{title:'backup'});embed();
+    write(()=>index.admit(job,model));write(()=>index.step(job.generation,32));
+    const expected=index.candidates(job.generation,bytes(vector(1)),100),sequence=db.sequence;
+    const path=mkdtempSync(join(tmpdir(),'ears-ann-backup-'));db.backup(path);
+    const reopened=new SqliteDatabase({path,readOnly:true});held.push({db:reopened,path});
+    const snapshot=new SqliteVectorIndex(reopened,process.env.EARS_VEC1_EXTENSION!);
+    expect(snapshot.candidates(job.generation,bytes(vector(1)),100)).toEqual(expected);
+    expect(reopened.sequence).toBe(sequence);
+    expect(()=>snapshot.step(job.generation,1)).toThrow(expect.objectContaining({code:'UNIT_REQUIRED'}));
+  });
+
   it('rolls back refused admission and rejects stale generations and unsafe writer use',()=>{
     const {db,index,job,model,write}=fixture();
     expect(()=>index.admit(job,model)).toThrow(expect.objectContaining({code:'UNIT_REQUIRED'}));
