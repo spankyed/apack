@@ -170,3 +170,20 @@ cannot supersede the failed 100k cohort or its original 16 ms targets. FULL and 
 The [kernel's cgroup CPU interface](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files)
 defines quota periods and throttling counters; [Docker's CPU limits](https://docs.docker.com/engine/containers/resource_constraints/#configure-the-default-cfs-scheduler)
 distinguish bandwidth limits from CPU affinity. This is a hypothesis to test, not an attribution of the old miss.
+
+
+### Actual admission runtime trace (predeclared)
+
+The four quota/affinity controls completed without own-group throttling during timing; scalar SQL/facade
+p99 stayed below 3 ms in all four, while the fixed CPU loop had two >30 ms calls at ordinals 31–32 in each.
+These controls do not establish the cause of the original admission miss or justify changing the runner.
+
+Next run exactly one fresh **100k OFF full-watch search admission** using the existing source/tsx invocation,
+`--search --progress --diagnostic`, unchanged two-CPU/6 GiB limits, unchanged 300-second process bound and all
+original workload/resource targets. Set `EARS_ADMISSION_TRACE` to a new owned report prefix. The optional helper
+starts after seeding/initial watch settlement, records GC events, a CPU profile and cgroup counters every 64 ms,
+and stops after the independent heartbeat stops. It does not change production SQL, watch/batch constants,
+query-watch counts or primary workload. Counter sampling runs on the event loop and can be delayed; profile
+and GC recording add overhead. Retain that scope and every budget outcome, including failure. This is one
+diagnostic, never a replacement acceptance trial, a retry-until-green cohort, or permission to proceed to FULL.
+Correlate actual heartbeat overdue windows with GC/spans and cgroup intervals before proposing a remedy.

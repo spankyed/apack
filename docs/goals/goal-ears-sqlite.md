@@ -216,7 +216,13 @@ Next resume phase 3's recorded 100k admission/heartbeat miss and phase 4's repre
 tuning. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
 `runtime-control.mjs`: same two-CPU quota/6 GiB, ABBA order, 500 fixed samples per path, first-150/remaining-350
 strata, cgroup counters/GC/CPU profiles and no discarded cold samples. This is diagnostic only; it cannot
-replace the failed admission cohort. Run it once in disposable Linux and retain every process and failure. Preserve every existing phase 3–7 criterion. Phase 5/6 app/media ownership, raw/unmanaged readers,
+replace the failed admission cohort. That four-process control is complete: all answers pass, no own-group throttling is observed during timing,
+SQL/facade p99 stay below 3 ms, and the CPU loop has two ~30 ms calls at ordinals 31–32 in every process.
+Do not change the runner/query compiler on that evidence. See
+[runtime quota evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/runtime-quota/README.md).
+The next preregistered diagnostic is exactly one existing full-watch 100k OFF source/tsx admission with
+optional runtime tracing (GC/CPU profile/cgroup every 64 ms); original 300-second bound and workload budgets
+remain. This is diagnostic only, not a favorable retry or permission to proceed to FULL. Preserve every existing phase 3–7 criterion. Phase 5/6 app/media ownership, raw/unmanaged readers,
 directory-creation hierarchy, read-only mounts, filesystem/power-loss/platform and large-copy resource
 qualification remain required before adoption. Never delete a pending preparation to bypass startup.
 The earlier 431 SQLite / 256 native suite and real WAL-sync evidence remains in

@@ -45,6 +45,9 @@ const total = (values: Record<string, number>) => Object.values(values).reduce((
 const heard = new Map<string, unknown>(), errors: unknown[] = [];
 const watches: Array<{ stop(): void }> = [];
 let heartbeat: ReturnType<typeof startHeartbeat> | undefined;
+let runtimeTrace: { stop(): Promise<void> } | undefined;
+const runtimeTracePrefix = process.env.EARS_ADMISSION_TRACE;
+assert(!runtimeTracePrefix || (diagnostic && search && n === 100000 && !durable), 'Runtime tracing is only the declared 100k OFF search diagnostic');
 try {
   let nativeBindings = loadedNativeBindings();
   assert(nativeBindings.some(binding => binding.path.replaceAll('\\', '/').includes('/better-sqlite3/')), 'No loaded SQLite binding reported');
@@ -65,6 +68,7 @@ try {
   }));
   await e.admin.watchesSettled();
   const before = files();
+  if (runtimeTracePrefix) runtimeTrace = await (await import('./admission-runtime.ts')).startAdmissionTrace(runtimeTracePrefix);
   let maxObservedBytes = total(before), maxObservedWal = before['data.sqlite3-wal'] ?? 0;
   const batchSamples: Array<{ phase: string; outcome: string; ms: number }> = [];
   phase = 'build';
@@ -150,6 +154,7 @@ try {
   maxObservedBytes = Math.max(maxObservedBytes, total(afterBuild), total(afterGc));
   maxObservedWal = Math.max(maxObservedWal, afterBuild['data.sqlite3-wal'] ?? 0, afterGc['data.sqlite3-wal'] ?? 0);
   heartbeat.stop();
+  if (runtimeTrace) await runtimeTrace.stop();
   if (search) {
     nativeBindings = loadedNativeBindings([getLoadablePath()]);
     assert(nativeBindings.some(binding => binding.path === getLoadablePath()), 'Loaded vector extension was not fingerprinted');
@@ -175,6 +180,9 @@ try {
   if (!passed) process.exitCode = 1;
 } finally {
   heartbeat?.stop();
-  for (const watch of watches) watch.stop();
-  db.close(); rmSync(path, { recursive: true, force: true });
+  try { if (runtimeTrace) await runtimeTrace.stop(); }
+  finally {
+    for (const watch of watches) watch.stop();
+    db.close(); rmSync(path, { recursive: true, force: true });
+  }
 }
