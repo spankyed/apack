@@ -33,6 +33,7 @@ import { RESERVED_ATTRIBUTES } from "../errors.ts";
 import { sameValue } from "../utils.ts";
 import { executeQuery } from "./query.ts";
 import { SqliteIndexBuilds, type SqliteIndexSpec } from "./index-builds.ts";
+import { SqliteEmbeddings } from './embeddings.ts';
 import { SqliteSearch } from "./search.ts";
 import { SqliteValues, type SqliteValueLayout } from "./values.ts";
 import { createSchemaValidator } from "./schema-validation.ts";
@@ -97,6 +98,7 @@ export class SqliteDatabase implements EarsDatabase {
   private schemaPresent: boolean;
   private counter = 0;
   readonly search: SqliteSearch;
+  readonly embeddings: SqliteEmbeddings;
   readonly values: SqliteValues;
   readonly indexBuilds: SqliteIndexBuilds;
   private readonly layouts = new Map<string, SqliteValueLayout>();
@@ -121,6 +123,8 @@ export class SqliteDatabase implements EarsDatabase {
       fail("NO_DATABASE", `No SQLite database at ${file}`);
     this.sql = new NativeDatabase(file, { readonly: this.readOnly });
     try {
+      this.embeddings = new SqliteEmbeddings(this);
+      this.embeddings.initialize();
       this.sql.exec("PRAGMA busy_timeout=0; PRAGMA cache_size=-65536;");
       if (!this.readOnly) {
         this.sql
@@ -1399,18 +1403,12 @@ export class SqliteDatabase implements EarsDatabase {
             after = row.seq;
           }
         }
-        after = 0;
-        for (;;) {
-          const batch = incoming.all("SELECT c.rowid ordinal,c.* FROM chunks c JOIN index_builds b ON b.type=c.type AND b.name=c.index_name AND b.kind='vector' AND b.generation=c.generation WHERE c.rowid>? ORDER BY c.rowid LIMIT 256", [after]);
-          if (!batch.length) break;
-          for (const row of batch) {
-            after = row.ordinal;
-            if (this.heldSchema.types[row.type]?.indexes?.[row.index_name]?.kind !== 'vector') continue;
-            const generation = this.indexBuilds.index(row.type, 'vector', row.index_name).generation;
-            this.run(`UPDATE chunks SET embedding=? WHERE entity_id=? AND index_name=? AND generation=? AND chunk=? AND hash=? AND model=? AND dims=?`,
-              [row.embedding,row.entity_id,row.index_name,generation,row.chunk,row.hash,row.model,row.dims]);
-          }
+        for (const value of incoming.statement('SELECT entity_id,index_name,chunk,hash,model,dims,embedding FROM embedding_values ORDER BY id').iterate()) {
+          const row = value as {entity_id: string; index_name: string; chunk: number; hash: string; model: string; dims: number; embedding: Uint8Array};
+          this.embeddings.restore({ id: row.entity_id, index: row.index_name, chunk: row.chunk, hash: row.hash,
+            model: row.model, dimensions: row.dims, bytes: row.embedding });
         }
+        this.embeddings.relink();
         unit.changes.add('all'); unit.commit();
       } catch (error) { this.abortFailedOperation(error); }
     } finally { incoming.close(); }

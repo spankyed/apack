@@ -88,7 +88,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('shared backgro
       expect(db.all(`PRAGMA index_info('${String(index.name)}')`).some(row => row.name === 'embedding')).toBe(false);
     }
     const vector = searchJobs(db).find(job => job.kind === 'vector')!;
-    const pending = db.all('EXPLAIN QUERY PLAN SELECT entity_id,chunk FROM chunks WHERE type=? AND index_name=? AND generation=? AND embedding IS NULL ORDER BY entity_id,chunk LIMIT ?', ['Row', vector.name, vector.generation, 10]);
+    const pending = db.all('EXPLAIN QUERY PLAN SELECT entity_id,chunk FROM chunks WHERE type=? AND index_name=? AND generation=? AND embedding_id IS NULL ORDER BY entity_id,chunk LIMIT ?', ['Row', vector.name, vector.generation, 10]);
     expect(pending.some(row => String(row.detail).includes('chunk_pending'))).toBe(true);
   });
 
@@ -142,7 +142,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('shared backgro
     expect(db.indexBuilds.step()).toBe('failed'); fault.mockRestore();
     await expect(db.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
     expect(db.indexBuilds.step()).toBe('idle');
-    expect(db.get('SELECT count(*) n FROM chunks WHERE generation=? AND embedding IS NOT NULL', [old.generation])!.n).toBe(150);
+    expect(db.get('SELECT count(*) n FROM chunks WHERE generation=? AND embedding_id IS NOT NULL', [old.generation])!.n).toBe(150);
     db.close(); const resumed = open(db.path); await resumed.db.indexesReady();
     expect(resumed.e.pendingEmbeddings('Row').count).toBe(0);
     drain(resumed.db); expect(resumed.db.get('SELECT 1 FROM index_gc LIMIT 1')).toBeUndefined();
@@ -176,7 +176,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('shared backgro
       expect(e.query('Row').search('needle', { fuzzy: false }).count()).toBe(149);
       expect(e.query('Row').containing('changed').ids()).toEqual(['Row-0']);
       expect(e.getAttr('Row-0', 'title')).toBe('changed title');
-      expect(db.get('SELECT count(*) n FROM chunks WHERE generation=? AND embedding IS NOT NULL', [previous.generation])!.n).toBe(150);
+      expect(db.get('SELECT count(*) n FROM chunks WHERE generation=? AND embedding_id IS NOT NULL', [previous.generation])!.n).toBe(150);
       expect(db.indexBuilds.step()).toBe('idle');
     } finally { watch.stop(); }
     db.close(); const resumed = open(db.path); await resumed.db.indexesReady();

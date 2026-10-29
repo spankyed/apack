@@ -70,13 +70,9 @@ async function* records(db: SqliteDatabase): AsyncGenerator<LogicalRecord> {
     const row = value as {id: string; kind: string; source: string; target: string; seq: number; info: Uint8Array | null};
     yield { kind: 'relation', id: row.id, relationKind: row.kind, source: row.source, target: row.target, seq: row.seq, info: row.info };
   }
-  // Several derived generations may carry the same logical identity. Retain its latest populated version,
-  // matching generation reuse, instead of serializing disposable acceleration history as primary versions.
-  for (const value of db.statement(`SELECT c.entity_id,c.index_name,c.chunk,c.hash,c.model,c.dims,c.embedding FROM chunks c
-    WHERE c.embedding IS NOT NULL AND c.generation=(SELECT max(n.generation) FROM chunks n
-      WHERE n.entity_id=c.entity_id AND n.index_name=c.index_name AND n.chunk=c.chunk AND n.hash=c.hash
-      AND n.model=c.model AND n.dims=c.dims AND n.embedding IS NOT NULL)
-    ORDER BY c.entity_id,c.index_name,c.chunk,c.hash,c.model,c.dims`).iterate()) {
+  // Primary embedding identities survive derived retirement and declaration changes.
+  for (const value of db.statement(`SELECT entity_id,index_name,chunk,hash,model,dims,embedding FROM embedding_values
+    ORDER BY entity_id,index_name,chunk,hash,model,dims`).iterate()) {
     const row = value as {entity_id: string; index_name: string; chunk: number; hash: string; model: string; dims: number; embedding: Uint8Array};
     yield { kind: 'embedding', id: row.entity_id, index: row.index_name, chunk: row.chunk, hash: row.hash,
       model: row.model, dimensions: row.dims, bytes: row.embedding };

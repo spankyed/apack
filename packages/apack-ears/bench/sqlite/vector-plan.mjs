@@ -71,9 +71,9 @@ try {
   const buildStart = performance.now();
   db.sql.exec(`CREATE VIRTUAL TABLE diagnostic_vectors USING vec0(embedding float[${dimensions}] distance_metric=cosine, live boolean, bucket integer, in_ten boolean)`);
   db.sql.prepare(`INSERT INTO diagnostic_vectors(rowid,embedding,live,bucket,in_ten)
-    SELECT CAST(substr(c.entity_id,5) AS INTEGER)+1,c.embedding,e.trashed=0,
+    SELECT CAST(substr(c.entity_id,5) AS INTEGER)+1,v.embedding,e.trashed=0,
       CAST(substr(c.entity_id,5) AS INTEGER)%100,CAST(substr(c.entity_id,5) AS INTEGER)%100<10
-    FROM chunks c JOIN entities e ON e.id=c.entity_id WHERE c.type='Row' AND c.embedding IS NOT NULL`).run();
+    FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id WHERE c.type='Row' AND v.embedding IS NOT NULL`).run();
   report.packedBuildMs = performance.now() - buildStart;
   assert.equal(db.sql.prepare('SELECT count(*) n FROM diagnostic_vectors').get().n, n);
   report.afterPacked = { files: files(), pages: db.sql.pragma('page_count', { simple: true }), memory: process.memoryUsage() };
@@ -83,8 +83,8 @@ try {
     const condition = path === 'all' ? '' : path === 'tenPercent' ? ' AND in_ten=1' : ' AND bucket=0';
     const scalarCondition = path === 'all' ? '' : ` AND CAST(substr(c.entity_id,5) AS INTEGER)%100${path === 'tenPercent' ? '<10' : '=0'}`;
     const variants = {
-      scalarNoGrouping: `SELECT c.entity_id id,1-vec_distance_cosine(c.embedding,?) score FROM chunks c JOIN entities e ON e.id=c.entity_id
-        WHERE c.type='Row' AND c.embedding IS NOT NULL AND e.trashed=0${scalarCondition} ORDER BY score DESC,e.seq LIMIT 10`,
+      scalarNoGrouping: `SELECT c.entity_id id,1-vec_distance_cosine(v.embedding,?) score FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
+        WHERE c.type='Row' AND v.embedding IS NOT NULL AND e.trashed=0${scalarCondition} ORDER BY score DESC,e.seq LIMIT 10`,
       vec0Metadata: `SELECT 'Row-'||(rowid-1) id,1-distance score FROM diagnostic_vectors WHERE embedding MATCH ? AND k=10 AND live=1${condition} ORDER BY distance`,
       vec0CandidateIds: `SELECT 'Row-'||(rowid-1) id,1-distance score FROM diagnostic_vectors WHERE embedding MATCH ? AND k=10
         AND rowid IN (SELECT value FROM json_each(?)) ORDER BY distance`,

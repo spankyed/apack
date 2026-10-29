@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { validateEmbeddingBytes } from './embeddings.ts';
 import { SqliteDatabase } from './database.ts';
 import { searchTable, type SqliteIndexJob } from './index-builds.ts';
 
@@ -80,22 +81,17 @@ function metadataAndEmbeddings(db: SqliteDatabase, issue: (message: string) => v
       issue(`${entry.key}: invalid metadata counter`);
   }
   if (maximum > 0 && (typeof next !== 'number' || next <= maximum)) issue('seq: next identity does not exceed stored primary sequences');
-  for (const value of db.statement(`SELECT c.entity_id,c.chunk,c.dims,c.embedding FROM chunks c
-    JOIN index_builds j ON j.generation=c.generation WHERE c.embedding IS NOT NULL ORDER BY c.entity_id,c.chunk`).iterate()) {
+  for (const value of db.statement(`SELECT entity_id,chunk,dims,embedding FROM embedding_values ORDER BY entity_id,chunk`).iterate()) {
     const row = value as { entity_id: string; chunk: number; dims: number; embedding: Uint8Array };
-    const bytes = row.embedding;
-    let valid = Number.isSafeInteger(row.dims) && row.dims > 0 && bytes instanceof Uint8Array && bytes.byteLength === row.dims * 4;
-    let nonzero = false;
-    if (valid) {
-      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-      for (let offset = 0; offset < view.byteLength; offset += 4) {
-        const component = view.getFloat32(offset, true);
-        if (!Number.isFinite(component)) { valid = false; break; }
-        if (component !== 0) nonzero = true;
-      }
-    }
-    if (!valid || !nonzero) issue(`${row.entity_id} chunk ${row.chunk}: invalid Float32 cosine embedding`);
+    try { validateEmbeddingBytes(row.embedding, row.dims); }
+    catch { issue(`${row.entity_id} chunk ${row.chunk}: invalid Float32 cosine embedding`); }
   }
+  if (db.get(`SELECT 1 FROM embedding_values v LEFT JOIN entities e ON e.id=v.entity_id WHERE e.id IS NULL LIMIT 1`))
+    issue('Orphan authoritative embedding');
+  if (db.get(`SELECT 1 FROM chunks c LEFT JOIN embedding_values v ON v.id=c.embedding_id WHERE c.embedding_id IS NOT NULL
+    AND (v.id IS NULL OR v.entity_id!=c.entity_id OR v.index_name!=c.index_name OR v.chunk!=c.chunk
+      OR v.hash!=c.hash OR v.model!=c.model OR v.dims!=c.dims) LIMIT 1`)) issue('Derived chunk has an invalid primary embedding reference');
+
 }
 
 async function rebuildPrivateMembership(db: SqliteDatabase): Promise<void> {
@@ -121,8 +117,8 @@ function contents(job: SqliteIndexJob): [string, unknown[]] {
     'SELECT entity_id,type,field,value,seq FROM field_index WHERE generation=? ORDER BY entity_id,field,value', [job.generation],
   ];
   if (job.kind === 'vector') return [
-    `SELECT entity_id,type,index_name,chunk,model,dims,hash,text,embedding FROM chunks WHERE generation=?
-      ORDER BY entity_id,index_name,chunk`, [job.generation],
+    `SELECT c.entity_id,c.type,c.index_name,c.chunk,c.model,c.dims,c.hash,c.text,v.embedding FROM chunks c
+      LEFT JOIN embedding_values v ON v.id=c.embedding_id WHERE c.generation=? ORDER BY c.entity_id,c.index_name,c.chunk`, [job.generation],
   ];
   const table = searchTable(job);
   return job.kind === 'text' ? [

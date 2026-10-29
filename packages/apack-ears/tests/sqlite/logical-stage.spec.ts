@@ -35,7 +35,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('sealed logical
     try {
       expect(spool.prepare("SELECT value FROM archive_state WHERE key='sealed'").get()).toEqual({ value: 1 });
       expect(spool.prepare("SELECT kind,value FROM logical_values WHERE field='negative'").get()).toEqual({ kind: 'zero', value: 0 });
-      expect(spool.prepare('SELECT embedding FROM embeddings').get()).toEqual(f.db.get('SELECT embedding FROM chunks'));
+      expect(spool.prepare('SELECT embedding FROM embeddings').get()).toEqual(f.db.get('SELECT embedding FROM embedding_values'));
       expect(spool.prepare('SELECT value FROM meta WHERE key=?').get('schema')).toEqual(f.db.get('SELECT value FROM meta WHERE key=?', ['schema']));
     } finally { spool.close(); }
     expect(f.e.lastCommit()).toBe(before); expect(Object.is(f.e.getAttr('Row-one', 'negative'), -0)).toBe(true);

@@ -131,7 +131,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
 
   it('reports malformed stored embeddings instead of accepting identical corrupted copies', async () => {
     const { db, e } = seed(), before = e.lastCommit();
-    expect(db.run("UPDATE chunks SET embedding=? WHERE entity_id=?", [Buffer.alloc(4), 'Row-one']).changes).toBe(1);
+    expect(db.run("UPDATE embedding_values SET embedding=? WHERE entity_id=?", [Buffer.alloc(4), 'Row-one']).changes).toBe(1);
     const report = await auditSqliteDatabase(db);
     expect(report.ok).toBe(false);
     expect(report.issues).toContain('Row-one chunk 0: invalid Float32 cosine embedding');

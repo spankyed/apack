@@ -101,11 +101,11 @@ export class SqliteSearch {
       .exec(`CREATE TABLE IF NOT EXISTS text_meta(entity_id TEXT,index_name TEXT,generation INTEGER NOT NULL,hashes TEXT NOT NULL,PRIMARY KEY(entity_id,index_name,generation));
       CREATE TABLE IF NOT EXISTS chunks(entity_id TEXT NOT NULL,type TEXT NOT NULL,index_name TEXT NOT NULL,generation INTEGER NOT NULL,
       chunk INTEGER NOT NULL,model TEXT NOT NULL,dims INTEGER NOT NULL,hash TEXT NOT NULL,text TEXT NOT NULL,
-      embedding BLOB,PRIMARY KEY(entity_id,index_name,generation,chunk));
-      CREATE INDEX IF NOT EXISTS chunk_pending ON chunks(type,index_name,generation,entity_id,chunk) WHERE embedding IS NULL;
+      embedding_id INTEGER,PRIMARY KEY(entity_id,index_name,generation,chunk));
+      CREATE INDEX IF NOT EXISTS chunk_pending ON chunks(type,index_name,generation,entity_id,chunk) WHERE embedding_id IS NULL;
       CREATE INDEX IF NOT EXISTS chunk_generation ON chunks(generation);
       CREATE INDEX IF NOT EXISTS text_generation ON text_meta(generation);
-      CREATE INDEX IF NOT EXISTS chunk_reuse ON chunks(entity_id,index_name,chunk,hash,model,dims,generation);`);
+      CREATE INDEX IF NOT EXISTS chunk_reuse ON chunks(embedding_id);`);
     for (const [type, definition] of Object.entries(schema.types) as Array<
       [string, Data]
     >)
@@ -134,12 +134,11 @@ export class SqliteSearch {
       for (let chunk = 0; chunk < texts.length; chunk++) {
         const text = texts[chunk], hash = digest(text);
         this.db.run(`INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?,?,
-          (SELECT embedding FROM chunks old WHERE old.entity_id=? AND old.index_name=? AND old.chunk=? AND old.hash=? AND old.model=? AND old.dims=? AND old.generation!=? AND old.embedding IS NOT NULL ORDER BY old.generation DESC LIMIT 1))
+          (SELECT id FROM embedding_values WHERE entity_id=? AND index_name=? AND chunk=? AND hash=? AND model=? AND dims=?))
           ON CONFLICT(entity_id,index_name,generation,chunk) DO UPDATE SET
-          model=excluded.model,dims=excluded.dims,hash=excluded.hash,text=excluded.text,
-          embedding=CASE WHEN chunks.hash=excluded.hash AND chunks.model=excluded.model AND chunks.dims=excluded.dims THEN chunks.embedding ELSE excluded.embedding END`,
+          model=excluded.model,dims=excluded.dims,hash=excluded.hash,text=excluded.text,embedding_id=excluded.embedding_id`,
           [row.id, row.entityType, name, generation, chunk, index.model, index.dims, hash, text,
-            row.id, name, chunk, hash, index.model, index.dims, generation]);
+            row.id, name, chunk, hash, index.model, index.dims]);
       }
       this.db.run('DELETE FROM chunks WHERE entity_id=? AND index_name=? AND generation=? AND chunk>=?', [row.id, name, generation, texts.length]);
     }
@@ -176,6 +175,7 @@ export class SqliteSearch {
         this.texts.remove(this.db.indexBuilds.index(type, 'text', name), id);
     this.db.run("DELETE FROM text_meta WHERE entity_id=?", [id]);
     this.db.run("DELETE FROM chunks WHERE entity_id=?", [id]);
+    this.db.run("DELETE FROM embedding_values WHERE entity_id=?", [id]);
   }
   clear(schema = this.db.schemaForQueries()) {
     this.trigrams.clear(schema);
@@ -187,7 +187,7 @@ export class SqliteSearch {
       ) as Array<[string, Data]>)
         if (index.kind === "text")
           this.db.sql.exec(`DELETE FROM ${this.table(type, name, index)}; DELETE FROM ${this.table(type, name, index)}_docs;`);
-    this.db.sql.exec("DELETE FROM text_meta; DELETE FROM chunks;");
+    this.db.sql.exec("DELETE FROM text_meta; DELETE FROM chunks; DELETE FROM embedding_values;");
   }
   pending(type: string, limit: number) {
     const [name, index] = this.vectorIndex(type);
@@ -198,12 +198,12 @@ export class SqliteSearch {
       model: index.model,
       dims: index.dims,
       count: this.db.get(
-        "SELECT count(*) n FROM chunks WHERE type=? AND index_name=? AND generation=? AND embedding IS NULL",
+        "SELECT count(*) n FROM chunks WHERE type=? AND index_name=? AND generation=? AND embedding_id IS NULL",
         [type, name, generation]
       )!.n,
       chunks: this.db
         .all(
-          "SELECT entity_id id,chunk,hash,text FROM chunks WHERE type=? AND index_name=? AND generation=? AND embedding IS NULL ORDER BY entity_id,chunk LIMIT ?",
+          "SELECT entity_id id,chunk,hash,text FROM chunks WHERE type=? AND index_name=? AND generation=? AND embedding_id IS NULL ORDER BY entity_id,chunk LIMIT ?",
           [type, name, generation, limit]
         )
         .map((r) => ({ id: String(r.id), chunk: Number(r.chunk), hash: String(r.hash), text: String(r.text) })),
@@ -223,10 +223,10 @@ export class SqliteSearch {
     );
     if (!chunk || chunk.hash !== op.hash || chunk.model !== op.model)
       return { kind: "stale" };
-    this.db.run(
-      "UPDATE chunks SET embedding=? WHERE entity_id=? AND index_name=? AND generation=? AND chunk=?",
-      [embedding, op.id, name, job.generation, op.chunk]
-    );
+    const identity = this.db.embeddings.replace({ id: op.id, index: name, chunk: op.chunk, hash: op.hash,
+      model: op.model, dimensions: index.dims, bytes: embedding });
+    this.db.run('UPDATE chunks SET embedding_id=? WHERE entity_id=? AND index_name=? AND generation=? AND chunk=?',
+      [identity, op.id, name, job.generation, op.chunk]);
     return { kind: "done" };
   }
   vector(
@@ -241,8 +241,8 @@ export class SqliteSearch {
     const embedding = vectorBytes(vector, index.dims);
     return this.db
       .all(
-        `SELECT c.entity_id id,1-min(vec_distance_cosine(c.embedding,?)) score FROM chunks c
-      JOIN entities e ON e.id=c.entity_id WHERE c.type=? AND c.index_name=? AND c.generation=? AND c.embedding IS NOT NULL
+        `SELECT c.entity_id id,1-min(vec_distance_cosine(v.embedding,?)) score FROM chunks c
+      JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id WHERE c.type=? AND c.index_name=? AND c.generation=? AND c.embedding_id IS NOT NULL
       AND ${
         ids === null
           ? "e.trashed=0"
@@ -264,7 +264,7 @@ export class SqliteSearch {
     const [name] = this.vectorIndex(type);
     const generation = this.db.indexBuilds.index(type, 'vector', name).generation;
     const row = this.db.get(
-      "SELECT embedding FROM chunks WHERE entity_id=? AND index_name=? AND generation=? AND embedding IS NOT NULL ORDER BY chunk LIMIT 1",
+      "SELECT v.embedding FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id WHERE c.entity_id=? AND c.index_name=? AND c.generation=? ORDER BY c.chunk LIMIT 1",
       [id, name, generation]
     );
     if (!row) return [];
