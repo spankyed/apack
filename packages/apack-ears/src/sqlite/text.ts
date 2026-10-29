@@ -110,8 +110,12 @@ export class SqliteText {
     this.db.run(`DELETE FROM ${table} WHERE rowid IN (SELECT id FROM ${table}_docs ORDER BY id LIMIT ?)`, [limit]);
     return Number(this.db.run(`DELETE FROM ${table}_docs WHERE id IN (SELECT id FROM ${table}_docs ORDER BY id LIMIT ?)`, [limit]).changes) < limit;
   }
-  search(job: SqliteIndexJob, ids: string[] | null, query: string, options: Data, wantHits: boolean): Data[] {
+  search(job: SqliteIndexJob, ids: string[] | null, query: string, options: Data, wantHits: boolean, limit?: number): Data[] {
     const table = searchTable(job), fields = Object.keys(job.definition.fields);
+    const recency = options.recency?.halfLife > 0 ? options.recency : undefined;
+    const now = recency ? recency.now ?? Date.now() : undefined;
+    // Decay can change the prefix. Its generic-value path ranks before limiting in JS.
+    const nativeLimit = recency ? undefined : limit;
     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
     if (!tokens.length) return [];
     const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT DISTINCT term FROM ${table}_vocab WHERE col IN ('body','aliases')`).map(row => String(row.term));
@@ -170,7 +174,10 @@ export class SqliteText {
     // Every accepted entity belongs to at least one group's last executed positive clause. Exclusions
     // only need those owners; their scores never contribute to a positive result.
     const candidates = required.map(group => group.reduce((last, i) => positions.get(last)! > positions.get(i)! ? last : i));
-    const select = (open: string, close: string) => {
+    const select = (open: string, close: string, details = wantHits, selected?: Data[]) => {
+      const filtered = selected ? [JSON.stringify(selected.map(row => row.id))] : scoped;
+      const eligible = selected ? 'f.entity_id IN (SELECT value FROM json_each(?))' : scope;
+      const ownerMask = selected && selected.length <= 2048 ? selected.map(row => quote(String(row.owner))).join(' OR ') : undefined;
       const args: any[] = [], ctes = executionOrder.map(i => {
         const clause = clauses[i]!;
         const preceding = previous.get(i);
@@ -182,28 +189,38 @@ export class SqliteText {
           (SELECT CASE WHEN count(*)>2048 THEN '' ELSE ' AND owner : (' || coalesce(group_concat(owner,' OR '),'z') || ')' END
            FROM (SELECT DISTINCT owner FROM (${owners}) LIMIT 2049)))`;
         const weights = fields.map((field, position) => `WHEN ${position} THEN ${Number(job.definition.fields[field].weight ?? 1)}`).join(' ');
-        if (wantHits) args.push(open, close, open, close);
-        args.push(clause.match);
-        args.push(...scoped);
+        if (details) args.push(open, close, open, close);
+        args.push(ownerMask ? `(${clause.match}) AND owner : (${ownerMask})` : clause.match);
+        args.push(...filtered);
         return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,
           -bm25(${table},0,0,0,1,1,0)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
-          ${wantHits ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
+          ${details ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
           FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ${match} AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
-          AND ${scope})`;
+          AND ${eligible})`;
       });
-      return this.db.all(`WITH ${ctes.join(',')}, matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
-        clause_scores AS (SELECT clause,id,max(score) score FROM matches WHERE negative=0 GROUP BY clause,id),
-        accepted AS (SELECT id,sum(score) score FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))
-        SELECT a.id,a.score${wantHits ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM accepted a
-        JOIN entities e ON e.id=a.id ${wantHits ? 'JOIN matches m ON m.id=a.id AND m.negative=0' : ''}
-        ORDER BY a.score DESC,e.seq${wantHits ? ',m.docid,m.clause' : ''}`, args);
+      const single = clauses.length === 1, source = single ? 'c0' : 'matches';
+      const combined = single ? 'accepted AS (SELECT id,max(score) score,min(owner) owner FROM c0 GROUP BY id)' :
+        `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
+         clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner FROM matches WHERE negative=0 GROUP BY clause,id),
+         accepted AS (SELECT id,sum(score) score,min(owner) owner FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
+      const ranked = nativeLimit === undefined ? '' : `, ranked AS MATERIALIZED
+        (SELECT a.id,a.score,a.owner FROM accepted a JOIN entities e ON e.id=a.id ORDER BY a.score DESC,e.seq LIMIT ?)`;
+      if (nativeLimit !== undefined) args.push(nativeLimit);
+      return this.db.all(`WITH ${ctes.join(',')}, ${combined}${ranked}
+        SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? 'accepted' : 'ranked'} a
+        JOIN entities e ON e.id=a.id ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
+        ORDER BY a.score DESC,e.seq${details ? ',m.docid,m.clause' : ''}`, args);
     };
-    let open = '\u0001', close = '\u0002', rows = select(open, close);
+    let open = '\u0001', close = '\u0002';
+    // The read request owns a snapshot across both statements. Score the entity prefix before fetching
+    // its text strings, so discarded matches do not allocate or format highlights.
+    const selected = wantHits && nativeLimit !== undefined ? select(open, close, false) : undefined;
+    let rows = selected?.length === 0 ? [] : select(open, close, wantHits, selected);
     if (wantHits) {
       const contains = (marker: string) => rows.some(row => String(row.body).includes(marker) || String(row.aliases).includes(marker));
       if (contains(open) || contains(close)) {
         do { open = '\u0001' + randomUUID() + '\u0001'; close = '\u0002' + randomUUID() + '\u0002'; } while (contains(open) || contains(close));
-        rows = select(open, close);
+        rows = select(open, close, true, selected);
       }
     }
     const hits = new Map<string, Data>();
@@ -222,13 +239,14 @@ export class SqliteText {
       }
       if (ranges.length) Object.defineProperty(hit.highlights, field, { value: mergeRanges(ranges), enumerable: true, configurable: true, writable: true });
     }
-    if (options.recency) {
-      const payloads = new Map(this.db.rows([...hits.keys()], [options.recency.field]).map(row => [row.id, row]));
+    if (recency) {
+      const payloads = new Map(this.db.rows([...hits.keys()], [recency.field]).map(row => [row.id, row]));
       for (const hit of hits.values()) {
-        const at = payloads.get(hit.id)?.[options.recency.field];
-        if (typeof at === 'number') hit.score *= Math.pow(0.5, Math.max(0, (options.recency.now ?? Date.now()) - at) / options.recency.halfLife);
+        const value = payloads.get(hit.id)?.[recency.field], at = value instanceof Date ? value.getTime() : value;
+        if (typeof at === 'number') hit.score *= Math.pow(0.5, Math.max(0, now - at) / recency.halfLife);
       }
     }
-    return [...hits.values()].sort((a, b) => b.score - a.score);
+    const ordered = [...hits.values()].sort((a, b) => b.score - a.score);
+    return limit === undefined ? ordered : ordered.slice(0, limit);
   }
 }

@@ -340,6 +340,17 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
           plan.start.from === "types" && steps[0] === step && scope === "live"
             ? null
             : idsNow();
+        const next = steps[stepIndex + 1];
+        // Each type's top k contains every possible global winner. Earlier limits and later filters
+        // retain their own pipeline scope; hybrid fusion still needs its complete text ranking.
+        let textLimit: number | undefined;
+        if (step.step === 'search') {
+          if (next?.step === 'limit') textLimit = Math.max(0, Math.floor(next.n));
+          else if (stepIndex === steps.length - 1 && ['first', 'firstRow', 'exists'].includes(plan.terminal.answer)) textLimit = 1;
+        }
+        const options = step.step === 'search' || step.step === 'hybrid' ? step.options : undefined;
+        const searchOptions = options?.recency && options.recency.halfLife > 0 && options.recency.now === undefined ?
+          { ...options, recency: { ...options.recency, now: Date.now() } } : options;
         let hits: Data[] = [];
         for (const type of types) {
           const needs =
@@ -366,8 +377,9 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
                 ids,
                 type,
                 step.query,
-                step.options,
-                plan.terminal.answer === "hits"
+                searchOptions,
+                plan.terminal.answer === "hits",
+                textLimit
               )
             );
           else if (step.step === "near")
@@ -381,7 +393,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
                 ids,
                 type,
                 step.query,
-                step.options,
+                searchOptions,
                 plan.terminal.answer === "hits"
               ),
               vector = db.search.vector(
@@ -466,7 +478,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       const result: StoredHit = { id, score: hit.score, terms: hit.terms ?? [] };
       if (terminal.highlights) result.highlights = hit.highlights ?? {};
       if (terminal.fields) {
-        const row = db.row(id)!;
+        const row = db.row(id, terminal.fields)!;
         result.row = Object.fromEntries([
           ["id", id],
           ...terminal.fields

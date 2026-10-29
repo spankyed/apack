@@ -264,9 +264,12 @@ limited reads remain ~28 ms versus legacy ~15 ms, unaccepted. See
 [owner cost and exact functional proof](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-cost/README.md).
 The functional checkpoint is published at 7cba75f431 with exact gate 40814018368 above. This is not adoption
 or performance acceptance. Keep canonical on 585dcafccf until that exact gate succeeds.
-Next implement safe adjacent text-limit/top-k pushdown before match expansion/JS return. Preserve recency,
-later filters, multiple types, complete highlights and the unchanged relevance corpus; check actual native
-returned-row bounds, then preregister a new cost comparison. Preserve every failed cohort and all remaining
+Local ranked-prefix/late-highlight-fetch checkpoint passes **483 SQLite / 289 native** EARS cases, five
+builds, types/API reports, lint/imports and five removal controls. See [prefix evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-prefixes/README.md).
+Its preregistered six-process cost cohort remains unexecuted. Published gate 40814018368 has failed app/recovery
+validation: elmdb canonical destination paths do not string-match aliased caller paths on macOS. One native
+job was still live at the last poll. Fix the real physical-profile identity check, preserve foreign/leaf-link
+refusals and exercise both backends plus interrupted resume before a new exact gate. Do not promote. Preserve every failed cohort and all remaining
 phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
 after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the

@@ -265,8 +265,8 @@ export class SqliteSearch {
     );
     return this.vector(ids, type, vector, k, id);
   }
-  text(ids: string[] | null, type: string, query: string, options: Data = {}, wantHits = true): Data[] {
+  text(ids: string[] | null, type: string, query: string, options: Data = {}, wantHits = true, limit?: number): Data[] {
     const [name] = this.textIndex(type);
-    return this.texts.search(this.db.indexBuilds.index(type, 'text', name), ids, query, options, wantHits);
+    return this.texts.search(this.db.indexBuilds.index(type, 'text', name), ids, query, options, wantHits, limit);
   }
 }

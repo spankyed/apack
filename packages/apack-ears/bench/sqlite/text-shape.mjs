@@ -37,15 +37,23 @@ try {
   await db.indexesReady(); const buildMs = performance.now() - admitStart; sample();
   const afterBuild = files(), sqlCalls = { all: 0, get: 0, run: 0 }, originals = {};
   for (const key of Object.keys(sqlCalls)) { originals[key] = db[key].bind(db); db[key] = (...args) => { sqlCalls[key]++; return originals[key](...args); }; }
-  const samples = { point: [], crossField: [], crossFieldReverse: [], medium: [], mediumReverse: [], negative: [], negativeReverse: [], disjunction: [], broad: [], update: [] }, counts = {};
-  for (const [name, query, expected] of [['point', 'ticket42', ['Row-42']], ['crossField', 'ticket42 ready', ['Row-42']], ['crossFieldReverse', 'ready ticket42', ['Row-42']], ['medium', 'group7 ready', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['mediumReverse', 'ready group7', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['negative', 'ticket42 -storage', []], ['negativeReverse', '-storage ticket42', []], ['disjunction', 'ticket42 OR ticket43', ['Row-42', 'Row-43']], ['broad', 'storage', null]]) {
+  const samples = { point: [], crossField: [], crossFieldReverse: [], medium: [], mediumReverse: [], negative: [], negativeReverse: [], disjunction: [], broad: [], highlights: [], recency: [], update: [] }, counts = {};
+  const recencyNow = Date.now();
+  for (const [name, query, expected, extra] of [['point', 'ticket42', ['Row-42']], ['crossField', 'ticket42 ready', ['Row-42']], ['crossFieldReverse', 'ready ticket42', ['Row-42']], ['medium', 'group7 ready', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['mediumReverse', 'ready group7', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['negative', 'ticket42 -storage', []], ['negativeReverse', '-storage ticket42', []], ['disjunction', 'ticket42 OR ticket43', ['Row-42', 'Row-43']], ['broad', 'storage', null], ['highlights', 'storage', null], ['recency', 'storage', null, { recency: { field: 'createdAt', halfLife: 3600000, now: recencyNow } }]]) {
     phase = name; const callsBefore = { ...sqlCalls };
-    const limit = name === 'broad' ? 50 : 250;
+    const limit = ['broad', 'highlights', 'recency'].includes(name) ? 50 : 250;
     for (let i = 0; i < limit; i++) {
       await new Promise(resolve => setImmediate(resolve));
-      const at = performance.now(), ids = e.query('Row').search(query, { fuzzy: false }).limit(10).ids();
+      const at = performance.now(), builder = e.query('Row').search(query, { fuzzy: false, ...extra }).limit(10);
+      const answer = name === 'highlights' ? builder.hits({ fields: ['name'], highlights: true }) : builder.ids();
       samples[name].push(performance.now() - at);
+      const ids = name === 'highlights' ? answer.map(hit => hit.id) : answer;
       if (expected) assert.deepEqual(ids, expected); else { assert.equal(ids.length, 10); assert.equal(new Set(ids).size, 10); assert(ids.every(id => /^Row-\d+$/.test(id) && Number(id.slice(4)) < n)); }
+      if (name === 'highlights') for (const hit of answer) {
+        const i = Number(hit.id.slice(4));
+        assert.deepEqual(hit.highlights.tags, [[1, 0, 7]]);
+        assert.equal(hit.row.name, `openDatabaseStore ticket${i} group${i % 100}`);
+      }
     }
     counts[name] = Object.fromEntries(Object.keys(sqlCalls).map(key => [key, sqlCalls[key] - callsBefore[key]]));
   }

@@ -237,3 +237,23 @@ SQL snapshot, cap generated terms at 2048, and fall back to the unrestricted cla
 is larger. Estimates never truncate results. The indexed column changes document-length statistics and adds
 storage/build work, which this cohort must report. Fresh/reset copied format-one profiles are required.
 This diagnostic does not settle broad-query pagination, fuzzy scaling, real app budgets or phase 3–7 acceptance.
+
+### Ranked-prefix and late-fetch cohort
+
+Before measuring the adjacent-limit/single-clause correction, run exactly **legacy / postings / prefix /
+prefix / postings / legacy**, six fresh Linux processes, unchanged two CPUs/6 GiB and 180 seconds each.
+Legacy is `9a2771ec25`, postings is `c132441538`, prefix is the converged ranked-prefix implementation.
+All six receive the identical `text-shape.mjs`, retaining its dataset and every earlier measurement, plus
+50 broad highlighted/picked-name reads and 50 positive-recency broad reads. The latter explicitly measures
+the generic-value recency fallback rather than excluding it from the comparison. Read counts stay at 250
+for point/conjunction/group/exclusion/OR, 50 for each broad mode and 1000 name writes. All samples, binding
+calls, file/RSS/WAL/heartbeat and actual entrypoints/native hashes remain. No warm samples are discarded.
+Stop on correctness/setup failure, retain every attempted process, and never retry automatically.
+
+The prefix optimization caps only an adjacent limit or a final first/first-row/exists terminal. It preserves
+each type's possible global winners and applies the existing global pipeline afterward. Active recency
+ranks generic values before limiting in JS; it has no premature SQL prefix. Single-clause aggregation removes
+redundant native grouping. Bounded highlight queries score first, then fetch complete matching strings for
+selected entities inside the request's read snapshot; only requested primary hit fields are projected.
+Actual native returned-row and highlight-call controls are required before timing. This diagnostic is not
+100k/FULL admission, full app qualification, bounded fuzzy, vector recall or an adoption decision.

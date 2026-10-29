@@ -1,0 +1,13 @@
+{
+  "base": "7be59bc2c176f7c2d54e756e00939e6d17eab020",
+  "changedFiles": [
+    "packages/apack-ears/bench/sqlite/README.md",
+    "packages/apack-ears/bench/sqlite/text-shape.mjs",
+    "packages/apack-ears/src/sqlite/query.ts",
+    "packages/apack-ears/src/sqlite/search.ts",
+    "packages/apack-ears/src/sqlite/text.ts",
+    "packages/apack-ears/tests/engine/search.spec.ts",
+    "packages/apack-ears/tests/sqlite/text-limits.spec.ts"
+  ],
+  "sha256": "6b588cde1fcfa7512638bb97ca0db783098f66055c2ceeefae8d676d81840fbc"
+}
