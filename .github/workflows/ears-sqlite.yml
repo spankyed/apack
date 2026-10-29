@@ -49,6 +49,18 @@ jobs:
         run: npm ci
       - name: Build matching packages
         run: npm run packages:build
+      - name: SDK fixtures use the selected real backend
+        run: >-
+          npm test -w @apackdev/sdk -- tests/testing/database-backend.spec.ts --maxWorkers=2
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/sdk-backend.json
+          2>&1 | tee .temp/sqlite-platform/sdk-backend.log
+      - name: Build shipped pack for SQLite repository contracts
+        run: npm run build:default-setup
+      - name: Current app repository queries on SQLite
+        run: >-
+          npm test -w @app/default-setup -- tests/features/threads/be/query-work.spec.ts --maxWorkers=2
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/query-work.json
+          2>&1 | tee .temp/sqlite-platform/query-work.log
       - name: Prepare Windows C compiler
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
@@ -123,9 +135,7 @@ jobs:
             "$producer" .temp/sqlite-platform/profile-crash.json 2>&1 | tee .temp/sqlite-platform/profile-crash.log
       - name: Build shipped pack and API for converted-profile lifecycle
         if: runner.os == 'Linux'
-        run: |
-          npm run build:default-setup
-          npm run build -w @app/api
+        run: npm run build -w @app/api
       - name: Native baseline and converted API restart with real pack views
         if: runner.os == 'Linux'
         env:

@@ -20,12 +20,15 @@ if (mode === 'verify') {
   const passedIn = (value, pattern) => value.testResults.flatMap(test => pattern.test(test.name.replaceAll('\\', '/'))
     ? test.assertionResults.filter(result => result.status === 'passed') : []).length;
   const nativeGeneration=report('native-generation/provenance.json');
+  const sdkBackend=report('sdk-backend.json'),queryWork=report('query-work.json');
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
-  const result = { source, nativeGenerationCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-index\.spec\.ts$/),
+  const result = { source, sdkBackendCasesPassed:passedIn(sdkBackend,/\/tests\/testing\/database-backend\.spec\.ts$/),
+    queryWorkCasesPassed:passedIn(queryWork,/\/tests\/features\/threads\/be\/query-work\.spec\.ts$/),
+    nativeGenerationCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-index\.spec\.ts$/),
     nativeTrainingCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-training\.spec\.ts$/),
     nativeModelCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-models\.spec\.ts$/),
     nativeGenerationExtensionSha256:nativeGeneration.extensionSha256, earsPassed: ears.numPassedTests, sqliteCasesPassed: passedIn(ears, /\/tests\/sqlite\//),
@@ -41,6 +44,10 @@ if (mode === 'verify') {
     logicalHostSkipped: logicalSkipped.map(test => ({ name: test.fullName, status: test.status })),
     hostPassed: host.numPassedTests, recoveryCasesPassed: passedIn(host, /\/backup\/recovery\.spec\.ts$/) };
   save('verification.json', result);
+  assert.equal(result.sdkBackendCasesPassed,2,'Both SDK fixture stores must use SQLite');
+  assert.equal(sdkBackend.numFailedTests,0);
+  assert.equal(result.queryWorkCasesPassed,4,'All current app repository query contracts must execute on SQLite');
+  assert.equal(queryWork.numFailedTests,0);
   assert.equal(nativeGeneration.source,source,'Native lifecycle build must match the checkout');
   assert.equal(nativeGeneration.upstream.commit,'814fd8ef4d42d6567f1613a66f556c8194764d06');
   assert.equal(nativeGeneration.upstream.sha256,'b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1');

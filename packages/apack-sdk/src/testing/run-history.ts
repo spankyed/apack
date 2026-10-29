@@ -1,9 +1,9 @@
 import { createEarsEngine, type EarsDatabase, type EarsEngine } from '@apackdev/ears';
-import { createTemporaryDatabases } from '@apackdev/ears/lmdb';
+import { createTestDatabases } from './databases.ts';
 import { _RUN_HISTORY_SCHEMA } from '../services/run-history.ts';
 
 /** The process's test run histories, each removed when the process exits */
-const databases = createTemporaryDatabases();
+const databases = createTestDatabases();
 
 /**
  * @internal A run history's database in a temporary directory of its own, held to the run history's schema as the
