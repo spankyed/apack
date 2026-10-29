@@ -1,5 +1,6 @@
 // Diagnostic only: first-invocation and warm query costs; OS/storage caches are not made cold.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,9 +11,11 @@ const output = process.argv[2];
 assert(process.platform === 'linux' && output && !existsSync(output));
 const entries = Object.fromEntries(['@apackdev/ears', '@apackdev/ears/sqlite'].map(name => [name, import.meta.resolve(name)]));
 assert(Object.values(entries).every(path => path.includes('/dist/')));
+const runtimeHashes = Object.fromEntries([...Object.values(entries), new URL('./text.js', entries['@apackdev/ears/sqlite']).href]
+  .map(path => [path, createHash('sha256').update(readFileSync(new URL(path))).digest('hex')]));
 const constraints = { cpuMax: readFileSync('/sys/fs/cgroup/cpu.max', 'utf8').trim(), memoryMax: readFileSync('/sys/fs/cgroup/memory.max', 'utf8').trim() };
 assert.equal(constraints.cpuMax, '200000 100000'); assert.equal(constraints.memoryMax, String(6 * 1024 ** 3));
-const report = { qualification: false, source: process.env.EARS_COST_SOURCE, node: process.version, entries, constraints,
+const report = { qualification: false, source: process.env.EARS_COST_SOURCE, node: process.version, entries, runtimeHashes, constraints,
   protocol: '1k/10k/100k unique terms; first invocation + 12 warm calls per path; OFF; no discarded samples', profiles: [] };
 const summary = samples => { const sorted = [...samples].sort((a, b) => a - b); return { count: sorted.length,
   p50: sorted[Math.floor(sorted.length * .5)], p99: sorted[Math.floor(sorted.length * .99)], max: sorted.at(-1) }; };
