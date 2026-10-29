@@ -6,7 +6,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { setTimeout as pause } from 'node:timers/promises';
 import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
 const require = createRequire(import.meta.url), Database = require('better-sqlite3');
-const [extension, corpusPath, modelFile, output] = process.argv.slice(2);
+const [extension, corpusPath, modelFile, output, extensionProvenance] = process.argv.slice(2);
 assert(output && !existsSync(output));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const manifest = JSON.parse(readFileSync(corpusPath + '/manifest.json'));
@@ -15,12 +15,19 @@ assert.equal(sha(corpus), manifest.files['corpus.f32'].sha256);
 assert.equal(sha(queries), manifest.files['queries.f32'].sha256);
 const model = readFileSync(modelFile), identity = JSON.parse(readFileSync(modelFile + '.json'));
 assert.equal(sha(model), identity.sha256);
-assert.equal(sha(readFileSync(extension)), identity.identity.extensionSha256);
+const actualExtensionSha256 = sha(readFileSync(extension));
+let patchProvenance;
+if(actualExtensionSha256!==identity.identity.extensionSha256) {
+  assert(extensionProvenance,'Different native code requires explicit patch provenance');
+  patchProvenance=JSON.parse(readFileSync(extensionProvenance));
+  assert.equal(patchProvenance.upstreamExtensionSha256,identity.identity.extensionSha256);
+  assert.equal(patchProvenance.patchedExtensionSha256,actualExtensionSha256);
+}
 assert.equal(identity.identity.size, 99900);
 const report = {protocol:'ears-vec1-owner-scope/1',source:process.env.EARS_TEST_SOURCE,qualification:false,
   scope:'Ten observed queries, UUID-shaped text owners, SQL owner-IN versus equivalent range predicates; no integrated or fresh recall acceptance',
   node:process.version,platform:process.platform,arch:process.arch,modelSha256:sha(model),
-  loadedNative:[],records:[]};
+  loadedNative:[],patchProvenance,records:[]};
 const save = () => writeFileSync(output,JSON.stringify(report,null,2)+'\n');
 const file = '/metrics/owner-scope.sqlite3', bytes = 1536*4;
 assert(!existsSync(file));
