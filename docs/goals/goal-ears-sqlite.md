@@ -194,10 +194,20 @@ The guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-e
 to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No master merge, adoption,
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, with vector/operational tests and maintenance/audit implementation through 635b6d76af, preparing publication; published through **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**.
-Published functional checkpoint is **507e92fe85** (Float32 cosine/model validation), building on
-**7b56a145d4** (call-site correction) and text runtime/cost evidence at **a2de2944a1**.
-Integration/remote is **6cf6c8349ee7cb9813b5a1e2b2cb718227d62869**. Canonical/helper BASE are now at exact green 6cf6c8349e.
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published integration/remote is
+**34c612ab84d176a1ae4107dbc815892470694181**, including the vector diagnostics and maintenance/audit
+implementation. Existing draft #286 is updated with actual checks and unresolved requirements.
+Its focused [SQLite platform run 40873999402](https://github.com/spankyed/apack/actions/runs/40873999402)
+is live on exactly 34c612ab84: Linux x64, macOS arm64 and Windows x64 are running. App acceptance's
+ordinary check job is deliberately skipped for this focused dispatch. Each platform must execute all nine
+real maintenance command cases in addition to selected EARS/host contracts; evidence verifies nonvacuity.
+Poll that exact run; do not dispatch duplicates. It is not the full strict chain.
+Canonical/helper BASE remain at exact full-green **6cf6c8349e**. Runtime base/native pins remain
+98386b36a1/6ab2f69; master ref 3d2929177d has only the previously reviewed two plan documents.
+Published maintenance includes app-only rebuild/audit ownership, offline primary/runs/all selection,
+unreadable-history preservation, private semantic reconstruction and bounded finding retention.
+Native own-embedding visibility remains unresolved; no newer native/full green claim is made.
+
 
 The earlier **b25a985c8cebdf898b86cb915bca2600ba03782a** [Strict chain 40842115212](https://github.com/spankyed/apack/actions/runs/40842115212)
 is terminal FAILURE. Producers, both integration shards, both native shards and SQLite Linux/macOS passed.
@@ -287,7 +297,7 @@ failures; initial test types fail on receiver annotations, fixed in the subseque
 validation at 965301274c passes all 539 SQLite cases across 39 files, build/types/lint.
 Public audit export/CLI wiring 8db6c28fe7 passes five builds, EARS/host/CLI types, 16 host cases, nine
 real CLI maintenance cases, API generation and lint/imports. The generated API report is committed at
-635b6d76af. This converged maintenance checkpoint is preparing publication to the existing draft branch;
+635b6d76af. This converged maintenance checkpoint is published through 34c612ab84 to the existing draft branch;
 canonical stays at exact full-green 6cf. Native own-embedding visibility remains an unresolved baseline
 discrepancy; do not claim the newer shared native suite or full gate passes.
 Public rebuild still needs a correct generationless membership repair/publication design. Poll that same handle. The audit is not yet public
