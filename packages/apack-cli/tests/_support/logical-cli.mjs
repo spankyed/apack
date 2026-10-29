@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEarsEngine } from '@apackdev/ears';
 import { openDatabase } from '@apackdev/ears/sqlite';
@@ -22,6 +22,10 @@ const report = { source: process.env.EARS_TEST_SOURCE, qualification: installed 
   node: process.version, cli: { path: cli, sha256: hash(readFileSync(cli)) }, bundle: { path: bundle, sha256: hash(readFileSync(bundle)) },
   entries: Object.fromEntries(['@apackdev/ears', '@apackdev/ears/sqlite', '@apackdev/sdk/utils'].map(name => [name, import.meta.resolve(name)])), calls: [], checks: [] };
 assert(Object.values(report.entries).every(path => path.includes('/dist/')));
+const earsRoot = dirname(dirname(fileURLToPath(report.entries['@apackdev/ears'])));
+report.regexAssets = ['rregex.cjs', 'rregex_bg.wasm'].map(file => {
+  const path = join(earsRoot, 'vendor/rregex', file); return { path, sha256: hash(readFileSync(path)) };
+});
 if (installed) {
   assert(Object.values(report.entries).every(entry => fileURLToPath(entry).startsWith(join(installed, 'node_modules') + sep)));
   for (const name of ['ears', 'sdk', 'cli']) assert(!existsSync(join(installed, 'node_modules/@apackdev', name, 'src')));
@@ -39,7 +43,7 @@ function command(args, expected = 0) {
 function current() {
   const db = openDatabase({ path: paths.lmdb, readOnly: true });
   try { const e = createEarsEngine({ database: db }); return { sequence: e.lastCommit(), row: e.getRow('Row-one'), pending: e.pendingEmbeddings('Row').count,
-    nearest: e.query('Row').near([1, 0, 0]).ids() }; } finally { db.close(); }
+    nearest: e.query('Row').near([1, 0, 0]).ids(), regex: e.query('Row').matching('needle').ids() }; } finally { db.close(); }
 }
 function history() {
   const db = openDatabase({ path: paths.runHistory, readOnly: true });
@@ -72,7 +76,7 @@ try {
   command(['load', '--data-dir', profile, '--primary', primary, '--runs', runs, '--force']);
   const restored = current(); assert.equal(restored.row.title, 'needle'); assert(Object.is(restored.row.negative, -0));
   assert.deepEqual(restored.row.bytes, new Uint8Array([0, 255])); assert.equal(restored.row.big, 'x'.repeat(256000));
-  assert.equal(restored.pending, 0); assert.deepEqual(restored.nearest, ['Row-one']); assert(restored.sequence > before.sequence);
+  assert.equal(restored.pending, 0); assert.deepEqual(restored.nearest, ['Row-one']); assert.deepEqual(restored.regex, ['Row-one']); assert(restored.sequence > before.sequence);
   assert.deepEqual(history().ids, ['RunNode-one']); report.checks.push('built populated restore preserves bytes, embeddings and monotonic commit');
   command(['dump', '--data-dir', profile, '--primary', primary], 1);
   assert.equal(hash(readFileSync(primary)), report.archiveHashes.primary); assert.equal(hash(readFileSync(runs)), report.archiveHashes.runs);
@@ -85,9 +89,10 @@ try {
       assert(receipt.bindings.every(binding => binding.path.startsWith(join(installed, 'node_modules') + sep)));
     }
     const loaded = report.runtimeReceipts.flatMap(receipt => receipt.bindings);
-    assert(loaded.some(binding => binding.path.includes('better_sqlite3.node')));
+    assert(loaded.some(binding => binding.path.includes(sep + 'better-sqlite3' + sep) && binding.path.endsWith('.node')));
     assert(loaded.some(binding => binding.path.includes('elmdb') && binding.path.endsWith('.node')));
-    assert(loaded.some(binding => binding.path.includes('sqlite-vec')));
+    const extensions = report.runtimeReceipts.flatMap(receipt => receipt.extensionLoads);
+    assert(extensions.length > 0 && extensions.every(extension => extension.path.startsWith(join(installed, 'node_modules') + sep) && extension.path.includes('sqlite-vec')));
   }
 } catch (error) { report.failure = { message: error.message, stack: error.stack }; process.exitCode = 1; }
 finally { save(); rmSync(root, { recursive: true, force: true }); }
