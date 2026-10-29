@@ -59,7 +59,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
   });
 
   it('refuses foreground transaction ownership and insufficient input without poisoning the database',async()=>{
-    const {db,e,trainer,job}=fixture(8);
+    const {e,trainer,job}=fixture(8);
     let refusal!:Promise<unknown>;e.transact(()=>{refusal=trainer.train(job);});
     await expect(refusal).rejects.toMatchObject({code:'UNIT_OPEN'});
     await expect(trainer.train(job)).rejects.toMatchObject({code:'TRAINING_DATA'});
