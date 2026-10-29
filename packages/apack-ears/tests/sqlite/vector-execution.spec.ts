@@ -34,7 +34,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
     // Independent scalar instrumentation makes the exact-scan mutation fail this test. It does not
     // replace native Hamming candidate selection and is never registered by production code.
     let reranked = 0;
-    db.sql.function('vec_distance_cosine', { deterministic: true }, (a: Uint8Array, b: Uint8Array) => {
+    db.sql.function('vec_distance_cosine', { deterministic: true }, (a, b) => {
+      if (!(a instanceof Uint8Array) || !(b instanceof Uint8Array)) throw Error('Expected Float32 blobs');
       reranked++;
       const x = new DataView(a.buffer, a.byteOffset, a.byteLength), y = new DataView(b.buffer, b.byteOffset, b.byteLength);
       let dot = 0, xx = 0, yy = 0;
