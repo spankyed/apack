@@ -194,7 +194,13 @@ The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex
 1a0f664d01 to 585dcafccf; its BASE is now 585dcafccf. App master/native remain pinned to 98386b36a1 / 6ab2f69.
 No master merge, adoption, local compiler or native build occurred.
 
-Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Committed **bccf1ee752** implements explicit
+Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`, clean at local checkpoint **0a09dafa64**
+before this handoff update. Latest local runtime **2d0bdcbde9** (484 SQLite / 289 native) and its complete
+four-process cost evidence are not yet published; the exact CI source remains 60d4283f68. Run 40819583704
+now has producers SUCCESS and all five consumers live. No owned Linux container remains. Next implement
+the native recency checkpoint specified below; do not restart that CI or promote a different source.
+
+Earlier recovery checkpoint **bccf1ee752** implements explicit
 `db recover`, resumable offline incumbent restoration, forensic retention and managed-reader exclusion.
 The final runtime snapshot adds preparation durability barriers and permission/failure cases. It passes five
 builds, host/API/CLI types, **73 host cases**, **3 CLI cases**, lint/imports and three removal controls. Actual
