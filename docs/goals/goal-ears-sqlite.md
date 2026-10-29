@@ -206,17 +206,23 @@ confirms signal reporting only; corrected Windows recovery still needs CI. See
 [Windows/platform evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-portability/README.md).
 The correction is published at **e452d67ae1** on integration/remote; canonical remains at exact green 60d.
 The two compiler fixtures pass all seven cases with original budgets in a stage-instrumented Linux run,
-which does not explain the hosted macOS failure. The existing focused macOS workflow is live at exact
-e452d67ae1: [40834826426](https://github.com/spankyed/apack/actions/runs/40834826426). Poll it, do not
-duplicate dispatch. See [compiler timeout evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/compiler-timeouts/README.md).
+which does not explain the hosted macOS failure. The existing focused macOS workflow at exact e452d67ae1,
+[40834826426](https://github.com/spankyed/apack/actions/runs/40834826426), completed SUCCESS: both files,
+all seven cases, zero skipped, original deadlines. Neither focus reproduces the broad timeout; cause remains
+unisolated and that full gate stays failed. See [compiler timeout evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/compiler-timeouts/README.md).
 Do not relax deadlines or rerun unchanged source into acceptance. The local bounded typo implementation
 now removes vocabulary enumeration and its unused virtual table, following the behavior/18 cases
 preregistered at 5e72c2dc14. It passes **509 SQLite / 289 native**, 93 focused cases including the unchanged
 shared corpus, five builds, types/API reports/lint/imports and two failing removal controls. Its growth
 case proves identical query work after unrelated vocabulary growth; no latency or memory acceptance is
 claimed. See [bounded typo evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/bounded-typos/README.md).
-Next preregister/measure default-fuzzy growth costs while observing the exact focused macOS run; preserve
-the independent broad compiler failure until diagnosed or qualified. No owned Linux container remains;
+The functional correction is committed at **9beb23ebc9**. Its preregistered four-process default-fuzzy
+growth cohort completed all 1k/10k/100k profiles and expected answers. At 100k, exact/typo medians improve
+~135–149 to ~13–15 ms, but broad reads regress ~300 to ~1320 ms; small profiles and maximum-token queries
+also regress. This strategy is **not accepted**. See [typo growth cost](../references/evidence/ears-sqlite-implementation-2026-10-28/typo-cost/README.md).
+Next isolate full versus presence-pruned MATCH input on the same profile, for unscored count and the actual
+scored native SQL, before choosing a correction. Preserve the independent broad compiler failure until
+diagnosed or qualified. No owned Linux cohort remains;
 no VM scratch process or file remains from the signal probe.
 
 The published pre-typo runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/

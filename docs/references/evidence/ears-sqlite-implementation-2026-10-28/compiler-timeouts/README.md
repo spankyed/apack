@@ -11,7 +11,9 @@ append-only stage timestamps, process CPU totals and memory readings. The exact 
 results archive; it is not applied to committed production code. The two original fixture files and their
 test/hook budgets stay unchanged. Five package builds and **all seven cases in those two files pass**.
 Vitest's JSON `numPassedTestSuites` also counts nested suites; the actual file results are two, not five.
-The invocation takes 111 seconds including loading; the file reports are about 35 seconds each. Individual
+The invocation takes 111 seconds including loading; stdout reports about 71.5 seconds for dependency-graph
+(including setup) and 35.2 for build-registry. JSON testResults start/end omit dependency-graph setup and
+must not be presented as its complete file duration. Individual
 facade phases are roughly 2.4–3.2 seconds; other visible stages include input capture, generation, frontend
 and final validation. This does not reproduce or diagnose the macOS failure, establish normal performance
 or clear the required integrated gate.
@@ -25,7 +27,11 @@ on the daily-use Mac and no mutable dependency/native build is shared.
 
 The existing focused macOS workflow is dispatched once at exact e452d67ae1:
 [App acceptance 40834826426](https://github.com/spankyed/apack/actions/runs/40834826426), suite `integration`,
-only dependency-graph.integration.spec.ts and build-registry.integration.spec.ts. It is confirmed live
-at dispatch; poll this handle, never duplicate it because observation times out. It covers the actual
-failing platform after Linux fails to reproduce. Its result remains pending. A focused pass cannot
-substitute for the required full strict gate, and no deadline, assertion or input scope is relaxed.
+only dependency-graph.integration.spec.ts and build-registry.integration.spec.ts. It covers the actual
+failing platform after Linux fails to reproduce. It completed SUCCESS, with both files and all seven cases
+passing, zero skipped. Stdout reports 183 seconds
+for dependency-graph including its setup, and 111.8 for build-registry; its first case takes 95.3 seconds.
+The selected invocation takes 187.4 seconds. The JSON interval for dependency-graph excludes its setup;
+retain both report and full job log rather than mistake that 40.5-second interval for the whole file.
+Neither focused environment reproduces the broad failure, so its cause remains unisolated. A focused pass
+cannot substitute for the required full strict gate, and no deadline or assertion is relaxed.
