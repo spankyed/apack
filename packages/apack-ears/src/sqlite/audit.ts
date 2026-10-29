@@ -40,8 +40,7 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
   return source.withExclusiveWrites(async () => {
     const root = mkdtempSync(join(tmpdir(), 'ears-sqlite-audit-'));
     let incumbent: SqliteDatabase | undefined, rebuilt: SqliteDatabase | undefined;
-    let failure: unknown;
-    try {
+    const inspect = async (): Promise<SqliteAuditReport> => {
       const originalPath = join(root, 'incumbent'), rebuiltPath = join(root, 'rebuilt');
       source.backup(originalPath);
       incumbent = new SqliteDatabase({ path: originalPath, readOnly: true });
@@ -77,13 +76,15 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
       }
       report.ok = report.issues.length === 0;
       return report;
-    } catch (error) { failure = error; throw error; }
-    finally {
-      const cleanup: unknown[] = [];
-      for (const db of [rebuilt, incumbent]) try { db?.close(); } catch (error) { cleanup.push(error); }
-      try { rmSync(root, { recursive: true, force: true }); } catch (error) { cleanup.push(error); }
-      if (cleanup.length) throw new AggregateError(failure === undefined ? cleanup : [failure, ...cleanup],
-        'SQLite audit cleanup failed', { cause: failure ?? cleanup[0] });
-    }
+    };
+    let report: SqliteAuditReport | undefined, failure: unknown, failed = false;
+    try { report = await inspect(); } catch (error) { failed = true; failure = error; }
+    const cleanup: unknown[] = [];
+    for (const db of [rebuilt, incumbent]) try { db?.close(); } catch (error) { cleanup.push(error); }
+    try { rmSync(root, { recursive: true, force: true }); } catch (error) { cleanup.push(error); }
+    if (cleanup.length) throw new AggregateError(failed ? [failure, ...cleanup] : cleanup,
+      'SQLite audit cleanup failed', { cause: failed ? failure : cleanup[0] });
+    if (failed) throw failure;
+    return report!;
   });
 }
