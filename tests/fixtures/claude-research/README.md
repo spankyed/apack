@@ -146,3 +146,8 @@ are refused. The fixture uses original key approval and first-party acquisition,
 or eligibility overrides. It verifies normal/compact review, native Trust/helper or Exit effects,
 retained draft, original journal/print cost, same-session recovery and owned exits. Inspect captures
 and independently query the closed app database; broader policy/lifetime and F1–F5 remain separate.
+
+The completion-navigation profile now checks parent/Agent IME cancellation with native suggestions
+open at normal/compact sizes. Use `verifyNativeCompletionNavigation(root, { composition: true })`
+for the expanded eight-capture journey after saved app/native verification. Open its captures;
+exact Unicode DOM receipts do not prove CJK glyph rendering or physical OS candidate windows.
