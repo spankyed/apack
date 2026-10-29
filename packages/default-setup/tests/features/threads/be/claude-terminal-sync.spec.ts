@@ -336,3 +336,17 @@ it('persists exact refusal-note retirement and refuses its replay under a new ow
   await (second.beforeRelease as ReturnType<typeof vi.fn>).mock.calls[0]![0]()
   expect(fake.messages.map(message=>message.id)).toEqual(['foreign','human'])
 })
+
+
+it('persists the durable child link after native exit without changing the parent identity', async () => {
+  const continuation = { sessionId, continuedInSessionId: '05ff1d31-597d-4537-8737-4407191add6e', timestamp: '2026-10-29T12:13:13.909Z' }
+  const owner = { state: { sessionId, continuation, cwd: directory, status: 'exited', busy: false, tasks: [], ownerId: 'owned' }, busy: false,
+    readJournal: async () => ({ entries: [], pending: false, problems: [] }), refreshNotice: async () => {}, refreshMcpInput: async () => {},
+    getGenericToolPermissionDialogs: async () => [], getToolPermissionDialogs: async () => [], getWorkflowDialogs: async () => [],
+    getFileDialogs: async () => [], getBashDialogs: async () => [], getQuestionDialogs: async () => [], getPlanDialogs: async () => [], beforeRelease: vi.fn() } as unknown as ClaudeNativeTerminalOwner
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
+  await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, nativeContinuation: continuation }))
+  await (owner.beforeRelease as ReturnType<typeof vi.fn>).mock.calls[0]![0]()
+  expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, nativeContinuation: continuation, chatState: 'paused' })
+})

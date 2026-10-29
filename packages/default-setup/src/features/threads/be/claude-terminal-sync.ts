@@ -258,7 +258,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         }
         const state = owner.state, metadata = state.session
         const working = owner.busy || state.status === 'live' && !!state.activity && (state.activity.pendingAgents > 0 || state.activity.pendingWorkflows > 0)
-        const snapshot = JSON.stringify([state.sessionId, metadata, working, state.status, state.lastTurn, problem, lastTurnAt, toolCounts.get(state.sessionId), object(repository.threadQueries.byId(threadId)?.context?.claudeCode?.pendingControlRequest)?.requestId])
+        const snapshot = JSON.stringify([state.sessionId, state.continuation, metadata, working, state.status, state.lastTurn, problem, lastTurnAt, toolCounts.get(state.sessionId), object(repository.threadQueries.byId(threadId)?.context?.claudeCode?.pendingControlRequest)?.requestId])
         if (snapshot === lastMetadata) return
         lastMetadata = snapshot
         const nativeLaunch = await readLaunch()
@@ -269,7 +269,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const previous = Array.isArray(prior.previousSessionIds) ? prior.previousSessionIds : []
         const nativeError = state.lastTurn?.reason === 'error' ? 'Native Claude turn failed; details remain in the native interface' : state.lastTurn?.reason === 'refusal' ? 'Native Claude refused the turn' : undefined
         const chatState = problem || nativeError || state.status === 'error' ? 'error' : object(prior.pendingControlRequest)?.nativeTerminal ? 'paused' : working ? 'working' : state.status === 'exited' || state.lastTurn?.reason === 'aborted' ? 'paused' : 'success'
-        const context = { ...thread.context, claudeCode: { ...prior, sessionId: state.sessionId, ...(nativeLaunch?.sessionId === state.sessionId ? {nativeLaunch} : {}),
+        const context = { ...thread.context, claudeCode: { ...prior, sessionId: state.sessionId, ...(state.continuation ? { nativeContinuation: state.continuation } : {}), ...(nativeLaunch?.sessionId === state.sessionId ? {nativeLaunch} : {}),
           ...(prior.sessionId && prior.sessionId !== state.sessionId ? { previousSessionIds: [...new Set([...previous, prior.sessionId])] } : {}),
           ...(metadata ? { model: metadata.model, modelOverride: owner.modelSelection ?? prior.modelOverride, cwd: metadata.cwd, ...(metadata.permissionMode ? { permissionMode: metadata.permissionMode, prePlanMode: metadata.prePlanMode } : {}), turns: metadata.turns, startedAt: metadata.startedAt, ...(metadata.totalCostUsd !== undefined ? { totalCostUsd: metadata.totalCostUsd } : {}) } : {}),
           toolCallCount: toolCounts.get(state.sessionId) ?? 0, ...(lastTurnAt !== undefined ? { lastTurnAt } : {}), chatState, sessionError: problem ?? nativeError } }

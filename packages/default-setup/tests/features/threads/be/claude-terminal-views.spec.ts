@@ -330,3 +330,64 @@ it('shares sequencing across form/URL requests and rejects a detached URL action
     await Promise.resolve(); expect(f.owner.operateMcpUrl).toHaveBeenCalledOnce()
   } finally { f.views.clear() }
 })
+
+
+describe('background session view lifetime', () => {
+  const link = { sessionId: '24be904a-3c35-4981-9793-cbe7a6c19d46', continuedInSessionId: '05ff1d31-597d-4537-8737-4407191add6e', timestamp: '2026-10-29T12:13:13.909Z' }
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_BACKGROUND' as const, ...link, revision: 1, operation: 'refresh' as const }
+  it('uses the persisted link after the foreground owner has exited, and reopens on a new mount', async () => {
+    const background = vi.fn(async () => undefined), send = vi.fn()
+    const views = createClaudeTerminalViews({ get: () => undefined, open: vi.fn(), continuation: () => link, background })
+    try {
+      views.handle(mount, 'one', send); views.handle(request, 'one', send)
+      await vi.waitFor(() => expect(send.mock.calls.at(-1)![0].background?.status).toBe('done'))
+      expect(background).toHaveBeenCalledOnce()
+      views.handle({ ...mount, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'one', send)
+      const remount = { ...mount, mountId: randomUUID() }
+      views.handle(remount, 'one', send); views.handle({ ...request, mountId: remount.mountId }, 'one', send)
+      await vi.waitFor(() => expect(background).toHaveBeenCalledTimes(2))
+    } finally { views.clear() }
+  })
+  it('rejects another window, foreign session and replayed revisions', async () => {
+    const background = vi.fn(async () => undefined), send = vi.fn()
+    const views = createClaudeTerminalViews({ get: () => undefined, open: vi.fn(), continuation: () => link, background })
+    try {
+      views.handle(mount, 'one', send)
+      views.handle(request, 'two', send)
+      views.handle({ ...request, continuedInSessionId: randomUUID() }, 'one', send)
+      expect(background).not.toHaveBeenCalled()
+      views.handle(request, 'one', send)
+      await vi.waitFor(() => expect(send.mock.calls.at(-1)![0].background?.status).toBe('done'))
+      views.handle(request, 'one', send)
+      await Promise.resolve(); expect(background).toHaveBeenCalledOnce()
+    } finally { views.clear() }
+  })
+  it.each(['unmount', 'replacement'])('does not publish a late read after %s', async change => {
+    let current = link, finish!: () => void
+    const background = vi.fn(() => new Promise<undefined>(resolve => { finish = () => resolve(undefined) })), send = vi.fn()
+    const views = createClaudeTerminalViews({ get: () => undefined, open: vi.fn(), continuation: () => current, background })
+    try {
+      views.handle(mount, 'one', send); views.handle(request, 'one', send)
+      await vi.waitFor(() => expect(background).toHaveBeenCalledOnce())
+      if (change === 'unmount') views.handle({ ...mount, type: 'CLAUDE_TERMINAL_UNMOUNT' }, 'one', send)
+      else current = { ...link, continuedInSessionId: randomUUID() }
+      const before = send.mock.calls.length; finish(); await Promise.resolve(); await Promise.resolve()
+      expect(send.mock.calls).toHaveLength(before)
+    } finally { views.clear() }
+  })
+  it('lets a new child refresh while the previous child read is still pending', async () => {
+    let current = link, finish!: () => void
+    const background = vi.fn().mockImplementationOnce(() => new Promise<undefined>(resolve => { finish = () => resolve(undefined) })).mockResolvedValue(undefined), send = vi.fn()
+    const views = createClaudeTerminalViews({ get: () => undefined, open: vi.fn(), continuation: () => current, background })
+    try {
+      views.handle(mount, 'one', send); views.handle(request, 'one', send)
+      await vi.waitFor(() => expect(background).toHaveBeenCalledOnce())
+      current = { ...link, continuedInSessionId: randomUUID() }
+      views.handle({ ...request, ...current, revision: 2 }, 'one', send)
+      await vi.waitFor(() => expect(send.mock.calls.at(-1)![0].background).toMatchObject({ continuedInSessionId: current.continuedInSessionId, status: 'done' }))
+      finish(); await Promise.resolve(); await Promise.resolve()
+      expect(send.mock.calls.at(-1)![0].background.continuedInSessionId).toBe(current.continuedInSessionId)
+    } finally { views.clear() }
+  })
+
+})

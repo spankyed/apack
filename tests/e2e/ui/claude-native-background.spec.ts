@@ -83,17 +83,51 @@ test('hands an original native conversation to a separate background session fro
     expect(job.sessionId).not.toBe(sessionId)
     expect(job.pid).toBeGreaterThan(1)
     await expect.poll(async () => (await context()).native?.state?.status, { timeout: 10000 }).toBe('exited')
+    await expect.poll(async () => (await context()).claude.nativeContinuation).toMatchObject({ sessionId, continuedInSessionId: job.sessionId })
+    const widget = appPage.getByRole('region', { name: 'Background Claude session', exact: true })
+    await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toBeEnabled({ timeout: 15000 })
+    await composer.click(); await composer.press('Control+A'); await composer.pressSequentially('Keep these notes while the background session runs.')
+    const retainedDraft = await composer.textContent()
+    await widget.getByRole('button', { name: 'Refresh status', exact: true }).click()
+    await expect(widget.getByRole('button', { name: 'Refresh status', exact: true })).toBeEnabled()
+    await expect(composer).toHaveText(retainedDraft!)
+    const mountIds = () => appPage.evaluate(() => Object.keys((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews))
+    const priorMounts = await mountIds()
+    const parentThreadId = (await context()).threadId
+    await appPage.evaluate(cwd => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }), workspace!)
+    await expect(widget).toHaveCount(0)
+    await expect.poll(mountIds).not.toEqual(priorMounts)
+    await appPage.evaluate(threadId => (window as any).applicationState.system.get('default-setup/threads').send({ type: 'OPEN_THREAD_CHAT', threadId }), parentThreadId)
+    await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toBeEnabled({ timeout: 15000 })
+    await expect(composer).toHaveText(retainedDraft!)
+    observations.remounted = { before: priorMounts, after: await mountIds() }
+    expect(observations.remounted.after).not.toEqual(priorMounts)
+    observations.running = await context()
     for (const [name, size] of [['normal', { width: 1100, height: 900 }], ['compact', { width: 680, height: 600 }]] as const) {
       await appPage.setViewportSize(size)
-      await capture('apack-native-background-' + name + '.png')
+      await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toBeInViewport({ ratio: 1 })
+      await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
+      await capture('apack-native-background-running-' + name + '.png')
+    }
+    await widget.getByRole('button', { name: 'Stop background session', exact: true }).click()
+    await expect(widget.getByRole('status')).toHaveText('Background session stopped', { timeout: 20000 })
+    await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toHaveCount(0)
+    await expect(composer).toHaveText(retainedDraft!)
+    observations.uiStop = true
+    observations.stopped = await context()
+    for (const [name, size] of [['normal', { width: 1100, height: 900 }], ['compact', { width: 680, height: 600 }]] as const) {
+      await appPage.setViewportSize(size)
+      await capture('apack-native-background-stopped-' + name + '.png')
     }
     observations.current = await context()
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, appHandoffAccepted: false }))
+    observations.retainedDraft = retainedDraft
+    expect(observations.current.sessionId).toBe(sessionId)
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeBackgroundControls: true, appHandoffAccepted: false }))
   } finally {
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
     if (job) {
-      observations.stop = await cli(['stop', job.id])
       observations.after = await list()
+      if (observations.after.find((row: any) => row.id === job.id)?.state !== 'stopped') { observations.cleanupStop = await cli(['stop', job.id]); observations.after = await list() }
       expect(observations.after.find((row: any) => row.id === job.id)?.state).toBe('stopped')
     }
     observations.current = await context()

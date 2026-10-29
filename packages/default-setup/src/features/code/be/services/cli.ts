@@ -1,3 +1,4 @@
+import { backgroundSession } from './claude-code/background-sessions.ts'
 import { parseMcpElicitationForm, validateMcpElicitationForm } from '../../common/mcp-elicitation-form.ts'
 import type { ClaudeNativeLaunch } from '../../common/native-launch.ts'
 import { prepareClaudeNativeTerminal } from './claude-code/terminal-owner.ts'
@@ -55,6 +56,7 @@ export interface CliServiceType {
   /** Clear-cache resolve + exec test — same path as the Settings test button. */
   testCli(provider: string): Promise<{ success: true; resolvedPath: string } | { success: false; error: string }>
   claudeCode: {
+    backgroundSession: typeof backgroundSession
     parseMcpElicitationForm: typeof parseMcpElicitationForm
     validateMcpElicitationForm: typeof validateMcpElicitationForm
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
@@ -199,6 +201,7 @@ function createCliService(): CliServiceType {
       },
     },
     claudeCode: {
+      backgroundSession,
       parseMcpElicitationForm,
       validateMcpElicitationForm,
       query(opts) {
