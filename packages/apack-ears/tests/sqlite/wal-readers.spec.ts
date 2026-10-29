@@ -21,8 +21,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite retaine
     }) }); stores.push(writer);
     const e = createEarsEngine({ database: writer });
     e.create('Row', { id: 'Row-before' });
-    writer.sql.pragma('wal_checkpoint(TRUNCATE)');
-    writer.sql.pragma('wal_autocheckpoint=0');
+    writer.all('PRAGMA wal_checkpoint(TRUNCATE)');
+    writer.sql.exec('PRAGMA wal_autocheckpoint=0');
     const reader = new SqliteDatabase({ path, readOnly: true }); stores.push(reader);
     // Hold a real SQLite read transaction, as a separate long-lived reader would. EARS readSync
     // normally releases its snapshot before returning, so it cannot model this retained reader.
@@ -34,13 +34,13 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite retaine
       expect(reader.get('SELECT count(*) n FROM entities')!.n).toBe(1);
       const before = statSync(join(path, 'data.sqlite3-wal')).size;
       expect(before).toBeGreaterThan(16 * 32768);
-      const blocked = writer.sql.pragma('wal_checkpoint(TRUNCATE)') as Array<{ busy: number; log: number; checkpointed: number }>;
+      const blocked = writer.all('PRAGMA wal_checkpoint(TRUNCATE)') as Array<{ busy: number; log: number; checkpointed: number }>;
       expect(blocked[0]!.busy).toBe(1);
       expect(blocked[0]!.checkpointed).toBeLessThan(blocked[0]!.log);
       expect(statSync(join(path, 'data.sqlite3-wal')).size).toBe(before);
     } finally { reader.sql.exec('ROLLBACK'); }
     expect(reader.get('SELECT count(*) n FROM entities')!.n).toBe(17);
-    const released = writer.sql.pragma('wal_checkpoint(TRUNCATE)') as Array<{ busy: number }>;
+    const released = writer.all('PRAGMA wal_checkpoint(TRUNCATE)') as Array<{ busy: number }>;
     expect(released[0]!.busy).toBe(0);
     expect(statSync(join(path, 'data.sqlite3-wal')).size).toBe(0);
     expect(e.query('Row').count()).toBe(17);
