@@ -131,3 +131,15 @@ tradeoff of searching more coarse buckets while holding the model fixed. Any sel
 strategy needs a separately frozen, previously unobserved query partition before
 acceptance, plus the complete integrated EARS and app gates above. No dependency
 adoption or generalization claim follows from a favorable diagnostic.
+
+## Exploratory stable vec0 chunk-size control
+
+The graph-sized vec1 owner-IN prerequisite exposes a separate metadata comparison cost.
+Before adding another native dependency or maintaining an extension fork, compare the
+already-pinned sqlite-vec binary table with 64/128/256-row chunks versus its recorded
+1024-row default. The upstream per-chunk repeated-minimum selection cost makes this
+a specific configuration hypothesis. Use K=256, the unchanged 99,900-row corpus,
+all original scopes/phases/queries/passes, 64 MiB cache and private container database.
+Record `EARS_VEC0_CHUNK_SIZE` explicitly. Preserve all earlier timings and failures.
+These observed queries remain exploratory, with fresh validation and integrated owner
+aggregation/filtering/admission/transaction/platform gates required before acceptance.

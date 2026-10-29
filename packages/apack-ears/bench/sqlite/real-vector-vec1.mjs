@@ -12,6 +12,8 @@ const require = createRequire(import.meta.url), Database = require('better-sqlit
 const [extensionFile, corpusPath, truthFile, sizeArg, mode, output, modelCache] = process.argv.slice(2);
 const size = Number(sizeArg), isVec0 = mode.startsWith('vec0-binary-'), isSqlBinary = mode.startsWith('sql-binary-');
 const isBinary = isVec0 || isSqlBinary;
+const vec0ChunkSize = Number(process.env.EARS_VEC0_CHUNK_SIZE ?? 1024);
+assert([64,128,256,1024].includes(vec0ChunkSize));
 const extension = isBinary ? getLoadablePath() : resolve(extensionFile);
 assert([1000,10000,99900].includes(size));
 assert(['flat','ivf-bq-256','ivf-bq-1024','scan-bq-256','scan-bq-1024','vec0-binary-256','vec0-binary-1024','sql-binary-256','sql-binary-1024'].includes(mode));
@@ -49,7 +51,8 @@ try {
   report.loadedNative = loadedNativeBindings([extension]);
   if(isBinary) {
     db.exec('CREATE TABLE raw(rowid INTEGER PRIMARY KEY,v BLOB NOT NULL)');
-    db.exec(isVec0?'CREATE VIRTUAL TABLE corpus USING vec0(embedding bit[1536],scope integer,active integer)':
+    report.vec0ChunkSize = isVec0 ? vec0ChunkSize : null;
+    db.exec(isVec0?`CREATE VIRTUAL TABLE corpus USING vec0(embedding bit[1536],scope integer,active integer,chunk_size=${vec0ChunkSize})`:
       'CREATE TABLE corpus(rowid INTEGER PRIMARY KEY,embedding BLOB NOT NULL,scope INTEGER NOT NULL,active INTEGER NOT NULL); CREATE INDEX eligible ON corpus(active,scope)');
   } else db.exec('CREATE VIRTUAL TABLE corpus USING vec1(v, scope, active)');
   if (isBinary) {
