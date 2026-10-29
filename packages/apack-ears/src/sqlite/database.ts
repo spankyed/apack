@@ -67,6 +67,8 @@ export class SqliteDatabase implements EarsDatabase {
   readonly sql: DatabaseSync;
   private readonly writeLease = createWriteLease();
   private opened = true;
+  private readonly closeController = new AbortController();
+  get closeSignal(): AbortSignal { return this.closeController.signal; }
   private faulted?: Error;
   private active?: SqliteUnit;
   private schemaValidator?: ReturnType<typeof createSchemaValidator>;
@@ -1442,6 +1444,7 @@ export class SqliteDatabase implements EarsDatabase {
     this.writeLease.assertWritable();
     this.indexBuilds.stop();
     if (this.active) this.active.abort();
+    this.closeController.abort();
     this.sql.close();
     this.opened = false;
     this.tracks.clear();
