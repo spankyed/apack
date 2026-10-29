@@ -116,3 +116,18 @@ candidate SQL and a rerank over those bounded owner IDs, requiring identical ans
 These counterfactuals run after the original statement on warmer caches; their costs
 are diagnostic, do not add up to an independent attribution, and cannot qualify the
 original latency/heartbeat gates. Preserve the full uninstrumented matrix first.
+
+## Exploratory IVF probe diagnostic after failed strategies
+
+After the original fixed 16-probe IVF and full-scan results, compare 32 and 64 probes
+on a single reused, hashed 64-bucket model at 99,900 rows, K=256. Use the app's 64 MiB
+cache and private ordinary container filesystem, both phases and all three scopes.
+All queries, eligibility, oracle, passes and budgets remain unchanged. Record probe
+counts explicitly through `EARS_VEC1_NPROBE`; default 16 preserves earlier invocations.
+
+This is exploratory reuse of already-observed queries, not fresh held-out validation
+or a replacement for the original failed configurations. It diagnoses the recall/cost
+tradeoff of searching more coarse buckets while holding the model fixed. Any selected
+strategy needs a separately frozen, previously unobserved query partition before
+acceptance, plus the complete integrated EARS and app gates above. No dependency
+adoption or generalization claim follows from a favorable diagnostic.
