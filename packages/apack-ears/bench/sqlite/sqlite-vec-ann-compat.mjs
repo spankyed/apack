@@ -38,16 +38,27 @@ try {
   save();
   db.exec(`CREATE VIRTUAL TABLE corpus USING vec0(v float[8] distance_metric=cosine
     INDEXED BY diskann(neighbor_quantizer=binary,n_neighbors=16,search_list_size=1024))`);
+  db.exec('CREATE VIRTUAL TABLE flat_control USING vec0(v float[8] distance_metric=cosine)');
+  const flatInsert=db.prepare('INSERT INTO flat_control(rowid,v) VALUES (?,?)');
   const insert=db.prepare('INSERT INTO corpus(rowid,v) VALUES (?,?)'),remove=db.prepare('DELETE FROM corpus WHERE rowid=?');
   db.transaction(()=>{
-    for(let i=0;i<512;i++)insert.run(BigInt(i+1),blob([-1,...Array.from({length:7},(_,j)=>.3*Math.sin(i*9.17+j*2.71))]));
-    for(const [id,v] of [[10001,q],[10002,blob([.8,.6])],[10003,blob([0,1])],[10004,blob([-.8,.6])]])insert.run(BigInt(id),v);
+    for(let i=0;i<512;i++) {
+      const value=blob([-1,...Array.from({length:7},(_,j)=>.3*Math.sin(i*9.17+j*2.71))]);
+      insert.run(BigInt(i+1),value);flatInsert.run(BigInt(i+1),value);
+    }
+    for(const [id,v] of [[10001,q],[10002,blob([.8,.6])],[10003,blob([0,1])],[10004,blob([-.8,.6])]]) {
+      insert.run(BigInt(id),v);flatInsert.run(BigInt(id),v);
+    }
   })();
   report.graphNodes=db.prepare('SELECT count(*) n FROM corpus_diskann_nodes00').get().n;
   assert(report.graphNodes>0);save();
   // Request all candidates on this tiny graph, so rollback/snapshot evidence is separate from ANN recall.
   const nearest=handle=>handle.prepare(`SELECT rowid,vec_distance_cosine(v,?) exact FROM corpus
     WHERE v MATCH ? AND k=1024 ORDER BY distance`).all(q,q).sort((a,b)=>a.exact-b.exact||a.rowid-b.rowid)[0]?.rowid;
+  const flatSelf=db.prepare('SELECT rowid FROM flat_control WHERE v MATCH ? AND k=1 ORDER BY distance').all(q);
+  const flatScope=db.prepare('SELECT rowid FROM flat_control WHERE v MATCH ? AND k=1 AND rowid IN (SELECT value FROM json_each(?)) ORDER BY distance').all(q,JSON.stringify([10003]));
+  report.flatControl={self:flatSelf.map(row=>row.rowid),rowidFilter:flatScope.map(row=>row.rowid)};
+  assert.deepEqual(report.flatControl,{self:[10001],rowidFilter:[10003]});save();
   const initial=db.prepare(`SELECT rowid,vec_distance_cosine(v,?) exact FROM corpus
     WHERE v MATCH ? AND k=1024 ORDER BY distance`).all(q,q);
   const direct=db.prepare('SELECT v,vec_distance_cosine(v,?) exact FROM corpus WHERE rowid=10001').get(q);
