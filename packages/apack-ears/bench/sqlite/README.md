@@ -358,3 +358,29 @@ Before trying ANN alternatives, use provisional engineering ceilings: warm query
 These are diagnostic thresholds for selecting an execution strategy, not approved full-app/adoption budgets;
 actual representative app-flow acceptance and matched durability remain required. A synthetic pass cannot
 replace licensed, attributed real-model corpus qualification or complete chunk/hybrid/lifecycle contracts.
+
+
+### Int8 candidate counterfactual
+
+Before its first run, freeze `vector-quantized.mjs`: pinned better-sqlite3/sqlite-vec only, no production
+change. Quantize each Float32 vector independently by max absolute component, rounding/clamping to
+[-127,127]. Search native vec0 int8 cosine for **64 candidates**, then rerank original Float32 values
+with native cosine for k=10. No corpus-trained scale, external cache or ANN graph is introduced.
+Keep live metadata in the same SQLite transaction; selective paths include native primary-candidate
+lookup, rowid-list transport and vector filtering. Use explicit INTEGER PRIMARY KEY identities.
+
+First verify direct quantized KNN and reranking through own writes, nested savepoint deletion/rollback,
+metadata changes, two-handle WAL snapshots, close/reopen and VACUUM INTO. Then run one fresh process
+at 1k, then 10k, then 100k, both existing 1536-dimensional clustered/mixed distributions, held-out 16
+queries, all/10%/1% scopes, first +2 warm calls and one post-update call each. Stop the cohort at the
+first correctness/recall or strategy ceiling miss; retain partial reports and unrun members. Keep existing
+mean recall@10 >=0.95 per scope/phase, warm p95 <=100ms at10k /200ms at100k and heartbeat p99 <=16ms;
+1k is a correctness smoke. No retries or changed candidate count after seeing recall. Record generation,
+index/update cost, every answer/truth, candidate/rerank/total spans, files, memory and native fingerprints.
+
+This is a native primitive counterfactual, not an integrated EARS strategy or app acceptance. Multiple
+chunks per entity, adaptive distinct-owner admission, arbitrary/large k and hybrid semantics, background
+generations and full backup/rebuild still require integration proof before selection. Current source
+`chunks` uses an implicit rowid; a durable derived index must not join on that unstable identity across
+VACUUM backups ([SQLite documentation](https://www.sqlite.org/lang_vacuum.html)). Require a stable owner
+mapping or explicit primary key and test backup/reopen; do not change production layout before evidence.
