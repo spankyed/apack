@@ -88,6 +88,19 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(e.getAttr('Row-one', 'title')).toBe('alpha needle');
   });
 
+  it('detects missing external-content postings even when stored documents are unchanged', async () => {
+    const { db, e, tri } = seed(), before = e.lastCommit();
+    const docsBefore = db.all(`SELECT entity_id,raw,folded FROM ${tri}_docs ORDER BY id`);
+    db.run(`INSERT INTO ${tri}(${tri},rowid,folded) SELECT 'delete',id,folded FROM ${tri}_docs WHERE entity_id=?`, ['Row-one']);
+    expect(db.all(`SELECT entity_id,raw,folded FROM ${tri}_docs ORDER BY id`)).toEqual(docsBefore);
+    expect(e.query('Row').containing('needle').ids()).toEqual([]);
+    const report = await auditSqliteDatabase(db);
+    expect(report.ok).toBe(false);
+    expect(report.issues.some(issue => issue.includes('trigram posting integrity failed'))).toBe(true);
+    expect(e.query('Row').containing('needle').ids()).toEqual([]);
+    expect(e.lastCommit()).toBe(before);
+  });
+
   it('refuses rebuild on read-only, open-unit and stopped owners without changing the catalog', () => {
     const { db, e } = seed();
     const jobs = db.indexBuilds.jobs(), before = e.lastCommit();
