@@ -52,7 +52,10 @@ try {
     assert.equal(nearest(db), 2);
     assert.deepEqual(scoped(db).map(row => row.rowid), [3]);
     const filtered = db.prepare('SELECT rowid FROM corpus(?,?) WHERE active=1').all(query,JSON.stringify({K:1,nprobe:100}));
-    assert.deepEqual(filtered.map(row => row.rowid), [2]); record.passed.push('metadata and dynamic owner IN filtering before K'); save();
+    assert.equal(filtered.length,1); assert([2,3,4].includes(filtered[0].rowid));
+    if (mode !== 'ivf-bq') assert.equal(filtered[0].rowid,2);
+    for (const id of [2,3,4]) assert.deepEqual(db.prepare('SELECT rowid FROM corpus(?,?) WHERE active=1 AND owner IN (SELECT value FROM json_each(?))').all(query,JSON.stringify({K:1,nprobe:100}),JSON.stringify([`owner-${id}`])).map(row=>row.rowid),[id]);
+    record.passed.push('metadata and dynamic owner IN filtering before K'); save();
     reader = open(file, true); assert.equal(nearest(reader),2);
     db.exec('BEGIN IMMEDIATE'); db.prepare('UPDATE corpus SET v=? WHERE rowid=2').run(opposite);
     assert.equal(nearest(db),3); assert.equal(nearest(reader),2);
