@@ -1,0 +1,9 @@
+# Semantic audit implementation
+
+The internal audit takes a private VACUUM snapshot and a second copy, rebuilds active derived generations on the second, and hashes rows incrementally with length framing in canonical SQL order. It compares active value/text/trigram/vector contents and returns the snapshot's logical sequence. Incomplete generations do not produce an ok result. Two database copies and rebuild/WAL space are required; native sort/SQLite memory and maximum individual values still need resource qualification. This is an internal partial maintenance surface, not complete primary-data validation or CLI qualification.
+
+Exact source 9e1df259e2 passes EARS build/types and all 26 recovery cases, including clean comparison and detection of a deleted real FTS document without repairing the incumbent. Root lint fails no-unsafe-finally in cleanup. That failed run is retained; source 475c8de8f1 moves cleanup/error aggregation outside finally rather than disabling the rule.
+
+New source adds FTS5 native integrity checks on a writable private copy only. The [official FTS5 integrity command](https://www.sqlite.org/fts5.html#the_integrity_check_command) specifies rank=1 for comparison against external content. The new regression removes trigram postings via the native delete command while leaving the document table unchanged; result pending. It distinguishes inverted-posting integrity from document equality. No source primary data, logical commit or incumbent postings are repaired by audit.
+
+Complete primary/value invariants, bounded issue retention, interrupted cleanup/fault controls, scratch resource policy, public host/CLI wiring and full suite/platform acceptance remain required. Source backup/open failures remain explicit failures rather than a clean audit report. Construction uses the current driver and its pinned native artifacts; no new dependency is introduced.

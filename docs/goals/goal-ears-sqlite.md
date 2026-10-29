@@ -273,8 +273,12 @@ and invalidates the old reader; managed-writer exclusion is tested. Selected sto
 lint/imports. The c286f096d2 unreadable-history preservation test passes with host types/lint: incumbent
 bytes remain unchanged, with no aside/replacement. Full suite/platform qualification remains required.
 Internal audit slice 9e1df259e2 compares streamed active derived contents with rebuilt private snapshots;
-it is validating in ears-audit-contents. This slice is not yet public and does not cover all primary/value
-invariants or FTS inverted-posting integrity. Complete audit and lossless logical export remain required.
+it passes all 26 recovery cases/build/types but fails cleanup lint. Corrected 475c8de8f1 also adds native
+FTS posting integrity checks on a private writable snapshot and a postings-only corruption regression;
+validation is active in ears-audit-postings (exec 17575). Poll that same handle. The audit is not yet public
+and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
+See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
+Complete audit and lossless logical export remain required.
  See [explicit rebuild evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/explicit-rebuild/README.md).
 Next resolve execution ownership and snapshot/transaction requirements before moving vector work off-thread;
 continue real-corpus qualification and the complete phase 3–7 gates without treating a synthetic kernel as adoption proof.
