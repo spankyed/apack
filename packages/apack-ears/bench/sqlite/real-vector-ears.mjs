@@ -76,7 +76,7 @@ try {
     const describe=value=>value instanceof Uint8Array?{kind:'bytes',length:value.byteLength,sha256:sha(value)}:
       typeof value==='string'?{kind:'string',length:value.length}:{kind:typeof value,value};
     const capture=(method,operation)=>(sql,parameters=[])=>{
-      const begin=performance.now(),cpu=process.resourceUsage(),answer=operation(sql,parameters),end=process.resourceUsage();
+      const begin=performance.now(),cpu=process.resourceUsage(),answer=operation(sql,parameters),elapsed=performance.now()-begin,end=process.resourceUsage();
       if(stages) {
         let id=known.get(sql);
         if(id===undefined) {
@@ -84,7 +84,7 @@ try {
           report.sql.push({id,method,sql,parameters:parameters.map(describe),
             plan:db.sql.prepare('EXPLAIN QUERY PLAN '+sql).all(...parameters)});
         }
-        stages.push({id,ms:performance.now()-begin,userCpuUs:end.userCPUTime-cpu.userCPUTime,
+        stages.push({id,ms:elapsed,userCpuUs:end.userCPUTime-cpu.userCPUTime,
           systemCpuUs:end.systemCPUTime-cpu.systemCPUTime,rows:Array.isArray(answer)?answer.length:answer?1:0});
         const split=sql.indexOf(') SELECT c.entity_id id,1-min');
         if(split>=0) {
@@ -110,7 +110,7 @@ try {
         for(let q=0;q<10;q++) {
           stages=[];
           const at=performance.now(),hits=(percent===100?e.query('Row'):e.query.ids(selected)).near(queryVectors[q],{k:10}).hits();
-          report.diagnostics.push({percent,q,wallMs:performance.now()-at,stages,ordinals:hits.map(hit=>Number(hit.id.slice(4)))});
+          report.diagnostics.push({percent,q,instrumentedWallMs:performance.now()-at,stages,ordinals:hits.map(hit=>Number(hit.id.slice(4)))});
           stages=undefined;save();
         }
       }
