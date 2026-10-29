@@ -144,6 +144,12 @@ export class SqliteDatabase implements EarsDatabase {
       }
       this.values = new SqliteValues(this, { encode: value => this.pack(value), decode: bytes => this.unpack(bytes) });
       if (!this.readOnly) this.values.initialize();
+      this.sql.function('ears_rebuild_members', { deterministic: true }, bytes => {
+        if (!(bytes instanceof Uint8Array)) fail('CORRUPT', 'Invalid authoritative list encoding');
+        const value = this.unpack(bytes);
+        if (!Array.isArray(value)) fail('CORRUPT', 'Invalid authoritative list encoding');
+        return JSON.stringify(this.values.members(value));
+      });
       this.search = new SqliteSearch(this);
       this.heldSchema = this.meta("schema") ?? {
         types: {},
@@ -1247,6 +1253,9 @@ export class SqliteDatabase implements EarsDatabase {
     this.sql.exec('BEGIN IMMEDIATE');
     try {
       this.checkRevision();
+      // Explicit offline maintenance rebuilds generationless membership in this same atomic admission.
+      // SQLite owns the scan and insertion; the callback only decodes one authoritative array at a time.
+      this.values.rebuildMembers();
       const jobs = this.indexBuilds.jobs();
       this.indexBuilds.restart(jobs);
       this.search.ensure(this.heldSchema);

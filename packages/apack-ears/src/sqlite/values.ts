@@ -56,6 +56,15 @@ export class SqliteValues {
     this.sql.run('DELETE FROM value_members');
   }
 
+  /** Caller owns the offline write transaction: readers see the old or complete rebuilt membership. */
+  rebuildMembers(): void {
+    this.sql.run('DELETE FROM value_members');
+    this.sql.run(`INSERT OR IGNORE INTO value_members(entity_id,field,kind,value)
+      SELECT o.entity_id,o.field,json_extract(member.value,'$.kind'),json_extract(member.value,'$.value')
+      FROM value_overflow o JOIN entities e ON e.id=o.entity_id, json_each(ears_rebuild_members(o.value)) member
+      WHERE o.kind='array'`);
+  }
+
   /** Reopens an admitted layout without DDL or writes, including on a read-only connection. */
   layout(name: string): SqliteValueLayout | undefined {
     const type = this.sql.get('SELECT id FROM value_types WHERE name=?', [name]);

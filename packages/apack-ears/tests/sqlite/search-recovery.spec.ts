@@ -156,6 +156,26 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     expect(e.getAttr('Row-one', 'tags')).toEqual(persisted);
     expect(e.lastCommit()).toBe(before);
     expect(db.get("SELECT 1 FROM value_members WHERE entity_id=? AND field='tags' AND kind='text'", ['Row-one'])).toBeUndefined();
+    expect(e.query('Row').where('tags', 'needle').ids()).toEqual([]);
+    db.rebuildIndexes(); await db.indexesReady();
+    expect(e.query('Row').where('tags', 'needle').ids()).toEqual(['Row-one']);
+    expect(e.getAttr('Row-one', 'tags')).toEqual(persisted);
+    expect(e.lastCommit()).toBe(before);
+    expect((await auditSqliteDatabase(db)).ok).toBe(true);
+  });
+
+  it('rolls membership reconstruction back if later index admission fails', () => {
+    const { db, e } = seed();
+    e.write('Row-one').set('tags', ['fresh']);
+    db.run("UPDATE value_members SET value='stale' WHERE entity_id=? AND field='tags'", ['Row-one']);
+    const generations = db.indexBuilds.jobs(), before = e.lastCommit();
+    const fault = vi.spyOn(db.search, 'ensure').mockImplementation(() => { throw Error('admission refused'); });
+    expect(() => db.rebuildIndexes()).toThrow('admission refused'); fault.mockRestore();
+    expect(db.sql.inTransaction).toBe(false);
+    expect(db.indexBuilds.jobs()).toEqual(generations);
+    expect(e.lastCommit()).toBe(before);
+    expect(db.get("SELECT value FROM value_members WHERE entity_id=? AND field='tags'", ['Row-one'])!.value).toBe('stale');
+    expect(e.query('Row').where('tags', 'fresh').ids()).toEqual([]);
   });
 
   it('removes failed audit scratch and releases write ownership after a snapshot failure', async () => {
