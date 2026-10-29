@@ -560,3 +560,14 @@ values, settings, history and media and unchanged native source hashes. It recor
 executable absence rather than claiming all pack integrations work; JSON fatal API reports refuse. It is a built
 Node API gate, not an Electron/renderer or installed-distribution certificate. The Linux platform job requires it,
 while every platform separately requires the native-producer profile conversion/refusal probe.
+
+### Process death during profile conversion
+
+`tests/scripts/test-sqlite-profile-crash.ts <matching-elmdb-cli> <new-receipt.json>` runs under the source condition
+and tsx in disposable environments. A parent kills the child only after real method-boundary witnesses: partial
+FULL ingestion, primary installation, and final directory publication. The final profile stays absent before
+publication; after it, both stores and owned data reopen completely. Reuse of the killed operation's container
+refuses; a new-container retry reclaims the dead source owner while preserving the old output file bytes. The
+Linux five-case proof is retained, and platform CI now requires all five cases. This is process-kill qualification,
+not proof against power loss, resource exhaustion or arbitrary filesystem behavior; no automatic resume/cleanup
+of a killed operation's private scratch is introduced.

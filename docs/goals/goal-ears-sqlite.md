@@ -195,14 +195,17 @@ to exactly 6cf6c8349e and updated its BASE. Native stays pinned to 6ab2f69. No m
 release or daily-Mac native build occurred. Later local experiments are not covered by this green gate.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; publication stays on existing draft #286.
-The last dispatched checkpoint **3c1d7ff85966589129eeeaab9455e6a827f86c60** has terminal focused
-[40908544589](https://github.com/spankyed/apack/actions/runs/40908544589) FAILURE: Linux x64 and Windows x64
-pass all five real native profile groups and seven dump cases plus host/CLI/archive gates. macOS passes ordinary
-contracts but its profile probe incorrectly compares canonical `/private/var/...` with lexical `/var/...` immediately
-after conversion. Source corrects that assertion and adds an intentionally aliased output-parent success case,
-retaining every overlap/refusal control. Evidence is `logical-archive/macos-path-40908544589`. The Windows
-explicit child-ready/stricter exit harness passes; the earlier timeout cause remains unisolated. The producer build
-now runs inside the pinned native checkout with explicit toolchain reporting. No newer full Strict success is claimed.
+The exact **ab148afb550245d80cc2f11e5e4c604d6a4315ae** focused
+[40913131660](https://github.com/spankyed/apack/actions/runs/40913131660) completed SUCCESS across Linux x64,
+macOS arm64 and Windows x64. Every host executes all five actual native-producer profile groups, seven dump cases
+and existing EARS/host/archive/CLI gates, including the corrected canonical/aliased output-parent case. Linux also
+builds the real starter pack/API and passes the native-controlled three-boot/API/pack/live-view/restart gate.
+Complete nested reports/receipts and explicit skips are retained in `logical-archive/platform-40913131660`.
+The optional Codex executable is absent in native and SQLite API runs; diagnostics retain that limitation.
+This is focused qualification, not a newer full Strict or renderer/installed/resource/performance result.
+Earlier **3c1d7ff859** [40908544589](https://github.com/spankyed/apack/actions/runs/40908544589) failed only the
+macOS profile fixture's canonical `/private/var/...` versus lexical `/var/...` comparison; Linux/Windows passed.
+Its raw evidence remains `logical-archive/macos-path-40908544589`. Producer toolchain selection is now explicit.
 Previously [40905356110](https://github.com/spankyed/apack/actions/runs/40905356110) at 2ca3b0c276 failed the
 Windows forced-SIGQUIT case (121 other host cases and all six then-current dump cases passed); its raw evidence
 remains `logical-archive/windows-signal-40905356110`.
@@ -839,6 +842,16 @@ Buffer class assertion are retained under `logical-archive/converted-api`. The o
 in both native and SQLite runs and its startup action fails; diagnostics record that environment limitation, so
 complete pack health/external inference is not claimed. Any JSON __fatal API report refuses the gate.
 Linux CI now requires this real native-controlled API lifecycle on exact source; all hosts require the profile
-conversion probe. Their new terminal results remain required. Electron/renderer, installed/signed platform
+conversion probe. The exact ab148afb55 focused gate passes on all three hosts as recorded above; it predates new profile kill cases. Electron/renderer, installed/signed platform
 coverage, conversion interruption/resources, existing failed latency/relevance/recall budgets, full validation and
 final adoption review remain required. Keep the complete phase 3–7 scope and production elmdb selection.
+
+Process-kill profile conversion at **27c1e9d7c4bcda34a6d43c6eab7c3d9f87ab3cd4** passes all five real parent-issued
+SIGKILL boundaries in capped disposable Linux ARM64: after a FULL ingestion batch with 1,000 of 1,002 entities,
+before/after primary installation, and before/after final profile publication. Source data hashes remain unchanged;
+old output reuse refuses, new-container retries retain old output file bytes and reopen all rows/settings/history/media.
+The final path stays absent before publication and is complete/reopenable after it. Types, five builds and lint/import
+checks pass. Evidence is `logical-archive/profile-crash`. New platform CI requires all five witnesses and identical
+native producer/source receipts; that new exact-source terminal result remains required. No physical power-loss,
+large-resource, arbitrary filesystem, renderer/installed-distribution, latency/relevance/recall or full-Strict/adoption
+completion follows. Keep the entire goal active and production composition on elmdb.
