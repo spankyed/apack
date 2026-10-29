@@ -32,7 +32,7 @@ const eligible = (i, path) => i % 17 !== 0 && (path === 'all' || (path === 'tenP
 try {
   checkCorpusMath(); report.fixtureChecks = 'passed';
   for (const distribution of ['clustered', 'mixed']) {
-    const root = mkdtempSync(join(tmpdir(), 'ears-vector-shape-')), profile = { distribution, samples: [], truth: [], updates: [], heartbeat: [] };
+    const root = mkdtempSync(join(tmpdir(), 'ears-vector-shape-')), profile = { distribution, samples: [], truth: [], heartbeat: [] };
     report.profiles.push(profile); let db, pulse;
     const files = () => Object.fromEntries(readdirSync(root).map(name => [name, statSync(join(root, name)).size]));
     try {
@@ -95,6 +95,7 @@ try {
       await sample('initial', 3);
       // Content invalidation and embedding publication intentionally remain two separate operations.
       const changed = Array.from({ length: 32 }, (_, i) => i + 1).filter(i => i % 17 !== 0);
+      profile.updatedOrdinals = changed;
       const stale = e.pendingEmbeddings('Row').chunks; assert.equal(stale.length, 0);
       const oldChunks = [];
       for (const i of changed) {
@@ -114,11 +115,15 @@ try {
       });
       const embedStart = performance.now(); assert.deepEqual(e.embed(replacement), { stored: changed.length, stale: 0 });
       profile.embeddingBatchMs = performance.now() - embedStart; assert.equal(e.pendingEmbeddings('Row').count, 0);
+      profile.vectorHashAfterUpdates = hash(Buffer.from(vectors.buffer));
       await sample('updated', 1);
       profile.filesAfterQueries = files(); profile.memoryAfterQueries = process.memoryUsage(); profile.resourceUsage = process.resourceUsage();
       profile.summary = Object.fromEntries(paths.map(path => {
         const samples = profile.samples.filter(row => row.path === path), warm = samples.filter(row => row.phase === 'initial' && row.repeat > 0);
-        return [path, { meanRecall: samples.reduce((sum, row) => sum + row.recall, 0) / samples.length, warmMs: summary(warm.map(row => row.ms)) }];
+        return [path, { meanRecall: samples.reduce((sum, row) => sum + row.recall, 0) / samples.length,
+          meanRecallByPhase: Object.fromEntries(['initial', 'updated'].map(phase => {
+            const rows = samples.filter(row => row.phase === phase); return [phase, rows.reduce((sum, row) => sum + row.recall, 0) / rows.length];
+          })), warmMs: summary(warm.map(row => row.ms)) }];
       }));
       profile.heartbeatSummary = summary(profile.heartbeat.map(row => row.delayMs));
       profile.budgets = { recall: Object.values(profile.summary).every(row => row.meanRecall >= .95),
