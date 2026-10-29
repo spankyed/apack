@@ -265,9 +265,11 @@ matrix. No dependency changed. [Probe evidence](../references/evidence/ears-sqli
 now includes the [owner-scope prerequisite](../references/evidence/ears-sqlite-implementation-2026-10-28/vec1-owner-scope/README.md):
 UUID owner-IN filtering takes roughly 2.5 seconds at 10% and 270 ms at 1%, despite identical candidate
 results. Constant range filters do not qualify actual EARS scopes; this vec1 path is unsuitable for
-graph-sized arbitrary scopes. Before owning another extension/fork, test smaller vec0 chunks in the
-already-pinned stable dependency: its repeated-minimum per-chunk selection is a concrete cost
-hypothesis. Fresh frozen queries and complete integrated/admission/platform checks remain required
+graph-sized arbitrary scopes. [Stable vec0 chunk controls](../references/evidence/ears-sqlite-implementation-2026-10-28/vec0-chunk-control/README.md)
+at 64/128/256 rows all pass sampled recall but miss broad heartbeat; the configuration hypothesis
+does not solve responsiveness. No production dependency/layout changes follow. Next evaluate a native
+strategy with efficient arbitrary membership filtering and transactional ownership, including the
+maintenance cost of any required extension change, before integration. Fresh frozen queries and complete integrated/admission/platform checks remain required
 before acceptance. No strategy selection or adoption is established.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
 the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
