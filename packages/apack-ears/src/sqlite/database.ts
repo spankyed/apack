@@ -145,9 +145,9 @@ export class SqliteDatabase implements EarsDatabase {
       this.values = new SqliteValues(this, { encode: value => this.pack(value), decode: bytes => this.unpack(bytes) });
       if (!this.readOnly) this.values.initialize();
       this.sql.function('ears_rebuild_members', { deterministic: true }, bytes => {
-        if (!(bytes instanceof Uint8Array)) fail('CORRUPT', 'Invalid authoritative list encoding');
+        if (!(bytes instanceof Uint8Array)) return fail('CORRUPT', 'Invalid authoritative list encoding');
         const value = this.unpack(bytes);
-        if (!Array.isArray(value)) fail('CORRUPT', 'Invalid authoritative list encoding');
+        if (!Array.isArray(value)) return fail('CORRUPT', 'Invalid authoritative list encoding');
         return JSON.stringify(this.values.members(value));
       });
       this.search = new SqliteSearch(this);
