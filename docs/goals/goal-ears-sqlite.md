@@ -314,8 +314,10 @@ ad2cd0eab5 completes all six profiles: sampled 100k FULL 22.23 s →1.70 s, OFF 
 membership SQL remains about 1.2 s. No variance or interactive guarantee is inferred. A new missing-primary
 negative control passes in full source 5efda35064: all 544 SQLite cases, build/types/lint. Newer
 repair/optimization work still needs host/CLI/platform convergence; canonical remains 6cf. The next
-implementation is lossless archive framing/export and staging, per the concrete contract in
-docs/plans/ears-sqlite-storage.md; embedding restore remains required, not silently omitted. See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
+implementation starts at 2ae8af5939: internal logical stream codec, typed raw records, terminal
+count/hash, linear fragmented input, frame limits and cleanup/error controls. Focused disposable
+validation is active in ears-logical-format. It is not public export/import yet; source snapshot traversal,
+embedding restore, staging and host publication remain required per docs/plans/ears-sqlite-storage.md. See [cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/membership-cost/README.md). It still needs measured duration/memory/WAL and interruption
 qualification; this synchronous offline scan is not the dynamic schema-admission path. Poll that handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
