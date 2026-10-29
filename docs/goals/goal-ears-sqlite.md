@@ -280,7 +280,9 @@ retired group on exactly SQLITE_CORRUPT_VTAB and adds explicit incumbent recover
 build/types/lint pass. Primary decoding/orphans and bounded retained issues pass all 29 recovery cases at 8b58886b20, with
 build/types/lint. The earlier failed fixture used a valid msgpackr special object; its corrected truncated
 map is retained with both results. New cdb961fb87 adds metadata identity and embedding representation
-checks; validation is active in ears-audit-metadata. Poll that same handle. The audit is not yet public
+checks; all 31 recovery cases, build/types/lint pass. New 2fd2e376a6 independently reconstructs list
+membership in the audit copy; complete SQLite-suite validation is active in ears-audit-membership.
+Public rebuild still needs a correct generationless membership repair/publication design. Poll that same handle. The audit is not yet public
 and still needs complete primary/value invariants, fault/resource checks and host/CLI wiring.
 See [semantic audit evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/semantic-audit/README.md).
 Complete audit and lossless logical export remain required.
