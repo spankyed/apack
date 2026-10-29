@@ -1,0 +1,2 @@
+# Controlled runtime and provenance files must retain their exact bytes on every checkout.
+packages/apack-ears/vendor/rregex/** -text

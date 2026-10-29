@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
+import { createInterface } from 'node:readline';
 import NativeDatabase from 'better-sqlite3';
 import { createEarsEngine, type EngineSchema } from '../../src/index.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
@@ -218,12 +220,22 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('shared backgro
   it('recovers a search cursor committed by a process killed before readiness', async () => {
     const { db, e } = seed(); e.admin.setSchema(indexed); const path = db.path; db.close();
     const module = pathToFileURL(fileURLToPath(new URL('../../src/sqlite/database.ts', import.meta.url))).href;
-    const code = `import {writeSync} from 'node:fs';const {SqliteDatabase}=await import(${JSON.stringify(module)});const db=new SqliteDatabase({path:process.argv[1],syncs:false});db.indexBuilds.step();writeSync(1,JSON.stringify(db.indexBuilds.jobs().find(j=>j.kind==='text')));process.kill(process.pid,'SIGKILL');`;
-    const child = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code, path], { encoding: 'utf8', timeout: 10000 });
-    expect(child.error).toBeUndefined(); expect(child.signal).toBe('SIGKILL');
-    const progress = JSON.parse(child.stdout); expect(progress.state).toBe('building'); expect(progress.afterSeq).toBeGreaterThan(0);
-    const resumed = open(path); expect(resumed.db.indexBuilds.index('Row', 'text', progress.name).afterSeq).toBe(progress.afterSeq);
-    await resumed.db.indexesReady(); expect(resumed.e.query('Row').search('needle').count()).toBe(150);
+    // Block the child's event loop after its committed witness: no background batch may finish before the parent kills it.
+    const code = `import {writeSync} from 'node:fs';const deadline=performance.now()+10000;const {SqliteDatabase}=await import(${JSON.stringify(module)});const db=new SqliteDatabase({path:process.argv[1],syncs:false});db.indexBuilds.step();writeSync(1,JSON.stringify(db.indexBuilds.jobs().find(j=>j.kind==='text'))+'\\n');Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,Math.max(0,deadline-performance.now()));process.exit(2);`;
+    const child = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', code, path], { timeout: 10000, killSignal: 'SIGKILL' });
+    const exited = once(child, 'exit'), lines = createInterface({ input: child.stdout }); let stderr = '';
+    child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
+    try {
+      const [line] = await Promise.race([once(lines, 'line'), exited.then(([status, signal]) => { throw Error(`Child exited before its committed cursor: ${status}/${signal}: ${stderr}`); })]);
+      const progress = JSON.parse(String(line)); expect(progress.state).toBe('building'); expect(progress.afterSeq).toBeGreaterThan(0);
+      expect(child.kill('SIGKILL'), stderr).toBe(true);
+      const [, signal] = await exited; expect(signal, stderr).toBe('SIGKILL');
+      const resumed = open(path); expect(resumed.db.indexBuilds.index('Row', 'text', progress.name).afterSeq).toBe(progress.afterSeq);
+      await resumed.db.indexesReady(); expect(resumed.e.query('Row').search('needle').count()).toBe(150);
+    } finally {
+      lines.close();
+      if (child.pid && child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await exited; }
+    }
   });
 
   it('lets background-only work exit but keeps an explicit readiness wait alive until complete', () => {

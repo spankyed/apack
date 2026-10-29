@@ -43,7 +43,7 @@ describe('admin.calls', () => {
     expect(report.totals.unit).toMatchObject({ calls: 1 });
     expect(sitesOf('unit', report.sites)).toEqual([expect.objectContaining({ calls: 1, writes: 2 })]);
     for (const site of report.sites) {
-      expect(site.site.split(' < ')[0]).toContain(THIS_FILE);
+      expect(site.site.split(' < ')[0]!.replaceAll('\\', '/')).toContain(THIS_FILE);
       expect(site.ms).toBeGreaterThanOrEqual(0);
     }
   });

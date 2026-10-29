@@ -190,22 +190,31 @@ The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the 
 `session/ears-sqlite`. Latest exact published green is **60d4283f682f3e44e12088352e04e39532ffc3d7**:
 [strict run 40819583704](https://github.com/spankyed/apack/actions/runs/40819583704) completed SUCCESS, all six jobs.
 The approved guarded helper advanced clean canonical `monorepo-worktrees.noindex/sqlite-evaluation` from
-585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. Integration and remote also remain at that source;
+585dcafccf to exactly 60d4283f68. Its BASE is now 60d4283f68. The newer integration/remote candidate is below;
 master/native stay pinned to 98386b36a1 / 6ab2f69. No master merge, adoption, release or local native build occurred.
 
 Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`. Published candidate is now
 **a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c**, on the existing remote branch and clean detached integration.
 It contains runtime f426f938f8 plus all completed cost evidence and the explicit three-platform SQLite lane.
-Its single exact [strict run 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) was
-confirmed queued; poll that handle rather than dispatching duplicates. Canonical/helper BASE remain at
-previous green 60d4283f68 until this new exact source succeeds. No owned Linux container remains.
+Its single exact [strict run 40827265393](https://github.com/spankyed/apack/actions/runs/40827265393) is
+terminal FAILURE: seven jobs pass; Windows has three portability failures, and integration-2 has two
+compiler fixture timeouts. Canonical/helper BASE remain at previous green 60d4283f68. The local Windows
+correction pins controlled asset checkout bytes, normalizes a test path and uses a parent-issued kill
+after a committed cursor witness. Exact Linux validation passes 492 SQLite / 289 native cases, 35 focused
+cases, types/builds/lint/imports and the cursor-removal negative control. A tiny Windows VM Node probe
+confirms signal reporting only; corrected Windows recovery still needs CI. See
+[Windows/platform evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-portability/README.md).
+Next diagnose the independent 240-second dependency-graph hook and 140-second build-registry case before
+another integrated gate. Do not relax deadlines or rerun unchanged source into acceptance. No owned Linux
+container remains; no VM scratch process or file remains from the signal probe.
 
 The runtime passes **492 SQLite / 289 native**, 76 focused cases, five builds, EARS/host types, 95 recovery/
 storage cases, lint/imports/API reports and native hydration/selected-plan controls. The fixed four-process
 indexed cohort improves recency highlights ~35 to ~27 ms; ID-only recency is mixed, and one slower indexed
-build/highlight trial remains retained. Hosted macOS arm64, Windows x64 and Linux x64 candidate execution is
-pending. Next prioritize bounded fuzzy behavior, useful-result cases and native candidate-work proof before
-implementation; full performance, relevance/vector, app/operational/packaging acceptance remains open.
+build/highlight trial remains retained. Hosted macOS arm64 and Linux x64 pass the built probe and 492 EARS /
+95 host cases; Windows passes the probe but needs the correction above. After resolving the exact gate,
+prioritize bounded fuzzy behavior, useful-result cases and native candidate-work proof before implementation;
+full performance, relevance/vector, app/operational/packaging acceptance remains open.
 
 Earlier recovery checkpoint **bccf1ee752** implements explicit
 `db recover`, resumable offline incumbent restoration, forensic retention and managed-reader exclusion.
