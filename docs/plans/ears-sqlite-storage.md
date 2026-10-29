@@ -432,6 +432,28 @@ without treating its observed difference as a causal join cost. Dormant-identity
 resource bounds and large restored/replaced stores need measured qualification; this design does not waive
 existing vector latency/recall/resource or recovery gates.
 
+### Inactive trained native generation storage
+
+`sqlite/vector-index.ts` is the first internal storage slice for a trained native index;
+normal app composition does not activate it yet. A trusted owner supplies the extension,
+never a path from stored data. Model installation, table/triggers and catalog admission
+share one writer transaction. The model hash identifies the private generation.
+
+Chunk triggers capture ordinary foreground changes, including writes behind the bounded
+backfill cursor. Trash changes update that owner's native rows in the same transaction.
+Canonical bytes stay in `embedding_values`; native rows are derived. Readiness publishes
+after backfill, without a logical data commit. A nonempty group cannot be dropped through
+the retirement operation. Candidate queries apply owner scopes before K but do not yet
+own final EARS owner aggregation/reranking.
+
+The [lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-generation-admission/README.md)
+covers actual EARS mutation/rollback, bounded admission, a read-only compacted backup
+and negative controls on original upstream vec1. It does not select a native fork or
+establish automatic admission, performance, normal packaging or platform qualification.
+The next integration must give persistent training to a background owner without holding
+a foreground writer, connect readiness/watch and retirement/rebuild/restore/audit paths,
+and capture native build hashes. Keep the complete goal and fresh validation gates.
+
 ### App and host archive composition
 
 The app-only SQLite entry exposes `exportLogicalSnapshot(database, { maxFrameBytes? })` and

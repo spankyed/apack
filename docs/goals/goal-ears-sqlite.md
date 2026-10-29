@@ -292,6 +292,18 @@ is frozen before new queries are evaluated; files/oracle still need generation. 
 implement actual candidate generation/admission/transaction ownership with an explicit
 maintenance/distribution decision, then qualify the complete fresh and integrated gates.
 No more primitive result alone can establish the required final execution design.
+The first internal [generation admission slice](../references/evidence/ears-sqlite-implementation-2026-10-28/native-generation-admission/README.md)
+now exists in `src/sqlite/vector-index.ts`. It captures actual EARS mutations through
+transactional triggers, backfills bounded batches and atomically publishes readiness.
+Source `b654f8050b` passes 610 EARS cases plus builds/types/API/static checks; the later
+`5ecb60b12b` adds a passing read-only backup case and four intended failing mutations.
+The class is not activated by normal app composition; automatic training, scheduler
+ownership, final EARS query aggregation and normal native packaging remain unfinished.
+Lifecycle checks used original upstream vec1, not the membership patch; binary hashes
+were not captured in these runs and must enter the integrated build gate. The prior
+three-platform green predates this class. Next connect persistent training/admission
+with bounded writer work, then close freshness/watch/retirement/audit/rebuild/restore
+and native distribution gaps before fresh full integration qualification.
 Newer local elmdb main was observed read-only at `5f65c43985` with merged heap/read-allocation work;
 the tested native pin remains `6ab2f69` until deliberate source/artifact/baseline reconciliation.
 Closing checks must cover candidate/trash filtering before K, multiple-chunk owner scoring, ties, large K,
