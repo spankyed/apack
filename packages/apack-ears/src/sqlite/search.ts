@@ -1,10 +1,11 @@
 /// <reference types="node" />
 // FTS5 owns text indexing/ranking. sqlite-vec owns vector distance evaluation; EARS owns chunks and model freshness.
 // Fuzzy expansion and highlight adaptation are explicit application work, not native FTS5 capabilities.
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { getLoadablePath } from "sqlite-vec";
 import type { SqliteDatabase } from "./database.ts";
 import { searchTable, type SqliteIndexJob } from './index-builds.ts';
+import { SqliteText } from './text.ts';
 import { SqliteTrigrams } from "./trigrams.ts";
 import { missingSearchStructures, type SqliteSearchStructure } from "./search-structures.ts";
 type Data = Record<string, any>;
@@ -18,14 +19,12 @@ const textOf = (v: any): string =>
     : Array.isArray(v)
     ? v.filter((x) => typeof x === "string").join("\n\n")
     : "";
-const quote = (s: string) => `"${s.replaceAll('"', '""')}"`;
-const fold = (s: string) =>
-  s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
 export class SqliteSearch {
   private vectorLoaded = false;
   readonly trigrams: SqliteTrigrams;
   private readonly db: SqliteDatabase;
-  constructor(db: SqliteDatabase) { this.db = db; this.trigrams = new SqliteTrigrams(db); }
+  private readonly texts: SqliteText;
+  constructor(db: SqliteDatabase) { this.db = db; this.trigrams = new SqliteTrigrams(db); this.texts = new SqliteText(db); }
   private textIndex(
     type: string,
     schema = this.db.schemaForQueries()
@@ -60,12 +59,6 @@ export class SqliteSearch {
       this.vectorLoaded = true;
     }
   }
-  private textStructure(job: SqliteIndexJob): SqliteSearchStructure {
-    const table = searchTable(job);
-    return { types: [job.type], indexes: [job], objects: [['table', table], ['table', table + '_vocab'],
-      ...['data', 'idx', 'content', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const)],
-      reset: `DROP TABLE IF EXISTS ${table}_vocab; DROP TABLE IF EXISTS ${table};` };
-  }
   private structures(schema: Data): SqliteSearchStructure[] {
     const text: SqliteIndexJob[] = [], vectors: SqliteIndexJob[] = [];
     for (const [type, definition] of Object.entries(schema.types) as Array<[string, Data]>)
@@ -77,7 +70,7 @@ export class SqliteSearch {
       { types: text.map(j => j.type), indexes: text, objects: [['table', 'text_meta']] },
       { types: vectors.map(j => j.type), indexes: vectors, objects: [['table', 'chunks']] },
       { types: [], indexes: [], objects: [['index', 'chunk_pending'], ['index', 'chunk_reuse'], ['index', 'chunk_generation'], ['index', 'text_generation']] },
-      ...text.map(job => this.textStructure(job)), ...this.trigrams.structures(schema),
+      ...text.map(job => this.texts.structure(job)), ...this.trigrams.structures(schema),
     ];
   }
   needsRepair(schema: Data): boolean { return missingSearchStructures(this.db, this.structures(schema)).length !== 0; }
@@ -96,7 +89,7 @@ export class SqliteSearch {
     this.loadVectors(schema);
     this.trigrams.ensure(schema);
     this.db.sql
-      .exec(`CREATE TABLE IF NOT EXISTS text_meta(entity_id TEXT,index_name TEXT,generation INTEGER NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(entity_id,index_name,generation));
+      .exec(`CREATE TABLE IF NOT EXISTS text_meta(entity_id TEXT,index_name TEXT,generation INTEGER NOT NULL,hashes TEXT NOT NULL,PRIMARY KEY(entity_id,index_name,generation));
       CREATE TABLE IF NOT EXISTS chunks(entity_id TEXT NOT NULL,type TEXT NOT NULL,index_name TEXT NOT NULL,generation INTEGER NOT NULL,
       chunk INTEGER NOT NULL,model TEXT NOT NULL,dims INTEGER NOT NULL,hash TEXT NOT NULL,text TEXT NOT NULL,
       embedding BLOB,PRIMARY KEY(entity_id,index_name,generation,chunk));
@@ -110,22 +103,7 @@ export class SqliteSearch {
       for (const [name, index] of Object.entries(
         definition.indexes ?? {}
       ) as Array<[string, Data]>) {
-        if (index.kind === "text") {
-          if (index.stem && index.stem !== "en")
-            fail(
-              "UNSUPPORTED",
-              "Evaluation FTS5 porter tokenizer supports English stemming only"
-            );
-          const table = this.table(type, name, index),
-            cols = Object.keys(index.fields)
-              .map((_, i) => `c${i}`)
-              .join(",");
-          this.db.sql
-            .exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,${cols},tokenize='${
-            index.stem ? "porter unicode61 remove_diacritics 2" : "unicode61 remove_diacritics 2"
-          }');
-          CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},row);`);
-        }
+        if (index.kind === "text") this.texts.ensure(this.db.indexBuilds.index(type, 'text', name));
       }
   }
   refile(row: Data, seq: number, schema = this.db.schemaForQueries(), changed?: ReadonlySet<string>) {
@@ -133,22 +111,14 @@ export class SqliteSearch {
       if (index.kind === 'value') continue;
       const fields = this.indexFields(index);
       if (changed && !fields.some(field => changed.has(field))) continue;
-      const selected = changed ? this.db.row(row.id, fields)! : row;
-      this.refileIndex(selected, seq, this.db.indexBuilds.index(row.entityType, index.kind, name));
+      const selected = changed ? this.db.row(row.id, index.kind === 'text' ? fields.filter(field => changed.has(field)) : fields)! : row;
+      this.refileIndex(selected, seq, this.db.indexBuilds.index(row.entityType, index.kind, name), changed);
     }
   }
-  refileIndex(row: Data, seq: number, job: SqliteIndexJob): void {
+  refileIndex(row: Data, seq: number, job: SqliteIndexJob, changed?: ReadonlySet<string>): void {
     const index = job.definition, name = job.name, generation = job.generation;
     if (job.kind === 'trigram') { this.trigrams.refileIndex(row, job); return; }
-    if (job.kind === 'text') {
-      const fields = Object.keys(index.fields).map(field => textOf(row[field])), hash = digest(JSON.stringify(fields));
-      const old = this.db.get('SELECT hash FROM text_meta WHERE entity_id=? AND index_name=? AND generation=?', [row.id, name, generation]);
-      if (old?.hash === hash) return;
-      const table = searchTable(job);
-      this.db.run(`DELETE FROM ${table} WHERE rowid=?`, [seq]);
-      if (fields.some(Boolean)) this.db.run(`INSERT INTO ${table}(rowid,entity_id,${fields.map((_, i) => 'c' + i).join(',')}) VALUES (${fields.map(() => '?').concat(['?', '?']).join(',')})`, [seq, row.id, ...fields]);
-      this.db.run('INSERT OR REPLACE INTO text_meta VALUES (?,?,?,?)', [row.id, name, generation, hash]);
-    }
+    if (job.kind === 'text') this.texts.refile(row, job, changed);
     if (job.kind === 'vector') {
       const joined = index.from.map((field: string) => textOf(row[field])).filter(Boolean).join('\n\n').trim();
       const texts = index.chunk === 'paragraph' ? joined.split(/\n\s*\n/).filter(Boolean) : joined ? [joined] : [];
@@ -168,12 +138,13 @@ export class SqliteSearch {
   /** Retirement alternates with build work. Rows are removed in batches before dropping an empty group. */
   collectIndex(job: SqliteIndexJob, limit: number): boolean {
     if (job.kind === 'vector') return Number(this.db.run('DELETE FROM chunks WHERE rowid IN (SELECT rowid FROM chunks WHERE generation=? LIMIT ?)', [job.generation, limit]).changes) < limit;
-    const structure = job.kind === 'text' ? this.textStructure(job) : this.trigrams.structure(job);
+    const structure = job.kind === 'text' ? this.texts.structure(job) : this.trigrams.structure(job);
     if (missingSearchStructures(this.db, [structure]).length) {
       this.db.sql.exec(structure.reset!);
     } else {
-      const table = searchTable(job), docs = job.kind === 'trigram' ? table + '_docs' : table;
-      if (Number(this.db.run(`DELETE FROM ${docs} WHERE rowid IN (SELECT rowid FROM ${docs} LIMIT ?)`, [limit]).changes) >= limit) return false;
+      const table = searchTable(job), docs = table + '_docs';
+      if (job.kind === 'text' ? !this.texts.collect(job, limit) :
+        Number(this.db.run(`DELETE FROM ${docs} WHERE rowid IN (SELECT rowid FROM ${docs} LIMIT ?)`, [limit]).changes) >= limit) return false;
       this.db.sql.exec(structure.reset!);
     }
     if (job.kind === 'text') return Number(this.db.run('DELETE FROM text_meta WHERE rowid IN (SELECT rowid FROM text_meta WHERE generation=? LIMIT ?)', [job.generation, limit]).changes) < limit;
@@ -187,10 +158,7 @@ export class SqliteSearch {
       schema.types[type]?.indexes ?? {}
     ) as Array<[string, Data]>)
       if (index.kind === "text")
-        this.db.run(
-          `DELETE FROM ${this.table(type, name, index)} WHERE rowid=?`,
-          [seq]
-        );
+        this.texts.remove(this.db.indexBuilds.index(type, 'text', name), id);
     this.db.run("DELETE FROM text_meta WHERE entity_id=?", [id]);
     this.db.run("DELETE FROM chunks WHERE entity_id=?", [id]);
   }
@@ -203,7 +171,7 @@ export class SqliteSearch {
         definition.indexes ?? {}
       ) as Array<[string, Data]>)
         if (index.kind === "text")
-          this.db.sql.exec(`DELETE FROM ${this.table(type, name, index)};`);
+          this.db.sql.exec(`DELETE FROM ${this.table(type, name, index)}; DELETE FROM ${this.table(type, name, index)}_docs;`);
     this.db.sql.exec("DELETE FROM text_meta; DELETE FROM chunks;");
   }
   pending(type: string, limit: number) {
@@ -297,184 +265,8 @@ export class SqliteSearch {
     );
     return this.vector(ids, type, vector, k, id);
   }
-  text(
-    ids: string[] | null,
-    type: string,
-    query: string,
-    options: Data = {},
-    wantHits = true
-  ): Data[] {
-    const [name, index] = this.textIndex(type),
-      table = this.table(type, name, index),
-      fields = Object.keys(index.fields);
-    const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
-    if (!tokens.length) return [];
-    const vocabulary =
-      options.fuzzy === false
-        ? []
-        : this.db
-            .all(`SELECT term FROM ${table}_vocab`)
-            .map((r) => String(r.term));
-    const terms: string[] = [];
-    const positive: string[] = [],
-      negative: string[] = [];
-    const distance = (a: string, b: string): number => {
-      let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-      for (let i = 1; i <= a.length; i++) {
-        const row = [i];
-        for (let j = 1; j <= b.length; j++)
-          row[j] = Math.min(
-            row[j - 1]! + 1,
-            prev[j]! + 1,
-            prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1)
-          );
-        prev = row;
-      }
-      return prev[b.length]!;
-    };
-    for (const [position, rawToken] of tokens.entries()) {
-      let token = rawToken;
-      if (token === "OR") {
-        positive.push("OR");
-        continue;
-      }
-      const neg = token.startsWith("-");
-      if (neg) token = token.slice(1);
-      const colon = token.startsWith('"') ? -1 : token.indexOf(':');
-      const field = colon < 0 ? undefined : token.slice(0, colon);
-      if (colon >= 0) token = token.slice(colon + 1);
-      const phrase = token.startsWith('"');
-      const raw = token.replace(/^"|"$/g, "");
-      const normalized = fold(raw);
-      if (!normalized) continue;
-      terms.push(normalized);
-      const max = normalized.length >= 9 ? 2 : normalized.length >= 5 ? 1 : 0;
-      const expanded =
-        !phrase && max
-          ? vocabulary.filter(
-              (t) =>
-                Math.abs(t.length - normalized.length) <= max &&
-                distance(t, normalized) <= max
-            )
-          : [];
-      const words = [...new Set([raw, ...expanded])];
-      let expression = phrase
-        ? quote(raw)
-        : `(${words.map(quote).join(" OR ")})`;
-      if (options.prefix && !phrase && position === tokens.length - 1) expression = `${quote(raw)}*`;
-      if (field !== undefined || options.fields?.length) {
-        const selected = (field === undefined ? options.fields : [field])
-          .filter((f: string) => !options.fields?.length || options.fields.includes(f))
-          .map((f: string) => fields.indexOf(f))
-          .filter((n: number) => n >= 0)
-          .map((n: number) => "c" + n);
-        if (!selected.length) return [];
-        expression = `{${selected.join(" ")}} : ${expression}`;
-      }
-      (neg ? negative : positive).push(expression);
-    }
-    if (!positive.length) return [];
-    let match = "(" + positive.join(options.any ? " OR " : " AND ").replaceAll(options.any ? " OR OR OR " : " AND OR AND ", " OR ") + ")";
-    for (const n of negative) match += ` NOT ${n}`;
-    const weights = [0, ...fields.map((f) => index.fields[f].weight ?? 1)].join(
-      ","
-    );
-    const highlights = fields
-      .map((_, i) => `highlight(${table},${i + 1},?,?) h${i}`)
-      .join(",");
-    const select = (open: string, close: string) => this.db.all(
-      `SELECT f.entity_id id,-bm25(${table},${weights}) score${
-        wantHits ? "," + highlights : ""
-      } FROM ${table} f
-      JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ? AND ${
-        ids === null
-          ? "e.trashed=0"
-          : "f.entity_id IN (SELECT value FROM json_each(?))"
-      } ORDER BY score DESC,e.seq`,
-      [...(wantHits ? fields.flatMap(() => [open, close]) : []), match, ...(ids === null ? [] : [JSON.stringify(ids)])]
-    );
-    let open = "\u0001", close = "\u0002", rows = select(open, close);
-    const payloads = wantHits || options.recency ? new Map(this.db.rows(rows.map(row => row.id),
-      [...new Set([...fields, ...(options.recency ? [options.recency.field] : [])])]).map(row => [row.id, row])) : undefined;
-    if (wantHits) {
-      // FTS inserts markers into the original text; literal marker bytes must remain ordinary source text.
-      const contains = (marker: string) => [...payloads!.values()].some(row => fields.some(field => textOf(row[field]).includes(marker)));
-      if (contains(open) || contains(close)) {
-        do { open = "\u0001" + randomUUID() + "\u0001"; close = "\u0002" + randomUUID() + "\u0002"; }
-        while (contains(open) || contains(close));
-        rows = select(open, close);
-      }
-    }
-    return rows
-      .map((r) => {
-        const ranges: Data = {},
-          found = new Set<string>();
-        const payload =
-          payloads?.get(r.id);
-        if (wantHits)
-          fields.forEach((field, i) => {
-            const marked = String(r["h" + i]);
-            let clean = "",
-              start = -1;
-            const places: number[][] = [];
-            for (let offset = 0; offset < marked.length;) {
-              if (marked.startsWith(open, offset)) { start = clean.length; offset += open.length; }
-              else if (marked.startsWith(close, offset)) {
-                if (start >= 0) {
-                  places.push([0, start, clean.length]);
-                  found.add(fold(clean.slice(start)));
-                  start = -1;
-                }
-                offset += close.length;
-              } else clean += marked[offset++]!;
-            }
-            const source = payload![field];
-            let adapted = places;
-            if (Array.isArray(source)) {
-              let base = 0;
-              const segments: Array<{
-                element: number;
-                start: number;
-                end: number;
-              }> = [];
-              source.forEach((value, element) => {
-                if (typeof value === "string") {
-                  if (segments.length) base += 2;
-                  segments.push({
-                    element,
-                    start: base,
-                    end: base + value.length,
-                  });
-                  base += value.length;
-                }
-              });
-              adapted = places.flatMap(([, start, end]) =>
-                segments
-                  .filter((s) => start >= s.start && end <= s.end)
-                  .map((s) => [s.element, start! - s.start, end! - s.start])
-              );
-            }
-            if (adapted.length)
-              Object.defineProperty(ranges, field, {
-                value: adapted,
-                enumerable: true,
-                writable: true,
-                configurable: true,
-              });
-          });
-        let score = r.score;
-        if (options.recency) {
-          const row = payload!,
-            at = row[options.recency.field];
-          if (typeof at === "number")
-            score *= Math.pow(
-              0.5,
-              Math.max(0, (options.recency.now ?? Date.now()) - at) /
-                options.recency.halfLife
-            );
-        }
-        return { id: r.id, score, terms: [...found], highlights: ranges };
-      })
-      .sort((a, b) => b.score - a.score);
+  text(ids: string[] | null, type: string, query: string, options: Data = {}, wantHits = true): Data[] {
+    const [name] = this.textIndex(type);
+    return this.texts.search(this.db.indexBuilds.index(type, 'text', name), ids, query, options, wantHits);
   }
 }

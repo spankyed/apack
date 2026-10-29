@@ -247,11 +247,28 @@ are required after changing this format-one derived layout; opening an old table
 Highlights choose delimiters absent from authoritative source text when literal control markers collide,
 then return offsets into the original scalar/list string in UTF-16 units.
 
-The existing one-row-per-entity FTS representation joins list elements, so it still gives incorrect positive
-and negative cross-element phrase results. Unicode61 also does not split camelCase components. Those three
-corpus failures remain required; no JS full-corpus fallback or weakened expectation resolves them. The next
-representation change must preserve cross-element AND, field restrictions, original whole-identifier search,
-source-element highlight offsets, stable useful ranking, foreground maintenance, background generations and
-reopen/rollback behavior. Measure index bytes and write/build cost alongside foreground latency before
-selecting the final shape. Full vocabulary fuzzy expansion is independently unfinished. See the
+`SqliteText` now owns one FTS document per nonempty scalar/list string and a private per-generation
+owner table indexed by entity/field/element. FTS5 enforces phrases within that document. Materialized native
+clause results combine by entity in SQL, preserving AND across fields/elements, OR/any and global exclusions.
+BM25 is evaluated per string; each clause uses its best weighted field match, and positive clause scores sum.
+This deliberately changes score statistics from the former per-entity document. Usefulness and resource
+acceptance, rather than exact scores, decide whether this representation is acceptable.
+
+Original text stays indexed for whole identifiers. A second derived column inserts spaces at camelCase and
+acronym boundaries. Queries reach both columns; sparse insertion offsets map its native highlights back to
+the original UTF-16 source. It is not a replacement Unicode tokenizer or a new native extension. Strings
+without such boundaries have no duplicate alias content. Latin folding uses native Unicode61; other language
+segmentation/stemming choices still need representative qualification.
+
+Per-field hashes allow changed fields to replace only their own documents. Foreground updates read only
+changed text inputs when their generation already holds the row; a row changed ahead of a new generation's
+cursor gets a full initial refile. Owner tables participate in physical checks, rebuild, atomic writes and
+bounded retirement. The format-one tables and field-hash metadata changed in place; reset/rebuild copied
+candidate profiles explicitly, without a compatibility path in normal boot.
+
+The unchanged shared relevance corpus and targeted identifier/list/rollback/reopen/recovery cases pass in
+Linux; source-loading and whole-suite results are owned by the current goal handoff. Full vocabulary fuzzy
+expansion remains unfinished. Before accepting shape costs, execute the preregistered old/new/new/old 10k
+cohort from the benchmark README, preserving all samples, bytes, name-update costs and latency. This does not
+replace the failed 100k admission qualification or any phase 4–7 requirement. See the
 [corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md).

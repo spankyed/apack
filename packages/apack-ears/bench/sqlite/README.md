@@ -187,3 +187,15 @@ query-watch counts or primary workload. Counter sampling runs on the event loop 
 and GC recording add overhead. Retain that scope and every budget outcome, including failure. This is one
 diagnostic, never a replacement acceptance trial, a retry-until-green cohort, or permission to proceed to FULL.
 Correlate actual heartbeat overdue windows with GC/spans and cgroup intervals before proposing a remedy.
+
+### Source-string FTS shape diagnostic
+
+Before measuring the new source-string representation, run one fixed **old / new / new / old** cohort, four
+fresh Node processes in one Linux container with the unchanged two-CPU quota and 6 GiB. Old is `9a2771ec25`;
+new is the converged selective-document implementation. Use the exact same `text-shape.mjs` fixture with
+normal built entries, OFF commits and 10,000 rows: one camelCase name, a mostly 500-byte body (1/128 large),
+and three tags. Admit text indexing after seed. Retain every seed/admission/readiness duration, sampled
+file/WAL/RSS high-water, raw heartbeat, call counts, 250 point and cross-field reads, 50 broad limited reads,
+and 1,000 name updates. No warm samples are discarded. Stop on setup/correctness failure; no automatic retry.
+Each process has a 180-second safety bound. This diagnostic measures shape costs and answer parity for common
+queries, not realistic relevance, FULL durability, app/watch acceptance or the unresolved 100k admission gate.

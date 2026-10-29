@@ -216,7 +216,9 @@ reproduces all five failures. Package builds, host types and lint pass. See
 [recovery launch evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recovery-launch/README.md).
 Published descendant **e5fe7ea16bee7b96acaa495fe132ad65fe766a7c** is on the existing draft branch and clean
 integration checkout. Its exact [strict run 40804552364](https://github.com/spankyed/apack/actions/runs/40804552364)
-was dispatched once and is queued/running; poll that handle before canonical promotion. The local helper
+completed FAILURE in producers: benchmark Vitest lacked the required source condition; consumers were skipped.
+Both benchmark/root EARS configs now declare it and pass the actual Linux import guard. Preserve that failure;
+no replacement strict run is dispatched yet. The local helper
 already exists with BASE 585dcafccf and exact-success guards; the user's renewed approval does not bypass them.
 Local continuation includes diagnostics beyond the published tip; keep that distinct from CI source.
 
@@ -227,15 +229,20 @@ identifiers/case/accents, per-element phrases and highlights, field restrictions
 last-word prefix, typo opt-out, recency and exact multilingual terms plus English stemming. Run unchanged
 expectations against both pinned backends before tuning; retain failures, then fix demonstrated candidate gaps.
 This curated corpus is a first contract slice, not full real-world relevance, scalability or language qualification.
-The corrected fixture inputs now pass 32/32 on pinned elmdb. Local candidate fixes recency field reads,
-any/field/prefix translation, native query Unicode handling, multi-accent Latin tokenization and literal marker
-highlight offsets. Focused EARS types/lint/build and existing search contracts pass; full SQLite EARS reports
-460 passed / exactly 3 required relevance failures. See
-[shared corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md)
-for source patch, both fixture corrections and all failed runs. Do not publish this as accepted or skip those
-cases. Next resolve FTS document/token representation for camelCase component discovery and positive/negative
-phrase boundaries across list elements, then require the unchanged corpus plus write/reopen/rollback and
-index-size/build/latency evidence. Fuzzy vocabulary bounding and the rest of phase 4 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
+The corrected fixture inputs pass 32/32 on pinned elmdb. The new local source-string FTS implementation also
+passes that unchanged corpus, with native clause combination, original/identifier columns, source-offset
+mapping and per-field selective maintenance. Linux source-loading/types and the full SQLite EARS suite pass
+**471/471**. Five normal package builds, 95 focused cases, imports/lint and three removal controls pass on the
+snapshot preceding the sole parameter-property-to-field-assignment loader correction. See
+[source-string evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-documents/README.md)
+for exact source patches, setup/config/loader failures and qualified limits. The earlier
+[corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md)
+retains fixture corrections and pre-fix failures. No query budget or useful-result expectation was weakened.
+Next execute the preregistered old/new/new/old 10k text-shape cohort from the benchmark README: old 9a2771ec25,
+new this converged source, all samples/bytes/calls retained. The fixture is syntax-checked, not yet measured.
+Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
+100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
+rest of phases 4–7 remain required. A preregistered four-process quota/affinity diagnostic now lives in the benchmark README and
 `runtime-control.mjs`: same two-CPU quota/6 GiB, ABBA order, 500 fixed samples per path, first-150/remaining-350
 strata, cgroup counters/GC/CPU profiles and no discarded cold samples. This is diagnostic only; it cannot
 replace the failed admission cohort. That four-process control is complete: all answers pass, no own-group throttling is observed during timing,
