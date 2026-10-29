@@ -875,3 +875,26 @@ The pinned card declares no license; these receipts do not grant redistribution 
 are used. Next preregister and run independent Float64 exact truth over stored Float32 values and the fixed native
 strategy matrix, keeping all original recall/latency/heartbeat and remaining phase 3–7 requirements. Do not use
 synthetic or tiny compatibility results as real-model adoption evidence.
+
+
+### Real-model native matrix, 2026-10-29
+
+The independent Float64 oracle and fixed protocol are committed at `5f613394f5`. Original native source
+`5fb4893b7f` completes nine configurations; fixed-probe IVF misses scoped recall and flat 100k blocks the
+main thread. Flat also loses deterministic cutoff ties after updates (strict recall 0.998), retained as a
+correctness failure. No original failure was replaced by a broad mean or a relaxed budget.
+
+The separately preregistered follow-on at `42f408b1ff` uses full binary scans, exact reranking and identical
+hashed models for 256/1,024 candidates. All six configurations complete in capped disposable Linux ARM64.
+All 36 scope/phase/cohort mean recall checks exceed 0.95. At 100k, 256 candidates reach 0.989–0.999 recall
+with pooled query p95 16.36–16.83 ms; 1,024 candidates reach 1.0 on this fixture with p95 19.31–29.80 ms.
+The 100k heartbeat still fails 16 ms (256 candidates p99 17.28–21.74 ms). These are native diagnostics,
+not EARS/application results, an integrated elmdb comparison or platform qualification. No production
+dependency changes or adoption follow. See [full retained evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/real-vector-matrix/README.md).
+
+Next compare the already-pinned sqlite-vec binary primitive before choosing an additional native dependency,
+then implement the selected native execution with selective exact fallback, canonical-byte preservation,
+owner/chunk/tie semantics, model/generation freshness and own-unit/savepoint visibility. Resolve off-main
+execution and admission without stale-snapshot substitutes. Requalify through EARS and the app. Full phases
+3–7, the existing failed responsiveness/admission gates, realistic relevance, installed/renderer/SDK and
+operational/platform acceptance, full Strict and final architecture/adoption review remain required.
