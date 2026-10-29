@@ -206,8 +206,9 @@ export class SqliteText {
          accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
       const decayed = nativeRecency ? `, decayed AS (
         SELECT a.id,a.owner,a.seq,a.score base_score,
-          a.score * CASE WHEN r.kind IN ('num','zero','date') THEN pow(0.5,max(0,? - r.value)/?) ELSE 1 END score
-        FROM accepted a LEFT JOIN (${this.db.fieldSource(recency.field, [job.type])}) r ON r.id=a.id)` : '';
+          a.score * coalesce((SELECT CASE WHEN r.kind IN ('num','zero','date') THEN pow(0.5,max(0,? - r.value)/?) ELSE 1 END
+            FROM (${this.db.fieldSource(recency.field, [job.type])}) r WHERE r.id=a.id),1) score
+        FROM accepted a)` : '';
       if (nativeRecency) args.push(now, recency.halfLife);
       // Stable JS decay ties previously retained the base-score order, then entity insertion order.
       const scored = nativeRecency ? 'decayed' : 'accepted';

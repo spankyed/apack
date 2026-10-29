@@ -113,6 +113,25 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native text pr
       expect(statements.at(-1)?.returnedRows).toBe(3);
     }
   });
+  it('uses indexed timestamp probes for the selected native recency highlight stage', () => {
+    const definition: EngineSchema = { ...schema, types: { ...schema.types,
+      Row: { ...schema.types.Row!, fields: { at: { type: 'any', optional: true } } } } };
+    const { db, e } = open(definition);
+    e.transact(() => { for (let i = 0; i < 128; i++) e.create('Row', { id: `Row-${i}`, name: 'needle', at: i === 127 ? 99000 : 1000 }); });
+    const all = db.all.bind(db), statements: Array<{ rows: number; plan: string[] }> = [];
+    vi.spyOn(db, 'all').mockImplementation((sql, args) => {
+      const rows = all(sql, args);
+      if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) statements.push({ rows: rows.length,
+        plan: db.sql.prepare('EXPLAIN QUERY PLAN ' + sql).all(...(args ?? [])).map((row: any) => String(row.detail)) });
+      return rows;
+    });
+    const hits = e.query('Row').search('needle', { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } })
+      .limit(3).hits({ fields: ['name'], highlights: true });
+    expect(hits.map(hit => hit.id)).toEqual(['Row-127', 'Row-0', 'Row-1']);
+    expect(statements).toHaveLength(2); expect(statements[1]?.rows).toBe(3);
+    expect(statements[1]!.plan.some(detail => /^SCAN v(?:\s|$)/.test(detail))).toBe(false);
+    expect(statements[1]!.plan.some(detail => /^SEARCH v USING (?:PRIMARY KEY|INDEX)/.test(detail))).toBe(true);
+  });
   it('ranks declared Date slots and built-in numeric timestamps natively after read-only reopen', () => {
     const definition: EngineSchema = { ...schema, types: { ...schema.types,
       Row: { ...schema.types.Row!, fields: { at: { type: 'any', optional: true } } } } };

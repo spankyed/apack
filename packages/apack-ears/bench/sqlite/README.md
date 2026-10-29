@@ -299,3 +299,14 @@ add ten recency-highlight reads. Capture actual native plans plus VDBE programs 
 timing, with binding/total time, row counts, answers, source/native hashes and normal built entries. No
 retry or discarded samples. This diagnoses timestamp selection, projection and ranking work; it does not
 rerun qualification or establish a cause before the actual plans are inspected.
+
+### Indexed timestamp-selection cost cohort
+
+After the selected-stage native-plan guard and old-join removal check pass, run exactly **materialized /
+indexed / indexed / materialized**, four fresh processes in one disposable Linux container, unchanged two
+CPUs/6 GiB and 180 seconds each. Materialized is 0f57770e1f; indexed is the converged correlated timestamp
+selection source. Use the identical expanded `text-shape.mjs` from the native-recency cohort, including
+50 recency-highlight reads and every other case/write. Retain every raw sample, answer, native fingerprint,
+entrypoint, call count and file/WAL/RSS/heartbeat result. No retries, discarded samples or budget changes.
+Native plan evidence comes from functional validation; this cohort measures the changed execution shape.
+It does not replace phase 3 qualification or close bounded fuzzy, realistic search/vector or app budgets.

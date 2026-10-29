@@ -305,8 +305,17 @@ The preregistered four-process cost cohort completed: recency ~28 versus ~46 ms,
 ~35 versus ~80 ms. Other query/write costs and main-file bytes remain close; sampled RSS is lower but
 unbounded. All expected answers pass; a post-timing premature-prefix control fails with the wrong winner.
 See [recency cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-cost/README.md).
-Next run the preregistered changed-source `text-plan.mjs` diagnosis (one 10k profile, ten samples/path,
-including recency highlights and actual FTS VDBE programs) before choosing another correction. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
+The preregistered changed-source plan diagnosis completed: timestamp source r materializes all values
+in both score and selected-highlight statements; the latter takes ~6.4 ms while returning ten rows. See
+[recency plan evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-plans/README.md).
+The correlated indexed timestamp correction passes **492 SQLite / 289 native**, 76 focused cases,
+five builds, EARS/host types, 34 recovery cases, lint/imports/API reports and two removal controls. The
+initial value observer was insufficient and its failed negative proof is retained; the unmodified native
+plan guard now fails on the old full-scan join and passes indexed probes. See [selection evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-selection/README.md).
+Next run the preregistered materialized/indexed/indexed/materialized cost cohort, preserving all samples
+and failures. Then prioritize bounded fuzzy search: specify/review its behavior and useful-result cases
+before implementation, prove native candidate work avoids a full vocabulary scan, and evaluate relevance
+and growth costs. No current correctness or diagnostic result closes that requirement. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
 possible diagnostic, not a chosen layout change. The ordinary recovery alias fixtures now use Windows junctions, matching the existing storage fixture;
 actual Windows recovery/platform qualification remains required (crash tests are POSIX-only).
 Recency and every phase 3–7 requirement remain required; none of these diagnostics is qualification. Preserve every failed cohort and all remaining
