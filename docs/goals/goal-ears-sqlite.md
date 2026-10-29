@@ -199,11 +199,13 @@ Active continuation is `/private/tmp/ears-sqlite-diagnosis-evidence`; published 
 restoration/replacement, public archive API and selected-store host publication/import/preview.
 Existing draft #286 is updated around the final implementation and actual remaining requirements.
 Its focused [SQLite platform run 40891758576](https://github.com/spankyed/apack/actions/runs/40891758576)
-is confirmed live on exactly 31c6c751b5: Linux x64, macOS arm64 and Windows x64 are in native setup.
-Poll that same run; do not redispatch because an observation expires. The ordinary app check job is
-intentionally skipped for this focused suite. Every platform must execute the five public snapshot
-cases and ten host logical archive cases (only Windows directory-sync case may skip), all nine actual
-maintenance commands and existing EARS/host contracts; the verifier enforces nonvacuity.
+completed SUCCESS on exactly 31c6c751b5. Linux x64/macOS arm64 pass 596 EARS / 131 host
+cases; Windows x64 passes 595 / 118, with all skipped cases retained. Every platform executes five public
+snapshot and nine maintenance cases. Host logical archive cases are 10/10 on Linux/macOS and 9/10 on
+Windows; its directory-sync case is explicitly skipped. The ordinary app job is deliberately skipped.
+Runtime/native receipts, verification and lossless compressed raw reports are retained under
+[archive platform evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/logical-archive/platform-40891758576/README.md).
+Do not redispatch this unchanged source. This gate predates new local CLI commands and the lock fix.
 Previous focused [40873999402](https://github.com/spankyed/apack/actions/runs/40873999402) completed
 SUCCESS on exactly 34c612ab84 and is retained as historical platform proof, not the new archive gate.
 Canonical/helper BASE remain at exact full-green **6cf6c8349e**. Runtime base/native pins remain
@@ -357,9 +359,17 @@ primary commit/data unchanged; preview fully verifies/audits and runs the releva
 without replacement. Physical-backup validation still requires the primary database. The focused
 platform workflow now includes these real host logical and backup-storage cases and requires all five
 public EARS snapshot cases plus all ten host logical cases (only Windows directory-sync case may skip).
-This implementation is published at 31c6c751b5 through existing draft #286 with the live focused platform
+This implementation is published at 31c6c751b5 through existing draft #286 with the completed focused platform
 gate above; canonical remains 6cf. No newer full-Strict/native or adoption result is claimed.
-Next expose the verified path through real CLI/app operations, preserve selected-store/media ownership,
+New local CLI dump/load source 7d3a67fc8a adds explicit --primary/--runs files, complete dry-run
+validation and protected forced import. The first CLI run passed 35 cases but exposed a shared lock bug:
+a refused same-PID acquisition deleted the incumbent, allowing a later call through. Ownership fix
+8e5d0829c4 adds per-acquisition tokens and acquired-state cleanup. All 45 CLI and 15 ownership cases,
+five builds, CLI types, lint/import checks pass in disposable Linux; restoring the old release condition
+fails both new ownership controls and restoring source passes. Built-process smoke at 048e26bfc7 is live
+in ears-built-logical-cli (exec 27593); poll that exact handle. These local descendants are not covered
+by the published platform gate and are not yet pushed.
+Next complete actual built/installed CLI and app operations, preserve selected-store/media ownership,
 qualify process death before/during staging/publication and protected populated replacement, and complete
 actual copied-profile conversion plus representative duration/memory/disk/platform evidence. Keep partial
 restored directories private until audit and publication complete; never direct a partial-ingestion or

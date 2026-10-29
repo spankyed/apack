@@ -1,0 +1,15 @@
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/database/write-lock.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/database/write-lock.spec.ts (15 tests) 1582ms
+   ✓ the database write lock > is taken by one of several tools that ask for it at the same moment  954ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  14:43:17
+   Duration  3.11s (transform 706ms, setup 12ms, collect 1.39s, tests 1.58s, environment 0ms, prepare 36ms)
+

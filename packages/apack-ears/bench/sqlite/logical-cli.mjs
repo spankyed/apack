@@ -9,19 +9,19 @@ import { createEarsEngine } from '@apackdev/ears';
 import { openDatabase } from '@apackdev/ears/sqlite';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { openRunHistory } from '@apackdev/host/database';
-const output = process.argv[2], cli = resolve('packages/apack-cli/bin/apack.mjs'), bundle = resolve('packages/apack-cli/dist/cli.js');
+const output = process.argv[2], cli = resolve('packages/apack-cli/dist/package/bin/apack.mjs'), bundle = resolve('packages/apack-cli/dist/package/dist/cli.js');
 assert(output && !existsSync(output) && existsSync(bundle));
 const root = mkdtempSync(join(tmpdir(), 'ears-built-logical-cli-')), profile = join(root, 'profile'), paths = _appDataPaths(profile);
 const primary = join(root, 'primary.ears'), runs = join(root, 'runs.ears');
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-const report = { source: process.env.EARS_TEST_SOURCE, qualification: 'Small built-workspace CLI only; not installed/signed CLI, Electron, power loss or large-profile resource acceptance',
+const report = { source: process.env.EARS_TEST_SOURCE, qualification: 'Small staged CLI with workspace dependencies; not installed/signed CLI, Electron, power loss or large-profile resource acceptance',
   node: process.version, cli: { path: cli, sha256: hash(readFileSync(cli)) }, bundle: { path: bundle, sha256: hash(readFileSync(bundle)) },
   entries: Object.fromEntries(['@apackdev/ears', '@apackdev/ears/sqlite', '@apackdev/sdk/utils'].map(name => [name, import.meta.resolve(name)])), calls: [], checks: [] };
 assert(Object.values(report.entries).every(path => path.includes('/dist/')));
 const save = () => writeFileSync(output, JSON.stringify(report, null, 2));
 const env = { ...process.env, NODE_OPTIONS: '', APACK_ENV: 'test', APACK_STORAGE_FORMAT: 'sqlite/1', APACK_USER_DATA_DIR: profile };
 function command(args, expected = 0) {
-  const start = performance.now(), result = spawnSync(process.execPath, [cli, 'db', ...args], { env, encoding: 'utf8', timeout: 30000 });
+  const start = performance.now(), result = spawnSync(process.execPath, [cli, 'db', ...args], { env, cwd: root, encoding: 'utf8', timeout: 30000 });
   report.calls.push({ args, expected, status: result.status, signal: result.signal, stdout: result.stdout, stderr: result.stderr, ms: performance.now() - start }); save();
   assert.equal(result.status, expected, result.stderr); assert.equal(result.signal, null);
   return result;
