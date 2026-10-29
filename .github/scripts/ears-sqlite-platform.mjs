@@ -19,7 +19,7 @@ if (mode === 'verify') {
   const report = file => JSON.parse(readFileSync(join(evidence, file), 'utf8'));
   const passedIn = (value, pattern) => value.testResults.flatMap(test => pattern.test(test.name.replaceAll('\\', '/'))
     ? test.assertionResults.filter(result => result.status === 'passed') : []).length;
-  const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json');
+  const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
@@ -30,7 +30,7 @@ if (mode === 'verify') {
     logicalCommandCasesPassed: passedIn(cli, /\/tests\/commands\/db-logical\.spec\.ts$/),
     logicalCrashCasesPassed: passedIn(host, /\/tests\/backup\/logical-crash\.spec\.ts$/),
     builtLogicalChecks: builtCli.checks.length,
-    profileConversionChecks: profile.checks.length, convertedApi,
+    profileConversionChecks: profile.checks.length, profileCrashCases: profileCrash.records.length, convertedApi,
     nativeDumpCasesPassed: passedIn(ears, /\/tests\/sqlite\/elmdb-conversion\.spec\.ts$/),
     logicalSnapshotCasesPassed: passedIn(ears, /\/tests\/sqlite\/logical-snapshot\.spec\.ts$/),
     logicalHostCasesPassed: logical.filter(test => test.status === 'passed').length,
@@ -50,6 +50,14 @@ if (mode === 'verify') {
     for (const key of ['postRestartDataRetained', 'nativeSourceUnchanged', 'historyRetained', 'settingsRetained', 'mediaRetained'])
       assert.equal(convertedApi[key], true, `Actual API lifecycle must verify ${key}`);
   }
+  assert.equal(profileCrash.source, source, 'Process-kill profile gate must match source');
+  assert.equal(profileCrash.producerSha256, profile.producerSha256, 'Profile gates must use the same actual native producer');
+  assert.equal(profileCrash.enginePin, profile.enginePin);
+  assert.deepEqual(profileCrash.records.map(item => item.point), ['during-primary', 'before-primary', 'after-primary', 'before-profile', 'after-profile']);
+  assert(profileCrash.records.every(item => item.signal === 'SIGKILL' && item.nativeSourceUnchanged && item.oldOutputBytesUnchanged && item.newContainerRetryVerified));
+  assert.equal(profileCrash.records[0].witness.loadedEntities, 1000, 'Kill must occur after a real committed ingestion batch');
+  assert(profileCrash.records.every(item => item.witness.finalExists === (item.point === 'after-profile')));
+  assert.equal(profileCrash.records[4].completedProfileReopened, true);
   assert.equal(profile.source, source, 'Profile conversion must run against exact candidate source');
   assert.equal(profile.enginePin, readFileSync('vendor/elmdb.rev', 'utf8').trim());
   assert(/^[a-f0-9]{64}$/.test(profile.producerSha256), 'Retain the actual native dump producer hash');

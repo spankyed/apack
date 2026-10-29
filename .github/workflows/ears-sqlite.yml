@@ -88,6 +88,14 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then producer="$producer.exe"; fi
           node scripts/with-source.mjs node --import tsx tests/scripts/test-sqlite-profile-conversion.ts \
             "$producer" .temp/sqlite-platform/profile-conversion.json 2>&1 | tee .temp/sqlite-platform/profile-conversion.log
+      - name: Profile conversion ingestion and publication process-kill boundaries
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: |
+          producer=vendor/elmdb/target/release/elmdb
+          if [ "$RUNNER_OS" = Windows ]; then producer="$producer.exe"; fi
+          node scripts/with-source.mjs node --import tsx tests/scripts/test-sqlite-profile-crash.ts \
+            "$producer" .temp/sqlite-platform/profile-crash.json 2>&1 | tee .temp/sqlite-platform/profile-crash.log
       - name: Build shipped pack and API for converted-profile lifecycle
         if: runner.os == 'Linux'
         run: |
