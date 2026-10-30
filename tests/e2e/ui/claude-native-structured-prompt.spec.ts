@@ -142,6 +142,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
     await appPage.setViewportSize({width:1400,height:900})
   }
   if(uiCopy){
+    const copyBefore=await context();
     const original=await electronApp.evaluate(({clipboard})=>({text:clipboard.readText(),html:clipboard.readHTML(),rtf:clipboard.readRTF(),image:clipboard.readImage().toDataURL(),bookmark:clipboard.readBookmark().title}));
     const copies=async()=>JSON.parse(await readFile(join(workspace!,'native-copy-receipts.json'),'utf8').catch(()=>'[]'));
     const button=card.getByRole('button',{name:'Copy release checklist',exact:true});
@@ -178,6 +179,21 @@ test('round-trips decorated structured replace append and cursor insertion throu
       await appPage.evaluate(()=>{if((window as any).__nativeCopyWrite){navigator.clipboard.writeText=(window as any).__nativeCopyWrite;delete (window as any).__nativeCopyWrite}});
       await electronApp.evaluate(({clipboard,nativeImage},saved)=>{const image=nativeImage.createFromDataURL(saved.image);clipboard.write({text:saved.text,html:saved.html,rtf:saved.rtf,...(saved.bookmark?{bookmark:saved.bookmark}:{}),...(!image.isEmpty()?{image}:{})})},original);
     }
+    const copyAfter=await context(),submitted='Review the pending release notes.',recovery='Continue reviewing the release after the clipboard check.';
+    expect(copyAfter.messages).toEqual(copyBefore.messages);expect(copyAfter.turns).toBe(copyBefore.turns);expect(copyAfter.claude.totalCostUsd).toBe(copyBefore.claude.totalCostUsd);expect(copyAfter.native.state.nativePid).toBe(boundNativePid);
+    if(await tools.getAttribute('aria-expanded')==='true')await tools.click();
+    await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('');
+    await expect.poll(async()=>(await context()).native.state.busy).toBe(false);
+    await expect.poll(async()=>(await context()).messages.filter((message:any)=>message.sender==='user'&&message.text===submitted).length).toBe(1);
+    const sent=await context();expect(sent.sessionId).toBe(sessionId);expect(sent.native.state.nativePid).toBe(boundNativePid);
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await composer.fill('Retained after copying.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture('native-clipboard-sent-'+size.width+'.png');}
+    await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/);
+    const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click();
+    await composer.fill(recovery);await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');
+    const final=await context();expect(final.sessionId).toBe(sessionId);expect(errors).toEqual([]);
+    await writeFile(join(workspace!,'native-clipboard-app-proof.json'),JSON.stringify({copyBefore,copyAfter,submitted,recovery,sent,final},null,2));
+    await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeClipboard:true,nativeClipboardSameSessionRecovery:true,nativeStructuredPrompt:false,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));
+    return;
   }
 
   const receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-structured-prompt-receipts.json'),'utf8').catch(()=>'[]'))
