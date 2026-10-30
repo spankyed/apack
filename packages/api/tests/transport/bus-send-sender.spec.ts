@@ -65,7 +65,7 @@ describe('bus.send carries the sender across the boundary', () => {
    */
   it('carries every field a sender may set, whatever the envelope grows', async () => {
     received.length = 0;
-    const whole: Required<Omit<Message, 'client'>> = { to: 'memo-pack/memos', event: { type: 'ADD_MEMO' }, from: 'default-setup', via: 'action:Summarise', sender: 'memo-pack/memos', call: 'c-1', answering: 'c-0' };
+    const whole: Required<Omit<Message, 'client'>> = { diagnostics: { traceparent: '00-11111111111111111111111111111111-2222222222222222-01' }, to: 'memo-pack/memos', event: { type: 'ADD_MEMO' }, from: 'default-setup', via: 'action:Summarise', sender: 'memo-pack/memos', call: 'c-1', answering: 'c-0' };
     await caller.send(whole);
     expect(received).toEqual([{ ...whole, client: 'c-one' }]);
   });
@@ -123,6 +123,12 @@ describe('bus.send carries the sender across the boundary', () => {
     received.length = 0;
     await caller.send({ to: 'memo-pack/memos', event: { type: 'ADD_MEMO' }, answering: 'c-the-ask' });
     expect(received[0]?.answering).toBe('c-the-ask');
+  });
+
+  it('accepts business requests with malformed diagnostics while retaining a bounded invalid marker', async () => {
+    received.length = 0;
+    await caller.send({ to: 'memo-pack/memos', event: { type: 'ADD_MEMO' }, diagnostics: { traceparent: 'x'.repeat(513) } });
+    expect(received[0]).toMatchObject({ event: { type: 'ADD_MEMO' }, diagnostics: { traceparent: '' } });
   });
 
   // The fields are named rather than the object made passthrough, so the boundary stays closed to the rest

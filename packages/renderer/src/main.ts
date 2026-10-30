@@ -1,3 +1,4 @@
+import { windowPerformance } from './runtime/performance.ts';
 import { hostDeclaration } from '@apackdev/host/fe';
 import { createApp } from 'vue'
 import { createActor } from 'xstate';
@@ -34,6 +35,8 @@ declare global {
      * that have nothing to do with it.
      */
     __sendToSystem?: (systemId: string, event: { type: string } & Record<string, unknown>) => void;
+    /** Developer/test recording; the authenticated backend refuses production admission. */
+    __performance: typeof windowPerformance;
     appVersion: string;
   }
 }
@@ -85,6 +88,7 @@ window.__disableOnboardingUI = () => {
 };
 
 window.__sendToSystem = untypedSendToSystem;
+window.__performance = windowPerformance;
 
 applicationState.subscribe({
   error: (error: unknown) => {

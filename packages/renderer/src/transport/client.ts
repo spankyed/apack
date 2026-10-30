@@ -1,3 +1,5 @@
+import { notifyPerformanceView } from '@/runtime/performance';
+import { _performanceExecution } from '@apackdev/sdk/runtime';
 // The window's client to the API: the SDK's sends and the shell's subscription, over tRPC and the Electron main
 // process's report of the API's status. Nothing else in the renderer calls the bus or reads the loaded packs.
 import type { ShellClient, ShellFailure } from '@apackdev/host/fe';
@@ -79,7 +81,12 @@ export const feClient: ShellClient = {
           connection.onDisconnected();
           connection.onFailed(String(error));
         },
-        onData: (message) => { if (current() && !windowSettings.receive(message)) connection.onMessage(message); },
+        onData: (message) => {
+          if (!current()) return;
+          const performance = _performanceExecution();
+          const receive = () => { if (!windowSettings.receive(message)) connection.onMessage(message); };
+          if (performance) performance.withCarrier(message.diagnostics, receive); else receive();
+        },
       });
     };
     let subscription = subscribeToBus();
@@ -123,19 +130,46 @@ export const feClient: ShellClient = {
   },
 
   watchView: (request, observer) => {
+    const { diagnostics: requestedCarrier, ...plainRequest } = request;
+    let firstSubscription = true;
+    let active = true;
+    let generation = 0;
     let subscription: { unsubscribe(): void } | undefined;
     const view = {
       subscribe: () => {
+        if (!active) return;
+        const epoch = ++generation;
+        let delivered = 0;
+        const performance = _performanceExecution();
+        const carrier = firstSubscription ? requestedCarrier ?? performance?.capture() : performance?.capture();
+        firstSubscription = false;
+        const tracedRequest = carrier?.traceparent ? { ...plainRequest, diagnostics: carrier } : plainRequest;
         subscription?.unsubscribe();
-        subscription = trpc.views.watch.subscribe(request, {
+        subscription = trpc.views.watch.subscribe(tracedRequest, {
           // tRPC types a frame as JSON delivers it, where a member typed `unknown` may be absent; the API sends
           // `ViewUpdate`s, so what arrives is one, a result of `undefined` being one JSON can't carry anyway
-          onData: (update) => observer(update as ViewUpdate),
+          onData: (update) => {
+            if (!active || generation !== epoch) return;
+            const performance = _performanceExecution();
+            const value = update as ViewUpdate;
+            const receive = () => {
+              observer(value);
+              notifyPerformanceView({ request: plainRequest, update: value, generation: epoch, delivery: ++delivered });
+            };
+            if (performance) performance.withCarrier(value.diagnostics?.carrier, receive);
+            else receive();
+          },
           // The subscription failed rather than the view: a request the API refused, or the socket gone for good
-          onError: (error: unknown) => observer({ ok: false, error: errorMessage(error), commit: 0 }),
+          onError: (error: unknown) => {
+            if (!active || generation !== epoch) return;
+            const performance = _performanceExecution();
+            const failed = () => observer({ ok: false, error: errorMessage(error), commit: 0 });
+            if (performance) performance.withCarrier(carrier, failed);
+            else failed();
+          },
         });
       },
-      unsubscribe: () => subscription?.unsubscribe(),
+      unsubscribe: () => { active = false; generation++; subscription?.unsubscribe(); },
     };
     views.add(view);
     view.subscribe();

@@ -2,7 +2,7 @@ import { compileSettingsCatalog } from '../features/settings/validation.ts';
 // The host's implementations of the services packs reach through `services` (contracts in @apackdev/sdk/services),
 // and the one place the app's HostRuntime is assembled.
 import { secretRedaction } from '../secrets/redaction.ts';
-import type { HostRuntime, RootEvents } from '@apackdev/sdk/runtime';
+import type { HostRuntime, RootEvents, PerformanceExecution } from '@apackdev/sdk/runtime';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import type { PackRegistry } from '../packs/registry.ts';
 import { createAppData } from './app-data.ts';
@@ -33,10 +33,12 @@ export interface HostRuntimeOptions {
   appVersion: string;
   /** Whether the runtime offers counting its engines' calls (`HostRuntime.diagnostics`): a development app's choice */
   countCalls?: boolean;
+  /** Development/test context supplied by the composition root, never initialized by services. */
+  performance?: PerformanceExecution;
 }
 
 /** The running app as the SDK reaches it, which the composition root binds with `bindHost` */
-export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls }: HostRuntimeOptions): HostRuntime {
+export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): HostRuntime {
   const settings = createSettingsService(createSettingsStore({
     ears: () => engine,
     catalog: packs.settingsCatalog,
@@ -50,8 +52,9 @@ export function createHostRuntime({ transport, appVersion, database, runHistory,
     packs,
     appVersion,
     redaction: secretRedaction,
-    ...(countCalls && {
+    ...((countCalls || performance) && {
       diagnostics: {
+        ...(performance && { performance }),
         calls: {
           start() {
             engine.admin.calls.start();

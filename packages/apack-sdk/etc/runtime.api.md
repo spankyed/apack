@@ -55,6 +55,7 @@ export interface FeHostRuntime {
     application: HostShell;
     catalog: PackCatalogView;
     client: FeClient;
+    diagnostics?: PerformanceExecution;
     packs: FePackRegistryView;
     secrets: SecretsClient;
     settings: SettingsPort;
@@ -99,6 +100,7 @@ export interface HostCallReports {
 export interface HostDiagnostics {
     // (undocumented)
     calls: HostCallCounting;
+    performance?: PerformanceExecution;
 }
 
 // @public
@@ -166,6 +168,29 @@ export interface PackRegistryView extends PackExtensionsView {
     surfaceIds(): readonly FeatureRef[];
     systemIds(): readonly FeatureRef[];
 }
+
+// @public
+export interface PerformanceCarrier {
+    // (undocumented)
+    traceparent?: string;
+    // (undocumented)
+    tracestate?: string;
+}
+
+// @public
+export interface PerformanceExecution {
+    // (undocumented)
+    capture(): PerformanceCarrier;
+    // (undocumented)
+    carryEvent(event: object, carrier: unknown): void;
+    // (undocumented)
+    withCarrier<T>(carrier: unknown, fn: () => T): T;
+    // (undocumented)
+    withEvent<T>(event: object, fn: () => T): T;
+}
+
+// @internal
+export function _performanceExecution(): PerformanceExecution | undefined;
 
 // @public
 export interface RootEvents {

@@ -1,3 +1,4 @@
+import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
@@ -61,6 +62,8 @@ export let appSettingsAccess: ReturnType<typeof createSettingsAccess>;
 export let appViews: ViewHost;
 
 /** The open database, so shutdown can close it, which syncs what is owed */
+export let appPerformance: ReturnType<typeof createNodePerformanceController> | undefined;
+
 export let appDatabase: EarsDatabase | undefined;
 
 /** The run history's open database, so shutdown can close it */
@@ -105,15 +108,20 @@ export function openAppStore(): AppStore {
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
   const runHistory = openRunHistory(_getRunHistoryPath());
+  const env = resolveAppEnvironment().env;
+  appPerformance = env === 'development' || env === 'test' ? createNodePerformanceController() : undefined;
+  appPerformance?.attach(engine, 'app');
+  appPerformance?.attach(runHistory.engine, 'runHistory');
   runtime = createHostRuntime({
     database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs,
+    performance: appPerformance?.execution,
     countCalls: resolveAppEnvironment().env === 'development',
   });
   bindHost(runtime);
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);
-  appViews = createViewHost({ ears: () => engine, packs });
+  appViews = createViewHost({ ears: () => engine, packs, performance: appPerformance });
   appDatabase = database;
   appRunHistory = runHistory;
   return { database, runHistory, engine, packs };

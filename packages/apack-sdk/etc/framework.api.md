@@ -995,6 +995,16 @@ export type ViewArgs<Read> = Read extends () => unknown ? undefined : Read exten
 export type ViewDefinitions = Readonly<Record<string, ViewRead>>;
 
 // @public
+export interface ViewDiagnostics {
+    // (undocumented)
+    carrier: PerformanceCarrier;
+    // (undocumented)
+    delivery: number;
+    // (undocumented)
+    subscription: string;
+}
+
+// @public
 export function viewKey(request: ViewRequest): string;
 
 // @public
@@ -1003,6 +1013,7 @@ export type ViewRead = (args: never) => unknown;
 // @public
 export interface ViewRequest {
     args?: unknown;
+    diagnostics?: PerformanceCarrier;
     ref: string;
     view: string;
 }
@@ -1015,10 +1026,12 @@ export type ViewUpdate<Result = unknown> = {
     ok: true;
     value: Result;
     commit: number;
+    diagnostics?: ViewDiagnostics;
 } | {
     ok: false;
     error: string;
     commit: number;
+    diagnostics?: ViewDiagnostics;
 };
 
 // (No @packageDocumentation comment for this package)

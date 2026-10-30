@@ -1,3 +1,5 @@
+import type { createPerformanceController } from '../diagnostics/controller.ts';
+import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
 // The views windows are subscribed to: each request resolved to the feature's view in the registered pack and run
 // on the engine as a watch (`Ears.watch`), so it runs again after every commit that could change its result.
 //
@@ -20,6 +22,7 @@ type ViewObserver = (update: ViewUpdate) => void;
 
 /** What the views read: the engine, and the packs that declare them */
 export interface ViewHostOptions {
+  performance?: Pick<ReturnType<typeof createPerformanceController>, 'begin' | 'execution'>;
   /** The engine views run on, asked for at each start, so a test's replaced engine is the one a new watch reads */
   ears: () => Ears;
   packs: {
@@ -52,7 +55,7 @@ interface SharedView {
   stop: () => void;
 }
 
-export function createViewHost({ ears, packs }: ViewHostOptions): ViewHost {
+export function createViewHost({ ears, packs, performance }: ViewHostOptions): ViewHost {
   const views = new Map<string, SharedView>();
 
   const deliver = (shared: SharedView, update: ViewUpdate) => {
@@ -84,9 +87,35 @@ export function createViewHost({ ears, packs }: ViewHostOptions): ViewHost {
       return;
     }
     const args = shared.request.args;
-    const watching = ears().watch(() => (read as (args: unknown) => unknown)(args), {
-      next: (value, commit) => deliver(shared, { ok: true, value, commit }),
-      error: (error, commit) => deliver(shared, { ok: false, error: errorMessage(error), commit }),
+    let first = true;
+    let readCarrier: PerformanceCarrier | undefined;
+    const runRead = () => {
+      const span = performance?.begin('app.view.read');
+      readCarrier = span?.carrier();
+      const run = () => (read as (args: unknown) => unknown)(args);
+      try {
+        const result = span ? span.within(run) : run();
+        span?.end();
+        return result;
+      } catch (error) { span?.end('error'); throw error; }
+    };
+    const deliverRead = (update: ViewUpdate) => {
+      const run = () => {
+        const span = performance?.begin('app.view.deliver', { 'app.commit': update.commit });
+        try { if (span) span.within(() => deliver(shared, update)); else deliver(shared, update); }
+        finally { span?.end(); }
+      };
+      if (performance) performance.execution.withCarrier(readCarrier, run); else run();
+    };
+    const watching = ears().watch(() => {
+      const initial = first;
+      first = false;
+      // A delayed re-read may combine several commits. It has no single action parent until the scheduler
+      // supplies the contributing causes; never inherit whichever async callback happened to flush it.
+      return !initial && performance ? performance.execution.withCarrier(undefined, runRead) : runRead();
+    }, {
+      next: (value, commit) => deliverRead({ ok: true, value, commit }),
+      error: (error, commit) => deliverRead({ ok: false, error: errorMessage(error), commit }),
     }, { label: `${shared.request.ref} · ${shared.request.view}` });
     shared.stop = () => watching.stop();
   };
