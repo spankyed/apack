@@ -159,18 +159,25 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
         return { completed, durationMs, reports, failure, work, viewProgress, timings: firstVisibleMs === undefined ? undefined : { firstVisibleMs, maxVisibleGapMs } };
       }, { mode, thread, expected: fixture.script.chunks.join(''), scriptedChunks: fixture.script.chunks.length });
       let backlog: ReturnType<typeof streamingBacklog> | undefined;
-      let backlogFailure = false;
+      let backlogFailure: string | undefined;
+      let backlogPhase = 'production-file';
+      result.work.receivedProgress = result.viewProgress.length;
+      result.work.receivedFinalChars = result.viewProgress.at(-1)?.chars ?? 0;
       if (result.completed) try {
         const productionFile = path.join(directory, `production-${thread}.jsonl`);
         if (statSync(productionFile).size > 16 * 1024 || result.work.droppedProgress) throw Error('Progress capture exceeded its bound');
         const produced = readFileSync(productionFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+        backlogPhase = 'production-count';
+        result.work.producedProgress = produced.length;
+        result.work.producedFinalChars = produced.at(-1)?.chars ?? 0;
         if (produced.length !== fixture.script.chunks.length) throw Error('Missing production progress');
+        backlogPhase = 'progress-data';
         backlog = streamingBacklog(produced, result.viewProgress, fixture.script.chunks.join('').length);
-      } catch { backlogFailure = true; }
+      } catch { backlogFailure = `backlog-${backlogPhase}`; }
       trials.push(trialSchema.parse({ scenario: 'streaming', index, warmup: index < warmups,
         work: result.work, timings: result.timings, backlog, outcome: backlogFailure ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
         correct: result.completed && !backlogFailure, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
-        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: backlogFailure ? 'backlog-capture' : result.failure }));
+        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: backlogFailure ?? result.failure }));
       save();
       expect(trials.at(-1)!.outcome, `Preserved evidence: ${output}`).toBe('passed');
     }
