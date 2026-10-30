@@ -3,7 +3,7 @@
     <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
     <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" :info="view?.backgroundInfo" :can-reply="view?.canReplyBackground === true" @operate="operateBackground" @open="openBackground">
       <template #parent-interface>
-        <button v-if="!active && !view?.attachment" type="button" class="native-button native-parent-interface" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" aria-label="Use native interface" title="Open parent native interface" @click="open"><span aria-hidden="true" class="native-command">›_</span></button>
+        <button v-if="!active && !view?.attachment && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" type="button" class="native-button native-parent-interface" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" aria-label="Use native interface" title="Open parent native interface" @click="open"><span aria-hidden="true" class="native-command">›_</span></button>
       </template>
     </NativeBackgroundSession>
     <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
@@ -52,9 +52,10 @@
         </template>
       </div>
     </section>
-    <div v-if="!active && !view?.attachment && !continuation" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt'" class="native-launch__actions">
+    <div v-if="!active && !view?.attachment" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt' && (!continuation || launchProblem || view?.opening)" class="native-launch__actions">
       <span v-if="launchProblem" role="status" class="native-problem" :class="{ 'native-problem--expected': managedPolicyDeclined }">{{ launchProblem }}</span>
-      <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
+      <span v-if="continuation && view?.opening" role="status">{{ view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' }}</span>
+      <button v-if="!continuation" type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
         {{ view?.opening ? view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' : 'Use native interface' }}
       </button>
