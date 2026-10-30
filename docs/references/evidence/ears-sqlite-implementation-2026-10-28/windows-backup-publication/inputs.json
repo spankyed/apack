@@ -1,0 +1,4 @@
+{
+  "packages/apack-cli/src/commands/db/backup.ts": "9da94cb14dba6877fa48d8ddacffa06aa3a8d35f36b270ab0aa818a8f9a41768",
+  "packages/apack-cli/tests/commands/sqlite-profile.spec.ts": "6366276ba9d3c5d5b29bfd0ab037ba07e7eaf7ad2b8d56a0132d54aa3bce529c"
+}

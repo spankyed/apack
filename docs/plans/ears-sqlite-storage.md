@@ -891,3 +891,23 @@ with their original code or recreation; normal opens add no compatibility fallba
 validation does not grant physical replacement authority or exclude arbitrary raw writers and path aliases.
 Ordinary data-file ownership, reset/history deletion exclusion, durable directory publication and the remaining
 operational qualification are still required by the goal.
+
+
+### Background responsiveness: transaction-level attribution
+
+The [current-source admission diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-responsiveness/README.md)
+still fails: 99,900 vectors take 18.15 seconds and heartbeat p99 is 31.05 ms against 16 ms. Native projection
+itself stays near its four-millisecond slice, but 1,088 COMMITs consume 11.32 seconds wall time and about
+4.23 seconds of main-thread CPU, without cgroup throttling or substantial run-queue delay. Upstream vec1's
+xSync flushes buffered native writers during COMMIT, outside the current projection slice. Its base table also
+retains Float32 inputs; database growth during admission is approximately 844 MB. These are attribution
+results, not a speedup comparison or acceptance.
+
+Before adding a writer service or extending native storage, measure supported upstream physical allocation
+controls on one fixed model, including blocksize-min, with unchanged FULL, checkpoint policy and primary
+bytes. Compare deferred COMMIT work, write volume, all query scopes/updates/recall, memory and disk. Reject a
+layout that improves admission by degrading the original query/recall/resource gates. A background worker
+alternative must coordinate its SQLite writer with synchronous foreground units and qualify worker death,
+commit uncertainty, schema/generation changes, maintenance and shutdown. Merely adding a second writer
+connection would introduce internal BUSY failures; enlarging slices or hiding fsync changes is not a solution.
+The complete uninstrumented workload and original budgets remain required after any implementation.

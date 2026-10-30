@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
+import * as backups from '@apackdev/host/backup';
 import { DATABASE_FORMAT } from '@apackdev/ears/sqlite';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { appDataDirFor, _appDirOf } from '@apackdev/sdk/env';
@@ -10,7 +11,7 @@ import { db } from '../../src/commands/db';
 import { parseDbArgs } from '../../src/commands/db/target';
 
 const roots: string[] = [];
-afterEach(() => { vi.unstubAllEnvs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-cli-sqlite-')); roots.push(root);
   const dir = path.join(root, 'profile'), paths = _appDataPaths(dir);
@@ -82,4 +83,23 @@ it('permits a SQLite reset dry run while history is held without deleting primar
     expect(JSON.parse((await command(['query', '--data-dir', f.dir, '--output', 'json', 'return query.all().count()'])).out)).toBe(1);
     expect(fs.existsSync(f.paths.runHistory)).toBe(true);
   } finally { held.database.close(); }
+});
+
+
+it.each(['file', 'empty directory', 'populated directory', 'dangling symlink'])('refuses a backup destination raced by a %s without replacing it', async kind => {
+  const f = fixture(), destination = path.join(f.root, 'raced-backup'), outside = path.join(f.root, 'not-created');
+  const exportDatabase = backups.exportDatabase; let raced = false;
+  vi.spyOn(backups, 'exportDatabase').mockImplementation(async (...args) => {
+    const snapshot = await exportDatabase(...args);
+    if (kind === 'file') fs.writeFileSync(destination, 'belongs to someone else');
+    else if (kind === 'dangling symlink') fs.symlinkSync(outside, destination, 'file');
+    else { fs.mkdirSync(destination); if (kind === 'populated directory') fs.writeFileSync(path.join(destination, 'kept'), 'belongs to someone else'); }
+    raced = true; return snapshot;
+  });
+  await expect(command(['backup', '--data-dir', f.dir, '--out', destination])).rejects.toThrow();
+  expect(raced).toBe(true);
+  if (kind === 'file') expect(fs.readFileSync(destination, 'utf8')).toBe('belongs to someone else');
+  else if (kind === 'dangling symlink') { expect(fs.lstatSync(destination).isSymbolicLink()).toBe(true); expect(fs.readlinkSync(destination)).toBe(outside); expect(fs.existsSync(outside)).toBe(false); }
+  else expect(fs.readdirSync(destination)).toEqual(kind === 'empty directory' ? [] : ['kept']);
+  expect(fs.readdirSync(f.root).some(name => name.startsWith('.apack-backup-'))).toBe(false);
 });

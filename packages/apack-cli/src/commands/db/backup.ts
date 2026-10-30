@@ -46,9 +46,12 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
       }
       verifyBackup(backup);
       fs.chmodSync(backup, 0o700);
-      // Exclusive reservation prevents overwriting a destination created while the snapshot was copied.
-      fs.mkdirSync(destination);
-      reserved = true;
+      // POSIX can replace an empty directory; reserve it exclusively first. Windows directory rename
+      // already refuses an occupied destination, and cannot rename onto even our empty reservation.
+      if (process.platform !== 'win32') {
+        fs.mkdirSync(destination);
+        reserved = true;
+      }
       fs.renameSync(backup, destination);
       reserved = false;
     });

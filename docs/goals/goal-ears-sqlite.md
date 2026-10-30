@@ -215,10 +215,16 @@ initial test-development failures are retained. Nine actual-report controls prot
 witnesses. The original assertions/deadlines were not relaxed. Broad/compiler work stays in private
 Linux/CI, capped at two CPUs/six GiB/no swap with a quiet admission window; focused checks use half a CPU/768 MiB.
 
-[Platform run 41112243866](https://github.com/spankyed/apack/actions/runs/41112243866) is terminal success on all
-three hosts at `9fbea37d0d`; that predates the native pin, file ownership and reset changes. [Signed installed
-41106578424](https://github.com/spankyed/apack/actions/runs/41106578424) passes at `f731a4a549`, including both
-persisted-identity witnesses. Final exact-source strict/platform and signed-installed runs remain required.
+[Platform run 41112243866](https://github.com/spankyed/apack/actions/runs/41112243866) passes all three hosts
+at `9fbea37d0d`, before the native/ownership/reset changes. Current runtime `a95039a8c7` passes
+[signed installed Preview 41120611981](https://github.com/spankyed/apack/actions/runs/41120611981), including
+both store identities, and Linux/macOS SQLite qualification in [strict run 41120604961](https://github.com/spankyed/apack/actions/runs/41120604961).
+That strict run remains live: producers and integration-2 pass; other shards require polling. Windows fails
+its CLI backup step because renaming onto an empty reserved directory is unsupported there. The
+[backup publication correction](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-backup-publication/README.md)
+keeps the POSIX reservation and uses direct directory rename on Windows, with four raced-destination
+preservation cases. All 28 platform CLI cases, CLI types/lint/package build pass on Linux; actual Windows
+qualification remains pending. Do not restart the live strict run or mislabel it green.
 The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
 The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
 remains unexplained. The older editor intermittent also remains unexplained despite ten unchanged repeats.
@@ -226,8 +232,8 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: publish this tested runtime, run final pinned strict/platform/installed acceptance, resolve
-resulting failures and continue the responsiveness, real-corpus and full app/operational requirements below.
+Next checkpoint: qualify the Windows backup correction through the existing platform witness, inspect the
+remaining strict shards, and continue responsiveness, real-corpus and full app/operational requirements below.
 No evidence here certifies arbitrary filesystems or completes the goal.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:
@@ -247,7 +253,11 @@ Next deliverables and their closing checks, without narrowing phases 3–7:
   a separate guard. These remain phases 2/5/6, not completed requirements.
 - Resolve the existing failed responsiveness gate. Latest recorded 99,900-vector admission takes 20.77 s
   with heartbeat p99 48.14 ms against 16 ms. Projection batching improves throughput but does not prove a
-  heartbeat win. In a later 0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;
+  heartbeat win. A [current-source attribution run](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-responsiveness/README.md)
+  still fails at p99 31.05 ms: 11.32 seconds of COMMIT wall time includes deferred vec1 work and substantial
+  blocked time, with no cgroup throttling. The projection slice alone does not bound its transaction. This is
+  not a speedup comparison or acceptance. Next measure supported physical allocation controls on a fixed model
+  before adding native storage or writer coordination. In a later 0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;
   bounded native deletion still needs latency/WAL/resource qualification. FULL writes, canonical bytes,
   default checkpoints and original budgets remain unchanged. Do not relax gates around these results.
 - Complete representative search usefulness (language/identifier/typo/phrases/highlights/field restrictions),
