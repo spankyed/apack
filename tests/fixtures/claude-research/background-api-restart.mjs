@@ -56,7 +56,8 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
   observation.stalePost=await sendOldPost();
   expect(observation.stalePost.status).toBe(409);
   observation.newProducer=(await audit()).filter(row=>row.path==='/background-status'&&row.status===200&&row.pid===observation.apiAfter.pid&&row.input?.sessionId===job.sessionId&&row.reply?.shellPrefix).map(row=>JSON.parse(Buffer.from(row.reply.shellPrefix.slice(row.reply.shellPrefix.lastIndexOf(' -')+2),'base64url').toString())).at(-1);
-  expect(observation.newProducer?.generation).not.toBe(oldConfig.generation);expect(observation.newProducer?.token).not.toBe(oldConfig.token);
+  expect(observation.newProducer).toMatchObject({socketPath:oldConfig.socketPath,brokerToken:oldConfig.brokerToken,sessionId:job.sessionId,pid:job.pid});
+  expect(observation.newProducer.generation).not.toBe(oldConfig.generation);expect(observation.newProducer.token).not.toBe(oldConfig.token);
   const starts=(await readFile(join(workspace,'native-children.jsonl'),'utf8')).trim().split('\n').map(JSON.parse).filter(row=>JSON.stringify(row.args)===JSON.stringify(['--version']));
   const active=[];for(const start of starts){const state=await childProcessState(start.pid);if(state&&state.state!=='Z')active.push({...start,process:state});}
   expect(active).toHaveLength(1);observation.authorityAfter=active[0];
