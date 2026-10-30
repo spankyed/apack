@@ -256,7 +256,11 @@ disabled, all five normal package builds, lint and all 41 platform CLI cases pas
 is terminal success: producers, all three SQLite platforms, both integration shards, both native shards and
 app-and-rest pass. [Retained metadata](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-1eb/README.md)
 distinguishes those nine successful jobs from six skipped alternate workflow jobs. This closes the current
-strict/platform gap, not final installed/signed source or the remaining app/operational/performance gates.
+strict/platform gap, not the remaining app/operational/performance gates.
+[Signed installed run 41144824212](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-49d/README.md)
+also passes at `49d6426961` (identical production inputs): six actual macOS arm64 executable cases, zero skips/
+retries, mandatory two-store identity/model-claim witness, pre/post-sign native smoke and strict Developer ID
+sealing. This closes the current six-case macOS installed gap; broader flows and required architectures remain.
 Repeat affected integrated gates after future production changes; documentation alone does not require a rerun.
 The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
 The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
@@ -279,8 +283,9 @@ Next deliverables and their closing checks, without narrowing phases 3–7:
 - Qualify native repair faults on the final platforms, complete physical publication/deletion authority and
   physical-file recovery, and verify interruption/reopen outcomes under cooperating ownership.
   Claims inside a database directory do not authorize arbitrary rename/delete or noncooperating writers.
-- Qualify final native provenance after inner-library signing and before app sealing; qualify installed
-  Electron/renderer/CLI, executable-pack/SDK flows and required OS/architectures. `asar:false` already keeps
+- Complete installed Electron/renderer/CLI, executable-pack/SDK flows and required OS/architectures beyond
+  the six-case macOS arm64 signed qualification above. Requalify native provenance after inner-library signing
+  and before app sealing when relevant inputs change. `asar:false` already keeps
   the native files on disk. Ordinary source/unsigned package builds do not prove installed/signing behavior.
 - Close remaining filesystem/format ownership work: qualify ordinary unaliased data files and foreign
   valid SQLite refusal/positive persisted identity on final platforms, and synchronize/qualify

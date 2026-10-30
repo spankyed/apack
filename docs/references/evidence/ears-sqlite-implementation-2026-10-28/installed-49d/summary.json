@@ -1,0 +1,20 @@
+{
+  "run": 41144824212,
+  "source": "49d6426961b7e02a361e3c115474f28aae89389e",
+  "job": 124367386911,
+  "platform": "darwin-arm64",
+  "expected": 6,
+  "skipped": 0,
+  "unexpected": 0,
+  "flaky": 0,
+  "retries": 0,
+  "witness": "packaged SQLite stores hold their model claims across the real API process",
+  "checks": [
+    "Build unsigned installed Preview",
+    "Installed SQLite app lifecycle",
+    "Packaged native runtime",
+    "Sign installed Preview and verify native provenance",
+    "Typecheck installed app contracts"
+  ],
+  "wholeGoalAcceptance": false
+}
