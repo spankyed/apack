@@ -350,3 +350,20 @@ it('persists the durable child link after native exit without changing the paren
   await (owner.beforeRelease as ReturnType<typeof vi.fn>).mock.calls[0]![0]()
   expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, nativeContinuation: continuation, chatState: 'paused' })
 })
+
+it('retires conversation controls after a durable fork while the original terminal stays live', async () => {
+  const continuation = { sessionId, continuedInSessionId: '05ff1d31-597d-4537-8737-4407191add6e', timestamp: '2026-10-29T12:13:13.909Z' }
+  const owner = { state: { sessionId, continuation, cwd: directory, status: 'live', busy: false, tasks: [], ownerId: 'owned' }, busy: false,
+    readJournal: async () => ({ entries: [], pending: false, problems: [] }), refreshNotice: vi.fn(async () => { throw new Error('Retired parent notice') }), refreshMcpInput: vi.fn(async () => { throw new Error('Native MCP form session changed') }),
+    getGenericToolPermissionDialogs: vi.fn(async () => { throw new Error('Retired parent controls') }), getToolPermissionDialogs: async () => [], getWorkflowDialogs: async () => [],
+    getFileDialogs: async () => [], getBashDialogs: async () => [], getQuestionDialogs: async () => [], getPlanDialogs: async () => [], beforeRelease: vi.fn() } as unknown as ClaudeNativeTerminalOwner
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
+  await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, nativeContinuation: continuation }))
+  expect(owner.refreshMcpInput).not.toHaveBeenCalled()
+  expect(owner.refreshNotice).not.toHaveBeenCalled()
+  expect(owner.getGenericToolPermissionDialogs).not.toHaveBeenCalled()
+  expect(fake.thread.context.claudeCode).toMatchObject({ sessionError: undefined })
+  await (owner.beforeRelease as ReturnType<typeof vi.fn>).mock.calls[0]![0]()
+  expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, nativeContinuation: continuation, chatState: 'paused' })
+})

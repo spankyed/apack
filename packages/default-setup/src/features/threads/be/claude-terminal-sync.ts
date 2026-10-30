@@ -168,17 +168,22 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           lastTaskSnapshot = taskSnapshot
           for (const entry of agentRows.values()) upsert(entry)
         }
-        await owner.refreshMcpInput()
-        await owner.refreshNotice()
+        // A durable fork keeps the terminal alive on the native agents screen, but retires
+        // this conversation's controls. Its journal and parent identity remain owned here.
+        const backgrounded = owner.state.continuation?.sessionId === owner.state.sessionId
+        if (!backgrounded) {
+          await owner.refreshMcpInput()
+          await owner.refreshNotice()
+        }
         if (!current() || !repository.threadQueries.byId(threadId)) return
         applyRetirements()
-        const genericPermissions = await owner.getGenericToolPermissionDialogs()
-        const toolPermissions = await owner.getToolPermissionDialogs()
-        const workflows = await owner.getWorkflowDialogs()
-        const reads = await owner.getFileDialogs()
-        const bashes = await owner.getBashDialogs()
-        const questions = await owner.getQuestionDialogs()
-        const plans = await owner.getPlanDialogs()
+        const genericPermissions = backgrounded ? [] : await owner.getGenericToolPermissionDialogs()
+        const toolPermissions = backgrounded ? [] : await owner.getToolPermissionDialogs()
+        const workflows = backgrounded ? [] : await owner.getWorkflowDialogs()
+        const reads = backgrounded ? [] : await owner.getFileDialogs()
+        const bashes = backgrounded ? [] : await owner.getBashDialogs()
+        const questions = backgrounded ? [] : await owner.getQuestionDialogs()
+        const plans = backgrounded ? [] : await owner.getPlanDialogs()
         if (!current() || !repository.threadQueries.byId(threadId)) return
         const dialogThread = repository.threadQueries.byId(threadId)!
         const priorControl = object(dialogThread.context?.claudeCode?.pendingControlRequest)
@@ -268,7 +273,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const prior = thread.context?.claudeCode ?? {}
         const previous = Array.isArray(prior.previousSessionIds) ? prior.previousSessionIds : []
         const nativeError = state.lastTurn?.reason === 'error' ? 'Native Claude turn failed; details remain in the native interface' : state.lastTurn?.reason === 'refusal' ? 'Native Claude refused the turn' : undefined
-        const chatState = problem || nativeError || state.status === 'error' ? 'error' : object(prior.pendingControlRequest)?.nativeTerminal ? 'paused' : working ? 'working' : state.status === 'exited' || state.lastTurn?.reason === 'aborted' ? 'paused' : 'success'
+        const chatState = problem || nativeError || state.status === 'error' ? 'error' : object(prior.pendingControlRequest)?.nativeTerminal ? 'paused' : state.continuation?.sessionId === state.sessionId ? 'paused' : working ? 'working' : state.status === 'exited' || state.lastTurn?.reason === 'aborted' ? 'paused' : 'success'
         const context = { ...thread.context, claudeCode: { ...prior, sessionId: state.sessionId, ...(state.continuation ? { nativeContinuation: state.continuation } : {}), ...(nativeLaunch?.sessionId === state.sessionId ? {nativeLaunch} : {}),
           ...(prior.sessionId && prior.sessionId !== state.sessionId ? { previousSessionIds: [...new Set([...previous, prior.sessionId])] } : {}),
           ...(metadata ? { model: metadata.model, modelOverride: owner.modelSelection ?? prior.modelOverride, cwd: metadata.cwd, ...(metadata.permissionMode ? { permissionMode: metadata.permissionMode, prePlanMode: metadata.prePlanMode } : {}), turns: metadata.turns, startedAt: metadata.startedAt, ...(metadata.totalCostUsd !== undefined ? { totalCostUsd: metadata.totalCostUsd } : {}) } : {}),

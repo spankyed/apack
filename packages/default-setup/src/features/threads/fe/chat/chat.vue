@@ -323,7 +323,7 @@ const allMessages = useSelector(actor, (state) => (state.context.currentThread?.
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
-const nativeComposerOwner = computed(() => nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+const nativeComposerOwner = computed(() => !nativeSessionBackgrounded.value && nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
 function operateMcpForm(action: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormOperation) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value, form = owner?.mcpForm
   if (!mount || !owner || !form) return
