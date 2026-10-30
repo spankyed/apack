@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { createServer, type ServerResponse } from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { createClaudeTerminalUiTransport } from '#features/code/be/services/claude-code/terminal-ui.ts'
 
 async function fixture(answer: (body: Record<string, unknown>, response: ServerResponse) => void) {
-  const directory = await mkdtemp('/private/tmp/cc-ui-test-'), socketPath = join(directory, 'ui.sock')
+  const directory = await mkdtemp(join(tmpdir(), 'cc-ui-test-')), socketPath = join(directory, 'ui.sock')
   const owner = { pid: 17, sessionId: 'native-session' }
   let current: typeof owner | undefined = owner
   const server = createServer(async (request, response) => {

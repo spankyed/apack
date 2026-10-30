@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import http from 'node:http'
 import { readFile, writeFile, readdir } from 'node:fs/promises'
@@ -10,7 +11,7 @@ async function config() { return JSON.parse(await readFile(bridge!.directory + '
 async function request(path: string, body: unknown, token?: string) {
   const value = await config()
   return new Promise<{ status: number; value: Record<string, unknown> }>((resolve, reject) => {
-    const req = http.request({ socketPath: value.socketPath, path, method: 'POST', headers: { 'content-type': 'application/json', 'x-apack-native-token': token ?? value.token } }, response => {
+    const req = http.request({ socketPath: value.socketPath, path, method: 'POST', agent: false, headers: { 'content-type': 'application/json', 'x-apack-native-token': token ?? value.token } }, response => {
       let bytes = ''; response.on('data', chunk => { bytes += chunk }); response.on('end', () => resolve({ status: response.statusCode!, value: JSON.parse(bytes) }))
     }); req.on('error', reject); req.end(JSON.stringify(body))
   })
@@ -502,4 +503,34 @@ it('accepts billing only from its current native owner and clears stale observat
  expect((await request('/native-billing',{...event,sessionId:next,sequence:4})).status).toBe(400)
  expect((await request('/native-billing',{...event,sessionId:next,sequence:5,observedAt:11})).status).toBe(200)
  await bridge!.close(); expect(bridge!.billing).toBeUndefined()
+})
+
+
+it.each(['漢', '\u0000'])('delivers a native maximum-length %j clipboard request through the authenticated broker', async character => {
+  await create()
+  const text = character.repeat(1000000), copy = vi.fn(async (_text: string) => true)
+  bridge!.uiTransport.promptHosts.register('app', { read: async () => ({ text: '', cursor: 0 }), fill: async () => false, copy })
+  const body = { sessionId: session, pid: process.pid, request_id: randomUUID(), sequence: 1, request: { subtype: 'ui_copy', surface: 'desktop', client_id: 'app', text } }
+  const result = await request('/ui-host', body)
+  expect(result.status).toBe(200)
+  expect(result.value.result).toEqual({ copied: true })
+  expect(copy).toHaveBeenCalledOnce()
+  expect(copy.mock.calls[0]?.[0]).toBe(text)
+})
+
+
+it('still refuses text beyond the native character limit without invoking the clipboard', async () => {
+  await create()
+  const copy = vi.fn(async (_text: string) => true)
+  bridge!.uiTransport.promptHosts.register('app', { read: async () => ({ text: '', cursor: 0 }), fill: async () => false, copy })
+  const result = await request('/ui-host', { sessionId: session, pid: process.pid, request_id: randomUUID(), sequence: 1, request: { subtype: 'ui_copy', surface: 'desktop', client_id: 'app', text: '漢'.repeat(1000001) } })
+  expect(result.status).toBe(200)
+  expect(result.value.result).toEqual({ copied: false })
+  expect(copy).not.toHaveBeenCalled()
+})
+
+it('keeps the reverse text byte budget finite and unrelated broker routes unchanged', async () => {
+  await create()
+  expect((await request('/ui-host', { sessionId: session, padding: '\u0000'.repeat(1020000) })).status).toBe(413)
+  expect((await request('/native-focus', { sessionId: session, padding: '漢'.repeat(400000) })).status).toBe(413)
 })

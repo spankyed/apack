@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFile, readdir as _readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
@@ -154,6 +155,18 @@ test('round-trips decorated structured replace append and cursor insertion throu
       await button.click();await expect.poll(async()=>(await copies()).length).toBe(4);
       expect((await copies())[3]).toEqual({textLength:1000001,result:{isCopied:false,reason:'no-clipboard'}});
       expect(await electronApp.evaluate(({clipboard})=>clipboard.readText())).toBe('Release checklist 2\nVerify behavior 👋');
+      const largeCopies=[];
+      for(const [index,name,text] of [[4,'cjk','漢'.repeat(1000000)],[5,'astral','👋'.repeat(500000)],[6,'escaped',String.fromCharCode(92,10).repeat(500000)]] as const){
+        await button.click();await expect.poll(async()=>(await copies()).length).toBe(index+1);
+        expect((await copies())[index]).toEqual({textLength:1000000,result:{isCopied:true}});
+        const actual=await electronApp.evaluate(async({clipboard})=>{const{createHash}=await import('node:crypto'),text=clipboard.readText();return {length:text.length,bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex')}});
+        const expected={length:text.length,bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex')};
+        expect(actual).toEqual(expected);largeCopies.push({name,...actual,nativeResult:(await copies())[index].result});
+        await expect(composer).toHaveText('Review the pending release notes.');
+        if(index===4)for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(button).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-large-clipboard-'+width+'.png')});}
+      }
+      await writeFile(join(workspace!,'native-large-copy-proof.json'),JSON.stringify(largeCopies,null,2));
+      await appPage.setViewportSize({width:1400,height:900});
       await expect(composer).toHaveText('Review the pending release notes.');
     }finally{
       await appPage.evaluate(()=>{if((window as any).__nativeCopyWrite){navigator.clipboard.writeText=(window as any).__nativeCopyWrite;delete (window as any).__nativeCopyWrite}});

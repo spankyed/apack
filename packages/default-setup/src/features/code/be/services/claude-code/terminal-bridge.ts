@@ -1,3 +1,4 @@
+import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createClaudeTerminalPlugin } from './terminal-plugin.ts'
 import { createClaudeBackgroundStatus, type ClaudeBackgroundStatusIdentity } from './terminal-background-status.ts'
 import { createClaudeBillingState } from '../../../common/native-billing.ts'
@@ -92,7 +93,7 @@ export async function createClaudeTerminalBridge(options: {
       if (closed || request.method !== 'POST' || request.headers['x-apack-native-token'] !== token) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
-      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/native-status' || request.url === '/ui-host' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
+      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/native-status' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
       const value = object(JSON.parse(Buffer.concat(chunks).toString()))
       if (!value || typeof value.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.sessionId)) return reply(400, {})
       if (request.url === '/background-register') return reply(200, await background.register(value.sessionId, Number(value.pid)))
