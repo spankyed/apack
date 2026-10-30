@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -49,6 +49,27 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     expect(answers.find(a=>a.embedding_id===old.id)!.distance).toBeCloseTo(0);
     expect(new Set(answers.map(a=>Number(a.owner)))).toEqual(new Set(db.all('SELECT seq FROM entities WHERE id IN (?,?,?)',[first,second,third]).map(r=>r.seq)));
     expect(index.candidates(job.generation,bytes(vector(1)),1,{sql:'SELECT id FROM entities WHERE id=?',parameters:[third]})).toHaveLength(1);
+  });
+
+  it('stops inside a partial page at the time budget and resumes only committed rows after rollback',()=>{
+    const {db,e,index,job,model,write,embed}=fixture();
+    for(let i=0;i<5;i++)e.create('Row',{title:`row ${i}`});embed();
+    write(()=>index.admit(job,model));
+    const first=db.get('SELECT min(id) id FROM embedding_values')!.id;
+    const sliced=()=>{
+      const clock=vi.spyOn(performance,'now').mockReturnValueOnce(0).mockReturnValue(5);
+      try{return index.step(job.generation,128);}finally{clock.mockRestore();}
+    };
+    expect(()=>write(()=>{expect(sliced()).toBe(false);throw Error('rollback slice');})).toThrow('rollback slice');
+    expect(db.get('SELECT after_id,state FROM vector_indexes')).toEqual({after_id:0,state:'building'});
+    expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(0);
+    expect(write(sliced)).toBe(false);
+    expect(db.get('SELECT after_id,state FROM vector_indexes')).toEqual({after_id:first,state:'building'});
+    expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(1);
+    while(!write(()=>index.step(job.generation,128))) { /* resume from the last committed row */ }
+    expect(index.candidates(job.generation,bytes(vector(1)),100)).toHaveLength(5);
+    expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(5);
+    expect(db.get('SELECT state FROM vector_indexes')!.state).toBe('ready');
   });
 
   it('keeps nested/outer rollback, trash, replacement and destruction in the same transaction',()=>{

@@ -192,13 +192,15 @@ No master merge, release, production adoption or version-only PR is authorized. 
 Active integration checkout: `/private/tmp/ears-sqlite-query-integration`. The preceding checkpoint is
 preserved at `/private/tmp/ears-sqlite-diagnosis-evidence`, `68cf78a2f4`.
 
-Current checkpoint: qualify the candidate on committed master `debeddc3a6a` and native
+Current checkpoint: resolve admission responsiveness and finish app qualification on committed master `debeddc3a6a` and native
 `8ab7088f9a`. Detached merge `399c4765f0` combines candidate `fbd3c1c441` with that master,
 retaining SQLite explanations/backend assertions, master reverse-traversal clarification and all
 **five** current thread-query cases. The new master adds the Message status index, queued-message
 relocation and batched library queries. No source branch or other-agent checkout was merged/reset.
 The previous `330efa68e6` integration of `68cf78a2f4` and master `8b1a479b96` is historical.
 The draft branch publishes candidates for CI review; publication does not establish combined acceptance.
+Exact base `2d0a0e7d48` is now all-platform green; the later admission batching change has Linux
+qualification and requires new source qualification before final acceptance.
 Closing checks are matching native source/build, complete platform and full Strict gates, all five
 current app-query/SDK contracts, unchanged primary data/units/watches and exact-input verification.
 [Integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/master-query-integration/README.md)
@@ -239,8 +241,9 @@ cost, without establishing the cause of the whole-suite miss or selecting a load
 [Current integration and diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/current-query-integration/README.md)
 retain exact inputs, interrupted evidence and failed/unsupported scratch prerequisites.
 Strict CI now preserves progress artifacts without altering completed verdicts. Do not relax its deadline
-or treat a partial run as green. Next qualify current platform source, then use macOS per-file evidence
-to resolve the host gate; a broad retry without diagnosis is not an acceptance result.
+or treat a partial run as green. Base platform source is qualified below. Use macOS per-file evidence
+to resolve the host gate, and qualify later implementation edits when their focused checks converge;
+a broad retry without diagnosis is not an acceptance result.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains at `6cf6c8349e`, exact
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs green.
@@ -279,7 +282,10 @@ at `71810414e8` passes every mean-recall group (minimum 0.972) but misses respon
 p95 is roughly 19 ms; large filtered groups are 139–149 ms. Admission heartbeat p99 is 24.34 ms. The
 independent verifier rejects those gates and corrupted evidence. Profiles identify native filtered SQL at
 121–124 ms and COMMIT as 20.05 of 27.84 s of admission, maximum 385.69 ms. Model installation/observed
-GC are small. Automatic checkpoints versus fsync still need separate causal measurement.
+GC are small. The subsequent admission-only checkpoint control shows that disabling automatic
+checkpoints is insufficient: FULL COMMIT still consumes about 30.24 of 39.35 s, heartbeat p99 is
+55.52 ms and WAL grows to 2.16 GB before a 4.56 s final checkpoint. This does not isolate syscall-level
+fsync cost; no production checkpoint or durability policy is changed.
 
 Owner-only projection removes redundant payload/distance work without material sampled speedup. Shared
 bounded count/exact eligibility reduces a sampled 10k/10% exact query from 20.91 to 16.72 ms, while broad
@@ -295,7 +301,11 @@ retains exact inputs and the missing-prerequisite static-check attempt. CI requi
 and 555 comparisons on every host. Platform `40985909864` passes Linux/macOS; Windows executes
 its cases but fails source-byte verification because Git converts generated C to CRLF. Canonical LF
 before compilation reproduces/fixes that exact failure without changing the required hash or C code;
-new exact platform validation is required. Older scratch bitmap/text patches are not used.
+exact [platform 40996488761](https://github.com/spankyed/apack/actions/runs/40996488761) on
+`2d0a0e7d48` is now green on all three hosts. [Retained artifacts](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-current/README.md)
+verify all 555 comparisons and canonical source bytes per host, five current query cases and both SDK
+stores. Linux runs all 1,320 prepared SDK cases with zero skips and the converted API lifecycle.
+This qualifies that source, not later edits or full Strict. Older scratch bitmap/text patches are not used.
 
 The complete [fresh membership matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/native-membership/fresh/README.md)
 on `1860dd2eb1` now passes all patched query-latency and mean-recall gates (minimum 0.974), but still
@@ -306,6 +316,16 @@ answers and failed original-budget verifications remain retained. Scope/count/re
 native cost and FULL checkpoint scheduling remain the next performance work. Normal app model
 ownership/loading, packaging and physical failure qualification remain required. Do not retune frozen
 ANN settings or loosen thresholds.
+
+The [admission batching checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/admission-commit-batching/README.md)
+now uses the scheduler's four-millisecond work target with at most 128 ordered projection rows, committing
+only the processed cursor. All 626 SQLite EARS cases, types/lint and the old-implementation failure control
+pass. Two sliced 99,900-vector admissions take 17.74–18.26 s versus 26.57–46.19 s for fixed 32-row batches,
+with FULL/default automatic checkpoints unchanged. Commit counts drop from 3,126 to 1,075–1,185.
+Heartbeat remains failed and is not consistently better; the 1k tail also regresses. Original data, fixed
+chronology and independent models are retained. This is throughput progress, not acceptance or a reason to
+repeat broad gates before the remaining implementation converges. Resolve foreground commit cost and
+bounded writer/checkpoint ownership, and requalify complete frozen query/recall/app requirements.
 
 Still required, without narrowing phases 3–7:
 

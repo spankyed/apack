@@ -64,20 +64,24 @@ export class SqliteVectorIndex {
     const name = table(generation), state = this.db.get('SELECT * FROM vector_indexes WHERE generation=?', [generation]);
     if (!state) fail('CORRUPT', 'Missing native vector admission');
     if (state!.state === 'ready') return true;
+    const started = performance.now();
     const rows = this.db.all(`WITH page AS MATERIALIZED (
       SELECT entity_id,embedding_id FROM chunks WHERE generation=? AND embedding_id>? ORDER BY embedding_id LIMIT ?)
       SELECT v.id,coalesce(p.normalized,v.embedding) embedding,e.seq,1-e.trashed active
       FROM page c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
-      LEFT JOIN embedding_search p ON p.embedding_id=v.id`, [generation, state!.after_id, limit]);
+      LEFT JOIN embedding_search p ON p.embedding_id=v.id ORDER BY v.id`, [generation, state!.after_id, limit]);
+    let processed = 0, afterId = state!.after_id;
     for (const row of rows) {
       if (!Number.isSafeInteger(row.id) || !Number.isSafeInteger(row.seq)) fail('CORRUPT', 'Invalid native vector identity');
       this.db.run(`DELETE FROM ${name} WHERE rowid=?`, [BigInt(row.id)]);
       this.db.run(`INSERT INTO ${name}(rowid,v,owner,active) VALUES (?,?,?,?)`,
         [BigInt(row.id),row.embedding,BigInt(row.seq),BigInt(row.active)]);
+      processed++; afterId = row.id;
+      if (performance.now() - started >= this.db.indexBuilds.sliceMs) break;
     }
-    const ready = rows.length < limit;
+    const ready = processed === rows.length && rows.length < limit;
     this.db.run('UPDATE vector_indexes SET after_id=?,state=? WHERE generation=?',
-      [rows.at(-1)?.id ?? state!.after_id, ready ? 'ready' : 'building', generation]);
+      [afterId, ready ? 'ready' : 'building', generation]);
     return ready;
   }
   /** Chunk candidates only; final owner aggregation/reranking remains the query owner's responsibility. */

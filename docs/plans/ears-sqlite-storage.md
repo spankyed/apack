@@ -463,7 +463,10 @@ immediately. The [worker evidence](../references/evidence/ears-sqlite-implementa
 retains a real stale-snapshot failure, its fix, negative controls and exact native hashes.
 
 Projection backfill first pages IDs using `chunk_native_admission`, then loads only that page's
-vectors. Missing cursor indexes on populated stores require explicit offline preparation.
+vectors. Native model projection now takes at most 128 ordered rows and stops after the shared
+four-millisecond work target. Cursor/readiness include only completed rows and roll back with them;
+an early stop within an underfilled page cannot publish readiness. This reduces redundant FULL commits,
+but an indivisible row, query/GC and COMMIT can exceed the cooperative target. Missing cursor indexes on populated stores require explicit offline preparation.
 The shared scheduler now persists attempt/model states, claims attempts before worker launch,
 acknowledges responses only after result COMMIT, resumes committed work after reopen and
 joins native readiness/watch notification and bounded retirement. Explicit restart recovery
@@ -486,7 +489,14 @@ material sampled speedup. A bounded materialized eligibility page shares count a
 scoring for small sets, with a scalar witness against duplicate scope evaluation. Source
 `25668da288` passes 625 EARS/135 host cases; [diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-projection-scope/README.md)
 show a small exact-query improvement but no overall acceptance and worse broad samples.
-Further shared execution/native membership/checkpoint work remains required.
+[Checkpoint and batching evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/admission-commit-batching/README.md)
+now separates automatic-checkpoint deferral from the same FULL admission workload. Deferral alone still
+misses heartbeat and grows WAL to about 2.16 GB before a 4.56 s final checkpoint, so it is not selected.
+Time-sliced projection reduces sampled FULL commit counts from 3,126 to 1,075–1,185 and admission from
+26.57–46.19 s to 17.74–18.26 s. Heartbeat p99 varies and remains failed; this is not a general latency win.
+All 626 SQLite EARS cases and the reverted-implementation control pass their intended assertions.
+Further shared execution and bounded checkpoint/writer ownership work remains required, preserving FULL
+logical durability and the frozen heartbeat limit. Off-thread checkpoints alone are not established as sufficient.
 
 ### App and host archive composition
 

@@ -71,7 +71,7 @@ if (mode === 'verify') {
   assert.equal(result.nativeMembershipChecks,555,'All independent membership comparisons must execute');
   assert.equal(nativeGeneration.platform,platform());assert.equal(nativeGeneration.arch,arch());
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.extension)).digest('hex'),nativeGeneration.extensionSha256);
-  assert.equal(result.nativeGenerationCasesPassed,5,'All native generation lifecycle cases must execute');
+  assert.equal(result.nativeGenerationCasesPassed,6,'All native generation lifecycle cases must execute');
   assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
   assert.equal(result.nativeModelCasesPassed,7,'All durable native model admission cases must execute');
 

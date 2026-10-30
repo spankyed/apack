@@ -146,7 +146,8 @@ export class SqliteVectorModels {
       this.db.run("UPDATE vector_training SET state='projecting',model=NULL WHERE generation=?",[generation]);
       return {progressed:true,accept:()=>{}};
     }
-    const ready=this.index.step(generation,32);
+    // Use the shared time slice, with a bounded 128-row page, to amortize FULL commits.
+    const ready=this.index.step(generation,128);
     if(ready)this.db.run("UPDATE vector_training SET state='ready' WHERE generation=?",[generation]);
     return {progressed:true,...(ready?{changedType:job.type}:{}),accept:()=>{}};
   }
