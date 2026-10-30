@@ -1,0 +1,40 @@
+{
+  "source": "dd5d7da67e96c44b323e2572c48e529e7593da2e",
+  "completed": false,
+  "groups": [
+    {
+      "mode": "none",
+      "fixture": "compact",
+      "checks": 37
+    },
+    {
+      "mode": "none",
+      "fixture": "sparse32",
+      "checks": 37
+    },
+    {
+      "mode": "none",
+      "fixture": "wide64",
+      "checks": 37
+    },
+    {
+      "mode": "none",
+      "fixture": "mixed",
+      "checks": 37
+    },
+    {
+      "mode": "none",
+      "fixture": "real",
+      "checks": 37
+    },
+    {
+      "mode": "flat",
+      "fixture": "compact",
+      "checks": 5
+    }
+  ],
+  "failure": {
+    "message": "out of memory",
+    "stack": "SqliteError: out of memory\n    at check (file:///metrics/native/vectors/membership-test.mjs:58:101)\n    at file:///metrics/native/vectors/membership-test.mjs:66:7\n    at ModuleJob.run (node:internal/modules/esm/module_job:274:25)\n    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:98:5)"
+  }
+}

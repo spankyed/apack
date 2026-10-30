@@ -212,7 +212,8 @@ passes with the isolated journal-overlay fix, now committed/published as
 `8ab7088f9a583202f9ccc766381a31e39d19851f` and pinned by this candidate. All required
 Linux native checks pass, including 348 Rust cases, applicable binding tests and a
 negative control restoring the old implementation. Exact cross-platform native
-[CI 40982141666](https://github.com/spankyed/elmdb/actions/runs/40982141666) is running.
+[CI 40982141666](https://github.com/spankyed/elmdb/actions/runs/40982141666) is now green
+on all required platform jobs.
 The original app assertion passes on recorded base-plus-patch artifacts; exact combined
 CI remains required. Native fix checkout is `/private/tmp/ears-native-unit-fix`,
 independent of the working agent, with no shared target or main edits.
@@ -222,7 +223,9 @@ the CLI incumbent/refused-replacement facade test exceeding its unchanged 200 s
 deadline; the other seven jobs passed. The unchanged CLI case passes in isolated
 Linux in 31.164 s; its timestamped three-build trace is retained. That does not explain
 the macOS CI timeout. Preserve its assertions/deadline and rerun full Strict on the
-new source before claiming combined acceptance.
+new source before claiming combined acceptance. Exact full
+[Strict 40982500877](https://github.com/spankyed/apack/actions/runs/40982500877) is running
+on `dd5d7da67e`; producers and all three SQLite platform jobs pass, with five consumers still live.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains at `6cf6c8349e`, exact
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs green.
@@ -268,8 +271,16 @@ bounded count/exact eligibility reduces a sampled 10k/10% exact query from 20.91
 samples are worse and large filtered queries remain 134–143 ms. No overall improvement or acceptance follows.
 Next consolidate remaining scope/count/rerank work in one SQL execution frame, qualify native membership/
 distribution and test off-thread SQLite PASSIVE checkpoints with FULL logical durability, bounded WAL,
-error reporting and explicit drain. Scratch bitmap/text membership patches are not adopted; sparse/wide-ID
-behavior and failure allocation remain unresolved. Do not retune frozen ANN settings or loosen thresholds.
+error reporting and explicit drain. The candidate now owns a pinned native source builder and integer-membership
+patch at `native/vectors/`: sorted membership covers sparse int32 and full-width integer metadata without
+an ID-range bitmap. All 625 SQLite EARS cases, 555 independent SQL comparisons, a mask-corruption
+mutation, allocation-site `SQLITE_NOMEM` refusal and ASan/UBSan comparisons pass in Linux.
+[Evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-membership/README.md)
+retains exact inputs and the missing-prerequisite static-check attempt. CI now requires the same builder
+and 555 comparisons on every host. Cross-platform and fresh performance/recall qualification are next;
+prior failed budgets remain failed. Older scratch bitmap/text patches are not used. Normal app model
+ownership/loading, packaging and physical failure qualification remain required. Do not retune frozen
+ANN settings or loosen thresholds.
 
 Still required, without narrowing phases 3–7:
 

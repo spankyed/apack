@@ -20,6 +20,7 @@ if (mode === 'verify') {
   const passedIn = (value, pattern) => value.testResults.flatMap(test => pattern.test(test.name.replaceAll('\\', '/'))
     ? test.assertionResults.filter(result => result.status === 'passed') : []).length;
   const nativeGeneration=report('native-generation/provenance.json');
+  const nativeMembership=report('native-membership.json');
   const sdkBackend=report('sdk-backend.json'),queryWork=report('query-work.json');
   const sdkAll=platform()==='linux'?report('sdk-all-sqlite.json'):null;
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
@@ -27,7 +28,8 @@ if (mode === 'verify') {
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
-  const result = { source, sdkSqliteCasesPassed:sdkAll?.numPassedTests??null,
+  const result = { source, nativeMembershipChecks:nativeMembership.groups.reduce((n,group)=>n+group.checks,0),
+    nativeMembershipPatchSha256:nativeGeneration.patchSha256, sdkSqliteCasesPassed:sdkAll?.numPassedTests??null,
     sdkContentRuntimeCasesPassed:sdkAll?passedIn(sdkAll,/\/tests\/testing\/content-runtime\.spec\.ts$/):null,
     sdkBackendCasesPassed:passedIn(sdkBackend,/\/tests\/testing\/database-backend\.spec\.ts$/),
     queryWorkCasesPassed:passedIn(queryWork,/\/tests\/features\/threads\/be\/query-work\.spec\.ts$/),
@@ -58,7 +60,15 @@ if (mode === 'verify') {
   assert.equal(nativeGeneration.source,source,'Native lifecycle build must match the checkout');
   assert.equal(nativeGeneration.upstream.commit,'814fd8ef4d42d6567f1613a66f556c8194764d06');
   assert.equal(nativeGeneration.upstream.sha256,'b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1');
-  assert.equal(nativeGeneration.patchApplied,false);
+  assert.equal(nativeGeneration.patchApplied,true);
+  assert.equal(nativeGeneration.patchSha256,createHash('sha256').update(readFileSync('native/vectors/vec1-membership.patch')).digest('hex'));
+  assert.equal(nativeGeneration.sourceSha256,'5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b');
+  assert.equal(nativeMembership.source,source);
+  assert.equal(nativeMembership.extensionSha256,nativeGeneration.extensionSha256);
+  assert.equal(nativeMembership.completed,true);
+  assert.equal(nativeMembership.groups.length,15);
+  assert(nativeMembership.groups.every(group=>group.checks===37));
+  assert.equal(result.nativeMembershipChecks,555,'All independent membership comparisons must execute');
   assert.equal(nativeGeneration.platform,platform());assert.equal(nativeGeneration.arch,arch());
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.extension)).digest('hex'),nativeGeneration.extensionSha256);
   assert.equal(result.nativeGenerationCasesPassed,5,'All native generation lifecycle cases must execute');

@@ -17,7 +17,7 @@ const [corpusPath, truthFile, sizeArg, output, mode] = process.argv.slice(2), si
 assert([1000,99900].includes(size) && output && !existsSync(output));
 assert(mode === undefined || ['diagnose','native-fresh','native-diagnose'].includes(mode));
 const fresh=mode==='native-fresh'||mode==='native-diagnose',diagnostic=mode==='diagnose'||mode==='native-diagnose';
-if(fresh)assert(process.env.EARS_VEC1_EXTENSION,'A trusted original native extension is required');
+if(fresh)assert(process.env.EARS_VEC1_EXTENSION,'A trusted native extension is required');
 assert.equal(endianness(),'LE');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const manifestBytes = readFileSync(join(corpusPath,'manifest.json')), manifest = JSON.parse(manifestBytes);
