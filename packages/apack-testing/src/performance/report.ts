@@ -40,6 +40,7 @@ export const trialSchema = z.object({
   scenario: z.enum(['thread-open', 'streaming', 'search', 'populated-startup']), index: count, warmup: z.boolean(),
   outcome: z.enum(['passed', 'failed', 'incomplete', 'cancelled']), durationMs: z.number().finite().nonnegative().optional(),
   correct: z.boolean(), completion: z.enum(['view-ready', 'missing']),
+  work: z.record(z.string().max(64), count),
   processes: z.record(z.string(), processReportSchema), failure: z.string().max(128).optional(),
 }).superRefine((trial, ctx) => {
   if (trial.outcome === 'passed' && (!trial.correct || trial.completion !== 'view-ready' || trial.durationMs === undefined

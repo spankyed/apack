@@ -66,6 +66,7 @@ test('open a populated thread through the real transport and render its bounded 
         let durationMs: number | undefined;
         let lastDelivery: { subscription: string; delivery: number; commit: number } | undefined;
         let failure: string | undefined;
+        const work: Record<string, number> = {};
         try {
           await new Promise<void>((resolve, reject) => {
             let checking = false;
@@ -80,6 +81,8 @@ test('open a populated thread through the real transport and render its bounded 
                 if (finished) return;
                 const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
                 if (context.currentThread?.id !== target) return;
+                work.requestedMessages = context.chatLimit;
+                work.observedMessages = context.chatMessageIds.length;
                 if (context.chatMessageIds.length > 50 || context.chatLimit !== 50) throw Error('page-bound');
                 const elements = new Map(Array.from(document.querySelectorAll('[data-message-id]'))
                   .map(element => [element.getAttribute('data-message-id'), element]));
@@ -100,7 +103,7 @@ test('open a populated thread through the real transport and render its bounded 
                 completed = true;
                 finished = true;
                 close(); resolve();
-              } catch { finished = true; close(); reject(Error('view-correctness')); }
+              } catch (error) { finished = true; close(); reject(Error(error instanceof Error && error.message === 'page-bound' ? 'page-bound' : 'view-correctness')); }
               finally { checking = false; }
             };
             const detach = recording.onView(({ request, update }) => {
@@ -118,13 +121,13 @@ test('open a populated thread through the real transport and render its bounded 
             try { action.within(() => win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: target }] })); }
             catch (error) { finished = true; close(); reject(error); }
           });
-        } catch (error) { failure = error instanceof Error && error.message === 'view-correctness' ? 'view-correctness' : 'missing-view-ready'; }
+        } catch (error) { failure = error instanceof Error && ['view-correctness', 'page-bound'].includes(error.message) ? error.message : 'missing-view-ready'; }
         finally { action.end(completed ? 'ok' : 'error'); }
         const reports = await recording.stop();
-        return { completed, durationMs, reports, failure, lastDelivery };
+        return { completed, durationMs, reports, failure, lastDelivery, work };
       }, { mode, thread, expectedBodies: fixture.data.threads[thread]!.messages.slice(50).map(message => message.text.trimEnd()) });
       trials.push(trialSchema.parse({ scenario: 'thread-open', index, warmup: index < warmups,
-        outcome: result.completed && result.reports.complete ? 'passed' : 'incomplete',
+        work: result.work, outcome: result.completed && result.reports.complete ? 'passed' : 'incomplete',
         correct: result.completed, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
         processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: result.failure }));
       save();

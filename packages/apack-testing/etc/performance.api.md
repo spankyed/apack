@@ -189,6 +189,7 @@ export const trialSchema: z.ZodObject<{
         missing: "missing";
         "view-ready": "view-ready";
     }>;
+    work: z.ZodRecord<z.ZodString, z.ZodNumber>;
     processes: z.ZodRecord<z.ZodString, z.ZodObject<{
         observations: z.ZodArray<z.ZodString>;
         bytes: z.ZodNumber;
