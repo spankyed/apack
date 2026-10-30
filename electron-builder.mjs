@@ -1,6 +1,6 @@
 import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
-import {signMacApplication} from './build/prod/sign-mac.mjs';
+import {signMacApplication} from './scripts/lib/native-signing.mjs';
 import {execFileSync} from 'node:child_process';
 import {APP_WORKSPACES, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 

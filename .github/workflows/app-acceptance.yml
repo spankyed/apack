@@ -128,7 +128,7 @@ jobs:
           import path from 'node:path';
           import assert from 'node:assert/strict';
           import { execFileSync, spawnSync } from 'node:child_process';
-          import { signMacApplication } from './build/prod/sign-mac.mjs';
+          import { signMacApplication } from './scripts/lib/native-signing.mjs';
           const apps=fs.readdirSync('dist/preview',{withFileTypes:true}).filter(d=>d.isDirectory()&&d.name.startsWith('mac-'))
             .flatMap(d=>fs.readdirSync(path.join('dist/preview',d.name)).filter(n=>n.endsWith('.app')).map(n=>path.resolve('dist/preview',d.name,n)));
           assert.equal(apps.length,1);

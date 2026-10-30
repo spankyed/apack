@@ -44,3 +44,5 @@ queued, to avoid replacing GitHub's pending slot. A focused bundled-ui diagnosti
 
 Logs normalize trailing whitespace/blank EOF lines; JSON and test trace are retained without rewriting.
 Corpus/model payloads, dependencies and compiled binaries stay private. Production remains elmdb.
+
+[Exact repair-source full strict and all three platform hosts pass](platform-41056724109/README.md). Later packaging/signing changes require separate qualification.

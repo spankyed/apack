@@ -236,8 +236,9 @@ This qualifies source overlays, not final combined/platform/installed behavior o
 Exact-source full strict [41052678824](https://github.com/spankyed/apack/actions/runs/41052678824) is
 terminal green at `212b819db6`, including all required shards and all three SQLite hosts; see
 [retained receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/native-audit-rebuild/platform-41052678824/README.md).
-Repair checkpoint `3333361c3c` is running full strict [41056724109](https://github.com/spankyed/apack/actions/runs/41056724109):
-all three SQLite platforms pass; remaining shards are still running. Preserve this handle.
+Repair checkpoint `3333361c3c` passes complete full strict [41056724109](https://github.com/spankyed/apack/actions/runs/41056724109),
+including both integration/native shards, app-and-rest and all three SQLite hosts;
+[retained exact-source receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/native-derived-repair/platform-41056724109/README.md) qualify that source.
 Focused bundled-editor [41056522146](https://github.com/spankyed/apack/actions/runs/41056522146) passes once.
 That does not establish the cause or fix of the earlier failure; assertions and timeouts remain unchanged.
 
@@ -245,15 +246,20 @@ Published validation checkpoint `ff16d3b946` adds [native Electron runtime evide
 Identical Node-API addon bytes pass actual Node and Electron SQLite component checks without extra ABI rebuilds.
 Installed run [41066985563](https://github.com/spankyed/apack/actions/runs/41066985563) fails before packaging:
 redundant early contract generation precedes SDK dependency preparation. Preview/production now use the normal
-pack build's correctly ordered generation. Ten unchanged editor repetitions remain live in
-[41067062738](https://github.com/spankyed/apack/actions/runs/41067062738); preserve that handle.
+pack build's correctly ordered generation. Ten unchanged editor repetitions pass in
+[41067062738](https://github.com/spankyed/apack/actions/runs/41067062738). The actual job log confirms ten cases;
+artifact download hit an external egress limit. This does not establish the original intermittent failure's cause.
 
 The current [native signing checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
 finalizes binary hashes after inner signing and before outer app sealing. It preserves signing options/retries
 and refuses skipped libraries, mismatched unsigned provenance, concurrent manifest changes and escaping paths.
 Twelve isolated signing/Preview tests, tooling types, lint, workflow/shell syntax and three assertion-verified
-mutation controls pass. The new `installed-signed` suite must qualify the actual cold build, strict signatures,
-native smoke and signed executable on macOS after publication. Linux doubles do not establish signing validity.
+mutation controls pass. Published `2558de0d9d` is running signed installed [41069328528](https://github.com/spankyed/apack/actions/runs/41069328528)
+and full strict [41069599413](https://github.com/spankyed/apack/actions/runs/41069599413). Preserve those handles.
+The [routing follow-up](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/routing/README.md)
+moves the unchanged helper into `scripts/lib`, so normal tooling checks reach it. All 15 signing/Preview/boundary
+cases, tooling types, lint and workflow checks pass on that moved source; the old placement fails the boundary
+assertion. Publish and qualify this final routing source after the existing strict pending slot has started. Linux doubles do not establish signing validity.
 Final exact-source strict, required architectures, responsiveness and all remaining acceptance stay required.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:

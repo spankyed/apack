@@ -1,0 +1,33 @@
+{
+  "upstream": {
+    "commit": "814fd8ef4d42d6567f1613a66f556c8194764d06",
+    "sha256": "b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1",
+    "url": "https://raw.githubusercontent.com/sqlite/sqlite/814fd8ef4d42d6567f1613a66f556c8194764d06/ext/vec1/vec1.c"
+  },
+  "patchSha256": "33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923",
+  "sourceSha256": "5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b",
+  "compiler": "cl.exe",
+  "args": [
+    "/nologo",
+    "/O2",
+    "/DNDEBUG",
+    "/LD",
+    "/ID:\\a\\apack\\apack\\node_modules\\better-sqlite3\\deps\\sqlite3",
+    "D:\\a\\apack\\apack\\.temp\\sqlite-platform\\native-generation\\vec1.c",
+    "/link",
+    "/Brepro",
+    "/INCREMENTAL:NO",
+    "/OUT:D:\\a\\apack\\apack\\.temp\\sqlite-platform\\native-generation\\vec1.dll"
+  ],
+  "headersPackage": "13.0.3",
+  "extension": "D:\\a\\apack\\apack\\.temp\\sqlite-platform\\native-generation\\vec1.dll",
+  "extensionSha256": "73913aa7da6d2da340b4d0335e22c13b9bcd94ce97fb5276501c40439444c7c7",
+  "node": "v23.11.1",
+  "platform": "win32",
+  "arch": "x64",
+  "source": "3333361c3cfe65ea2eddadf29d3f5c893e132177",
+  "patchApplied": true,
+  "packagedExtension": "D:\\a\\apack\\apack\\packages\\apack-ears\\dist\\sqlite\\native\\win32-x64\\vec1.dll",
+  "packagedExtensionSha256": "73913aa7da6d2da340b4d0335e22c13b9bcd94ce97fb5276501c40439444c7c7",
+  "qualification": "Pinned membership patch for the SQLite candidate; packaging, signing and performance remain separate gates"
+}

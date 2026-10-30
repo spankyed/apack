@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({ sign: vi.fn(), exec: vi.fn(), delay: vi.fn() }
 vi.mock('@electron/osx-sign', () => ({ signAsync: mocks.sign }));
 vi.mock('node:child_process', () => ({ execFileSync: mocks.exec }));
 vi.mock('node:timers/promises', () => ({ setTimeout: mocks.delay }));
-import { signMacApplication } from '../../../build/prod/sign-mac.mjs';
+import { signMacApplication } from '../../../scripts/lib/native-signing.mjs';
 
 let root: string, app: string, library: string, manifestFile: string;
 const hash = (file: string) => createHash('sha256').update(fs.readFileSync(file)).digest('hex');

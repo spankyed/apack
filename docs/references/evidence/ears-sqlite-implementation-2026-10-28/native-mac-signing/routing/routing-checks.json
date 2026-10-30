@@ -1,0 +1,87 @@
+{
+  "base": "2558de0d9d8910c611fcaa179c5dadf666b4fbff",
+  "inputs": {
+    "scripts/lib/native-signing.mjs": "e42e641d59a6c7d5032b931ca1c4da9c5bdefa545055e65b2794c3aaaf60b2c5",
+    "electron-builder.mjs": "600359a4a0eb265ecc6f91077d60f4ffdeacefec03777c9123c97bbff27d9242",
+    "packages/repo-checks/tests/native-signing.spec.ts": "3bd0a108c36489db7df59e325fd236beb848b7805860c883e671f71b06e203ae",
+    ".github/workflows/app-acceptance.yml": "613bedf8c34acb2db2f49f86ab8ac32fbe4801004f4e704ec507ce9c57f2f8b3"
+  },
+  "checks": [
+    {
+      "label": "old-placement",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/repo-checks",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "tests/repo-check-boundary.spec.ts",
+        "--outputFile=/results/old-placement.json"
+      ],
+      "exitCode": 1,
+      "negative": true
+    },
+    {
+      "label": "routed-tests",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/repo-checks",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "tests/repo-check-boundary.spec.ts",
+        "tests/native-signing.spec.ts",
+        "tests/preview-build.spec.ts",
+        "--outputFile=/results/routed-tests.json"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "routed-types",
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/repo-checks",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "routed-lint",
+      "args": [
+        "node",
+        "node_modules/oxlint/bin/oxlint",
+        "scripts/lib/native-signing.mjs",
+        "packages/repo-checks/tests/native-signing.spec.ts",
+        "-D",
+        "correctness"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "routed-workflow",
+      "args": [
+        "node",
+        ".temp/signing-workflow-check.cjs"
+      ],
+      "exitCode": 0,
+      "negative": false
+    }
+  ]
+}
