@@ -378,7 +378,7 @@ const nativeHistoryReserve = computed(() => {
     // Focused fields still need room for the draft, native hint and Send toolbar.
     return nativeToolsRequiredHeight.value ? `min(${preferred}, max(calc(2rem + ${inputFormPadding.value}px), calc(var(--composer-available-height) - ${nativeToolsRequiredHeight.value}px)))` : preferred
   }
-  return nativeComposerHeight.value ? `max(2rem, calc(var(--composer-default-history-reserve) - ${nativeComposerHeight.value}px))` : undefined
+  return nativeComposerHeight.value ? `max(var(--composer-min-history-reserve, 2rem), calc(var(--composer-default-history-reserve) - ${nativeComposerHeight.value}px))` : undefined
 })
 const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
 function handleComposerNativeHotkey(event: KeyboardEvent) {
@@ -977,6 +977,11 @@ const handleSubmit = async () => {
   :global([data-composer-form]) { padding-top: 4px; padding-bottom: 4px; }
   .input :global([data-composer-toolbar]) { padding-top: 4px; padding-bottom: 4px; }
   .input { --composer-default-history-reserve: 2rem; --composer-field-history-reserve: 2rem; }
+  /* A rich draft must leave the conversation's task controls reachable. */
+  .input:has(:global(.composer-document) :is(h1, h2, h3, pre, ul, ol, blockquote)):not(:has(:global(.native-strip--open))) {
+    --composer-default-history-reserve: 6rem;
+    --composer-min-history-reserve: 6rem;
+  }
   .input :global([data-testid="composer-editor-area"]), .input :global(.composer-document) { min-height: 40px; }
   .input :global(.composer-document) { padding-top: 8px; padding-bottom: 8px; }
   .input :global(.ProseMirror) { min-height: 24px; }
