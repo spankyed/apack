@@ -75,6 +75,7 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
         return context.currentThread?.id === `Thread-stream-${thread}` && context.chatMessageIds.length === 20
           && context.chatMessageIds.every(id => document.querySelector(`[data-message-id="${id}"]`));
       }, thread);
+      const productionBefore = new Set(readdirSync(directory).filter(file => /^production-[0-9]+\.jsonl$/.test(file)));
       const result = await appPage.evaluate(async ({ mode, thread, expected, scriptedChunks }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
@@ -164,16 +165,23 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
       result.work.receivedProgress = result.viewProgress.length;
       result.work.receivedFinalChars = result.viewProgress.at(-1)?.chars ?? 0;
       if (result.completed) try {
-        const files = readdirSync(directory).filter(file => /^production-[0-9]+\.jsonl$/.test(file));
+        const files = readdirSync(directory).filter(file => /^production-[0-9]+\.jsonl$/.test(file) && !productionBefore.has(file));
         result.work.productionFiles = files.length;
-        if (files[0]) result.work.firstProductionIndex = Number(files[0].match(/[0-9]+/)![0]);
-        const productionFile = path.join(directory, `production-${thread}.jsonl`);
-        if (statSync(productionFile).size > 16 * 1024 || result.work.droppedProgress) throw Error('Progress capture exceeded its bound');
-        const produced = readFileSync(productionFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+        if (files.length > 64 || result.work.droppedProgress) throw Error('Progress capture exceeded its bound');
+        const completed = files.flatMap(file => {
+          const absolute = path.join(directory, file);
+          if (statSync(absolute).size > 16 * 1024) throw Error('Production file exceeded its bound');
+          const text = readFileSync(absolute, 'utf8');
+          if (!text.endsWith('\n')) return [];
+          const points = text.trim().split('\n').map(line => JSON.parse(line));
+          return points.length === fixture.script.chunks.length ? [points] : [];
+        });
         backlogPhase = 'production-count';
+        result.work.completedProductions = completed.length;
+        if (completed.length !== 1) throw Error('Missing or ambiguous completed production');
+        const produced = completed[0]!;
         result.work.producedProgress = produced.length;
         result.work.producedFinalChars = produced.at(-1)?.chars ?? 0;
-        if (produced.length !== fixture.script.chunks.length) throw Error('Missing production progress');
         backlogPhase = 'progress-data';
         backlog = streamingBacklog(produced, result.viewProgress, fixture.script.chunks.join('').length);
       } catch { backlogFailure = `backlog-${backlogPhase}`; }
