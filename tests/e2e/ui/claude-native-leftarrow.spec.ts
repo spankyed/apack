@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, writeFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
@@ -123,6 +123,18 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await expect(composer).toBeEditable()
     dialog = await review()
     await dialog.getByRole('button', { name: 'Background anyway (1 subagent restarts)', exact: true }).click()
+    await expect.poll(async () => (await context()).claude.nativeContinuation).toMatchObject({ sessionId })
+    await expect(card).toContainText('This conversation moved to the background.')
+    await expect(composer).toHaveAttribute('contenteditable', 'true')
+    await composer.fill('Keep these notes after the native agents transition.')
+    await expect(composer).toHaveText('Keep these notes after the native agents transition.')
+    expect((await context()).claude.sessionError).toBeUndefined()
+    await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
+    for (const [name, size] of [['normal', { width: 1100, height: 900 }], ['compact', { width: 680, height: 600 }]] as const) {
+      await appPage.setViewportSize(size)
+      await capture('apack-native-background-handoff-' + name + '.png')
+    }
+    observations.parentHandoffRecovered = true
     await expect.poll(async () => {
       observations.current = await context()
       observations.jobs = await list()
@@ -137,17 +149,33 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await widget.getByRole('button', { name: 'Refresh status', exact: true }).click()
     await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toBeEnabled({ timeout: 15000 })
     await composer.click(); await composer.press('Control+A'); await composer.pressSequentially('Keep these notes while the background session runs.')
-    const retainedDraft = await composer.textContent()
+    const retainedDraft = 'Keep these notes while the background session runs.'
+    await expect(composer).toHaveText(retainedDraft)
+    expect((await context()).claude.sessionError).toBeUndefined()
     await widget.getByRole('button', { name: 'Refresh status', exact: true }).click()
     await expect(widget.getByRole('button', { name: 'Refresh status', exact: true })).toBeEnabled()
     await expect(composer).toHaveText(retainedDraft!)
     observations.running = await context()
+    expect(observations.running.claude.sessionError).toBeUndefined()
+    expect(observations.running.sessionId).toBe(sessionId)
     for (const [name, size] of [['normal', { width: 1100, height: 900 }], ['compact', { width: 680, height: 600 }]] as const) {
       await appPage.setViewportSize(size)
       await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toBeInViewport({ ratio: 1 })
       await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
       await capture('apack-native-background-running-' + name + '.png')
     }
+    const childProcessState = async () => {
+      try {
+        const stat = await readFile('/proc/' + job.pid + '/stat', 'utf8')
+        const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
+        return { state: fields[0], start: fields[19] }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+        throw error
+      }
+    }
+    const childBeforeStop = process.platform === 'linux' ? await childProcessState() : undefined
+    if (process.platform === 'linux') { expect(childBeforeStop?.start).toBeTruthy(); expect(childBeforeStop?.state).not.toBe('Z') }
     await widget.getByRole('button', { name: 'Stop background session', exact: true }).click()
     await expect(widget.getByRole('status')).toHaveText('Background session stopped', { timeout: 20000 })
     await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toHaveCount(0)
@@ -155,7 +183,15 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
     await expect(card).toContainText('This conversation moved to the background.')
     observations.uiStop = true
+    if (process.platform === 'linux') {
+      await expect.poll(async () => { const current = await childProcessState(); return !current || current.start !== childBeforeStop!.start || current.state === 'Z' }).toBe(true)
+      observations.childProcessAfterStop = await childProcessState() ?? { state: 'gone' }
+      observations.childPidRetired = true
+    }
+
     observations.stopped = await context()
+    expect(observations.stopped.claude.sessionError).toBeUndefined()
+    expect(observations.stopped.native.state.sessionId).toBe(sessionId)
     for (const [name, size] of [['normal', { width: 1100, height: 900 }], ['compact', { width: 680, height: 600 }]] as const) {
       await appPage.setViewportSize(size)
       await capture('apack-native-background-stopped-' + name + '.png')
@@ -163,6 +199,17 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     observations.current = await context()
     observations.retainedDraft = retainedDraft
     expect(observations.current.sessionId).toBe(sessionId)
+    for (const message of observations.current.messages) {
+      const native = message.context?.claudeTerminalMessage
+      if (native) expect(native.sessionId).toBe(sessionId)
+    }
+    const projects = join(workspace!, '.claude', 'projects')
+    const parentJournals = (await Promise.all((await readdir(projects, { withFileTypes: true })).filter(entry => entry.isDirectory()).map(entry => readFile(join(projects, entry.name, sessionId + '.jsonl'), 'utf8').catch(() => undefined)))).filter(Boolean)
+    expect(parentJournals).toHaveLength(1)
+    const costs = parentJournals[0]!.split('\n').filter(Boolean).map(line => JSON.parse(line)).filter(row => row.type === 'cost-state')
+    expect(costs.length).toBeGreaterThan(0)
+    expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
+
     await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, appHandoffAccepted: false }))
   } finally {
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))

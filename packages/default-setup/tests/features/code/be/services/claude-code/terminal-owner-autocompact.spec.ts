@@ -1,10 +1,11 @@
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { prepareClaudeNativeTerminal } from '#features/code/be/services/claude-code/terminal-owner.ts'
-const f = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), request: vi.fn(), ready: true, nativePid: undefined as number | undefined, projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
+const f = vi.hoisted(() => { vi.resetModules(); return { spawn: vi.fn(), journal: vi.fn(), request: vi.fn(), ready: true, nativePid: undefined as number | undefined, projection: { sessionId: '11111111-1111-4111-8111-111111111111', tasks: [] } } })
 vi.mock('node-pty', () => ({ spawn: f.spawn }))
+vi.mock('#features/code/be/services/claude-code/terminal-journal.ts', () => ({ createClaudeNativeJournalReader: () => f.journal }))
 vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts', () => ({ createClaudeTerminalBridge: async () => ({ pluginRoot: '/private/fixture-plugin', bunOptions: 'fixture-preload', close: async () => {}, get ready() { return f.ready }, get nativePid() { return f.nativePid }, projection: f.projection, transcripts: [], session: { metadata: { permissionMode: 'default' }, update() {} }, uiTransport: { request: f.request } }) }))
-beforeEach(() => { vi.clearAllMocks(); f.request.mockReset(); f.ready = true; f.nativePid = undefined })
+beforeEach(() => { vi.clearAllMocks(); f.request.mockReset(); f.journal.mockReset().mockResolvedValue({ entries: [], pending: false, problems: [] }); f.projection.sessionId = '11111111-1111-4111-8111-111111111111'; f.ready = true; f.nativePid = undefined })
 async function fixture() {
   let exit!: (event: { exitCode: number }) => void
   f.spawn.mockImplementation(() => ({ pid: 0, onData() {}, onExit(callback: typeof exit) { exit = callback }, kill() { exit({ exitCode: 0 }) } }))
@@ -67,5 +68,29 @@ it('refuses parent submission during original park progress and restores it afte
     f.request.mockClear(); await expect(owner.submit('Retained notes', [])).rejects.toThrow('moving to the background'); expect(f.request).not.toHaveBeenCalled()
     f.request.mockResolvedValueOnce({ answered: true, handoffPending: false }); await owner.answerNotice({ id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision: 'background_stay' })
     expect(owner.state.handoffPending).toBe(false); expect(owner.state.notice).toBeUndefined()
+  } finally { await prepared.dispose() }
+})
+
+it('keeps the completed parent and retires its controls when the native agents screen changes session', async () => {
+  const { prepared, owner, notice } = await fixture()
+  try {
+    const continuation = { type: 'continued-in', sessionId: notice.sessionId, continuedInSessionId: '22222222-2222-4222-8222-222222222222', timestamp: '2026-10-30T06:23:31.038Z' }
+    f.journal.mockResolvedValueOnce({ entries: [{ sessionId: notice.sessionId, row: continuation }], pending: false, problems: [] })
+    await owner.readJournal()
+    f.projection.sessionId = '33333333-3333-4333-8333-333333333333'
+    f.journal.mockResolvedValueOnce({ entries: [
+      { sessionId: notice.sessionId, row: { type: 'cost-state', totalCostUSD: 0.00056 } },
+      { sessionId: continuation.continuedInSessionId, row: { type: 'cost-state', totalCostUSD: 9 } },
+      { sessionId: continuation.continuedInSessionId, row: { type: 'assistant', uuid: 'copied-parent-row' } },
+    ], pending: false, problems: [] })
+    const parentJournal = await owner.readJournal()
+    expect(parentJournal.entries).toHaveLength(1)
+    expect(parentJournal.entries[0]?.sessionId).toBe(notice.sessionId)
+    expect(owner.state.session?.totalCostUsd).toBe(0.00056)
+    expect(owner.busy).toBe(false)
+
+    expect(owner.state).toMatchObject({ sessionId: notice.sessionId, continuation: { sessionId: notice.sessionId, continuedInSessionId: continuation.continuedInSessionId }, handoffPending: false, busy: false, tasks: [] })
+    expect(owner.state.notice).toBeUndefined(); expect(owner.state.view).toBeUndefined()
+    f.request.mockClear(); await owner.refreshMcpInput(); await owner.refreshNotice(); expect(f.request).not.toHaveBeenCalled()
   } finally { await prepared.dispose() }
 })

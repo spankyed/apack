@@ -131,8 +131,8 @@
           <!-- Input -->
           <div v-show="!mainPanelActive && !mainOutputExpanded && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput ref="mainComposer" @native-tools-expanded="nativeToolsExpanded = $event"
-              :disabled="nativeAgentsDecisionPending || mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main'"
-              :disabled-reason="taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
+              :disabled="!nativeSessionBackgrounded && (nativeAgentsDecisionPending || mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main')"
+              :disabled-reason="!nativeSessionBackgrounded && taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
               :current-thread="currentThread"
               :current-mode="currentMode"
               :current-phase="currentPhase"
@@ -316,6 +316,7 @@ watch(composerAreaRef, (element, _previous, onCleanup) => {
   observer.observe(element); update()
   onCleanup(() => { observer.disconnect(); element.style.removeProperty('--composer-available-height') })
 }, { flush: 'post' })
+const currentMode = useSelector(actor, (state) => state.context.mode)
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
 const nativeAgentsDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && (view.state?.notice?.kind === 'left_arrow_confirm' || view.state?.handoffPending === true)))
 const nativeSessionBackgrounded = computed(() => { const native = currentThread.value?.context?.claudeCode; return currentMode.value === 'Claude Code' && !!native?.nativeContinuation && native.nativeContinuation.sessionId === native.sessionId })
@@ -377,6 +378,7 @@ const nativeActionKey = createClaudeActionKeyHandler(() => {
   return { scope: mount && view?.attachmentId ? `${mount.mountId}:${view.attachmentId}` : undefined, keys: view?.state.actionKeys, result: view?.actionKeyResult }
 }, request => { const mount = nativeUiMount.value; if (mount) actor.send({ type: 'CLAUDE_UI_KEY', ...mount, ...request }) })
 const nativeUiDrawing = computed(() => {
+  if (nativeSessionBackgrounded.value) return
   const mount = nativeUiMount.value
   return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.state : undefined
 })
@@ -421,6 +423,7 @@ function focusNativeUi(event: import('#features/code/be/services/claude-code/ui-
   if (mount) actor.send({ type: 'CLAUDE_UI_FOCUS', ...mount, ...event })
 }
 const nativePrompt = computed(() => {
+  if (nativeSessionBackgrounded.value) return
   const mount = nativeUiMount.value
   if (!mount || mount.threadId !== currentThread.value?.id) return
   const view = nativeUiViews.value[mount.mountId]
@@ -492,7 +495,6 @@ watch(() => JSON.stringify(visibleMessages.value.map(message => message.id)), re
 const recentThreadIds = useSelector(actor, (state) => state.context.recentThreadIds)
 const threadMap = useSelector(actor, (state) => state.context.threadMap)
 const recentThreads = computed(() => threadsFromStore(threadMap.value, recentThreadIds.value) as ThreadEntity[])
-const currentMode = useSelector(actor, (state) => state.context.mode)
 const currentPhase = useSelector(actor, (state) => state.context.phase)
 function setComposerPhase(phase: string) {
   if (nativeComposerOwner.value && currentThread.value?.context?.claudeCode && (phase === 'Plan' || phase === 'Edit')) actor.send({ type: 'STAGE_CLAUDE_PHASE', phase })

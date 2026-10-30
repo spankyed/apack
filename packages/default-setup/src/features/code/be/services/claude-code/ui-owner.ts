@@ -12,7 +12,7 @@ export function getClaudeUiOwner(threadId: string, target?: ClaudeNativeAgentUiT
   const native = getNativeTerminal(threadId)
   if (!native) return target ? undefined : getConversation(threadId)?.owner
   const state = native.state, view = state.view
-  if (state.status !== 'live' || !view) return
+  if (state.status !== 'live' || state.continuation || !view) return
   if (target ? state.ownerId !== target.ownerId || state.sessionId !== target.sessionId || view.kind !== 'agent' || view.taskId !== target.taskId || view.revision !== target.revision : view.kind !== 'main') return
   const key = JSON.stringify([state.sessionId, view.revision, target?.taskId ?? null])
   const cached = nativeOwners.get(native)
