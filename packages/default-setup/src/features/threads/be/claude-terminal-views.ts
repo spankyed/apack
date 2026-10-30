@@ -103,6 +103,7 @@ interface View {
   attachmentAbort?: AbortController
   attachmentUnsubscribe?: () => void
   owner?: ClaudeNativeTerminalOwner
+  backgroundUnsubscribe?: () => void
   unsubscribe?: () => void
   sequence: number
   opening: boolean
@@ -123,6 +124,8 @@ export function createClaudeTerminalViews(dependencies: {
   openAttachment?(continuation: ClaudeNativeContinuation, jobId: string, threadId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
   continuation?(threadId: string): ClaudeNativeContinuation | undefined
   background?(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, threadId: string): Promise<ClaudeBackgroundSession | undefined>
+  backgroundInfo?(threadId: string): import('#features/code/common/native-background.ts').ClaudeBackgroundStatus | undefined
+  subscribeBackground?(threadId: string, changed: () => void): () => void
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
   open(threadId: string, signal: AbortSignal): Promise<ClaudeNativeTerminalOwner>
   accepted?(owner: ClaudeNativeTerminalOwner, receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences): void
@@ -145,7 +148,7 @@ export function createClaudeTerminalViews(dependencies: {
   function drop(key: string) {
     const view = views.get(key); if (view) retireAttachment(view)
     views.get(key)?.launch?.abort.abort()
-    views.get(key)?.unsubscribe?.(); views.delete(key)
+    views.get(key)?.unsubscribe?.(); views.get(key)?.backgroundUnsubscribe?.(); views.delete(key)
     if (!views.size && timer) { clearInterval(timer); timer = undefined }
   }
   function publish(key: string, view: View) {
@@ -154,7 +157,7 @@ export function createClaudeTerminalViews(dependencies: {
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
-      view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.get(view.threadId)?.backgroundInfo, canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
+      view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
         state: view.owner?.state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
@@ -181,6 +184,8 @@ export function createClaudeTerminalViews(dependencies: {
           if (views.size >= 256 || [...views.values()].filter(value => value.client === client).length >= 16) return
           view = { client, threadId: event.threadId, mountId: event.mountId, expires: 0, send, sequence: 0, opening: false }
           views.set(key, view)
+          const mounted = view
+          view.backgroundUnsubscribe = dependencies.subscribeBackground?.(event.threadId, () => publish(key, mounted))
         }
         view.send = send; view.expires = Date.now() + 30000
         const owner = dependencies.get(event.threadId)

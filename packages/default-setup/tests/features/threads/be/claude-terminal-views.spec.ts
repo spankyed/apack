@@ -468,3 +468,14 @@ describe('background reply ownership', () => {
     try{f.views.handle(f.request,'one',f.send);await vi.waitFor(()=>expect(f.send.mock.calls.at(-1)![0].background).toMatchObject({status:'error',operation:'reply',problem:'Original native refusal'}));expect(reply).toHaveBeenCalledOnce()}finally{f.views.clear()}
   })
 })
+
+it('publishes retained child status to a window without a parent owner and releases its subscription on detach',()=>{
+ let updated!:(()=>void),info:any={sessionId:'child',pid:119,model:'sonnet',turns:2},unsubscribe=vi.fn()
+ const send=vi.fn(),views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),backgroundInfo:()=>info,subscribeBackground:(_key,changed)=>{updated=changed;return unsubscribe}})
+ try{
+  views.handle(mount,'surviving-window',send);expect(send.mock.calls.at(-1)?.[0].backgroundInfo).toEqual(info)
+  info={...info,turns:3};updated();expect(send.mock.calls.at(-1)?.[0].backgroundInfo?.turns).toBe(3)
+  views.handle({...mount,type:'CLAUDE_TERMINAL_UNMOUNT'},'surviving-window',send);expect(unsubscribe).toHaveBeenCalledOnce()
+  const count=send.mock.calls.length;updated();expect(send).toHaveBeenCalledTimes(count)
+ }finally{views.clear()}
+})

@@ -1,3 +1,5 @@
+import type { ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
+import type { ClaudeNativeContinuation } from './terminal-session.ts'
 import type { ClaudeNativeLaunch } from '../../../common/native-launch.ts'
 import {ClaudeNativeLaunchSchema,snapshotClaudeNativeLaunch} from './native-launch.ts'
 import type { ClaudePreparedNativeTerminal, ClaudeNativeTerminalOwner, ClaudeNativeTerminalOptions } from './terminal-owner.ts'
@@ -15,8 +17,26 @@ const terminals = new Map<string, ClaudeNativeTerminalOwner>()
 const draining = new Map<string, Promise<void>>()
 const terminalTransitions = new Map<string, AbortController>()
 const terminalResumes = new Map<string, Omit<ClaudeNativeTerminalOptions, 'settings' | 'signal'>>()
+const backgroundObservers = new Map<string, { observer: ClaudeBackgroundStatusObserver; unsubscribe(): void }>()
+const backgroundListeners = new Map<string, Set<() => void>>()
+const backgroundChanged = (key: string) => { for (const listener of backgroundListeners.get(key) ?? []) { try { listener() } catch { /* Isolate window leases. */ } } }
+function retireBackground(key: string) {
+  const entry = backgroundObservers.get(key); backgroundObservers.delete(key); entry?.unsubscribe(); void entry?.observer.close().catch(() => {}); backgroundChanged(key)
+}
+export function getNativeBackgroundStatus(key: string, continuation: ClaudeNativeContinuation | undefined) {
+  const entry = backgroundObservers.get(key), info = entry?.observer.value
+  return continuation && entry?.observer.parentSessionId === continuation.sessionId && info?.sessionId === continuation.continuedInSessionId ? info : undefined
+}
+export function subscribeNativeBackgroundStatus(key: string, listener: () => void) {
+  let listeners = backgroundListeners.get(key)
+  if (!listeners) { listeners = new Set(); backgroundListeners.set(key, listeners) }
+  listeners.add(listener)
+  return () => { listeners!.delete(listener); if (!listeners!.size && backgroundListeners.get(key) === listeners) backgroundListeners.delete(key) }
+}
+
 
 function stop(key: string): void {
+  retireBackground(key)
   terminalResumes.delete(key)
   starting.delete(key)
   terminalTransitions.get(key)?.abort(); terminalTransitions.delete(key)
@@ -73,7 +93,7 @@ export async function closeIdleConversation(key: string): Promise<boolean> {
   return true
 }
 export function killAllHandles(): void {
-  for (const key of new Set([...activeHandles.keys(), ...conversations.keys(), ...terminals.keys(), ...terminalResumes.keys(), ...starting.keys()])) stop(key)
+  for (const key of new Set([...activeHandles.keys(), ...conversations.keys(), ...terminals.keys(), ...terminalResumes.keys(), ...starting.keys(), ...backgroundObservers.keys()])) stop(key)
 }
 
 export function storeHandle(key: string, handle: QueryHandle): void {
@@ -133,7 +153,7 @@ function readUntilAborted<T>(read: () => Promise<T>, signal: AbortSignal): Promi
 }
 
 /** Explicit handoff/reopen; reservation and read-only preflight keep one session writer. */
-export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: ClaudeNativeLaunch & Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'signal' | 'columns' | 'rows'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
+export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions, backgroundObserver?: ClaudeBackgroundStatusObserver) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: ClaudeNativeLaunch & Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'signal' | 'columns' | 'rows'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
   const {resume: saved, signal, ...overrides} = options
   if (signal?.aborted) throw new Error('Native terminal startup was cancelled')
   const previous = conversations.get(key), retained = terminalResumes.get(key), resume = saved ? ClaudeNativeLaunchSchema.parse(saved) : retained
@@ -167,13 +187,19 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
     }
     if (!current()) throw new Error('Claude conversation changed during native terminal handoff')
     if (typeof launch.cwd !== 'string' || !launch.cwd) throw new Error('Native terminal handoff has no current working directory')
-    prepared = await prepare({ ...launch, settings, signal: abort.signal })
+    prepared = await prepare({ ...launch, settings, signal: abort.signal }, backgroundObservers.get(key)?.observer.parentSessionId === launch.sessionId ? backgroundObservers.get(key)?.observer : undefined)
     if (!current()) throw new Error('Claude conversation changed before terminal startup')
     await previous?.owner.close()
     if (abort.signal.aborted || starting.get(key) !== ticket) throw new Error('Native terminal handoff was cancelled')
     const owner = await prepared.start()
     if (abort.signal.aborted || starting.get(key) !== ticket) { owner.kill(); await owner.done; throw new Error('Native terminal startup was cancelled') }
     terminals.set(key, owner); terminalResumes.set(key, launch); published = true
+    if (owner.backgroundObserver && backgroundObservers.get(key)?.observer !== owner.backgroundObserver) {
+      retireBackground(key)
+      const observer = owner.backgroundObserver
+      backgroundObservers.set(key, { observer, unsubscribe: observer.subscribe(() => { if (backgroundObservers.get(key)?.observer === observer) backgroundChanged(key) }) })
+      backgroundChanged(key)
+    }
     trace('handoff_end', {outcome:'ok',pid:owner.state.nativePid ?? owner.state.pid})
     owner.beforeRelease(async () => {
       if (terminalResumes.get(key) !== launch) return
