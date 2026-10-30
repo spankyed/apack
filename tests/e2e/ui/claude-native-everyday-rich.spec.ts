@@ -123,6 +123,8 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
         expect(await snapshot(editor)).toEqual(beforeReading);
       }
     }
+    await editor.locator('p').filter({hasText:'Review behavior changes.'}).click();await editor.press('Home');await editor.press('Shift+ArrowRight');await editor.press('Shift+ArrowRight');
+    await expect(appPage.locator('.bubble-menu:visible')).toHaveCount(1);
   }
   try{
     const parentDraft=await pasteDraft(composer,'Parent');await review('parent',card,composer,false);

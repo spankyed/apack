@@ -59,6 +59,15 @@ function onAncestorScroll(event: Event) {
   })
 }
 
+// Reading should not leave formatting controls covering the selected text.
+// The menu's normal selection updates make it available again for the next edit.
+function onReadingWheel(event: WheelEvent) {
+  const target = event.target
+  if (!(target instanceof Element) || props.editor.isDestroyed) return
+  if (!editorElement.contains(target) && !target.contains(editorElement)) return
+  props.editor.view.dispatch(props.editor.state.tr.setMeta(menuKey, 'hide'))
+}
+
 let rightClicked = false
 
 function onContextMenu() { rightClicked = true }
@@ -67,6 +76,7 @@ function onMouseDown() { rightClicked = false }
 onMounted(() => {
   ownerDocument.body.appendChild(menuHost)
   ownerDocument.addEventListener('scroll', onAncestorScroll, true)
+  ownerDocument.addEventListener('wheel', onReadingWheel, { capture: true, passive: true })
   const el = editorElement
   el.addEventListener('contextmenu', onContextMenu)
   el.addEventListener('mousedown', onMouseDown)
@@ -74,6 +84,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   ownerDocument.removeEventListener('scroll', onAncestorScroll, true)
+  ownerDocument.removeEventListener('wheel', onReadingWheel, true)
   if (positionFrame !== undefined) cancelAnimationFrame(positionFrame)
   menuHost.remove()
   const el = editorElement
