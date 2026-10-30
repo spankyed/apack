@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   defineDriveConfig,
+  definePerformanceConfig,
   definePackE2EConfig,
   e2eWorkers,
 } from '../src/playwright.ts';
 
-/**
- * The two config helpers, one per kind of run, and what each takes a pack's word on.
- *
- * Both take it last, because nothing reads their settings back. A third helper stood beside them while a
- * session was an HTTP server with a handshake to protect; a session is a connection now, and there is no
- * setting left that a pack changing it would break.
- */
+/** Config helpers keep suite, driving and manual qualification policies in their owning test toolkit. */
 
 describe("a pack's E2E config", () => {
   it('holds the settings the four copies used to restate', () => {
@@ -80,3 +75,9 @@ describe('a driving config', () => {
   });
 });
 
+
+
+it('qualifies performance serially without retries, screenshots or tracing overhead by default', () => {
+  expect(definePerformanceConfig()).toMatchObject({ workers: 1, retries: 0,
+    testDir: '.', testMatch: '*.spec.ts', use: { trace: 'off', screenshot: 'off' } });
+});

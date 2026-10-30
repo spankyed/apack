@@ -4,8 +4,7 @@ import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import type { createPerformanceController, RecordingMode } from '@apackdev/host/diagnostics';
 import type { ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
-import { performanceIdentity } from '../../scripts/performance/identity.ts';
-import { chromeTrace, summarize, trialSchema, type PerformanceTrial } from '../../scripts/performance/report.ts';
+import { performanceIdentity, chromeTrace, summarize, trialSchema, type PerformanceTrial } from '@apackdev/testing/performance';
 import { threadFixture } from './fixture.ts';
 
 type Controller = ReturnType<typeof createPerformanceController>;
@@ -56,14 +55,13 @@ test('open a populated thread through the real transport and render its bounded 
     });
     for (let index = 0; index < warmups + measured; index++) {
       const thread = index % 2;
-      const result = await appPage.evaluate(async ({ mode, thread }) => {
+      const result = await appPage.evaluate(async ({ mode, thread, expectedBodies }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
         await recording.start(mode);
         const started = performance.now();
         const action = recording.begin('app.thread.open', { 'app.scenario': 'thread-open', 'app.fixture': 'populated-threads-v1' })!;
         const target = `Thread-performance-${thread}`;
-        const expected = `Fixture thread ${thread} message 99.`;
         let completed = false;
         let durationMs: number | undefined;
         let lastDelivery: { subscription: string; delivery: number; commit: number } | undefined;
@@ -81,11 +79,18 @@ test('open a populated thread through the real transport and render its bounded 
                 await recording.flushView();
                 if (finished) return;
                 const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
-                const elements = Array.from(document.querySelectorAll('[data-message-id]'));
-                const shown = context.chatMessageIds.length === 50 && context.chatMessageIds.every(id => elements.some(element => element.getAttribute('data-message-id') === id && element.textContent?.includes(`Fixture thread ${thread} message `)))
-                  && elements.some(element => element.textContent?.includes(expected));
-                if (context.currentThread?.id !== target || !shown) return;
-                if (context.chatMessageIds.length !== 50 || context.chatLimit !== 50) throw Error('page-bound');
+                if (context.currentThread?.id !== target) return;
+                if (context.chatMessageIds.length > 50 || context.chatLimit !== 50) throw Error('page-bound');
+                const elements = new Map(Array.from(document.querySelectorAll('[data-message-id]'))
+                  .map(element => [element.getAttribute('data-message-id'), element]));
+                const shown = context.chatMessageIds.map(id => elements.get(id));
+                const pattern = new RegExp(`Fixture thread ${thread} message ([0-9]+)[.]`);
+                const indices = shown.map(element => Number(element?.textContent?.match(pattern)?.[1]));
+                const readyPage = shown.length === 50 && new Set(context.chatMessageIds).size === 50
+                  && shown.every(element => element && element.getClientRects().length > 0)
+                  && new Set(indices).size === 50 && indices.every(value => value >= 50 && value < 100)
+                  && shown.every((element, at) => element!.textContent?.includes(expectedBodies[indices[at]! - 50]!));
+                if (!readyPage) return;
                 const ready = action.within(() => recording.begin('app.view.ready', {
                   'app.generation': lastDelivery?.subscription ?? 'disabled', 'app.delivery': lastDelivery?.delivery ?? 0,
                   'app.commit': lastDelivery?.commit ?? 0, 'app.result_count': context.chatMessageIds.length,
@@ -117,7 +122,7 @@ test('open a populated thread through the real transport and render its bounded 
         finally { action.end(completed ? 'ok' : 'error'); }
         const reports = await recording.stop();
         return { completed, durationMs, reports, failure, lastDelivery };
-      }, { mode, thread });
+      }, { mode, thread, expectedBodies: fixture.data.threads[thread]!.messages.slice(50).map(message => message.text.trimEnd()) });
       trials.push(trialSchema.parse({ scenario: 'thread-open', index, warmup: index < warmups,
         outcome: result.completed && result.reports.complete ? 'passed' : 'incomplete',
         correct: result.completed, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,

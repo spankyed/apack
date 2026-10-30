@@ -15,7 +15,7 @@ describe('trace session lifecycle', () => {
     const second = recording.begin('app.action', { scenario: 'second' });
     const seen = await Promise.all([first, second].map(action => action.within(async () => {
       const before = recording.capture();
-      await new Promise(resolve => setTimeout(resolve, 1));
+      await Promise.resolve();
       expect(recording.capture()).toEqual(before);
       action.end();
       return before;

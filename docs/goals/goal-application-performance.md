@@ -2,6 +2,7 @@
 
 Status: active. Branch `session/application-performance`, isolated worktree
 `/private/tmp/apack-application-performance`, initial source `62f1798c9b`.
+Draft PR: https://github.com/spankyed/apack/pull/293. Main checkout remains untouched.
 
 ## Acceptance
 
@@ -12,94 +13,73 @@ correct view-ready milestones, source-identified reports and comparison, counter
 overhead qualification, then one evidence-backed application optimization if supported.
 Deliver dependent reviewable PR checkpoints and required repository validation. No version
 changes, release, automatic CI enablement or speculative engine features. Preserve concurrent work.
-The detailed design remains `docs/plans/application-performance.md`; the approved implementation
+The detailed design remains `docs/plans/application-performance.md`; implementation acceptance
 also declares 10,000 observations/16 MiB per process, 20 measured trials per revision in ABBA
-order, and a 5% lightweight instrumentation median-overhead budget. Four actions are in scope
-for the initial delivery, even though thread opening is the first vertical implementation slice.
+order, and a 5% lightweight instrumentation median-overhead budget. All four actions remain in
+scope even though thread opening is the first vertical implementation slice.
 
-## Current handoff
+## Current implementation
 
-- Isolated dependencies and package outputs installed/built through repository tooling. No shared
-  app dependencies/output; elmdb pin and release metadata unchanged. Host uses sdk-trace 3,
-  context-async-hooks 3 and a direct API ^1.10 to match SDK peers (no deprecated sdk-trace-base).
-- Private host buffer, span processor and EARS-to-OpenTelemetry adapter are implemented. Recorder
-  excludes payloads and error messages, bounds encoded bytes/spans, reports SDK metadata loss,
-  and preserves unit/action ancestry for synchronous EARS operations. No global provider installed.
-  A clean npm ci now verifies one API 1.10 instance. Regenerating the lockfile from the original
-  pinned inputs removed an invalid new nested 1.9 resolution without unrelated dependency upgrades.
-- EARS admin.observe registers/detaches an optional EARS-owned observer. Reads/writes/loads/units
-  report encoded request/result byte counts, watch/unit flags and available sequence metadata.
-  Recorder errors and metadata lookup failures cannot change application results/errors; callback
-  reentrancy is suppressed. NOT_DURABLE is distinguished from refusal using native error code
-  and actual sequence advancement. Metadata is not a claim about a read's snapshot transaction ID.
-- 66 focused tests pass (8 host diagnostics, 6 EARS observations, 6 existing calls and 46 existing
-  transactions); host and EARS TypeScript checks passed. An isolated copy with the byte-budget guard
-  removed fails the oversized-observation contract using Node's assertion API. A disposable source
-  copy with the observer exception guard removed likewise fails its result-preservation assertion.
-  Tracked source was untouched for both proofs.
-- Public EARS API report regeneration requires built package outputs; don't bypass its guard.
-  Initial tsx socket permission failed in the sandbox, then normal escalation allowed it. First
-  report update and metadata-optionality refresh passed; generated API diff was reviewed.
-  All focused tests and typechecks were repeated successfully after clean dependency installation.
-  No setup/test/build process is running. This is the recorder/observer foundation checkpoint;
-  full-chain and application-scenario acceptance remain outstanding.
-- Next: add
-  session lifecycle (active/missing actions, stop/cancel and completeness), standard W3C carrier
-  propagation via @opentelemetry/core (declare direct dependency if imported), async context owner,
-  actual transport/actor/view-delivery wiring and host lifecycle integration. The adapter accepts an
-  explicit active-context getter so it doesn't choose global recording policy. No scenario is built
-  yet and admin.observe is not attached by production composition.
-- Implement thread-open then streaming/search/startup, source-identified reports/comparison,
-  counterfactuals and disabled/lightweight/detailed overhead measurements. Select one supported
-  application optimization only after evidence. No end-to-end or performance acceptance is claimed.
-- Required chain, strict validation, API checks, real process scenarios and reviewable PRs remain.
-  Preserve all four scenarios and optimization scope; do not stop at unit-test instrumentation.
+- Isolated dependencies and outputs. EARS observer/host recorder foundation committed as
+  `90fcca9287`; app transport/composition as `d6b9886df3`, with lifecycle fixes in subsequent commits.
+  Host uses API ^1.10, sdk-trace/context-async-hooks/core ^3. No global provider is installed.
+- EARS `admin.observe` reports encoded request/result byte counts, watch/unit flags and available
+  sequence metadata for reads/writes/loads/units. Observer failures, metadata getters and reentrant
+  reads preserve application outcomes. Native NOT_DURABLE is classified using sequence advancement;
+  sequence is not claimed to identify a read snapshot. Observer registration snapshots are covered.
+- Host recording bounds encoded spans, active starts, event context and links; excludes payloads and
+  error messages; preserves unknown/malformed/dropped/incomplete observations as loss counters.
+  Disabled mode neither initializes a provider/context manager nor enumerates supplied attributes.
+  Finished local action contexts cannot leak into later async work.
+- Stable controller ports attach/detach observers only during recording. Node uses an owned ALS
+  context manager; browser callbacks restore explicit carriers synchronously. Backend admission is
+  development/test only, over the authenticated socket, and recording ownership lasts through cleanup.
+  Renderer tracing loads only after admission. Stop, disconnect, failed listeners and overlapping
+  start/stop are covered. Diagnostic context is separate from synchronous reply-address scope.
+- W3C context travels on message/view envelopes, never in persisted business events or view keys.
+  Incoming, replies, broadcasts and local surface delivery carry it; handlers can restore queued
+  event context. View delivery includes subscription identity and ordinal; stale callbacks from a
+  stopped/reloaded generation are ignored. Full raw-XState actor queue coverage is still outstanding.
+- Initial view reads/deliveries have spans and EARS ancestry. Coalesced re-reads deliberately have no
+  action parent until contributing commit links are implemented. Trace `complete` describes capture
+  integrity, not completeness of instrumentation coverage.
+- The manual suite is `tests/performance/`, using `definePerformanceConfig` from the shared test
+  toolkit. Reusable schemas, identity, summaries, comparison-order/compatibility and Chrome Trace
+  conversion live in `@apackdev/testing/performance`, with its own tests/API report and direct Zod
+  dependency. Public package entries/build metadata and chain source inputs include the new tooling.
+- Thread fixture: two synthetic threads, 100 messages each, fixed timestamps and large bodies.
+  Import is outside measurement; default five warmups/twenty measured trials alternate threads in
+  one warm process. Start includes action-span creation and renderer surface-event dispatch.
+  Completion requires the requested thread, a correlated delivery, the complete correct last page of
+  fifty laid-out message bodies and Vue flush. It is view readiness, not paint or physical-input timing.
+  Reports preserve failures and actual build/native hashes, native checkout/pin, fixture distributions,
+  runtime/machine/cache identities. Comparisons reject dirty or incompatible conditions/native outputs.
 
-## Implementation checkpoint after recorder foundation
+## Validation and execution state
 
-Work after `90fcca9287` adds recording sessions, bounded context/event lifetimes, standard W3C
-transport carriers, opt-in process/window composition, connection ownership and stop/disconnect
-cleanup. New public SDK metadata stays outside business events and view keys. View subscriptions
-carry a unique subscription identity and delivery ordinal. Initial view reads have action ancestry;
-delayed/coalesced re-reads deliberately have no parent until contributing commit links are implemented.
-The trace's `complete` flag describes capture integrity, not completeness of application coverage.
+- Focused diagnostics/EARS/transport/renderer/report tests and changed-source typechecks pass.
+  Disposable mutations proved the byte-budget guard and observer-error preservation fail when removed;
+  tracked source was untouched. Generated SDK and testing API reports were regenerated/reviewed.
+- Full local `chain --no-native` is not yet green. Initial renderer mock typing and two lint findings
+  were fixed and their focused checks passed without widening timeouts. The latest broad run passed
+  5,983 tests and failed nine repo-integration assertions (layout/config helper/input coverage/docs/wait/
+  export policy). Their integration is now corrected; all 219 focused cases across the affected suites
+  pass. Remaining broad checks still require completion. Evidence of that broad run:
+  `node_modules/.cache/apack-chain/runs/2026-10-30T16-57-46Z-38340`.
+- No successful built-app performance scenario or overhead/timing acceptance yet. The first Linux
+  attempt failed Docker's disk preflight before launching work. Host free space recovered and Docker
+  is available again. Check `docker ps` for another expensive owner before launching; do not interfere
+  with another session's container/processes. The Linux test image now includes Xvfb/xauth for owned
+  headless Electron runs. Use the prescribed 2-core/6-GiB/no-swap runner, not native batches on macOS.
+- Next functional run: `npm run test:linux -- bash -lc 'npm run build:default-setup && npm run build:runtime -- --cores 1 && APACK_PERFORMANCE_TRIALS=1 xvfb-run -a npm run test:e2e -- --config tests/performance/playwright.config.ts'`.
+  This is a contract/debug run, not statistical qualification. Generated Linux reports stay in its work
+  volume; copy only owned reports back through a read-only helper container if needed.
 
-A manual `tests/performance/` suite now authors the populated-thread-open scenario with deterministic
-public-import data, five warmups and twenty measured trials by default. It requires the requested
-thread, correlated new subscription delivery, all fifty message bodies and Vue flush before recording
-view readiness. It preserves trial failures and bounded process reports. Report schemas, Chrome Trace
-conversion, manifest identities and comparison-order/compatibility contracts are implemented.
-This scenario has **not yet run successfully**. No timing or overhead acceptance is claimed.
+## Required remaining work
 
-Focused tests and source typechecks pass. SDK API reports were regenerated and their metadata changes
-reviewed; the build report also has a derived Zod property-order change. Existing report line endings
-were retained. Final chain/API verification remains outstanding.
-The attempted bounded Linux qualification failed in Docker's free-space preflight (`unexpected EOF`),
-before any build or app launch. The host briefly had only 688 MiB free; it subsequently showed 11 GiB,
-but Docker remained unavailable. The user was asked to restore free space/OrbStack asynchronously.
-Do not retry app builds while storage is critically low, remove another session's files, or bypass
-native-runtime execution safeguards. No workload from that attempt is running.
-
-Still required: successful real-process thread-open proof and counterfactuals; queued raw-actor context
-coverage and coalesced-watch causal links; streaming/search/populated-startup scenarios; reusable
-cross-revision orchestration and overhead qualification; detailed profiles/process statistics; one
+Successful thread-open slice and counterfactuals; raw actor queue context and coalesced-watch causal
+links; streaming/search/populated-startup scenarios; cross-revision orchestration and full manifest/
+trial consistency checks; detailed profiles/process statistics and overhead qualification; one
 supported application optimization; full repository and strict acceptance; dependent reviewable PRs.
-The new manual runner's completion test and provenance collection also need verification in the real
-built app. Preserve this broader scope; these primitives and authored scenarios do not complete it.
-
-
-The first local `chain --no-native` run passed package reproducibility, generated APIs and the
-EARS/SDK/host/API/UI/main/preload/CLI typechecks, and built default-setup. It stopped after the
-renderer typecheck exceeded its 60-second budget. Scoped reproduction exposed a new mock erasing a
-generic callback return type; that mock was fixed. Full renderer typechecking and its 15 affected
-transport/recording tests then passed. A separate stop/start race was fixed with a regression test:
-the window refuses new recording admission until both previous process stops settle. No timeout
-was increased. The remaining chain coverage must run before this checkpoint is considered gated.
-
-
-The resumed local gate passed the renderer typecheck, facade, specifier/tier checks and scripts/test
-typechecks, then found two lint issues. Observer registration now uses an explicit snapshot so
-replacements made inside callbacks affect the next operation (regression covered); browser callback
-binding preserves caller `this` using a bound context method. Lint, the seven EARS observation tests,
-three controller tests and affected typechecks passed after correction. The thread timing now starts
-before action-span creation, including that instrumentation cost. Remaining gate steps still need a run.
+Keep PR #293 a draft until its slice is qualified. Do not treat the recorder, authored scenarios,
+passing unit tests, or capture-integrity flags as completion of the approved goal.

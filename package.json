@@ -133,8 +133,7 @@
     "tsup": "^9.0.0",
     "typescript": "^5.8.3",
     "unplugin-vue": "^7.2.0",
-    "vue-component-type-helpers": "^2.2.12",
-    "zod": "^4.6.7"
+    "vue-component-type-helpers": "^2.2.12"
   },
   "dependencies": {
     "@app/api": "*",

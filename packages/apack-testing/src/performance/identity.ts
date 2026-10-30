@@ -39,7 +39,10 @@ export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture'
   for (const file of bindings) builds.push({ path: `vendor/elmdb/crates/elmdb-node/${file}`, sha256: digest(readFileSync(path.join(native, file))) });
   return manifestSchema.parse({
     format: 1, source: { revision: git(['rev-parse', 'HEAD']).toString().trim(), dirty: diff.length > 0 || untracked.length > 0, diffSha256: sourceHash.digest('hex') },
-    builds, ...options, runtime: { node: process.versions.node, v8: process.versions.v8, osRelease: release(), ...options.runtime },
+    builds, ...options, native: { pin: readFileSync(path.join(root, 'vendor/elmdb.rev'), 'utf8').trim(),
+      checkoutRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: native }).toString().trim(),
+      dirty: execFileSync('git', ['status', '--porcelain'], { cwd: native }).length > 0 },
+    runtime: { node: process.versions.node, v8: process.versions.v8, osRelease: release(), ...options.runtime },
     machine: { platform: process.platform, arch: process.arch, cpus: Math.ceil(cpuCount), memoryBytes: Number.isFinite(memoryLimit) && memoryLimit > 0 ? Math.min(totalmem(), memoryLimit) : totalmem(),
       identity: digest(JSON.stringify({ hostname: process.env.APACK_PERFORMANCE_MACHINE_ID ?? hostname(), model: cpus()[0]?.model })) },
     clock: 'Local monotonic durations; cross-process epoch alignment is approximate',

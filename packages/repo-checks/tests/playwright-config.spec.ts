@@ -19,7 +19,7 @@ import { repoFiles } from './_support/repo-files.ts';
  * watching it, and a serving session has four settings its HTTP handshake depends on.
  */
 
-const HELPERS = ['definePackE2EConfig', 'defineDriveConfig'] as const;
+const HELPERS = ['definePackE2EConfig', 'defineDriveConfig', 'definePerformanceConfig'] as const;
 
 /** The settings a helper owns, which a config restating one has stopped delegating */
 const OWNED_KEYS = ['testDir', 'testMatch', 'workers', 'timeout', 'outputDir'] as const;
