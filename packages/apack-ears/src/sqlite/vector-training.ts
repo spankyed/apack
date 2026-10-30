@@ -1,5 +1,6 @@
 // A read-only worker owns model training. Only the scheduler may later install its result.
 import { Worker } from 'node:worker_threads';
+import { supportsNativeVectorTraining } from './vector-policy.ts';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -72,7 +73,7 @@ export class SqliteVectorTraining {
     if(this.db.sql.inTransaction)fail('UNIT_OPEN','Release the foreground transaction before training');
     if(this.running)fail('TRAINING_ACTIVE','One native training worker may run per owner');
     const dimensions=job.definition.dims;
-    if(!Number.isSafeInteger(dimensions)||dimensions<128||dimensions>4096||dimensions%8!==0)
+    if(!supportsNativeVectorTraining(dimensions))
       fail('UNSUPPORTED','Unsupported ANN training dimensions');
     const maxSamples=Math.min(20000,Math.floor(128*1024*1024/(dimensions*4)));
     const worker=new Worker(workerCode,{eval:true,workerData:{file:join(this.db.path,'data.sqlite3'),

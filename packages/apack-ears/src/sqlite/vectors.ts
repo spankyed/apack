@@ -2,6 +2,7 @@
 import type { SqliteDatabase } from './database.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
 import { encodeEmbeddingVector, validateEmbeddingBytes } from './embeddings.ts';
+import { EXACT_VECTOR_CHUNK_LIMIT, NATIVE_VECTOR_OWNER_TARGET } from './vector-policy.ts';
 
 /** Float64 accumulation keeps every finite, nonzero Float32 direction normalizable. */
 function normalized(bytes: Uint8Array): { bytes: Buffer; squared: number } {
@@ -55,16 +56,16 @@ export class SqliteVectors {
     // large scopes return only their count and do not read canonical vector payloads here.
     const probe=this.db.all(`WITH eligible AS MATERIALIZED (
       SELECT c.entity_id id,c.embedding_id,e.seq FROM chunks c JOIN entities e ON e.id=c.entity_id
-      WHERE ${eligible} LIMIT 4097),
+      WHERE ${eligible} LIMIT ${EXACT_VECTOR_CHUNK_LIMIT + 1}),
       total AS MATERIALIZED (SELECT count(*) n FROM eligible),
       ranked AS MATERIALIZED (
         SELECT c.id,1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score,c.seq
         FROM total t CROSS JOIN eligible c JOIN embedding_values v ON v.id=c.embedding_id
-        LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE t.n<=4096
+        LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE t.n<=${EXACT_VECTOR_CHUNK_LIMIT}
         GROUP BY c.id ORDER BY score DESC,c.seq LIMIT ?)
       SELECT NULL id,NULL score,n,NULL seq FROM total
       UNION ALL SELECT id,score,NULL,seq FROM ranked ORDER BY n DESC,score DESC,seq`, [...bindings,query,k]);
-    if(Number(probe[0]!.n)<=4096)return probe.slice(1).map(row=>({id:row.id,score:row.score}));
+    if(Number(probe[0]!.n)<=EXACT_VECTOR_CHUNK_LIMIT)return probe.slice(1).map(row=>({id:row.id,score:row.score}));
     const owners=this.db.indexBuilds.nativeVectorOwners(generation,query,scope,exclude);
     if(owners) {
       const rows=this.db.all(`SELECT c.entity_id id,
@@ -80,7 +81,7 @@ export class SqliteVectors {
     const rows = this.db.all(`WITH candidates AS MATERIALIZED (
       SELECT c.entity_id FROM chunks c JOIN embedding_search p ON p.embedding_id=c.embedding_id
       JOIN entities e ON e.id=c.entity_id WHERE ${eligible}
-      GROUP BY c.entity_id ORDER BY min(vec_distance_hamming(vec_bit(p.bits),vec_quantize_binary(?))),e.seq LIMIT 256
+      GROUP BY c.entity_id ORDER BY min(vec_distance_hamming(vec_bit(p.bits),vec_quantize_binary(?))),e.seq LIMIT ${NATIVE_VECTOR_OWNER_TARGET}
       ) SELECT c.entity_id id,1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score
       FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
       LEFT JOIN embedding_search p ON p.embedding_id=v.id

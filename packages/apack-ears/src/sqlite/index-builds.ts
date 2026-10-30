@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import type { SqliteDatabase } from './database.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
 import type { SqliteVectorModels, SqliteModelStep } from './vector-models.ts';
+import { supportsNativeVectorTraining } from './vector-policy.ts';
 
 export type SqliteIndexKind = 'value' | 'text' | 'trigram' | 'vector';
 export interface SqliteIndexSpec {
@@ -28,7 +29,7 @@ export interface SqliteIndexBuild {
   throughSeq: number;
   error: string | null;
 }
-interface SqliteIndexState { generations: ReadonlyMap<string, number>; retries: ReadonlySet<number>; pending: boolean }
+interface SqliteIndexState { vectorDependencies: ReadonlyMap<string, ReadonlySet<number>>; generations: ReadonlyMap<string, number>; retries: ReadonlySet<number>; pending: boolean }
 const fail = (code: string, message: string): never => { throw Object.assign(new Error(message), { code }); };
 export function searchTable(index: SqliteIndexSpec & { generation: number }): string {
   return (index.kind === 'trigram' ? 'tri_' : 'fts_') + createHash('sha256')
@@ -37,6 +38,8 @@ export function searchTable(index: SqliteIndexSpec & { generation: number }): st
 
 export class SqliteIndexBuilds {
   private generations: ReadonlyMap<string, number> = new Map();
+  private vectorDependencies: ReadonlyMap<string, ReadonlySet<number>> = new Map();
+  get nativeAdmissionDependencies(): ReadonlyMap<string, ReadonlySet<number>> { return this.vectorDependencies; }
   private timer?: NodeJS.Immediate;
   private retry?: NodeJS.Timeout;
   private stopped = false;
@@ -111,17 +114,33 @@ export class SqliteIndexBuilds {
   }
   /** Prepare caches while admission can still roll back. Acceptance after COMMIT performs no IO. */
   readState(): SqliteIndexState {
-    const rows = this.db.all('SELECT type,name,kind,generation,state FROM index_builds');
+    const rows = this.db.all('SELECT * FROM index_builds');
+    const vectorDependencies = new Map<string, Set<number>>();
+    const watch = (key: string, generation: number) => {
+      const generations = vectorDependencies.get(key) ?? new Set<number>();
+      generations.add(generation); vectorDependencies.set(key, generations);
+    };
+    for (const row of rows) if (row.kind === 'vector') {
+      const definition = this.job(row).definition;
+      if (!supportsNativeVectorTraining(definition.dims)) continue;
+      if (!Array.isArray(definition.from) || definition.from.some(field => typeof field !== 'string'))
+        fail('CORRUPT', 'Invalid native admission fields');
+      watch('all', row.generation); watch(`vectors:${row.type}`, row.generation); watch(`members:${row.type}`, row.generation);
+      for (const field of definition.from) watch(`fieldType:${row.type}:${field}`, row.generation);
+    }
     const retries = new Set(rows.filter(row => this.retries.has(Number(row.generation))).map(row => Number(row.generation)));
-    return { generations: new Map(rows.filter(row => row.kind === 'value').map(row =>
+    return { vectorDependencies, generations: new Map(rows.filter(row => row.kind === 'value').map(row =>
       [this.key(String(row.type), String(row.name)), Number(row.generation)])), retries,
       pending: !!this.vectorModels?.hasWork() || retries.size > 0 || rows.some(row => row.state === 'building') || this.nextGC() !== undefined };
   }
   acceptState(state: SqliteIndexState): void {
     this.generations = state.generations; this.pending = state.pending;
+    this.vectorDependencies = state.vectorDependencies;
+    this.vectorModels?.invalidateAdmission(state.vectorDependencies);
     this.retries.clear(); for (const generation of state.retries) this.retries.add(generation);
   }
   reload(): void { this.acceptState(this.readState()); }
+  committed(changes: ReadonlySet<string>): void { this.vectorModels?.committed(changes); }
   generation(type: string, field: string): number | undefined { return this.generations.get(this.key(type, field)); }
   ready(type: string, field: string): boolean {
     if (this.generation(type, field) === undefined) return false;

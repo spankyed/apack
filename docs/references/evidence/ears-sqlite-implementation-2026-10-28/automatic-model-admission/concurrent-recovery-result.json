@@ -1,0 +1,19 @@
+{
+  "args": [
+    "node",
+    "scripts/with-source.mjs",
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--project",
+    "@apackdev/host",
+    "packages/apack-host/tests/backup/recovery-crash.spec.ts",
+    "packages/apack-host/tests/backup/storage.spec.ts",
+    "--maxWorkers=2",
+    "--reporter=default",
+    "--reporter=json",
+    "--outputFile=/results/concurrent-recovery.json"
+  ],
+  "exitCode": 0,
+  "seconds": 46.88167542300653
+}

@@ -472,9 +472,24 @@ acknowledges responses only after result COMMIT, resumes committed work after re
 joins native readiness/watch notification and bounded retirement. Explicit restart recovery
 requires the managed exclusive writer. [Scheduler evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-scheduler/README.md)
 retains rollback, stale-attempt and acknowledgement mutation controls.
-The remaining integration must provide automatic eligibility admission, incumbent-preserving
-physical model refresh, host drain before file replacement/deletion, complete rebuild/restore/
-audit ownership, and normal native loading/distribution. The new platform gate requires the native
+Attached model owners now perform automatic **initial** eligibility admission. Shared routing limits keep
+scopes of at most 4,096 chunks exact; admission requires more live chunks and at least 256 live owners,
+with supported training dimensions. Generation-specific dependency maps are prepared before a schema
+commit and accepted without IO. Only committed embedding, membership and declared source-field changes
+mark affected generations; registered generations stop receiving initial work. Another connection's changes
+are conservatively observed through `data_version` when polled, without promising cross-process watches.
+An active finite-range metadata scan is not reset by intervening relevant writes. Each turn reads at most
+128 references before joining live-owner metadata, stores at most 256 owners, and accepts its progress/enqueue
+only after COMMIT. No vector payload is hydrated. Failed logical generations and unsupported dimensions
+are skipped. Persisted failed training still requires explicit retry.
+[Automatic admission evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/automatic-model-admission/README.md)
+covers 633 EARS cases, all fourteen model cases, five mutation controls and real 1k/100k owner-driven admission
+without explicit benchmark enqueue. The 100k heartbeat p99 still misses 16 ms; neither concurrent training
+WAL/write behavior nor complete query/relevance acceptance follows from this probe.
+The remaining integration must create/load normal app owners, preserve incumbents during physical model
+refresh, drain before file replacement/deletion, complete rebuild/restore/audit ownership, and distribute/load
+trusted native artifacts on every writer and read-only candidate connection. Cursor indexes must be prepared
+before populated profile ingestion; the explicit maintenance refusal remains. The new platform gate requires the native
 lifecycle cases; neither it nor these local cases establish performance or final adoption.
 Keep the complete goal and frozen fresh validation gates.
 The [fresh integrated matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/fresh-native-ears/README.md)

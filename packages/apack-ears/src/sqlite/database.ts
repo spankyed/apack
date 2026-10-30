@@ -861,8 +861,8 @@ export class SqliteDatabase implements EarsDatabase {
       }
       case "embed": {
         const result = this.search.embed(op);
-        const row = this.row(op.id);
-        if (row) changes.add(`rows:${row.entityType}`);
+        const owner = this.get('SELECT type FROM entities WHERE id=?', [op.id]);
+        if (owner) { changes.add(`rows:${owner.type}`); if (result.kind === 'done') changes.add(`vectors:${owner.type}`); }
         return result;
       }
       case "link": {
@@ -1164,6 +1164,7 @@ export class SqliteDatabase implements EarsDatabase {
           }
         this.putMeta("commit", sequence);
         this.commitWrite();
+        this.indexBuilds.committed(changes);
       } else { if (this.sql.inTransaction) this.sql.exec("ROLLBACK"); this.layouts.clear(); }
       return result;
     } catch (e) {
@@ -1326,10 +1327,12 @@ export class SqliteDatabase implements EarsDatabase {
           ]);
           unit.changes.add(`kind:${load.kind}`);
         } else if (load.load === 'embedding') {
-          if (this.get('SELECT 1 FROM entities WHERE id=?', [load.id])) {
+          const owner = this.get('SELECT type FROM entities WHERE id=?', [load.id]);
+          if (owner) {
             const row = { id: load.id, index: load.index, chunk: load.chunk, hash: load.hash, model: load.model,
               dimensions: load.vector.length, bytes: encodeEmbeddingVector(load.vector, load.vector.length) };
             this.embeddings.replace(row); this.embeddings.relink(row);
+            unit.changes.add(`vectors:${owner.type}`);
           }
         } else if (load.load === "unset") {
           const r = this.row(load.id);
@@ -1344,6 +1347,7 @@ export class SqliteDatabase implements EarsDatabase {
       // Unchecked import deliberately permits invalid data, just as the existing admin API does.
       this.putMeta("commit", this.sequence + 1);
       this.commitWrite();
+      this.indexBuilds.committed(unit.changes);
       this.active = undefined;
       unit.ended();
       this.indexBuilds.wake();

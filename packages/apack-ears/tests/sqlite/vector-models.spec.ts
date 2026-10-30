@@ -35,6 +35,155 @@ function own(path:string,fresh=false) {
 function fixture(count=512) {const f=own(mkdtempSync(join(tmpdir(),'ears-vector-models-')),true);f.seed(count);return f;}
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EARS_VEC1_EXTENSION)('durable native model admission',()=>{
+  it('automatically admits an eligible committed generation, while small scopes and rolled-back growth stay exact',async()=>{
+    const {db,e,models,job,seed}=fixture(4096);
+    await db.indexesReady();expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    e.admin.setSchema({types:{Row:{required:[],embed:{from:['title'],model:'fixture',dims:128,chunk:'paragraph'}},
+      Other:{required:[],embed:{from:['title'],model:'other',dims:128}}},relations:{},roles:[]});
+    e.create('Other',{title:'other'});const other=e.pendingEmbeddings('Other');
+    e.embed(other.chunks.map(c=>({...c,model:other.model,vector:Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71))})));
+    await db.indexesReady();
+    const all=db.all.bind(db),pages=vi.spyOn(db,'all').mockImplementation((sql,parameters=[])=>all(sql,parameters));
+    e.write('Row-000000').set('unrelated','changed');await db.indexesReady();
+    expect(pages.mock.calls.some(([sql])=>sql.startsWith('WITH admission_page AS MATERIALIZED'))).toBe(false);
+    const sequence=db.sequence;
+    expect(()=>e.transact(()=>{seed(1);throw Error('rollback growth');})).toThrow('rollback growth');
+    await db.indexesReady();expect(db.sequence).toBe(sequence);
+    expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    e.create('Row',{id:'Row-004096',title:'new'});await db.indexesReady();
+    expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    const pending=e.pendingEmbeddings('Row');expect(pending.chunks).toHaveLength(1);
+    e.embed(pending.chunks.map(c=>({...c,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71))})));
+    const committed=db.sequence;await db.indexesReady();
+    expect(db.get('SELECT state,samples FROM vector_training WHERE generation=?',[job.generation]))
+      .toEqual({state:'ready',samples:4097});
+    expect(db.sequence).toBe(committed);
+    const scanned=pages.mock.calls.filter(([sql])=>sql.startsWith('WITH admission_page AS MATERIALIZED'));
+    expect(scanned.length).toBeGreaterThan(0);
+    expect(new Set(scanned.map(([,parameters])=>parameters?.[0]))).toEqual(new Set([job.generation]));
+    pages.mockClear();
+    const known=e.pendingEmbeddings('Row').count;expect(known).toBe(0);
+    const original=db.get('SELECT * FROM chunks WHERE entity_id=?',['Row-000000'])!;
+    e.embed([{id:'Row-000000',chunk:original.chunk,hash:original.hash,model:original.model,
+      vector:Array.from({length:128},(_,j)=>Math.cos((j+1)*1.71))}]);
+    await db.indexesReady();
+    expect(pages.mock.calls.some(([sql])=>sql.startsWith('WITH admission_page AS MATERIALIZED'))).toBe(false);
+    pages.mockRestore();
+    const candidates=vi.spyOn(models.index,'candidates');
+    const vector=Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71));
+    expect(e.query('Row').near(vector,{k:5}).ids()).toHaveLength(5);
+    expect(candidates).toHaveBeenCalled();
+  });
+
+  it('admits canonical embeddings imported after an initially ineligible generation',async()=>{
+    const {db,e}=fixture(4096);await db.indexesReady();
+    const id=e.create('Row',{title:'imported'}).id();await db.indexesReady();
+    expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    const chunk=db.get('SELECT * FROM chunks WHERE entity_id=?',[id])!;
+    db.bulkLoad([{load:'embedding',id,index:chunk.index_name,chunk:chunk.chunk,hash:chunk.hash,model:chunk.model,
+      vector:Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71))}]);
+    const sequence=db.sequence;await db.indexesReady();
+    expect(db.get('SELECT state,samples FROM vector_training')).toEqual({state:'ready',samples:4097});
+    expect(db.sequence).toBe(sequence);
+  });
+
+  it("discovers another connection's committed embeddings when readiness is polled",async()=>{
+    const {db}=fixture(4096);await db.indexesReady();
+    expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    const peer=new SqliteDatabase({path:db.path,syncs:false});
+    try {
+      const other=createEarsEngine({database:peer});other.create('Row',{id:'Row-004096',title:'peer'});
+      const pending=other.pendingEmbeddings('Row');expect(pending.chunks).toHaveLength(1);
+      other.embed(pending.chunks.map(c=>({...c,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71))})));
+    }finally{peer.close();}
+    const sequence=db.sequence;await db.indexesReady();
+    expect(db.get('SELECT state,samples FROM vector_training')).toEqual({state:'ready',samples:4097});
+    expect(db.sequence).toBe(sequence);
+  });
+
+  it('requires enough live distinct owners and rechecks eligibility after restoring trashed chunks',async()=>{
+    const {db,e,seed}=fixture(0);
+    const first=e.create('Row',{title:Array.from({length:4100},(_,i)=>`part ${i}`).join('\n\n')}).id();
+    seed(0);await db.indexesReady();
+    expect(db.get('SELECT count(*) n FROM chunks WHERE embedding_id IS NOT NULL')!.n).toBe(4100);
+    expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    seed(254);await db.indexesReady();
+    expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    e.write(first).trash();seed(1);await db.indexesReady();
+    expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    e.write(first).restore();const sequence=db.sequence;await db.indexesReady();
+    expect(db.get('SELECT state,samples FROM vector_training')).toEqual({state:'ready',samples:4355});
+    expect(db.sequence).toBe(sequence);
+  });
+
+  it('bounds eligibility to metadata pages and retries the same enqueue after its commit is refused',async()=>{
+    const {db,e,job}=fixture(4097);let sequence=db.sequence;
+    const all=db.all.bind(db);const pages:number[]=[];let plan:Array<Record<string,any>>=[];
+    db.all=(sql,parameters=[])=>{
+      const rows=all(sql,parameters);
+      if(sql.startsWith('WITH admission_page AS MATERIALIZED')) {
+        pages.push(rows.length);expect(rows.every(row=>!Object.values(row).some(value=>value instanceof Uint8Array))).toBe(true);
+        plan=all('EXPLAIN QUERY PLAN '+sql,parameters);
+      }
+      return rows;
+    };
+    const exec=db.sql.exec.bind(db.sql);let refused=false;
+    const commit=vi.spyOn(db.sql,'exec').mockImplementation(sql=>{
+      if(sql==='COMMIT'&&!refused&&db.get("SELECT 1 FROM vector_training WHERE state='pending'")) {
+        refused=true;throw Object.assign(Error('refuse automatic enqueue'),{code:'SQLITE_BUSY'});
+      }
+      return exec(sql);
+    });
+    let outcome:string|undefined;
+    for(let i=0;i<100&&!refused;i++) {
+      // Relevant commits keep arriving, but do not change the captured range of stored vectors.
+      // Restarting eligibility on every revision would never reach the enqueue below.
+      e.create('Row',{id:`Row-extra-${i}`,title:`unembedded ${i}`});sequence=db.sequence;
+      outcome=db.indexBuilds.step();
+    }
+    expect(refused).toBe(true);expect(outcome).toBe('busy');
+    expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();expect(db.sequence).toBe(sequence);
+    commit.mockRestore();await db.indexesReady();
+    expect(db.get('SELECT state FROM vector_training WHERE generation=?',[job.generation])!.state).toBe('ready');
+    expect(pages.length).toBeGreaterThan(32);expect(Math.max(...pages)).toBeLessThanOrEqual(128);
+    expect(plan.some(row=>String(row.detail).includes('chunk_native_admission')&&String(row.detail).includes('embedding_id>?'))).toBe(true);
+  });
+
+  it('discovers rebuilt generations without a logical commit and skips unsupported training dimensions',async()=>{
+    const {db,e,job}=fixture(4097);await db.indexesReady();const sequence=db.sequence;
+    db.rebuildIndexes();await db.indexesReady();
+    const rebuilt=db.indexBuilds.jobs().find(j=>j.kind==='vector')!;
+    expect(rebuilt.generation).not.toBe(job.generation);expect(db.sequence).toBe(sequence);
+    expect(db.get('SELECT state,samples FROM vector_training WHERE generation=?',[rebuilt.generation]))
+      .toEqual({state:'ready',samples:4097});
+    e.admin.setSchema({types:{Row:{required:[],embed:{from:['title'],model:'fixture',dims:128,chunk:'paragraph'}},
+      Other:{required:[],embed:{from:['title'],model:'small',dims:8}}},relations:{},roles:[]});
+    e.create('Other',{title:'small'});const pending=e.pendingEmbeddings('Other');
+    e.embed(pending.chunks.map(c=>({...c,model:pending.model,vector:[1,0,0,0,0,0,0,0]})));
+    await db.indexesReady();const small=db.indexBuilds.jobs().find(j=>j.kind==='vector'&&j.type==='Other')!;
+    expect(db.get('SELECT 1 FROM vector_training WHERE generation=?',[small.generation])).toBeUndefined();
+    expect(e.query('Other').near([1,0,0,0,0,0,0,0],{k:1}).ids()).toHaveLength(1);
+  });
+
+  it('does not enqueue or keep polling a failed logical generation with a large partial projection',async()=>{
+    const {db,e,models}=fixture(4608);await db.indexesReady();
+    const refile=db.search.refileIndex.bind(db.search);let rows=0;
+    const failure=vi.spyOn(db.search,'refileIndex').mockImplementation((row,seq,job)=>{
+      if(job.kind==='vector'&&++rows>4200)throw Error('fixture projection failure');
+      return refile(row,seq,job);
+    });
+    db.rebuildIndexes();await expect(db.indexesReady()).rejects.toMatchObject({code:'INDEX_FAILED'});
+    failure.mockRestore();
+    const failed=db.indexBuilds.jobs().find(job=>job.kind==='vector'&&job.state==='failed')!;
+    expect(failed).toBeDefined();
+    expect(db.get('SELECT count(*) n FROM chunks WHERE generation=? AND embedding_id IS NOT NULL',[failed.generation])!.n)
+      .toBeGreaterThan(4096);
+    for(let i=0;i<100;i++)db.indexBuilds.step();
+    expect(db.get('SELECT 1 FROM vector_training WHERE generation=?',[failed.generation])).toBeUndefined();
+    expect(models.hasWork()).toBe(false);
+    expect(e.query('Row').count()).toBe(4608);
+  });
+
   it('uses the shared scheduler to train, project and publish readiness without logical commits',async()=>{
     const {db,e,models,job,write}=fixture(),sequence=db.sequence,events:number[]=[];
     const off=db.onIndexesChanged(changes=>events.push(changes.sequence));

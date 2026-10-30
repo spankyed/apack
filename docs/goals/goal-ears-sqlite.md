@@ -15,7 +15,7 @@ recorded on pinned source in disposable environments, and a draft PR is ready fo
 an adoption decision. Commit usable checkpoints. Do not silently drop requirements.
 ```
 
-Status: active candidate integration and qualification, 2026-10-29.
+Status: active candidate integration and qualification, 2026-10-30.
 Branch: `session/ears-sqlite`. Checkout: `monorepo-worktrees.noindex/sqlite-evaluation`.
 The original `session/sqlite-evaluation` branch preserves the experiment at `4a3fe698f8`.
 
@@ -192,7 +192,7 @@ No master merge, release, production adoption or version-only PR is authorized. 
 Active integration checkout: `/private/tmp/ears-sqlite-query-integration`. The preceding checkpoint is
 preserved at `/private/tmp/ears-sqlite-diagnosis-evidence`, `68cf78a2f4`.
 
-Current checkpoint: resolve admission responsiveness and finish app qualification on committed master `debeddc3a6a` and native
+Current checkpoint: integrate automatic owner lifecycle and resolve admission responsiveness on committed master `debeddc3a6a` and native
 `8ab7088f9a`. Detached merge `399c4765f0` combines candidate `fbd3c1c441` with that master,
 retaining SQLite explanations/backend assertions, master reverse-traversal clarification and all
 **five** current thread-query cases. The new master adds the Message status index, queued-message
@@ -261,7 +261,9 @@ Implemented candidate behavior and evidence:
   the scheduler; claims commit before launch, responses are acknowledged after persistence COMMIT, restart
   recovery is explicit under exclusive ownership, projection is bounded and stop drains actual worker exit.
   Ready attached models feed EARS owner candidates and canonical all-chunk reranking. Normal app composition
-  does not activate this service; native C cancellation is not guaranteed immediate.
+  does not activate this service; native C cancellation is not guaranteed immediate. Attached owners now
+  automatically admit initial eligible generations through generation-specific committed dependencies and
+  bounded metadata scans. App creation/loading and incumbent-preserving physical refresh remain open.
 - At `25668da288`, 625 EARS, 135 affected host/storage and seventeen native cases pass, with builds/types/API/
   static and four mutation controls. A scope witness rejects the previous duplicate count/exact evaluation.
   [Projection/scope evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-projection-scope/README.md)
@@ -327,9 +329,23 @@ chronology and independent models are retained. This is throughput progress, not
 repeat broad gates before the remaining implementation converges. Resolve foreground commit cost and
 bounded writer/checkpoint ownership, and requalify complete frozen query/recall/app requirements.
 
+[Automatic initial admission](../references/evidence/ears-sqlite-implementation-2026-10-28/automatic-model-admission/README.md)
+now runs inside an attached owner without external enqueue calls. Committed generation-specific dependencies,
+128-reference pages, at most 256 remembered owners, rollback-safe progress, external-version observation and
+failed-generation refusal are implemented. Final runtime passes all 633 EARS cases; a later test-only owner-floor
+strengthening passes all fourteen model cases. Five controls fail their intended assertions. The real corpus
+stays exact at 1k; at 99,900 vectors it automatically enqueues once, trains 20,000 samples, publishes and serves
+an actual native EARS query. FULL/default checkpoints and primary bytes are preserved. Admission is 20.77 s
+and heartbeat p99 **48.14 ms**, still failed; this admission-only probe does not establish full query/recall,
+live-training write contention or app budgets. The intermediate host/storage run retains one 15 s child timeout;
+a quiet reproduction and instrumented concurrent 32-case run pass, with no demonstrated cause or fix.
+Next provide trusted loading for normal app/read-only/writer connections, prepare empty stages before native
+cursor admission, and implement incumbent-preserving physical refresh plus full maintenance/drain ownership.
+Keep the unresolved Strict/heartbeat/physical/application gates; no production composition changes here.
+
 Still required, without narrowing phases 3–7:
 
-- Automatic model eligibility admission, incumbent-preserving physical refresh, host drain before file replacement/
+- Normal app owner creation/loading and automatic admission integration, incumbent-preserving physical refresh, host drain before file replacement/
   deletion, complete native audit/rebuild/restore/retirement ownership, normal native loading/distribution/signing.
 - Final candidate/trash filtering before K, multi-chunk scoring, ties, large-K/exact fallbacks, own-unit/savepoint
   reads, model/generation/hash freshness, readiness/watch delivery and representative recall/update qualification.
