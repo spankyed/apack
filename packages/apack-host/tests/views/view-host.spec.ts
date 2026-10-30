@@ -132,7 +132,7 @@ describe('views', () => {
 });
 
 
-it('attributes initial view reads to their subscriber and leaves coalesced re-reads without an invented action parent', async () => {
+it('attributes initial reads to their subscriber and links coalesced reads to both writes without an invented parent', async () => {
   views.close();
   const recording = createNodePerformanceController();
   recording.attach(engine, 'app');
@@ -161,5 +161,7 @@ it('attributes initial view reads to their subscriber and leaves coalesced re-re
   expect(reads[0].traceId).toBe(openingTrace);
   expect(writeTraces).not.toContain(reads[1].traceId);
   expect(reads[1].parentSpanId).toBeUndefined();
+  expect(reads[1].links.map((link: { traceId: string }) => link.traceId)).toEqual(writeTraces);
+  expect(reads[1].attributes).toMatchObject({ 'app.coalesced_commits': 2, 'app.unattributed_commits': 0 });
   expect(spans.some(span => span.name === 'ears.read' && span.parentSpanId === reads[0].spanId)).toBe(true);
 });
