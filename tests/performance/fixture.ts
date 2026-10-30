@@ -43,3 +43,17 @@ export function searchFixture() {
     distribution: { threads: 12, messagesPerThread: 100, matchingQueries: 2, matchesPerQuery: 20, resultLimit: 20, bodyRepetitions: 50 },
   } };
 }
+
+/** A fresh conversation per trial keeps input size constant as replies are persisted. */
+export function streamingFixture(trials: number) {
+  const template = threadFixture().data.threads[0]!;
+  const script = { intervalMs: 25, chunks: Array.from({ length: 24 }, (_, index) => `Stream segment ${String(index).padStart(2, '0')} is deterministic. `) };
+  const data = { version: 2, threads: Array.from({ length: trials }, (_, index) => ({
+    ...template, id: `Thread-stream-${index}`, topic: `Streaming fixture ${index}`, messages: template.messages.slice(0, 20),
+  })) };
+  return { data, script, identity: {
+    generator: 'streaming-conversations-v1', seed: 0,
+    sha256: createHash('sha256').update(JSON.stringify({ data, script })).digest('hex'),
+    distribution: { threads: trials, historyMessagesPerThread: 20, scriptedChunks: script.chunks.length, intervalMs: script.intervalMs, bodyRepetitions: 50 },
+  } };
+}

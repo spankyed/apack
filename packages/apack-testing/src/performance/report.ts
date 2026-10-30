@@ -41,8 +41,13 @@ export const trialSchema = z.object({
   outcome: z.enum(['passed', 'failed', 'incomplete', 'cancelled']), durationMs: z.number().finite().nonnegative().optional(),
   correct: z.boolean(), completion: z.enum(['view-ready', 'missing']),
   work: z.record(z.string().max(64), count),
+  timings: z.object({ firstVisibleMs: z.number().finite().nonnegative(), maxVisibleGapMs: z.number().finite().nonnegative() }).optional(),
   processes: z.record(z.string(), processReportSchema), failure: z.string().max(128).optional(),
 }).superRefine((trial, ctx) => {
+  if (trial.scenario === 'streaming' && trial.outcome === 'passed' && (!trial.timings || trial.timings.firstVisibleMs >= (trial.durationMs ?? 0)
+    || trial.timings.maxVisibleGapMs > (trial.durationMs ?? 0) || (trial.work.visibleUpdates ?? 0) < 2)) {
+    ctx.addIssue({ code: 'custom', message: 'Streaming requires intermediate progress and bounded milestone timings' });
+  }
   if (trial.outcome === 'passed' && (!trial.correct || trial.completion !== 'view-ready' || trial.durationMs === undefined
     || Object.keys(trial.processes).length < 2 || Object.values(trial.processes).some(report => !report.complete))) {
     ctx.addIssue({ code: 'custom', message: 'Passing trial requires correct view readiness and complete process reports' });
