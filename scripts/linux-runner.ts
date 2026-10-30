@@ -118,6 +118,13 @@ const CONTAINER_CACHES = [
  * A file is written by the run, so one sync makes any volume identifiable, however old.
  */
 const CHECKOUT_FILE = '.apack-checkout';
+/** Whose elmdb volume this is, as `CHECKOUT_FILE` says whose work volume: the elmdb checkout it copies */
+const ELMDB_CHECKOUT_FILE = '.apack-elmdb-checkout';
+/**
+ * What Docker must have free before a run starts. A run's sync, install and builds grow its volumes by several GB, and
+ * a disk that fills mid-run fails it with errors that name neither the disk nor what holds it
+ */
+const DOCKER_FREE_FLOOR_GB = 8;
 
 const docker = (args: string[], stdio: 'inherit' | 'pipe' = 'pipe') => spawnSync('docker', args, { stdio, encoding: 'utf8' });
 
@@ -141,7 +148,7 @@ if (docker(['image', 'inspect', IMAGE]).status !== 0) {
 }
 
 /**
- * Work volumes whose checkout is gone.
+ * Work and elmdb volumes whose checkout is gone.
  *
  * A volume is keyed by a hash of the checkout's path, so nothing could tell an abandoned volume from a live one
  * — a deleted worktree's `node_modules` and platform builds simply stayed for ever, and one of them reached
@@ -157,15 +164,32 @@ if (docker(['image', 'inspect', IMAGE]).status !== 0) {
 function pruneAbandonedVolumes(): void {
   const listed = docker(['volume', 'ls', '--format', '{{.Name}}']);
   if (listed.status !== 0) return;
-  const mine = WORK_VOLUME;
+  const kinds = [
+    { prefix: 'apack-linux-work-', mine: WORK_VOLUME, file: CHECKOUT_FILE, what: 'work' },
+    { prefix: 'apack-linux-elmdb-', mine: ELMDB_VOLUME, file: ELMDB_CHECKOUT_FILE, what: 'elmdb' },
+  ];
   for (const name of listed.stdout.split('\n').map((line) => line.trim())) {
-    if (!name.startsWith('apack-linux-work-') || name === mine) continue;
-    const read = docker(['run', '--rm', ...RESOURCE_LIMITS, '-v', `${name}:/work:ro`, IMAGE, 'cat', `/work/${CHECKOUT_FILE}`]);
+    const kind = kinds.find(({ prefix }) => name.startsWith(prefix));
+    if (kind === undefined || name === kind.mine) continue;
+    const read = docker(['run', '--rm', ...RESOURCE_LIMITS, '-v', `${name}:/volume:ro`, IMAGE, 'cat', `/volume/${kind.file}`]);
     const checkout = read.status === 0 ? read.stdout.trim() : '';
     if (!checkout || fs.existsSync(checkout)) continue;
     if (docker(['volume', 'rm', name]).status === 0) {
-      process.stderr.write(`Removed the container work volume of ${checkout}, which no longer exists.\n`);
+      process.stderr.write(`Removed the container ${kind.what} volume of ${checkout}, which no longer exists.\n`);
     }
+  }
+}
+
+/** Refuses a run Docker hasn't the space for, saying where to see what holds it */
+function refuseWithoutSpace(): void {
+  const read = docker(['run', '--rm', ...RESOURCE_LIMITS, IMAGE, 'df', '-Pk', '/']);
+  const free = Number(read.stdout.trim().split('\n').at(-1)?.split(/\s+/)[3]) / 1024 ** 2;
+  if (read.status !== 0 || !Number.isFinite(free)) refuse(`Could not read Docker's free space: ${read.stderr.trim()}`);
+  if (free < DOCKER_FREE_FLOOR_GB) {
+    refuse([
+      `Docker has ${free.toFixed(1)} GB free, and a run needs ${DOCKER_FREE_FLOOR_GB}.`,
+      'What holds it, volumes by size: docker system df -v. A volume no container uses (LINKS 0) can go: docker volume rm <name>.',
+    ].join('\n'));
   }
 }
 
@@ -183,6 +207,7 @@ function gitDirMount(): string[] {
 }
 
 pruneAbandonedVolumes();
+refuseWithoutSpace();
 
 /**
  * What the chain and its pools tell a step about the run it is part of.
@@ -212,7 +237,7 @@ const sync = [
   '  echo "Waiting for another checkout\'s test:linux run to finish syncing the shared elmdb volume…" >&2',
   '  flock 8',
   'fi',
-  `elmdbChanged=$(rsync -aiO --delete --exclude=/${ELMDB_LOCK} --exclude=/${ELMDB_BUILT} --exclude=/target/ --exclude=node_modules --exclude='*.node' /elmdb-src/ /elmdb/)`,
+  `elmdbChanged=$(rsync -aiO --delete --exclude=/${ELMDB_LOCK} --exclude=/${ELMDB_BUILT} --exclude=/${ELMDB_CHECKOUT_FILE} --exclude=/target/ --exclude=node_modules --exclude='*.node' /elmdb-src/ /elmdb/)`,
   'ln -sfn /elmdb /work/vendor/elmdb',
   'elmdbLock=$(sha256sum /elmdb/package-lock.json | cut -d" " -f1)',
   'if [ "$(cat /elmdb/node_modules/.apack-installed-lock 2>/dev/null)" != "$elmdbLock" ]; then',
@@ -225,6 +250,8 @@ const sync = [
   '  (cd /elmdb && npm run -s build >/dev/null)',
   `  touch /elmdb/${ELMDB_BUILT}`,
   'fi',
+  // Whose volume this is: see ELMDB_CHECKOUT_FILE
+  `printf '%s' ${quote(ELMDB_CHECKOUT)} > /elmdb/${ELMDB_CHECKOUT_FILE}`,
   'exec 8>&-',
   // Whose volume this is, for the prune that cannot otherwise tell: see CHECKOUT_FILE
   `printf '%s' ${quote(REPO_ROOT)} > /work/${CHECKOUT_FILE}`,
