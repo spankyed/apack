@@ -219,7 +219,10 @@ Linux/CI, capped at two CPUs/six GiB/no swap with a quiet admission window; focu
 at `9fbea37d0d`, before the native/ownership/reset changes. Current runtime `a95039a8c7` passes
 [signed installed Preview 41120611981](https://github.com/spankyed/apack/actions/runs/41120611981), including
 both store identities, and Linux/macOS SQLite qualification in [strict run 41120604961](https://github.com/spankyed/apack/actions/runs/41120604961).
-That strict run remains live: producers and integration-2 pass; other shards require polling. Windows fails
+That strict run remains live: producers, both native shards and integration-2 pass; integration-1 still
+requires polling. The app/unit shard fails only its subprocess inventory (three sites recorded versus four).
+The [inventory correction](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-subprocess-inventory/README.md)
+records the actual killed-reset process with its isolation reason; all 14 detector/control cases pass. Windows fails
 its CLI backup step because renaming onto an empty reserved directory is unsupported there. The
 [backup publication correction](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-backup-publication/README.md)
 keeps the POSIX reservation and uses direct directory rename on Windows, with four raced-destination

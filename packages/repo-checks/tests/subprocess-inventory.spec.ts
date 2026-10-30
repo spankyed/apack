@@ -76,9 +76,10 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: 'vue-tsc, which needs the Vue language service that ts.createProgram is not; its two plain tsc spawns became the in-process typecheckPack' },
   'packages/apack-cli/tests/commands/app-install.integration.spec.ts': { calls: 1,
     why: 'macOS ditto creates real release-style ZIPs so installation verifies native extraction, executable permissions and bundle symlinks' },
-  'packages/apack-cli/tests/commands/db.integration.spec.ts': { calls: 3,
+  'packages/apack-cli/tests/commands/db.integration.spec.ts': { calls: 4,
     why: 'the CLI\'s db command against a data dir: it opens LMDB and exits, and neither survives being run in the worker; '
-      + 'and a process holding the database open to write, as a running app does, which one process can\'t be to itself' },
+      + 'and a process holding the database open to write, as a running app does, which one process can\'t be to itself; '
+      + 'reset is killed after primary clear and before history deletion to prove real process-death lock reclamation and retry without killing the test worker' },
   'packages/apack-cli/tests/commands/release.integration.spec.ts': { calls: 1,
     why: 'git, in a throwaway repository' },
   'packages/apack-cli/tests/_support/run-command.ts': { calls: 1,
