@@ -2,7 +2,7 @@ import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import type { z } from 'zod';
 import { expect, it } from 'vitest';
-import { assertComparable, comparisonOrder, manifestSchema, processReportSchema, summarize, trialSchema, validatePerformanceRun } from '../../src/performance/report.ts';
+import { assertComparable, comparisonOrder, manifestSchema, processReportSchema, summarize, streamingBacklog, trialSchema, validatePerformanceRun } from '../../src/performance/report.ts';
 const processReport = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
 const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', work: {}, processes: { renderer: processReport, backend: processReport } };
@@ -77,4 +77,14 @@ it('preserves process statistics across the portable schema and rejects conceale
   expect(parsed.processStatistics).toEqual(report.processStatistics);
   expect(parsed.processStatistics).toBeDefined();
   expect(processReportSchema.safeParse({ ...report, processStatisticsFailures: 1 }).success).toBe(false);
+});
+
+it('retains bounded raw streaming backlog, detects clock uncertainty and refuses incomplete progress', () => {
+  const produced = [{ epochMs: 1, chars: 10 }, { epochMs: 2, chars: 20 }, { epochMs: 3, chars: 30 }];
+  const received = [{ epochMs: 2, chars: 10 }, { epochMs: 4, chars: 30 }];
+  expect(streamingBacklog(produced, received, 30)).toMatchObject({ maxPendingChars: 10, clockOrderMismatches: 0, produced, received });
+  expect(streamingBacklog(produced, [{ epochMs: 0, chars: 10 }, { epochMs: 4, chars: 30 }], 30).clockOrderMismatches).toBe(1);
+  expect(() => streamingBacklog(produced, received.slice(0, 1), 30)).toThrow(/Incomplete/);
+  expect(() => streamingBacklog(produced, [received[1], received[0]], 30)).toThrow();
+  expect(() => streamingBacklog(Array(65).fill(produced[0]), received, 30)).toThrow();
 });

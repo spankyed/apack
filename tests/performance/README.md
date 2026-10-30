@@ -36,7 +36,10 @@ chat flow, process protocol, throttled writer and message views. A fresh twenty-
 per trial keeps history size constant. The fixture emits twenty-four chunks at fixed intervals.
 Completion requires visible intermediate progress and the complete reply plus completion timestamp in
 its database-backed view and DOM. Reports retain first-visible and maximum visible-update-gap timings;
-they do not yet establish provider-to-database backlog or overhead. No network/model service is called.
+backlog reports additionally retain bounded producer-enqueue and database-backed-view receipt
+progress. Pending UTF-16 code units at receipt use approximate epoch alignment; clock-order mismatches
+remain explicit. This is pipeline backlog, not database commit latency. Missing/incomplete progress
+fails the scenario. No overhead has been established. No network/model service is called.
 
 Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 

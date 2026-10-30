@@ -172,7 +172,16 @@ scope even though thread opening is the first vertical implementation slice.
 - Node recording now has aggregate CPU, sampled RSS/heap maxima, GC and event-loop observations using
   constant memory. Disabled mode starts no sampler. Timers/observers stop with recording; failed samples
   remain explicit and make capture incomplete. Host lifecycle/fault tests and portable-schema roundtrip
-  pass, as do affected host/testing/API/test-root types. Built-app integration of these totals is pending.
+  pass, as do affected host/testing/API/test-root types. On `c3ac8b6fde`, Linux passed all 18 focused diagnostics tests, six populated startup launches
+  and the default five-warmup/twenty-measured thread-open run. Both retained runs have clean source/
+  native provenance, complete captures and backend statistics in every trial:
+  `populated-startup-lightweight-1793392828133`, `thread-open-lightweight-1793392911873`.
+
+- Streaming backlog implementation retains at most 64 producer/receipt points per trial (counts and
+  epoch timestamps only). It computes pending UTF-16 code units at database-backed view receipt in
+  linear time, records clock-order mismatches and preserves both raw timelines. It explicitly does not
+  claim database commit latency. Missing/incomplete/bounded-out capture fails the scenario; fixture
+  script changes enter its identity. Focused tests/types/API reports pass; built-app proof is pending.
 
 ## Required remaining work
 
