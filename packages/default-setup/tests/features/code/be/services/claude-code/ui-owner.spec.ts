@@ -48,3 +48,10 @@ it('keeps ordinary print ownership but never redirects an Agent target to print'
   vi.mocked(store.getConversation).mockReturnValue({ owner } as ReturnType<typeof store.getConversation>)
   expect(getClaudeUiOwner('thread')).toBe(owner); expect(getClaudeUiOwner('thread', target)).toBeUndefined()
 })
+
+it('does not attach conversation UI after the original owner has a durable background continuation', () => {
+  const { state, request } = native()
+  state.view = { kind: 'main', revision: 3 }
+  state.continuation = { sessionId: state.sessionId, continuedInSessionId: 'child', timestamp: '2026-10-30T06:23:31.038Z' }
+  expect(getClaudeUiOwner('thread')).toBeUndefined(); expect(request).not.toHaveBeenCalled()
+})

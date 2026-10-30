@@ -272,15 +272,20 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         changed()
       } finally { operatingMcpForm = false; finish() }
     }
+    let backgroundState: ClaudeNativeTerminalState | undefined
+    const currentState = (): ClaudeNativeTerminalState => ({ handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks })
+    const readState = (): ClaudeNativeTerminalState => backgroundState
+      ? { ...backgroundState, status: closed ? status : backgroundState.status, exitCode }
+      : currentState()
     return {
-      get state() { return { handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks } },
-      get modelSelection() { return bridge.session.metadata?.modelSelection ?? modelSelection },
-      get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
+      get state() { return readState() },
+      get modelSelection() { return backgroundState ? backgroundState.session?.modelSelection ?? modelSelection : bridge.session.metadata?.modelSelection ?? modelSelection },
+      get busy() { return !closed && !backgroundState && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
       get records() { return bridge.session.records },
       uiTransport,
       async refreshMcpInput() {
-        if (closed || !bridge.ready || operatingMcpForm) return
+        if (closed || continuation || !bridge.ready || operatingMcpForm) return
         const epoch = mcpFormEpoch
         try {
           const result = await bridge.uiTransport.request({ subtype: 'apack_mcp_input' }) as { form?: unknown; url?: unknown }
@@ -310,7 +315,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         } finally { cancellingMcpForm = false }
       },
       async refreshNotice() {
-        if (closed || !bridge.ready && !bridge.nativePid) return
+        if (closed || continuation || !bridge.ready && !bridge.nativePid) return
         const sessionId = bridge.projection.sessionId
         const result = await bridge.uiTransport.request({ subtype: 'apack_native_notice' }) as { notice?: unknown; retirements?: unknown; handoffPending?: unknown }
         if (closed || sessionId !== bridge.projection.sessionId) return
@@ -338,7 +343,20 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         const batch = await readJournal(bridge.transcripts, { final: closed })
         for (const entry of batch.entries) {
           const nextContinuation = parseClaudeNativeContinuation(entry.row, bridge.projection.sessionId)
-          if (nextContinuation) continuation = nextContinuation
+          if (nextContinuation && !continuation) {
+            continuation = nextContinuation
+            // The native agents screen owns later runtime state; this owner retains the
+            // completed parent's identity and history until a separate attachment is chosen.
+            backgroundState = { ...currentState(), sessionId: continuation.sessionId, continuation,
+              handoffPending: false, busy: false, activity: undefined, tasks: [], view: undefined,
+              mcpForm: undefined, mcpUrl: undefined, notice: undefined, preview: undefined, billing: undefined, mainStatus: undefined }
+            mcpForm = undefined; mcpUrl = undefined; notice = undefined; mcpFormEpoch++
+            changed()
+          }
+          if (backgroundState && entry.sessionId === backgroundState.sessionId && backgroundState.session
+            && entry.row.type === 'cost-state' && typeof entry.row.totalCostUSD === 'number' && Number.isFinite(entry.row.totalCostUSD) && entry.row.totalCostUSD >= 0) {
+            backgroundState = { ...backgroundState, session: { ...backgroundState.session, totalCostUsd: Math.max(backgroundState.session.totalCostUsd ?? 0, entry.row.totalCostUSD) } }
+          }
           const metadata = bridge.session.metadata
           if (entry.sessionId !== bridge.projection.sessionId || !metadata) continue
           if (entry.row.type === 'cost-state' && typeof entry.row.totalCostUSD === 'number' && Number.isFinite(entry.row.totalCostUSD) && entry.row.totalCostUSD >= 0) {
@@ -349,7 +367,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
             if (mode.success) bridge.session.update({ ...metadata, permissionMode: mode.data })
           }
         }
-        return batch
+        const parentSessionId = backgroundState?.sessionId
+        return parentSessionId ? { ...batch, entries: batch.entries.filter(entry => entry.sessionId === parentSessionId) } : batch
       }, done,
       beforeRelease(listener) {
         if (releasing) throw new Error('Native terminal has already started releasing its owner')
