@@ -125,7 +125,9 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
         expect(await snapshot(editor)).toEqual(beforeReading);
       }
     }
-    await editor.locator('p').filter({hasText:'Review behavior changes.'}).click();await editor.press('Home');await editor.press('Shift+ArrowRight');await editor.press('Shift+ArrowRight');
+    // Wheel input is asynchronous; finish reading before starting a fresh selection.
+    await area.evaluate(element=>new Promise<void>((resolve,reject)=>{let previous=element.scrollTop,stable=0;const started=performance.now();const frame=()=>{const current=element.scrollTop;stable=current===previous?stable+1:0;previous=current;if(stable>=6)resolve();else if(performance.now()-started>1000)reject(Error('Draft reading scroll did not settle'));else requestAnimationFrame(frame)};requestAnimationFrame(frame)}));
+    await editor.locator('p').filter({hasText:'Review behavior changes.'}).click();await editor.press('Home');await editor.press('Shift+ArrowRight');await editor.press('Shift+ArrowRight');await editor.press('Shift+ArrowRight');
     await expect(appPage.locator('.bubble-menu:visible')).toHaveCount(1);
   }
   try{
