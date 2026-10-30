@@ -724,6 +724,17 @@ function restoreNativePlanContext(n,context,sessionId){
  }
  planContextRestored=true;
 }
+async function readNativeNoticeSnapshot(n){
+  const policy=nativeManagedSecurity(n);if(policy.item)return {notice:await projectNativeManagedSecurity(n,policy),retirements:policy.startup?[]:nativeRefusalRetirements(n,policy.store)};if(policy.startup)return {notice:null,retirements:[]};
+  const refusal=nativeRefusal(n);await restoreNativeRefusalDraft(n,refusal.store);refusal.retirements=nativeRefusalRetirements(n,refusal.store);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal),retirements:refusal.retirements};
+  const network=nativeSandboxNetwork(n);if(network.item)return {notice:await projectNativeSandboxNetwork(n,network),retirements:refusal.retirements};
+  const compact=nativeAutocompactOffer(n);if(compact.item)return {notice:await projectNativeAutocompactOffer(n,compact),retirements:refusal.retirements};
+  const goal=nativeGoalProposal(n);if(goal.item)return {notice:await projectNativeGoalProposal(n,goal),retirements:refusal.retirements};
+  const agentsReview=nativeLeftArrowReview(n);if(agentsReview.item)return {notice:projectNativeLeftArrow(n,agentsReview),retirements:refusal.retirements};
+  const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
+  const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
+  const d=nativeBillingNotice(n);return {retirements:refusal.retirements,notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
+ }
 async function control(request,abort){
  const n=await initialize();
  if(request.subtype==='apack_checkpoint_cost')return checkpointNativeCost(n,request.session_id);
@@ -786,23 +797,14 @@ async function control(request,abort){
   if(!d.item||request.id!==d.item.id||request.revision!==d.revision||request.session_id!==d.sessionId)throw Error('Native plan changed or expired');
   await answerPlan(n,d,request);dialogRevisions.delete(d.item.kind);return {answered:true};
  }
- if(request.subtype==='apack_native_notice'){
-  const policy=nativeManagedSecurity(n);if(policy.item)return {notice:await projectNativeManagedSecurity(n,policy),retirements:policy.startup?[]:nativeRefusalRetirements(n,policy.store)};if(policy.startup)return {notice:null,retirements:[]};
-  const refusal=nativeRefusal(n);await restoreNativeRefusalDraft(n,refusal.store);refusal.retirements=nativeRefusalRetirements(n,refusal.store);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal),retirements:refusal.retirements};
-  const network=nativeSandboxNetwork(n);if(network.item)return {notice:await projectNativeSandboxNetwork(n,network),retirements:refusal.retirements};
-  const compact=nativeAutocompactOffer(n);if(compact.item)return {notice:await projectNativeAutocompactOffer(n,compact),retirements:refusal.retirements};
-  const goal=nativeGoalProposal(n);if(goal.item)return {notice:await projectNativeGoalProposal(n,goal),retirements:refusal.retirements};
-  const agentsReview=nativeLeftArrowReview(n);if(agentsReview.item)return {notice:projectNativeLeftArrow(n,agentsReview),retirements:refusal.retirements};
-  const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
-  const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
-  const d=nativeBillingNotice(n);return {retirements:refusal.retirements,notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
- }
+ if(request.subtype==='apack_native_agents_gesture')return await dispatchNativeAgentsGesture(n,request);
+ if(request.subtype==='apack_native_notice')return {...await readNativeNoticeSnapshot(n),handoffPending:nativeAgentsParkState(n)};
  if(request.subtype==='apack_answer_native_notice'){
   abort.signal.throwIfAborted();
   if(['policy_approve','policy_reject'].includes(request.decision)){await answerNativeManagedSecurity(n,request);return {answered:true};}
   if(['compact_previous','compact_next','compact_accept','compact_keep','compact_dismiss'].includes(request.decision)){await answerNativeAutocompactOffer(n,request,abort);return {answered:true};}
   if(['sandbox_allow','sandbox_remember','sandbox_deny','sandbox_cancel'].includes(request.decision)){answerNativeSandboxNetwork(n,request);return {answered:true};}
-  if(['background_confirm','background_stay'].includes(request.decision)){await answerNativeLeftArrow(n,request);return {answered:true};}
+  if(['background_confirm','background_stay'].includes(request.decision)){await answerNativeLeftArrow(n,request);return {answered:true,handoffPending:nativeAgentsParkState(n)};}
   if(['goal_accept','goal_decline'].includes(request.decision)){answerNativeGoalProposal(n,request);return {answered:true};}
   if(['retry_fallback','edit_prompt','cancelled'].includes(request.decision)){answerNativeRefusal(n,request);return {answered:true};}
   if(['yes','no','disable'].includes(request.decision)&&nativePluginHint(n).item){answerNativePluginHint(n,request);return {answered:true};}
@@ -1067,7 +1069,7 @@ async function control(request,abort){
   for(const [key,frame] of toolGroupFrames)if(frame.clientId===clientId)toolGroupFrames.delete(key);
   terminalPlacementSeen.delete(clientId);for(const[key]of terminalPlacementFrames)if(JSON.parse(key)[0]===clientId)terminalPlacementFrames.delete(key);
   composerSeen.delete(clientId);composerClocks.delete(clientId);for(const [key,frame] of composerFrames)if(frame.clientId===clientId)composerFrames.delete(key);
-  const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
+  agentsGestureSequences.delete(clientId);const detached=clients.delete(clientId);if(detached)await n.session.d2t(clientId,'detach');
   if(!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.length))restoreHosts(n);
   return {detached,surfaces:n.runtime.lY()};
  }

@@ -29,6 +29,9 @@ export interface ClaudeNativeFocusProjection {
 }
 
 export interface ClaudeNativeTerminalState {
+  /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
+  handoffPending?: boolean
+
   /** Available after the native dialog store has been observed; retained through owned shutdown. */
   messageRetirements?: import('./native-notice.ts').ClaudeNativeMessageRetirements
   mcpUrl?: import('./native-mcp-url.ts').ClaudeNativeMcpUrl

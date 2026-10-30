@@ -10,7 +10,7 @@ async function fixture() {
   f.spawn.mockImplementation(() => ({ pid: 0, onData() {}, onExit(callback: typeof exit) { exit = callback }, kill() { exit({ exitCode: 0 }) } }))
   const prepared = await prepareClaudeNativeTerminal({ sessionId: f.projection.sessionId, cwd: tmpdir(), cliPath: process.execPath, permissionMode: 'default', settings: { effective: {}, sources: [] } }), owner = await prepared.start()
   const notice = { id: 'original', revision: randomUUID(), sessionId: f.projection.sessionId, kind: 'autocompact_offer' as const, title: 'Autocompact sooner?', paragraphs: ['Original explanation'], selectedTokens: 400000, canPrevious: true, canNext: true, choices: [{ value: 'compact_keep' as const, label: 'Keep auto' }, { value: 'compact_accept' as const, label: 'Autocompact at 400k' }] }
-  f.request.mockResolvedValueOnce({ notice, retirements: [] }); await owner.refreshNotice()
+  f.request.mockResolvedValueOnce({ notice, handoffPending: false, retirements: [] }); await owner.refreshNotice()
   const request = { id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision: 'compact_next' as const }
   return { prepared, owner, notice, request }
 }
@@ -22,7 +22,7 @@ it('keeps the current card mounted until a size-only action receives the fresh n
     const action = owner.answerNotice(request); await vi.waitFor(() => expect(resolve).toBeTypeOf('function'))
     expect(owner.state.notice).toEqual(notice)
     const next = { ...notice, revision: randomUUID(), selectedTokens: 500000, canNext: false }
-    resolve({ notice: next, retirements: [] }); await action
+    resolve({ notice: next, handoffPending: false, retirements: [] }); await action
     expect(owner.state.notice).toEqual(next)
   } finally { await prepared.dispose() }
 })
@@ -51,9 +51,21 @@ it('reads startup policy consent only after the original observer owns the proce
     await owner.refreshNotice(); expect(f.request).not.toHaveBeenCalled()
     f.nativePid = 12345
     const policy = { id: notice.id, revision: randomUUID(), sessionId: notice.sessionId, kind: 'managed_settings_security', title: 'Managed settings require approval', paragraphs: ['Original introduction', 'Original changes', 'Original advice', 'Original risks'], paragraphsAnsi: ['Original introduction', 'Original changes', 'Original advice', 'Original risks'], preferredChoice: 'policy_approve', choices: [{ value: 'policy_approve', label: 'Yes, I trust these settings' }, { value: 'policy_reject', label: 'No, exit Claude Code' }] }
-    f.request.mockResolvedValueOnce({ notice: policy, retirements: [] })
+    f.request.mockResolvedValueOnce({ notice: policy, handoffPending: false, retirements: [] })
     await owner.refreshNotice()
     expect(owner.state.notice).toEqual(policy)
     expect(f.request).toHaveBeenCalledExactlyOnceWith({ subtype: 'apack_native_notice' })
+  } finally { await prepared.dispose() }
+})
+
+it('refuses parent submission during original park progress and restores it after Stay', async () => {
+  const { prepared, owner, notice } = await fixture()
+  try {
+    const review = { ...notice, kind: 'left_arrow_confirm', preferredChoice: 'background_confirm', choices: [{ value: 'background_stay', label: 'Stay' }, { value: 'background_confirm', label: 'Background anyway' }] }
+    f.request.mockResolvedValueOnce({ notice: review, handoffPending: true, retirements: [] }); await owner.refreshNotice()
+    expect(owner.state.handoffPending).toBe(true)
+    f.request.mockClear(); await expect(owner.submit('Retained notes', [])).rejects.toThrow('moving to the background'); expect(f.request).not.toHaveBeenCalled()
+    f.request.mockResolvedValueOnce({ answered: true, handoffPending: false }); await owner.answerNotice({ id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision: 'background_stay' })
+    expect(owner.state.handoffPending).toBe(false); expect(owner.state.notice).toBeUndefined()
   } finally { await prepared.dispose() }
 })

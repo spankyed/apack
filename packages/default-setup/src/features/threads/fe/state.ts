@@ -1613,6 +1613,7 @@ const threadsState = setup({
     CLAUDE_UI_PANE: { actions: ({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
     } },
+    CLAUDE_UI_AGENTS_GESTURE: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_UI_BACKGROUND_REVIEW: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_UI_SETTINGS: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
     CLAUDE_UI_COMMAND_PANEL: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
