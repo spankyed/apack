@@ -28,7 +28,7 @@ export function comparisonOrder(perRevision?: number): Array<'A' | 'B'>;
 
 // @public
 export function createPerformanceRunStore(directory: string, manifestInput: unknown, measured: number): {
-    save: (invocations?: z.infer<typeof indexSchema>["invocations"]) => void;
+    save: (invocations?: readonly PerformanceInvocation[]) => void;
     append(input: unknown): {
         scenario: "search" | "thread-open" | "streaming" | "populated-startup";
         index: number;
@@ -133,6 +133,18 @@ export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture'
     warmups: number;
     clock: "Local monotonic durations; cross-process epoch alignment is approximate";
 };
+
+// @public
+export interface PerformanceInvocation {
+    // (undocumented)
+    exitCode: number | null;
+    // (undocumented)
+    index?: number;
+    // (undocumented)
+    phase: string;
+    // (undocumented)
+    signal: string | null;
+}
 
 // @public (undocumented)
 export type PerformanceManifest = z.infer<typeof manifestSchema>;

@@ -9,6 +9,14 @@ import { chromeTrace, manifestSchema, summarize, trialSchema, type PerformanceMa
 export const PERFORMANCE_TRIAL_BYTES = 128 * 1024 * 1024;
 export const PERFORMANCE_RUN_BYTES = 4 * 1024 * 1024 * 1024;
 const INDEX_BYTES = 1024 * 1024;
+
+/** Child process lifecycle retained independently of successful application assertions. */
+export interface PerformanceInvocation {
+  phase: string;
+  index?: number;
+  exitCode: number | null;
+  signal: string | null;
+}
 const sampleSchema = z.object({ scenario: trialSchema.shape.scenario, index: z.number().int().nonnegative(), warmup: z.boolean(),
   outcome: trialSchema.shape.outcome, durationMs: z.number().finite().nonnegative().optional(),
   correct: z.boolean(), completion: z.enum(['view-ready', 'missing']), failure: z.string().max(128).optional() });
@@ -39,7 +47,7 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
   let scenario: PerformanceTrial['scenario'] | undefined;
   let exportFailed = false;
   let exportPending = false;
-  function save(invocations?: z.infer<typeof indexSchema>['invocations']) {
+  function save(invocations?: readonly PerformanceInvocation[]) {
     const lifecycleFailed = invocations?.some(item => item.exitCode !== 0) ?? false;
     const complete = records.length === manifest.warmups + measured;
     const failed = exportFailed || records.some(record => record.sample.outcome !== 'passed') || lifecycleFailed;
