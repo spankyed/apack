@@ -200,8 +200,33 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         throw error
       }
     }
+    async function recordBackgroundReading(stage:string,size:string){
+      const metric=await composer.evaluate(element=>{
+        const box=(node:Element)=>{const r=node.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}}
+        const textRects:any[]=[],walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT)
+        while(walker.nextNode()){
+          const node=walker.currentNode;if(!node.textContent?.trim())continue
+          const range=document.createRange();range.selectNodeContents(node)
+          for(const r of range.getClientRects())if(r.width>0&&r.height>0)textRects.push({left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height,hit:element.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})
+        }
+        const clippingRects:any[]=[];let ancestor=element.parentElement
+        while(ancestor){const style=getComputedStyle(ancestor);if([style.overflowX,style.overflowY].some(value=>['hidden','auto','scroll','clip'].includes(value)))clippingRects.push(box(ancestor));ancestor=ancestor.parentElement}
+        return {text:element.textContent,textRects,clippingRects,editor:box(element.closest('[data-testid="composer-editor-area"]')!),viewport:{width:innerWidth,height:innerHeight}}
+      })
+      observations.backgroundCombinedLayout??=[];observations.backgroundCombinedLayout.push({stage,size,...metric})
+      expect(metric.text).toBe(retainedDraft);expect(metric.editor.height).toBeGreaterThanOrEqual(39);expect(metric.textRects.length).toBeGreaterThan(0)
+      for(const r of metric.textRects){
+        expect(r.hit).toBe(true)
+        for(const clip of [{left:0,top:0,right:metric.viewport.width,bottom:metric.viewport.height},...metric.clippingRects]){expect(r.left).toBeGreaterThanOrEqual(clip.left-1);expect(r.right).toBeLessThanOrEqual(clip.right+1);expect(r.top).toBeGreaterThanOrEqual(clip.top-1);expect(r.bottom).toBeLessThanOrEqual(clip.bottom+1)}
+      }
+    }
     if(parentOwnerLoss){
       const beforeWorker=await childProcessState(),beforeParent=await context()
+      await widget.getByRole('button',{name:'Reply',exact:true}).click()
+      const liveReply=widget.getByLabel('Message background session',{exact:true})
+      await liveReply.fill('Focus the background review on migration examples.')
+      for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await liveReply.scrollIntoViewIfNeeded();await recordBackgroundReading('live-parent-draft',name);await capture('apack-native-background-live-parent-draft-'+name+'.png')}
+      await widget.getByRole('button',{name:'Reply',exact:true}).click()
       await section.getByRole('button',{name:'Use native interface',exact:true}).click()
       const stopParent=section.getByRole('button',{name:'Stop session',exact:true})
       await expect(stopParent).toBeVisible()
@@ -264,7 +289,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       const input = widget.getByLabel('Message background session',{exact:true})
       await input.fill(replyText)
       for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
-        await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();await expect(widget.getByRole('button',{name:'Send message',exact:true})).toBeInViewport({ratio:1});await capture('apack-native-background-reply-draft-'+name+'.png')
+        await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();await expect(widget.getByRole('button',{name:'Send message',exact:true})).toBeInViewport({ratio:1});if(parentOwnerLoss)await recordBackgroundReading('draft',name);await capture('apack-native-background-reply-draft-'+name+'.png')
       }
       await widget.getByRole('button',{name:'Send message',exact:true}).click()
       await expect(widget.getByRole('status').filter({hasText:'Message queued'})).toBeVisible({timeout:20000})
@@ -286,7 +311,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       expect(afterReply.messages).toEqual(beforeReply.messages)
       expect((await childProcessState())?.start).toBe(workerBefore?.start)
       for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
-        await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();await capture('apack-native-background-reply-queued-'+name+'.png')
+        await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();if(parentOwnerLoss)await recordBackgroundReading('queued',name);await capture('apack-native-background-reply-queued-'+name+'.png')
       }
       if(childStatus){const info=await readInfo();expect(info.sessionId).toBe(job.sessionId);expect(info.pid).toBe(job.pid);expect(info.observedAt).toBeGreaterThan(observations.childStatus.before.observedAt);observations.childStatus={...observations.childStatus,after:info,parentAfter:afterReply,remountPreserved:true}}
       observations.childReply = {replyText,retainedReply,rows:await childRows(),parentBefore:beforeReply,parentAfter:afterReply,workerBefore,workerAfter:await childProcessState(),queued:true,remountDraftPreserved:true}

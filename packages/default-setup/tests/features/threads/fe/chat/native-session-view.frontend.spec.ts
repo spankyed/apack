@@ -10,16 +10,16 @@ vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativ
 let app: App | undefined
 beforeEach(() => { actor.send.mockClear(); state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
-async function fixture() {
+async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation) {
   const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', busy: false, onActive: active }) }); app.mount(root)
+  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', continuation, busy: false, onActive: active }) }); app.mount(root)
   const mount = actor.send.mock.calls.find(([event]) => event.type === 'CLAUDE_TERMINAL_MOUNT')![0]
   const snapshot: ClaudeTerminalViewSnapshot = { opening: false, output: [], state: { ownerId: 'owner', sessionId: 'session', cwd: '/fixture', status: 'live', busy: false, tasks: [{ id: 'agent-a', name: 'Worker', status: 'running' }], view: { kind: 'agent', revision: 2, registryId: 'registry-a', taskId: 'agent-a' } } }
   function publish(value: ClaudeTerminalViewSnapshot) { state.value = { context: { nativeTerminalViews: { [mount.mountId]: { ...value, threadId: 'thread' } as ClaudeTerminalViewSnapshot } } } }
   publish(snapshot); await nextTick()
-  root.querySelector<HTMLButtonElement>('button')!.click(); await nextTick()
+  Array.from(root.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Use native interface' || button.textContent?.includes('Use native interface'))!.click(); await nextTick()
   const back = Array.from(root.querySelectorAll('button')).find(button => button.textContent?.includes('Back to conversation'))!
-  return { root, active, snapshot, publish, back }
+  return { root, active, snapshot, publish, back, mount }
 }
 it('keeps the native terminal visible until the exact main-view receipt is acknowledged', async () => {
   const f = await fixture(); expect(f.root.textContent).toContain('Viewing Agent · Worker')
@@ -295,4 +295,15 @@ it('keeps left-arrow decisions bound to the rendered native owner and revision',
   publish('owner-b', 'new-revision'); await nextTick(); oldRevisionButton.click(); expect(actor.send).not.toHaveBeenCalled()
   const dialog = root.querySelector('[role="dialog"]')!; dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_NOTICE', ownerId: 'owner-b', notice: { id: 'dialog', revision: 'new-revision', sessionId: 'session', decision: 'background_stay' } }))
+})
+
+it('keeps the parent interface action in the background card bound to this mounted owner',async()=>{
+ const f=await fixture({sessionId:'session',continuedInSessionId:'child',timestamp:'2026-10-30T16:30:00Z'})
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ const open=f.root.querySelector<HTMLButtonElement>('[aria-label="Background Claude session"] [aria-label="Use native interface"]')!
+ expect(open).not.toBeNull();expect(f.root.querySelectorAll('[aria-label="Use native interface"]')).toHaveLength(1)
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,view:{kind:'main',revision:3}}});await nextTick();open.click();await nextTick()
+ expect(actor.send).toHaveBeenLastCalledWith({type:'CLAUDE_TERMINAL_OPEN',threadId:'thread',mountId:f.mount.mountId})
+ Array.from(f.root.querySelectorAll('button')).find(button=>button.textContent==='Stop session')!.click()
+ expect(actor.send).toHaveBeenLastCalledWith({type:'CLAUDE_TERMINAL_CLOSE',threadId:'thread',mountId:f.mount.mountId,ownerId:'owner'})
 })

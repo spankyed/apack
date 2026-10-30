@@ -76,7 +76,7 @@
           />
         </div>
 
-        <p v-if="nativeBackgrounded" role="status" class="px-4 py-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Use the native interface to continue it, or start a new thread.</p>
+        <p v-if="nativeBackgrounded" role="status" class="px-4 py-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Your notes stay here.</p>
         <NativePromptCompletions :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || submitting" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
 
         <div v-if="nativeUi?.composer?.length" class="flex min-w-0 items-end gap-2 px-5">

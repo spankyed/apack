@@ -7,7 +7,7 @@
       <p v-if="panel.session?.waitingFor" class="background-session__detail">{{ panel.session.waitingFor }}</p>
       <p v-if="panel.problem" role="alert" class="background-session__problem">{{ panel.problem }}</p>
     </div>
-    <form v-if="canReply && replyOpen && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" class="background-session__reply" @submit.prevent="reply(panel.target, panel.session)">
+    <form v-if="canReply && replyOpen && panel.session?.pid && ['working','blocked'].includes(panel.session.state)" class="background-session__reply" data-native-background-reply @submit.prevent="reply(panel.target, panel.session)">
       <label :for="replyInputId">Message background session</label>
       <textarea :id="replyInputId" v-model="draft" rows="2" maxlength="32768" :disabled="panel.pending" placeholder="Send a follow-up for the next turn" />
       <div class="background-session__reply-actions">
@@ -20,6 +20,7 @@
       <button v-if="panel.session" type="button" :disabled="panel.pending || attached" @click="openSession(panel.target, panel.session.id)">Open session</button>
       <button type="button" :disabled="panel.pending" @click="operate(panel.target, { operation: 'refresh' })">{{ panel.pending && panel.operation === 'refresh' ? 'Checking…' : 'Refresh status' }}</button>
       <button v-if="panel.session?.pid && ['working', 'blocked'].includes(panel.session.state)" type="button" :disabled="panel.pending" @click="operate(panel.target, { operation: 'stop', id: panel.session.id, pid: panel.session.pid })">Stop background session</button>
+      <slot name="parent-interface" />
     </div>
   </section>
 </template>
@@ -97,4 +98,12 @@ button { min-height: 30px; padding: 5px 9px; border: 1px solid #ffffff1a; border
 button:hover { background: #ffffff08; }
 button:focus-visible { outline: 2px solid #8cabe8; outline-offset: 2px; }
 button:disabled { opacity: .5; }
+@media (max-height: 700px) {
+  .background-session__reply { grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; }
+  .background-session__reply label { grid-column: 1 / -1; }
+  .background-session__reply textarea { grid-column: 1; grid-row: 2; }
+  .background-session__reply-actions { display: contents; }
+  .background-session__reply-actions button { grid-column: 2; grid-row: 2; align-self: end; }
+  .background-session__reply-actions span { grid-column: 1 / -1; grid-row: 3; font-size: 11px; }
+}
 </style>
