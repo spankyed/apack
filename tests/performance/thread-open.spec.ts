@@ -111,10 +111,20 @@ test('open a populated thread through the real transport and render its bounded 
         const reports = await recording.stop();
         return { completed, durationMs, reports, failure, lastDelivery, work };
       }, { mode, thread, expectedBodies: fixture.data.threads[thread]!.messages.slice(50).map(message => message.text.trimEnd()) });
+      // A page may return its bodies, scalar metadata/framing (50% headroom), and 16 KiB of headers.
+      // This is a declared work budget; a full-history read must not pass just because the UI shows fifty rows.
+      const maxAppResponseBytes = Math.ceil(fixture.data.threads[thread]!.messages.slice(50)
+        .reduce((bytes, message) => bytes + Buffer.byteLength(message.text), 0) * 1.5) + 16 * 1024;
+      const appResponseBytes = mode === 'disabled' ? undefined : result.reports.backend?.observations
+        .map(encoded => JSON.parse(encoded) as { name: string; attributes: Record<string, unknown> })
+        .filter(span => span.name === 'ears.read' && span.attributes['ears.database'] === 'app')
+        .reduce((bytes, span) => bytes + Number(span.attributes['ears.response_bytes'] ?? 0), 0);
+      const excessReadWork = appResponseBytes !== undefined && appResponseBytes > maxAppResponseBytes;
+      const work = { ...result.work, maxAppResponseBytes, ...(appResponseBytes !== undefined && { windowAppResponseBytes: appResponseBytes }) };
       trials.push(trialSchema.parse({ scenario: 'thread-open', index, warmup: index < warmups,
-        work: result.work, outcome: result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
-        correct: result.completed, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
-        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: result.failure }));
+        work, outcome: excessReadWork ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
+        correct: result.completed && !excessReadWork, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
+        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: excessReadWork ? 'app-read-work-bound' : result.failure }));
       save();
       expect(trials.at(-1)!.outcome, `Preserved evidence: ${output}`).toBe('passed');
     }
