@@ -925,10 +925,15 @@ updated-only diagnostic retains pause windows and does not replace the full acce
 [Upstream native counters](../references/evidence/ears-sqlite-implementation-2026-10-28/native-query-profile/README.md)
 then identify metadata scanning as about 51–54% of filtered native timer ticks versus 0.14% unfiltered.
 About 665 metadata blocks/query each repeat RHS conversion/allocation. These timer ratios are not CPU time
-or complete EARS call attribution. Before maintaining another native fast path, measure supported larger
-block sizing on a controlled fixed-model copy: fewer blocks might reduce filtering/read overhead, while
-larger rewrites might worsen COMMIT and disk costs. Require unchanged canonical bytes and full scoped
-query/update/recall/resource checks. Deferred COMMIT remains a separate responsiveness requirement.
+or complete EARS call attribution. The [supported larger-block comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
+now completes 16/64/256 KiB on one fixed trained model, with 21,600 queries, verified canonical bytes,
+minimum mean recall 0.973 and exact paired answers. Metadata blocks/query decrease, but every variant still
+fails responsiveness, including the three timed query passes. Pause-overlapping samples remain in the raw
+report; fixed ordering/caches/cumulative RSS prevent causal or isolated-resource claims. No defaults change.
+The smaller next native diagnostic is to binary-search the existing query-owned integer RHS directly for
+compact metadata, avoiding per-block conversion without a bitmap, new allocations or lifetime state. Require
+ordinary-SQLite NULL/full-width/mixed semantics, baseline controls and full scoped query/update/recall/resource
+checks before adoption. Deferred COMMIT and unfiltered scanning remain separate responsiveness requirements.
 Do not discard paused/outlier samples or relax original gates. Supported allocation controls alone have
 not established a solution. Compare write volume, all query scopes/updates/recall, memory and disk before
 adopting any layout. A background worker

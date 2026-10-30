@@ -269,13 +269,19 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: measure supported larger native block sizing on a controlled fixed-model copy, before
-adding another native membership fast path. Dependencies: preserve the closed baseline snapshot/model and
-canonical bytes, bound disposable disk use, retain FULL/default checkpoints and the original query/recall gates.
-Closing checks include admission/COMMIT timing, native block/counter attribution, the complete query/update
-matrix, exact canonical-byte verification and resource/pause windows. A diagnostic cannot substitute for live
-app-owned admission or the remaining app/operational requirements. The SQL/native evidence below narrows the
-query cost; it does not resolve the separate durable-COMMIT responsiveness miss.
+Next checkpoint: test direct compact-integer membership against the existing query-owned sorted RHS,
+before adopting another representation or tuning ANN quality. The [supported-block study](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
+completes 16/64/256 KiB with one fixed trained model: all 21,600 initial/updated queries finish, canonical bytes
+verify, both larger variants reproduce all 7,200 baseline answers, and minimum mean recall is 0.973. All
+variants still fail responsiveness, including the timed-only query gates. Pauses are retained and timings do
+not establish causal layout effects; no default changes. Larger blocks reduce metadata blocks/query but do
+not close the gate. Dependencies for the next native diagnostic: exact pinned baseline source, unchanged
+ordinary-SQLite semantics (including compact NULL sentinels, wide integer RHS and mixed/real lists), no new
+allocation/lifetime/format state, and preserved product artifacts. Closing checks: existing membership controls
+plus boundary cases against both baseline/prototype, then fixed-model actual initial/update query/recall/resource
+proof. Adoption still requires complete EARS, fresh actual-owner, platform/packaging/installed and original app
+gates. The earlier untested bitmap prototype is not selected. Scoped SQL work and durable COMMIT remain
+separate responsiveness costs; a prepared private scope-driven eligibility probe is not yet executed.
 No evidence here certifies arbitrary filesystems or completes the goal.
 
 Independent phase 5 checkpoint: run the broader source UI/app suite with explicit `storage_format=sqlite/1`
@@ -322,8 +328,9 @@ Next deliverables and their closing checks, without narrowing phases 3–7:
   are retained; this updated-only comparison is not full acceptance. [Existing native counters](../references/evidence/ears-sqlite-implementation-2026-10-28/native-query-profile/README.md)
   attribute about 51–54% of filtered native timer ticks to metadata scans, with about 665 metadata blocks/query.
   Whole-list conversion per block remains despite binary-search membership. No cheaper ANN policy or native
-  prototype is adopted. Supported larger block sizing is the next controlled diagnostic, with possible COMMIT
-  write amplification an explicit measured risk. In a later
+  prototype is adopted. The supported larger-block diagnostic above is now complete and insufficient;
+  next test skipping repeated operand conversion through the already-sorted integer RHS, without a bitmap.
+  COMMIT and unfiltered native scanning remain separately required work. In a later
   0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;
   bounded native deletion still needs latency/WAL/resource qualification. FULL writes, canonical bytes,
   default checkpoints and original budgets remain unchanged. Do not relax gates around these results.
