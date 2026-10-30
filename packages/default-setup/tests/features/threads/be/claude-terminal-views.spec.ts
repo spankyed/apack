@@ -479,3 +479,15 @@ it('publishes retained child status to a window without a parent owner and relea
   const count=send.mock.calls.length;updated();expect(send).toHaveBeenCalledTimes(count)
  }finally{views.clear()}
 })
+
+it('recovers background observation once for a mounted view and ignores completion after that view detaches',async()=>{
+ let done!:()=>void
+ const restoreBackground=vi.fn(()=>new Promise<void>(resolve=>{done=resolve})),send=vi.fn()
+ const views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),restoreBackground})
+ try{
+  views.handle(mount,'one',send);views.handle(mount,'one',send)
+  expect(restoreBackground).toHaveBeenCalledExactlyOnceWith('thread')
+  views.handle({...mount,type:'CLAUDE_TERMINAL_UNMOUNT'},'one',send)
+  const count=send.mock.calls.length;done();await Promise.resolve();expect(send).toHaveBeenCalledTimes(count)
+ }finally{views.clear()}
+})

@@ -1,4 +1,4 @@
-import { getNativeBackgroundStatus, subscribeNativeBackgroundStatus } from '#features/code/be/services/claude-code/handle-store.ts';
+import { getNativeBackgroundStatus, subscribeNativeBackgroundStatus, restoreNativeBackgroundStatus } from '#features/code/be/services/claude-code/handle-store.ts';
 import { parseClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts';
 import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
 import { readSavedClaudeNativeLaunch, readClaudePlanRestoreMode } from '#features/code/be/services/claude-code/native-launch.ts';
@@ -38,6 +38,11 @@ const terminalViews = createClaudeTerminalViews({
     return getNativeBackgroundStatus(key, continuation);
   },
   subscribeBackground: subscribeNativeBackgroundStatus,
+  async restoreBackground(key) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode
+    const continuation = state?.sessionId ? parseClaudeNativeContinuation({...state.nativeContinuation,type:'continued-in'},state.sessionId) : undefined
+    if (continuation && typeof state?.cwd === 'string') await restoreNativeBackgroundStatus(key,continuation,state.cwd)
+  },
   async replyBackground(continuation, request, key) {
     const owner = services.cli.claudeCode.getNativeTerminal(key)
     const current = owner?.state.continuation

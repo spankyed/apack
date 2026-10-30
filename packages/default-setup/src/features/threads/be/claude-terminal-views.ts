@@ -126,6 +126,7 @@ export function createClaudeTerminalViews(dependencies: {
   background?(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, threadId: string): Promise<ClaudeBackgroundSession | undefined>
   backgroundInfo?(threadId: string): import('#features/code/common/native-background.ts').ClaudeBackgroundStatus | undefined
   subscribeBackground?(threadId: string, changed: () => void): () => void
+  restoreBackground?(threadId: string): Promise<void>
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
   open(threadId: string, signal: AbortSignal): Promise<ClaudeNativeTerminalOwner>
   accepted?(owner: ClaudeNativeTerminalOwner, receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences): void
@@ -186,6 +187,7 @@ export function createClaudeTerminalViews(dependencies: {
           views.set(key, view)
           const mounted = view
           view.backgroundUnsubscribe = dependencies.subscribeBackground?.(event.threadId, () => publish(key, mounted))
+          void dependencies.restoreBackground?.(event.threadId).then(()=>publish(key,mounted),error=>{if(views.get(key)===mounted){mounted.problem=error instanceof Error?error.message:'Background status recovery failed';publish(key,mounted)}})
         }
         view.send = send; view.expires = Date.now() + 30000
         const owner = dependencies.get(event.threadId)

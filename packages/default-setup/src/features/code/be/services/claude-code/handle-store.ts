@@ -1,3 +1,9 @@
+import {resolveAppEnvironment} from '@apackdev/sdk/env'
+import {resolveForService} from '../../utils/resolve-cli.ts'
+import {buildChildEnv} from './runner.ts'
+import {createClaudeBackgroundStatusAuthority} from './background-status-authority.ts'
+import {claimClaudeBackgroundCheckpoint} from './background-observer-checkpoint.ts'
+import {createClaudeBackgroundStatusObserver} from './background-status-observer.ts'
 import type { ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
 import type { ClaudeNativeContinuation } from './terminal-session.ts'
 import type { ClaudeNativeLaunch } from '../../../common/native-launch.ts'
@@ -19,13 +25,43 @@ const terminalTransitions = new Map<string, AbortController>()
 const terminalResumes = new Map<string, Omit<ClaudeNativeTerminalOptions, 'settings' | 'signal'>>()
 const backgroundObservers = new Map<string, { observer: ClaudeBackgroundStatusObserver; unsubscribe(): void }>()
 const backgroundListeners = new Map<string, Set<() => void>>()
+const backgroundRestores = new Map<string, { identity: string; promise: Promise<void> }>()
 const backgroundChanged = (key: string) => { for (const listener of backgroundListeners.get(key) ?? []) { try { listener() } catch { /* Isolate window leases. */ } } }
 function retireBackground(key: string) {
+  backgroundRestores.delete(key)
   const entry = backgroundObservers.get(key); backgroundObservers.delete(key); entry?.unsubscribe(); void entry?.observer.close().catch(() => {}); backgroundChanged(key)
 }
 export function getNativeBackgroundStatus(key: string, continuation: ClaudeNativeContinuation | undefined) {
   const entry = backgroundObservers.get(key), info = entry?.observer.value
   return continuation && entry?.observer.parentSessionId === continuation.sessionId && info?.sessionId === continuation.continuedInSessionId ? info : undefined
+}
+/** Rebind only an abandoned endpoint of this app profile and persisted native continuation. */
+export function restoreNativeBackgroundStatus(key: string, continuation: ClaudeNativeContinuation, cwd: string): Promise<void> {
+  const retained = backgroundObservers.get(key)?.observer
+  if (retained?.available && retained.parentSessionId === continuation.sessionId) return Promise.resolve()
+  const identity = JSON.stringify([continuation.sessionId, continuation.continuedInSessionId, cwd])
+  const prior = backgroundRestores.get(key)
+  if (prior?.identity === identity) return prior.promise
+  const ticket = { identity, promise: Promise.resolve() }
+  backgroundRestores.set(key, ticket)
+  ticket.promise = (async () => {
+    const profile = resolveAppEnvironment().userDataDir
+    const executable = await resolveForService('claude-code'), env = buildChildEnv()
+    if (backgroundRestores.get(key) !== ticket) return
+    const checkpoint = await claimClaudeBackgroundCheckpoint({profile, parentSessionId:continuation.sessionId})
+    if (!checkpoint) return
+    const observer = await createClaudeBackgroundStatusObserver({
+      parentSessionId:continuation.sessionId, profile, checkpoint,
+      target:()=>({sessionId:continuation.continuedInSessionId,cwd}),
+      authority:parent => createClaudeBackgroundStatusAuthority(parent,{cliPath:executable,cwd,env}), changed:()=>backgroundChanged(key),
+    })
+    if (backgroundRestores.get(key) !== ticket) { await observer.close(); return }
+    const existing = backgroundObservers.get(key)
+    existing?.unsubscribe(); void existing?.observer.close().catch(()=>{})
+    backgroundObservers.set(key,{observer,unsubscribe:observer.subscribe(()=>{if(backgroundObservers.get(key)?.observer===observer)backgroundChanged(key)})})
+    await observer.releaseParent(); backgroundChanged(key)
+  })().finally(()=>{if(backgroundRestores.get(key)===ticket)backgroundRestores.delete(key)})
+  return ticket.promise
 }
 export function subscribeNativeBackgroundStatus(key: string, listener: () => void) {
   let listeners = backgroundListeners.get(key)
@@ -93,7 +129,7 @@ export async function closeIdleConversation(key: string): Promise<boolean> {
   return true
 }
 export function killAllHandles(): void {
-  for (const key of new Set([...activeHandles.keys(), ...conversations.keys(), ...terminals.keys(), ...terminalResumes.keys(), ...starting.keys(), ...backgroundObservers.keys()])) stop(key)
+  for (const key of new Set([...activeHandles.keys(), ...conversations.keys(), ...terminals.keys(), ...terminalResumes.keys(), ...starting.keys(), ...backgroundObservers.keys(), ...backgroundRestores.keys()])) stop(key)
 }
 
 export function storeHandle(key: string, handle: QueryHandle): void {
@@ -168,6 +204,7 @@ export async function openNativeTerminal(key: string, options: ClaudeNativeTermi
   const current = () => !abort.signal.aborted && starting.get(key) === ticket && (previous ? conversations.get(key) === previous && !previous.owner.busy : terminalResumes.get(key) === retained)
   try {
     await draining.get(key)
+    await backgroundRestores.get(key)?.promise
     if (!current()) throw new Error('Claude conversation changed during native terminal handoff')
     let launch: Omit<ClaudeNativeTerminalOptions, 'settings' | 'signal'>, settings: ClaudeNativeTerminalOptions['settings']
     if (previous) {
