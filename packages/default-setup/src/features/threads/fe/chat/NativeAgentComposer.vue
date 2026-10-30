@@ -8,7 +8,7 @@
     </div>
     <NativePromptCompletions :editor="editorRef?.editor" :rows="offers" :disabled="disabled || submitting" @select="(index, id) => bridge?.selectCompletion(index, id)" @dismiss="bridge?.dismissCompletions()" />
     </div>
-    <div class="flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-2">
+    <div class="native-agent-actions flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-2">
       <div class="flex min-w-0 items-center gap-2">
         <button v-if="openSettings" type="button" aria-label="Claude settings" title="Claude settings" :disabled="disabled || submitting" class="shrink-0 rounded-lg p-1.5 text-neutral-400 hover:bg-white/5 hover:text-neutral-200 disabled:opacity-40" @click="openNativeSettings"><Settings2 :size="16" /></button>
         <span class="truncate text-[11px] text-neutral-500">{{ disabled ? 'Agent input unavailable' : 'Enter to send · Shift+Enter for a new line' }}</span>
@@ -190,6 +190,12 @@ onBeforeUnmount(() => {
 .native-agent-composer :deep(.native-strip--open) { min-height: 0; }
 @media (max-height: 700px) {
   .native-agent-composer { margin-bottom: .75rem; }
+  /* Rich drafts need reading space without hiding native status or the transcript. */
+  .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) {
+    max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 9.5rem));
+  }
+  .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) :deep([data-testid="composer-session-strip"]) { padding-block: .25rem; }
+  .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) .native-agent-actions { padding-block: .25rem; }
   .native-agent-composer :deep(.native-agent-editor) { min-height: 2.5rem; padding-block: .5rem; }
 }
 </style>
