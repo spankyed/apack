@@ -287,8 +287,8 @@ EARS.RelKind.TAGGED_WITH  // "tagged_with"
 ```
 
 **A relation kind is declared before anything links with it.** `EARS.RelKind` is the closed union of the pack's
-kinds, its dependencies' and the SDK's, so every place that names a kind — `link`, `unlink`, `out`, `in`,
-`outEdges`, `inEdges`, `linkedTo`, `linkedFrom`, `unlinkedTo`, `unlinkedFrom` — completes the declared ones and refuses a misspelled one at
+kinds, its dependencies' and the SDK's, so every place that names a kind — `link`, `unlink`, `out`, `in`, `both`,
+`descendants`, `ancestors`, `pathTo`, `degrees`, `outEdges`, `inEdges`, `linkedTo`, `linkedFrom`, `unlinkedTo`, `unlinkedFrom` — completes the declared ones and refuses a misspelled one at
 compile time. The engine refuses an undeclared kind at runtime too (`UNKNOWN_RELATION_KIND`), on a read as well as
 a write, since a read naming a kind nothing declared would answer as if no entity had such a link. A kind that
 arrives as data (an event's field, an imported file) is narrowed with `EARS.isRelKind(value)`; `EARS.RELATION_KINDS`
@@ -398,7 +398,7 @@ transact(() => {
 });
 ```
 
-`query.ids(id).out(kinds)` walks to the entities an entity links to and `in(kinds)` to those linking to it; `outEdges(kinds)` and `inEdges(kinds)` return the edges themselves. A relation reads the same wherever it comes from — `outEdges`, `inEdges`, `findRelations` — as `{ id, kind, source, target, info }`: its own id, its kind, its two ends and its `info` (a flow edge's handles). `findRelations` finds relations by any of `kind`, `source` and `target`, and `getSchemaStats().relations` counts each kind's:
+`query.ids(id).out(kinds)` walks to the entities an entity links to, `in(kinds)` to those linking to it and `both(kinds)` to either; `outEdges(kinds)` and `inEdges(kinds)` return the edges themselves, and `degrees(kinds, type?, { direction? })` how many each entity of the query has, as a `Map` from its id. A relation reads the same wherever it comes from — `outEdges`, `inEdges`, `findRelations` — as `{ id, kind, source, target, info }`: its own id, its kind, its two ends and its `info` (a flow edge's handles). `findRelations` finds relations by any of `kind`, `source` and `target`, and `getSchemaStats().relations` counts each kind's:
 
 ```typescript
 import { findRelations, getRelation, removeRelation, getSchemaStats } from '@apackdev/sdk/ears';
@@ -455,9 +455,10 @@ and goes only where the query could reach, so a trashed entity ends it unless th
 |---|---|
 | `query.ids(id).descendants(kind, type?)` | Every entity reachable by following `kind` out of `id`, `id` excluded: its subtree |
 | `query.ids(id).ancestors(kind, type?)` | Every entity reachable by following `kind` into `id`, `id` excluded: in a tree, its parent first and its root last |
+| `query.ids(id).pathTo(to, kind, { direction?, depth? })` | A shortest path from `id` to `to`: its entities in order, both ends included, or none. Edges are followed `out` unless `direction` is `in` or `both` |
 | `wouldCreateCycle(source, target, kinds)` | `true` when `target` already reaches `source`, or is `source`, so linking `source → target` would close a cycle |
 
-`type` keeps the reached entities of that type and walks through the rest. Check `wouldCreateCycle` before moving an
+`type` keeps the reached entities of that type and walks through the rest. `{ depth }`, after `type`, stops a walk that many edges away (`descendants(kind, undefined, { depth: 2 })`), and a path any longer than that is none. Check `wouldCreateCycle` before moving an
 entity under a new parent, or declare the kind `acyclic` in `data.relations` to have the link refused instead. A path to the root
 is `query.ids(id).ancestors(kind).ids().reverse()`.
 
