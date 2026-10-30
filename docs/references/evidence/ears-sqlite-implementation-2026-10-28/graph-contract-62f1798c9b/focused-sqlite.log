@@ -1,0 +1,14 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ✓ tests/engine/relations.spec.ts (29 tests) 2795ms
+ ✓ tests/sqlite/graph-execution.spec.ts (2 tests) 403ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 579ms
+   ✓ rules read off the names > pairs every negation with its positive and every direction with its opposite  341ms
+
+ Test Files  3 passed (3)
+      Tests  38 passed (38)
+   Start at  16:43:06
+   Duration  5.04s (transform 379ms, setup 24ms, collect 760ms, tests 3.78s, environment 0ms, prepare 188ms)
+
+JSON report written to /results/focused-sqlite.json

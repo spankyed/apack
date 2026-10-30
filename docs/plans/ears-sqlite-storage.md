@@ -829,3 +829,18 @@ and seven reverted-safeguard controls. All three platform jobs require 27 specif
 no skips. Local functional evidence does not certify final platform, alias/unmanaged-writer, directory durability
 or performance behavior. Data-file alias enforcement, positive SQLite format identity and quarantine-parent
 synchronization remain existing-phase work before adoption.
+
+
+### Current graph contract
+
+The private structured plan carries `both`, bounded hierarchy walks, shortest `pathTo` and terminal
+`degrees` from the current EARS facade. One-hop adjacency and degree counting execute in SQL against the
+source/target relation indexes; parallel edges count separately, and a self-edge counts twice in both directions.
+Hierarchy and shortest-path execution batch each breadth-first frontier into one SQL read, ordered by seed,
+requested kind, direction and insertion sequence. The driver iterator avoids retaining the complete layer's
+adjacency rows in JavaScript and closes on early path discovery. The frontier, visited set and parent map remain
+proportional to visited vertices; SQLite may also allocate or spill for ordering. This is not a constant-memory
+traversal or a latency qualification. Output-type restriction does not block traversal through other types.
+Graph membership dependencies include intermediate and unchecked repair types so trash/restore/destruction
+cannot leave a path or degree watch stale. Focused contracts compare both backends; final combined-source
+qualification and representative graph performance measurements remain required by the goal.

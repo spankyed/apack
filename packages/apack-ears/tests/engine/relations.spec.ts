@@ -191,6 +191,9 @@ describe('relation kinds', () => {
       ['findRelations', () => e.findRelations({ kind: 'blokcs' })],
       ['descendants', () => e.query.ids(a).descendants('blokcs')],
       ['ancestors', () => e.query.ids(b).ancestors('blokcs')],
+      ['both', () => e.query.ids(a).both('blokcs')],
+      ['pathTo', () => e.query.ids(a).pathTo(b, 'blokcs')],
+      ['degrees', () => e.query.ids(a).degrees('blokcs')],
       ['wouldCreateCycle', () => e.wouldCreateCycle(a, b, ['blokcs'])],
     ];
     for (const [via, read] of reads) expect(read, via).toThrow(expect.objectContaining({ ...unknown, message: expect.stringContaining(`${via}("blokcs")`) }));
@@ -240,6 +243,127 @@ describe('hierarchy walks', () => {
     e.write(mid).trash();
     expect(e.query.ids(leaf).ancestors('child').ids()).toEqual([deep]);
     expect(e.query.withTrashed.ids(leaf).ancestors('child').ids()).toEqual([deep, mid, root]);
+  });
+
+  it('stops at a depth, a count of edges taken as limit takes one', () => {
+    const [a, b, c, d] = [task('a'), task('b'), task('c'), task('d')];
+    e.write(a).link('child', b);
+    e.write(b).link('child', c);
+    e.write(c).link('child', d);
+    expect(e.query.ids(a).descendants('child', undefined, { depth: 1 }).ids()).toEqual([b]);
+    expect(e.query.ids(a).descendants('child', undefined, { depth: 2.9 }).ids()).toEqual([b, c]);
+    expect(e.query.ids(a).descendants('child', undefined, { depth: 0 }).ids()).toEqual([]);
+    expect(e.query.ids(a).descendants('child', undefined, { depth: -1 }).ids()).toEqual([]);
+    expect(e.query.ids(a).descendants('child', undefined, { depth: Infinity }).ids()).toEqual([b, c, d]);
+    expect(e.query.ids(d).ancestors('child', 'Task', { depth: 2 }).ids()).toEqual([c, b]);
+  });
+});
+
+describe('graph walks', () => {
+  it('both follows edges out and in, each far end once', () => {
+    const [a, b, c] = [task('a'), task('b'), task('c')];
+    e.write(a).link('refs', b);
+    e.write(c).link('refs', a);
+    e.write(b).link('refs', a);
+    expect(e.query.ids(a).both('refs').ids()).toEqual([b, c]);
+    expect(e.query.ids(a).both('refs', 'Task').pick(['title'])).toEqual([{ id: b, title: 'b' }, { id: c, title: 'c' }]);
+  });
+
+  it('pathTo answers a shortest path from the set, following edges the way it is told, or none', () => {
+    const [a, b, c, d, x] = [task('a'), task('b'), task('c'), task('d'), task('x')];
+    e.write(a).link('refs', b);
+    e.write(b).link('refs', c);
+    e.write(c).link('refs', d);
+    e.write(a).link('blocks', d);
+    expect(e.query.ids(a).pathTo(d, 'refs').ids()).toEqual([a, b, c, d]);
+    expect(e.query.ids(a).pathTo(d, ['refs', 'blocks']).ids()).toEqual([a, d]);
+    expect(e.query.ids(a).pathTo(d, 'refs', { depth: 2 }).ids()).toEqual([]);
+    expect(e.query.ids(a).pathTo(x, 'refs').ids()).toEqual([]);
+    expect(e.query.ids(d).pathTo(a, 'refs').ids()).toEqual([]);
+    expect(e.query.ids(d).pathTo(a, 'refs', { direction: 'in' }).ids()).toEqual([d, c, b, a]);
+    expect(e.query.ids(c).pathTo(a, 'refs', { direction: 'both' }).pick(['title']).map((r) => r.title)).toEqual(['c', 'b', 'a']);
+    // A trashed entity is walked around, unless the query reaches the trash
+    e.write(b).trash();
+    expect(e.query.ids(a).pathTo(c, 'refs').ids()).toEqual([]);
+    expect(e.query.withTrashed.ids(a).pathTo(c, 'refs').ids()).toEqual([a, b, c]);
+  });
+
+  it("degrees counts each entity's edges as outEdges and inEdges answer them", () => {
+    const [a, b, c] = [task('a'), task('b'), task('c')];
+    const project = e.create('Project').id();
+    e.write(a).link('refs', b).link('refs', c).link('refs', project);
+    e.write(b).link('refs', a);
+    expect(e.query.ids([a, b, c]).degrees('refs')).toEqual(new Map([[a, 3], [b, 1], [c, 0]]));
+    expect(e.query.ids([a, b, c]).degrees('refs', undefined, { direction: 'in' })).toEqual(new Map([[a, 1], [b, 1], [c, 1]]));
+    expect(e.query.ids([a, b, c]).degrees('refs', 'Task', { direction: 'both' })).toEqual(new Map([[a, 3], [b, 2], [c, 1]]));
+    expect(e.query.ids(a).degrees('refs').get(a)).toBe(e.query.ids(a).outEdges('refs').length);
+  });
+});
+
+describe('graph boundary contracts', () => {
+  it('breaks shortest-path ties by seed, kind, direction and insertion order', () => {
+    const [a, b, left, right, goal] = [task('a'), task('b'), task('left'), task('right'), task('goal')];
+    e.write(a).link('refs', left).link('blocks', right);
+    e.write(b).link('refs', right);
+    e.write(left).link('refs', goal);
+    e.write(right).link('refs', goal);
+    expect(e.query.ids([b, a]).pathTo(goal, ['refs', 'blocks']).ids()).toEqual([b, right, goal]);
+    expect(e.query.ids(a).pathTo(goal, ['blocks', 'refs']).ids()).toEqual([a, right, goal]);
+    expect(e.query.ids(a).pathTo(goal, ['refs', 'blocks']).ids()).toEqual([a, left, goal]);
+    // The incoming edge was inserted first, but outgoing wins within each kind.
+    e.write(right).link('child', a);
+    e.write(a).link('child', left);
+    expect(e.query.ids(a).both('child').ids()).toEqual([left, right]);
+    expect(e.query.ids(a).pathTo(goal, ['child', 'refs'], { direction: 'both' }).ids()).toEqual([a, left, goal]);
+  });
+
+  it('keeps zero-edge paths and excludes every original seed from bounded reachability', () => {
+    const [a, b, c] = [task('a'), task('b'), task('c')];
+    e.write(a).link('refs', b);
+    e.write(b).link('refs', c);
+    e.write(c).link('refs', a);
+    expect(e.query.ids([a, b]).descendants('refs', undefined, { depth: 1 }).ids()).toEqual([c]);
+    expect(e.query.ids([a, b]).descendants('refs').ids()).toEqual([c]);
+    expect(e.query.ids([a, b]).pathTo(b, [], { depth: 0 }).ids()).toEqual([b]);
+    expect(e.query.ids(a).pathTo(c, 'refs', { depth: 0 }).ids()).toEqual([]);
+    expect(e.query.ids(a).descendants('refs', undefined, { depth: NaN }).ids()).toEqual([]);
+    expect(e.query.ids(a).descendants('refs', undefined, { depth: 2 ** 32 }).ids()).toEqual([b, c]);
+  });
+
+  it('counts parallel and unchecked self edges, repeated kinds, and empty neighborhoods', () => {
+    const [a, b, loose] = [task('a'), task('b'), task('loose')];
+    const project = e.create('Project').id();
+    e.write(a).link('refs', b, { info: { edge: 1 } }).link('refs', b, { info: { edge: 2 } }).link('refs', project);
+    e.admin.bulkLoadRelation('Relation-self' as RelId, 'refs', a, a);
+    expect(e.query.ids([a, loose]).degrees('refs')).toEqual(new Map([[a, 4], [loose, 0]]));
+    expect(e.query.ids(a).degrees('refs', 'Task', { direction: 'both' })).toEqual(new Map([[a, 4]]));
+    expect(e.query.ids(a).degrees(['refs', 'refs'], 'Task', { direction: 'both' })).toEqual(new Map([[a, 8]]));
+    expect(e.query.ids([a, loose]).degrees([])).toEqual(new Map([[a, 0], [loose, 0]]));
+    e.write(b).trash();
+    expect(e.query.ids(a).degrees('refs', 'Task', { direction: 'both' })).toEqual(new Map([[a, 2]]));
+    expect(e.query.withTrashed.ids(a).degrees('refs', 'Task', { direction: 'both' })).toEqual(new Map([[a, 4]]));
+    expect(e.query.ids(a).both('refs', 'Task').ids()).toEqual([]);
+  });
+
+  it('invalidates paths, both and degrees when an intermediate entity changes trash scope', async () => {
+    const root = e.create('Project').id(), mid = task('mid'), leaf = e.create('Project').id();
+    e.write(root).link('refs', mid);
+    e.write(mid).link('refs', leaf);
+    const read = () => [e.query.ids(root).pathTo(leaf, 'refs').ids(), e.query.ids(root).both('refs').ids(),
+      [...e.query.ids(root).degrees('refs')]];
+    const seen: ReturnType<typeof read>[] = [];
+    const watch = e.watch(read, value => seen.push(value));
+    try {
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[root, mid, leaf], [mid], [[root, 1]]]);
+      e.write(mid).trash();
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[], [], [[root, 0]]]);
+      e.write(mid).restore();
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[root, mid, leaf], [mid], [[root, 1]]]);
+      expect(seen).toHaveLength(3);
+    } finally { watch.stop(); }
   });
 });
 

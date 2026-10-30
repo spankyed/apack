@@ -329,6 +329,21 @@ export class SqliteDatabase implements EarsDatabase {
     this.recordStatement(sql, parameters, rows.length, performance.now() - started);
     return rows;
   }
+  *iterate(sql: string, parameters: any[] = []): IterableIterator<Data> {
+    const cursor = this.statement(sql).iterate(...parameters), trace = this.explaining;
+    let count = 0, ms = 0;
+    try {
+      for (;;) {
+        const started = trace ? performance.now() : 0, next = cursor.next();
+        if (trace) ms += performance.now() - started;
+        if (next.done) break;
+        count++; yield next.value as Data;
+      }
+    } finally {
+      cursor.return?.();
+      if (trace) this.recordStatement(sql, parameters, count, ms);
+    }
+  }
   get(sql: string, parameters: any[] = []): Data | undefined {
     if (!this.explaining) return this.statement(sql).get(...parameters) as Data | undefined;
     const started = performance.now();
@@ -616,6 +631,7 @@ export class SqliteDatabase implements EarsDatabase {
     changes.add(`rows:${row.entityType}`);
     if (!before || has(before, "trashedAt") !== has(row, "trashedAt")) {
       changes.add(`members:${row.entityType}`);
+      changes.add('membersAny');
       changes.add(`exists:${row.id}`);
     }
     for (const field of new Set([
@@ -856,6 +872,7 @@ export class SqliteDatabase implements EarsDatabase {
         changes.add(`exists:${op.id}`);
         changes.add(`rows:${row.entityType}`);
         changes.add(`members:${row.entityType}`);
+        changes.add('membersAny');
         return done;
       }
       case "takeLabel": {

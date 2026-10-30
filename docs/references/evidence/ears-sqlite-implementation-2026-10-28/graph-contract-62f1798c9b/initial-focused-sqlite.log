@@ -1,0 +1,128 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ❯ tests/engine/relations.spec.ts (29 tests | 3 failed) 16105ms
+   ✓ links > link stores a relation row, which is no entity, and indexes both ends  969ms
+   ✓ links > linkedTo and linkedFrom without an end, and unlinkedTo and unlinkedFrom, filter by having an edge of the kind at all  620ms
+   ✓ links > linking the same edge again changes nothing, keeping its id and its place; another info is another edge 292ms
+   ✓ links > an info with the same fields in another order is the same edge  387ms
+   ✓ links > refuses options it does not know, which is info passed where the options go  301ms
+   ✓ links > refuses a self link  811ms
+   ✓ links > unlink, unlinkAll and removeRelation remove relations and empty index entries  591ms
+   ✓ links > removeRelation removes that one edge, leaving the other edges between its ends and the ends themselves, and refuses an id no relation has 125ms
+   ✓ links > a kind declared unique keeps one edge between two ends, which linking again replaces the info of; updateRelation moves one, keeping its id, and refuses an id no relation has  883ms
+   ✓ links > a kind declared acyclic refuses a link that would close a cycle through it  1103ms
+   ✓ relation kinds > refuses a kind its creator did not register, before writing anything  418ms
+   ✓ relation kinds > refuses one in every read and walk that names a kind, rather than answering with nothing  364ms
+   ✓ relation kinds > loads a stored relation of any kind through the admin face, which is how data a pack's removal left is read 208ms
+   ✓ hierarchy walks > descendants and ancestors reach every entity through a kind once each; ancestors in a tree run parent to root  434ms
+   ✓ hierarchy walks > walks nearest first, keeps the reached entities of a type, and goes only where the query could reach 248ms
+   ✓ hierarchy walks > stops at a depth, a count of edges taken as limit takes one  536ms
+   ✓ graph walks > both follows edges out and in, each far end once  705ms
+   × graph walks > pathTo answers a shortest path from the set, following edges the way it is told, or none 539ms
+     → 3rd ORDER BY term out of range - should be between 1 and 2
+   ✓ graph walks > degrees counts each entity's edges as outEdges and inEdges answer them  597ms
+   × graph boundary contracts > breaks shortest-path ties by seed, kind, direction and insertion order 394ms
+     → 3rd ORDER BY term out of range - should be between 1 and 2
+   ✓ graph boundary contracts > keeps zero-edge paths and excludes every original seed from bounded reachability  811ms
+   ✓ graph boundary contracts > counts parallel and unchecked self edges, repeated kinds, and empty neighborhoods  1274ms
+   × graph boundary contracts > invalidates paths, both and degrees when an intermediate entity changes trash scope 469ms
+     → expected undefined to deeply equal [ [ …(3) ], …(2) ]
+   ✓ declared roles > refuses a role its creator did not register, in a role write and a query by role  619ms
+   ✓ declared roles > loads a stored role of any kind through the admin face, which is how data a pack's removal left is read 265ms
+   ✓ roles > grant, revoke, grantExclusive and withRole  390ms
+   ✓ updates cross-type graph watches when a destination is trashed or restored  347ms
+   ✓ walks each source in the requested kind order, then relation insertion order  857ms
+   ✓ matches an explicit relation end even when unchecked data has no entity at that end  530ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 900ms
+   ✓ rules read off the names > pairs every negation with its positive and every direction with its opposite  479ms
+   ✓ rules read off the names > answers undefined, never null, from every get* asked about an id no entity has  416ms
+ ❯ tests/sqlite/graph-execution.spec.ts (2 tests | 2 failed) 822ms
+   × SQLite graph execution > batches a width-16 frontier and closes an early-return cursor before the next write 311ms
+     → 3rd ORDER BY term out of range - should be between 1 and 2
+   × SQLite graph execution > batches a width-256 frontier and closes an early-return cursor before the next write 509ms
+     → 3rd ORDER BY term out of range - should be between 1 and 2
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/relations.spec.ts > graph walks > pathTo answers a shortest path from the set, following edges the way it is told, or none
+ FAIL  tests/engine/relations.spec.ts > graph boundary contracts > breaks shortest-path ties by seed, kind, direction and insertion order
+SqliteError: 3rd ORDER BY term out of range - should be between 1 and 2
+ ❯ Database.prepare ../../node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ SqliteDatabase.statement src/sqlite/database.ts:320:28
+    318|     let statement = this.statements.get(sql);
+    319|     if (!statement) {
+    320|       statement = this.sql.prepare(sql);
+       |                            ^
+    321|       this.statements.set(sql, statement);
+    322|     }
+ ❯ SqliteDatabase.iterate src/sqlite/database.ts:333:25
+ ❯ executeScopedQuery src/sqlite/query.ts:275:24
+ ❯ executeQuery src/sqlite/query.ts:19:16
+ ❯ SqliteDatabase.answer src/sqlite/database.ts:1099:24
+ ❯ src/sqlite/database.ts:1134:52
+ ❯ SqliteDatabase.readSync src/sqlite/database.ts:1134:36
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/engine/relations.spec.ts > graph boundary contracts > invalidates paths, both and degrees when an intermediate entity changes trash scope
+AssertionError: expected undefined to deeply equal [ [ …(3) ], …(2) ]
+
+[32m- Expected:[39m
+[
+  [
+    "Project-7d62375810ec5dcabb56",
+    "Task-07039a15918db288f3cc",
+    "Project-5939be9ac2a1d35c69e0",
+  ],
+  [
+    "Task-07039a15918db288f3cc",
+  ],
+  [
+    [
+      "Project-7d62375810ec5dcabb56",
+      1,
+    ],
+  ],
+]
+
+[31m+ Received:[39m
+undefined
+
+ ❯ tests/engine/relations.spec.ts:358:27
+    356|     try {
+    357|       await e.admin.watchesSettled();
+    358|       expect(seen.at(-1)).toEqual([[root, mid, leaf], [mid], [[root, 1…
+       |                           ^
+    359|       e.write(mid).trash();
+    360|       await e.admin.watchesSettled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/sqlite/graph-execution.spec.ts > SQLite graph execution > batches a width-16 frontier and closes an early-return cursor before the next write
+ FAIL  tests/sqlite/graph-execution.spec.ts > SQLite graph execution > batches a width-256 frontier and closes an early-return cursor before the next write
+SqliteError: 3rd ORDER BY term out of range - should be between 1 and 2
+ ❯ Database.prepare ../../node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ SqliteDatabase.statement src/sqlite/database.ts:320:28
+    318|     let statement = this.statements.get(sql);
+    319|     if (!statement) {
+    320|       statement = this.sql.prepare(sql);
+       |                            ^
+    321|       this.statements.set(sql, statement);
+    322|     }
+ ❯ SqliteDatabase.iterate src/sqlite/database.ts:333:25
+ ❯ executeScopedQuery src/sqlite/query.ts:275:24
+ ❯ executeQuery src/sqlite/query.ts:19:16
+ ❯ SqliteDatabase.explain src/sqlite/database.ts:367:20
+ ❯ SqliteDatabase.answer src/sqlite/database.ts:1098:39
+ ❯ src/sqlite/database.ts:1134:52
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+
+ Test Files  2 failed | 1 passed (3)
+      Tests  5 failed | 33 passed (38)
+   Start at  16:42:17
+   Duration  22.79s (transform 1.69s, setup 158ms, collect 3.22s, tests 17.83s, environment 0ms, prepare 536ms)
+
+JSON report written to /results/focused-sqlite.json

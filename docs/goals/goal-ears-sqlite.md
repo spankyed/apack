@@ -5,7 +5,7 @@
 
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
-The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 5e81dda7c2
+The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 62f1798c9b
 and its native pin 95615ed8d4; full combined acceptance remains pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
@@ -193,7 +193,7 @@ Source work stays isolated in `/private/tmp/ears-sqlite-query-integration`; the 
 `monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at its earlier
 full-strict-green checkpoint `6cf6c8349e`; do not infer it contains later published work.
 
-The integrated base is committed master `5e81dda7c2055a7fd10d4d7ee2bd94311473ac9d` and native pin
+The integration candidate now reconciles committed master `62f1798c9bec2c013ded929d7080b65d1083049e` and native pin
 `95615ed8d493f9a7c2789eaf1f4c847ae375eb32`. Preceding `95515e6463` passes the complete strict chain
 including every required native/integration/app shard and all three SQLite hosts in
 [41040846758](https://github.com/spankyed/apack/actions/runs/41040846758). Physical refresh preserves a ready
@@ -275,6 +275,17 @@ host cases (one existing Windows-only case skipped), all 691 native-enabled EARS
 normal matching-package rebuild. A copied-fixture generation omission and unbuilt-package refusal are recorded;
 no guard or assertion was weakened. Retain exact-input receipts and current CI handles. Qualify the published
 checkpoint in full strict and real signed installed CI before treating these host changes as platform complete.
+
+The [current graph integration](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-contract-62f1798c9b/README.md)
+implements master's `both`, bounded hierarchy walks, shortest `pathTo` and edge `degrees` in the structured
+port and SQLite. Ordered frontier reads stream rows and close on early path discovery; membership invalidation
+covers intermediate and unchecked repair types. The final merged-source gates pass 701 native-enabled EARS
+cases with zero skips, 1,927 host cases with the existing Windows-only skip, EARS/host and scripts types,
+changed lint and three API reports, after five matching normal package builds. Shared focused checks pass
+38 SQLite/36 elmdb cases, and four independently reverted safeguards fail their intended cases. Initial SQL,
+observer-instrumentation and test-only type failures are retained with their fixes. Resource pauses make the
+recorded wall times unsuitable for performance claims. Existing draft publication and exact-source CI remain
+pending; all remaining phases and original performance budgets stay required.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:
 

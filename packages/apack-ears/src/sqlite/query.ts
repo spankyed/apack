@@ -146,7 +146,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       case "linkedFrom":
       case "unlinkedTo":
       case "unlinkedFrom": {
-        for (const type of Object.keys(schema.types)) db.trackRange(`members:${type}`);
+        db.trackRange('membersAny');
         const outward = step.step.endsWith("To"),
           negative = step.step.startsWith("unlinked");
         const kind = step.step === "linkedWith" ? undefined : step.kind;
@@ -191,10 +191,11 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       }
       case "out":
       case "in":
+      case "both":
       case "descendants":
       case "ancestors": {
         const outward = step.step === "out" || step.step === "descendants",
-          deep = step.step === "descendants" || step.step === "ancestors";
+          both = step.step === 'both', deep = step.step === "descendants" || step.step === "ancestors";
         const kinds: string[] = step.kinds;
         for (const k of kinds) {
           db.relationDefinition(k);
@@ -203,16 +204,18 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         for (const t of step.types ?? []) db.definition(t);
         specificTypes = step.types !== undefined;
         // An intermediate type can change reachability even when the final output is type-restricted.
-        for (const type of Object.keys(schema.types)) db.trackRange(`members:${type}`);
+        db.trackRange('membersAny');
         if (!deep) {
           // Keep the whole adjacency selection in SQL. Deduplicate by first encounter, preserving source order
           // and relation insertion order, rather than doing one binding call for each source entity.
-          sql = `SELECT id,0 major,ROW_NUMBER() OVER (ORDER BY major,ord,kind_ord,edge_seq) ord FROM (
+          sql = `SELECT id,0 major,ROW_NUMBER() OVER (ORDER BY major,ord,kind_ord,side,edge_seq) ord FROM (
             SELECT far.id,p.major,p.ord,kind.key kind_ord,r.seq edge_seq,
-              ROW_NUMBER() OVER (PARTITION BY far.id ORDER BY p.major,p.ord,kind.key,r.seq) encounter
-            FROM (${sql}) p JOIN relations r ON r.${outward ? "source" : "target"}=p.id
+              ${both ? 'CASE WHEN r.source=p.id THEN 0 ELSE 1 END' : '0'} side,
+              ROW_NUMBER() OVER (PARTITION BY far.id ORDER BY p.major,p.ord,kind.key,
+                ${both ? 'CASE WHEN r.source=p.id THEN 0 ELSE 1 END' : '0'},r.seq) encounter
+            FROM (${sql}) p JOIN relations r ON ${both ? '(r.source=p.id OR r.target=p.id)' : `r.${outward ? 'source' : 'target'}=p.id`}
             JOIN json_each(?) kind ON kind.value=r.kind
-            JOIN entities far ON far.id=r.${outward ? "target" : "source"}
+            JOIN entities far ON far.id=${both ? 'CASE WHEN r.source=p.id THEN r.target ELSE r.source END' : `r.${outward ? 'target' : 'source'}`}
             WHERE far.id!=p.id AND ${reachable("far")}
             ${step.types ? "AND far.type IN (SELECT value FROM json_each(?))" : ""}
           ) WHERE encounter=1`;
@@ -224,10 +227,11 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         const seeds = idsNow(),
           seen = new Set<string>(seeds),
           found: string[] = [];
-        let frontier = seeds;
-        do {
+        let frontier = seeds, level = 0;
+        while (frontier.length && (step.depth === undefined || level < step.depth)) {
+          level++;
           const next: string[] = [];
-          const ends = db.all(
+          const ends = db.iterate(
             `SELECT far.id,far.type FROM json_each(?) seed JOIN relations r
               ON r.${outward ? "source" : "target"}=seed.value
               JOIN json_each(?) kind ON kind.value=r.kind
@@ -243,9 +247,45 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
             if (!step.types || step.types.includes(end.type)) found.push(end.id);
           }
           frontier = next;
-        } while (frontier.length);
+        }
         restart(found);
         types = step.types ?? Object.keys(schema.types);
+        break;
+      }
+      case 'pathTo': {
+        for (const kind of step.kinds) { db.relationDefinition(kind); db.trackRange(`kind:${kind}`); }
+        db.trackRange('membersAny'); db.trackKey(`exists:${step.to}`);
+        const seeds = idsNow(), seen = new Set(seeds), parents = new Map<string, string>();
+        let path: string[] = [], frontier = seeds, level = 0;
+        if (seen.has(step.to)) path = [step.to];
+        else if (db.get(`SELECT 1 FROM entities far WHERE far.id=? AND ${reachable('far')}`, [step.to])) {
+          const direction = step.direction ?? 'out';
+          if (!['out', 'in', 'both'].includes(direction)) fail('VALUE_INVALID', 'Invalid graph direction');
+          const both = direction === 'both', outward = direction === 'out';
+          while (!path.length && frontier.length && (step.depth === undefined || level < step.depth)) {
+            level++;
+            const next: string[] = [];
+            const ends = db.iterate(`SELECT seed.value parent,far.id FROM json_each(?) seed JOIN relations r
+              ON ${both ? '(r.source=seed.value OR r.target=seed.value)' : `r.${outward ? 'source' : 'target'}=seed.value`}
+              JOIN json_each(?) kind ON kind.value=r.kind
+              JOIN entities far ON far.id=${both ? 'CASE WHEN r.source=seed.value THEN r.target ELSE r.source END' : `r.${outward ? 'target' : 'source'}`}
+              WHERE ${reachable('far')} ORDER BY seed.key,kind.key,
+                ${both ? 'CASE WHEN r.source=seed.value THEN 0 ELSE 1 END,' : ''}r.seq`,
+            [JSON.stringify(frontier), JSON.stringify(step.kinds)]);
+            for (const end of ends) {
+              if (seen.has(end.id)) continue;
+              seen.add(end.id); parents.set(end.id, end.parent);
+              if (end.id === step.to) {
+                path = [step.to];
+                while (parents.has(path[path.length - 1])) path.push(parents.get(path[path.length - 1])!);
+                path.reverse(); break;
+              }
+              next.push(end.id);
+            }
+            frontier = next;
+          }
+        }
+        restart(path); types = Object.keys(schema.types); specificTypes = false;
         break;
       }
       case "limit":
@@ -366,7 +406,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
             !needs.every((k) => available.includes(k)) &&
             (plan.start.from === "ids" ||
               steps.some((s) =>
-                ["out", "in", "descendants", "ancestors"].includes(s.step)
+                ["out", "in", "both", "descendants", "ancestors", "pathTo"].includes(s.step)
               ))
           )
             continue;
@@ -548,6 +588,23 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       else groups.push([value ?? null, [id]]);
     }
     return { kind: "groups", groups: terminal.counts ? groups.map(([value, ids]) => [value, ids.length]) : groups, __visited: visited ?? ids.length };
+  }
+  if (terminal.answer === 'degrees') {
+    for (const kind of terminal.kinds) { db.relationDefinition(kind); db.trackRange(`kind:${kind}`); }
+    for (const type of terminal.types ?? []) db.definition(type);
+    db.trackRange('membersAny');
+    const direction = terminal.direction ?? 'out';
+    if (!['out', 'in', 'both'].includes(direction)) fail('VALUE_INVALID', 'Invalid graph direction');
+    const both = direction === 'both', outward = direction === 'out';
+    const rows = db.all(`SELECT seed.value id,COALESCE((SELECT sum(
+        ${both ? 'CASE WHEN r.source=seed.value AND r.target=seed.value THEN 2 ELSE 1 END' : '1'})
+      FROM relations r JOIN json_each(?) kind ON kind.value=r.kind
+      JOIN entities far ON far.id=${both ? 'CASE WHEN r.source=seed.value THEN r.target ELSE r.source END' : `r.${outward ? 'target' : 'source'}`}
+      WHERE ${both ? '(r.source=seed.value OR r.target=seed.value)' : `r.${outward ? 'source' : 'target'}=seed.value`}
+        AND ${reachable('far')} ${terminal.types ? 'AND far.type IN (SELECT value FROM json_each(?))' : ''}),0) n
+      FROM json_each(?) seed ORDER BY seed.key`,
+      [JSON.stringify(terminal.kinds), ...(terminal.types ? [JSON.stringify(terminal.types)] : []), JSON.stringify(ids)]);
+    return { kind: 'degrees', degrees: rows.map(row => [row.id, Number(row.n)]), __visited: visited ?? ids.length };
   }
   if (terminal.answer === "edges") {
     const groups: string[] = terminal.kinds;

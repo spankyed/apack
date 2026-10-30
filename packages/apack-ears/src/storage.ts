@@ -3,7 +3,7 @@
 export type QueryScope = 'live' | 'withTrashed' | 'trashed';
 export type QueryStart = { from: 'types'; types: string[] } | { from: 'ids'; ids: string[] } | { from: 'all' };
 export type { SearchOptions } from './runtime.ts';
-import type { SearchOptions } from './runtime.ts';
+import type { EdgeDirection, SearchOptions } from './runtime.ts';
 export type QueryStep =
   | { step: 'ofType'; type: string }
   | { step: 'within'; ids: string[] }
@@ -12,7 +12,8 @@ export type QueryStep =
   | { step: 'withRole'; role: string }
   | { step: 'linkedWith'; other: string }
   | { step: 'linkedTo' | 'linkedFrom' | 'unlinkedTo' | 'unlinkedFrom'; kind: string; other?: string }
-  | { step: 'out' | 'in' | 'descendants' | 'ancestors'; kinds: string[]; types?: string[] }
+  | { step: 'out' | 'in' | 'both' | 'descendants' | 'ancestors'; kinds: string[]; types?: string[]; depth?: number }
+  | { step: 'pathTo'; to: string; kinds: string[]; direction?: EdgeDirection; depth?: number }
   | { step: 'orderBy'; field: string; descending?: boolean }
   | { step: 'reverse' }
   | { step: 'limit'; n: number }
@@ -27,6 +28,7 @@ export type QueryStep =
 export type QueryTerminal =
   | { answer: 'ids' | 'count' | 'first' | 'last' | 'exists' }
   | { answer: 'rows' | 'firstRow'; fields?: string[] }
+  | { answer: 'degrees'; kinds: string[]; direction?: EdgeDirection; types?: string[] }
   | { answer: 'edges'; kinds: string[]; outward: boolean; types?: string[] }
   | { answer: 'groupBy'; field: string; counts?: boolean }
   | { answer: 'hits'; fields?: string[]; highlights?: boolean };
@@ -99,6 +101,7 @@ interface QueryAnswers {
   rows: { kind: 'rows'; rows: Record<string, unknown>[]; plainObjects?: boolean };
   firstRow: { kind: 'row'; row: Record<string, unknown> | null; plainObjects?: boolean };
   edges: { kind: 'relations'; relations: StoredRelation[] };
+  degrees: { kind: 'degrees'; degrees: Array<[string, number]> };
   groupBy: { kind: 'groups'; groups: Array<[unknown, string[] | number]>; plainObjects?: boolean };
   hits: { kind: 'hits'; hits: StoredHit[]; plainObjects?: boolean };
 }

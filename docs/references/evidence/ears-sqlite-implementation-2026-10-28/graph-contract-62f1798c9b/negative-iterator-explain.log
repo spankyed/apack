@@ -1,0 +1,52 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ❯ tests/engine/sqlite-operations.spec.ts (18 tests | 1 failed | 17 skipped) 627ms
+   ↓ SQLite operational feasibility > selects adjacency and relation payloads without a binding call per source or edge
+   ↓ SQLite operational feasibility > does not serialize transport envelopes or read answers
+   ↓ SQLite operational feasibility > reads and updates a scalar through EARS without decoding or encoding its large neighbors
+   ↓ SQLite operational feasibility > replaces logical values when the source and destination have different physical field slots
+   ↓ SQLite operational feasibility > explains actual FTS and vector statements with their original bindings
+   × SQLite operational feasibility > bounds explain capture while counting every executed query statement 626ms
+     → expected 2 to be 272 // Object.is equality
+   ↓ SQLite operational feasibility > reopens lossless payloads, FTS and embeddings, including read-only access
+   ↓ SQLite operational feasibility > backs up and replaces a populated destination with text, relations and vectors intact
+   ↓ SQLite operational feasibility > rolls back primary, FTS and pending-vector changes together
+   ↓ SQLite operational feasibility > admits new types and value indexes over existing data, and refuses stale handles
+   ↓ SQLite operational feasibility > keeps the incumbent intact when replacement fails midway
+   ↓ SQLite operational feasibility > gives a consistent multi-statement snapshot while another handle commits
+   ↓ SQLite operational feasibility > preserves the declared schema and data after unsupported index admission
+   ↓ SQLite operational feasibility > allows another process to read a committed snapshot and refuses its competing writer
+   ↓ SQLite operational feasibility > admits required fields over old data and checks only changed fields
+   ↓ SQLite operational feasibility > refuses an elmdb directory without creating SQLite files beside it
+   ↓ SQLite operational feasibility > preserves array-element and UTF-16 highlight locations
+   ↓ SQLite operational feasibility > reports its own commit sequence when another writer commits immediately after it
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/sqlite-operations.spec.ts > SQLite operational feasibility > bounds explain capture while counting every executed query statement
+AssertionError: expected 2 to be 272 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 272[39m
+[31m+ 2[39m
+
+ ❯ tests/engine/sqlite-operations.spec.ts:191:37
+    189|       if (result.backend !== "sqlite") throw new Error("Wrong backend"…
+    190|       expect(result.ids).toEqual(ids.slice(1));
+    191|       expect(result.statementCount).toBe(calls);
+       |                                     ^
+    192|       expect(result.statementCount).toBeGreaterThan(256);
+    193|       expect(result.statements).toHaveLength(256);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 skipped (18)
+   Start at  17:04:32
+   Duration  2.60s (transform 1.23s, setup 17ms, collect 1.48s, tests 627ms, environment 0ms, prepare 193ms)
+
+JSON report written to /results/negative-iterator-explain.json

@@ -1,0 +1,17 @@
+{
+  "docs/public-facing/services-and-data.md": "e5dac334e6cbd668013c7c5085dea7812ff794cce0a59f219dce139e13a7abd7",
+  "packages/apack-cli/tests/_support/facade-packs.ts": "6d440f48e9ea56cf56e6e771abf7e2c487166a4e55f4076a10c5308b75778e08",
+  "packages/apack-ears/CLAUDE.md": "b5dd98aba2788b37597331fb0714fd86d6c95ae530823ef5f5e655ef54775b33",
+  "packages/apack-ears/etc/index.api.md": "89b7f78d346cd45cb61a7bd2f5b8ea542888b9b9e10cdd3c9f56376a63cde8d1",
+  "packages/apack-ears/src/index.ts": "a1c37c3341ce58a8b77fe5eba5606097644df0b6a7aa2ca4e7048da73a419748",
+  "packages/apack-ears/src/query.ts": "6a13ab55ab355312c69ca1bf0193e672c1ccbed0af62a75ddcaf85f1f814b950",
+  "packages/apack-ears/src/runtime.ts": "2d4e65506e76663eeabd596830724719d688a58f8f5c5d5a42ab33141966ff46",
+  "packages/apack-ears/src/sqlite/database.ts": "45345bfeb0e72385437a3110517dcf477020e551307b3eab8c50ae37bc3db5ca",
+  "packages/apack-ears/src/sqlite/query.ts": "b37e91522c1b4648af80927f9210ef59fb776b6c3703c5d1dc8f083db6300a3e",
+  "packages/apack-ears/src/storage.ts": "4981e3cc23dfae96ae2c138b7e1daea2d46a473932d886c977b90f2f967a3fb4",
+  "packages/apack-ears/tests/engine/relations.spec.ts": "688290c9ade1faaa6e9842e9b59c500d7404c4ee613bf664a5080b19a59a5421",
+  "packages/apack-ears/tests/vocabulary.spec.ts": "2fff492594056ab9eb853aec7a21813143097a21a73e72def6ee74d693ac592b",
+  "packages/default-setup/tests/sdk-type-safety.spec.ts": "eeacb638df274e2e4e4361d041db969a4dc3e59cc6ef564abcea91de6e3ba3b2",
+  "scripts/api-reports.ts": "c0d8ddd8ece476d960c3fe17c9741c3dc5064b6462aaa8a563202577d80bcd73",
+  "packages/apack-ears/tests/sqlite/graph-execution.spec.ts": "d5aa8da64585043e017bc500fd73907d60b8214623fe5f5668a690a476bd732b"
+}

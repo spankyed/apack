@@ -180,9 +180,10 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
         for (let i = 1; i < ids.length; i++) e.write(ids[i - 1]).link("refs", ids[i]);
         return ids;
       });
-      const all = db.all.bind(db);
+      const all = db.all.bind(db), iterate = db.iterate.bind(db);
       let calls = 0;
       db.all = (...args) => { calls++; return all(...args); };
+      db.iterate = (...args) => { calls++; return iterate(...args); };
       const result = e.query.ids(ids[0]).descendants("refs").explain();
       expect(result.backend).toBe("sqlite");
       if (result.backend !== "sqlite") throw new Error("Wrong backend");
