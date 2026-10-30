@@ -1,0 +1,82 @@
+{
+  "source": "1d16d85c8104859932a555d09d4b4f00600f8b1a",
+  "extensionSha256": "3bf657a9adea0584351a29232690f8b3a1e909a7439d0c6aaafdab7e594cc4ba",
+  "completed": true,
+  "groups": [
+    {
+      "mode": "none",
+      "fixture": "compact",
+      "checks": 37
+    },
+    {
+      "mode": "none",
+      "fixture": "sparse32",
+      "checks": 37
+    },
+    {
+      "mode": "none",
+      "fixture": "wide64",
+      "checks": 37
+    },
+    {
+      "mode": "none",
+      "fixture": "mixed",
+      "checks": 37
+    },
+    {
+      "mode": "none",
+      "fixture": "real",
+      "checks": 37
+    },
+    {
+      "mode": "flat",
+      "fixture": "compact",
+      "checks": 37
+    },
+    {
+      "mode": "flat",
+      "fixture": "sparse32",
+      "checks": 37
+    },
+    {
+      "mode": "flat",
+      "fixture": "wide64",
+      "checks": 37
+    },
+    {
+      "mode": "flat",
+      "fixture": "mixed",
+      "checks": 37
+    },
+    {
+      "mode": "flat",
+      "fixture": "real",
+      "checks": 37
+    },
+    {
+      "mode": "ivf-bq",
+      "fixture": "compact",
+      "checks": 37
+    },
+    {
+      "mode": "ivf-bq",
+      "fixture": "sparse32",
+      "checks": 37
+    },
+    {
+      "mode": "ivf-bq",
+      "fixture": "wide64",
+      "checks": 37
+    },
+    {
+      "mode": "ivf-bq",
+      "fixture": "mixed",
+      "checks": 37
+    },
+    {
+      "mode": "ivf-bq",
+      "fixture": "real",
+      "checks": 37
+    }
+  ]
+}

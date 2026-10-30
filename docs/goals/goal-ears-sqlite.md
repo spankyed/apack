@@ -392,9 +392,10 @@ app owner creation/recovery, live replacement and physical refresh remain separa
 now uses pinned `fs-native-extensions` 1.5.2 with a persistent per-store inode. File ownership excludes
 independent handles/processes and survives a handled termination signal until workers exit; process death
 releases it. Idle services release synchronously. Final ordinary package builds, all 646 SQLite EARS cases,
-types/boundaries/lint and two negative controls pass in private Linux; new dependency/platform qualification
-remains required. The earlier package/linker checkpoint `1efad34246` is green on all three CI hosts, with
-raw artifacts independently inspected; its result does not qualify these later ownership changes.
+types/boundaries/lint and two negative controls pass in private Linux. Exact checkpoint `1d16d85c81`
+is now green on all three CI hosts: [retained ownership qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-ownership/platform-41019274148/README.md).
+All three execute the kernel-claim and worker-drain cases with the pinned dependency; this does not
+qualify the subsequent readiness/activation edits or signed installed applications.
 
 Next separate logical index readiness from optional native model completion before activating app owners.
 Current startup/pack registration waits on `indexesReady()`, which includes native work and failure; leaving
