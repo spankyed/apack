@@ -219,15 +219,18 @@ Linux/CI, capped at two CPUs/six GiB/no swap with a quiet admission window; focu
 at `9fbea37d0d`, before the native/ownership/reset changes. Current runtime `a95039a8c7` passes
 [signed installed Preview 41120611981](https://github.com/spankyed/apack/actions/runs/41120611981), including
 both store identities, and Linux/macOS SQLite qualification in [strict run 41120604961](https://github.com/spankyed/apack/actions/runs/41120604961).
-That strict run remains live: producers, both native shards and integration-2 pass; integration-1 still
-requires polling. The app/unit shard fails only its subprocess inventory (three sites recorded versus four).
-The [inventory correction](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-subprocess-inventory/README.md)
-records the actual killed-reset process with its isolation reason; all 14 detector/control cases pass. Windows fails
-its CLI backup step because renaming onto an empty reserved directory is unsupported there. The
-[backup publication correction](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-backup-publication/README.md)
-keeps the POSIX reservation and uses direct directory rename on Windows, with four raced-destination
-preservation cases. All 28 platform CLI cases, CLI types/lint/package build pass on Linux; actual Windows
-qualification remains pending. Do not restart the live strict run or mislabel it green.
+That strict run is a terminal failure: producers, both native and both integration shards pass; the app/unit
+shard fails only its subprocess inventory (three sites recorded versus four). The
+[inventory correction](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-subprocess-inventory/README.md)
+records the actual killed-reset process with its isolation reason; all 14 detector/control cases pass.
+Windows fails the original CLI backup reservation with EPERM. The first attempted correction at `2a641ce102`
+passes Linux but [platform run 41125212261](https://github.com/spankyed/apack/actions/runs/41125212261) proves
+its direct Windows rename replaces competing files and dangling symlinks. Linux/macOS pass that run;
+Windows fails two preservation assertions. The [exclusive-publication correction](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-backup-exclusive/README.md)
+uses the system Windows Directory.Move operation with paths passed as data and retains all race assertions.
+Twelve focused CLI cases pass on Linux, including a literal metacharacter path; actual Windows qualification
+remains required. Host types pass with an explicit 512 MiB heap; CLI types exhaust that heap and require the
+larger disposable budget or CI. These resource failures are retained, not counted as passing checks.
 The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
 The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
 remains unexplained. The older editor intermittent also remains unexplained despite ten unchanged repeats.
@@ -235,8 +238,8 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: qualify the Windows backup correction through the existing platform witness, inspect the
-remaining strict shards, and continue responsiveness, real-corpus and full app/operational requirements below.
+Next checkpoint: qualify exclusive Windows backup publication through the existing platform witness,
+complete pending source checks, and continue responsiveness, real-corpus and full app/operational requirements below.
 No evidence here certifies arbitrary filesystems or completes the goal.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:

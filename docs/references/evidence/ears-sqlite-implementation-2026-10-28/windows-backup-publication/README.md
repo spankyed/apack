@@ -1,4 +1,8 @@
-# Windows fresh-backup publication — 2026-10-30
+# First Windows fresh-backup publication attempt — 2026-10-30
+
+**Superseded, unsafe on Windows:** [exclusive-publication evidence](../windows-backup-exclusive/README.md)
+records run 41125212261: direct Node rename overwrites competing files and dangling symlinks.
+The following records the first attempted correction, not a qualified implementation.
 
 Actual Windows job 124285964888 in strict run 41120604961 fails at source `a95039a8c7`:
 `apack db backup` creates an empty destination reservation, then renames the verified backup onto it.
@@ -9,9 +13,9 @@ whole strict run; the signed job log additionally verifies six actual executable
 the mandatory two-store/model-ownership witness, pre/post-sign native smoke and strict Developer ID sealing.
 Those receipts apply to `a95039a8c7`, not the CLI correction. Other strict shards remain independent and must be inspected through their original handle.
 
-The corrected publication reserves an empty destination only on POSIX, where rename could replace an empty
-directory. Windows renames the verified directory directly and relies on directory rename refusing occupied
-destinations. It does not remove an existing destination to manufacture success. Four real filesystem races
+The first attempted correction reserves an empty destination only on POSIX, where rename could replace an empty
+directory. Windows renames the verified directory directly, incorrectly assuming directory rename refuses every
+occupied destination. It does not remove an existing destination to manufacture success. Four real filesystem races
 create a file, empty directory, populated directory or dangling symlink after snapshot export but before
 publication; refusal must preserve the competing entry and clean only owned staging. The existing complete
 backup/verify/history/import case remains required on Windows rather than being skipped.

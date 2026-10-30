@@ -1,3 +1,4 @@
+export { publishBackupDirectory } from './publication.ts';
 export { exportLogicalDatabase } from './logical.ts';
 export { listImportRecoveries, restoreImportRecovery, type ImportRecovery } from './restore.ts';
 import fs from 'fs-extra';

@@ -103,3 +103,10 @@ it.each(['file', 'empty directory', 'populated directory', 'dangling symlink'])(
   else expect(fs.readdirSync(destination)).toEqual(kind === 'empty directory' ? [] : ['kept']);
   expect(fs.readdirSync(f.root).some(name => name.startsWith('.apack-backup-'))).toBe(false);
 });
+
+
+it('publishes a backup whose path contains shell metacharacters as literal data', async () => {
+  const f = fixture(), destination = path.join(f.root, "backup 'quoted';$value");
+  await command(['backup', '--data-dir', f.dir, '--out', destination]);
+  expect(JSON.parse((await command(['backup', 'verify', destination, '--json'])).out).valid).toBe(true);
+});

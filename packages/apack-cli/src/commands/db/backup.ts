@@ -2,7 +2,7 @@ import { dbBackupVerify, verifyBackup, VERIFY_USAGE } from './backup-verify';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { findRunningApp, holdDatabaseWriteLock, openRunHistory } from '@apackdev/host/database';
-import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
+import { databaseBackupStore, exportDatabase, publishBackupDirectory } from '@apackdev/host/backup';
 import { readHostCompatibility } from '@apackdev/host/packs';
 import { openTarget, parseDbArgs, realDestination, TARGET_USAGE, withDatabase, type DbIo } from './target';
 
@@ -25,7 +25,6 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
   if (fs.existsSync(destination)) throw new Error(`Backup destination already exists: ${destination}`);
   const lock = holdDatabaseWriteLock(target.userDataDir, 'apack db backup');
   let stage: string | undefined;
-  let reserved = false;
   try {
     if (findRunningApp(target)) throw new Error('Quit the app before taking a full offline backup.');
     const db = await openTarget(target, { write: false, command: 'backup' }, io);
@@ -46,19 +45,11 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
       }
       verifyBackup(backup);
       fs.chmodSync(backup, 0o700);
-      // POSIX can replace an empty directory; reserve it exclusively first. Windows directory rename
-      // already refuses an occupied destination, and cannot rename onto even our empty reservation.
-      if (process.platform !== 'win32') {
-        fs.mkdirSync(destination);
-        reserved = true;
-      }
-      fs.renameSync(backup, destination);
-      reserved = false;
+      publishBackupDirectory(backup, destination);
     });
     io.out(destination);
   } finally {
     try {
-      if (reserved) fs.rmdirSync(destination);
       if (stage) fs.rmSync(stage, { recursive: true, force: true });
     } finally { lock.release(); }
   }
