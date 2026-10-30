@@ -1,8 +1,9 @@
+import { withActorContext } from '../diagnostics/actors.ts';
 import { carrySettingsRequest } from '../features/settings/be/access.ts';
 // The backend bus: spawns the registered systems, routes client events to them and their events to
 // clients. The app composes it with its event sources and client sink (createAppBus, app-bus.ts); the pack
 // test harness runs the same machine with a recording sink.
-import { enqueueActions, fromCallback, setup, spawnChild, type AnyActorRef, type AnyStateMachine } from 'xstate';
+import { enqueueActions, fromCallback, setup, spawnChild, type AnyActorRef, type AnyActorLogic, type AnyStateMachine } from 'xstate';
 import { reportError } from '@apackdev/sdk/logger';
 import { HOST } from '../refs.ts';
 import { deliverAs } from './delivery.ts';
@@ -118,9 +119,9 @@ function spawnSystems(
   systemIds: readonly string[],
 ): string[] {
   // XState types `id` from the machine's declared children, and the bus's are whatever is registered
-  const spawner = enqueue as { spawnChild(machine: AnyStateMachine, options: { id: string; systemId: string }): void };
+  const spawner = enqueue as { spawnChild(machine: AnyActorLogic, options: { id: string; systemId: string }): void };
   const spawned = systemIds.filter((id) => machines.has(id));
-  for (const id of spawned) spawner.spawnChild(machines.get(id)!, { id, systemId: id });
+  for (const id of spawned) spawner.spawnChild(withActorContext(machines.get(id)!), { id, systemId: id });
   return spawned;
 }
 
