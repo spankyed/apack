@@ -279,3 +279,20 @@ it('keeps keyboard focus when the same autocompact dialog publishes a fresh size
  expect(document.activeElement).toBe(larger);expect(larger.isConnected).toBe(true)
  larger.click();expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({id:notice.id,revision:'fresh-size',sessionId:notice.sessionId,decision:'compact_next'})
 })
+
+it('keeps left-arrow decisions bound to the rendered native owner and revision', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', busy: false }) }); app.mount(root)
+  const mount = actor.send.mock.calls.find(([event]) => event.type === 'CLAUDE_TERMINAL_MOUNT')![0]
+  const notice: ClaudeNativeNotice = { kind: 'left_arrow_confirm', id: 'dialog', revision: 'revision', sessionId: 'session', title: 'Background this session?', paragraphs: ['The original running reviewer restarts.'], preferredChoice: 'background_confirm', choices: [{ value: 'background_stay', label: 'Stay' }, { value: 'background_confirm', label: 'Background anyway' }] }
+  const publish = (ownerId: string, revision = 'revision') => { state.value = { context: { nativeTerminalViews: { [mount.mountId]: { opening: false, output: [], state: { ownerId, sessionId: 'session', cwd: '/fixture', status: 'live', busy: false, tasks: [], view: { kind: 'main', revision: 1 }, notice: { ...notice, revision } } } } } } }
+  publish('owner-a'); await nextTick()
+  const oldButton = Array.from(root.querySelectorAll('button')).find(button => button.textContent === 'Background anyway')!
+  await vi.waitFor(() => expect(document.activeElement).toBe(oldButton))
+  publish('owner-b'); await nextTick(); actor.send.mockClear(); oldButton.click()
+  expect(actor.send).not.toHaveBeenCalled()
+  const oldRevisionButton = Array.from(root.querySelectorAll('button')).find(button => button.textContent === 'Background anyway')!
+  publish('owner-b', 'new-revision'); await nextTick(); oldRevisionButton.click(); expect(actor.send).not.toHaveBeenCalled()
+  const dialog = root.querySelector('[role="dialog"]')!; dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'CLAUDE_TERMINAL_NOTICE', ownerId: 'owner-b', notice: { id: 'dialog', revision: 'new-revision', sessionId: 'session', decision: 'background_stay' } }))
+})

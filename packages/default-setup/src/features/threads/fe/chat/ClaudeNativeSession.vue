@@ -1,5 +1,6 @@
 <template>
   <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
+    <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
     <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" @operate="operateBackground" />
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
     <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
@@ -99,6 +100,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import NativeBackgroundReview from './NativeBackgroundReview.vue'
 import NativeBackgroundSession from './NativeBackgroundSession.vue'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeBackgroundSessionRequest } from '#features/code/common/native-background.ts'
@@ -140,6 +142,20 @@ function answerSandboxNetwork(response: ClaudeNativeNoticeResponse) {
   const state = view.value?.state, notice = state?.notice
   if (!state || notice?.kind !== 'sandbox_network_access' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
+}
+const leftArrowPanel = computed(() => {
+  const state = view.value?.state, notice = state?.notice
+  if (active.value || !state || notice?.kind !== 'left_arrow_confirm') return
+  const confirm = notice.choices.find(choice => choice.value === 'background_confirm'), cancel = notice.choices.find(choice => choice.value === 'background_stay')
+  if (!confirm || !cancel) return
+  return { ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId,
+    state: { status: noticePending.value ? 'pending' as const : 'ready' as const, problem: noticeProblem.value,
+      review: { revision: notice.revision, title: notice.title, paragraphs: notice.paragraphs, confirmLabel: confirm.label, cancelLabel: cancel.label, defaultFocus: notice.preferredChoice === 'background_confirm' ? 'confirm' as const : 'cancel' as const } } }
+})
+function answerLeftArrow(panel: NonNullable<typeof leftArrowPanel.value>, request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }) {
+  const state = view.value?.state
+  if (panel !== leftArrowPanel.value || !state || noticePending.value || panel.ownerId !== state.ownerId || request.panelId !== panel.id || request.revision !== panel.revision) return
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision: request.decision === 'confirm' ? 'background_confirm' : 'background_stay' } })
 }
 function answerNotice(panel: (typeof noticePanels.value)[number], decision: ClaudeNativeNoticeResponse['decision']) {
   const state = view.value?.state, notice = state?.notice
@@ -184,7 +200,7 @@ const active = computed(() => !!view.value?.state && !view.value.opening && requ
 const noticePanels = computed(() => {
   if (active.value) return []
   const state = view.value?.state, notice = state?.notice
-  if (!state || !notice || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access') return []
+  if (!state || !notice || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access' || notice.kind === 'left_arrow_confirm') return []
   return [{ key: JSON.stringify([state.ownerId, notice.sessionId, notice.id, notice.kind]), ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId, kind: notice.kind, notice }]
 })
 const viewport = ref<HTMLElement>()

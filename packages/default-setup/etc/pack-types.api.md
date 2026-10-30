@@ -1066,11 +1066,29 @@ declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
-    decision: 'cancelled' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'no' | 'policy_approve' | 'policy_reject' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
+    decision: 'background_confirm' | 'background_stay' | 'cancelled' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'no' | 'policy_approve' | 'policy_reject' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
 };
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
 declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"left_arrow_confirm">;
+    preferredChoice: z.ZodEnum<{
+        background_confirm: "background_confirm";
+        background_stay: "background_stay";
+    }>;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<{
+            background_confirm: "background_confirm";
+            background_stay: "background_stay";
+        }>;
+        label: z.ZodString;
+    }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"sandbox_network_access">;
     choices: z.ZodArray<z.ZodObject<{
         value: z.ZodEnum<{

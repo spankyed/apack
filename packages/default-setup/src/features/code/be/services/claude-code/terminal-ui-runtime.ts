@@ -1,3 +1,4 @@
+import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
 import { claudeTerminalBackgroundRuntime } from './terminal-background-runtime.ts'
 import { claudeTerminalSandboxNetworkRuntime } from './terminal-sandbox-network-runtime.ts'
 import { claudeTerminalManagedSecurityRuntime } from './terminal-managed-security-runtime.ts'
@@ -523,6 +524,7 @@ ${claudeTerminalMcpUrlRuntime}
 ${claudeTerminalLspRecommendationRuntime}
 ${claudeTerminalPluginHintRuntime}
 ${claudeTerminalGoalProposalRuntime}
+${claudeTerminalLeftArrowRuntime}
 ${claudeTerminalSandboxNetworkRuntime}
 ${claudeTerminalManagedSecurityRuntime}
 ${claudeTerminalAutocompactOfferRuntime}
@@ -790,6 +792,7 @@ async function control(request,abort){
   const network=nativeSandboxNetwork(n);if(network.item)return {notice:await projectNativeSandboxNetwork(n,network),retirements:refusal.retirements};
   const compact=nativeAutocompactOffer(n);if(compact.item)return {notice:await projectNativeAutocompactOffer(n,compact),retirements:refusal.retirements};
   const goal=nativeGoalProposal(n);if(goal.item)return {notice:await projectNativeGoalProposal(n,goal),retirements:refusal.retirements};
+  const agentsReview=nativeLeftArrowReview(n);if(agentsReview.item)return {notice:projectNativeLeftArrow(n,agentsReview),retirements:refusal.retirements};
   const hint=nativePluginHint(n);if(hint.item)return {notice:await projectNativePluginHint(n,hint),retirements:refusal.retirements};
   const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
   const d=nativeBillingNotice(n);return {retirements:refusal.retirements,notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
@@ -799,6 +802,7 @@ async function control(request,abort){
   if(['policy_approve','policy_reject'].includes(request.decision)){await answerNativeManagedSecurity(n,request);return {answered:true};}
   if(['compact_previous','compact_next','compact_accept','compact_keep','compact_dismiss'].includes(request.decision)){await answerNativeAutocompactOffer(n,request,abort);return {answered:true};}
   if(['sandbox_allow','sandbox_remember','sandbox_deny','sandbox_cancel'].includes(request.decision)){answerNativeSandboxNetwork(n,request);return {answered:true};}
+  if(['background_confirm','background_stay'].includes(request.decision)){await answerNativeLeftArrow(n,request);return {answered:true};}
   if(['goal_accept','goal_decline'].includes(request.decision)){answerNativeGoalProposal(n,request);return {answered:true};}
   if(['retry_fallback','edit_prompt','cancelled'].includes(request.decision)){answerNativeRefusal(n,request);return {answered:true};}
   if(['yes','no','disable'].includes(request.decision)&&nativePluginHint(n).item){answerNativePluginHint(n,request);return {answered:true};}
