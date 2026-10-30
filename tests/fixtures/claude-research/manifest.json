@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "fb000f39a546871af9b15770debc6ea51dee42e2",
+  "researchCommit": "e88e1ee588443724f64462ef681ac7f421420b61",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -98,7 +98,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "b76f48f8cb0e4f5dc721723fba39395d0db59a030675adcd25ff98d7b6441cf5",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "4e172d96ecf5ee6a48c71a202ebaea59026b67e52c53c3051a9320f7e724e671",
+    "src/integration/apack-terminal-owner-app.mjs": "78271112b2e34dd7e511d2d5e99443b3b962075cddf10706b308d0dc2982fcf5",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -144,7 +144,7 @@
     "src/integration/native-platform-preload.mjs": "d877c2c3a67aab23a73fc56438ee87d8455afb0e7754a01efef16e15f734fd24",
     "src/integration/native-plugin-hint.mjs": "23921560c8a62c5752963e951aca8bc06fe971fc14147c3189463f357c358cd3",
     "src/integration/native-refusal-owner.mjs": "880b900b5ee1b658a9c7e5150fa5ac696ceade8de8075583bd0e87e58a3b8d4e",
-    "src/integration/owned-background-broker-audit.mjs": "07b2bda7d7cd5851fcb6daea1ba4d9295f1e44423ab7e3f99d49d92fcc0e6c2d",
+    "src/integration/owned-background-broker-audit.mjs": "687a6514cfb2c16bc610184604d6a87affa083ceb6ee9b75ba2269a807423966",
     "src/integration/owned-prompt-reply-hold.mjs": "8e1b4c3ea78568b428b87cec31fe6583102292471950f739ac26f4512154c158",
     "src/integration/permission-enforcement-app-driver.mjs": "02ebba021cf32856d0e4088afd7ffe6832862228eb378f34d9309c8f1333bebc",
     "src/integration/permission-enforcement-app.mjs": "2e62678f2edf1500c4309cd99b2325ca46d65f47e5fb9f932147c8247976fe2f",
@@ -155,7 +155,7 @@
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
     "src/integration/revalidate-held-helper.mjs": "2ffab9830556cd112944216225c2711a113c8d2626fff76a2ab6d5d45f58007b",
     "src/integration/revalidate-native-question-owner.mjs": "0ae408485822afb83be99d033f423195e6de112035347673fa67dd44e0dad6f0",
-    "src/integration/run-apack-controls.mjs": "9b68692bc68be262e232f911017ad6b29bc59fcc014f37c6b2a0443864754305",
+    "src/integration/run-apack-controls.mjs": "6a70a28f20d794ed95239722c76c229eb7e3e919c87729ba2133dfe533d27186",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -166,11 +166,11 @@
     "src/integration/sync-native-kitty-vendor.mjs": "731ea9e87b9aff99cbbe170f84a755725a8f5df2f113fe9ddd6745c1e8dd9fa4",
     "src/integration/task-list-app-driver.mjs": "0f45af319d50854c50f5f5e1e1529f96230399a9fd8442be1a59031e87bb9b29",
     "src/integration/task-list-app.mjs": "e4784bf1817ec2f25c043ddff3234e199e3a4fcb473cb77a9999850586ee075d",
-    "src/integration/verify-background-formatter.py": "c56d5a3dde01a8d1e3a191056025418cfed85057014ce786b4e3f2234a097698",
-    "src/integration/verify-background-reply.py": "0c9f669c6bc326a0248b8286d2b5819fd2b48c5dc23666ad9a942e5469e3924b",
+    "src/integration/verify-background-formatter.py": "752af8f07e90e1a0d7021fa8ace9a2a7ac55e67b33c88f866325448241634c7e",
+    "src/integration/verify-background-reply.py": "66cf61d41401de6aef7b1d6ebebe4f645ae780b7586e5ba26159822e573677d6",
     "src/integration/verify-background-resume.py": "2f8d85b8cfc64b546f94d36b8269e0a3920bc9dd0f25b0a601cbe94a063fa56e",
     "src/integration/verify-background-status-lifecycle.py": "0acfa51f46d59122806704d093e63f46756369057b77bad9fc8a40c2f9ac8fe2",
-    "src/integration/verify-background-status.py": "8721fdef0263d7e6a31d85c9ba30f8d4b65a2e55c72a9ef57844a85012909e98",
+    "src/integration/verify-background-status.py": "c10e499e5226f871ca0a8ef01c86d8f0455b7572171fc00a67d42ba27a551ea6",
     "src/integration/verify-clipboard.py": "6a8ac7e017c36fc45f71ee14d145c8f47132b02af0f24bd6b9b16fd26b85eb59",
     "src/integration/verify-everyday-rich.py": "725811c0ff0944750c903b76788d5ece67d129c5723cbd568183f553f757d080",
     "src/integration/verify-hover-browser.mjs": "f0c564f97deb7a3ad2fc5aaa6774373d0510b4a2d116ec763f1d994a1381b45c",
@@ -195,7 +195,7 @@
     "src/protocol/hook-discovery-lifecycle.mjs": "1e3896dcface2aaf09ff7e029ab183137c45a14fbeaf78fc4f6cb600851be27f",
     "src/protocol/hook-edit.mjs": "1d982e7dadecb34877a073ecfb655ebcae46e717f12a7c33e6f241b419b2c05c",
     "src/protocol/hook-listing.mjs": "5aa48b849d5b83dde2c2c28af0b68ffb474a0fa97d246f244923c60e33221110",
-    "src/protocol/linux-policy-transition-fixture.py": "3fbb39e78e426d68ed80dc441844c9f55dab5c0098518b1941eb955d31a2cfaa",
+    "src/protocol/linux-policy-transition-fixture.py": "0829923d1e4504be7ac0b754589faa26ee1115fbeeedc2ed404da91051c8e5ff",
     "src/protocol/linux-unreadable-policy.py": "2f5ca27936db090315543c35c2a27ed21e0e9eb4b337715ad081df0fa726dfa7",
     "src/protocol/live-model.mjs": "69b9cb535077ff9c6586a30c9d76beb5abb6280538e428acc157708f8fe224fb",
     "src/protocol/live-thinking.mjs": "0be002ccfe5f2cd4bf7a38e3188268a4c1d783ea059f46e9c5191b2ab499f8b5",
@@ -386,5 +386,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "3ff58817dcc80da137b8774e9efb8e9156a9f255d8a4612e6d3b39624ed24f48"
+  "archiveSha256": "17c47c0c37c083bb501118302225f15f082130d5ee303e8fdaee23d1ae7f8074"
 }
