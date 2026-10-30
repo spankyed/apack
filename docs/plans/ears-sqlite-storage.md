@@ -778,3 +778,18 @@ salvager. The existing logical archive operations retain canonical bytes indepen
 records the exact overlay, fault cases and four negative controls. Final all-platform, physical-publication,
 installed/signing and unchanged performance gates remain required. Full strict at the preceding live-maintenance
 checkpoint also has an unresolved bundled-editor app assertion; native platform success does not close it.
+
+
+### Native runtime and installed Preview validation
+
+The packaged native smoke now exercises a real 4097-row, 128-dimensional ready model, worker/ownership,
+search and read-only reopen within its original deadline. Resolved EARS assets and loaded native addons
+must remain inside the staged app. Node-API 10 in better-sqlite3 13.0.3 supports both Node 23 and Electron
+37's Node 22 without a driver rebuild; selective node-pty rebuilding remains appropriate.
+
+The `installed` app-acceptance suite builds an ordinary unsigned Preview, runs the complete native smoke,
+and launches its actual executable against an isolated SQLite profile. An app-integration witness requires
+both managed stores to contain SQLite files and retain their native model claims across the real API process.
+The report guard refuses a missing or skipped witness. This complements source-based authoring tests;
+it does not certify signing or all required architectures. [Component evidence and limits](../references/evidence/ears-sqlite-implementation-2026-10-28/native-electron-runtime/README.md)
+retain runtime hashes, fixture corrections and negative controls. Installed CI execution remains pending.

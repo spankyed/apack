@@ -24,10 +24,11 @@ test('renders and edits with its bundled @apackdev/ui editor', async ({ appPage,
     try {
       const states = await editor.evaluateAll(elements => elements.map(element => {
         const instance = (element as HTMLElement & { editor?: {
-          isInitialized?: boolean; isDestroyed?: boolean; state?: { doc?: { textContent?: string } };
+          isInitialized?: boolean; isDestroyed?: boolean; isFocused?: boolean; state?: { doc?: { textContent?: string } };
         } }).editor;
         return { domText: element.textContent, documentText: instance?.state?.doc?.textContent,
-          initialized: instance?.isInitialized, destroyed: instance?.isDestroyed,
+          initialized: instance?.isInitialized, destroyed: instance?.isDestroyed, focused: instance?.isFocused,
+          activeElement: element.ownerDocument.activeElement?.getAttribute('data-testid') || element.ownerDocument.activeElement?.tagName,
           editable: element.getAttribute('contenteditable') };
       }));
       await testInfo.attach('bundled-editor-state', { body: JSON.stringify(states), contentType: 'application/json' });

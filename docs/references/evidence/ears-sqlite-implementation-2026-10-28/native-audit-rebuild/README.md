@@ -45,3 +45,5 @@ final combined/platform/installed and performance acceptance remain in the activ
 
 Logs strip trailing whitespace/blank EOF lines; JSON reports remain unchanged except the explicitly extended
 final-source provenance. Corpus/model payloads, dependencies and compiled binaries remain private.
+
+[Exact-source full strict and platform receipts](platform-41052678824/README.md) now qualify this checkpoint on all three CI hosts. Later repair/packaging edits and performance/installed signing remain separate.

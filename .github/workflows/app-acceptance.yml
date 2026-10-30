@@ -6,12 +6,16 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged, installed]
         default: all
       test:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
         type: string
         default: ''
+      repeat_each:
+        description: Repeat each selected app or pack Playwright case (1-20)
+        type: number
+        default: 1
   workflow_call:
     inputs:
       suite:
@@ -20,6 +24,9 @@ on:
       test:
         type: string
         default: ''
+      repeat_each:
+        type: number
+        default: 1
 
 permissions:
   contents: read
@@ -39,6 +46,7 @@ jobs:
     timeout-minutes: 45
     env:
       APACK_CHAIN_CORES: 2
+      APACK_E2E_REPEAT: ${{ inputs.repeat_each }}
     defaults:
       run:
         shell: bash
@@ -50,13 +58,19 @@ jobs:
           cache: npm
       - name: Record source
         run: git rev-parse HEAD
+      - name: Validate repetition count
+        run: |
+          repeat_pattern='^([1-9]|1[0-9]|20)$'
+          if [[ ! "$APACK_E2E_REPEAT" =~ $repeat_pattern ]]; then
+            echo 'repeat_each must be an integer from 1 to 20'; exit 1
+          fi
       - uses: ./.github/actions/elmdb
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build shipped pack
-        if: ${{ inputs.suite != 'host-windows' }}
+        if: ${{ inputs.suite != 'host-windows' && inputs.suite != 'installed' }}
         env:
           APACK_ACCEPTANCE_SUITE: ${{ inputs.suite }}
         run: |
@@ -68,10 +82,50 @@ jobs:
             npm run build:default-setup
           fi
       - name: Build app runtime
-        if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' && inputs.suite != 'host-windows' }}
+        if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' && inputs.suite != 'host-windows' && inputs.suite != 'installed' }}
         id: runtime
         # The renderer leg's heap ceiling is declared on the leg (RUNTIME_BUILD_LEGS).
         run: npm run build:runtime -- --cores 2
+      - name: Build unsigned installed Preview
+        if: ${{ inputs.suite == 'installed' }}
+        run: |
+          mkdir -p .apack/installed-evidence
+          version="$(node -p 'require("./package.json").version.split("-")[0]')"
+          npm run build:preview -- --version "$version" | tee .apack/installed-evidence/installed-build.log
+      - name: Typecheck installed app contracts
+        if: ${{ inputs.suite == 'installed' }}
+        run: node node_modules/typescript/bin/tsc -p tests --noEmit | tee .apack/installed-evidence/typecheck.log
+      - name: Packaged native runtime
+        if: ${{ inputs.suite == 'installed' }}
+        run: |
+          apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
+          if (( ${#apps[@]} != 1 )) || [[ ! -d "${apps[0]}" ]]; then
+            echo 'Expected one unpacked Preview app'; exit 1
+          fi
+          node build/prod/smoke-native.mjs "${apps[0]}" | tee .apack/installed-evidence/installed-native.log
+      - name: Installed SQLite app lifecycle
+        if: ${{ inputs.suite == 'installed' }}
+        env:
+          APACK_STORAGE_FORMAT: sqlite/1
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/installed-evidence/installed-app.json
+        run: |
+          apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
+          executables=("${apps[0]}"/../../MacOS/*)
+          if (( ${#executables[@]} != 1 )) || [[ ! -x "${executables[0]}" ]]; then
+            echo 'Expected one packaged Preview executable'; exit 1
+          fi
+          unset APACK_HOST_ROOT
+          export APACK_HOST_EXECUTABLE="${executables[0]}"
+          node scripts/with-source.mjs node_modules/.bin/playwright test tests/e2e/smoke tests/e2e/app-integration/sqlite-storage.spec.ts --workers 1 --reporter=line,json
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const report=JSON.parse(fs.readFileSync(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME,'utf8'));
+          const specs=suites=>suites.flatMap(s=>[...(s.specs??[]),...specs(s.suites??[])]);
+          const witness=specs(report.suites).find(s=>s.title==='packaged SQLite stores hold their model claims across the real API process');
+          assert(witness?.ok&&witness.tests.every(t=>t.results.some(r=>r.status==='passed')),'Actual packaged SQLite witness must execute');
+          assert(report.stats.expected>=6&&report.stats.unexpected===0&&report.stats.skipped===0&&report.stats.flaky===0,'Installed app checks must pass without skips or retries');
+          fs.writeFileSync('.apack/installed-evidence/verification.json',JSON.stringify({stats:report.stats,sqliteWitness:witness.title},null,2)+'\n');
+          NODE
       - name: Host contract dependencies
         if: ${{ inputs.suite == 'host-windows' }}
         run: npm run packages:build
@@ -128,7 +182,7 @@ jobs:
         env:
           APACK_E2E_GREP: ${{ inputs.test }}
         run: |
-          args=(--host "$GITHUB_WORKSPACE" --prebuilt --trace retain-on-failure)
+          args=(--host "$GITHUB_WORKSPACE" --prebuilt --trace retain-on-failure --repeat-each "$APACK_E2E_REPEAT")
           if [[ -n "$APACK_E2E_GREP" ]]; then args+=(--grep "$APACK_E2E_GREP"); fi
           ../../../node_modules/.bin/apack pack test "${args[@]}"
       - name: App suites including settings recovery
@@ -136,11 +190,9 @@ jobs:
         env:
           APACK_E2E_GREP: ${{ inputs.test }}
         run: |
-          if [[ -n "$APACK_E2E_GREP" ]]; then
-            npm run test:e2e -- --grep "$APACK_E2E_GREP"
-          else
-            npm run test:e2e
-          fi
+          args=(--repeat-each "$APACK_E2E_REPEAT")
+          if [[ -n "$APACK_E2E_GREP" ]]; then args+=(--grep "$APACK_E2E_GREP"); fi
+          npm run test:e2e -- "${args[@]}"
       - name: Retain app suites before the CLI scenario
         if: always()
         uses: actions/upload-artifact@v4
@@ -149,6 +201,7 @@ jobs:
           include-hidden-files: true
           path: |
             .apack/tests/results/
+            .apack/installed-evidence/
             tests/packs/*/.apack/tests/results/
             tests/packs/*/dist/build-inputs.json
       - name: Compiler queue lifecycle
@@ -169,5 +222,6 @@ jobs:
           include-hidden-files: true
           path: |
             .apack/tests/results/
+            .apack/installed-evidence/
             tests/packs/*/.apack/tests/results/
             tests/packs/*/dist/build-inputs.json

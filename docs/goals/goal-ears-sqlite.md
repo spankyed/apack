@@ -210,8 +210,8 @@ allow cleanup ownership while all data operations still refuse. [Local evidence]
 passes 665 EARS, 1898 host (one Windows-only skip), 141 API, affected types/static/API checks and four negative
 controls. [All three SQLite platform jobs now pass](../references/evidence/ears-sqlite-implementation-2026-10-28/live-model-maintenance/platform-41050219130/README.md)
 at that exact source. Full strict [41050219130](https://github.com/spankyed/apack/actions/runs/41050219130)
-has an app-and-rest failure in the bundled-editor editing assertion; producers/integration-2/native-2 pass,
-and integration-1/native-1 remain live at this handoff. Re-poll that handle; do not restart it because observation expires.
+is terminal with only the bundled-editor app assertion failing; every other required job passes.
+The original failure remains an unresolved intermittent case, not evidence of data-store failure.
 
 Checkpoint `212b819db6` adds [native audit and owned rebuild](../references/evidence/ears-sqlite-implementation-2026-10-28/native-audit-rebuild/README.md)
 on that published parent. Audit checks native page integrity, model hashes, exact trigger SQL, canonical
@@ -233,12 +233,19 @@ zero skips, 98 host backup/import cases, seven API lifecycle cases, affected typ
 25 native maintenance cases including an additional malformed-model witness and four negative controls.
 This qualifies source overlays, not final combined/platform/installed behavior or performance.
 
-Exact-source full strict [41052678824](https://github.com/spankyed/apack/actions/runs/41052678824) remains
-queued at `212b819db6`. Do not dispatch another full strict while it still occupies the pending slot: GitHub
-can replace pending runs even with cancel-in-progress disabled. Once it starts, queue the repaired checkpoint
-once. The bundled-editor assertion is unchanged; failure-only DOM/ProseMirror state diagnostics are added,
-typechecked and linted. A focused app diagnostic run must reproduce/resolve the failure; no timeout or
-success assertion has been weakened. Preserve original logs/trace/empty console and every live CI handle.
+Exact-source full strict [41052678824](https://github.com/spankyed/apack/actions/runs/41052678824) is
+terminal green at `212b819db6`, including all required shards and all three SQLite hosts; see
+[retained receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/native-audit-rebuild/platform-41052678824/README.md).
+Repair checkpoint `3333361c3c` is running full strict [41056724109](https://github.com/spankyed/apack/actions/runs/41056724109):
+all three SQLite platforms pass; remaining shards are still running. Preserve this handle.
+Focused bundled-editor [41056522146](https://github.com/spankyed/apack/actions/runs/41056522146) passes once.
+That does not establish the cause or fix of the earlier failure; assertions and timeouts remain unchanged.
+
+The next validation checkpoint adds [native Electron runtime evidence and installed-app coverage](../references/evidence/ears-sqlite-implementation-2026-10-28/native-electron-runtime/README.md).
+The same Node-API addon bytes pass actual Node and Electron SQLite component checks; no extra ABI rebuild
+is necessary. Root/fixture E2E types and changed lint pass. The new unsigned installed Preview suite and
+bounded repeated editor diagnostic require CI execution after publication. Failure-only editor diagnostics
+now capture focus as well as DOM/ProseMirror state. Signed installed acceptance and performance gates remain open.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:
 

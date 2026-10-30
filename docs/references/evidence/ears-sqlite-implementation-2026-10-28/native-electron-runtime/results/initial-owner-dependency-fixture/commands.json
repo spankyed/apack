@@ -1,0 +1,20 @@
+[
+  {
+    "label": "electron-download",
+    "exitCode": 0,
+    "seconds": 4.874287282000296,
+    "args": [
+      "node",
+      "node_modules/electron/install.js"
+    ]
+  },
+  {
+    "label": "electron-native-model",
+    "exitCode": 1,
+    "seconds": 0.1442672400153242,
+    "args": [
+      "/electron/node_modules/electron/dist/electron",
+      "/probe.mjs"
+    ]
+  }
+]

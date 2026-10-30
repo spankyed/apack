@@ -8,7 +8,7 @@
 // It runs a probe in the app's own executable as Node (ELECTRON_RUN_AS_NODE=1, as the app starts its API),
 // resolving each module from packages/api as the API does:
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
-//   EARS SQLite       writes/reopens and queries FTS, Rust regex/WASM and native vector assets
+//   EARS SQLite       writes/reopens and queries FTS/regex, claims native ownership and trains a worker model
 //   node-pty          spawns a shell and waits for it to exit
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 import fs from 'node:fs';
@@ -55,6 +55,14 @@ const [appDir, dataDir] = process.argv.slice(2);
 const load = createRequire(path.join(appDir, 'packages', 'api', 'package.json'));
 const { pathToFileURL } = require('node:url');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+function insideApp(file) {
+  const relative = path.relative(fs.realpathSync(appDir), fs.realpathSync(file));
+  assert(relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative),
+    'Packaged runtime resolved a dependency outside the app: ' + file);
+  return relative;
+}
 
 async function main() {
   const { Database } = load('elmdb');
@@ -68,30 +76,55 @@ async function main() {
   if (!read?.types?.Smoke) throw new Error('elmdb read back the schema ' + JSON.stringify(read) + ' after reopening');
   console.log('elmdb: wrote, closed, reopened and read back');
 
-  const { openDatabase } = await import(pathToFileURL(load.resolve('@apackdev/ears/sqlite')).href);
+  const earsEntry = load.resolve('@apackdev/ears/sqlite');
+  insideApp(earsEntry);
+  const nativeDirectory = path.join(path.dirname(earsEntry), 'native', process.platform + '-' + process.arch);
+  const nativeLibrary = path.join(nativeDirectory, process.platform === 'darwin' ? 'vec1.dylib' : process.platform === 'win32' ? 'vec1.dll' : 'vec1.so');
+  insideApp(nativeLibrary);
+  insideApp(path.join(nativeDirectory, 'manifest.json'));
+  const { openDatabase, startVectorModels, waitForNativeModels } = await import(pathToFileURL(earsEntry).href);
   const { createEarsEngine } = await import(pathToFileURL(load.resolve('@apackdev/ears')).href);
   const sqlitePath = path.join(dataDir, 'sqlite');
   const schema = { types: { Smoke: { required: [], substrings: ['title'], search: { fields: { title: 1 } },
-    embed: { from: ['title'], model: 'smoke', dims: 3 } } }, relations: {}, roles: [] };
+    embed: { from: ['title'], model: 'smoke', dims: 128 } } }, relations: {}, roles: [] };
+  const vector = i => Array.from({ length: 128 }, (_, j) => Math.sin((i + 1) * (j + 1) * 1.71));
   let sqlite = openDatabase({ path: sqlitePath, schema, syncs: false });
   const verifySqlite = () => {
     const engine = createEarsEngine({ database: sqlite });
-    assert.deepEqual(engine.query('Smoke').matching('^alpha').ids(), ['Smoke-alpha']);
-    assert.deepEqual(engine.query('Smoke').containing('beta').ids(), ['Smoke-beta']);
-    assert.deepEqual(engine.query('Smoke').search('alpha', { fuzzy: false }).ids(), ['Smoke-alpha']);
-    assert.deepEqual(engine.query('Smoke').near([1, 0, 0], { k: 1 }).ids(), ['Smoke-alpha']);
+    assert.deepEqual(engine.query('Smoke').matching('^alpha').ids(), ['Smoke-000000']);
+    assert.deepEqual(engine.query('Smoke').containing('beta').ids(), ['Smoke-000001']);
+    assert.deepEqual(engine.query('Smoke').search('alpha', { fuzzy: false }).ids(), ['Smoke-000000']);
+    assert.deepEqual(engine.query('Smoke').near(vector(0), { k: 1 }).ids(), ['Smoke-000000']);
   };
   try {
+    await startVectorModels(sqlite);
     const engine = createEarsEngine({ database: sqlite });
-    engine.create('Smoke', { id: 'Smoke-alpha', title: 'alpha marker' });
-    engine.create('Smoke', { id: 'Smoke-beta', title: 'beta marker' });
-    const { model, chunks } = engine.pendingEmbeddings('Smoke');
-    engine.embed(chunks.map(chunk => ({ ...chunk, model, vector: chunk.id === 'Smoke-alpha' ? [1, 0, 0] : [0, 1, 0] })));
+    engine.transact(() => {
+      for (let i = 0; i < 4097; i++) engine.create('Smoke', {
+        id: 'Smoke-' + String(i).padStart(6, '0'), title: i === 0 ? 'alpha marker' : i === 1 ? 'beta marker' : 'marker ' + i,
+      });
+    });
+    let embedded = 0;
+    for (;;) {
+      const { model, chunks } = engine.pendingEmbeddings('Smoke', { limit: 1000 });
+      if (!chunks.length) break;
+      engine.embed(chunks.map(chunk => ({ ...chunk, model, vector: vector(Number(chunk.id.slice(6))) })));
+      embedded += chunks.length;
+    }
+    assert.equal(embedded, 4097);
+    await waitForNativeModels(sqlite);
+    // App-only ownership checks prove the real worker published a model, rather than taking an exact fallback.
+    assert.equal(sqlite.get("SELECT samples FROM vector_training WHERE state='ready'")?.samples, 4097);
+    assert(sqlite.get("SELECT 1 FROM vector_indexes WHERE state='ready'"));
     verifySqlite();
-  } finally { sqlite.close(); }
+    console.log('EARS SQLite provenance: ' + JSON.stringify({ entry: insideApp(earsEntry),
+      driverVersion: createRequire(earsEntry)('better-sqlite3/package.json').version,
+      sqliteVersion: sqlite.get('SELECT sqlite_version() version').version,
+      nativeManifest: JSON.parse(fs.readFileSync(path.join(nativeDirectory, 'manifest.json'), 'utf8')) }));
+  } finally { await sqlite.drainBackground(); sqlite.close(); }
   sqlite = openDatabase({ path: sqlitePath, readOnly: true });
   try { verifySqlite(); } finally { sqlite.close(); }
-  console.log('EARS SQLite: wrote, reopened read-only, verified FTS, regex/WASM and native vectors');
+  console.log('EARS SQLite: claimed ownership, trained a native model in a worker, queried and reopened read-only with FTS/regex');
 
   const pty = load('node-pty');
   const [shell, args] = process.platform === 'win32' ? ['cmd.exe', ['/c', 'exit 0']] : ['/bin/sh', ['-c', 'exit 0']];
@@ -102,6 +135,11 @@ async function main() {
   const { Entry } = load('@napi-rs/keyring');
   if (typeof Entry !== 'function') throw new Error('@napi-rs/keyring has no Entry');
   console.log('@napi-rs/keyring: binding loaded');
+  const addons = Object.keys(require.cache).filter(file => file.endsWith('.node')).map(file => ({
+    file: insideApp(file), sha256: crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'),
+  }));
+  console.log('Packaged native provenance: ' + JSON.stringify({ versions: process.versions,
+    platform: process.platform, arch: process.arch, addons }));
 }
 main().catch((error) => { console.error(error?.stack ?? String(error)); process.exit(1); });
 `;
