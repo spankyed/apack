@@ -90,6 +90,8 @@ const FILTERS = [
   ...['apack-ears', 'apack-sdk', 'apack-ui', 'apack-testing', 'apack-cli'].flatMap((pkg) =>
     [`--exclude=/packages/${pkg}/dist`, `--exclude=/packages/${pkg}/publish`]),
   '--exclude=/packages/default-setup/dist', '--exclude=/packages/default-setup/.apack',
+  ...['api', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),
+  '--exclude=/build-manifest.json', '--exclude=/build-integrity.json',
 ];
 
 /**
