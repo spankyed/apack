@@ -321,6 +321,11 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         const configured=widget.getByLabel('Background Claude configured status',{exact:true})
         await expect(configured).toContainText('AppNativeMain '+job.sessionId,{timeout:15000})
         await expect(configured).toContainText('Second native status line')
+        await expect.poll(async()=>{
+          const current=await readInfo()
+          const rows=await readFile(join(workspace!,'background-formatter-helper.jsonl'),'utf8').then(text=>text.trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))).catch(error=>error.code==='ENOENT'?[]:Promise.reject(error))
+          return rows.some(row=>row.sessionId===job.sessionId&&(!parentOwnerLoss||row.at>observations.parentOwnerLoss.closedAt)&&row.stdout.trim().split('\n').flatMap((line:string)=>line.trim()||[]).join('\n')===current?.statusLine)
+        },{timeout:15000}).toBe(true)
         const info=await readInfo();expect(info.statusLine).toContain(job.sessionId)
         const receipts=(await readFile(join(workspace!,'background-formatter-helper.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(row=>row.sessionId===job.sessionId)
         expect(receipts.some(row=>(!parentOwnerLoss||row.at>observations.parentOwnerLoss.closedAt)&&row.stdout.trim().split('\n').flatMap((line:string)=>line.trim()||[]).join('\n')===info.statusLine)).toBe(true)
