@@ -470,6 +470,8 @@ export const claudeNativeLinuxBindings: {
     }
   },
   "functionNames": {
+    "KCo": "s_o",
+    "mte": "fte",
     "HIe": "tEe",
     "VCo": "r_o",
     "Ske": "Tke",
@@ -512,6 +514,8 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "e611c57cc8b263026de5a0b2a40644179fda5bc54e5a40b49919b51d8adc08f4": "d65b730db759ee8145211af18d54722f70d611f82d876eaf5d25075e5eaaf6b1",
+    "eef71f5d1f4e2efcc0c9a0f485d5a530d5943f3e81bab60f2e6575174541c9e7": "d12b7191be69a5c7725ac83bec9d70a8d870c38a32ca2dce8b6d58a54b588fd9",
     "8c1a9dcbdd4a1c9e2db39937f22289db72758d4671938522306b44b77147b403": "ec910d2137837723c47cad72818afa8047e27c040f4105d448f4814d18be3b34",
     "573ab81627b252950400c030451d1608cd68367c498beaca288b27c3da8d20c5": "6eb8c9c2db42ae52f118e9b8e0403ca0cdbede2dba2ce618a80282bd660685a3",
     "5ef697d36d06b882f5a1363a26b6b7c9a5f26dec6e375f494ee564ef93048aa0": "681d3e07b581fbdeaa30fce3b295c99169dde2a2d5d18c0211ed1b2f2039cadc",
