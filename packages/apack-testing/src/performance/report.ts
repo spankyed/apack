@@ -27,10 +27,10 @@ export const processReportSchema = z.object({
   }
 });
 export const manifestSchema = z.object({
-  format: z.literal(1), source: z.object({ revision: z.string(), dirty: z.boolean(), diffSha256: z.string() }),
+  format: z.literal(1), source: z.object({ revision: z.string(), dirty: z.boolean(), excludedUntracked: z.array(z.string()), diffSha256: z.string() }),
   builds: z.array(z.object({ path: z.string(), sha256: z.string() })).min(1),
   fixture: z.object({ generator: z.string(), seed: count, sha256: z.string(), distribution: z.record(z.string(), count) }),
-  native: z.object({ pin: z.string(), checkoutRevision: z.string(), dirty: z.boolean() }),
+  native: z.object({ pin: z.string(), checkoutRevision: z.string(), dirty: z.boolean(), excludedUntracked: z.array(z.string()) }),
   runtime: z.record(z.string(), z.string()), machine: z.object({ platform: z.string(), arch: z.string(), cpus: count, memoryBytes: count, identity: z.string() }),
   mode: z.enum(['disabled', 'lightweight', 'detailed']),
   cache: z.enum(['warm-process', 'fresh-process-warm-filesystem']), warmups: count,
