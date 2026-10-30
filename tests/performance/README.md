@@ -70,3 +70,11 @@ resources. The command rejects missing/unsuccessful/inconsistent trials and over
 Startup additionally requires successful process invocations and matching per-launch manifests/results.
 For native isolation, set `APACK_LINUX_ELMDB_ROOT` to a clean frozen checkout at `vendor/elmdb.rev`;
 never qualify timings against another agent's changing native tree.
+
+Controlled manual counterfactuals: `APACK_PERFORMANCE_SCENARIO=search-supersession` delivers real old
+results directly to the actor after supersession/cancellation (transport guards are separately tested).
+`APACK_PERFORMANCE_SCENARIO=backend-block` runs a bounded CPU workload through the actual database
+console and requires its returned CPU charge in backend process totals. These are correctness proofs,
+not latency samples. Inside the runner-owned `/work` copy only, `bash tests/performance/counterfactuals/thread-full-read.sh`
+injects an actual full-dataset query, requires a newly written failed work-budget report, and restores
+its source on exit. Deliberate defects never enter the authored checkout.
