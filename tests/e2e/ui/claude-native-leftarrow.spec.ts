@@ -146,12 +146,26 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await capture('apack-native-background-handoff-' + name + '.png')
     }
     observations.parentHandoffRecovered = true
-    await expect.poll(async () => {
-      observations.current = await context()
-      observations.jobs = await list()
-      job = observations.jobs.find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
-      return Number.isSafeInteger(job?.pid) && job.pid > 1
-    }, { timeout: 25000, intervals: [500] }).toBe(true)
+    try {
+      await expect.poll(async () => {
+        observations.current = await context()
+        observations.jobs = await list()
+        job = observations.jobs.find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
+        return Number.isSafeInteger(job?.pid) && job.pid > 1
+      }, { timeout: 25000, intervals: [500] }).toBe(true)
+    } catch(error) {
+      observations.initialChildAdmission={job,current:await context()}
+      if(parentOwnerLoss&&job?.id){
+        const initialWidget=appPage.getByRole('region',{name:'Background Claude session',exact:true})
+        try{
+          await initialWidget.getByRole('button',{name:'Open session',exact:true}).click({timeout:5000})
+          await expect.poll(async()=>!!(await context()).native?.attachment?.state?.output?.length,{timeout:8000}).toBe(true)
+        }catch(attachError){observations.initialChildAdmission.attachProblem=String(attachError)}
+        observations.initialChildAdmission.attached=(await context()).native?.attachment
+        await appPage.setViewportSize({width:1100,height:900});await capture('apack-native-background-startup-diagnostic.png')
+      }
+      throw error
+    }
     observations.job = job
     expect(job.sessionId).not.toBe(sessionId)
     expect(job.pid).toBeGreaterThan(1)
