@@ -16,7 +16,7 @@ test('attributes an injected CPU block to the backend process', async ({ app, ap
   try {
     await appPage.evaluate(() => {
       const win = window as unknown as PerformanceWindow;
-      const action = win.__performance.begin('app.dispatch', { 'app.scenario': 'backend-block-counterfactual' });
+      const action = win.__performance.begin('app.dispatch', { 'app.scenario': 'backend-block-counterfactual' })!;
       try {
         action.within(() => win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/database', events: [{
           type: 'QUERY.EXECUTE', code: `
