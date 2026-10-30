@@ -278,6 +278,15 @@ app-owned admission or the remaining app/operational requirements. The SQL/nativ
 query cost; it does not resolve the separate durable-COMMIT responsiveness miss.
 No evidence here certifies arbitrary filesystems or completes the goal.
 
+Independent phase 5 checkpoint: run the broader source UI/app suite with explicit `storage_format=sqlite/1`
+through the existing App acceptance workflow (`suite=app`). The production/workflow default remains elmdb.
+The source SQLite witness must inspect both managed stores' physical EARS headers in the real isolated API
+profile, and the settings-recovery fixture must validate its explicit temporary target rather than relying
+on a missing parent-process profile variable. Inspect all actual reports, failures and intentional installed-only
+skips; a green build or six installed smokes cannot substitute for these broader flows. This checkpoint also
+serves phase 3 live-pack/readiness behavior; it does not close performance or all operational requirements.
+
+
 Next deliverables and their closing checks, without narrowing phases 3–7:
 
 - Qualify native repair faults on the final platforms, complete physical publication/deletion authority and

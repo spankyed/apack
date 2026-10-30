@@ -8,6 +8,11 @@ on:
         type: choice
         options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged, installed, installed-signed]
         default: all
+      storage_format:
+        description: Storage for isolated source app/pack qualification; installed suites select SQLite explicitly
+        type: choice
+        options: [elmdb/1, sqlite/1]
+        default: elmdb/1
       test:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
         type: string
@@ -21,6 +26,9 @@ on:
       suite:
         type: string
         default: all
+      storage_format:
+        type: string
+        default: elmdb/1
       test:
         type: string
         default: ''
@@ -47,6 +55,7 @@ jobs:
     env:
       APACK_CHAIN_CORES: 2
       APACK_E2E_REPEAT: ${{ inputs.repeat_each }}
+      APACK_STORAGE_FORMAT: ${{ inputs.storage_format || 'elmdb/1' }}
     defaults:
       run:
         shell: bash
@@ -58,6 +67,12 @@ jobs:
           cache: npm
       - name: Record source
         run: git rev-parse HEAD
+      - name: Validate storage selection
+        run: |
+          case "$APACK_STORAGE_FORMAT" in
+            elmdb/1|sqlite/1) printf 'Isolated app storage: %s\n' "$APACK_STORAGE_FORMAT" ;;
+            *) echo 'Expected elmdb/1 or sqlite/1'; exit 1 ;;
+          esac
       - name: Validate repetition count
         run: |
           repeat_pattern='^([1-9]|1[0-9]|20)$'

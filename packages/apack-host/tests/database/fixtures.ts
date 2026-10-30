@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import { untypedCreate, _bindEars } from '@apackdev/sdk/ears';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { openDatabaseStore } from '../../src/database/open.ts';
+import { configuredDatabaseFormat } from '../../src/database/storage.ts';
 import { readInstalledSchema, type DatabaseSchema } from '../../src/database/schema.ts';
 import { _appDirOf } from '@apackdev/sdk/env';
 
@@ -64,6 +65,7 @@ export async function writeData(userDataDir: string, write: () => void): Promise
   const paths = _appDataPaths(userDataDir);
   const { database, engine } = openDatabaseStore({
     path: paths.lmdb,
+    storageFormat: configuredDatabaseFormat(userDataDir),
     schema: readInstalledSchema(context(userDataDir)),
   });
   const previous = _bindEars(engine);
