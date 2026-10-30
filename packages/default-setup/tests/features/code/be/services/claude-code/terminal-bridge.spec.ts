@@ -239,6 +239,8 @@ it('publishes native view revisions only from its current process/session and re
   expect(bridge!.view).toEqual({ kind: 'agent', revision: 3, registryId: 'registry-a', taskId: 'agent-a' })
   const otherSession = '22222222-2222-2222-2222-222222222222'
   await request('/poll', { sessionId: otherSession, agents: [], statusCommand: 'main', subagentCommand: 'sub', shellPrefix: null })
+  expect(bridge!.view).toEqual({ kind: 'agent', revision: 3, registryId: 'registry-a', taskId: 'agent-a' })
+  await request('/poll', { sessionId: otherSession, agents: [], directOwner: true, busy: false, turn: null })
   expect(bridge!.view).toBeUndefined()
   expect((await request('/native-view', agent)).status).toBe(409)
   expect((await request('/native-view', { ...main, sessionId: otherSession, sequence: 4 })).status).toBe(200)
@@ -332,6 +334,8 @@ it('fences native pending activity by owner/session/sequence without blocking ba
   expect((await request('/native-activity', body)).status).toBe(409)
   expect(bridge!.activity).toEqual(next.activity)
   await request('/poll', { sessionId: '22222222-2222-2222-2222-222222222222', agents: [] })
+  expect(bridge!.activity).toEqual(next.activity)
+  await request('/poll', { sessionId: '22222222-2222-2222-2222-222222222222', agents: [], directOwner: true, busy: false, turn: null })
   expect(bridge!.activity).toBeUndefined()
   expect((await request('/native-activity', { ...body, sequence: 3 })).status).toBe(409)
 })
@@ -498,6 +502,8 @@ it('accepts billing only from its current native owner and clears stale observat
  expect((await request('/native-billing',{...event,sequence:2,observedAt:9})).status).toBe(400)
  const next='22222222-2222-2222-2222-222222222222'
  expect((await request('/poll',{sessionId:next,agents:[]})).status).toBe(200)
+ expect(bridge!.billing?.info.isUsingOverage).toBe(true)
+ expect((await request('/poll',{sessionId:next,agents:[],directOwner:true,busy:false,turn:null})).status).toBe(200)
  expect(bridge!.billing).toBeUndefined()
  expect((await request('/native-billing',{...event,sequence:3})).status).toBe(409)
  expect((await request('/native-billing',{...event,sessionId:next,sequence:4})).status).toBe(400)
