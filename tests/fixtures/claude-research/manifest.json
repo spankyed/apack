@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "fbedbeb9f796d38adaa4188d0297a5bdec97a254",
+  "researchCommit": "4e14977694e4119801f6ad3c4ca980e860323bf1",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -98,7 +98,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "b76f48f8cb0e4f5dc721723fba39395d0db59a030675adcd25ff98d7b6441cf5",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "8cb30f448ab3255a014dc4ed9b0308243f240b022a66db8ad1892af6c7763098",
+    "src/integration/apack-terminal-owner-app.mjs": "1396f0995f270f96a607a9626341a05d9e246d7612a24bf5616257cba711f158",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -152,7 +152,7 @@
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
     "src/integration/revalidate-held-helper.mjs": "2ffab9830556cd112944216225c2711a113c8d2626fff76a2ab6d5d45f58007b",
     "src/integration/revalidate-native-question-owner.mjs": "0ae408485822afb83be99d033f423195e6de112035347673fa67dd44e0dad6f0",
-    "src/integration/run-apack-controls.mjs": "24b5243848e87afaa547b8eeded2ec9e97e443b6cea59539db3334d45deb081b",
+    "src/integration/run-apack-controls.mjs": "92dc0dae3dd6761b4b32bd7bcf9501f6dae23f183ff1f6cfd493c45aea68117f",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -170,6 +170,7 @@
     "src/integration/verify-clipboard.py": "6a8ac7e017c36fc45f71ee14d145c8f47132b02af0f24bd6b9b16fd26b85eb59",
     "src/integration/verify-hover-browser.mjs": "f0c564f97deb7a3ad2fc5aaa6774373d0510b4a2d116ec763f1d994a1381b45c",
     "src/integration/verify-patch.mjs": "0714c854b5d5c21c5137c64e5a63a6b4a9bc6fa2b4000272e6280078a8f50892",
+    "src/integration/verify-structured-selection.py": "eac3eae61dafe07bd5b001cfe104656da08eb58e1a7aa216ad116931204cfdfb",
     "src/integration/verify-svg-browser.mjs": "599b395b69035c39ca074cbcc57939e79405982bf892f4366b79e3a684a2d2db",
     "src/integration/workflow-app-driver.mjs": "c1435ea9b1902034e9bb4dcdef8cff9c759eacf7089432e8df8e5670844ee8f1",
     "src/integration/workflow-app.mjs": "85c3d9132e36c716c00fa69b2246e3e2fb55ab50222aedc037a5f64256433f0c",
@@ -378,5 +379,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "8135d6cccc99e85c1c2d0c5934d0fdc3f23fe788f4753c70edf9aacb0292f890"
+  "archiveSha256": "a0253988a51f82ef5001b4d655d8f400529ba10ba93e5cb5688274642e008b93"
 }
