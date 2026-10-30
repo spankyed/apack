@@ -2,7 +2,9 @@
 
 `build.mjs` builds SQLite's vec1 extension at upstream commit
 `814fd8ef4d42d6567f1613a66f556c8194764d06` with `vec1-membership.patch`.
-The upstream source SHA-256 is checked before patching or compiling. The upstream
+The upstream source SHA-256 is checked before patching or compiling. After patch application,
+generated C is canonicalized to LF and its exact expected digest is checked before compilation,
+including when Git has a Windows CRLF policy. The upstream
 copyright disclaimer stays in the generated source. Build provenance records source,
 patch, compiler, SQLite header package, target and binary hashes. No database value
 chooses executable code. The database owner supplies a trusted built extension path.

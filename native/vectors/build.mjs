@@ -29,6 +29,10 @@ mkdirSync(output, { recursive: true, mode: 0o700 });
 const file = join(output, 'vec1.c');
 writeFileSync(file, source, { flag: 'wx' });
 execFileSync('git', ['apply', '--no-index', '--unsafe-paths', patchFile], { cwd: output, stdio: 'inherit' });
+// Git may honor a Windows CRLF policy even for --no-index application. Compile the same pinned bytes everywhere.
+writeFileSync(file, readFileSync(file, 'utf8').replaceAll('\r\n', '\n'));
+assert.equal(sha(readFileSync(file)), '5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b',
+  'Patched native source must match after canonicalizing line endings');
 const require = createRequire(import.meta.url), manifest = require.resolve('better-sqlite3/package.json');
 const headers = join(dirname(manifest), 'deps/sqlite3');
 assert(existsSync(join(headers, 'sqlite3ext.h')));

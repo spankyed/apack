@@ -1,0 +1,35 @@
+[
+  {
+    "label": "legacy-crlf",
+    "args": [
+      "node",
+      "native/vectors/build.mjs",
+      "/metrics/crlf-legacy",
+      "/upstream.c"
+    ],
+    "exitCode": 0,
+    "seconds": 2.640007403009804
+  },
+  {
+    "label": "canonical-crlf",
+    "args": [
+      "node",
+      "native/vectors/build.mjs",
+      "/metrics/crlf-fixed",
+      "/upstream.c"
+    ],
+    "exitCode": 0,
+    "seconds": 2.5283278719871305
+  },
+  {
+    "label": "canonical-membership",
+    "args": [
+      "node",
+      "native/vectors/membership-test.mjs",
+      "/metrics/crlf-fixed/vec1.so",
+      "/results/membership.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.5283893710002303
+  }
+]
