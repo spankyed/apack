@@ -29,6 +29,8 @@ it('retains the other profile and closes after one oversized export', async () =
   const report = await capture.stop();
   expect(report).toMatchObject({ complete: false, failures: 1, failureStages: ['cpu-size'], allocation: '{"head":{}}' });
   expect(report.cpu).toBeUndefined();
+  expect(report.encodedBytes!.cpu).toBeGreaterThan(PROFILE_BYTES / 2);
+  expect(report.encodedBytes!.allocation).toBe(11);
   expect(report.bytes).toBe(11);
   expect(port.close).toHaveBeenCalledTimes(1);
 });

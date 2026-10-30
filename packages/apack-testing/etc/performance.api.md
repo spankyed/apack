@@ -166,6 +166,10 @@ export const processReportSchema: z.ZodObject<{
         bytes: z.ZodNumber;
         failures: z.ZodNumber;
         failureStages: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        encodedBytes: z.ZodOptional<z.ZodObject<{
+            cpu: z.ZodOptional<z.ZodNumber>;
+            allocation: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strip>>;
         complete: z.ZodBoolean;
         windowLimitMs: z.ZodLiteral<30000>;
         durationMs: z.ZodNumber;
@@ -364,6 +368,10 @@ export const trialSchema: z.ZodObject<{
             bytes: z.ZodNumber;
             failures: z.ZodNumber;
             failureStages: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            encodedBytes: z.ZodOptional<z.ZodObject<{
+                cpu: z.ZodOptional<z.ZodNumber>;
+                allocation: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strip>>;
             complete: z.ZodBoolean;
             windowLimitMs: z.ZodLiteral<30000>;
             durationMs: z.ZodNumber;
@@ -522,6 +530,10 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
                 cpu?: string | undefined;
                 allocation?: string | undefined;
                 failureStages?: string[] | undefined;
+                encodedBytes?: {
+                    cpu?: number | undefined;
+                    allocation?: number | undefined;
+                } | undefined;
             } | undefined;
             profileFailures?: number | undefined;
             rendererResourceFailures?: number | undefined;
