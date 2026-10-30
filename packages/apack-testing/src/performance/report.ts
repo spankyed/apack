@@ -56,6 +56,24 @@ export const trialSchema = z.object({
 export type PerformanceTrial = z.infer<typeof trialSchema>;
 export type PerformanceManifest = z.infer<typeof manifestSchema>;
 
+/** Validate a complete run before comparison; partial/failing reports remain useful diagnostic evidence. */
+export function validatePerformanceRun(manifestInput: unknown, trialsInput: unknown, measured: number) {
+  const manifest = manifestSchema.parse(manifestInput);
+  if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100 || manifest.warmups > 100) throw Error('Invalid run size');
+  const trials = z.array(trialSchema).max(200).parse(trialsInput);
+  if (trials.length !== manifest.warmups + measured) throw Error('Incomplete trial count');
+  const scenario = trials[0]!.scenario;
+  for (const [index, trial] of trials.entries()) {
+    if (trial.index !== index || trial.warmup !== (index < manifest.warmups)) throw Error('Invalid trial order or warmup classification');
+    if (trial.scenario !== scenario) throw Error('Mixed scenarios');
+    if (trial.outcome !== 'passed') throw Error('Unsuccessful trial');
+    const required = scenario === 'populated-startup' ? ['driver', 'renderer', 'backend'] : ['renderer', 'backend'];
+    if (required.some(process => !trial.processes[process])) throw Error('Missing required process');
+    if (Object.values(trial.processes).some(process => process.mode !== manifest.mode)) throw Error('Mixed recording modes');
+  }
+  return { manifest, trials, summary: summarize(trials) };
+}
+
 /** A spread and sample count accompany every median; failed trials remain in the report. */
 export function summarize(input: readonly PerformanceTrial[]) {
   const trials = input.map(trial => trialSchema.parse(trial));

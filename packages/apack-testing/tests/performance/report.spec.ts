@@ -1,7 +1,7 @@
 import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
 import type { z } from 'zod';
 import { expect, it } from 'vitest';
-import { assertComparable, comparisonOrder, manifestSchema, processReportSchema, summarize, trialSchema } from '../../src/performance/report.ts';
+import { assertComparable, comparisonOrder, manifestSchema, processReportSchema, summarize, trialSchema, validatePerformanceRun } from '../../src/performance/report.ts';
 const processReport = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
 const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', work: {}, processes: { renderer: processReport, backend: processReport } };
@@ -48,5 +48,22 @@ it('requires visible intermediate streaming progress and plausible milestone tim
   expect(trialSchema.safeParse(streaming).success).toBe(true);
   for (const patch of [{ timings: undefined }, { work: { visibleUpdates: 1 } }, { timings: { firstVisibleMs: 10, maxVisibleGapMs: 1 } }, { timings: { firstVisibleMs: 2, maxVisibleGapMs: 11 } }]) {
     expect(trialSchema.safeParse({ ...streaming, ...patch }).success).toBe(false);
+  }
+});
+
+it('rejects incomplete and internally inconsistent whole runs before comparison', () => {
+  const manifest = { format: 1, source: { revision: 'one', dirty: false, excludedUntracked: [], diffSha256: 'clean' },
+    builds: [{ path: 'app', sha256: 'one' }], fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} },
+    native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] }, mode: 'lightweight', cache: 'warm-process', warmups: 1,
+    runtime: {}, machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' },
+    clock: 'Local monotonic durations; cross-process epoch alignment is approximate' };
+  const trials = [{ ...trial, warmup: true }, { ...trial, index: 1 }];
+  expect(validatePerformanceRun(manifest, trials, 1).summary.passed).toBe(1);
+  for (const changed of [trials.slice(1), [trials[0], trials[0]], [trials[0], { ...trials[1], warmup: true }],
+    [trials[0], { ...trials[1], scenario: 'search' }],
+    [trials[0], { ...trials[1], processes: { renderer: processReport, unrelated: processReport } }],
+    [trials[0], { ...trials[1], processes: { renderer: { ...processReport, mode: 'disabled' }, backend: processReport } }],
+    [trials[0], { ...trials[1], outcome: 'cancelled' }]]) {
+    expect(() => validatePerformanceRun(manifest, changed, 1)).toThrow();
   }
 });
