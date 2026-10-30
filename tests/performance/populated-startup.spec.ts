@@ -50,11 +50,12 @@ test('start a populated profile through admission to its initial usable thread v
   try {
     await appPage.waitForFunction(expected => {
       const win = window as unknown as PerformanceWindow;
-      const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
+      const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadIds: string[]; lists: { list: Array<{ id: string; topic: string }> } };
       const receipt = win.__performance.lastStartupView('default-setup/threads', 'list');
-      return receipt?.ok && Object.keys(context.threadMap).filter(id => id.startsWith('Thread-search-')).length === expected;
+      return receipt?.ok && Array.from({ length: expected }, (_, index) => index).every(index =>
+        context.threadIds.includes(`Thread-search-${index}`) && context.lists.list.some(row => row.id === `Thread-search-${index}` && row.topic === `Search fixture ${index}`));
     }, fixture.distribution.threads);
-    await expect(appPage.getByText('Search fixture 11', { exact: true }).first()).toBeVisible();
+    await expect(appPage.locator('.thread-row').filter({ has: appPage.getByText('Search fixture 11', { exact: true }) }).first()).toBeVisible();
     const receipt = await appPage.evaluate(async () => {
       const recording = (window as unknown as PerformanceWindow).__performance;
       await recording.flushView();
