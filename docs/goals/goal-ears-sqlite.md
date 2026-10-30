@@ -5,8 +5,8 @@
 
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
-The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 59ed33cdb9
-and its native pin 006d6cec88; combined acceptance is pending. Inspect the current handoff and actual source before continuing.
+The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 5e81dda7c2
+and its native pin 95615ed8d4; combined acceptance is pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
 Finished when the SQLite candidate runs the complete app data lifecycle, all required
@@ -192,9 +192,13 @@ No master merge, release, production adoption or version-only PR is authorized. 
 Active integration checkout: `/private/tmp/ears-sqlite-query-integration`. The preceding checkpoint is
 preserved at `/private/tmp/ears-sqlite-diagnosis-evidence`, `68cf78a2f4`.
 
-Current checkpoint: integrate claimed model ownership with separate logical/native readiness and resolve admission responsiveness on committed master `59ed33cdb9` and native
-`006d6cec88`. Detached merge `edf17cd0dc` integrates master’s runner cleanup and descendant native pin into
-`23a1e941c7`; exact-source combined acceptance remains pending. The preceding merge `399c4765f0` combines
+Current checkpoint: qualify managed model ownership and separate logical/native readiness on committed
+master `5e81dda7c2` and native `95615ed8d4`, then resolve admission responsiveness and remaining lifecycle gates.
+Detached merge `61b287bcd7` combines verified candidate `9fc0e5e19b` with that master snapshot: batched folder
+queries/paths, selective flow removal, native graph/reader/watch fixes and the corresponding facade report.
+The preceding candidate passes 652 EARS, 18 host and 7 API cases on native `006d6cec88`; those results do
+not qualify the later merge. Exact-source combined acceptance remains pending. The preceding detached
+merge `edf17cd0dc` integrated master’s runner cleanup and native pin into `23a1e941c7`. The preceding merge `399c4765f0` combines
 candidate `fbd3c1c441` with master `debeddc3a6a`,
 retaining SQLite explanations/backend assertions, master reverse-traversal clarification and all
 **five** current thread-query cases. The new master adds the Message status index, queued-message
@@ -202,8 +206,8 @@ relocation and batched library queries. No source branch or other-agent checkout
 The previous `330efa68e6` integration of `68cf78a2f4` and master `8b1a479b96` is historical.
 The draft branch publishes candidates for CI review; publication does not establish combined acceptance.
 Exact base `1efad34246` is now all-platform green in `41013324901`, including ordinary package loading,
-current app queries and native pin `006d6cec88`. Later service-ownership edits still need their own
-qualification. Full Strict and the complete adoption/performance criteria remain required.
+the then-current app queries and native pin `006d6cec88`. Ownership checkpoint `1d16d85c81` also passes
+all three platform hosts in run `41019274148`; neither result qualifies the newer activation/master merge. Full Strict and the complete adoption/performance criteria remain required.
 Closing checks are matching native source/build, complete platform and full Strict gates, all five
 current app-query/SDK contracts, unchanged primary data/units/watches and exact-input verification.
 [Integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/master-query-integration/README.md)
@@ -216,7 +220,7 @@ on Linux/macOS/Windows at `d28e2de39c`; Linux executes all 1,320 prepared SDK ca
 with no skips. All hosts execute both fixture stores and four built-pack repository cases.
 The unchanged own-unit embedding assertion fails on exact native `4d558a2754` and
 passes with the isolated journal-overlay fix, now committed/published as
-`8ab7088f9a583202f9ccc766381a31e39d19851f`, the preceding tested native pin. Current master’s
+`8ab7088f9a583202f9ccc766381a31e39d19851f`, the preceding tested native pin. The preceding pin
 `006d6cec880471e7ccc83899cd9c8704288b04e0` descends from that fix; old artifact receipts do not qualify this newer pin. All required
 Linux native checks pass, including 348 Rust cases, applicable binding tests and a
 negative control restoring the old implementation. Exact cross-platform native

@@ -23,12 +23,13 @@ if (mode === 'verify') {
   const nativeMembership=report('native-membership.json');
   const sdkBackend=report('sdk-backend.json'),queryWork=report('query-work.json');
   const sdkAll=platform()==='linux'?report('sdk-all-sqlite.json'):null;
+  const apiStartup=platform()==='linux'?report('api-startup.json'):null;
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
-  const result = { source, nativeMembershipChecks:nativeMembership.groups.reduce((n,group)=>n+group.checks,0),
+  const result = { source, apiStartupCasesPassed:apiStartup?.numPassedTests??null, nativeMembershipChecks:nativeMembership.groups.reduce((n,group)=>n+group.checks,0),
     nativeMembershipPatchSha256:nativeGeneration.patchSha256, sdkSqliteCasesPassed:sdkAll?.numPassedTests??null,
     sdkContentRuntimeCasesPassed:sdkAll?passedIn(sdkAll,/\/tests\/testing\/content-runtime\.spec\.ts$/):null,
     sdkBackendCasesPassed:passedIn(sdkBackend,/\/tests\/testing\/database-backend\.spec\.ts$/),
@@ -80,6 +81,12 @@ if (mode === 'verify') {
   assert.equal(result.nativeGenerationCasesPassed,8,'All native generation lifecycle cases must execute');
   assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
   assert.equal(result.nativeModelCasesPassed,23,'All durable native model admission cases must execute');
+  if(apiStartup){
+    assert.equal(apiStartup.numFailedTests,0);assert.equal(apiStartup.numPendingTests,0);
+    assert.equal(passedIn(apiStartup,/\/tests\/runtime\/sqlite-profile\.spec\.ts$/),5);
+    assert.equal(passedIn(apiStartup,/\/tests\/transport\/shutdown\.spec\.ts$/),2);
+    assert.equal(result.apiStartupCasesPassed,7,'All managed API startup and shutdown cases must execute');
+  }
 
   assert(result.maintenanceCasesPassed >= 9 && cli.numFailedTests === 0,
     'All nine actual offline maintenance command cases must execute and pass');

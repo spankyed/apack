@@ -56,6 +56,8 @@ jobs:
           {
             npm run typecheck -w @apackdev/ears
             npm run typecheck:host
+            npm run typecheck:api
+            npm run api:check -w @apackdev/ears
             npm run typecheck:scripts
             node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run \
               --project @app/repo-checks packages/repo-checks/tests/chain-inputs.spec.ts \
@@ -77,6 +79,14 @@ jobs:
           npm test -w @apackdev/sdk -- --maxWorkers=2 --reporter=default --reporter=json
           --outputFile=../../.temp/sqlite-platform/sdk-all-sqlite.json
           2>&1 | tee .temp/sqlite-platform/sdk-all-sqlite.log
+      - name: Managed API storage startup and shutdown
+        if: runner.os == 'Linux'
+        run: >-
+          node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run
+          --project @app/api packages/api/tests/runtime/sqlite-profile.spec.ts
+          packages/api/tests/transport/shutdown.spec.ts --maxWorkers=2
+          --reporter=default --reporter=json --outputFile=.temp/sqlite-platform/api-startup.json
+          2>&1 | tee .temp/sqlite-platform/api-startup.log
       - name: Current app repository queries on SQLite
         run: >-
           npm test -w @app/default-setup -- tests/features/threads/be/query-work.spec.ts --maxWorkers=2

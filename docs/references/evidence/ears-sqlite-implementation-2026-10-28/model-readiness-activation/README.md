@@ -23,7 +23,7 @@ initial failure remains in `api-types.log` and `integrated-results.json`; succes
 continuation is in `finish-results.json`. No runtime fix followed the 652-case pass.
 
 API reports were regenerated and checked in Linux, then copied using the report's existing
-LF convention. Boundaries, changed-file correctness lint and platform script syntax passed.
+LF convention and successfully rechecked after that normalization (`normalized-api-report-check.log`). Boundaries, changed-file correctness lint and platform script syntax passed.
 `final-source.json` verifies the final runtime, test and normalized report hashes against
 the validated volume and records both actual native binary identities. `validate.py` and
 `finish.py` preserve the exact command sequence. The broader container used 2 CPU / 6 GiB
