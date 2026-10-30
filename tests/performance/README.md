@@ -45,20 +45,25 @@ Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 
 - `manifest.json` identifies source/dirty state, actual build/native output hashes and checkout identity, fixture distributions, runtimes,
   machine, recording mode, cache policy and warmups.
-- `results.json` retains warmups, failures/incomplete trials, raw process records and median/range/count.
-- `trace.json` is Chrome Trace Event JSON for Perfetto. Durations are local monotonic measurements;
+- `results.json` is a compact format-2 index: ordered raw-trial paths, byte counts, SHA-256 hashes,
+  scalar samples, lifecycle status and median/range/count. It never duplicates full profiles.
+- `trial-N.json` retains each warmup, failure/incomplete trial and its complete process records once.
+  A raw trial is limited to 128 MiB; generated raw/viewer files have a 4 GiB per-store budget.
+  Run admission reads one trial at a time and verifies hashes, summaries, order, modes and lifecycle.
+- `trial-N.trace.json` is Chrome Trace Event JSON for Perfetto. Detailed recordings additionally export
+  each process's `.cpuprofile` and `.heapprofile` for existing V8 profile viewers. Durations are local monotonic measurements;
   cross-process epoch placement is approximate. Parent ids/links live in event arguments.
 
 Capture integrity (`complete`) does not certify instrumentation coverage. Coalesced watch re-reads
 have no action parent and link affected commits, with explicit unknown/dropped causes. Root actor queues restore explicitly carried event context; untagged internal events are not covered.
 Enabled Node recordings include aggregate process CPU, sampled RSS/heap maxima, GC and event-loop
 observations. These process totals are not per-action attribution, and sampled maxima are not true peak
-memory. Disabled mode starts no sampler; sample failures invalidate capture. Detailed Node recordings include V8 CPU and sampled JS allocation profiles; renderer capture remains
-in progress. Profiles record sampling settings and a requested 30-second window (timers can be delayed
+memory. Disabled mode starts no sampler; sample failures invalidate capture. Detailed Node and renderer recordings include V8 CPU and sampled JS allocation profiles. Renderer
+recordings also retain named CDP task/layout/heap metrics and long-task aggregates. Profiles record sampling settings and a requested 30-second window (timers can be delayed
 by synchronous work), cap serialized CPU/allocation output at 2 MiB each, and reserve those bytes within
 the 16 MiB recording budget. Protocol failures or oversized output invalidate capture. These are V8
 isolate/JS-heap profiles; process totals cover a broader resource scope. No overhead or performance improvement is established yet.
-Populated startup, cross-revision orchestration and qualification remain in the goal.
+Cross-revision orchestration and overhead qualification remain in the goal.
 
 Populated startup uses a separate controller, `node scripts/with-source.mjs tsx tests/performance/startup-run.ts`.
 It owns profile paths, finishes real onboarding, imports the fixture and opens its declared chat outside

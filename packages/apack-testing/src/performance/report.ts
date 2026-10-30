@@ -143,8 +143,10 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
 }
 
 /** A spread and sample count accompany every median; failed trials remain in the report. */
-export function summarize(input: readonly PerformanceTrial[]) {
-  const trials = input.map(trial => trialSchema.parse(trial));
+export function summarize(input: readonly Pick<PerformanceTrial, 'warmup' | 'outcome' | 'durationMs'>[]) {
+  const timing = z.object({ warmup: z.boolean(), outcome: z.enum(['passed', 'failed', 'incomplete', 'cancelled']), durationMs: z.number().finite().nonnegative().optional() });
+  const trials = input.map(trial => timing.parse(trial));
+  if (trials.some(trial => trial.outcome === 'passed' && trial.durationMs === undefined)) throw Error('Passing timing requires a duration');
   const measured = trials.filter(trial => !trial.warmup);
   const values = measured.filter(trial => trial.outcome === 'passed').map(trial => trial.durationMs!).sort((a, b) => a - b);
   const middle = Math.floor(values.length / 2);

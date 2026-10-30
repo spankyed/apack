@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { performanceIdentity, chromeTrace, summarize, trialSchema, type PerformanceTrial } from '@apackdev/testing/performance';
+import { performanceIdentity, createPerformanceRunStore, trialSchema } from '@apackdev/testing/performance';
 import { threadFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -18,15 +18,10 @@ test('open a populated thread through the real transport and render its bounded 
   const directory = mkdtempSync(path.join(tmpdir(), 'apack-performance-fixture-'));
   const output = path.resolve('.apack/performance', `thread-open-${mode}-${Date.now()}`);
   mkdirSync(output, { recursive: true });
-  const trials: PerformanceTrial[] = [];
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
   const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime });
-  writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
-  const save = () => {
-    writeFileSync(path.join(output, 'results.json'), JSON.stringify({ format: 1, trials, summary: summarize(trials) }, null, 2));
-    writeFileSync(path.join(output, 'trace.json'), JSON.stringify(chromeTrace(trials.flatMap(trial => Object.entries(trial.processes)
-      .map(([process, report]) => ({ process: `${process}/trial-${trial.index}`, report }))))));
-  };
+  const journal = createPerformanceRunStore(output, manifest, measured);
+  const save = () => journal.save();
   try {
     writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify(fixture.data));
     await app.waitForSurface('default-setup/threads');
@@ -121,12 +116,12 @@ test('open a populated thread through the real transport and render its bounded 
         .reduce((bytes, span) => bytes + Number(span.attributes['ears.response_bytes'] ?? 0), 0);
       const excessReadWork = appResponseBytes !== undefined && appResponseBytes > maxAppResponseBytes;
       const work = { ...result.work, maxAppResponseBytes, ...(appResponseBytes !== undefined && { windowAppResponseBytes: appResponseBytes }) };
-      trials.push(trialSchema.parse({ scenario: 'thread-open', index, warmup: index < warmups,
+      const trial = trialSchema.parse({ scenario: 'thread-open', index, warmup: index < warmups,
         work, outcome: excessReadWork ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
         correct: result.completed && !excessReadWork, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
-        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: excessReadWork ? 'app-read-work-bound' : result.failure }));
-      save();
-      expect(trials.at(-1)!.outcome, `Preserved evidence: ${output}`).toBe('passed');
+        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: excessReadWork ? 'app-read-work-bound' : result.failure });
+      journal.append(trial);
+      expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
     }
   } finally { save(); rmSync(directory, { recursive: true, force: true }); }
 });

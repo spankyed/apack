@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@apackdev/testing';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { performanceIdentity, chromeTrace, summarize, streamingBacklog, trialSchema, type PerformanceTrial } from '@apackdev/testing/performance';
+import { performanceIdentity, createPerformanceRunStore, streamingBacklog, trialSchema } from '@apackdev/testing/performance';
 import { streamingFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -26,15 +26,10 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
   chmodSync(executable, 0o700);
   writeFileSync(path.join(directory, 'stream.json'), JSON.stringify(fixture.script));
   fixture.identity.sha256 = createHash('sha256').update(fixture.identity.sha256).update(readFileSync(source)).digest('hex');
-  const trials: PerformanceTrial[] = [];
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
   const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime });
-  writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
-  const save = () => {
-    writeFileSync(path.join(output, 'results.json'), JSON.stringify({ format: 1, trials, summary: summarize(trials) }, null, 2));
-    writeFileSync(path.join(output, 'trace.json'), JSON.stringify(chromeTrace(trials.flatMap(trial => Object.entries(trial.processes)
-      .map(([process, report]) => ({ process: `${process}/trial-${trial.index}`, report }))))));
-  };
+  const journal = createPerformanceRunStore(output, manifest, measured);
+  const save = () => journal.save();
   try {
     writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify(fixture.data));
     await app.waitForSurface('default-setup/threads');
@@ -185,12 +180,12 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
         backlogPhase = 'progress-data';
         backlog = streamingBacklog(produced, result.viewProgress, fixture.script.chunks.join('').length);
       } catch { backlogFailure = `backlog-${backlogPhase}`; }
-      trials.push(trialSchema.parse({ scenario: 'streaming', index, warmup: index < warmups,
+      const trial = trialSchema.parse({ scenario: 'streaming', index, warmup: index < warmups,
         work: result.work, timings: result.timings, backlog, outcome: backlogFailure ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
         correct: result.completed && !backlogFailure, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
-        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: backlogFailure ?? result.failure }));
-      save();
-      expect(trials.at(-1)!.outcome, `Preserved evidence: ${output}`).toBe('passed');
+        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: backlogFailure ?? result.failure });
+      journal.append(trial);
+      expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
     }
   } finally { save(); rmSync(directory, { recursive: true, force: true }); }
 });

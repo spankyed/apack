@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { summarize, trialSchema, type PerformanceTrial } from '@apackdev/testing/performance';
+import { createPerformanceRunStore, trialSchema } from '@apackdev/testing/performance';
 
 // One immutable seeded profile, one closed/copy/launch/close trial at a time. Copies are outside measurement.
 const root = path.resolve(import.meta.dirname, '../..');
@@ -16,12 +17,11 @@ mkdirSync(output, { recursive: true });
 const work = mkdtempSync(path.join(tmpdir(), 'apack-startup-qualification-'));
 const seed = path.join(work, 'seed');
 const seedReport = path.join(output, 'seed.json');
-const trials: PerformanceTrial[] = [];
+let journal: ReturnType<typeof createPerformanceRunStore> | undefined;
 const invocations: Array<{ phase: string; index?: number; exitCode: number | null; signal: NodeJS.Signals | null }> = [];
 const save = () => {
-  const failed = invocations.some(invocation => invocation.exitCode !== 0) || trials.some(trial => trial.outcome !== 'passed');
-  const complete = invocations.length === 6 + measured && trials.length === 5 + measured;
-  writeFileSync(path.join(output, 'results.json'), JSON.stringify({ format: 1, status: failed ? 'failed' : complete ? 'passed' : 'incomplete', trials, summary: summarize(trials), invocations }, null, 2));
+  writeFileSync(path.join(output, 'lifecycle.json'), JSON.stringify({ invocations }, null, 2));
+  journal?.save(invocations);
 };
 async function run(phase: string, profile: string, index?: number) {
   const environment: NodeJS.ProcessEnv = { ...process.env, E2E_DATA_DIR: profile, APACK_PERFORMANCE_SCENARIO: phase,
@@ -38,13 +38,19 @@ async function run(phase: string, profile: string, index?: number) {
   invocations.push({ phase, index, ...result });
   if (index !== undefined) {
     try {
-      const report = JSON.parse(readFileSync(path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'results.json'), 'utf8'));
-      trials.push(...report.trials.map((value: unknown) => trialSchema.parse(value)));
+      const reportFile = path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'results.json');
+      if (statSync(reportFile).size > 128 * 1024 * 1024) throw Error('Startup trial exceeds admission budget');
+      const report = JSON.parse(readFileSync(reportFile, 'utf8'));
+      const ownManifest = JSON.parse(readFileSync(path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'manifest.json'), 'utf8'));
+      journal ??= createPerformanceRunStore(output, ownManifest, measured);
+      if (!isDeepStrictEqual(ownManifest, JSON.parse(readFileSync(path.join(output, 'manifest.json'), 'utf8')))) throw Error('Startup trial manifests differ');
+      if (report.trials.length !== 1) throw Error('Expected one startup trial per process');
+      journal.append(trialSchema.parse(report.trials[0]));
     } catch (error) {
       const file = path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'driver-failure.json');
       try {
         const driver = JSON.parse(readFileSync(file, 'utf8'));
-        trials.push(trialSchema.parse({ scenario: 'populated-startup', index, warmup: index < 5, outcome: 'incomplete', correct: false,
+        journal?.append(trialSchema.parse({ scenario: 'populated-startup', index, warmup: index < 5, outcome: 'incomplete', correct: false,
           completion: 'missing', work: {}, processes: { driver }, failure: 'startup-process-failed' }));
       } catch { /* Invocation failure remains explicit even when the worker could not write a capture. */ }
       save(); throw error;
