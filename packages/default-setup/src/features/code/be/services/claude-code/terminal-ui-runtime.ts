@@ -1,3 +1,4 @@
+import { claudeTerminalBackgroundReplyRuntime } from './terminal-background-reply-runtime.ts'
 import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
 import { claudeTerminalBackgroundRuntime } from './terminal-background-runtime.ts'
 import { claudeTerminalSandboxNetworkRuntime } from './terminal-sandbox-network-runtime.ts'
@@ -735,8 +736,10 @@ async function readNativeNoticeSnapshot(n){
   const recommendation=nativeLspRecommendation(n);if(recommendation.item)return {notice:await projectNativeLspRecommendation(n,recommendation),retirements:refusal.retirements};
   const d=nativeBillingNotice(n);return {retirements:refusal.retirements,notice:d.item?{id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:'auto_mode_server_fallback',title:d.payload.title,paragraphs:d.payload.paragraphs,helpUrl:d.payload.helpUrl}:null};
  }
+${claudeTerminalBackgroundReplyRuntime}
 async function control(request,abort){
  const n=await initialize();
+ if(request.subtype==='apack_background_reply')return replyNativeBackground(request);
  if(request.subtype==='apack_checkpoint_cost')return checkpointNativeCost(n,request.session_id);
  if(request.subtype==='apack_ui_background_review')return nativeBackgroundReview(n,request);
  if(request.subtype==='apack_ui_settings')return nativeSettings(n,request,abort);

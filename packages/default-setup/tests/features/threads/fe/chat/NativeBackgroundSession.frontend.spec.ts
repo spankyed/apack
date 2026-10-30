@@ -27,3 +27,21 @@ it('does not display another child state as the current session', async () => {
   try { expect(root.textContent).toContain('Checking background session'); expect(root.textContent).not.toContain('Stop background session') }
   finally { app.unmount(); root.remove() }
 })
+
+it('retains a refused draft through remount and clears only its acknowledged reply', async () => {
+  const state = reactive<ClaudeBackgroundSessionState>({...link,operation:'refresh',status:'done',revision:1,session:{id:'05ff1d31',sessionId:link.continuedInSessionId,cwd:'/owned',pid:119,state:'working',status:'idle'}})
+  const operate=vi.fn(),root=document.createElement('div');document.body.append(root)
+  let app=createApp(NativeBackgroundSession,{continuation:link,state,onOperate:operate,canReply:true});app.mount(root)
+  const type=async(text:string)=>{const input=root.querySelector('textarea')!;input.value=text;input.dispatchEvent(new Event('input',{bubbles:true}));await nextTick()}
+  const submit=()=>root.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))
+  try{
+    [...root.querySelectorAll('button')].find(button=>button.textContent==='Reply')!.click();await nextTick();await type('Keep this follow-up.');submit()
+    expect(operate).toHaveBeenLastCalledWith(link,{operation:'reply',id:'05ff1d31',pid:119,text:'Keep this follow-up.'})
+    state.operation='reply';state.revision=2;state.status='error';state.problem='Original refusal';await nextTick()
+    expect(root.querySelector('textarea')!.value).toBe('Keep this follow-up.')
+    app.unmount();app=createApp(NativeBackgroundSession,{continuation:link,state,onOperate:operate,canReply:true});app.mount(root)
+    expect(root.querySelector('textarea')!.value).toBe('Keep this follow-up.')
+    submit();state.revision=3;state.status='pending';await nextTick();expect(root.querySelector('textarea')!.disabled).toBe(true)
+    state.status='done';await nextTick();expect(root.querySelector('textarea')!.value).toBe('');expect(root.textContent).toContain('Message queued')
+  }finally{app.unmount();root.remove()}
+})

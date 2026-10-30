@@ -435,3 +435,35 @@ it('retires the child client when the durable continuation changes without redir
     f.notify();expect(f.child.close).toHaveBeenCalledOnce();expect(f.send.mock.calls.at(-1)![0].attachment).toBeUndefined()
   }finally{f.views.clear()}
 })
+
+describe('background reply ownership', () => {
+  const link={sessionId:'24be904a-3c35-4981-9793-cbe7a6c19d46',continuedInSessionId:'05ff1d31-597d-4537-8737-4407191add6e',timestamp:'2026-10-29T12:13:13.909Z'}
+  const job={id:'05ff1d31',sessionId:link.continuedInSessionId,cwd:'/owned',pid:119,state:'working' as const}
+  async function ready(replyBackground:NonNullable<Parameters<typeof createClaudeTerminalViews>[0]['replyBackground']>) {
+    const send=vi.fn(),background=vi.fn(async()=>job),views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background,replyBackground})
+    views.handle(mount,'one',send)
+    views.handle({...mount,...link,type:'CLAUDE_TERMINAL_BACKGROUND',operation:'refresh',revision:1},'one',send)
+    await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background?.status).toBe('done'))
+    const request={...mount,...link,type:'CLAUDE_TERMINAL_BACKGROUND' as const,operation:'reply' as const,id:job.id,pid:job.pid,text:'Follow up.',revision:2}
+    return {send,views,request}
+  }
+  it('rejects another window, stale workers and duplicate pending sends', async()=>{
+    let finish!:(value:typeof job)=>void
+    const reply=vi.fn(()=>new Promise<typeof job>(resolve=>{finish=resolve})),f=await ready(reply)
+    try{
+      f.views.handle(f.request,'two',f.send);f.views.handle({...f.request,pid:120},'one',f.send);await Promise.resolve();expect(reply).not.toHaveBeenCalled()
+      f.views.handle(f.request,'one',f.send);await vi.waitFor(()=>expect(reply).toHaveBeenCalledOnce())
+      f.views.handle({...f.request,revision:3},'one',f.send);await Promise.resolve();expect(reply).toHaveBeenCalledOnce()
+      finish(job);await vi.waitFor(()=>expect(f.send.mock.calls.at(-1)![0].background).toMatchObject({status:'done',operation:'reply',revision:2}))
+      f.views.handle(f.request,'one',f.send);await Promise.resolve();expect(reply).toHaveBeenCalledOnce()
+    }finally{f.views.clear()}
+  })
+  it('does not send when its window closes before dispatch', async()=>{
+    const reply=vi.fn(async()=>job),f=await ready(reply)
+    try{f.views.handle(f.request,'one',f.send);f.views.handle({...mount,type:'CLAUDE_TERMINAL_UNMOUNT'},'one',f.send);await Promise.resolve();expect(reply).not.toHaveBeenCalled()}finally{f.views.clear()}
+  })
+  it('publishes an original refusal without retrying the send', async()=>{
+    const reply=vi.fn(async()=>{throw Error('Original native refusal')}),f=await ready(reply)
+    try{f.views.handle(f.request,'one',f.send);await vi.waitFor(()=>expect(f.send.mock.calls.at(-1)![0].background).toMatchObject({status:'error',operation:'reply',problem:'Original native refusal'}));expect(reply).toHaveBeenCalledOnce()}finally{f.views.clear()}
+  })
+})

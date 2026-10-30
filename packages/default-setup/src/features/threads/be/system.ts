@@ -31,6 +31,12 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const terminalHistory = new WeakMap<Awaited<ReturnType<typeof services.cli.claudeCode.openNativeTerminal>>, ReturnType<typeof syncClaudeTerminalThread>>();
 const terminalViews = createClaudeTerminalViews({
+  async replyBackground(continuation, request, key) {
+    const owner = services.cli.claudeCode.getNativeTerminal(key)
+    const current = owner?.state.continuation
+    if (!owner || current?.sessionId !== continuation.sessionId || current.continuedInSessionId !== continuation.continuedInSessionId) throw new Error('Background reply owner is unavailable')
+    return owner.replyBackground(request.id, request.pid, request.text)
+  },
   openAttachment: (continuation,jobId,key,signal) => services.cli.claudeCode.openBackgroundAttachment(continuation,jobId,{cwd:repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd,timeoutMs:15000,signal}),
   continuation(key) {
     const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;

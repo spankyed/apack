@@ -14,6 +14,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
+  const childReply = process.env.CLAUDE_RESEARCH_BACKGROUND_REPLY_APP === '1'
   const childResume = process.env.CLAUDE_RESEARCH_BACKGROUND_RESUME_APP === '1'
   const childInteraction = process.env.CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP === '1'
   const attachChild = childResume || childInteraction || process.env.CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP === '1'
@@ -181,6 +182,42 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         throw error
       }
     }
+    if (childReply) {
+      const beforeReply = await context(), workerBefore = await childProcessState()
+      const replyText = 'Focus the background review on migration examples.'
+      const projects = join(workspace!, '.claude', 'projects')
+      const childRows = async () => {
+        const text = (await Promise.all((await readdir(projects,{withFileTypes:true})).filter(entry=>entry.isDirectory()).map(entry=>readFile(join(projects,entry.name,job.sessionId+'.jsonl'),'utf8').catch(()=>'')))).join('\n')
+        return text.split('\n').filter(Boolean).map(line=>JSON.parse(line))
+      }
+      await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeEnabled()
+      await widget.getByRole('button',{name:'Reply',exact:true}).click()
+      const input = widget.getByLabel('Message background session',{exact:true})
+      await input.fill(replyText)
+      for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
+        await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();await expect(widget.getByRole('button',{name:'Send message',exact:true})).toBeInViewport({ratio:1});await capture('apack-native-background-reply-draft-'+name+'.png')
+      }
+      await widget.getByRole('button',{name:'Send message',exact:true}).click()
+      await expect(widget.getByRole('status').filter({hasText:'Message queued'})).toBeVisible({timeout:20000})
+      await expect(input).toHaveValue('')
+      await expect.poll(async()=>(await childRows()).filter(row=>row.origin?.kind==='human'&&row.message?.content===replyText).length,{timeout:15000}).toBe(1)
+      const retainedReply = 'Keep this separate follow-up through navigation.'
+      await input.fill(retainedReply)
+      await app.navigate('host/settings');await app.navigate('default-setup/threads')
+      await expect(input).toHaveValue(retainedReply)
+      await expect(composer).toHaveText(retainedDraft)
+      await widget.getByRole('button',{name:'Send message',exact:true}).click()
+      await expect(input).toHaveValue('',{timeout:20000})
+      await expect.poll(async()=>(await childRows()).filter(row=>row.origin?.kind==='human'&&row.message?.content===retainedReply).length,{timeout:15000}).toBe(1)
+      const afterReply = await context()
+      expect(afterReply.sessionId).toBe(sessionId);expect(afterReply.claude.totalCostUsd).toBe(beforeReply.claude.totalCostUsd)
+      expect(afterReply.messages).toEqual(beforeReply.messages)
+      expect((await childProcessState())?.start).toBe(workerBefore?.start)
+      for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
+        await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();await capture('apack-native-background-reply-queued-'+name+'.png')
+      }
+      observations.childReply = {replyText,retainedReply,rows:await childRows(),parentBefore:beforeReply,parentAfter:afterReply,workerBefore,workerAfter:await childProcessState(),queued:true,remountDraftPreserved:true}
+    }
     if (attachChild && !childResume) {
       const normalizeScreen = (value:string) => stripVTControlCharacters(value).replace(/\s+/g,'')
       const attachment = () => appPage.evaluate(() => {
@@ -257,7 +294,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     const childBeforeStop = process.platform === 'linux' ? await childProcessState() : undefined
     if (process.platform === 'linux') { expect(childBeforeStop?.start).toBeTruthy(); expect(childBeforeStop?.state).not.toBe('Z') }
     await widget.getByRole('button', { name: 'Stop background session', exact: true }).click()
-    await expect(widget.getByRole('status')).toHaveText('Last reported: stopped', { timeout: 20000 })
+    await expect(widget.getByRole('status').filter({hasText:/^Last reported:/})).toHaveText('Last reported: stopped', { timeout: 20000 })
     await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toHaveCount(0)
     await expect(composer).toHaveText(retainedDraft!)
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
@@ -328,7 +365,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         const completed=await attachment();await closeAttachment()
         const parentAfter=await context();expect(parentAfter.messages).toEqual(parentBefore.messages);expect(parentAfter.claude.totalCostUsd).toBe(parentBefore.claude.totalCostUsd);expect(parentAfter.sessionId).toBe(sessionId)
         await widget.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(widget.getByRole('button',{name:'Stop background session',exact:true})).toBeEnabled()
-        await widget.getByRole('button',{name:'Stop background session',exact:true}).click();await expect(widget.getByRole('status')).toHaveText('Last reported: stopped',{timeout:20000})
+        await widget.getByRole('button',{name:'Stop background session',exact:true}).click();await expect(widget.getByRole('status').filter({hasText:/^Last reported:/})).toHaveText('Last reported: stopped',{timeout:20000})
         await expect.poll(async()=>!!await liveWorker()).toBe(false)
         const resumedProcess=async()=>{try{const raw=await readFile('/proc/'+resumed!.job.pid+'/stat','utf8');const fields=raw.slice(raw.lastIndexOf(')')+2).split(' ');return {state:fields[0],start:fields[19]}}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return;throw error}}
         await expect.poll(async()=>{const current=await resumedProcess();return !current||current.state==='Z'||current.start!==resumed!.start}).toBe(true)
@@ -363,7 +400,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), appHandoffAccepted: false }))
   } finally {
     if ((childInteraction && !observations.childInteraction) || (childResume && !observations.childResume?.workerRetired)) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
