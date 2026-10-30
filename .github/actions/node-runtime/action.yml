@@ -17,6 +17,12 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: npm
+    # Ordinary EARS package production now builds its pinned SQLite extension offline.
+    - name: Prepare Windows native package compiler
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+      with:
+        arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
     # The complete version directory includes the architecture's .complete marker. Save before tests so a later
     # test failure cannot discard a successful download, and consumers can restore the producer's exact runtime.
     - name: Retain Node toolchain

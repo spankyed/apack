@@ -33,6 +33,7 @@ if (mode === 'verify') {
     sdkContentRuntimeCasesPassed:sdkAll?passedIn(sdkAll,/\/tests\/testing\/content-runtime\.spec\.ts$/):null,
     sdkBackendCasesPassed:passedIn(sdkBackend,/\/tests\/testing\/database-backend\.spec\.ts$/),
     queryWorkCasesPassed:passedIn(queryWork,/\/tests\/features\/threads\/be\/query-work\.spec\.ts$/),
+    nativePackageCasesPassed:passedIn(ears,/\/tests\/sqlite\/native-extension\.spec\.ts$/),
     nativeGenerationCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-index\.spec\.ts$/),
     nativeTrainingCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-training\.spec\.ts$/),
     nativeModelCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-models\.spec\.ts$/),
@@ -71,6 +72,9 @@ if (mode === 'verify') {
   assert.equal(result.nativeMembershipChecks,555,'All independent membership comparisons must execute');
   assert.equal(nativeGeneration.platform,platform());assert.equal(nativeGeneration.arch,arch());
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.extension)).digest('hex'),nativeGeneration.extensionSha256);
+  assert.equal(nativeGeneration.packagedExtensionSha256,nativeGeneration.extensionSha256,'Ordinary package and independent native build must match');
+  assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.packagedExtension)).digest('hex'),nativeGeneration.extensionSha256);
+  assert.equal(result.nativePackageCasesPassed,5,'All ordinary package loading/integrity cases must execute');
   assert.equal(result.nativeGenerationCasesPassed,8,'All native generation lifecycle cases must execute');
   assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
   assert.equal(result.nativeModelCasesPassed,16,'All durable native model admission cases must execute');

@@ -342,7 +342,7 @@ an actual native EARS query. FULL/default checkpoints and primary bytes are pres
 and heartbeat p99 **48.14 ms**, still failed; this admission-only probe does not establish full query/recall,
 live-training write contention or app budgets. The intermediate host/storage run retains one 15 s child timeout;
 a quiet reproduction and instrumented concurrent 32-case run pass, with no demonstrated cause or fix.
-Next resolve trusted packaged artifacts and create normal app owners, then implement incumbent-preserving
+Next create normal app owners, finish signed/installed artifact qualification and implement incumbent-preserving
 physical refresh plus full maintenance/drain ownership.
 [Empty-store cursor preparation](../references/evidence/ears-sqlite-implementation-2026-10-28/native-cursor-preparation/README.md)
 now runs before ordinary/stage ingestion. Populated native attachment reuses it without cursor DDL, while
@@ -368,6 +368,16 @@ process coverage are still required; terminal drain cannot resume the same sched
 in [shutdown ownership](../references/evidence/ears-sqlite-implementation-2026-10-28/shutdown-ownership/README.md):
 637 SQLite cases, four host and eighteen affected API cases, types/boundaries/package/API checks, and two
 negative controls pass. The API signal boundary is controlled, not installed-process qualification.
+
+[Offline native package production](../references/evidence/ears-sqlite-implementation-2026-10-28/native-package-distribution/README.md)
+now vendors the pinned upstream C, compiles during ordinary EARS package builds and ships only the library,
+stable provenance and license. Public app-only opens resolve and hash-check their package copy by default;
+no runtime build/download is added. Offline builds and an independent build match the earlier Linux ARM64
+binary; 555 comparisons and an extracted npm artifact pass. All 642 SQLite EARS cases pass before a test-only
+private-helper correction; the five corrected artifact cases, EARS/host/script types and 78 build-coverage
+cases pass afterwards. Current platform CI must qualify Windows/macOS build flags and exact complete inputs.
+Signing must finalize native binary hashes after library signing and before app/installer sealing. Normal
+app owner creation/recovery, live replacement and physical refresh remain separate; no adoption is implied.
 
 Still required, without narrowing phases 3–7:
 

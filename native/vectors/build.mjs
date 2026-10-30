@@ -18,9 +18,7 @@ assert(directory, 'Usage: node native/vectors/build.mjs <new-output-directory> [
 const output = resolve(directory);
 assert(!existsSync(output), 'Native output must be new');
 const url = `https://raw.githubusercontent.com/sqlite/sqlite/${upstream.commit}/ext/vec1/vec1.c`;
-const response = localSource ? null : await fetch(url);
-if (response) assert(response.ok, `Pinned native source download refused: ${response.status}`);
-const source = localSource ? readFileSync(localSource) : Buffer.from(await response.arrayBuffer());
+const source = readFileSync(localSource ?? new URL('./upstream.c', import.meta.url));
 assert.equal(sha(source), upstream.sha256, 'Pinned native source hash must match before compilation');
 const patchFile = fileURLToPath(new URL('./vec1-membership.patch', import.meta.url));
 const patch = readFileSync(patchFile);
@@ -39,8 +37,8 @@ assert(existsSync(join(headers, 'sqlite3ext.h')));
 const extension = join(output, process.platform === 'win32' ? 'vec1.dll' : process.platform === 'darwin' ? 'vec1.dylib' : 'vec1.so');
 const compiler = process.platform === 'win32' ? 'cl.exe' : process.platform === 'darwin' ? 'clang' : 'cc';
 const args = process.platform === 'win32'
-  ? ['/nologo', '/O2', '/DNDEBUG', '/LD', '/I' + headers, file, '/link', '/OUT:' + extension]
-  : ['-O3', '-DNDEBUG', '-Werror=implicit-function-declaration', process.platform === 'darwin' ? '-dynamiclib' : '-shared', '-fPIC', '-I' + headers, file, '-lm', '-o', extension];
+  ? ['/nologo', '/O2', '/DNDEBUG', '/LD', '/I' + headers, file, '/link', '/Brepro', '/INCREMENTAL:NO', '/OUT:' + extension]
+  : ['-O3', '-DNDEBUG', '-Werror=implicit-function-declaration', process.platform === 'darwin' ? '-dynamiclib' : '-shared', '-fPIC', '-I' + headers, file, '-lm', ...(process.platform === 'darwin' ? ['-Wl,-install_name,@rpath/vec1.dylib'] : []), '-o', extension];
 execFileSync(compiler, args, { cwd: output, stdio: 'inherit' });
 writeFileSync(join(output, 'provenance.json'), JSON.stringify({
   upstream: { ...upstream, url }, patchSha256: sha(patch), sourceSha256: sha(readFileSync(file)),

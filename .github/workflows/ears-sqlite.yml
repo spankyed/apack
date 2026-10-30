@@ -49,6 +49,19 @@ jobs:
         run: npm ci
       - name: Build matching packages
         run: npm run packages:build
+      - name: Native package ownership and types
+        if: runner.os == 'Linux'
+        run: |
+          set -o pipefail
+          {
+            npm run typecheck -w @apackdev/ears
+            npm run typecheck:host
+            npm run typecheck:scripts
+            node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run \
+              --project @app/repo-checks packages/repo-checks/tests/chain-inputs.spec.ts \
+              packages/repo-checks/tests/repro.spec.ts --maxWorkers=2 \
+              --reporter=default --reporter=json --outputFile=.temp/sqlite-platform/package-build-coverage.json
+          } 2>&1 | tee .temp/sqlite-platform/package-types.log
       - name: SDK fixtures use the selected real backend
         run: >-
           npm test -w @apackdev/sdk -- tests/testing/database-backend.spec.ts --maxWorkers=2
@@ -69,11 +82,6 @@ jobs:
           npm test -w @app/default-setup -- tests/features/threads/be/query-work.spec.ts --maxWorkers=2
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/query-work.json
           2>&1 | tee .temp/sqlite-platform/query-work.log
-      - name: Prepare Windows C compiler
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
-        with:
-          arch: x64
       - name: Build pinned candidate vector extension
         run: node .github/scripts/ears-vec1-build.mjs
       - name: Native owner membership matches ordinary SQLite

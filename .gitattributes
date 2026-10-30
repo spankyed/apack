@@ -2,3 +2,6 @@
 packages/apack-ears/vendor/rregex/** -text
 # Patch context retains upstream whitespace as part of its pinned source identity.
 native/vectors/*.patch -text -whitespace
+
+# Pinned upstream source is hashed before patching/compilation.
+native/vectors/upstream.c -text -whitespace

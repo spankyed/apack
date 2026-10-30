@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import type { EarsDatabase } from '../database.ts';
 import { toElmdbSchema, type EngineSchema } from '../schema.ts';
 import { SqliteDatabase } from './database.ts';
+import { resolveNativeVectorExtension } from './native-extension.ts';
 import { auditSqliteDatabase, type SqliteAuditReport } from './audit.ts';
 export type { SqliteAuditReport } from './audit.ts';
 
@@ -29,7 +30,7 @@ export interface DatabaseOptions {
 }
 
 export function openDatabase({ schema, ...options }: DatabaseOptions): EarsDatabase {
-  return new SqliteDatabase({ ...options, ...(schema ? { schema: toElmdbSchema(schema) } : {}) });
+  return new SqliteDatabase({ ...options, nativeVectorExtension: options.nativeVectorExtension ?? resolveNativeVectorExtension(), ...(schema ? { schema: toElmdbSchema(schema) } : {}) });
 }
 
 /** Rebuild derived indexes from primary data, excluding other writes until current generations are ready. */
