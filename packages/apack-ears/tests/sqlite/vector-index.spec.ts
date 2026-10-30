@@ -103,6 +103,43 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     expect(()=>snapshot.step(job.generation,1)).toThrow(expect.objectContaining({code:'UNIT_REQUIRED'}));
   });
 
+  it('prepares ordinary empty stores before ingestion and admits native loading after populated reopen',()=>{
+    const path=mkdtempSync(join(tmpdir(),'ears-ann-ordinary-'));
+    const db=new SqliteDatabase({path,syncs:false,schema:toElmdbSchema({types:{Row:{required:[],embed:{from:['title'],model:'fixture',dims:8,chunk:'paragraph'}}},relations:{},roles:[]})});
+    held.push({db,path});
+    expect(db.get("SELECT 1 FROM sqlite_schema WHERE name='chunk_native_admission'")).toBeDefined();
+    const e=createEarsEngine({database:db});e.create('Row',{title:'loaded before native owner'});
+    const pending=e.pendingEmbeddings('Row',{limit:10});
+    e.embed(pending.chunks.map(c=>({...c,model:pending.model,vector:vector(.5)})));
+    const sequence=db.sequence;db.close();
+    const reopened=new SqliteDatabase({path,syncs:false});held[held.length-1]={db:reopened,path};
+    const exec=vi.spyOn(reopened.sql,'exec');
+    expect(()=>new SqliteVectorIndex(reopened,process.env.EARS_VEC1_EXTENSION!)).not.toThrow();
+    expect(exec.mock.calls.some(([sql])=>/CREATE INDEX.*chunk_native_admission/i.test(sql))).toBe(false);
+    expect(reopened.sequence).toBe(sequence);
+    expect(createEarsEngine({database:reopened}).query('Row').count()).toBe(1);
+  });
+
+  it('owns the empty-check transaction and rolls back refused cursor preparation before retry',()=>{
+    const {db}=fixture();db.sql.exec('DROP INDEX chunk_native_admission');
+    const originalGet=db.get.bind(db),originalExec=db.sql.exec.bind(db.sql);
+    const get=vi.spyOn(db,'get').mockImplementation((sql,parameters=[])=>{
+      if(sql==='SELECT 1 FROM chunks LIMIT 1')expect(db.sql.inTransaction).toBe(true);
+      return originalGet(sql,parameters);
+    });
+    const refusal=Object.assign(new Error('cursor preparation refused'),{code:'SQLITE_FULL'});
+    const exec=vi.spyOn(db.sql,'exec').mockImplementation(sql=>{
+      if(sql.startsWith('CREATE INDEX IF NOT EXISTS chunk_native_admission'))throw refusal;
+      return originalExec(sql);
+    });
+    expect(()=>new SqliteVectorIndex(db,process.env.EARS_VEC1_EXTENSION!)).toThrow(refusal);
+    expect(db.sql.inTransaction).toBe(false);
+    expect(db.get("SELECT 1 FROM sqlite_schema WHERE name='chunk_native_admission'")).toBeUndefined();
+    exec.mockRestore();
+    expect(()=>new SqliteVectorIndex(db,process.env.EARS_VEC1_EXTENSION!)).not.toThrow();
+    expect(db.sql.inTransaction).toBe(false);get.mockRestore();
+  });
+
   it('refuses an implicit cursor-index build on a populated store',()=>{
     const {db,e}=fixture();e.create('Row',{title:'incumbent'});
     db.sql.exec('DROP INDEX chunk_native_admission');

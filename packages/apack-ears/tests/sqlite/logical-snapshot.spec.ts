@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { createEarsEngine, type EarsDatabase } from '../../src/index.ts';
 import { exportLogicalSnapshot, openDatabase, stageLogicalSnapshot } from '../../src/sqlite/index.ts';
 const roots: string[] = [], stores: EarsDatabase[] = [];
@@ -22,6 +23,9 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('app-only logic
     expect(result).toMatchObject({ path: join(f.stage, 'store'), sequence, audit: { ok: true, checkedEntities: 1 } });
     expect(readdirSync(f.stage)).toEqual(['store']); expect(existsSync(join(f.stage, 'data.sqlite3'))).toBe(false);
     const restored = openDatabase({ path: result.path, readOnly: true }); stores.push(restored);
+    expect(restored).toBeInstanceOf(SqliteDatabase);
+    if (!(restored instanceof SqliteDatabase)) throw new Error('Expected a SQLite staging owner');
+    expect(restored.get("SELECT 1 FROM sqlite_schema WHERE type='index' AND name='chunk_native_admission'")).toBeDefined();
     const e = createEarsEngine({ database: restored });
     expect(Object.is(e.getAttr('Row-one', 'negative'), -0)).toBe(true); expect(e.getAttr('Row-one', 'bytes')).toEqual(new Uint8Array([0, 255]));
     expect(e.query('Row').near([1, 0, 0]).ids()).toEqual(['Row-one']); expect(f.e.lastCommit()).toBe(sequence);

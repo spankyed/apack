@@ -1,6 +1,7 @@
 // Generation-owned native projections. The database owner supplies its trusted extension;
 // no database metadata may select executable code. Training and packaging have separate owners.
 import { createHash } from 'node:crypto';
+import { prepareEmptyNativeVectorCursor } from './vector-cursor.ts';
 import type { SqliteDatabase } from './database.ts';
 import type { SqliteIndexJob } from './index-builds.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
@@ -16,11 +17,9 @@ export class SqliteVectorIndex {
   constructor(db: SqliteDatabase, extension: string) {
     this.db = db;
     db.sql.loadExtension(extension);
-    const indexed=db.get("SELECT 1 FROM sqlite_schema WHERE type='index' AND name='chunk_native_admission'");
-    if(!indexed) {
+    if (!prepareEmptyNativeVectorCursor(db)) {
       if(db.readOnly)fail('CORRUPT','Missing native admission cursor index');
-      if(db.get('SELECT 1 FROM chunks LIMIT 1'))fail('MAINTENANCE_REQUIRED','Prepare the native admission cursor index offline before enabling it on a populated store');
-      db.sql.exec('CREATE INDEX chunk_native_admission ON chunks(generation,embedding_id) WHERE embedding_id IS NOT NULL');
+      fail('MAINTENANCE_REQUIRED','Prepare the native admission cursor index offline before enabling it on a populated store');
     }
     if (!db.readOnly) db.sql.exec(`CREATE TABLE IF NOT EXISTS vector_indexes(
       generation INTEGER PRIMARY KEY,state TEXT NOT NULL CHECK(state IN ('building','ready')),

@@ -488,8 +488,10 @@ without explicit benchmark enqueue. The 100k heartbeat p99 still misses 16 ms; n
 WAL/write behavior nor complete query/relevance acceptance follows from this probe.
 The remaining integration must create/load normal app owners, preserve incumbents during physical model
 refresh, drain before file replacement/deletion, complete rebuild/restore/audit ownership, and distribute/load
-trusted native artifacts on every writer and read-only candidate connection. Cursor indexes must be prepared
-before populated profile ingestion; the explicit maintenance refusal remains. The new platform gate requires the native
+trusted native artifacts on every writer and read-only candidate connection. Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,
+with transactional failure/retry and populated staging/reopen coverage. Populated stores missing it
+still require explicit offline preparation. [Cursor preparation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-cursor-preparation/README.md)
+retains 635 SQLite cases and the reverted-code control; it does not qualify the newer native pin. The new platform gate requires the native
 lifecycle cases; neither it nor these local cases establish performance or final adoption.
 Keep the complete goal and frozen fresh validation gates.
 The [fresh integrated matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/fresh-native-ears/README.md)

@@ -2,6 +2,7 @@
 // FTS5 owns text indexing/ranking. sqlite-vec owns vector distance evaluation; EARS owns chunks and model freshness.
 // Fuzzy expansion and highlight adaptation are explicit application work, not native FTS5 capabilities.
 import { encodeEmbeddingVector } from './embeddings.ts';
+import { prepareEmptyNativeVectorCursor } from './vector-cursor.ts';
 import { SqliteVectors } from './vectors.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
 import { createHash } from "node:crypto";
@@ -107,6 +108,9 @@ export class SqliteSearch {
       CREATE INDEX IF NOT EXISTS chunk_generation ON chunks(generation);
       CREATE INDEX IF NOT EXISTS text_generation ON text_meta(generation);
       CREATE INDEX IF NOT EXISTS chunk_reuse ON chunks(embedding_id);`);
+    // Staging and ordinary opens prepare empty stores before any primary/chunk ingestion. Existing
+    // populated stores without this optional native index retain explicit offline admission.
+    prepareEmptyNativeVectorCursor(this.db);
     for (const [type, definition] of Object.entries(schema.types) as Array<
       [string, Data]
     >)

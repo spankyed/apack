@@ -5,8 +5,8 @@
 
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
-The prototype checkpoint is 4a3fe698f8. The current detached integration combines master debeddc3a6a
-and native fix 8ab7088f9a; combined acceptance is pending. Inspect the current handoff and actual source before continuing.
+The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 59ed33cdb9
+and its native pin 006d6cec88; combined acceptance is pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
 Finished when the SQLite candidate runs the complete app data lifecycle, all required
@@ -192,8 +192,10 @@ No master merge, release, production adoption or version-only PR is authorized. 
 Active integration checkout: `/private/tmp/ears-sqlite-query-integration`. The preceding checkpoint is
 preserved at `/private/tmp/ears-sqlite-diagnosis-evidence`, `68cf78a2f4`.
 
-Current checkpoint: integrate automatic owner lifecycle and resolve admission responsiveness on committed master `debeddc3a6a` and native
-`8ab7088f9a`. Detached merge `399c4765f0` combines candidate `fbd3c1c441` with that master,
+Current checkpoint: integrate automatic owner lifecycle and resolve admission responsiveness on committed master `59ed33cdb9` and native
+`006d6cec88`. Detached merge `edf17cd0dc` integrates master’s runner cleanup and descendant native pin into
+`23a1e941c7`; exact-source combined acceptance remains pending. The preceding merge `399c4765f0` combines
+candidate `fbd3c1c441` with master `debeddc3a6a`,
 retaining SQLite explanations/backend assertions, master reverse-traversal clarification and all
 **five** current thread-query cases. The new master adds the Message status index, queued-message
 relocation and batched library queries. No source branch or other-agent checkout was merged/reset.
@@ -213,7 +215,8 @@ on Linux/macOS/Windows at `d28e2de39c`; Linux executes all 1,320 prepared SDK ca
 with no skips. All hosts execute both fixture stores and four built-pack repository cases.
 The unchanged own-unit embedding assertion fails on exact native `4d558a2754` and
 passes with the isolated journal-overlay fix, now committed/published as
-`8ab7088f9a583202f9ccc766381a31e39d19851f` and pinned by this candidate. All required
+`8ab7088f9a583202f9ccc766381a31e39d19851f`, the preceding tested native pin. Current master’s
+`006d6cec880471e7ccc83899cd9c8704288b04e0` descends from that fix; old artifact receipts do not qualify this newer pin. All required
 Linux native checks pass, including 348 Rust cases, applicable binding tests and a
 negative control restoring the old implementation. Exact cross-platform native
 [CI 40982141666](https://github.com/spankyed/elmdb/actions/runs/40982141666) is now green
@@ -339,8 +342,13 @@ an actual native EARS query. FULL/default checkpoints and primary bytes are pres
 and heartbeat p99 **48.14 ms**, still failed; this admission-only probe does not establish full query/recall,
 live-training write contention or app budgets. The intermediate host/storage run retains one 15 s child timeout;
 a quiet reproduction and instrumented concurrent 32-case run pass, with no demonstrated cause or fix.
-Next provide trusted loading for normal app/read-only/writer connections, prepare empty stages before native
-cursor admission, and implement incumbent-preserving physical refresh plus full maintenance/drain ownership.
+Next provide trusted loading for normal app/read-only/writer connections and implement incumbent-preserving
+physical refresh plus full maintenance/drain ownership.
+[Empty-store cursor preparation](../references/evidence/ears-sqlite-implementation-2026-10-28/native-cursor-preparation/README.md)
+now runs before ordinary/stage ingestion. Populated native attachment reuses it without cursor DDL, while
+missing populated indexes retain the explicit maintenance refusal. All 635 SQLite EARS cases, types and lint
+pass, with a reverted-code control. Those focused SQLite checks use the recorded older native binding,
+so current master/native combined platform/full Strict qualification remains pending.
 Keep the unresolved Strict/heartbeat/physical/application gates; no production composition changes here.
 
 Still required, without narrowing phases 3–7:
