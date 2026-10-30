@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
-import { callsHelper, declaresKey } from './_support/config-code.ts';
+import { callsHelper, declaresKey, declaresKeyOutsideHelpers } from './_support/config-code.ts';
 import { repoFiles } from './_support/repo-files.ts';
 
 /**
@@ -66,11 +66,19 @@ describe('a Playwright config calls its helper', () => {
     const restated = playwrightConfigs()
       .filter((config) => !(config in ASSEMBLES_ITS_OWN))
       .flatMap((config) => OWNED_KEYS
-        .filter((key) => declaresKey(read(config), key))
+        .filter((key) => declaresKeyOutsideHelpers(read(config), key, HELPERS))
         .map((key) => `${config} declares ${key}`));
 
     expect(restated, 'pass what this config needs to its helper as an argument, or record it in '
       + 'ASSEMBLES_ITS_OWN with what no helper can express').toEqual([]);
+  });
+
+  it('accepts helper arguments while refusing outer and spread overrides', () => {
+    expect(declaresKeyOutsideHelpers("export default definePerformanceConfig({ testMatch: 'search.spec.ts' })", 'testMatch', HELPERS)).toBe(false);
+    expect(declaresKeyOutsideHelpers("export default defineConfig({ ...definePerformanceConfig(), testMatch: 'search.spec.ts' })", 'testMatch', HELPERS)).toBe(true);
+    expect(declaresKeyOutsideHelpers('const workers = 2; export default { ...definePerformanceConfig(), workers }', 'workers', HELPERS)).toBe(true);
+    expect(declaresKeyOutsideHelpers("export default { ...definePerformanceConfig(), ['timeout']: 1 }", 'timeout', HELPERS)).toBe(true);
+    expect(declaresKeyOutsideHelpers("// testMatch: 'ignored'\nconst prose = 'testMatch:'; export default definePerformanceConfig()", 'testMatch', HELPERS)).toBe(false);
   });
 
   it('lists no exception that has stopped applying', () => {
