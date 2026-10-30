@@ -1,12 +1,11 @@
 // The same bounded owner selection serves training owners and independently opened readers/writers.
-import type { SqliteDatabase } from './database.ts';
 import type { SqliteVectorIndex } from './vector-index.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
 import { NATIVE_VECTOR_OWNER_TARGET } from './vector-policy.ts';
 
-export function nativeVectorCandidateOwners(db: SqliteDatabase, index: SqliteVectorIndex,
+export function nativeVectorCandidateOwners(index: SqliteVectorIndex,
   generation: number, vector: Uint8Array, scope: SqliteEntityScope | null, exclude?: string): number[] | undefined {
-  if (db.get('SELECT state FROM vector_training WHERE generation=?', [generation])?.state !== 'ready') return;
+  if (!index.ready(generation)) return;
   // A chunk cap is not an owner cap: expand when one owner has many close chunks.
   for (let limit = NATIVE_VECTOR_OWNER_TARGET; limit <= 4096; limit *= 2) {
     const rows = index.candidates(generation, vector, limit, scope, exclude, 'owners');

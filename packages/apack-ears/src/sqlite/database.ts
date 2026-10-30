@@ -122,10 +122,9 @@ export class SqliteDatabase implements EarsDatabase {
     this.nativeExtension = path;
   }
   nativeVectorOwners(generation: number, vector: Uint8Array, scope: SqliteEntityScope | null, exclude?: string): number[] | undefined {
-    if (!this.nativeExtension || !this.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='vector_training'")) return;
-    if (this.get('SELECT state FROM vector_training WHERE generation=?', [generation])?.state !== 'ready') return;
+    if (!this.nativeExtension || !this.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='vector_indexes'")) return;
     this.nativeReader ??= new SqliteVectorIndex(this, this.nativeExtension);
-    return nativeVectorCandidateOwners(this, this.nativeReader, generation, vector, scope, exclude);
+    return nativeVectorCandidateOwners(this.nativeReader, generation, vector, scope, exclude);
   }
 
   private readonly layouts = new Map<string, SqliteValueLayout>();
@@ -1274,6 +1273,16 @@ export class SqliteDatabase implements EarsDatabase {
     } catch (e) {
       this.abortFailedOperation(e);
     }
+  }
+  /** Durably queue physical replacements while preserving canonical data and current native models. */
+  refreshNativeModels():void {
+    this.writable();
+    if(this.active)fail('UNIT_OPEN','Commit or abort the open unit before refreshing native models');
+    this.sql.exec('BEGIN IMMEDIATE');
+    try {
+      this.checkRevision();this.indexBuilds.refreshNativeModels();this.commitWrite();
+    } catch(error){this.abortFailedOperation(error);}
+    this.indexBuilds.wake();
   }
   /** Admit fresh derived generations without changing primary data or its logical commit identity. */
   rebuildIndexes(): void {

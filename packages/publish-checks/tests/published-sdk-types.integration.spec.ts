@@ -5,9 +5,14 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { publishedManifest } from '@apackdev/host/build/published-manifest';
-import { CONSUMER_MATRIX, PACKAGES_BUILT, REPO_ROOT, compileConsumer, installPublishedPackages, type TscVersion } from '../src/published-packages.ts';
+import { CONSUMER_MATRIX, PACKAGES_BUILT, PACKED_PACKAGES, REPO_ROOT, compileConsumer, installPublishedPackages, workspacePackList, type TscVersion } from '../src/published-packages.ts';
 
 const execFileAsync = promisify(execFile);
+
+/** Dependency directories added by installation are not files shipped in the npm tarball. */
+function packedRoots(directory:string):string[] {
+  return [...new Set([...workspacePackList(directory)].map(file=>file.split('/')[0]))].sort();
+}
 
 let consumer: string | undefined;
 beforeAll(() => {
@@ -148,7 +153,7 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
     const ears = path.join(consumer!, 'node_modules', '@apackdev', 'ears');
     expect(await resolveFromConsumer('@apackdev/ears')).toBe(pathToFileURL(fs.realpathSync(path.join(ears, 'dist', 'index.js'))).href);
     const shipped = fs.readdirSync(path.join(sdk, 'dist'), { recursive: true }).map(String);
-    expect(fs.readdirSync(sdk).sort()).toEqual(['apack.schema.json', 'dist', 'package.json']);
+    expect(packedRoots(PACKED_PACKAGES.sdk!)).toEqual(['apack.schema.json', 'dist', 'package.json']);
     // Source maps would point at src, which isn't published
     expect(shipped.filter((f) => f.endsWith('.map'))).toEqual([]);
   });
@@ -163,7 +168,7 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
       { cwd: consumer!, env: { PATH: process.env.PATH }, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 },
     );
     expect(output).toBe('Flow contains object true');
-    expect(fs.readdirSync(earsRoot).sort()).toEqual(['dist', 'package.json', 'vendor']);
+    expect(packedRoots(PACKED_PACKAGES.ears!)).toEqual(['dist', 'package.json', 'vendor']);
     expect(fs.readdirSync(path.join(earsRoot, 'vendor'))).toEqual(['rregex']);
     expect(fs.readdirSync(path.join(earsRoot, 'vendor', 'rregex')).sort())
       .toEqual(['LICENSE', 'README.md', 'provenance.json', 'rregex.cjs', 'rregex_bg.wasm']);

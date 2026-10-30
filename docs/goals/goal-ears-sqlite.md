@@ -6,7 +6,7 @@
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
 The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 5e81dda7c2
-and its native pin 95615ed8d4; combined acceptance is pending. Inspect the current handoff and actual source before continuing.
+and its native pin 95615ed8d4; full combined acceptance remains pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
 Finished when the SQLite candidate runs the complete app data lifecycle, all required
@@ -192,8 +192,8 @@ No master merge, release, production adoption or version-only PR is authorized. 
 Active integration checkout: `/private/tmp/ears-sqlite-query-integration`. The preceding checkpoint is
 preserved at `/private/tmp/ears-sqlite-diagnosis-evidence`, `68cf78a2f4`.
 
-Current checkpoint: qualify managed model ownership and separate logical/native readiness on committed
-master `5e81dda7c2` and native `95615ed8d4`, then resolve admission responsiveness and remaining lifecycle gates.
+Current checkpoint: qualify incumbent-preserving physical model refresh on committed master `5e81dda7c2`
+and native `95615ed8d4`, then complete live replacement suspension and resolve admission responsiveness.
 Detached merge `61b287bcd7` combines verified candidate `9fc0e5e19b` with that master snapshot: batched folder
 queries/paths, selective flow removal, native graph/reader/watch fixes and the corresponding facade report.
 The preceding candidate passes 652 EARS, 18 host and 7 API cases on native `006d6cec88`; those results do
@@ -204,7 +204,13 @@ retaining SQLite explanations/backend assertions, master reverse-traversal clari
 **five** current thread-query cases. The new master adds the Message status index, queued-message
 relocation and batched library queries. No source branch or other-agent checkout was merged/reset.
 The previous `330efa68e6` integration of `68cf78a2f4` and master `8b1a479b96` is historical.
-The draft branch publishes candidates for CI review; publication does not establish combined acceptance.
+The draft branch publishes candidates for CI review; publication does not establish full combined acceptance.
+Checkpoint `3cccc4dfa9` now passes [all three platform hosts](../references/evidence/ears-sqlite-implementation-2026-10-28/model-readiness-activation/platform-41034695900/README.md),
+including managed startup, current SDK/app queries and actual converted-profile API restart. Full strict
+run `41034746897` is still running and has an integration-1 failure: the published SDK inventory test
+counted installation-added dependency directories as shipped files. Its assertions now inspect npm's
+actual tarball inventory; [all 10 consumer cases, types, lint and the reverted control pass](../references/evidence/ears-sqlite-implementation-2026-10-28/published-inventory/README.md). Inspect the
+remaining exact run handles; the newer fix and refresh still require a fresh full strict run.
 Exact base `1efad34246` is now all-platform green in `41013324901`, including ordinary package loading,
 the then-current app queries and native pin `006d6cec88`. Ownership checkpoint `1d16d85c81` also passes
 all three platform hosts in run `41019274148`; neither result qualifies the newer activation/master merge. Full Strict and the complete adoption/performance criteria remain required.
@@ -401,19 +407,26 @@ is now green on all three CI hosts: [retained ownership qualification](../refere
 All three execute the kernel-claim and worker-drain cases with the pinned dependency; this does not
 qualify the subsequent readiness/activation edits or signed installed applications.
 
-Logical/native readiness separation and managed app activation are now implemented in the working overlay,
-with [six focused cases and two negative controls](../references/evidence/ears-sqlite-implementation-2026-10-28/model-readiness-activation/README.md).
+Logical/native readiness separation and managed app activation are implemented and all-platform qualified
+at `3cccc4dfa9`, with [focused and integrated evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/model-readiness-activation/README.md).
 `indexesReady()` waits for declared logical generations; app-only `waitForNativeModels()` includes native work.
 The managed API starts claimed services on both writable stores, recovers abandoned attempts under that
 claim and drains both stores if startup fails. Forensic/offline opens do not start services. The exact
 prior-base overlay passes 652 EARS cases, 18 host cases, 7 API cases, EARS/host/API types, regenerated API
-reports, boundaries and lint. This includes startup refusal cleanup; it does not qualify later master
-integration, full platform/installed startup or the complete performance/application gates.
-Physical refresh and live replacement suspension remain required.
+reports, boundaries and lint. Subsequent run `41034695900` qualifies the master/native integration and
+managed startup on all three platform hosts. Signed installed startup and full performance gates remain open.
+
+[Physical model refresh](../references/evidence/ears-sqlite-implementation-2026-10-28/physical-model-refresh/README.md)
+now preserves a ready incumbent while training and projecting a separate physical model. Publication and
+trigger retirement are atomic; cleanup is bounded, and interrupted projection resumes without removing the
+incumbent. The current-pin Linux overlay passes 657 EARS cases, 18 host cases, 7 API cases, types and static
+checks, plus five focused cases and three negative controls. Later platform/full strict and performance
+qualification remain required. Live replacement must still suspend native services and invalidate the old
+model epoch atomically; terminal shutdown drain cannot be reused for that operation.
 
 Still required, without narrowing phases 3–7:
 
-- Requalify managed app owners/loading and automatic admission against the current integrated baseline; implement incumbent-preserving physical refresh and host drain before file replacement/
+- Qualify physical refresh and remaining model freshness/retirement cases on the final integrated candidate; suspend/drain native work before live replacement/
   deletion, complete native audit/rebuild/restore/retirement ownership, normal native loading/distribution/signing.
 - Final candidate/trash filtering before K, multi-chunk scoring, ties, large-K/exact fallbacks, own-unit/savepoint
   reads, model/generation/hash freshness, readiness/watch delivery and representative recall/update qualification.

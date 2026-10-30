@@ -36,7 +36,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     expect(write(()=>index.step(job.generation,1))).toBe(false);
     expect(plan.some(row=>String(row.detail).includes('chunk_native_admission')&&String(row.detail).includes('embedding_id>?'))).toBe(true);
     expect(plan.some(row=>String(row.detail).startsWith('SEARCH v USING INTEGER PRIMARY KEY'))).toBe(true);
-    expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(1);
+    expect(db.get(`SELECT count(*) n FROM ann_${db.get('SELECT id FROM vector_indexes WHERE generation=?',[job.generation])!.id}`)!.n).toBe(1);
     // Updating an already-visited vector and adding new owners must both survive later backfill.
     const pending=e.pendingEmbeddings('Row',{limit:1000});expect(pending.chunks).toHaveLength(0);
     const old=db.get('SELECT * FROM embedding_values WHERE entity_id=? ORDER BY chunk LIMIT 1',[first])!;
@@ -62,14 +62,71 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     };
     expect(()=>write(()=>{expect(sliced()).toBe(false);throw Error('rollback slice');})).toThrow('rollback slice');
     expect(db.get('SELECT after_id,state FROM vector_indexes')).toEqual({after_id:0,state:'building'});
-    expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(0);
+    expect(db.get(`SELECT count(*) n FROM ann_${db.get('SELECT id FROM vector_indexes WHERE generation=?',[job.generation])!.id}`)!.n).toBe(0);
     expect(write(sliced)).toBe(false);
     expect(db.get('SELECT after_id,state FROM vector_indexes')).toEqual({after_id:first,state:'building'});
-    expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(1);
+    expect(db.get(`SELECT count(*) n FROM ann_${db.get('SELECT id FROM vector_indexes WHERE generation=?',[job.generation])!.id}`)!.n).toBe(1);
     while(!write(()=>index.step(job.generation,128))) { /* resume from the last committed row */ }
     expect(index.candidates(job.generation,bytes(vector(1)),100)).toHaveLength(5);
-    expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).toBe(5);
+    expect(db.get(`SELECT count(*) n FROM ann_${db.get('SELECT id FROM vector_indexes WHERE generation=?',[job.generation])!.id}`)!.n).toBe(5);
     expect(db.get('SELECT state FROM vector_indexes')!.state).toBe('ready');
+  });
+
+  it('preserves the incumbent through refresh, foreground changes and a refused atomic publication',()=>{
+    const {db,e,index,job,model,write,embed}=fixture();
+    const first=e.create('Row',{title:'first'}).id(),second=e.create('Row',{title:'second'}).id();embed();
+    write(()=>index.admit(job,model));while(!write(()=>index.step(job.generation,1))) { /* initial model */ }
+    const incumbent=Number(index.ready(job.generation)!.id),sequence=db.sequence;
+    const original=index.candidates(job.generation,bytes(vector(1)),100);
+    write(()=>index.admit(job,model));
+    const replacement=Number(db.get("SELECT id FROM vector_indexes WHERE state='building'")!.id);
+    expect(replacement).not.toBe(incumbent);expect(db.sequence).toBe(sequence);
+    expect(write(()=>index.step(job.generation,1))).toBe(false);
+    expect(index.candidates(job.generation,bytes(vector(1)),100)).toEqual(original);
+    expect(()=>e.transact(()=>{e.write(first).trash();throw Error('rollback refresh write');})).toThrow('rollback refresh write');
+    expect(index.candidates(job.generation,bytes(vector(1)),100)).toEqual(original);
+    e.write(second).trash();const third=e.create('Row',{title:'third'}).id();embed();
+    const firstVector=db.get('SELECT chunk,hash,model FROM embedding_values WHERE entity_id=?',[first])!;
+    e.embed([{id:first,chunk:firstVector.chunk,hash:firstVector.hash,model:firstVector.model,vector:vector(1)}]);
+    const expected=index.candidates(job.generation,bytes(vector(1)),100);
+    expect(expected.find(row=>Number(row.owner)===Number(db.get('SELECT seq FROM entities WHERE id=?',[first])!.seq))!.distance).toBeCloseTo(0);
+    expect(new Set(expected.map(row=>row.owner))).toEqual(new Set(db.all('SELECT seq FROM entities WHERE id IN (?,?)',[first,third]).map(row=>row.seq)));
+    while(Number(db.get('SELECT after_id FROM vector_indexes WHERE id=?',[replacement])!.after_id)<Number(db.get('SELECT max(embedding_id) n FROM chunks WHERE generation=?',[job.generation])!.n))
+      expect(write(()=>index.step(job.generation,1))).toBe(false);
+    expect(()=>write(()=>{expect(index.step(job.generation,1)).toBe(true);throw Error('refused flip');})).toThrow('refused flip');
+    expect(Number(index.ready(job.generation)!.id)).toBe(incumbent);
+    expect(db.get('SELECT state FROM vector_indexes WHERE id=?',[replacement])!.state).toBe('building');
+    expect(index.candidates(job.generation,bytes(vector(1)),100)).toEqual(expected);
+    expect(write(()=>index.step(job.generation,1))).toBe(true);
+    expect(Number(index.ready(job.generation)!.id)).toBe(replacement);
+    expect(index.candidates(job.generation,bytes(vector(1)),100)).toEqual(expected);
+    expect(db.get("SELECT count(*) n FROM sqlite_schema WHERE type='trigger' AND name GLOB ?",[`ann_${incumbent}_*`])!.n).toBe(0);
+    expect(db.get('SELECT state FROM vector_indexes WHERE id=?',[incumbent])!.state).toBe('retiring');
+    const remaining=Number(db.get(`SELECT count(*) n FROM ann_${incumbent}`)!.n);expect(remaining).toBeGreaterThan(1);
+    write(()=>index.collectSuperseded(1));expect(db.get('SELECT 1 FROM vector_indexes WHERE id=?',[incumbent])).toBeDefined();
+    expect(Number(db.get(`SELECT count(*) n FROM ann_${incumbent}`)!.n)).toBe(remaining-1);
+    while(index.retirementPending())write(()=>index.collectSuperseded(1));
+    expect(db.get('SELECT 1 FROM sqlite_schema WHERE name=?',[`ann_${incumbent}`])).toBeUndefined();
+    expect(Number(index.ready(job.generation)!.id)).toBe(replacement);
+    expect(db.indexBuilds.jobs().find(j=>j.generation===job.generation)?.state).toBe('ready');
+  });
+
+  it('keeps an older read snapshot usable while a refreshed physical model is published and retired',()=>{
+    const {db,e,index,job,model,write,embed}=fixture();e.create('Row',{title:'snapshot'});embed();
+    write(()=>index.admit(job,model));write(()=>index.step(job.generation,32));
+    const reader=new SqliteDatabase({path:db.path,readOnly:true});
+    try {
+      const old=new SqliteVectorIndex(reader,process.env.EARS_VEC1_EXTENSION!);
+      reader.sql.exec('BEGIN');const before=old.candidates(job.generation,bytes(vector(1)),100);
+      const identity=old.ready(job.generation)!.id;
+      write(()=>index.admit(job,model));write(()=>index.step(job.generation,32));
+      expect(index.ready(job.generation)!.id).not.toBe(identity);
+      while(index.retirementPending())write(()=>index.collectSuperseded(32));
+      expect(old.ready(job.generation)!.id).toBe(identity);
+      expect(old.candidates(job.generation,bytes(vector(1)),100)).toEqual(before);
+      reader.sql.exec('ROLLBACK');expect(old.ready(job.generation)!.id).toBe(index.ready(job.generation)!.id);
+      expect(old.candidates(job.generation,bytes(vector(1)),100)).toEqual(before);
+    } finally {reader.close();}
   });
 
   it('keeps nested/outer rollback, trash, replacement and destruction in the same transaction',()=>{

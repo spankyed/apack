@@ -491,7 +491,7 @@ before connection writes. Ready native candidate selection is shared with separa
 writable handles, without automatically creating a trainer. Private export/audit/replacement-source copies
 inherit the owner's loader, never a path from stored data. [Connection evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-connections/README.md)
 retains 637 passing SQLite cases, generated API/package checks and two negative controls. This is the
-connection contract; ordinary unsigned package resolution is now implemented below; installed/signing qualification and host model ownership are still required.
+connection contract; ordinary unsigned package resolution is now implemented below; installed/signing qualification remains required.
 Graceful API SIGTERM now uses host `closeDatabases`: per-handle write exclusion remains held until
 optional terminal drain and close complete. Other stores still settle if one fails; repeated signals and
 shutdown hooks are idempotent. SQLite's terminal drain rejects new writes until close/reopen. This does
@@ -504,7 +504,7 @@ license ship. App-only opens resolve and hash-check their package-owned artifact
 owner overrides remain explicit. The CI wrapper requires independent/package byte equality. Native source
 is a declared package input; Windows compiler setup precedes package production. Signed/installed artifacts
 must finalize their binary hashes after library signing, before the outer app is sealed; that lifecycle is
-not supplied by an unsigned npm package. Automatic model-owner creation remains separate.
+not supplied by an unsigned npm package. Managed app owner creation is now implemented below.
 Native model constructors now take an OS-backed service claim using pinned `fs-native-extensions` 1.5.2.
 One persistent empty inode per store prevents independently opened services from recovering each other's
 work. The descriptor remains held through actual worker exit; no signal/PID timeout releases it early.
@@ -512,17 +512,40 @@ Idle owners release synchronously, and process death releases kernel ownership. 
 through one typed consumed signature, avoiding ambient declarations in consuming workspace builds.
 This does not certify network filesystems, arbitrary inode deletion or noncooperating writers.
 
-Before normal app owner activation, separate logical generation readiness from optional native training:
-`SqliteIndexBuilds.indexesReady()` currently waits on `vectorModels.hasWork()` and reports model failure.
-Startup and live pack registration use that port; activating a service unchanged would block them on
-optional model admission even when ordinary queries are ready. Keep logical readiness usable while native
-work runs, provide an explicit native-completion wait for maintenance/benchmarks, and preserve readiness
-watch delivery without inventing logical commits. Then compose claimed recovery/owner creation and the
-already implemented drain path into normal boot. No claim or raw constructor implicitly grants physical
-replacement/deletion authority.
-The remaining integration must create/load normal app owners, preserve incumbents during physical model
-refresh, drain before file replacement/deletion, complete rebuild/restore/audit ownership, and distribute/load
-trusted native artifacts on every writer and read-only candidate connection. Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,
+Managed API startup now uses the host storage hook to start a claimed service on each writable SQLite
+store before loading packs. It recovers abandoned attempts only after claiming ownership, and drains both
+stores if either startup refuses. Forensic readers and offline constructors do not start services.
+Logical `indexesReady()` remains usable while optional native work is pending or failed; explicit
+`waitForNativeModels()` includes model completion. Graceful shutdown joins the service's actual worker exit.
+[Exact platform qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/model-readiness-activation/platform-41034695900/README.md)
+passes Linux/macOS/Windows on committed master `5e81dda7c2` and native `95615ed8d4`. This does not
+certify signed installed apps, live replacement suspension or the final performance budgets.
+
+Physical refresh separates logical vector generations from physical model identities. `vector_indexes`
+allocates persistent non-reused physical IDs, with unique partial indexes for one ready and one building
+model per logical generation. `ann_<physical-id>` tables capture canonical writes transactionally during
+projection. App-only `refreshNativeModels()` durably queues replacements without retaining write exclusion
+through training; it neither changes logical generations nor invents a logical commit. Failed attempts leave
+the incumbent usable on owner and independently opened reader connections. Candidate routing follows the
+ready physical row, independently of the latest training attempt's state.
+
+Only complete projection switches the ready row, within the same transaction as its final cursor update.
+The previous model becomes retiring and loses its write triggers at that switch, so foreground mutations
+cannot repopulate garbage. Cleanup deletes at most 32 native rows per scheduler step before dropping an
+empty physical group; public refresh refuses another attempt until the prior projection/retirement finishes.
+An older read snapshot remains valid across another connection's publication and retirement. Interrupted
+private projection resumes after reopen while the incumbent remains current. This changes pre-release
+format-one derived metadata in place: recreate developer SQLite profiles rather than adding a compatibility
+migration; production remains elmdb.
+[Physical refresh evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/physical-model-refresh/README.md)
+records the five focused cases, three reverted-code controls and current-pin integrated Linux qualification.
+Platform and installed qualification for these later changes remain required.
+
+The remaining lifecycle integration must suspend/drain native services around live replacement/deletion,
+complete native rebuild/restore/audit ownership and finish trusted installed loading/signing. A same-schema
+primary replacement must not let an old worker result or old model become the new corpus's accepted epoch.
+No raw constructor or model-service claim grants physical replacement/deletion authority.
+Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,
 with transactional failure/retry and populated staging/reopen coverage. Populated stores missing it
 still require explicit offline preparation. [Cursor preparation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-cursor-preparation/README.md)
 retains 635 SQLite cases and the reverted-code control; it does not qualify the newer native pin. The new platform gate requires the native

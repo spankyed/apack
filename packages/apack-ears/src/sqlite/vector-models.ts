@@ -52,7 +52,7 @@ export class SqliteVectorModels {
   committed(changes:ReadonlySet<string>):void { this.admission.committed(changes); }
   hasWork():boolean {
     if(this.stopped||!this.db.isOpen)return false;
-    return this.admission.hasWork()||this.orphanSweep||!!this.outcome||!!this.running||!!this.db.get("SELECT 1 FROM vector_training WHERE state IN ('pending','training','trained','projecting') LIMIT 1");
+    return this.admission.hasWork()||this.index.retirementPending()||this.orphanSweep||!!this.outcome||!!this.running||!!this.db.get("SELECT 1 FROM vector_training WHERE state IN ('pending','training','trained','projecting') LIMIT 1");
   }
   failure():Error|undefined {
     const row=this.db.get("SELECT generation,error FROM vector_training WHERE state='failed' ORDER BY generation LIMIT 1");
@@ -66,11 +66,11 @@ export class SqliteVectorModels {
     this.writer();
     if(!this.db.get('SELECT 1 FROM vector_indexes WHERE generation=?',[generation]))return true;
     if(!this.index.collect(generation,32))return false;
-    this.index.retire(generation);return true;
+    this.index.retire(generation);return !this.db.get('SELECT 1 FROM vector_indexes WHERE generation=?',[generation]);
   }
   candidateOwners(generation:number,vector:Uint8Array,scope:SqliteEntityScope|null,exclude?:string):number[]|undefined {
     if(this.stopped)return;
-    return nativeVectorCandidateOwners(this.db,this.index,generation,vector,scope,exclude);
+    return nativeVectorCandidateOwners(this.index,generation,vector,scope,exclude);
   }
 
   private writer():void {
@@ -87,6 +87,16 @@ export class SqliteVectorModels {
     if(JSON.stringify(current.definition)!==JSON.stringify(job.definition))fail('SCHEMA_CHANGED','Native model definition changed');
     this.db.run("INSERT INTO vector_training(generation,definition,state) VALUES (?,?,'pending') ON CONFLICT(generation) DO NOTHING",
       [job.generation,JSON.stringify(job.definition)]);
+  }
+  /** Queue a replacement for an existing physical model; preserve its current pointer and logical data. */
+  refresh(generation:number):void {
+    this.writer();this.job(generation);
+    if(!this.index.ready(generation))fail('INDEX_BUILDING','A ready incumbent is required for physical refresh');
+    if(this.db.get("SELECT 1 FROM vector_indexes WHERE generation=? AND state!='ready'",[generation]))
+      fail('REFRESH_ACTIVE','Finish projection and retirement before another physical refresh');
+    const state=this.db.get('SELECT state FROM vector_training WHERE generation=?',[generation]);
+    if(state?.state!=='ready'&&state?.state!=='failed')fail('TRAINING_ACTIVE','This generation already has an active training attempt');
+    this.db.run("UPDATE vector_training SET state='pending',attempt=NULL,model=NULL,error=NULL WHERE generation=?",[generation]);
   }
   /** Only the managed exclusive writer may declare previous in-flight attempts abandoned on startup. */
   recover():void {
@@ -145,6 +155,7 @@ export class SqliteVectorModels {
       // outside this transaction. Eligibility must not starve worker launch or acknowledgement.
       if(this.db.get("SELECT 1 FROM vector_training WHERE state IN ('pending','training') LIMIT 1"))
         return {progressed:false,accept:()=>{}};
+      if(this.index.collectSuperseded(32))return {progressed:true,accept:()=>{}};
       if(this.admission.hasWork())return this.admission.step(job=>this.enqueue(job));
       if(!this.orphanSweep)return {progressed:false,accept:()=>{}};
       const orphan=this.orphan();

@@ -7,9 +7,9 @@ import type { SqliteIndexJob } from './index-builds.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
 
 const fail = (code: string, message: string): never => { throw Object.assign(new Error(message), { code }); };
-function table(generation: number): string {
-  if (!Number.isSafeInteger(generation) || generation < 1) fail('CORRUPT', 'Invalid native vector generation');
-  return 'ann_' + generation;
+function table(identity: number): string {
+  if (!Number.isSafeInteger(identity) || identity < 1) fail('CORRUPT', 'Invalid native vector generation');
+  return 'ann_' + identity;
 }
 
 export class SqliteVectorIndex {
@@ -22,8 +22,12 @@ export class SqliteVectorIndex {
       fail('MAINTENANCE_REQUIRED','Prepare the native admission cursor index offline before enabling it on a populated store');
     }
     if (!db.readOnly) db.sql.exec(`CREATE TABLE IF NOT EXISTS vector_indexes(
-      generation INTEGER PRIMARY KEY,state TEXT NOT NULL CHECK(state IN ('building','ready')),
-      after_id INTEGER NOT NULL,model_sha256 TEXT NOT NULL);`);
+      id INTEGER PRIMARY KEY AUTOINCREMENT,generation INTEGER NOT NULL,
+      state TEXT NOT NULL CHECK(state IN ('building','ready','retiring')),
+      after_id INTEGER NOT NULL,model_sha256 TEXT NOT NULL);
+      CREATE UNIQUE INDEX IF NOT EXISTS vector_current ON vector_indexes(generation) WHERE state='ready';
+      CREATE UNIQUE INDEX IF NOT EXISTS vector_building ON vector_indexes(generation) WHERE state='building';
+      CREATE INDEX IF NOT EXISTS vector_retirement ON vector_indexes(state,id);`);
   }
   private writer(): void {
     if (this.db.readOnly || !this.db.sql.inTransaction) fail('UNIT_REQUIRED', 'Native index admission requires writer ownership');
@@ -34,11 +38,11 @@ export class SqliteVectorIndex {
     const current = this.db.indexBuilds.index(job.type, 'vector', job.name);
     if (job.kind !== 'vector' || current.generation !== job.generation ||
         JSON.stringify(current.definition) !== JSON.stringify(job.definition)) fail('SCHEMA_CHANGED', 'Native vector admission is stale');
-    const name = table(job.generation), gen = job.generation;
+    const inserted=this.db.run("INSERT INTO vector_indexes(generation,state,after_id,model_sha256) VALUES (?,'building',0,?)",
+      [job.generation,createHash('sha256').update(model).digest('hex')]);
+    const name = table(Number(inserted.lastInsertRowid)), gen = job.generation;
     this.db.sql.exec(`CREATE VIRTUAL TABLE ${name} USING vec1(v,owner,active);`);
     this.db.run(`INSERT INTO ${name}(cmd,arg) VALUES ('rebuild',?)`, [Buffer.from(model)]);
-    this.db.run("INSERT INTO vector_indexes VALUES (?,'building',0,?)",
-      [gen, createHash('sha256').update(model).digest('hex')]);
     const project = `INSERT INTO ${name}(rowid,v,owner,active)
       SELECT v.id,coalesce(p.normalized,v.embedding),e.seq,1-e.trashed
       FROM embedding_values v JOIN entities e ON e.id=v.entity_id
@@ -60,9 +64,12 @@ export class SqliteVectorIndex {
   step(generation: number, limit: number): boolean {
     this.writer();
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 128) fail('VALUE_INVALID', 'Invalid native projection batch');
-    const name = table(generation), state = this.db.get('SELECT * FROM vector_indexes WHERE generation=?', [generation]);
-    if (!state) fail('CORRUPT', 'Missing native vector admission');
-    if (state!.state === 'ready') return true;
+    const state=this.db.get("SELECT * FROM vector_indexes WHERE generation=? AND state='building'",[generation]);
+    if(!state) {
+      if(this.ready(generation))return true;
+      fail('CORRUPT','Missing native vector admission');
+    }
+    const name=table(Number(state!.id));
     const started = performance.now();
     const rows = this.db.all(`WITH page AS MATERIALIZED (
       SELECT entity_id,embedding_id FROM chunks WHERE generation=? AND embedding_id>? ORDER BY embedding_id LIMIT ?)
@@ -79,8 +86,17 @@ export class SqliteVectorIndex {
       if (performance.now() - started >= this.db.indexBuilds.sliceMs) break;
     }
     const ready = processed === rows.length && rows.length < limit;
-    this.db.run('UPDATE vector_indexes SET after_id=?,state=? WHERE generation=?',
-      [afterId, ready ? 'ready' : 'building', generation]);
+    if(ready) {
+      // Both models have captured foreground writes. Flip only after the replacement's complete page
+      // commits; the previous model remains queryable on every refusal/rollback and across snapshots.
+      const incumbent=this.ready(generation);
+      if(incumbent) {
+        this.dropTriggers(Number(incumbent.id));
+        this.db.run("UPDATE vector_indexes SET state='retiring' WHERE id=?",[incumbent.id]);
+      }
+    }
+    this.db.run('UPDATE vector_indexes SET after_id=?,state=? WHERE id=?',
+      [afterId, ready ? 'ready' : 'building', state!.id]);
     return ready;
   }
   /** Chunk candidates only; final owner aggregation/reranking remains the query owner's responsibility. */
@@ -89,8 +105,9 @@ export class SqliteVectorIndex {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 4096) fail('VALUE_INVALID', 'Invalid native candidate limit');
     if(!this.db.get("SELECT 1 FROM index_builds WHERE generation=? AND kind='vector'",[generation]))
       fail('SCHEMA_CHANGED','Native vector generation was retired');
-    const name = table(generation), state = this.db.get('SELECT state FROM vector_indexes WHERE generation=?', [generation]);
-    if (state?.state !== 'ready') fail('INDEX_BUILDING', 'Native vector projection is not ready');
+    const state=this.ready(generation);
+    if(!state)fail('INDEX_BUILDING','Native vector projection is not ready');
+    const name=table(Number(state!.id));
     const filter = scope || exclude ? `owner IN (SELECT e.seq FROM entities e WHERE
       ${scope ? `e.id IN (${scope.sql})` : 'e.trashed=0'} AND e.id!=?)` : 'active=1';
     // Owner admission does not need native Float32 payloads or a second exact distance calculation.
@@ -99,18 +116,47 @@ export class SqliteVectorIndex {
       [...(projection==='owners'?[]:[Buffer.from(vector)]),Buffer.from(vector),JSON.stringify({K:limit,nprobe:32}),
         ...(scope || exclude ? [...(scope?.parameters ?? []),exclude ?? ''] : [])]);
   }
-  collect(generation:number,limit:number):boolean {
-    this.writer();
+  ready(generation:number):Record<string,any>|undefined {
+    return this.db.get("SELECT * FROM vector_indexes WHERE generation=? AND state='ready'",[generation]);
+  }
+  retirementPending():boolean {return !!this.db.get("SELECT 1 FROM vector_indexes WHERE state='retiring' LIMIT 1");}
+  private dropTriggers(identity:number):void {
+    const name=table(identity);
+    this.db.sql.exec(`DROP TRIGGER ${name}_insert; DROP TRIGGER ${name}_update;
+      DROP TRIGGER ${name}_delete; DROP TRIGGER ${name}_trash;`);
+  }
+  private collectGroup(row:Record<string,any>,limit:number):boolean {
     if(!Number.isSafeInteger(limit)||limit<1||limit>128)fail('VALUE_INVALID','Invalid native retirement batch');
-    const name=table(generation);
+    const name=table(Number(row.id));
+    if(row.state!=='retiring') {
+      this.dropTriggers(Number(row.id));
+      this.db.run("UPDATE vector_indexes SET state='retiring' WHERE id=?",[row.id]);
+    }
     return Number(this.db.run(`DELETE FROM ${name} WHERE rowid IN (SELECT rowid FROM ${name} LIMIT ?)`,[limit]).changes)<limit;
   }
+  /** Collect one physical group for a logically retired generation. */
+  collect(generation:number,limit:number):boolean {
+    this.writer();
+    const row=this.db.get('SELECT * FROM vector_indexes WHERE generation=? ORDER BY id LIMIT 1',[generation]);
+    return !row||this.collectGroup(row,limit);
+  }
+  private dropGroup(row:Record<string,any>):void {
+    const name=table(Number(row.id));
+    if(this.db.get(`SELECT 1 FROM ${name} LIMIT 1`))fail('INDEX_NOT_EMPTY','Retire native rows before dropping the group');
+    if(row.state!=='retiring')this.dropTriggers(Number(row.id));
+    this.db.sql.exec(`DROP TABLE ${name}`);
+    this.db.run('DELETE FROM vector_indexes WHERE id=?',[row.id]);
+  }
   /** Caller must first retire projection rows in bounded batches; DROP must not hide live work. */
-  retire(generation: number): void {
-    this.writer(); const name = table(generation);
-    if (this.db.get(`SELECT 1 FROM ${name} LIMIT 1`)) fail('INDEX_NOT_EMPTY', 'Retire native rows before dropping the group');
-    this.db.sql.exec(`DROP TRIGGER ${name}_insert; DROP TRIGGER ${name}_update;
-      DROP TRIGGER ${name}_delete; DROP TRIGGER ${name}_trash; DROP TABLE ${name};`);
-    this.db.run('DELETE FROM vector_indexes WHERE generation=?', [generation]);
+  retire(generation:number):void {
+    this.writer();const row=this.db.get('SELECT * FROM vector_indexes WHERE generation=? ORDER BY id LIMIT 1',[generation]);
+    if(row)this.dropGroup(row);
+  }
+  /** Retire a superseded physical model without touching its logical generation or incumbent. */
+  collectSuperseded(limit:number):boolean {
+    this.writer();const row=this.db.get("SELECT * FROM vector_indexes WHERE state='retiring' ORDER BY id LIMIT 1");
+    if(!row)return false;
+    if(this.collectGroup(row,limit))this.dropGroup(row);
+    return true;
   }
 }

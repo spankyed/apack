@@ -266,6 +266,14 @@ export class SqliteIndexBuilds {
   async drain():Promise<void> {
     this.stop();await this.stoppingModels;
   }
+  /** The caller owns the short refresh admission transaction; training runs after it releases writes. */
+  refreshNativeModels():void {
+    this.assertRunning();
+    const models=this.vectorModels;
+    if(!models)return fail('BACKGROUND_OWNER_REQUIRED','Start native model ownership before refreshing models');
+    const rows=this.db.all("SELECT v.generation FROM vector_indexes v JOIN index_builds b ON b.generation=v.generation WHERE v.state='ready' ORDER BY v.generation");
+    for(const row of rows)models.refresh(Number(row.generation));
+  }
   /** Explicit maintenance cannot enqueue work on an owner that requires reopen. */
   assertRunning(): void {
     if (this.stopped) throw this.lastError ?? Object.assign(new Error('Index scheduler is stopped; reopen the database'), { code: 'CLOSED' });

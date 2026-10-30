@@ -56,6 +56,14 @@ export async function startVectorModels(database: EarsDatabase): Promise<void> {
   });
 }
 
+/** Queue background physical model refresh without changing logical generations or blocking ordinary writes.
+ * Resolves after durable admission, not training. Use waitForNativeModels for explicit completion.
+ */
+export async function refreshNativeModels(database:EarsDatabase):Promise<void> {
+  if(!(database instanceof SqliteDatabase))throw Object.assign(new Error('Native model refresh requires a SQLite owner'),{code:'UNSUPPORTED'});
+  await database.withExclusiveWrites(async()=>{database.refreshNativeModels();});
+}
+
 /** Wait for optional native work as well as declared logical indexes; requires a live service on this handle. */
 export function waitForNativeModels(database: EarsDatabase): Promise<void> {
   if (!(database instanceof SqliteDatabase)) return Promise.reject(Object.assign(new Error('Native model readiness requires a SQLite owner'), { code: 'UNSUPPORTED' }));

@@ -34,6 +34,9 @@ export function openDatabase(input: DatabaseOptions): EarsDatabase;
 // @public
 export function rebuildIndexes(database: EarsDatabase): Promise<void>;
 
+// @public
+export function refreshNativeModels(database: EarsDatabase): Promise<void>;
+
 // @public (undocumented)
 export interface SqliteAuditReport {
     // (undocumented)
