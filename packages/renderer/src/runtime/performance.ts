@@ -12,11 +12,20 @@ let starting = false;
 let stopping = false;
 let failedListeners = 0;
 export interface PerformanceViewDelivery { request: ViewRequest; update: ViewUpdate; generation: number; delivery: number }
+interface StartupViewReceipt { commit: number; subscription?: string; delivery?: number; ok: boolean }
+const startupViews = new Map<string, StartupViewReceipt>();
 const listeners = new Set<(delivery: PerformanceViewDelivery) => void>();
 
 /** Ephemeral developer callbacks; no request arguments or results enter the span recorder. */
 export function notifyPerformanceView(delivery: PerformanceViewDelivery) {
   if (!controller) return;
+  if (startupAction && delivery.request.args === undefined) {
+    const { ref, view } = delivery.request;
+    const key = `${ref}\0${view}`;
+    if (ref.length > 128 || view.length > 128 || !startupViews.has(key) && startupViews.size >= 32) failedListeners++;
+    else startupViews.set(key, { ok: delivery.update.ok, commit: delivery.update.commit,
+      subscription: delivery.update.diagnostics?.subscription, delivery: delivery.update.diagnostics?.delivery });
+  }
   for (const listener of listeners) { try { listener(delivery); } catch { failedListeners++; } }
 }
 
@@ -35,12 +44,17 @@ export const windowPerformance = {
       const resource = createPerformanceController(() => new BrowserRecordingContext());
       resource.start(mode);
       failedListeners = 0;
+      startupViews.clear();
       controller = resource;
       if (options?.startup) startupAction = resource.execution.withCarrier(options.carrier, () => resource.begin('app.startup', { 'app.process': 'renderer' }));
     } catch (error) {
       if (admitted) await trpc.performance.stop.mutate().catch(() => {});
       throw error;
     } finally { starting = false; }
+  },
+  lastStartupView(ref: string, view: string): StartupViewReceipt | undefined {
+    const receipt = startupViews.get(`${ref}\0${view}`);
+    return receipt && { ...receipt };
   },
   withinStartup<T>(fn: () => T): T { return startupAction ? startupAction.within(fn) : fn(); },
   begin(name: string, attributes?: Parameters<Controller['begin']>[1]) {
@@ -61,6 +75,7 @@ export const windowPerformance = {
     controller = undefined;
     stopping = true;
     listeners.clear();
+    startupViews.clear();
     // Both owners are stopped even if the socket was lost. A failed report remains a failed trial.
     try {
       const [renderer, backend] = await Promise.allSettled([resource.stop(), trpc.performance.stop.mutate()]);
