@@ -61,12 +61,12 @@ lightweight instrumentation median-overhead budget. All four actions remain in s
 - **Node resources:** constant-memory aggregate CPU, sampled RSS/heap maxima, GC and event-loop
   observations for enabled recordings; no per-action attribution or true-peak-memory claim. Timers and
   observers stop; sample faults invalidate capture. Eighteen Linux diagnostics tests and portable-schema
-  roundtrip/fault tests pass. Renderer resource observations and CPU/allocation profiles remain open.
+  roundtrip/fault tests pass. Renderer resources and detailed profiles are implemented; startup profile qualification remains open.
 - **Report admission:** actual app/native output hashes, clean/dirty authored-source identity, fixtures,
   runtimes, machine/resources, mode/cache/warmups. Whole-run validation rejects missing/duplicate trials,
-  invalid warmups, mixed scenarios/modes, missing processes and unsuccessful samples. The manual checker
-  bounds input to 64 MiB before parsing and verifies startup aggregate/per-launch consistency. Comparison
-  compatibility and ABBA-order primitives exist; orchestration/whole-run retention remain open.
+  invalid warmups, mixed scenarios/modes, missing processes and unsuccessful samples. The checker
+  admits bounded per-trial files and verifies startup aggregate/per-launch consistency. Comparison
+  compatibility and ABBA-order primitives exist; balanced orchestration remains open.
 
 ## Controlled measurement proofs
 
@@ -107,13 +107,13 @@ typecheck pass. A final full gate is still required.
 
 Detailed Node capture now uses an owned local Inspector session, with no debug listener. It records
 V8 CPU and sampled allocation formats, including discarded allocations, sampling parameters and its
-30-second requested window. Serialized output is capped at 2 MiB per profile, reserved within the
+30-second requested window. Serialized output is capped at 4 MiB per profile (8 MiB combined), reserved within the
 existing 16 MiB total recording budget. Protocol calls have deadlines; stop closes partial sessions,
 retains usable evidence and reports loss. Stop awaits profile cleanup even if trace export fails.
 API/startup admission waits for readiness, and connection closure during admission is tested.
 Twenty-five focused host tests, eight API tests and ten portable-report tests pass, including real V8
 profiles, timeout/expiry/oversize faults and original-error preservation. Host/API/renderer types pass.
-Built-app detailed-mode verification is still pending.
+Built-app detailed thread verification passed; detailed startup qualification remains open.
 
 Renderer collection is now wired before application actor startup through the SDK's host-only
 main/preload bridge. Main owns each debugger with a per-window lease, rejects production/subframes,
@@ -151,3 +151,15 @@ Run retention now writes immutable per-trial raw evidence, per-trial trace/profi
 compact format-2 index rather than retaining/re-encoding every full report. Five focused store tests
 cover complete/failing runs, order, hash/summary tampering, size/symlink admission, viewer failure and
 startup process lifecycle; ten report tests also pass. Built-app verification of this integration is pending.
+
+On rebuilt `f1769741a5`, query-plan probes passed (`query-plans-1793400901200`), retaining the
+54-entry traversal and twenty-match search stages outside timing. These are native stage-defined
+visited counters, not exhaustive physical work or unique rows. Detailed startup remained incomplete:
+backend exports were 2,827,898/3,541,931 bytes, and renderer allocation collection timed out.
+The shipped V8 ignores the attempted 32-frame sampling depth and uses 128. Electron 37's debugger
+silently drops responses rejected by Chromium's 200-level JSON parser, which is consistent with the
+startup-only deeply nested allocation failure. The fix uses standard non-flattened CDP messages over
+the existing owned debugger and JS JSON decoding, preserving deadlines and a bounded response size.
+The profile budget is rebalanced to 8 MiB, leaving 8 MiB for spans within the original 16 MiB total;
+sampling frequency is unchanged. Eight main transport/resource tests, eight profile tests and fifteen
+report/store tests pass. Rebuilt application verification of this fix remains pending.

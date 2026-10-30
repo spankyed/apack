@@ -7,14 +7,14 @@ export interface PerformanceProfileTransport {
   close(): void | Promise<void>;
 }
 
-export const PROFILE_BYTES = 4 * 1024 * 1024;
+export const PROFILE_BYTES = 8 * 1024 * 1024;
 export const PROFILE_WINDOW_MS = 30_000;
 
 class ProfileProtocolTimeout extends Error {}
 
 /** A finite diagnostic window, owned transport and capped serialized output, separate from span retention. */
 export function createPerformanceProfiles(transport: PerformanceProfileTransport) {
-  const sampling = { cpuIntervalMicros: 1000, allocationIntervalBytes: 512 * 1024, allocationStackDepth: 32, includeCollectedAllocations: true };
+  const sampling = { cpuIntervalMicros: 1000, allocationIntervalBytes: 512 * 1024, allocationStackDepth: 128, includeCollectedAllocations: true };
   function bounded<T>(operation: () => T | Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new ProfileProtocolTimeout()), 5000);

@@ -109,3 +109,18 @@ it('stops allocation sampling before serializing either profile', async () => {
   await capture.ready;
   expect((await capture.stop()).complete).toBe(true);
 });
+
+it('distinguishes a timed-out allocation export while preserving the CPU profile and releasing the owner', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  const port = transport();
+  port.post.mockImplementation(async method => method === 'HeapProfiler.stopSampling' ? new Promise(() => {}) : { profile: { nodes: [], head: {} } });
+  const capture = createPerformanceProfiles(port);
+  await capture.ready;
+  const pending = capture.stop();
+  await vi.advanceTimersByTimeAsync(5000);
+  const report = await pending;
+  expect(report).toMatchObject({ complete: false, failures: 1, failureStages: ['allocation-timeout'] });
+  expect(report.cpu).toBeDefined(); expect(report.allocation).toBeUndefined();
+  expect(port.close).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+});
