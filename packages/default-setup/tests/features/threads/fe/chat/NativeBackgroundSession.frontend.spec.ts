@@ -12,10 +12,10 @@ it('renders observed child state and captures the worker target; retires Stop on
     const stop = [...root.querySelectorAll('button')].find(button => button.textContent === 'Stop background session')!
     stop.click(); expect(operate).toHaveBeenCalledWith(link, { operation: 'stop', id: '05ff1d31', pid: 119 })
     state.operation = 'stop'; state.status = 'pending'; await nextTick()
-    expect(root.textContent).not.toContain('Background session stopped')
+    expect(root.textContent).not.toContain('Last reported: stopped')
     expect([...root.querySelectorAll('button')].every(button => button.disabled)).toBe(true)
     state.status = 'done'; state.session = { ...state.session!, state: 'stopped', pid: undefined }; await nextTick()
-    expect(root.textContent).toContain('Background session stopped')
+    expect(root.textContent).toContain('Last reported: stopped')
     expect(root.textContent).not.toContain('Stop background session')
     stop.click(); expect(operate).toHaveBeenCalledTimes(1)
   } finally { app.unmount(); root.remove() }

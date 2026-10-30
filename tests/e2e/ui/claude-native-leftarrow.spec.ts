@@ -1,7 +1,8 @@
+import {createHash} from 'node:crypto'
 import {stripVTControlCharacters} from 'node:util'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { readFile, writeFile, readdir } from 'node:fs/promises'
+import { readFile, writeFile, readdir, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
@@ -13,8 +14,9 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
+  const childResume = process.env.CLAUDE_RESEARCH_BACKGROUND_RESUME_APP === '1'
   const childInteraction = process.env.CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP === '1'
-  const attachChild = childInteraction || process.env.CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP === '1'
+  const attachChild = childResume || childInteraction || process.env.CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP === '1'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -179,7 +181,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         throw error
       }
     }
-    if (attachChild) {
+    if (attachChild && !childResume) {
       const normalizeScreen = (value:string) => stripVTControlCharacters(value).replace(/\s+/g,'')
       const attachment = () => appPage.evaluate(() => {
         const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
@@ -255,7 +257,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     const childBeforeStop = process.platform === 'linux' ? await childProcessState() : undefined
     if (process.platform === 'linux') { expect(childBeforeStop?.start).toBeTruthy(); expect(childBeforeStop?.state).not.toBe('Z') }
     await widget.getByRole('button', { name: 'Stop background session', exact: true }).click()
-    await expect(widget.getByRole('status')).toHaveText('Background session stopped', { timeout: 20000 })
+    await expect(widget.getByRole('status')).toHaveText('Last reported: stopped', { timeout: 20000 })
     await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toHaveCount(0)
     await expect(composer).toHaveText(retainedDraft!)
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
@@ -274,6 +276,79 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await appPage.setViewportSize(size)
       await capture('apack-native-background-stopped-' + name + '.png')
     }
+    if (childResume) {
+      const stoppedJob = {...job}, parentBefore = await context()
+      const attachment = () => appPage.evaluate(() => {
+        const state=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+        const entry=Object.entries(state.nativeTerminalViews).find(([,view]:any)=>view.threadId===state.currentThread?.id&&view.attachment)
+        return entry?{mountId:entry[0],...(entry[1] as any).attachment}:undefined
+      })
+      const attached=appPage.getByRole('region',{name:'Background Claude terminal',exact:true})
+      const projects=join(workspace!,'.claude','projects')
+      const files=(await Promise.all((await readdir(projects,{withFileTypes:true})).filter(entry=>entry.isDirectory()).map(async entry=>{const path=join(projects,entry.name,job.sessionId+'.jsonl');return await readFile(path,'utf8').then(()=>path).catch(()=>undefined)}))).filter(Boolean) as string[]
+      expect(files).toHaveLength(1)
+      const journal=files[0]!, preserved=journal+'.research-preserved'
+      let moved=false
+      const screen=async()=>stripVTControlCharacters((await attachment())?.state?.output.map((chunk:any)=>chunk.text).join('')??'').replace(/\s+/g,'')
+      const liveWorker=async()=>{const listed=(await list()).find(row=>row.id===stoppedJob.id);if(!listed?.pid)return;try{const raw=await readFile('/proc/'+listed.pid+'/stat','utf8');const fields=raw.slice(raw.lastIndexOf(')')+2).split(' ');if(fields[0]!=='Z')return {job:listed,state:fields[0],start:fields[19]}}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}}
+      async function captureResume(phase:string) {for(const [name,size]of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await expect(attached.getByRole('button',{name:'Close connection',exact:true})).toBeInViewport({ratio:1});await capture('apack-native-child-'+phase+'-'+name+'.png')}}
+      async function closeAttachment(){await attached.getByRole('button',{name:'Close connection',exact:true}).click();await expect(attached).toHaveCount(0);await expect(composer).toHaveText(retainedDraft)}
+      async function restoreJournal(){
+        // Keep unexpected native output as evidence rather than overwriting it.
+        try {await rename(journal,journal+'.research-unexpected')}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
+        await rename(preserved,journal);moved=false
+      }
+      try {
+        await widget.getByRole('button',{name:'Open session',exact:true}).click()
+        await expect.poll(screen,{timeout:20000}).toContain('Quicksafetycheck:')
+        await expect.poll(screen).toContain('No,exit')
+        observations.childResume={refusal:{kind:'workspace-trust-exit',shown:await attachment()}}
+        await captureResume('resume-trust-exit')
+        await attached.locator('textarea.xterm-helper-textarea').press('Enter')
+        await expect.poll(async()=>(await attachment())?.state?.status).toBe('exited')
+        expect(await liveWorker()).toBeUndefined()
+        observations.childResume.refusal={...observations.childResume.refusal,attachment:await attachment(),originalText:true,noWorker:true,jobs:await list()}
+        await closeAttachment()
+        await widget.getByRole('button',{name:'Open session',exact:true}).click()
+        await expect.poll(screen,{timeout:20000}).toContain('Quicksafetycheck:')
+        const terminalInput=attached.locator('textarea.xterm-helper-textarea')
+        await terminalInput.press('ArrowDown');await terminalInput.press('Enter')
+        await expect.poll(screen,{timeout:20000}).toContain('ParentSubagentFixtureComplete')
+        await expect.poll(async()=>!!await liveWorker()).toBe(true)
+        const resumed=await liveWorker();expect(resumed!.job.sessionId).toBe(stoppedJob.sessionId);expect(resumed!.job.id).toBe(stoppedJob.id);expect(resumed!.job.pid).not.toBe(stoppedJob.pid)
+        job=resumed!.job;observations.resumedJob=job
+        const resumedView=await attachment();expect(resumedView.state.sessionId).toBe(job.sessionId)
+        const staleText='Retired refusal input must never reach the child.'
+        await appPage.evaluate(({threadId,mountId,attachmentId,text})=>(window as any).applicationState.system.get('default-setup/threads').send({type:'CLAUDE_BACKGROUND_INPUT',threadId,mountId,attachmentId,text}),{threadId:(await context()).threadId,mountId:resumedView.mountId,attachmentId:observations.childResume.refusal.attachment.state.id,text:staleText})
+        const text='Continue this background review after the stopped session resumes.'
+        await terminalInput.fill(text);await terminalInput.press('Enter')
+        await expect.poll(()=>readFile(journal,'utf8'),{timeout:15000}).toContain(text)
+        expect(await readFile(journal,'utf8')).not.toContain(staleText)
+        await captureResume('resumed')
+        const completed=await attachment();await closeAttachment()
+        const parentAfter=await context();expect(parentAfter.messages).toEqual(parentBefore.messages);expect(parentAfter.claude.totalCostUsd).toBe(parentBefore.claude.totalCostUsd);expect(parentAfter.sessionId).toBe(sessionId)
+        await widget.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(widget.getByRole('button',{name:'Stop background session',exact:true})).toBeEnabled()
+        await widget.getByRole('button',{name:'Stop background session',exact:true}).click();await expect(widget.getByRole('status')).toHaveText('Last reported: stopped',{timeout:20000})
+        await expect.poll(async()=>!!await liveWorker()).toBe(false)
+        const resumedProcess=async()=>{try{const raw=await readFile('/proc/'+resumed!.job.pid+'/stat','utf8');const fields=raw.slice(raw.lastIndexOf(')')+2).split(' ');return {state:fields[0],start:fields[19]}}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return;throw error}}
+        await expect.poll(async()=>{const current=await resumedProcess();return !current||current.state==='Z'||current.start!==resumed!.start}).toBe(true)
+        const workerProcessAfterStop=await resumedProcess()??{state:'gone'}
+        observations.childResume={...observations.childResume,stoppedJob,resumed,attachment:completed,text,staleText,sameSession:true,parentPreserved:true,uiStop:true,workerRetired:true,workerProcessAfterStop}
+        const originalJournal=await readFile(journal,'utf8')
+        await rename(journal,preserved);moved=true
+        await widget.getByRole('button',{name:'Open session',exact:true}).click()
+        let historyTrustAccepted=false
+        await expect.poll(async()=>{const value=await screen();if(value.includes('Quicksafetycheck:')&&!historyTrustAccepted){historyTrustAccepted=true;await terminalInput.press('ArrowDown');await terminalInput.press('Enter')}return value},{timeout:20000}).toContain('Thissessionhasnosavedtranscript')
+        await expect.poll(async()=>(await attachment())?.state?.status).toBe('exited')
+        expect(await liveWorker()).toBeUndefined()
+        observations.childResume.historyRefusal={attachment:await attachment(),originalText:true,noWorker:true,historyTrustAccepted,jobs:await list(),journalSha256Before:createHash('sha256').update(originalJournal).digest('hex')}
+        await captureResume('resume-history-refusal');await closeAttachment()
+        expect(await readFile(preserved,'utf8')).toBe(originalJournal)
+        await restoreJournal();expect(await readFile(journal,'utf8')).toBe(originalJournal)
+        observations.childResume.historyRefusal.journalRestored=true
+        observations.childResume.historyRefusal.journalSha256After=createHash('sha256').update(await readFile(journal)).digest('hex')
+      } finally {if(moved)await restoreJournal()}
+    }
     observations.current = await context()
     observations.retainedDraft = retainedDraft
     expect(observations.current.sessionId).toBe(sessionId)
@@ -288,9 +363,9 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), appHandoffAccepted: false }))
   } finally {
-    if (childInteraction && !observations.childInteraction) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
+    if ((childInteraction && !observations.childInteraction) || (childResume && !observations.childResume?.workerRetired)) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
     if (job) {
       observations.after = await list()

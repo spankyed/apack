@@ -110,7 +110,7 @@ test('hands an original native conversation to a separate background session fro
       await capture('apack-native-background-running-' + name + '.png')
     }
     await widget.getByRole('button', { name: 'Stop background session', exact: true }).click()
-    await expect(widget.getByRole('status')).toHaveText('Background session stopped', { timeout: 20000 })
+    await expect(widget.getByRole('status')).toHaveText('Last reported: stopped', { timeout: 20000 })
     await expect(widget.getByRole('button', { name: 'Stop background session', exact: true })).toHaveCount(0)
     await expect(composer).toHaveText(retainedDraft!)
     observations.uiStop = true
