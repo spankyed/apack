@@ -86,3 +86,12 @@ cross-revision orchestration and overhead qualification; detailed profiles/proce
 supported application optimization; full repository and strict acceptance; dependent reviewable PRs.
 The new manual runner's completion test and provenance collection also need verification in the real
 built app. Preserve this broader scope; these primitives and authored scenarios do not complete it.
+
+
+The first local `chain --no-native` run passed package reproducibility, generated APIs and the
+EARS/SDK/host/API/UI/main/preload/CLI typechecks, and built default-setup. It stopped after the
+renderer typecheck exceeded its 60-second budget. Scoped reproduction exposed a new mock erasing a
+generic callback return type; that mock was fixed. Full renderer typechecking and its 15 affected
+transport/recording tests then passed. A separate stop/start race was fixed with a regression test:
+the window refuses new recording admission until both previous process stops settle. No timeout
+was increased. The remaining chain coverage must run before this checkpoint is considered gated.

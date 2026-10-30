@@ -200,8 +200,8 @@ it('preserves view results and ignores deliveries after a subscription has stopp
 it('carries request context and restores each delivery context separately', () => {
   const sent = { traceparent: '00-11111111111111111111111111111111-2222222222222222-01' };
   const received = { traceparent: '00-33333333333333333333333333333333-4444444444444444-01' };
-  const withCarrier = vi.fn((_carrier: unknown, fn: () => unknown) => fn());
-  startFeTestRuntime({ diagnostics: { capture: () => sent, withCarrier, carryEvent() {}, withEvent: (_event, fn) => fn() } });
+  const withCarrier = vi.fn<(carrier: unknown) => void>();
+  startFeTestRuntime({ diagnostics: { capture: () => sent, withCarrier: (carrier, fn) => { withCarrier(carrier); return fn(); }, carryEvent() {}, withEvent: (_event, fn) => fn() } });
   const observer = vi.fn();
   const stop = feClient.watchView({ ref: 'pack/feature', view: 'page' }, observer);
   try {

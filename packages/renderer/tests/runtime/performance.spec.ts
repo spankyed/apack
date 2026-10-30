@@ -43,3 +43,16 @@ it('isolates view listener failures and clears listeners between recordings', as
   expect(listener).toHaveBeenCalledTimes(1);
   expect(await windowPerformance.stop()).toMatchObject({ complete: true, renderer: { observations: [] } });
 });
+
+
+it('does not admit a replacement recording while either process is still stopping', async () => {
+  await windowPerformance.start('lightweight');
+  let release!: () => void;
+  rpc.stop.mockImplementationOnce(() => new Promise(resolve => { release = () => resolve({ complete: true }); }));
+  const stopping = windowPerformance.stop();
+  await expect(windowPerformance.start('lightweight')).rejects.toThrow(/stopping/);
+  release();
+  expect(await stopping).toMatchObject({ complete: true });
+  await windowPerformance.start('disabled');
+  await windowPerformance.stop();
+});
