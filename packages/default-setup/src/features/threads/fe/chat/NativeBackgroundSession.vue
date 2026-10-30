@@ -37,7 +37,7 @@ const panels = computed(() => {
   const target = { ...props.continuation }
   const state = props.state?.sessionId === target.sessionId && props.state.continuedInSessionId === target.continuedInSessionId ? props.state : undefined
   const session = state?.session, pending = state?.status === 'pending'
-  const label = session ? session.state === 'stopped' ? 'Background session stopped' : session.state === 'done' ? 'Background session completed' : session.state === 'failed' ? 'Background session failed'
+  const label = session ? session.state === 'stopped' ? 'Last reported: stopped' : session.state === 'done' ? 'Last reported: completed' : session.state === 'failed' ? 'Last reported: failed'
     : !session.pid ? 'Last reported: awaiting a background worker' : session.state === 'blocked' || session.status === 'waiting' ? 'Last reported: needs input' : session.status === 'busy' ? 'Last reported: working in background' : 'Last reported: running in background'
     : pending || !state ? 'Checking background session…' : 'Background session is not listed'
   return [{ key: JSON.stringify([target.sessionId, target.continuedInSessionId, session?.id, session?.pid]), target, session, pending, operation: state?.operation, problem: state?.problem, label }]
