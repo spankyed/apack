@@ -241,11 +241,20 @@ all three SQLite platforms pass; remaining shards are still running. Preserve th
 Focused bundled-editor [41056522146](https://github.com/spankyed/apack/actions/runs/41056522146) passes once.
 That does not establish the cause or fix of the earlier failure; assertions and timeouts remain unchanged.
 
-The next validation checkpoint adds [native Electron runtime evidence and installed-app coverage](../references/evidence/ears-sqlite-implementation-2026-10-28/native-electron-runtime/README.md).
-The same Node-API addon bytes pass actual Node and Electron SQLite component checks; no extra ABI rebuild
-is necessary. Root/fixture E2E types and changed lint pass. The new unsigned installed Preview suite and
-bounded repeated editor diagnostic require CI execution after publication. Failure-only editor diagnostics
-now capture focus as well as DOM/ProseMirror state. Signed installed acceptance and performance gates remain open.
+Published validation checkpoint `ff16d3b946` adds [native Electron runtime evidence and installed-app coverage](../references/evidence/ears-sqlite-implementation-2026-10-28/native-electron-runtime/README.md).
+Identical Node-API addon bytes pass actual Node and Electron SQLite component checks without extra ABI rebuilds.
+Installed run [41066985563](https://github.com/spankyed/apack/actions/runs/41066985563) fails before packaging:
+redundant early contract generation precedes SDK dependency preparation. Preview/production now use the normal
+pack build's correctly ordered generation. Ten unchanged editor repetitions remain live in
+[41067062738](https://github.com/spankyed/apack/actions/runs/41067062738); preserve that handle.
+
+The current [native signing checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
+finalizes binary hashes after inner signing and before outer app sealing. It preserves signing options/retries
+and refuses skipped libraries, mismatched unsigned provenance, concurrent manifest changes and escaping paths.
+Twelve isolated signing/Preview tests, tooling types, lint, workflow/shell syntax and three assertion-verified
+mutation controls pass. The new `installed-signed` suite must qualify the actual cold build, strict signatures,
+native smoke and signed executable on macOS after publication. Linux doubles do not establish signing validity.
+Final exact-source strict, required architectures, responsiveness and all remaining acceptance stay required.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:
 

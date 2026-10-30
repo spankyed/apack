@@ -57,6 +57,7 @@ names every workspace that has a second config.
 
 | Spec | Subject |
 |---|---|
+| `native-signing` | Native library provenance is finalized after inner signing and before the outer app seal, with option preservation, retries and refusal of mismatched or skipped inputs |
 | `preview-build` | preview version parsing, isolated build environment, and isolated staging builds, build integrity before packaging, and beta release naming |
 | `packaged-app` | manifest-based bundle selection, channel isolation, reset scope, captured exit status, signing assessment failures, and diagnostics from the selected app and profile |
 | `chain-graph`, `chain-schedule`, `step-timing` | the chain's run order, the scheduler that admits its steps on a core budget, and what a step costs. That a step's declared timeout rung matches its kind of work (`rungForKind`), with the reviewed exceptions, and what a step says when its rung killed it: the deadline and the recorded cost, without diagnosing slow from stalled. Every class a direct `npm run` bounds at through `scripts/bounded.ts` is on the ladder, and the scan is mutated in the spec because one that matched nothing would satisfy every assertion over it |

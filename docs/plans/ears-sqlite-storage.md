@@ -793,3 +793,17 @@ both managed stores to contain SQLite files and retain their native model claims
 The report guard refuses a missing or skipped witness. This complements source-based authoring tests;
 it does not certify signing or all required architectures. [Component evidence and limits](../references/evidence/ears-sqlite-implementation-2026-10-28/native-electron-runtime/README.md)
 retain runtime hashes, fixture corrections and negative controls. Installed CI execution remains pending.
+
+
+### macOS signing and final native hashes
+
+`mac.sign` preserves electron-builder's resolved signing options and retries through @electron/osx-sign.
+The hook verifies unsigned native bytes first, then updates only their manifest's binary hash immediately
+before outer sealing, after the actual inner library signing pass and signature verification. It refuses
+changed manifests, escaping paths and unsupported universal layouts. Signing never mutates sealed resources.
+
+The `installed-signed` app acceptance suite exercises the same hook using the existing CI Developer ID
+certificate on a disposable Preview, verifies strict bundle integrity, then runs the full native smoke and
+SQLite app lifecycle. No release or notarization occurs. [Ordering/fault evidence and cold-build fix](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
+record the 12 passing isolated tests and three safeguard controls; actual macOS CI execution remains required.
+Preview and production now let the ordinary pack build generate entries after preparing SDK dependencies.

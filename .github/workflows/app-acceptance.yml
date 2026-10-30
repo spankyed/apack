@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged, installed]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged, installed, installed-signed]
         default: all
       test:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
@@ -70,7 +70,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build shipped pack
-        if: ${{ inputs.suite != 'host-windows' && inputs.suite != 'installed' }}
+        if: ${{ inputs.suite != 'host-windows' && !startsWith(inputs.suite, 'installed') }}
         env:
           APACK_ACCEPTANCE_SUITE: ${{ inputs.suite }}
         run: |
@@ -82,29 +82,77 @@ jobs:
             npm run build:default-setup
           fi
       - name: Build app runtime
-        if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' && inputs.suite != 'host-windows' && inputs.suite != 'installed' }}
+        if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' && inputs.suite != 'host-windows' && !startsWith(inputs.suite, 'installed') }}
         id: runtime
         # The renderer leg's heap ceiling is declared on the leg (RUNTIME_BUILD_LEGS).
         run: npm run build:runtime -- --cores 2
       - name: Build unsigned installed Preview
-        if: ${{ inputs.suite == 'installed' }}
+        if: ${{ startsWith(inputs.suite, 'installed') }}
         run: |
           mkdir -p .apack/installed-evidence
           version="$(node -p 'require("./package.json").version.split("-")[0]')"
           npm run build:preview -- --version "$version" | tee .apack/installed-evidence/installed-build.log
       - name: Typecheck installed app contracts
-        if: ${{ inputs.suite == 'installed' }}
+        if: ${{ startsWith(inputs.suite, 'installed') }}
         run: node node_modules/typescript/bin/tsc -p tests --noEmit | tee .apack/installed-evidence/typecheck.log
       - name: Packaged native runtime
-        if: ${{ inputs.suite == 'installed' }}
+        if: ${{ startsWith(inputs.suite, 'installed') }}
         run: |
           apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
           if (( ${#apps[@]} != 1 )) || [[ ! -d "${apps[0]}" ]]; then
             echo 'Expected one unpacked Preview app'; exit 1
           fi
           node build/prod/smoke-native.mjs "${apps[0]}" | tee .apack/installed-evidence/installed-native.log
+      - name: Sign installed Preview and verify native provenance
+        if: ${{ inputs.suite == 'installed-signed' }}
+        env:
+          APACK_TEST_CERTIFICATE: ${{ secrets.certificate || secrets.MAC_CERTIFICATE_P12_BASE64 }}
+          APACK_TEST_CERTIFICATE_PASSWORD: ${{ secrets.certificate_password || secrets.MAC_CERTIFICATE_PASSWORD }}
+        run: |
+          test -n "$APACK_TEST_CERTIFICATE"
+          umask 077
+          keychain="$RUNNER_TEMP/apack-installed-signing.keychain-db"
+          certificate="$RUNNER_TEMP/apack-installed-signing.p12"
+          password=$(openssl rand -hex 24)
+          echo "::add-mask::$password"
+          trap 'rm -f "$certificate"' EXIT
+          printf '%s' "$APACK_TEST_CERTIFICATE" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 1200 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -P "$APACK_TEST_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          export APACK_TEST_SIGNING_KEYCHAIN="$keychain"
+          node --input-type=module <<'JS' | tee .apack/installed-evidence/installed-signing.log
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import assert from 'node:assert/strict';
+          import { execFileSync, spawnSync } from 'node:child_process';
+          import { signMacApplication } from './build/prod/sign-mac.mjs';
+          const apps=fs.readdirSync('dist/preview',{withFileTypes:true}).filter(d=>d.isDirectory()&&d.name.startsWith('mac-'))
+            .flatMap(d=>fs.readdirSync(path.join('dist/preview',d.name)).filter(n=>n.endsWith('.app')).map(n=>path.resolve('dist/preview',d.name,n)));
+          assert.equal(apps.length,1);
+          const app=apps[0],keychain=process.env.APACK_TEST_SIGNING_KEYCHAIN;
+          const search=execFileSync('security',['list-keychains','-d','user'],{encoding:'utf8'})
+            .trim().split('\n').map(n=>n.trim().replace(/^"|"$/g,'')).filter(Boolean);
+          execFileSync('security',['list-keychains','-d','user','-s',keychain,...search]);
+          const identities=execFileSync('security',['find-identity','-v','-p','codesigning',keychain],{encoding:'utf8'});
+          const matches=[...identities.matchAll(/\b([A-F0-9]{40}) "Developer ID Application:[^"\n]+"/g)];
+          assert.equal(matches.length,1,'Expected one Developer ID Application identity');
+          const entitlements=path.resolve('build/resources/entitlements.mac.plist');
+          await signMacApplication({app,identity:matches[0][1],identityValidation:false,keychain,platform:'darwin',
+            strictVerify:true,preAutoEntitlements:false,preEmbedProvisioningProfile:false,
+            optionsForFile:()=>({entitlements,hardenedRuntime:true,timestamp:'none'})});
+          execFileSync('codesign',['--verify','--deep','--strict',app],{stdio:'inherit'});
+          const executable=path.join(app,'Contents/MacOS',fs.readdirSync(path.join(app,'Contents/MacOS'))[0]);
+          const details=spawnSync('codesign',['--display','--verbose=4',executable],{encoding:'utf8'});
+          assert.equal(details.status,0);assert.match(details.stderr,/flags=.*\bruntime\b/);
+          assert.match(details.stderr,/TeamIdentifier=[A-Z0-9]{10}\b/);console.log(details.stderr);
+          JS
+          apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
+          node build/prod/smoke-native.mjs "${apps[0]}" | tee .apack/installed-evidence/installed-signed-native.log
       - name: Installed SQLite app lifecycle
-        if: ${{ inputs.suite == 'installed' }}
+        if: ${{ startsWith(inputs.suite, 'installed') }}
         env:
           APACK_STORAGE_FORMAT: sqlite/1
           PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/installed-evidence/installed-app.json
@@ -225,3 +273,8 @@ jobs:
             .apack/installed-evidence/
             tests/packs/*/.apack/tests/results/
             tests/packs/*/dist/build-inputs.json
+      - name: Remove installed signing keychain
+        if: ${{ always() && inputs.suite == 'installed-signed' }}
+        run: |
+          security delete-keychain "$RUNNER_TEMP/apack-installed-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/apack-installed-signing.p12"

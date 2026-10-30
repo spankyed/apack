@@ -1,5 +1,6 @@
 import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
+import {signMacApplication} from './build/prod/sign-mac.mjs';
 import {execFileSync} from 'node:child_process';
 import {APP_WORKSPACES, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 
@@ -59,6 +60,7 @@ export default /** @type import('electron-builder').Configuration */
   
   // Platform targets
   mac: {
+    sign: signMacApplication,
     category: 'public.app-category.developer-tools',
     hardenedRuntime: true,
     gatekeeperAssess: false,
