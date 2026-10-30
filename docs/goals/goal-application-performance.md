@@ -60,13 +60,14 @@ scope even though thread opening is the first vertical implementation slice.
 - Focused diagnostics/EARS/transport/renderer/report tests and changed-source typechecks pass.
   Disposable mutations proved the byte-budget guard and observer-error preservation fail when removed;
   tracked source was untouched. Generated SDK and testing API reports were regenerated/reviewed.
-- Full local `chain --no-native` is not yet green. Initial renderer mock typing and two lint findings
-  were fixed and their focused checks passed without widening timeouts. The latest broad run passed
-  5,983 tests and failed nine repo-integration assertions (layout/config helper/input coverage/docs/wait/
-  export policy). Their integration is now corrected; all 219 focused cases across the affected suites
-  pass. Remaining broad checks still require completion. Evidence of that broad run:
-  `node_modules/.cache/apack-chain/runs/2026-10-30T16-57-46Z-38340`.
-- No complete built-app performance scenario or overhead/timing acceptance yet. The Linux app now
+- Full local `npm run chain -- --no-native` passed on the implementation checkpoint, including
+  integration, host/pack test pools, app smoke, external-pack and packaged-authoring checks. The
+  provenance collector's intentional untracked-only Git query is documented in the existing rule
+  mechanism. Successful run evidence:
+  `node_modules/.cache/apack-chain/runs/2026-10-30T18-29-45Z-3915` (865.6 seconds, 19/31 cached).
+  Native acceptance remains the bounded Linux run and the separately dispatched strict CI; this
+  local command deliberately excludes the native pool.
+- Thread-open has a passing built-app contract run; overhead/comparison acceptance is still pending. The Linux app now
   builds and connects after correcting API declaration portability and guarding macOS-only window
   controls. Three warmups completed with intact recording reports; the fourth failed the view
   correctness predicate. Reports are preserved under `.apack/performance/linux-evidence/` locally.
@@ -79,6 +80,11 @@ scope even though thread opening is the first vertical implementation slice.
   until its animation frames settle and cancels stale frames across thread changes/unmount. Seven
   focused pack tests and pack typechecking pass; built-app verification remains required. This is a
   correctness/work-bound fix, with no latency improvement claim.
+- Built-app verification on `1bc6afe750` passed all five warmups plus twenty measured thread opens.
+  Every trial requested/displayed fifty messages; renderer/backend capture reports were complete and
+  both source manifests were clean. Raw evidence remains local in
+  `thread-open-lightweight-1793384628617`. This establishes the scenario's work/readiness contract for
+  this run, not an A/B latency improvement or recorder-overhead qualification.
 - Docker is restored with about 25 GiB free. Check for another expensive owner before launching;
   do not interfere with another session's containers/processes. The owned image includes Xvfb/xauth.
 - Linux runner bookkeeping files are declared by their owner and recorded as explicit untracked
