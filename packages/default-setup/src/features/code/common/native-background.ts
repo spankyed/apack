@@ -1,3 +1,16 @@
+/** Original session totals belong to the child snapshot; they are never parent billing deltas. */
+export interface ClaudeBackgroundStatus {
+  jobId: string
+  sessionId: string
+  pid: number
+  observedAt: number
+  model: string
+  turns: number
+  startedAt: number
+  context?: { tokens: number; window: number; percent: number }
+  totalCostUsd?: number
+}
+
 /** Original background job identity is distinct from the parent app conversation. */
 export interface ClaudeBackgroundSession {
   id: string

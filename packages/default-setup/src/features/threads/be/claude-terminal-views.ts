@@ -71,6 +71,7 @@ export interface ClaudeBackgroundAttachmentView {
   problem?: string
 }
 export type ClaudeTerminalViewSnapshot = {
+  backgroundInfo?: import('#features/code/common/native-background.ts').ClaudeBackgroundStatus
   canReplyBackground?: boolean
   attachment?: ClaudeBackgroundAttachmentView
   background?: ClaudeBackgroundSessionState
@@ -153,7 +154,7 @@ export function createClaudeTerminalViews(dependencies: {
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
-      view.send({ type: 'CLAUDE_TERMINAL_STATE', canReplyBackground: dependencies.get(view.threadId)?.canReplyBackground === true, threadId: view.threadId, mountId: view.mountId,
+      view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.get(view.threadId)?.backgroundInfo, canReplyBackground: dependencies.get(view.threadId)?.canReplyBackground === true, threadId: view.threadId, mountId: view.mountId,
         state: view.owner?.state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }

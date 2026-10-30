@@ -1,3 +1,4 @@
+import { createClaudeBackgroundStatus, type ClaudeBackgroundStatusIdentity } from './terminal-background-status.ts'
 import { createClaudeBillingState } from '../../../common/native-billing.ts'
 import { readClaudeUiActionKeys } from './ui-controls.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
@@ -24,6 +25,7 @@ const command = (value: unknown): string | undefined => { const entry = object(v
 /** Native plugin and native-invoked command helpers share one private, session-scoped broker. */
 export async function createClaudeTerminalBridge(options: {
   sessionId: string
+  backgroundTarget?(): { sessionId: string; cwd: string } | undefined
   restorePlan?: { sessionId: string; mode: import('./types.ts').PermissionMode }
   settings: ClaudeSettings
   bunOptions?: string
@@ -66,6 +68,16 @@ export async function createClaudeTerminalBridge(options: {
   let nativePolling = false
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
+  const background = createClaudeBackgroundStatus({
+    async identify(sessionId, pid) {
+      const target = options.backgroundTarget?.()
+      if (closed || !target || target.sessionId !== sessionId || sessionId === projection.sessionId) throw new Error('Background session is not linked to this parent')
+      const result = object(await ui.transport.request({ subtype: 'apack_background_identity', parent_session_id: projection.sessionId, child_session_id: sessionId, pid, cwd: target.cwd }))
+      if (closed || options.backgroundTarget?.()?.sessionId !== sessionId || !result || result.sessionId !== sessionId || result.pid !== pid || typeof result.jobId !== 'string' || typeof result.start !== 'string' || !result.start || typeof result.hostStart !== 'string' || !result.hostStart || !Number.isSafeInteger(result.hostPid) || result.cwd !== target.cwd) throw new Error('Background status identity changed')
+      return result as unknown as ClaudeBackgroundStatusIdentity
+    },
+    changed: options.changed,
+  })
   let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; prepared?: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
   const settle = (error?: Error, receipt?: ClaudeNativeSubmissionReceipt) => {
     const current = pending
@@ -82,6 +94,8 @@ export async function createClaudeTerminalBridge(options: {
       for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/native-status' || request.url === '/ui-host' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
       const value = object(JSON.parse(Buffer.concat(chunks).toString()))
       if (!value || typeof value.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.sessionId)) return reply(400, {})
+      if (request.url === '/background-register') return reply(200, await background.register(value.sessionId, Number(value.pid)))
+      if (request.url === '/background-status') { await background.accept(value); return reply(200, {}) }
       if (request.url === '/observer-ready') {
         if (value.sessionId !== options.sessionId || !Number.isSafeInteger(value.pid) || (value.pid as number) < 2 || (observerPid !== undefined && observerPid !== value.pid) || !await options.ownsProcess?.(value.pid as number)) return reply(409, {})
         observerPid = value.pid as number; observerProblem = undefined; options.changed(); return reply(200, {})
@@ -139,6 +153,7 @@ export async function createClaudeTerminalBridge(options: {
       }
       if (request.url === '/owner-pending') return value.sessionId === projection.sessionId ? reply(200, { pending: !!pending, ...(pending?.entered ? { id: pending.id } : {}) }) : reply(409, {})
       if (request.url === '/poll') {
+        if (value.directOwner !== true && value.sessionId !== projection.sessionId) return reply(200, { background: options.backgroundTarget?.()?.sessionId === value.sessionId })
         // Once the native owner takes over, a late plugin poll cannot restore older policy metadata.
         if (nativePolling && value.directOwner !== true) return reply(200, {})
         if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
@@ -343,17 +358,18 @@ export async function createClaudeTerminalBridge(options: {
     await writeFile(join(pluginRoot, 'hooks/hooks.json'), JSON.stringify({ modules: ['./register.ts'] }), { mode: 0o600 })
     const plugin = `async function send($,path,body){const response=await $.http.fetch('http://apack'+path,{method:'POST',socketPath:${JSON.stringify(socketPath)},headers:{'x-apack-native-token':${JSON.stringify(token)},'content-type':'application/json'},body:JSON.stringify({sessionId:await $.session.id(),...body})});if(!response.ok)throw Error('Owned terminal broker refused');return JSON.parse(response.text);}
     export function register(on) {
-      let started=false,inFlight=false,submission;const paths={};
+      let started=false,inFlight=false,submission,backgroundLease,backgroundPid,backgroundSequence=0,backgroundTick=0,backgroundAttempted=false;const paths={};
       on('classic.*',async($,e,next)=>{const result=await next(e);if(e.transcript_path&&e.session_id&&e.transcript_path.endsWith('/'+e.session_id+'.jsonl')){paths[e.session_id]=e.transcript_path;await send($,'/transcript',{sessionId:e.session_id,path:e.transcript_path}).catch(()=>{});}return result;});
       on('session.append',async($,e,next)=>{const sessionId=await $.session.id();const result=await next(e);if(!e.agentId&&result.message&&result.uuid)await send($,'/append',{sessionId,uuid:result.uuid,message:result.message,door:e.door,origin:e.origin,...(submission&&e.door==='prompt'?{submissionId:submission.id}:{})}).catch(()=>{});return result;});
       on('prompt.submit',async($,e,next)=>{const own=submission;try{const result=await next(e);if(own)await send($,'/submission',{id:own.id,...(typeof result.drop==='string'?{drop:result.drop}:{accepted:true})}).catch(()=>{});return result;}finally{if(submission===own)submission=undefined;}});
-      on('session.start',async($,e,next)=>{try{await send($,'/ui-ready',{});}catch{}if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const usage=await $.session.usage();const metadata={cwd:await $.session.cwd(),model:await $.session.model(),turns:await $.session.turns(),startedAt:usage.startedAt,...(usage.cost?{totalCostUsd:usage.cost.usd}:{})};const settings=await $.settings.read();const policy=await $.settings.read({source:'policy'});const helpers=(policy.allowManagedHooksOnly||settings.disableAllHooks&&!policy.disableAllHooks)?policy:settings;const main=policy.disableAllHooks?null:helpers.statusLine;const sub=policy.disableAllHooks?null:helpers.subagentStatusLine;const statusCommand=main?.type==='command'&&typeof main.command==='string'?main.command:null;const subagentCommand=sub?.type==='command'&&typeof sub.command==='string'?sub.command:null;const shellPrefix=await $.env.get('CLAUDE_CODE_SHELL_PREFIX')??null;const command=await send($,'/poll',{agents,metadata,statusCommand,subagentCommand,shellPrefix,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:settings.disableAllHooks===true});const sessionId=await $.session.id();if(paths[sessionId])await send($,'/transcript',{sessionId,path:paths[sessionId]});if(!command.id)return;submission={id:command.id};let filled=command.prepared===true;try{if(!filled){const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}}catch{}if(!filled)submission=undefined;await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
+      on('session.start',async($,e,next)=>{try{await send($,'/ui-ready',{});}catch{}if(!started){started=true;$.clock.every(250,()=>{if(inFlight)return;inFlight=true;(async()=>{const agents=(await $.agent.list()).map(agent=>({id:agent.id,type:agent.type,status:agent.status}));const usage=await $.session.usage();const metadata={cwd:await $.session.cwd(),model:await $.session.model(),turns:await $.session.turns(),startedAt:usage.startedAt,...(usage.cost?{totalCostUsd:usage.cost.usd}:{})};if(backgroundLease){if(backgroundTick++%4!==0)return;await send($,'/background-status',{pid:backgroundPid,token:backgroundLease,sequence:++backgroundSequence,metadata,usage});return;}const settings=await $.settings.read();const policy=await $.settings.read({source:'policy'});const helpers=(policy.allowManagedHooksOnly||settings.disableAllHooks&&!policy.disableAllHooks)?policy:settings;const main=policy.disableAllHooks?null:helpers.statusLine;const sub=policy.disableAllHooks?null:helpers.subagentStatusLine;const statusCommand=main?.type==='command'&&typeof main.command==='string'?main.command:null;const subagentCommand=sub?.type==='command'&&typeof sub.command==='string'?sub.command:null;const shellPrefix=await $.env.get('CLAUDE_CODE_SHELL_PREFIX')??null;const command=await send($,'/poll',{agents,metadata,statusCommand,subagentCommand,shellPrefix,policy:{allowManagedHooksOnly:policy.allowManagedHooksOnly===true,disableAllHooks:policy.disableAllHooks===true},hooksDisabled:settings.disableAllHooks===true});const sessionId=await $.session.id();if(paths[sessionId])await send($,'/transcript',{sessionId,path:paths[sessionId]});if(command.background===true){if(backgroundAttempted)return;backgroundAttempted=true;const host=await $.process.run(['/bin/sh','-c','printf "%s" "$PPID"'],{timeoutMs:3000});if(host.exitCode!==0)throw Error('Original background identity helper refused');const pid=Number(host.stdout.trim());const registered=await send($,'/background-register',{pid});backgroundPid=pid;backgroundLease=registered.token;return;}if(!command.id)return;submission={id:command.id};let filled=command.prepared===true;try{if(!filled){const before=await $.prompt.read();if(!before.text){const result=await $.prompt.fill({text:command.text,mode:'replace'});filled=result.isFilled===true&&(await $.prompt.read()).text===command.text;}}}catch{}if(!filled)submission=undefined;await send($,'/result',{id:command.id,filled});})().catch(()=>{}).finally(()=>{inFlight=false;});});}return next(e);});
       on('turn.start',async($,e,next)=>{if(!e.agentId)await send($,'/turn',{running:true}).catch(()=>{});return next(e);});
       on('turn.complete',async($,e,next)=>{const result=await next(e);if(!e.agentId)await send($,'/turn',{running:false,turnId:e.turnId,reason:e.reason}).catch(()=>{});return result;});
     }`
     await writeFile(join(pluginRoot, 'hooks/register.ts'), plugin, { mode: 0o600 })
     return {
       directory, pluginRoot, bunOptions, projection, session, transcripts, uiTransport: ui.transport,
+      get backgroundInfo() { return background.value },
       get problem() { return observerProblem },
       get nativePid() { return observerPid },
       get view() { return nativeView },
@@ -374,7 +390,7 @@ export async function createClaudeTerminalBridge(options: {
       },
       async close() {
         if (closed) return
-        closed = true; busy = false; focus = undefined; activity = undefined; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
+        closed = true; background.close(); busy = false; focus = undefined; activity = undefined; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
         waiting.length = 0; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
         await rm(directory, { recursive: true, force: true })
       },
