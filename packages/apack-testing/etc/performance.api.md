@@ -194,6 +194,10 @@ export const trialSchema: z.ZodObject<{
         "view-ready": "view-ready";
     }>;
     work: z.ZodRecord<z.ZodString, z.ZodNumber>;
+    timings: z.ZodOptional<z.ZodObject<{
+        firstVisibleMs: z.ZodNumber;
+        maxVisibleGapMs: z.ZodNumber;
+    }, z.core.$strip>>;
     processes: z.ZodRecord<z.ZodString, z.ZodObject<{
         observations: z.ZodArray<z.ZodString>;
         bytes: z.ZodNumber;

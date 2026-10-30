@@ -42,3 +42,11 @@ it('keeps report validation aligned with every required host capture field', () 
   const compatible: z.infer<typeof processReportSchema> extends PerformanceRecordingReport ? true : never = true;
   expect(compatible).toBe(true);
 });
+
+it('requires visible intermediate streaming progress and plausible milestone timings', () => {
+  const streaming = { ...trial, scenario: 'streaming', work: { visibleUpdates: 3 }, timings: { firstVisibleMs: 2, maxVisibleGapMs: 4 } };
+  expect(trialSchema.safeParse(streaming).success).toBe(true);
+  for (const patch of [{ timings: undefined }, { work: { visibleUpdates: 1 } }, { timings: { firstVisibleMs: 10, maxVisibleGapMs: 1 } }, { timings: { firstVisibleMs: 2, maxVisibleGapMs: 11 } }]) {
+    expect(trialSchema.safeParse({ ...streaming, ...patch }).success).toBe(false);
+  }
+});
