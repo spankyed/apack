@@ -18,3 +18,14 @@ it('records admission before a window exists and permits exactly one matching ad
   const spans = report.observations.map(value => JSON.parse(value) as { name: string; spanId: string; parentSpanId?: string });
   expect(spans.find(span => span.name === 'app.index.admission')?.parentSpanId).toBe(spans.find(span => span.name === 'app.startup')?.spanId);
 });
+
+it('preserves a failed startup outcome and finishes idempotently', async () => {
+  const startup = createStartupPerformance('test', JSON.stringify({ mode: 'lightweight' }))!;
+  startup.finish('error');
+  startup.finish();
+  const report = await startup.controller.stop();
+  const spans = report.observations.map(value => JSON.parse(value));
+  expect(spans.filter(span => span.name === 'app.startup')).toHaveLength(1);
+  expect(spans[0].status).toBe(2);
+  expect(spans[0].attributes['diagnostics.outcome']).toBe('error');
+});

@@ -16,12 +16,12 @@ export function createStartupPerformance(env: AppEnv, input: string | undefined)
   const config = configuration.parse(JSON.parse(input));
   const controller = createNodePerformanceController();
   controller.start(config.mode);
-  const span = controller.execution.withCarrier(config.carrier, () => controller.begin('app.startup', { 'app.process': 'backend' }))!;
+  let span = controller.execution.withCarrier(config.carrier, () => controller.begin('app.startup', { 'app.process': 'backend' }));
   let available = true;
   return {
     controller,
-    run: span.within,
-    finish: (outcome: 'ok' | 'error' = 'ok') => span.end(outcome),
+    run<T>(fn: () => T): T { return span ? span.within(fn) : fn(); },
+    finish(outcome: 'ok' | 'error' = 'ok') { span?.end(outcome); span = undefined; },
     adopt(mode: RecordingMode) {
       if (!available || mode !== config.mode) throw new Error('No matching startup recording is available');
       available = false;
