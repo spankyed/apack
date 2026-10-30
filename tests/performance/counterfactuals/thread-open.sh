@@ -45,7 +45,7 @@ const created = readdirSync(root).filter(name => name.startsWith('thread-open-')
 if (created.length !== 1) throw Error('Expected exactly one new counterfactual report');
 const directory = created[0];
 const report = JSON.parse(readFileSync(`${root}/${directory}/results.json`));
-const trial = report.trials[0];
+const trial = JSON.parse(readFileSync(`${root}/${directory}/${report.records[0].file}`));
 const fault = process.env.APACK_THREAD_FAULT;
 if (Object.keys(trial?.processes ?? {}).length !== 2 || Object.values(trial?.processes ?? {}).some(process => !process.complete)) throw Error('Counterfactual capture is incomplete');
 if (fault === 'full-read') {

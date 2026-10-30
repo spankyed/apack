@@ -124,7 +124,11 @@ Four focused main tests and nine renderer tests pass, including stale leases, fo
 observation faults. Public SDK/testing reports are regenerated. On `7e2019da47`, six detailed built-app thread
 opens passed with clean source/native provenance, complete backend/renderer CPU and allocation
 profiles, all eight renderer metrics available and long-task support enabled:
-`thread-open-detailed-1793399557483`. Startup and injected-renderer-stall proof remain pending.
+`thread-open-detailed-1793399557483`. The injected renderer stall also passed on `1f81f60c4e`: a 200.5 ms block produced a 202 ms
+long-task entry and 210.6 ms of renderer task time (`renderer-block-1793399847469`). Detailed startup
+reached the correct usable view but failed profile capture (`populated-startup-detailed-1793399848039`).
+No successful detailed-startup claim is made. Bounded failure-stage diagnostics landed in `3478d3ed0b`
+to distinguish protocol/admission/size/encoding failures without retaining exception payloads.
 The existing EARS `query.explain()` API provides actual native stages/indexes/visited counts; the
 maintained detailed workflow must make that capability explicit without silently rerunning business reads.
 
@@ -142,3 +146,8 @@ maintained detailed workflow must make that capability explicit without silently
 
 Do not mark the goal complete from implemented infrastructure, passing individual scenarios or capture
 integrity alone. No scope reductions or automatic timing gates are authorized.
+
+Run retention now writes immutable per-trial raw evidence, per-trial trace/profile viewer files and a
+compact format-2 index rather than retaining/re-encoding every full report. Five focused store tests
+cover complete/failing runs, order, hash/summary tampering, size/symlink admission, viewer failure and
+startup process lifecycle; ten report tests also pass. Built-app verification of this integration is pending.

@@ -26,6 +26,21 @@ export function chromeTrace(input: ReadonlyArray<{
 // @public
 export function comparisonOrder(perRevision?: number): Array<'A' | 'B'>;
 
+// @public
+export function createPerformanceRunStore(directory: string, manifestInput: unknown, measured: number): {
+    save: (invocations?: z.infer<typeof indexSchema>["invocations"]) => void;
+    append(input: unknown): {
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        index: number;
+        warmup: boolean;
+        outcome: "failed" | "cancelled" | "incomplete" | "passed";
+        correct: boolean;
+        completion: "missing" | "view-ready";
+        durationMs?: number | undefined;
+        failure?: string | undefined;
+    };
+};
+
 // @public (undocumented)
 export const manifestSchema: z.ZodObject<{
     format: z.ZodLiteral<1>;
@@ -71,6 +86,12 @@ export const manifestSchema: z.ZodObject<{
     warmups: z.ZodNumber;
     clock: z.ZodLiteral<"Local monotonic durations; cross-process epoch alignment is approximate">;
 }, z.core.$strip>;
+
+// @public (undocumented)
+export const PERFORMANCE_RUN_BYTES: number;
+
+// @public (undocumented)
+export const PERFORMANCE_TRIAL_BYTES: number;
 
 // @public (undocumented)
 export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture' | 'mode' | 'cache' | 'warmups'> & {
@@ -208,6 +229,30 @@ export const processReportSchema: z.ZodObject<{
     complete: z.ZodBoolean;
 }, z.core.$strip>;
 
+// @public
+export function readPerformanceRun(directory: string, measured?: number): {
+    manifest: PerformanceManifest;
+    scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+    samples: {
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        index: number;
+        warmup: boolean;
+        outcome: "failed" | "cancelled" | "incomplete" | "passed";
+        correct: boolean;
+        completion: "missing" | "view-ready";
+        durationMs?: number | undefined;
+        failure?: string | undefined;
+    }[];
+    summary: {
+        measured: number;
+        passed: number;
+        unsuccessful: number;
+        medianMs: number | null;
+        minMs: number | null;
+        maxMs: number | null;
+    };
+};
+
 // @public (undocumented)
 export const spanSchema: z.ZodObject<{
     name: z.ZodString;
@@ -243,7 +288,7 @@ export function streamingBacklog(producedInput: unknown, receivedInput: unknown,
 };
 
 // @public
-export function summarize(input: readonly PerformanceTrial[]): {
+export function summarize(input: readonly Pick<PerformanceTrial, 'warmup' | 'outcome' | 'durationMs'>[]): {
     measured: number;
     passed: number;
     unsuccessful: number;
