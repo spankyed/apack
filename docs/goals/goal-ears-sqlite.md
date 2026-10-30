@@ -5,7 +5,7 @@
 
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
-The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 8b1a479b96
+The prototype checkpoint is 4a3fe698f8. The current detached integration combines master debeddc3a6a
 and native fix 8ab7088f9a; combined acceptance is pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
@@ -189,16 +189,18 @@ platform claims must identify their actual tested scope.
 The goal remains active; all scope, phases and acceptance above remain required. The deliverable is the
 existing [draft PR #286](https://github.com/spankyed/apack/pull/286), branch `session/ears-sqlite`.
 No master merge, release, production adoption or version-only PR is authorized. Production remains elmdb.
-Active integration checkout: `/private/tmp/ears-sqlite-master-integration`. The preceding checkpoint is
+Active integration checkout: `/private/tmp/ears-sqlite-query-integration`. The preceding checkpoint is
 preserved at `/private/tmp/ears-sqlite-diagnosis-evidence`, `68cf78a2f4`.
 
-Current checkpoint: qualify the candidate on the newly merged app/native baseline. A detached merge
-`330efa68e6` combines exact candidate `68cf78a2f4` with committed master `8b1a479b96` (PR #287).
-It brings app query-efficiency behavior/tests, the SDK testing `testCalls` export and native
-`4d558a27543a74e2ea4c131aff1cb32455708994`. No source branch or other-agent checkout was merged/reset.
-The draft branch publishes this candidate for CI review; publication does not establish combined acceptance.
-Closing checks are matching native source/build, complete platform and full Strict gates, new app-query/SDK
-contracts, unchanged primary data/units/watches and final exact-input/clean-checkout verification.
+Current checkpoint: qualify the candidate on committed master `debeddc3a6a` and native
+`8ab7088f9a`. Detached merge `399c4765f0` combines candidate `fbd3c1c441` with that master,
+retaining SQLite explanations/backend assertions, master reverse-traversal clarification and all
+**five** current thread-query cases. The new master adds the Message status index, queued-message
+relocation and batched library queries. No source branch or other-agent checkout was merged/reset.
+The previous `330efa68e6` integration of `68cf78a2f4` and master `8b1a479b96` is historical.
+The draft branch publishes candidates for CI review; publication does not establish combined acceptance.
+Closing checks are matching native source/build, complete platform and full Strict gates, all five
+current app-query/SDK contracts, unchanged primary data/units/watches and exact-input verification.
 [Integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/master-query-integration/README.md)
 now records a clean matching Linux native build and real SDK/pack coverage at `e8750da8c6`:
 1,319 SQLite SDK cases pass with one built-prerequisite skip; that case passes separately after
@@ -227,8 +229,18 @@ instead of EARS' private Ajv 8, and the host suite exceeds its unchanged 600 s d
 Its other seven jobs pass. The packed fixture now retains owning packages' private external
 dependencies; six focused cases and a control restoring the flattened fixture prove the fix.
 [Evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/packed-dependencies/README.md)
-retains exact logs and source hashes. The host timeout remains unexplained; collect file/phase
-progress before changing implementation. Do not relax its deadline or treat a partial run as green.
+retains exact logs and source hashes. The macOS host timeout remains unexplained. The next isolated Linux diagnostic retains
+552 module completions before the unchanged 600 s deadline; its effective pool has one worker
+inside a two-CPU container, so it does not reproduce macOS concurrency. A missing native-source
+chain input is fixed; 112 focused repository cases pass after preparing the UI declaration prerequisite.
+Five current query cases pass on **both** backends, and fifteen reporter cases verify separate optional
+per-file progress. A 62-assertion counterbalanced scratch probe measures modest eager SQLite import
+cost, without establishing the cause of the whole-suite miss or selecting a loader change.
+[Current integration and diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/current-query-integration/README.md)
+retain exact inputs, interrupted evidence and failed/unsupported scratch prerequisites.
+Strict CI now preserves progress artifacts without altering completed verdicts. Do not relax its deadline
+or treat a partial run as green. Next qualify current platform source, then use macOS per-file evidence
+to resolve the host gate; a broad retry without diagnosis is not an acceptance result.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains at `6cf6c8349e`, exact
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs green.

@@ -467,7 +467,9 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
   'build/prod/verify-node-modules.mjs', 'build/prod/smoke-native.mjs',
   'packages/apack-cli/bin',
   'packages/apack-ears/bench/ears.bench.ts', 'packages/api/tsup.config.ts',
-  'packages/dev-mode.js', 'packages/entry-point.mjs'];
+  'packages/dev-mode.js', 'packages/entry-point.mjs',
+  // Owned vector-extension build/test source is also read by repository-wide lint and guards.
+  'native/vectors'];
 
 /**
  * `packages:ensure` builds the publishable packages, so its inputs are theirs — taken from `BUILD_UNITS`

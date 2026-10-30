@@ -51,7 +51,7 @@ if (mode === 'verify') {
   save('verification.json', result);
   assert.equal(result.sdkBackendCasesPassed,2,'Both SDK fixture stores must use SQLite');
   assert.equal(sdkBackend.numFailedTests,0);
-  assert.equal(result.queryWorkCasesPassed,4,'All current app repository query contracts must execute on SQLite');
+  assert.equal(result.queryWorkCasesPassed,5,'All current app repository query contracts must execute on SQLite');
   assert.equal(queryWork.numFailedTests,0);
   if(sdkAll){
     assert(sdkAll.numPassedTests>=1320&&sdkAll.numFailedTests===0&&sdkAll.numPendingTests===0,'Complete prepared SDK contracts must execute on SQLite');

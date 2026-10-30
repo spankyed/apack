@@ -1,0 +1,162 @@
+[
+  {
+    "variant": "candidate",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/sdk",
+      "packages/apack-sdk/tests/content/format-applier.spec.ts",
+      "packages/apack-sdk/tests/testing/test-host.spec.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--reporter=/metrics/scripts/lib/spec-durations-reporter.ts",
+      "--outputFile=/results/import-probe-0-candidate.json"
+    ],
+    "seconds": 2.9468291829980444,
+    "testsPassed": 62,
+    "factorySha256": "53cd145023f54a6b5fa71dd80fad5fe9f5ba2d9a6ecff19b1103a2228e5db05e",
+    "modules": [
+      {
+        "project": "@apackdev/sdk",
+        "file": "tests/content/format-applier.spec.ts",
+        "ms": 659.0355099999999,
+        "overheadMs": 1100.3092430000002,
+        "skipped": false,
+        "overBudget": []
+      },
+      {
+        "project": "@apackdev/sdk",
+        "file": "tests/testing/test-host.spec.ts",
+        "ms": 50.31934000000001,
+        "overheadMs": 251.041987,
+        "skipped": false,
+        "overBudget": []
+      }
+    ]
+  },
+  {
+    "variant": "native-only-control",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/sdk",
+      "packages/apack-sdk/tests/content/format-applier.spec.ts",
+      "packages/apack-sdk/tests/testing/test-host.spec.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--reporter=/metrics/scripts/lib/spec-durations-reporter.ts",
+      "--outputFile=/results/import-probe-1-native-only-control.json"
+    ],
+    "seconds": 2.518046148994472,
+    "testsPassed": 62,
+    "factorySha256": "c33e58ec6a9f1d85dd6a5c5598c27c12e3ed88cbc00b2966c43eb6adab982aa2",
+    "modules": [
+      {
+        "project": "@apackdev/sdk",
+        "file": "tests/content/format-applier.spec.ts",
+        "ms": 537.4989429999999,
+        "overheadMs": 871.181189,
+        "skipped": false,
+        "overBudget": []
+      },
+      {
+        "project": "@apackdev/sdk",
+        "file": "tests/testing/test-host.spec.ts",
+        "ms": 47.320332000000036,
+        "overheadMs": 155.76128,
+        "skipped": false,
+        "overBudget": []
+      }
+    ]
+  },
+  {
+    "variant": "native-only-control",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/sdk",
+      "packages/apack-sdk/tests/content/format-applier.spec.ts",
+      "packages/apack-sdk/tests/testing/test-host.spec.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--reporter=/metrics/scripts/lib/spec-durations-reporter.ts",
+      "--outputFile=/results/import-probe-2-native-only-control.json"
+    ],
+    "seconds": 2.333918710995931,
+    "testsPassed": 62,
+    "factorySha256": "c33e58ec6a9f1d85dd6a5c5598c27c12e3ed88cbc00b2966c43eb6adab982aa2",
+    "modules": [
+      {
+        "project": "@apackdev/sdk",
+        "file": "tests/content/format-applier.spec.ts",
+        "ms": 498.1569649999999,
+        "overheadMs": 835.303679,
+        "skipped": false,
+        "overBudget": []
+      },
+      {
+        "project": "@apackdev/sdk",
+        "file": "tests/testing/test-host.spec.ts",
+        "ms": 34.05162999999999,
+        "overheadMs": 137.271107,
+        "skipped": false,
+        "overBudget": []
+      }
+    ]
+  },
+  {
+    "variant": "candidate",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/sdk",
+      "packages/apack-sdk/tests/content/format-applier.spec.ts",
+      "packages/apack-sdk/tests/testing/test-host.spec.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--reporter=/metrics/scripts/lib/spec-durations-reporter.ts",
+      "--outputFile=/results/import-probe-3-candidate.json"
+    ],
+    "seconds": 2.6131108129920904,
+    "testsPassed": 62,
+    "factorySha256": "53cd145023f54a6b5fa71dd80fad5fe9f5ba2d9a6ecff19b1103a2228e5db05e",
+    "modules": [
+      {
+        "project": "@apackdev/sdk",
+        "file": "tests/content/format-applier.spec.ts",
+        "ms": 450.439967,
+        "overheadMs": 1087.3827520000002,
+        "skipped": false,
+        "overBudget": []
+      },
+      {
+        "project": "@apackdev/sdk",
+        "file": "tests/testing/test-host.spec.ts",
+        "ms": 39.67597800000004,
+        "overheadMs": 198.164851,
+        "skipped": false,
+        "overBudget": []
+      }
+    ]
+  }
+]

@@ -1,0 +1,110 @@
+[
+  {
+    "label": "build-node-pty-prepared-headers",
+    "args": [
+      "npm",
+      "rebuild",
+      "node-pty",
+      "--offline"
+    ],
+    "exitCode": 0,
+    "seconds": 4.08452562300954
+  },
+  {
+    "label": "query-sqlite",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@app/default-setup",
+      "--",
+      "tests/features/threads/be/query-work.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/query-sqlite-prepared.json"
+    ],
+    "exitCode": 0,
+    "seconds": 10.528795792983146
+  },
+  {
+    "label": "query-elmdb",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@app/default-setup",
+      "--",
+      "tests/features/threads/be/query-work.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/query-elmdb-prepared.json"
+    ],
+    "exitCode": 0,
+    "seconds": 6.648861335997935
+  },
+  {
+    "label": "reporter-contracts",
+    "args": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--config",
+      "vitest.integration.config.ts",
+      "--project",
+      "@app/repo-checks",
+      "packages/repo-checks/tests/spec-durations-reporter.integration.spec.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/reporter-contracts.json"
+    ],
+    "exitCode": 0,
+    "seconds": 9.687329045991646
+  },
+  {
+    "label": "scripts-types",
+    "args": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "scripts"
+    ],
+    "exitCode": 0,
+    "seconds": 7.274231852992671
+  },
+  {
+    "label": "repo-check-types",
+    "args": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "packages/repo-checks"
+    ],
+    "exitCode": 0,
+    "seconds": 8.797117610985879
+  },
+  {
+    "label": "specifiers",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 8.599625820002984
+  },
+  {
+    "label": "host-progress",
+    "args": [
+      "npm",
+      "run",
+      "test:unit:host",
+      "--",
+      "--all"
+    ],
+    "exitCode": 1,
+    "seconds": 603.3962837670115
+  }
+]
