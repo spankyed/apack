@@ -4,6 +4,7 @@
       <h3>{{ panel.session?.name || 'Background session' }}</h3>
       <p role="status">{{ panel.label }}</p>
       <p v-if="panel.info" aria-label="Background session usage" class="background-session__detail">{{ panel.info.model }} · {{ panel.info.turns }} {{ panel.info.turns === 1 ? 'turn' : 'turns' }}<template v-if="panel.info.context"> · {{ panel.info.context.percent }}% context</template><template v-if="panel.info.totalCostUsd !== undefined"> · Session total ${{ panel.info.totalCostUsd.toFixed(6) }}</template></p>
+      <div v-if="panel.info?.statusLine" aria-label="Background Claude configured status" class="background-session__detail background-session__formatter" tabindex="0"><NativeStatusText :text="panel.info.statusLine" /></div>
       <p v-if="panel.session?.waitingFor" class="background-session__detail">{{ panel.session.waitingFor }}</p>
       <p v-if="panel.problem" role="alert" class="background-session__problem">{{ panel.problem }}</p>
     </div>
@@ -26,6 +27,7 @@
 </template>
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
+import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import { surfaceSessionStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 import { claudeWindowStorageKey } from './native-window-storage.ts'
@@ -87,6 +89,8 @@ const panels = computed(() => {
 h3 { margin: 0; color: #dcd8d2; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
 p { margin: 4px 0 0; color: #aaa59e; font-size: 11px; line-height: 1.5; }
 .background-session__detail { white-space: pre-wrap; overflow-wrap: anywhere; }
+.background-session__formatter { margin-top: 4px; max-height: 72px; overflow-y: auto; overscroll-behavior: contain; color: #aaa59e; font-size: 11px; line-height: 1.5; }
+.background-session__formatter:focus-visible { outline: 2px solid #8cabe8; outline-offset: 2px; }
 .background-session__problem { color: #e4aaa1; overflow-wrap: anywhere; }
 .background-session__controls { display: flex; flex-wrap: wrap; gap: 6px; }
 .background-session__reply { flex: 1 1 100%; display: grid; gap: 6px; min-width: 0; order: 2; }

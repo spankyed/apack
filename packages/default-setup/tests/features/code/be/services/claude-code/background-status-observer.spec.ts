@@ -67,3 +67,22 @@ it('retires old child tokens and the original identity authority on an acknowled
   expect((await f.post('/background-status',f.message(old,2))).code).toBe(409)
  }finally{await f.observer.close()}
 })
+
+it('keeps formatter output independent of the parent and refuses retired policy/worker results',async()=>{
+ const f=await fixture()
+ try{
+  const token=(await f.post('/background-register',{sessionId:child,pid:119})).value.token
+  const config={command:'cat',shellPrefix:null,policy:'personal'}
+  const first=await f.post('/background-status',{...f.message(token),formatter:config});expect(first.code).toBe(200)
+  const prefix=first.value.shellPrefix,producer=JSON.parse(Buffer.from(prefix.slice(prefix.lastIndexOf(' -')+2),'base64url').toString())
+  const output={...producer,startedAt:'10',stdout:'original child status'}
+  expect((await f.post('/background-formatter',output)).code).toBe(200);expect(f.observer.value?.statusLine).toBe('original child status')
+  await f.observer.releaseParent();expect((await f.post('/background-status',{...f.message(token,2),formatter:config})).code).toBe(200)
+  expect(f.observer.value?.statusLine).toBe('original child status')
+  await f.post('/background-status',{...f.message(token,3),formatter:{...config,command:null,policy:'disabled'}})
+  expect(f.observer.value?.statusLine).toBeUndefined();expect((await f.post('/background-formatter',{...output,startedAt:'20'})).code).toBe(409)
+  const fresh=await f.post('/background-status',{...f.message(token,4),formatter:config})
+  const next=fresh.value.shellPrefix,current=JSON.parse(Buffer.from(next.slice(next.lastIndexOf(' -')+2),'base64url').toString())
+  f.replace();expect((await f.post('/background-formatter',{...current,startedAt:'30',stdout:'wrong worker'})).code).toBe(409)
+ }finally{await f.observer.close()}
+})
