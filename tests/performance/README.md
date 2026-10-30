@@ -53,8 +53,11 @@ Capture integrity (`complete`) does not certify instrumentation coverage. Coales
 have no action parent and link affected commits, with explicit unknown/dropped causes. Root actor queues restore explicitly carried event context; untagged internal events are not covered.
 Enabled Node recordings include aggregate process CPU, sampled RSS/heap maxima, GC and event-loop
 observations. These process totals are not per-action attribution, and sampled maxima are not true peak
-memory. Disabled mode starts no sampler; sample failures invalidate capture. Detailed mode still needs
-CPU/allocation profiles and renderer resource observations. No overhead or performance improvement is established yet.
+memory. Disabled mode starts no sampler; sample failures invalidate capture. Detailed Node recordings include V8 CPU and sampled JS allocation profiles; renderer capture remains
+in progress. Profiles record sampling settings and a requested 30-second window (timers can be delayed
+by synchronous work), cap serialized CPU/allocation output at 2 MiB each, and reserve those bytes within
+the 16 MiB recording budget. Protocol failures or oversized output invalidate capture. These are V8
+isolate/JS-heap profiles; process totals cover a broader resource scope. No overhead or performance improvement is established yet.
 Populated startup, cross-revision orchestration and qualification remain in the goal.
 
 Populated startup uses a separate controller, `node scripts/with-source.mjs tsx tests/performance/startup-run.ts`.
@@ -82,3 +85,7 @@ its source on exit. Deliberate defects never enter the authored checkout.
 `bash tests/performance/counterfactuals/thread-open.sh missing-completion` withholds the correlated
 completion signal while the actual fifty-message view arrives. It requires an incomplete trial with
 no duration/success marker and complete process captures; source is restored on exit.
+
+Profile protocol references: [Node Inspector](https://nodejs.org/download/release/v23.11.1/docs/api/inspector.html)
+and [V8 heap sampling](https://chromedevtools.github.io/devtools-protocol/tot/HeapProfiler/).
+Allocation sampling includes objects discarded by major/minor GC; it does not request heap object values.

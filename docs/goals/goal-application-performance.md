@@ -1,7 +1,7 @@
 # Application performance implementation
 
 Status: active. Isolated worktree `/private/tmp/apack-application-performance`, branch
-`session/application-performance`, initial source `62f1798c9b`.
+`session/application-performance` (capability checkpoint), initial source `62f1798c9b`.
 Draft PR: https://github.com/spankyed/apack/pull/293. Main checkout and live native source are untouched.
 
 ## Acceptance
@@ -96,6 +96,28 @@ Full local `chain --no-native` and strict CI run `41109512527` passed at `c72035
 https://github.com/spankyed/apack/actions/runs/41109512527.
 Later changes have focused tests/types/lint, regenerated API reports and built-app evidence above.
 No final broad-gate claim is made for the current tip.
+
+## Qualification continuation
+
+`session/application-performance-qualification` continues from frozen capability checkpoint
+`e68e178f8c`. Strict CI for that checkpoint is run `41127756000`: producers, both integrations and both native
+shards passed. App-and-rest failed one repository guard (6,016 tests passed): the guard rejects a
+legitimate `testMatch` helper argument. That integration defect is being corrected before final gates.
+
+Detailed Node capture now uses an owned local Inspector session, with no debug listener. It records
+V8 CPU and sampled allocation formats, including discarded allocations, sampling parameters and its
+30-second requested window. Serialized output is capped at 2 MiB per profile, reserved within the
+existing 16 MiB total recording budget. Protocol calls have deadlines; stop closes partial sessions,
+retains usable evidence and reports loss. Stop awaits profile cleanup even if trace export fails.
+API/startup admission waits for readiness, and connection closure during admission is tested.
+Twenty-five focused host tests, eight API tests and ten portable-report tests pass, including real V8
+profiles, timeout/expiry/oversize faults and original-error preservation. Host/API/renderer types pass.
+Built-app detailed-mode verification is still pending.
+
+Renderer collection must start before its application actor for startup coverage. Its next integration
+uses the existing main/preload bridge and window ownership, with the same profiler protocol collector.
+The existing EARS `query.explain()` API provides actual native stages/indexes/visited counts; the
+maintained detailed workflow must make that capability explicit without silently rerunning business reads.
 
 ## Dependency-ordered remaining work
 

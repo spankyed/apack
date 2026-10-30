@@ -121,6 +121,26 @@ export type PerformanceTrial = z.infer<typeof trialSchema>;
 
 // @public (undocumented)
 export const processReportSchema: z.ZodObject<{
+    profiles: z.ZodOptional<z.ZodObject<{
+        sampling: z.ZodObject<{
+            cpuIntervalMicros: z.ZodLiteral<1000>;
+            allocationIntervalBytes: z.ZodLiteral<number>;
+            allocationStackDepth: z.ZodLiteral<32>;
+            includeCollectedAllocations: z.ZodLiteral<true>;
+        }, z.core.$strip>;
+        cpu: z.ZodOptional<z.ZodString>;
+        allocation: z.ZodOptional<z.ZodString>;
+        bytes: z.ZodNumber;
+        failures: z.ZodNumber;
+        complete: z.ZodBoolean;
+        windowLimitMs: z.ZodLiteral<30000>;
+        durationMs: z.ZodNumber;
+        stoppedBy: z.ZodEnum<{
+            owner: "owner";
+            limit: "limit";
+        }>;
+    }, z.core.$strip>>;
+    profileFailures: z.ZodOptional<z.ZodNumber>;
     processStatistics: z.ZodOptional<z.ZodObject<{
         samplingFailures: z.ZodNumber;
         durationMs: z.ZodNumber;
@@ -249,6 +269,26 @@ export const trialSchema: z.ZodObject<{
         clockOrderMismatches: z.ZodNumber;
     }, z.core.$strip>>;
     processes: z.ZodRecord<z.ZodString, z.ZodObject<{
+        profiles: z.ZodOptional<z.ZodObject<{
+            sampling: z.ZodObject<{
+                cpuIntervalMicros: z.ZodLiteral<1000>;
+                allocationIntervalBytes: z.ZodLiteral<number>;
+                allocationStackDepth: z.ZodLiteral<32>;
+                includeCollectedAllocations: z.ZodLiteral<true>;
+            }, z.core.$strip>;
+            cpu: z.ZodOptional<z.ZodString>;
+            allocation: z.ZodOptional<z.ZodString>;
+            bytes: z.ZodNumber;
+            failures: z.ZodNumber;
+            complete: z.ZodBoolean;
+            windowLimitMs: z.ZodLiteral<30000>;
+            durationMs: z.ZodNumber;
+            stoppedBy: z.ZodEnum<{
+                owner: "owner";
+                limit: "limit";
+            }>;
+        }, z.core.$strip>>;
+        profileFailures: z.ZodOptional<z.ZodNumber>;
         processStatistics: z.ZodOptional<z.ZodObject<{
             samplingFailures: z.ZodNumber;
             durationMs: z.ZodNumber;
@@ -357,6 +397,23 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
             rejectedStarts: number;
             invalidAttributes: number;
             complete: boolean;
+            profiles?: {
+                sampling: {
+                    cpuIntervalMicros: 1000;
+                    allocationIntervalBytes: number;
+                    allocationStackDepth: 32;
+                    includeCollectedAllocations: true;
+                };
+                bytes: number;
+                failures: number;
+                complete: boolean;
+                windowLimitMs: 30000;
+                durationMs: number;
+                stoppedBy: "owner" | "limit";
+                cpu?: string | undefined;
+                allocation?: string | undefined;
+            } | undefined;
+            profileFailures?: number | undefined;
             processStatistics?: {
                 samplingFailures: number;
                 durationMs: number;

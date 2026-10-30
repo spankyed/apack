@@ -18,6 +18,7 @@ const test = base.extend<{}, { startupRecording: void }>({
     if (!process.env.E2E_DATA_DIR || !process.env.APACK_PERFORMANCE_SEED_REPORT) throw Error('Use the owned startup controller');
     const previous = process.env.APACK_PERFORMANCE_STARTUP;
     parent = createNodePerformanceController(); parent.start(mode);
+    await parent.ready();
     action = parent.begin('app.startup', { 'app.process': 'driver', 'app.scenario': 'populated-startup' })!;
     process.env.APACK_PERFORMANCE_STARTUP = JSON.stringify({ mode, carrier: action.carrier() });
     try { await use(); }

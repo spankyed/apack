@@ -4,6 +4,7 @@ import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { SamplingDecision, TracerProvider, type SpanProcessor } from '@opentelemetry/sdk-trace';
 import { createSpanRecording } from './spans.ts';
 import { createEarsOperationObserver, EARS_SPAN_NAMES, EARS_SPAN_ATTRIBUTES } from './ears.ts';
+import type { PerformanceProfiles } from './profiles.ts';
 
 /** Only standard trace context crosses execution boundaries; no application payload or baggage. */
 export interface TraceCarrier { traceparent?: string; tracestate?: string }
@@ -30,6 +31,8 @@ export interface PerformanceProcessStatistics {
 
 /** Encoded process observations and capture-integrity counters, portable across the API boundary. */
 export interface PerformanceRecordingReport {
+  profiles?: PerformanceProfiles;
+  profileFailures?: number;
   processStatistics?: PerformanceProcessStatistics;
   processStatisticsFailures?: number;
   observations: readonly string[];

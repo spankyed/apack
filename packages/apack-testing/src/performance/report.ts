@@ -3,6 +3,26 @@ import { z } from 'zod';
 const count = z.number().int().nonnegative();
 const hrTime = z.tuple([count, count.max(999_999_999)]);
 const scalar = z.union([z.string().max(128), z.number().finite(), z.boolean()]);
+const profilesSchema = z.object({
+  sampling: z.object({ cpuIntervalMicros: z.literal(1000), allocationIntervalBytes: z.literal(512 * 1024), allocationStackDepth: z.literal(32), includeCollectedAllocations: z.literal(true) }),
+  cpu: z.string().max(2 * 1024 * 1024).optional(), allocation: z.string().max(2 * 1024 * 1024).optional(),
+  bytes: count.max(4 * 1024 * 1024), failures: count, complete: z.boolean(),
+  windowLimitMs: z.literal(30_000), durationMs: z.number().finite().nonnegative(), stoppedBy: z.enum(['owner', 'limit']),
+}).superRefine((profiles, ctx) => {
+  let bytes = 0;
+  for (const [kind, encoded] of [['cpu', profiles.cpu], ['allocation', profiles.allocation]] as const) {
+    if (encoded === undefined) continue;
+    const size = Buffer.byteLength(encoded);
+    bytes += size;
+    try {
+      const value = JSON.parse(encoded) as { nodes?: unknown; head?: unknown };
+      if (size > 2 * 1024 * 1024 || !value || (kind === 'cpu' ? !Array.isArray(value.nodes) : !value.head || typeof value.head !== 'object')) throw Error('Invalid profile');
+    } catch { ctx.addIssue({ code: 'custom', message: 'Invalid or oversized V8 profile' }); }
+  }
+  if (bytes !== profiles.bytes || profiles.complete && (profiles.failures || !profiles.cpu || !profiles.allocation)) {
+    ctx.addIssue({ code: 'custom', message: 'Profile capture metadata is inconsistent' });
+  }
+});
 export const spanSchema = z.object({
   name: z.string().max(128), traceId: z.string().regex(/^[a-f0-9]{32}$/), spanId: z.string().regex(/^[a-f0-9]{16}$/),
   parentSpanId: z.string().regex(/^[a-f0-9]{16}$/).optional(), startTime: hrTime, duration: hrTime,
@@ -10,6 +30,7 @@ export const spanSchema = z.object({
   links: z.array(z.object({ traceId: z.string(), spanId: z.string() })).max(32), droppedLinks: count,
 });
 export const processReportSchema = z.object({
+  profiles: profilesSchema.optional(), profileFailures: count.optional(),
   processStatistics: z.object({
     samplingFailures: count,
     durationMs: z.number().finite().nonnegative(), cpuUserMicros: count, cpuSystemMicros: count,
@@ -27,9 +48,10 @@ export const processReportSchema = z.object({
 }).superRefine((report, ctx) => {
   const bytes = report.observations.reduce((sum, value) => sum + Buffer.byteLength(value), 0);
   if (bytes !== report.bytes) ctx.addIssue({ code: 'custom', message: 'Encoded observation byte count differs' });
+  if (report.bytes + (report.profiles?.bytes ?? 0) > 16 * 1024 * 1024) ctx.addIssue({ code: 'custom', message: 'Combined recording budget exceeded' });
   if (report.complete && (report.truncated || report.dropped || report.rejected || report.droppedMetadata || report.active
     || report.unfinished || report.droppedStarts || report.invalidCarriers || report.detachFailures || report.droppedEvents || report.contextFailures || report.rejectedStarts || report.invalidAttributes
-    || report.processStatisticsFailures || report.processStatistics?.samplingFailures)) {
+    || report.processStatisticsFailures || report.processStatistics?.samplingFailures || report.profileFailures || report.profiles && !report.profiles.complete)) {
     ctx.addIssue({ code: 'custom', message: 'Lossy recording cannot be complete' });
   }
   for (const encoded of report.observations) {

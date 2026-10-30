@@ -145,7 +145,10 @@ export async function setupBackend(): Promise<void> {
   const startup = createStartupPerformance(env, process.env.APACK_PERFORMANCE_STARTUP);
   appStartupPerformance = startup;
   try {
-    if (startup) await startup.run(() => initializeBackend(startup.controller));
+    if (startup) {
+      await startup.controller.ready();
+      await startup.run(() => initializeBackend(startup.controller));
+    }
     else await initializeBackend();
     startup?.finish();
   } catch (error) { startup?.finish('error'); throw error; }

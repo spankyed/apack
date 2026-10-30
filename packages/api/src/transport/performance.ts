@@ -22,7 +22,7 @@ function owned(client: string) {
 }
 
 export const performanceRouter = router({
-  start: procedure.input(z.object({ mode: z.enum(['disabled', 'lightweight', 'detailed']), startup: z.boolean().optional() })).mutation(({ input, ctx }) => {
+  start: procedure.input(z.object({ mode: z.enum(['disabled', 'lightweight', 'detailed']), startup: z.boolean().optional() })).mutation(async ({ input, ctx }) => {
     const performance = controller();
     if (owner) throw new TRPCError({ code: 'CONFLICT', message: 'A performance recording is already active' });
     if (ctx.closed.aborted) throw new TRPCError({ code: 'BAD_REQUEST', message: 'The connection is closed' });
@@ -40,6 +40,8 @@ export const performanceRouter = router({
     };
     owner = claim;
     ctx.closed.addEventListener('abort', closed, { once: true });
+    await performance.ready();
+    if (ctx.closed.aborted) throw new TRPCError({ code: 'BAD_REQUEST', message: 'The connection is closed' });
   }),
   snapshot: procedure.query(({ ctx }): PerformanceRecordingReport | undefined => owned(ctx.client).snapshot()),
   stop: procedure.mutation(async ({ ctx }): Promise<PerformanceRecordingReport> => {
