@@ -188,4 +188,12 @@ the original left-arrow fork once, then opens the exact child through original `
 submits input, closes/reopens only the client and verifies retained parent state before UI Stop.
 The separate default left-arrow profile retains Stay/Escape coverage; this profile does not
 retest those decisions. Live terminal acceptance does not establish stopped-child resume,
-child approval/question journeys or structured desktop child prompt/status contracts.
+permission/question variants beyond the later scoped Read/single-question journey, or structured desktop child prompt/status contracts.
+
+Use `CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP=1` with the same kind for the child Read
+consent/single-question journey. It requires actual original file bytes and the selected Developers
+answer, separate native child receipts, preserved parent history/cost/draft, close/reopen and UI Stop.
+The attached terminal occupies the full content area on compact windows so all choices remain
+visible. A single-select original question submits immediately; do not invent a second review step.
+Reopening verifies the latest answer, not an older transcript frame. Other permission/question
+variants, stopped-child resume and structured desktop child bindings remain unaccepted.
