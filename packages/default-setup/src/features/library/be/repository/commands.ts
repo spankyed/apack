@@ -156,7 +156,7 @@ const writers = {
         name: child.name as string,
         description: child.description as string | undefined,
         path: collectionPath(child.id as EARS.EntityId),
-        documentCount: query.ids(child.id as EARS.EntityId).out(EARS.RelKind.CONTAINS, EARS.Entity.Document).pickAll().length,
+        documentCount: query.ids(child.id as EARS.EntityId).out(EARS.RelKind.CONTAINS, EARS.Entity.Document).count(),
         childCollections: buildChildren(query.ids(child.id as EARS.EntityId).out(EARS.RelKind.PARENT_OF, EARS.Entity.Collection).pick(['name', 'description', 'createdAt', 'updatedAt'])),
         displayOrder: displayOrderOf(child),
         createdAt: new Date(child.createdAt as number).toISOString(),
