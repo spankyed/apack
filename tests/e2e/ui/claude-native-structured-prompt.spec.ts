@@ -12,6 +12,12 @@ let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('round-trips decorated structured replace append and cursor insertion through original native APIs', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(90000)
+  async function capture(name: string) {
+    await appPage.evaluate(() => document.fonts.ready.then(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))))
+    const window = await electronApp.browserWindow(appPage), size = appPage.viewportSize()!
+    const png = await window.evaluate(async (window, size) => (await window.webContents.capturePage({ x: 0, y: 0, ...size })).toPNG().toString('base64'), size)
+    await writeFile(testInfo.outputPath(name), Buffer.from(png, 'base64'))
+  }
   expect(process.env.HOME).toBe(workspace)
   const {promptMedia,promptSyntax,uiCopy,uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
@@ -105,7 +111,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
     const expected=await appPage.evaluate(()=>{const first=document.querySelector('[data-native-selection-row]')!,last=Array.from(document.querySelectorAll('[data-native-selection-row]')).find(row=>row.textContent?.includes('Fixture completed.'))!;const filter={acceptNode:(node:Node)=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT};const firstWalker=document.createTreeWalker(first,NodeFilter.SHOW_TEXT,filter),lastWalker=document.createTreeWalker(last,NodeFilter.SHOW_TEXT,filter),start=firstWalker.nextNode()!,end=lastWalker.nextNode()!;const range=document.createRange();range.setStart(start,0);range.setEnd(end,end.textContent!.length);const selected=document.getSelection()!;selected.removeAllRanges();selected.addRange(range);document.dispatchEvent(new Event('selectionchange'));return selected.toString()})
     await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(2)
     expect((await selectedReceipts())[1]).toEqual({selected:true,value:{text:expected}})
-    for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(excerpt).toBeInViewport();await expect(composer).toHaveText('Review the pending release notes.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-selection-'+width+'.png')})}
+    for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(excerpt).toBeInViewport();await expect(composer).toHaveText('Review the pending release notes.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture('native-selection-'+width+'.png')}
     const user=appPage.locator('[data-native-selection-row]').filter({hasText:'Review the release notes for this project.'}).first()
     const userUuid=await user.getAttribute('data-native-selection-row'),pointerProof=[]
     for(const {width,expanded} of [{width:1100,expanded:false},{width:680,expanded:false},{width:1100,expanded:true},{width:680,expanded:true}]){
@@ -117,11 +123,11 @@ test('round-trips decorated structured replace append and cursor insertion throu
       const point=await user.evaluate(root=>{const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:node=>node.parentElement?.closest('[inert],[aria-hidden="true"],button,svg')?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});let node:Node|null;while((node=walker.nextNode())!==null){const at=node.textContent?.indexOf('Review the release notes for this project.')??-1;if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+6);const b=range.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2}}}throw Error('Visible user text not found')})
       await writeFile(join(workspace!,'native-user-pointer-target-'+width+'.json'),JSON.stringify(await appPage.evaluate(point=>{const el=document.elementFromPoint(point.x,point.y);return {point,hit:el?.outerHTML.slice(0,1500),focus:document.activeElement?.outerHTML.slice(0,500),ancestors:el?[el,...Array.from((function*(node){while(node.parentElement){node=node.parentElement;yield node}})(el))].slice(0,12).map(node=>({tag:node.tagName,class:node.className,select:getComputedStyle(node).userSelect})):[]}},point),null,2))
       await appPage.mouse.dblclick(point.x,point.y)
-      await appPage.screenshot({path:testInfo.outputPath('native-user-pointer-diagnostic-'+width+'.png')})
+      await capture('native-user-pointer-diagnostic-'+width+'.png')
       await expect.poll(()=>appPage.evaluate(()=>document.getSelection()?.toString().trim())).toBe('Review')
       const selected=await appPage.evaluate(()=>document.getSelection()!.toString())
       await expect(composer).toHaveText('Review the pending release notes.')
-      await appPage.screenshot({path:testInfo.outputPath('native-user-selection-'+width+'-'+expanded+'.png')})
+      await capture('native-user-selection-'+width+'-'+expanded+'.png')
       if(await sessionTools.getAttribute('aria-expanded')!=='true')await sessionTools.click()
       const beforeSelection=(await selectedReceipts()).length;await excerpt.click();await expect.poll(async()=>(await selectedReceipts()).length).toBe(beforeSelection+1)
       expect((await selectedReceipts()).at(-1)).toEqual({selected:true,value:{text:selected,requestId:userUuid}})
@@ -143,7 +149,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
       await button.click();await expect.poll(async()=>(await copies()).length).toBe(1);
       expect((await copies())[0].result).toEqual({isCopied:true});
       expect(await electronApp.evaluate(({clipboard})=>clipboard.readText())).toBe('Release checklist 0\nVerify behavior 👋');
-      for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(button).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer).toHaveText('Review the pending release notes.');await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-clipboard-'+width+'.png')});}
+      for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(button).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer).toHaveText('Review the pending release notes.');await capture('native-clipboard-'+width+'.png');}
       await appPage.setViewportSize({width:1400,height:900});
       await appPage.evaluate(()=>{const clipboard=navigator.clipboard;(window as any).__nativeCopyWrite=clipboard.writeText;clipboard.writeText=async()=>{throw new DOMException('Platform clipboard unavailable','NotAllowedError')}});
       await button.click();await expect.poll(async()=>(await copies()).length).toBe(2);
@@ -159,11 +165,11 @@ test('round-trips decorated structured replace append and cursor insertion throu
       for(const [index,name,text] of [[4,'cjk','漢'.repeat(1000000)],[5,'astral','👋'.repeat(500000)],[6,'escaped',String.fromCharCode(92,10).repeat(500000)]] as const){
         await button.click();await expect.poll(async()=>(await copies()).length).toBe(index+1);
         expect((await copies())[index]).toEqual({textLength:1000000,result:{isCopied:true}});
-        const actual=await electronApp.evaluate(async({clipboard})=>{const{createHash}=await import('node:crypto'),text=clipboard.readText();return {length:text.length,bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex')}});
+        const copied=await electronApp.evaluate(({clipboard})=>clipboard.readText()),actual={length:copied.length,bytes:Buffer.byteLength(copied),sha256:createHash('sha256').update(copied).digest('hex')};
         const expected={length:text.length,bytes:Buffer.byteLength(text),sha256:createHash('sha256').update(text).digest('hex')};
         expect(actual).toEqual(expected);largeCopies.push({name,...actual,nativeResult:(await copies())[index].result});
         await expect(composer).toHaveText('Review the pending release notes.');
-        if(index===4)for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(button).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-large-clipboard-'+width+'.png')});}
+        if(index===4)for(const width of [1100,680]){await appPage.setViewportSize({width,height:width===680?600:900});await expect(button).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture('native-large-clipboard-'+width+'.png');}
       }
       await writeFile(join(workspace!,'native-large-copy-proof.json'),JSON.stringify(largeCopies,null,2));
       await appPage.setViewportSize({width:1400,height:900});
@@ -194,7 +200,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
       await appPage.setViewportSize({width,height:width===680?600:900});
       await paint.scrollIntoViewIfNeeded();await expect(paint).toBeInViewport();
       await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();
-      await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-prompt-syntax-'+width+'.png')});
+      await capture('native-prompt-syntax-'+width+'.png');
       await expect(paint).toHaveText('Verify behavior');
     }
     await appPage.setViewportSize({width:1400,height:900});
@@ -213,7 +219,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
   expect(proof[2].after.text).toContain(promptSyntax?'- **Verify behavior**':'- Verify behavior')
   expect(proof[2].after.text).not.toContain('apackNativeOffset')
   if(await tools.isVisible()&&await tools.getAttribute('aria-expanded')==='true')await tools.click()
-  for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer.locator('h1')).toBeVisible();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-structured-prompt-'+size.width+'.png')});if(size.width===680){const last=composer.locator('li').last();await last.scrollIntoViewIfNeeded();await expect(last).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await appPage.screenshot({caret:'initial',path:testInfo.outputPath('native-structured-prompt-compact-checklist.png')})}}
+  for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await expect(composer.locator('h1')).toBeVisible();await capture('native-structured-prompt-'+size.width+'.png');if(size.width===680){const last=composer.locator('li').last();await last.scrollIntoViewIfNeeded();await expect(last).toBeInViewport();await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture('native-structured-prompt-compact-checklist.png')}}
   const before=(await context()).messages.length
   await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('')
   await expect.poll(async()=>(await context()).messages.slice(before).some((message:any)=>message.sender==='user'&&(promptMedia?message.text.includes(proof[2].after.text):message.text===proof[2].after.text))).toBe(true)
