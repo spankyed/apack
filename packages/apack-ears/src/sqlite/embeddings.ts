@@ -28,13 +28,8 @@ export class SqliteEmbeddings {
   private readonly db: SqliteDatabase;
   constructor(db: SqliteDatabase) { this.db = db; }
   initialize(): void {
-    // Pre-adoption candidates with generation-owned bytes require explicit export using their original code.
-    // Refuse before creating anything; absence must never silently turn stored primary vectors into pending work.
-    const chunks = this.db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='chunks'");
-    if (chunks && this.db.all('PRAGMA table_info(chunks)').some(column => column.name === 'embedding'))
-      throw Object.assign(new Error('Legacy SQLite candidate vector layout: export with its original version before conversion'), { code: 'WRONG_FORMAT' });
     const exists = this.db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='embedding_values'");
-    if (!exists && (chunks || this.db.readOnly || this.db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='meta'"))) return fail('Missing authoritative embedding storage');
+    if (!exists && (this.db.readOnly || this.db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='meta'"))) return fail('Missing authoritative embedding storage');
     if (!exists) this.db.sql.exec(`CREATE TABLE embedding_values(id INTEGER PRIMARY KEY,
       entity_id TEXT NOT NULL,index_name TEXT NOT NULL,chunk INTEGER NOT NULL,hash TEXT NOT NULL,
       model TEXT NOT NULL,dims INTEGER NOT NULL,embedding BLOB NOT NULL,

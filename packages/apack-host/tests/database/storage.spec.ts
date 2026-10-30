@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { syncBuiltinESMExports } from 'node:module';
@@ -154,7 +155,7 @@ it.each([ELMDB, SQLITE])('refuses %s history quarantine while a managed reader s
 
 
 it.each(['SQLITE_IOERR_READ', 'SQLITE_IOERR_FSYNC', 'SQLITE_CANTOPEN', 'SQLITE_PERM', 'SQLITE_FULL',
-  'SQLITE_BUSY', 'SQLITE_CORRUPT_INDEX', 'SQLITE_CORRUPT_VTAB', 'CORRUPT', 'NATIVE_CHANGED'])
+  'SQLITE_BUSY', 'WRONG_FORMAT', 'SQLITE_CORRUPT_INDEX', 'SQLITE_CORRUPT_VTAB', 'CORRUPT', 'NATIVE_CHANGED'])
 ('never treats %s as permission to replace a SQLite history directory', code => {
   const parent = root(), directory = path.join(parent, 'runs'); fs.mkdirSync(directory);
   const file = path.join(directory, 'data.sqlite3'), before = Buffer.alloc(16384, 7); fs.writeFileSync(file, before);
@@ -233,4 +234,16 @@ it.each([ELMDB, SQLITE])('refuses stale %s history publication after another dir
   } finally { spy.mockRestore(); syncBuiltinESMExports(); }
   const retry = openRunHistory(directory, { storageFormat }); opened.push(retry.database);
   expect(retry.database.isOpen).toBe(true);
+});
+
+
+it('refuses a foreign valid SQLite history without initialization or quarantine', () => {
+  const parent = root(), directory = path.join(parent, 'runs'); fs.mkdirSync(directory);
+  const file = path.join(directory, 'data.sqlite3'), foreign = new DatabaseSync(file);
+  foreign.exec("CREATE TABLE unrelated(value TEXT); INSERT INTO unrelated VALUES ('preserve foreign history')"); foreign.close();
+  const before = fs.readFileSync(file);
+  expect(() => openRunHistory(directory, { storageFormat: SQLITE })).toThrow(expect.objectContaining({ code: 'WRONG_FORMAT' }));
+  expect(fs.readFileSync(file)).toEqual(before);
+  expect(fs.readdirSync(parent).some(name => name.startsWith('runs.unreadable-'))).toBe(false);
+  expect(fs.readdirSync(path.join(parent, 'db-readers'))).toEqual([]);
 });

@@ -2,7 +2,7 @@ import { createWriteLease, withoutWriteAuthority } from '../write-lease.ts';
 // SQLite storage for the structured EARS port. Scalar columns own small values; MessagePack is limited
 // to composite persistence and canonical metadata.
 /// <reference types="node" />
-import { DATABASE_FORMAT } from './format.ts';
+import { DATABASE_FORMAT, databaseFormatPragmas, readDatabaseFormat } from './format.ts';
 import { repairNativeVectors } from './vector-repair.ts';
 import { SqliteVectorIndex } from './vector-index.ts';
 import { nativeVectorCandidateOwners } from './vector-candidates.ts';
@@ -48,6 +48,22 @@ type Track = { keys: Set<string>; ranges: Set<string> };
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
 };
+// Refusal must not checkpoint somebody else's WAL when the final connection closes. Inspect an existing
+// writable target through a read-only connection first; only an owned or empty store gets a writable handle.
+function inspectExistingDatabase(file: string): void {
+  const probe: DatabaseSync = new NativeDatabase(file, { readonly: true, timeout: 0 });
+  let refused = false, problem: unknown;
+  try { readDatabaseFormat({ get: sql => probe.prepare(sql).get() as Data | undefined }); }
+  catch (error) { refused = true; problem = error; }
+  try { probe.close(); }
+  catch (cleanup) {
+    const cause = refused ? problem : cleanup;
+    throw Object.assign(new AggregateError(refused ? [problem, cleanup] : [cleanup],
+      'Read-only SQLite inspection could not close its connection', { cause }),
+      { code: (cause as { code?: unknown })?.code, databaseConnectionUnclosed: true });
+  }
+  if (refused) throw problem;
+}
 const typeOf = (id: string) => id.slice(0, id.indexOf("-"));
 const has = (o: object, k: string) => Object.hasOwn(o, k);
 const own = (o: Data, k: string, value: unknown) =>
@@ -149,17 +165,26 @@ export class SqliteDatabase implements EarsDatabase {
       );
     if (this.readOnly && !existsSync(file))
       fail("NO_DATABASE", `No SQLite database at ${file}`);
-    this.sql = new NativeDatabase(file, { readonly: this.readOnly });
+    if (!this.readOnly && existsSync(file)) inspectExistingDatabase(file);
+    this.sql = new NativeDatabase(file, { readonly: this.readOnly, timeout: 0 });
     try {
+      const format = readDatabaseFormat(this);
+      if (this.readOnly && format === 'empty') fail('WRONG_FORMAT', 'An empty SQLite file has no EARS database identity');
       if (options.nativeVectorExtension !== undefined) this.loadNativeVectors(options.nativeVectorExtension);
       this.embeddings = new SqliteEmbeddings(this);
-      this.embeddings.initialize();
-      this.sql.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=0; PRAGMA cache_size=-65536;");
-      if (!this.readOnly) {
-        this.sql
-          .exec(`PRAGMA journal_mode=WAL; PRAGMA fullfsync=ON; PRAGMA checkpoint_fullfsync=ON; PRAGMA synchronous=${
-          options.syncs === false ? "OFF" : "FULL"
-        };
+      this.values = new SqliteValues(this, { encode: value => this.pack(value), decode: bytes => this.unpack(bytes) });
+      this.sql.exec(`PRAGMA foreign_keys=ON; PRAGMA busy_timeout=0; PRAGMA cache_size=-65536;
+        PRAGMA fullfsync=ON; PRAGMA checkpoint_fullfsync=ON;
+        PRAGMA synchronous=${options.syncs === false ? 'OFF' : 'FULL'};`);
+      // Keep an empty file's identity and primary schema in one publication. A competing initializer may have
+      // committed since inspection; recheck under write exclusion before claiming or creating anything.
+      const initializing = format === 'empty';
+      if (initializing) this.sql.exec('BEGIN IMMEDIATE');
+      try {
+        if (initializing && readDatabaseFormat(this) === 'empty') this.sql.exec(databaseFormatPragmas);
+        this.embeddings.initialize();
+        if (!this.readOnly) {
+          this.sql.exec(`
           CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value BLOB NOT NULL);
           CREATE TABLE IF NOT EXISTS entities(id TEXT PRIMARY KEY, type TEXT NOT NULL, seq INTEGER NOT NULL UNIQUE,
             trashed INTEGER NOT NULL, short_code TEXT UNIQUE);
@@ -173,10 +198,22 @@ export class SqliteDatabase implements EarsDatabase {
           CREATE TABLE IF NOT EXISTS field_index(entity_id TEXT NOT NULL, type TEXT NOT NULL, field TEXT NOT NULL,
             value TEXT NOT NULL, seq INTEGER NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(entity_id,field,value,generation));
           CREATE INDEX IF NOT EXISTS field_lookup ON field_index(type,field,generation,value,seq);
-        `);
+          `);
+          this.values.initialize();
+        }
+        if (initializing) this.sql.exec('COMMIT');
+      } catch (error) {
+        if (initializing && this.sql.inTransaction) {
+          try { this.sql.exec('ROLLBACK'); }
+          catch (rollback) {
+            throw Object.assign(new AggregateError([error, rollback], 'SQLite initialization and rollback failed', { cause: error }),
+              { code: (error as { code?: unknown })?.code });
+          }
+        }
+        throw error;
       }
-      this.values = new SqliteValues(this, { encode: value => this.pack(value), decode: bytes => this.unpack(bytes) });
-      if (!this.readOnly) this.values.initialize();
+      // Journal mode changes the file. Only a positively identified, complete store may enter WAL mode.
+      if (!this.readOnly) this.sql.exec('PRAGMA journal_mode=WAL');
       this.sql.function('ears_rebuild_members', { deterministic: true }, bytes => {
         if (!(bytes instanceof Uint8Array)) return fail('CORRUPT', 'Invalid authoritative list encoding');
         const value = this.unpack(bytes);

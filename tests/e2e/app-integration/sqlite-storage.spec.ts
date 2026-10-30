@@ -18,9 +18,12 @@ test('packaged SQLite stores hold their model claims across the real API process
   for (const directory of [stores.lmdb, stores.runHistory]) {
     const file = fs.openSync(path.join(directory, 'data.sqlite3'), 'r');
     try {
-      const header = Buffer.alloc(16);
-      expect(fs.readSync(file, header, 0, header.length, 0)).toBe(16);
-      expect(header.toString('utf8')).toBe('SQLite format 3\0');
+      const header = Buffer.alloc(100);
+      expect(fs.readSync(file, header, 0, header.length, 0)).toBe(header.length);
+      expect(header.subarray(0, 16).toString('utf8')).toBe('SQLite format 3\0');
+      // The initial primary transaction publishes these header fields before entering WAL mode.
+      expect(header.readUInt32BE(60)).toBe(1); // user_version
+      expect(header.readUInt32BE(68)).toBe(0x45415253); // application_id: EARS
     } finally { fs.closeSync(file); }
     expect(fs.existsSync(path.join(directory, 'data.mdb'))).toBe(false);
     // Open an existing inode without creating/truncating it; the packaged API must still hold its kernel claim.

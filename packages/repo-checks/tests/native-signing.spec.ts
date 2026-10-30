@@ -15,7 +15,7 @@ const hash = (file: string) => createHash('sha256').update(fs.readFileSync(file)
 const manifest = () => JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
 beforeEach(() => {
   vi.resetAllMocks();
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'native-signing-'));
+  root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'native-signing-')));
   app = path.join(root, 'Preview.app');
   const resources = path.join(app, 'Contents/Resources/app');
   fs.mkdirSync(path.join(app, 'Contents/MacOS'), { recursive: true });
@@ -55,6 +55,20 @@ describe('native manifest signing before outer app sealing', () => {
     await signMacApplication({ app, identity: 'identity hash', keychain: '/keychain', ignore, optionsForFile: perFile });
     expect(perFile.mock.calls.map(call => call[0])).toEqual([library, app]);
     expect(mocks.sign).toHaveBeenCalledTimes(1);
+  });
+
+  it('recognizes the outer app through an aliased caller path when the signer supplies canonical paths', async () => {
+    const alias = path.join(root, 'Aliased.app');
+    fs.symlinkSync(app, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    mocks.sign.mockImplementation(async options => {
+      options.optionsForFile(library);
+      fs.appendFileSync(library, ' signed');
+      options.optionsForFile(fs.realpathSync(options.app));
+    });
+    await signMacApplication({ app: alias });
+    expect(mocks.sign).toHaveBeenCalledTimes(1);
+    expect(manifest().extensionSha256).toBe(hash(library));
+    expect(mocks.exec).toHaveBeenCalledWith('/usr/bin/codesign', ['--verify', '--strict', library], { stdio: 'pipe' });
   });
 
   it('retains signer defaults when no per-file callback was supplied', async () => {

@@ -49,9 +49,9 @@ export async function signMacApplication(options) {
     let finalized = false, signedLibrary = false;
     try {
       await signAsync({ ...options, optionsForFile(file) {
-        const perFile = options.optionsForFile?.(file);
-        if (path.basename(file) === 'vec1.dylib' && fs.realpathSync(file) === library) signedLibrary = true;
-        if (path.resolve(file) === path.resolve(options.app)) {
+        const perFile = options.optionsForFile?.(file), real = fs.realpathSync(file);
+        if (real === library) signedLibrary = true;
+        if (real === app) {
           if (!signedLibrary) throw new Error('Signer skipped the native vector library before sealing the app');
           if (fs.readFileSync(manifestFile, 'utf8') !== expectedManifest) {
             throw new Error('Native provenance changed while signing');

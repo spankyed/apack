@@ -844,3 +844,22 @@ traversal or a latency qualification. Output-type restriction does not block tra
 Graph membership dependencies include intermediate and unchecked repair types so trash/restore/destruction
 cannot leave a path or degree watch stale. Focused contracts compare both backends; final combined-source
 qualification and representative graph performance measurements remain required by the goal.
+
+
+### Persisted identity and initialization
+
+Format-one SQLite files carry application ID `0x45415253` (EARS) and `user_version=1`. A foreign or mismatched
+identity refuses with `WRONG_FORMAT` before EARS initialization. Existing writable targets first undergo
+read-only inspection: closing a writable connection can checkpoint another application's committed WAL even
+when our initializer refused it. A real killed-writer fixture verifies that refusal preserves both the main
+file and committed WAL bytes. A failed probe close retains the managed directory claim and original failure.
+New empty files publish their identity and foundational primary tables in one transaction, before enabling
+WAL. Initialization failure rolls back both and permits a clean retry. Driver busy timeout is zero from the
+first metadata read. Missing primary catalogs or admitted per-type tables refuse as corruption; declarations
+must not recreate them over a damaged store. Derived-index recovery remains separately owned.
+
+This edits pre-release format one in place. Unmarked earlier candidates require explicit export/conversion
+with their original code or recreation; normal opens add no compatibility fallback or migration. Format
+validation does not grant physical replacement authority or exclude arbitrary raw writers and path aliases.
+Ordinary data-file ownership, reset/history deletion exclusion, durable directory publication and the remaining
+operational qualification are still required by the goal.
