@@ -18,12 +18,12 @@ import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
-/** The elmdb checkout `vendor/elmdb` links to (`npm run link:elmdb`), which the container builds its own binding from */
+/** Native source for this owned run; qualification may select a frozen checkout without changing the developer link. */
 const ELMDB_CHECKOUT = (() => {
   try {
-    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'elmdb'));
+    return fs.realpathSync(process.env.APACK_LINUX_ELMDB_ROOT ?? path.join(REPO_ROOT, 'vendor', 'elmdb'));
   } catch {
-    process.stderr.write('vendor/elmdb links to no elmdb checkout: run npm run link:elmdb first.\n');
+    process.stderr.write('Native source is unavailable: check APACK_LINUX_ELMDB_ROOT or run npm run link:elmdb.\n');
     process.exit(1);
   }
 })();

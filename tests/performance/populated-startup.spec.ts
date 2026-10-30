@@ -46,6 +46,7 @@ test('start a populated profile through admission to its initial usable thread v
   let correct = false;
   let failure: string | undefined;
   let durationMs: number | undefined;
+  let phase = 'list-data';
   const work: Record<string, number> = { expectedThreads: fixture.distribution.threads! };
   try {
     await appPage.waitForFunction(expected => {
@@ -55,7 +56,9 @@ test('start a populated profile through admission to its initial usable thread v
       return receipt?.ok && Array.from({ length: expected }, (_, index) => index).every(index =>
         context.threadIds.includes(`Thread-search-${index}`) && context.lists.list.some(row => row.id === `Thread-search-${index}` && row.topic === `Search fixture ${index}`));
     }, fixture.distribution.threads);
+    phase = 'main-list-row';
     await expect(appPage.locator('.thread-row').filter({ has: appPage.getByText('Search fixture 11', { exact: true }) }).first()).toBeVisible();
+    phase = 'view-revision';
     const receipt = await appPage.evaluate(async () => {
       const recording = (window as unknown as PerformanceWindow).__performance;
       await recording.flushView();
@@ -70,7 +73,18 @@ test('start a populated profile through admission to its initial usable thread v
     work.initialViewCommit = receipt.commit;
     durationMs = performance.now() - applicationLaunchStartedAt(electronApp);
     correct = true;
-  } catch { failure = 'missing-initial-view-ready'; }
+  } catch {
+    failure = `missing-startup-${phase}`;
+    const state = await appPage.evaluate(() => {
+      const win = window as unknown as PerformanceWindow;
+      const snapshot = win.applicationState.getSnapshot();
+      return { applicationState: snapshot.value, panelSizes: snapshot.context.panelSizes, targetView: snapshot.context.targetView,
+        mainListRows: document.querySelectorAll('.thread-row').length,
+        expectedTitleElements: document.querySelectorAll('[title="Search fixture 11"]').length };
+    });
+    writeFileSync(path.join(output, 'readiness-failure.json'), JSON.stringify(state, null, 2));
+    await appPage.screenshot({ path: path.join(output, 'readiness-failure.png') });
+  }
   action.end(correct ? 'ok' : 'error');
   const reports = await appPage.evaluate(() => (window as unknown as PerformanceWindow).__performance.stop());
   const driver = await parent.stop();

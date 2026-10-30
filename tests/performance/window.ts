@@ -14,6 +14,7 @@ export interface PerformanceWindow {
     stop(): Promise<{ renderer?: Awaited<ReturnType<Controller['stop']>>; backend?: Awaited<ReturnType<Controller['stop']>>; complete: boolean }>;
   };
   applicationState: {
+    getSnapshot(): { value: unknown; context: Record<string, unknown> };
     send(event: Record<string, unknown>): void;
     system: { get(ref: string): { send(event: Record<string, unknown>): void; getSnapshot(): { context: { currentThread?: { id: string }; chatMessageIds: string[]; chatLimit: number; messageContents: Record<string, { text?: string; sender?: string; responseTimestamp?: number }>; messageSearch: { query: string; searching: boolean; results: Array<{ messageId: string; threadId: string; timestamp: number }> } } } } };
   };
