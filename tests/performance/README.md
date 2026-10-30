@@ -2,7 +2,7 @@
 
 This is a manual suite against built application output, separate from the ordinary E2E gate. It
 owns a disposable test profile. Never set `E2E_DATA_DIR` to a developer's profile for qualification.
-The first scenario is authored but has not yet been qualified in the running application.
+Thread-open has passed a built-app run of five warmups and twenty measured trials; overhead and A/B qualification remain open.
 
 Build with the normal repository commands, then run from the checkout root:
 
@@ -13,7 +13,7 @@ npm run test:e2e -- --config tests/performance/playwright.config.ts
 ```
 
 Use the repository's bounded Linux runner for repeated native/runtime qualification. Electron needs
-an available display there (for example Xvfb). `APACK_PERFORMANCE_MODE` selects `disabled`,
+an available display there (for example Xvfb). Each invocation selects one scenario and owns a fresh process/profile; `APACK_PERFORMANCE_SCENARIO=thread-open` is the default and `search` selects the search corpus. `APACK_PERFORMANCE_MODE` selects `disabled`,
 `lightweight` (default), or `detailed`. `APACK_PERFORMANCE_TRIALS=1` is a contract/debug run;
 it cannot establish latency variability or overhead. The default is five warmups followed by twenty
 measured trials in a warmed process. This is not cold disk or fresh-process startup evidence.
@@ -23,6 +23,13 @@ then alternates opening them. Its start is renderer surface-event dispatch, not 
 measurement. Completion requires the requested thread, its correlated subscription delivery, all
 fifty requested message bodies in the DOM, and a Vue flush. It proves view readiness, not paint.
 The display/driver, fixed fixture, and completion checks are common to all recording modes.
+
+Search imports 1,200 synthetic large messages across twelve threads, with exactly twenty known matches
+for each of two queries. Each action supersedes one query with the requested query. Completion requires
+the current query, its correlated delivery, the complete expected timestamp/thread set, twenty unique
+rows and laid-out result snippets for that query. Start is surface-event dispatch and excludes the
+input control's debounce; it is not keyboard-to-results latency. This scenario does not certify ranking
+of a truncated larger result set or an independent late-response fault injection.
 
 Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 
@@ -36,4 +43,4 @@ Capture integrity (`complete`) does not certify instrumentation coverage. Coales
 currently have no action parent; contributing commit links and raw actor queue coverage remain open.
 Detailed mode currently uses the same bounded tracing foundation; CPU/allocation profiles and process
 statistics remain to be implemented. No overhead or performance improvement is established yet.
-Streaming, search, populated startup, cross-revision orchestration and qualification remain in the goal.
+Streaming, populated startup, cross-revision orchestration and qualification remain in the goal.

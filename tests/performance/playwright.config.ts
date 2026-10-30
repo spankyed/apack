@@ -1,3 +1,6 @@
 import { definePerformanceConfig } from '@apackdev/testing/playwright';
 
-export default definePerformanceConfig();
+// One scenario per invocation gives each corpus a fresh owned process/profile.
+const scenario = process.env.APACK_PERFORMANCE_SCENARIO ?? 'thread-open';
+if (!['thread-open', 'search'].includes(scenario)) throw new Error('Invalid APACK_PERFORMANCE_SCENARIO');
+export default definePerformanceConfig({ testMatch: `${scenario}.spec.ts` });

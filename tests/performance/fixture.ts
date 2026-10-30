@@ -21,3 +21,25 @@ export function threadFixture() {
     distribution: { threads: 2, messagesPerThread: 100, requestedPage: 50, bodyRepetitions: 50 },
   } };
 }
+
+/** Exactly twenty matches per query among 1,200 large messages; ranking cannot hide missing rows. */
+export function searchFixture() {
+  const template = threadFixture().data.threads[0]!;
+  const threads = Array.from({ length: 12 }, (_, thread) => ({
+    ...template,
+    id: `Thread-search-${thread}`,
+    topic: `Search fixture ${thread}`,
+    timestamp: 1_700_000_000_000 + thread * 1_000_000,
+    messages: template.messages.map((message, index) => ({
+      ...message,
+      timestamp: 1_700_000_000_000 + thread * 1_000_000 + index * 1_000,
+      text: `Search fixture thread ${thread} message ${index}. ${thread < 2 && index < 20 ? ['quartzalpha', 'quartzbeta'][thread] : 'unrelatedcorpus'} ${'Synthetic representative message body. '.repeat(50)}`,
+    })),
+  }));
+  const data = { version: 2, threads };
+  return { data, identity: {
+    generator: 'message-search-v1', seed: 0,
+    sha256: createHash('sha256').update(JSON.stringify(data)).digest('hex'),
+    distribution: { threads: 12, messagesPerThread: 100, matchingQueries: 2, matchesPerQuery: 20, resultLimit: 20, bodyRepetitions: 50 },
+  } };
+}
