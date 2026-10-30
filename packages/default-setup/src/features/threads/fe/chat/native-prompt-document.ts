@@ -1,4 +1,5 @@
 import { diffChars } from 'diff'
+import { Selection } from '@tiptap/pm/state'
 import { Fragment, Slice, type Mark, type Node as ProseMirrorNode } from '@tiptap/pm/model'
 
 export interface ClaudePromptDocument {
@@ -19,14 +20,39 @@ export function captureClaudePromptDocument(doc: ProseMirrorNode, position: numb
   if ((text === '' || text === '&nbsp;') && doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size) {
     return { text: '', cursor: 0, doc, position: 1 }
   }
-  const resolved = doc.resolve(position)
+  let resolved = doc.resolve(position)
+  // Select All has a document-edge head. Project through structural wrappers only;
+  // skipping a block attachment would invent a caret on the other side of an atom.
+  if (!resolved.parent.isTextblock && (position === 0 || position === doc.content.size)) {
+    const edge = Selection.findFrom(resolved, position === 0 ? 1 : -1, true)
+    if (!edge) return
+    let crossesAtom = false
+    doc.nodesBetween(Math.min(position, edge.head), Math.max(position, edge.head), node => { if (node.isAtom && !node.isText) crossesAtom = true })
+    if (crossesAtom) return
+    position = edge.head
+    resolved = doc.resolve(position)
+  }
   if (!resolved.parent.isTextblock) return
   let marker = '\uE000apackCursor\uE001'
   while (text.includes(marker)) marker += '\uE002'
   const marked = doc.replace(position, position, new Slice(Fragment.from(doc.type.schema.text(marker, marks ?? resolved.marks())), 0, 0))
   const encoded = serialize(marked)
-  const cursor = encoded.indexOf(marker)
-  if (cursor < 0 || encoded.indexOf(marker, cursor + marker.length) >= 0 || encoded.slice(0, cursor) + encoded.slice(cursor + marker.length) !== text) return
+  let cursor = encoded.indexOf(marker)
+  if (cursor < 0 || encoded.indexOf(marker, cursor + marker.length) >= 0) return
+  const before = encoded.slice(0, cursor), after = encoded.slice(cursor + marker.length)
+  if (before + after !== text) {
+    // Giving a blank paragraph text introduces Markdown paragraph separators.
+    // Remove only that proven extra framing, and refuse ambiguous cursor offsets.
+    if (resolved.depth !== 1 || resolved.parent.type.name !== 'paragraph' || resolved.parent.content.size) return
+    const extra = before.length + after.length - text.length, candidates = new Set<number>()
+    if (extra < 1 || extra > 2) return
+    for (let left = 0; left <= extra; left++) {
+      const right = extra - left
+      if (before.endsWith('\n'.repeat(left)) && after.startsWith('\n'.repeat(right)) && before.slice(0, before.length - left) + after.slice(right) === text) candidates.add(before.length - left)
+    }
+    if (candidates.size !== 1) return
+    cursor = candidates.values().next().value!
+  }
   return { text, cursor, doc, position }
 }
 
