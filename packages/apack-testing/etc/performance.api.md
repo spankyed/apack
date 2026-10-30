@@ -41,6 +41,14 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
     };
 };
 
+// @public
+export function createPerformanceScenarioRun(directory: string, manifestInput: unknown, measured: number, comparisonInput?: unknown): {
+    schedule: PerformanceScheduleEntry[];
+    save: (invocations?: Partial<Record<PerformanceVariant, readonly PerformanceInvocation[]>>) => void;
+    begin(entry: PerformanceScheduleEntry): void;
+    append(entry: PerformanceScheduleEntry, input: unknown): void;
+};
+
 // @public (undocumented)
 export const manifestSchema: z.ZodObject<{
     format: z.ZodLiteral<1>;
@@ -149,8 +157,28 @@ export interface PerformanceInvocation {
 // @public (undocumented)
 export type PerformanceManifest = z.infer<typeof manifestSchema>;
 
+// @public
+export function performanceSchedule(modeInput: unknown, measured: number, comparisonInput?: unknown): PerformanceScheduleEntry[];
+
+// @public (undocumented)
+export interface PerformanceScheduleEntry {
+    // (undocumented)
+    index: number;
+    // (undocumented)
+    mode: PerformanceManifest['mode'];
+    // (undocumented)
+    ordinal: number;
+    // (undocumented)
+    variant: PerformanceVariant;
+    // (undocumented)
+    warmup: boolean;
+}
+
 // @public (undocumented)
 export type PerformanceTrial = z.infer<typeof trialSchema>;
+
+// @public (undocumented)
+export type PerformanceVariant = 'A' | 'B';
 
 // @public (undocumented)
 export const processReportSchema: z.ZodObject<{
@@ -244,6 +272,62 @@ export const processReportSchema: z.ZodObject<{
     invalidAttributes: z.ZodNumber;
     complete: z.ZodBoolean;
 }, z.core.$strip>;
+
+// @public
+export function readPerformanceModeComparison(directory: string, measured?: number): {
+    scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+    baseline: {
+        manifest: PerformanceManifest;
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        samples: {
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+            index: number;
+            warmup: boolean;
+            outcome: "failed" | "cancelled" | "incomplete" | "passed";
+            correct: boolean;
+            completion: "missing" | "view-ready";
+            durationMs?: number | undefined;
+            failure?: string | undefined;
+        }[];
+        summary: {
+            measured: number;
+            passed: number;
+            unsuccessful: number;
+            medianMs: number | null;
+            minMs: number | null;
+            maxMs: number | null;
+        };
+    };
+    candidate: {
+        manifest: PerformanceManifest;
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        samples: {
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+            index: number;
+            warmup: boolean;
+            outcome: "failed" | "cancelled" | "incomplete" | "passed";
+            correct: boolean;
+            completion: "missing" | "view-ready";
+            durationMs?: number | undefined;
+            failure?: string | undefined;
+        }[];
+        summary: {
+            measured: number;
+            passed: number;
+            unsuccessful: number;
+            medianMs: number | null;
+            minMs: number | null;
+            maxMs: number | null;
+        };
+    };
+    medianDifferenceMs: number;
+    medianChangePercent: number | null;
+    budget: {
+        medianPercent: number;
+        assessment: string;
+    } | undefined;
+    policy: string;
+};
 
 // @public
 export function readPerformanceRun(directory: string, measured?: number): {

@@ -113,3 +113,27 @@ and [Electron debugger parser](https://github.com/electron/electron/blob/v37.2.4
 Before qualification, make runtime output current with the existing chain's `build:runtime` step
 (after its required producers). Recording source and output hashes alone does not certify that an old
 bundle was built from the current source. Keep all captured inputs frozen while producers execute.
+
+Controlled mode overhead uses the maintained runner after normal producer/runtime builds:
+
+```sh
+APACK_LINUX_ELMDB_ROOT=/private/tmp/apack-performance-elmdb-pinned npm run test:linux -- bash -lc \
+  'npm run chain -- --only build:runtime --no-native --cores 1 && xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario all --mode disabled --compare lightweight'
+```
+
+Use `--compare detailed` for the separate detailed-mode comparison. `--scenario thread-open`, `search`,
+`streaming` or `populated-startup` selects one action. `--output PATH` owns a new report directory and
+refuses an existing one. `--trials 2` is a contract run; it cannot qualify overhead. The default requires
+20 measured trials per mode after five warmups each, observed in individually balanced ABBA order.
+Warm scenarios switch modes serially within one warmed application. Streaming owns a fresh conversation
+for every action. Startup shares one closed seed, copies it and launches/closes a fresh process for every
+scheduled trial. Profile copying, recorder setup for warm scenarios, and report exports are outside
+readiness timing; startup includes recorder initialization during boot.
+
+Each scenario directory contains `A/` and `B/` bounded raw runs, `execution.json` with observed serial
+order/intervals, `invocation.json` with the actual process exit, and `comparison.json` with manifests,
+raw scalar samples, absolute median/range/count and median effects. Admission verifies both source/build
+identities and the declared execution policy. A child failure, incomplete capture, wrong order or mixed
+provenance cannot qualify. The disabled-to-lightweight median budget is 5%; a full manual qualification
+above that budget exits unsuccessfully while preserving evidence and finishing other selected actions.
+Ordinary CI never runs or enforces the clock budget. Detailed overhead has no assumed low-cost claim.

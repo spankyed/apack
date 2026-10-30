@@ -104,7 +104,7 @@ test('start a populated profile through admission to its initial usable thread v
   const driver = await parent.stop();
   // Provenance hashing is outside launch-to-view readiness and every resource recording.
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
-  const manifest = performanceIdentity({ fixture, mode, runtime, cache: 'fresh-process-warm-filesystem', warmups: 5 });
+  const manifest = performanceIdentity({ fixture, mode, runtime: { ...runtime, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' }, cache: 'fresh-process-warm-filesystem', warmups: 5 });
   writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
   const backend = reports.backend;
   if (correct && mode !== 'disabled' && !backend?.observations.some(value => JSON.parse(value).name === 'app.index.admission')) {

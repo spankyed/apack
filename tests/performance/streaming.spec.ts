@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@apackdev/testing';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { performanceIdentity, createPerformanceRunStore, streamingBacklog, trialSchema } from '@apackdev/testing/performance';
+import { performanceIdentity, createPerformanceScenarioRun, performanceSchedule, streamingBacklog, trialSchema } from '@apackdev/testing/performance';
 import { streamingFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -16,9 +16,11 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
   const measured = Number(process.env.APACK_PERFORMANCE_TRIALS ?? 20);
   if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100) throw Error('Trials must be between 1 and 100');
   const warmups = 5;
-  const fixture = streamingFixture(warmups + measured);
+  const comparison = process.env.APACK_PERFORMANCE_COMPARE_MODE;
+  const schedule = performanceSchedule(mode, measured, comparison);
+  const fixture = streamingFixture(schedule.length);
   const directory = mkdtempSync(path.join(tmpdir(), 'apack-performance-fixture-'));
-  const output = path.resolve('.apack/performance', `streaming-${mode}-${Date.now()}`);
+  const output = process.env.APACK_PERFORMANCE_RUN_OUTPUT ? path.resolve(process.env.APACK_PERFORMANCE_RUN_OUTPUT) : path.resolve('.apack/performance', `streaming-${mode}${comparison ? `-vs-${comparison}` : ''}-${Date.now()}`);
   mkdirSync(output, { recursive: true });
   const executable = path.join(directory, 'claude-fixture.mjs');
   const source = fileURLToPath(new URL('./fixtures/claude-stream.mjs', import.meta.url));
@@ -27,8 +29,8 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
   writeFileSync(path.join(directory, 'stream.json'), JSON.stringify(fixture.script));
   fixture.identity.sha256 = createHash('sha256').update(fixture.identity.sha256).update(readFileSync(source)).digest('hex');
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
-  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime });
-  const journal = createPerformanceRunStore(output, manifest, measured);
+  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime: { ...runtime, performancePolicy: comparison ? 'alternating-modes-v1' : 'single-scenario-v1' } });
+  const journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
   const save = () => journal.save();
   try {
     writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify(fixture.data));
@@ -61,9 +63,11 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
       const actor = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads');
       const context = actor.getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
       return !!context.threadMap[`Thread-stream-${last}`];
-    }, warmups + measured - 1);
-    for (let index = 0; index < warmups + measured; index++) {
-      const thread = index;
+    }, schedule.length - 1);
+    for (const entry of schedule) {
+      const { index, mode } = entry;
+      journal.begin(entry);
+      const thread = entry.ordinal;
       await appPage.evaluate(thread => (window as unknown as PerformanceWindow).applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: `Thread-stream-${thread}` }, { type: 'SET_MODE', mode: 'Claude Code' }] }), thread);
       await appPage.waitForFunction(thread => {
         const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
@@ -184,7 +188,7 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
         work: result.work, timings: result.timings, backlog, outcome: backlogFailure ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
         correct: result.completed && !backlogFailure, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
         processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: backlogFailure ?? result.failure });
-      journal.append(trial);
+      journal.append(entry, trial);
       expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
     }
   } finally { save(); rmSync(directory, { recursive: true, force: true }); }

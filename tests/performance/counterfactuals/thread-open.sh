@@ -25,7 +25,8 @@ else:
     b="try { action.within(() => (win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/database', events: [{ type: 'QUERY.EXECUTE', code: 'return query(EARS.Entity.Message).pickAll()' }] }), win.applicationState.send("
     assert s.count(a)==1
     s=s.replace(a,b,1)
-    s=s.replace('    for (let index', "    await app.waitForSurface('default-setup/database');\n    await app.navigate('default-setup/database');\n    await app.navigate('default-setup/threads');\n    for (let index",1)
+    assert s.count('    for (const entry of schedule)') == 1
+    s=s.replace('    for (const entry of schedule)', "    await app.waitForSurface('default-setup/database');\n    await app.navigate('default-setup/database');\n    await app.navigate('default-setup/threads');\n    for (const entry of schedule)",1)
     a="events: [{ type: 'OPEN_THREAD_CHAT', threadId: target }] })); }"
     b="events: [{ type: 'OPEN_THREAD_CHAT', threadId: target }] }))); }"
     assert s.count(a)==1

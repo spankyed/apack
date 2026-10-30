@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { performanceIdentity, createPerformanceRunStore, trialSchema } from '@apackdev/testing/performance';
+import { performanceIdentity, createPerformanceScenarioRun, performanceSchedule, trialSchema } from '@apackdev/testing/performance';
 import { threadFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -14,13 +14,15 @@ test('open a populated thread through the real transport and render its bounded 
   const measured = Number(process.env.APACK_PERFORMANCE_TRIALS ?? 20);
   if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100) throw Error('Trials must be between 1 and 100');
   const warmups = 5;
+  const comparison = process.env.APACK_PERFORMANCE_COMPARE_MODE;
+  const schedule = performanceSchedule(mode, measured, comparison);
   const fixture = threadFixture();
   const directory = mkdtempSync(path.join(tmpdir(), 'apack-performance-fixture-'));
-  const output = path.resolve('.apack/performance', `thread-open-${mode}-${Date.now()}`);
+  const output = process.env.APACK_PERFORMANCE_RUN_OUTPUT ? path.resolve(process.env.APACK_PERFORMANCE_RUN_OUTPUT) : path.resolve('.apack/performance', `thread-open-${mode}${comparison ? `-vs-${comparison}` : ''}-${Date.now()}`);
   mkdirSync(output, { recursive: true });
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
-  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime });
-  const journal = createPerformanceRunStore(output, manifest, measured);
+  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime: { ...runtime, performancePolicy: comparison ? 'alternating-modes-v1' : 'single-scenario-v1' } });
+  const journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
   const save = () => journal.save();
   try {
     writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify(fixture.data));
@@ -33,8 +35,10 @@ test('open a populated thread through the real transport and render its bounded 
       const context = actor.getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
       return !!context.threadMap['Thread-performance-1'];
     });
-    for (let index = 0; index < warmups + measured; index++) {
-      const thread = index % 2;
+    for (const entry of schedule) {
+      const { index, mode } = entry;
+      journal.begin(entry);
+      const thread = entry.ordinal % 2;
       const result = await appPage.evaluate(async ({ mode, thread, expectedBodies }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
@@ -120,7 +124,7 @@ test('open a populated thread through the real transport and render its bounded 
         work, outcome: excessReadWork ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
         correct: result.completed && !excessReadWork, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
         processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: excessReadWork ? 'app-read-work-bound' : result.failure });
-      journal.append(trial);
+      journal.append(entry, trial);
       expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
     }
   } finally { save(); rmSync(directory, { recursive: true, force: true }); }
