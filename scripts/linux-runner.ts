@@ -92,6 +92,7 @@ const FILTERS = [
   '--exclude=/packages/default-setup/dist', '--exclude=/packages/default-setup/.apack',
   ...['api', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),
   '--exclude=/build-manifest.json', '--exclude=/build-integrity.json',
+  '--exclude=/.apack/performance',
 ];
 
 /**
