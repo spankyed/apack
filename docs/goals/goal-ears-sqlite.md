@@ -232,6 +232,13 @@ All 29 platform CLI cases pass on Linux, including twelve focused profile cases 
 path; actual Windows qualification remains required. All five backup invariants are required by name in the
 platform verifier, with fourteen real-report omission/skip/duplicate/path controls passing. Host types pass with an explicit 512 MiB heap; CLI types exhaust that heap and require the
 larger disposable budget or CI. These resource failures are retained, not counted as passing checks.
+The [backup cleanup correction](../references/evidence/ears-sqlite-implementation-2026-10-28/backup-cleanup/README.md)
+preserves the original publication outcome alongside staging/lock cleanup errors, still attempts lock release,
+and reports a retained `publishedPath` after successful publication. Three exact-source baseline failures
+become passing cases; all 32 platform CLI cases, lint, syntax and twenty required-witness controls pass on
+Linux. CLI types/package builds and final integrated qualification remain pending. Platform run
+[41130505526](https://github.com/spankyed/apack/actions/runs/41130505526) is live at the preceding exclusive-move
+checkpoint `58ae8a7b0e`; it does not qualify the later cleanup changes.
 The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
 The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
 remains unexplained. The older editor intermittent also remains unexplained despite ten unchanged repeats.

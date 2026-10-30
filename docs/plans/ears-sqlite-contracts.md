@@ -1,10 +1,11 @@
 # EARS backend contracts for SQLite
 
-Current integration inputs: committed app master `98386b36a18d244c19ffb501830b990ed49f7653` and SQLite
-checkpoint `9c339d89a44e8c1c29bd83ef0dbb5aeb37930083`, combined in detached merge `4af1b513e3`.
-Execution belongs to [the SQLite goal](../goals/goal-ears-sqlite.md). This matrix preserves requirements while the
-private binary port is replaced by structured requests/results. Older benchmark evidence remains pinned to its
-own recorded source and native artifact; it is not reclassified as evidence for this integration.
+Current integrated app master is `dc67febcce3f3a28e8b2bc75b867f0374d4f4610`; the matching native engine
+is `2441af4658d961f547c7094cd041c2ac246668c5`. The pinned integration and native direction/protocol adaptation
+are recorded in [native integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-2441-integration/README.md).
+The [SQLite goal](../goals/goal-ears-sqlite.md#current-handoff) owns current candidate source, qualification
+and remaining failures. This matrix preserves requirements at the structured backend boundary; older
+benchmark/failed-suite evidence retains its original source and native artifact.
 
 ## Ownership and acceptance
 
@@ -19,7 +20,7 @@ Paths in the test column are relative to `packages/apack-ears/tests/` unless pre
 | Entity identity, reserved attributes, roles and numbering | `write.ts`, `engine/writes.spec.ts`, `relations.spec.ts`, `vocabulary.spec.ts` | Atomic refusals, non-reused numbering, engine-owned timestamps/roles/trash, unregistered-name refusal, relation/entity distinction. |
 | Value fidelity and ownership | `database.ts` codecs/freezing; `engine/writes.spec.ts`, `search.spec.ts`, prototype operational cases | Preserve Date, binary, missing versus null, arrays/maps and own `__proto__`. Structured reads return independent values. Frozen reads preserve existing semantics. |
 | Query starts, filtering and order | `query.ts`; `engine/queries.spec.ts`, independent `_harness` model | Scope/trash, caller ID order and duplicates, type/creation order, scalar/list membership, null/missing rules, filter ordering, limits/cursors and first/last semantics. SQL optimizations must preserve the pipeline. |
-| Substring and regex filters | `schema.ts` `substrings`; `query.ts` `containing`/`matching`; `engine/search.spec.ts` | Preserve pipeline order, per-element matching, case folding, write freshness, `UNKNOWN_INDEX` and `PATTERN_INVALID`. Native Rust regex syntax and bounded execution require a qualified implementation; JavaScript backtracking regex is not an equivalent replacement. The integrated SQLite suite currently has three explicit failures here. |
+| Substring and regex filters | `schema.ts` `substrings`; `query.ts` `containing`/`matching`; `engine/search.spec.ts` | Preserve pipeline order, per-element matching, case folding, write freshness, `UNKNOWN_INDEX` and `PATTERN_INVALID`. SQLite uses the pinned Rust-regex WASM bridge (`src/sqlite/regex.ts`) and native indexed literal narrowing. JavaScript backtracking regex is not an equivalent replacement. Current qualification and packaging evidence are owned by the goal; the three original integration failures are historical, not current open failures. |
 | Sorting, distinct and groups | `engine/queries.spec.ts` mixed-value ordering and group cases | Native SQL for supported declared types; documented canonical ordering/fallback for heterogeneous values. Eliminate quadratic prototype algorithms where corpus growth makes them unsafe. |
 | Relations and traversal | `engine/relations.spec.ts`, model-based suite | Deferred endpoint checks, unique/acyclic rules, adjacency filtering, BFS order/deduplication and trash handling. Walk each source in requested-kind order, then insertion order. Explicit relation-end filters match even a trashed or missing end; unconstrained adjacency requires a reachable end. Prefer batched/native SQL to per-node crossings without changing order. |
 | Units and savepoints | `database.ts` connection; `engine/transact.spec.ts` and model suite | Lazy write unit, own writes, savepoint rollback/release, atomic refusals, no unit/commit for read-only work, synchronous body contract and one commit for nested successful writes. |
@@ -33,16 +34,16 @@ Paths in the test column are relative to `packages/apack-ears/tests/` unless pre
 | Vectors and hybrid | `engine/vector.spec.ts`, prototype operational cases | Model/hash/chunk freshness, filtering, rollback and hybrid semantics. Ordinary cosine embeds/queries reject wrong dimensions, nonfinite Float32 components and all-zero Float32 vectors (including JS overflow/underflow); another embedding model is refused before obsolete-hash handling. Refused batches preserve pending work, commit position and watches. Evaluate algorithm latency at stated recall using representative dimensions/distributions. |
 | Live index readiness | Current native builder contract in EARS guide and engine schema paths | Reads correct while backfill proceeds; generation/watermark/change reconciliation, atomic publish, cancellation and crash recovery. A worker alone does not remove SQLite writer contention. |
 | Database open and run history | host `src/database/open.ts`, database tests and `tests/services/run-history.spec.ts` | Independent store ownership, read-only/closed/missing/permission/corruption distinctions, registry admission and safe run-history refusal/aside policy. |
-| Backup/import/media recovery | host `src/backup/index.ts`, `tests/backup/import*.spec.ts` | Storage descriptors/openers, validated snapshot, populated replacement, recovery copy, acceptance/media rollback and both-error preservation. Resolve four filename-preflight failures through actual composition. |
+| Backup/import/media recovery | host `src/backup/index.ts`, `tests/backup/import*.spec.ts` | Storage descriptors/openers, validated snapshot, populated replacement, recovery copy, acceptance/media rollback and both-error preservation. The format-aware host composition and storage/import suites replace the prototype filename preflight. Preserve real refusal, rollback and uncertain-outcome evidence; final filesystem, interruption and durability qualification remains required. |
 | Developer tools and maintenance | host/CLI database entry points and tests | Supported export/import/audit/rebuild/diagnostics, explicit copied-profile conversion. Disposition raw elmdb-only APIs outside EARS explicitly. |
 | Distribution and durability | host shared-instance/binding rules; packaging/native workflows | One supported loader/owner, pinned FTS/vector capability, packaged Electron/CLI, OS/architecture and filesystem policy, matched durability, real fault/crash evidence. |
 
 ## Integration boundaries
 
-The current native engine is `6ab2f69fa13289ed4f02952253c58b4d41922c98`, including the committed substring/regex,
-schema and watch changes in master `98386b36a1`. Its source and Linux binding are isolated from the other agent.
-The earlier actual-facade/admission measurements use `933aa19f04355784412cadf4938f9b49e35e564d` where their
-provenance says so. Compare new qualification runs against the matching new artifact; do not relabel old results.
+The current native engine and isolated binding match `2441af4658`; the EARS adapter uses the current structured
+relation direction protocol. Earlier integration used native `6ab2f69fa13289ed4f02952253c58b4d41922c98` and app
+master `98386b36a1`, while earlier facade/admission measurements used `933aa19f04355784412cadf4938f9b49e35e564d`
+where their provenance says so. Those measurements do not qualify the current artifact.
 
 Only committed inputs enter an integration. Relevant later committed changes require another pinned integration
 and gate; neither dirty source nor a moving reference establishes acceptance.

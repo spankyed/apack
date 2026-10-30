@@ -107,7 +107,10 @@ const requiredBackupPublicationCases = [
   "refuses a backup destination raced by a empty directory without replacing it",
   "refuses a backup destination raced by a populated directory without replacing it",
   "refuses a backup destination raced by a dangling symlink without replacing it",
-  "publishes a backup whose path contains shell metacharacters as literal data"
+  "publishes a backup whose path contains shell metacharacters as literal data",
+  "preserves uncertain backup publication and cleanup errors while releasing the write lock",
+  "reports the retained published backup when staging cleanup fails and releases the write lock",
+  "preserves uncertain backup publication when releasing the write lock also fails"
 ];
 
 const evidence = resolve('.temp/sqlite-platform'), mode = process.argv[2];

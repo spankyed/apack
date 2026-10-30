@@ -24,7 +24,8 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
   }
   if (fs.existsSync(destination)) throw new Error(`Backup destination already exists: ${destination}`);
   const lock = holdDatabaseWriteLock(target.userDataDir, 'apack db backup');
-  let stage: string | undefined;
+  let stage: string | undefined, published = false;
+  const failures: unknown[] = [];
   try {
     if (findRunningApp(target)) throw new Error('Quit the app before taking a full offline backup.');
     const db = await openTarget(target, { write: false, command: 'backup' }, io);
@@ -46,11 +47,22 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
       verifyBackup(backup);
       fs.chmodSync(backup, 0o700);
       publishBackupDirectory(backup, destination);
+      published = true;
     });
     io.out(destination);
-  } finally {
-    try {
-      if (stage) fs.rmSync(stage, { recursive: true, force: true });
-    } finally { lock.release(); }
+  } catch (error) { failures.push(error); }
+  try { if (stage) fs.rmSync(stage, { recursive: true, force: true }); }
+  catch (error) { failures.push(error); }
+  try { lock.release(); }
+  catch (error) { failures.push(error); }
+  if (failures.length === 1 && !published) throw failures[0];
+  if (failures.length) {
+    const original = failures[0] as { code?: unknown; destinationPath?: unknown } | null | undefined;
+    // Preserve uncertain publication metadata even when owned staging or lock cleanup also fails.
+    throw Object.assign(new AggregateError(failures, 'Backup failed; any published destination is retained', { cause: failures[0] }), {
+      ...(typeof original?.code === 'string' && { code: original.code }),
+      ...(typeof original?.destinationPath === 'string' && { destinationPath: original.destinationPath }),
+      ...(published && { publishedPath: destination }),
+    });
   }
 }
