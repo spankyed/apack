@@ -1,3 +1,4 @@
+import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { appPerformance } from '../runtime/index.ts';
@@ -36,8 +37,8 @@ export const performanceRouter = router({
     owner = claim;
     ctx.closed.addEventListener('abort', closed, { once: true });
   }),
-  snapshot: procedure.query(({ ctx }) => owned(ctx.client).snapshot()),
-  stop: procedure.mutation(async ({ ctx }) => {
+  snapshot: procedure.query(({ ctx }): PerformanceRecordingReport | undefined => owned(ctx.client).snapshot()),
+  stop: procedure.mutation(async ({ ctx }): Promise<PerformanceRecordingReport> => {
     const performance = owned(ctx.client);
     const claim = owner!;
     try { return await performance.stop(); }

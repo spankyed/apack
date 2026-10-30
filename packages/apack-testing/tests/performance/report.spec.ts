@@ -1,3 +1,5 @@
+import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
+import type { z } from 'zod';
 import { expect, it } from 'vitest';
 import { assertComparable, comparisonOrder, manifestSchema, processReportSchema, summarize, trialSchema } from '../../src/performance/report.ts';
 const processReport = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
@@ -34,4 +36,9 @@ it('refuses pooled results with dirty sources or different fixture and execution
   expect(() => assertComparable(manifest, { ...revision, native: { ...revision.native, dirty: true } })).toThrow(/clean/);
   expect(() => assertComparable(manifest, { ...revision, cache: 'fresh-process-warm-filesystem' })).toThrow(/cache/);
   expect(() => assertComparable(manifest, { ...revision, fixture: { ...revision.fixture, seed: 1 } })).toThrow(/fixture/);
+});
+
+it('keeps report validation aligned with every required host capture field', () => {
+  const compatible: z.infer<typeof processReportSchema> extends PerformanceRecordingReport ? true : never = true;
+  expect(compatible).toBe(true);
 });

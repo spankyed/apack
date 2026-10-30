@@ -9,6 +9,28 @@ import { createEarsOperationObserver, EARS_SPAN_NAMES, EARS_SPAN_ATTRIBUTES } fr
 export interface TraceCarrier { traceparent?: string; tracestate?: string }
 export type RecordingMode = 'disabled' | 'lightweight' | 'detailed';
 
+/** Encoded process observations and capture-integrity counters, portable across the API boundary. */
+export interface PerformanceRecordingReport {
+  observations: readonly string[];
+  bytes: number;
+  dropped: number;
+  truncated: boolean;
+  rejected: number;
+  droppedMetadata: number;
+  mode: RecordingMode;
+  active: number;
+  unfinished: number;
+  droppedStarts: number;
+  invalidCarriers: number;
+  detachFailures: number;
+  droppedEvents: number;
+  contextFailures: number;
+  rejectedStarts: number;
+  invalidAttributes: number;
+  complete: boolean;
+}
+
+
 /** The composition root supplies a fresh context manager for this recording's lifetime. */
 export function createTraceSession(options: {
   mode: RecordingMode;
@@ -107,7 +129,7 @@ export function createTraceSession(options: {
       return fn();
     }
   };
-  const snapshot = () => {
+  const snapshot = (): PerformanceRecordingReport => {
     const report = recording.snapshot();
     return { ...report, mode: options.mode, active: active.size, unfinished, droppedStarts, invalidCarriers, detachFailures, droppedEvents, contextFailures, rejectedStarts, invalidAttributes,
       complete: report.complete && active.size === 0 && unfinished === 0 && droppedStarts === 0 && invalidCarriers === 0 && detachFailures === 0 && droppedEvents === 0 && contextFailures === 0 && rejectedStarts === 0 && invalidAttributes === 0 };
@@ -172,7 +194,7 @@ export function createTraceSession(options: {
       };
     },
     snapshot,
-    async stop() {
+    async stop(): Promise<PerformanceRecordingReport> {
       if (!stopped) {
         stopped = true;
         for (const detach of attachments.values()) detach();
