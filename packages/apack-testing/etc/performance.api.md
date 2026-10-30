@@ -224,6 +224,89 @@ export const trialSchema: z.ZodObject<{
     failure: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 
+// @public
+export function validatePerformanceRun(manifestInput: unknown, trialsInput: unknown, measured: number): {
+    manifest: {
+        format: 1;
+        source: {
+            revision: string;
+            dirty: boolean;
+            excludedUntracked: string[];
+            diffSha256: string;
+        };
+        builds: {
+            path: string;
+            sha256: string;
+        }[];
+        fixture: {
+            generator: string;
+            seed: number;
+            sha256: string;
+            distribution: Record<string, number>;
+        };
+        native: {
+            pin: string;
+            checkoutRevision: string;
+            dirty: boolean;
+            excludedUntracked: string[];
+        };
+        runtime: Record<string, string>;
+        machine: {
+            platform: string;
+            arch: string;
+            cpus: number;
+            memoryBytes: number;
+            identity: string;
+        };
+        mode: "disabled" | "lightweight" | "detailed";
+        cache: "warm-process" | "fresh-process-warm-filesystem";
+        warmups: number;
+        clock: "Local monotonic durations; cross-process epoch alignment is approximate";
+    };
+    trials: {
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        index: number;
+        warmup: boolean;
+        outcome: "failed" | "cancelled" | "incomplete" | "passed";
+        correct: boolean;
+        completion: "missing" | "view-ready";
+        work: Record<string, number>;
+        processes: Record<string, {
+            observations: string[];
+            bytes: number;
+            dropped: number;
+            truncated: boolean;
+            rejected: number;
+            droppedMetadata: number;
+            mode: "disabled" | "lightweight" | "detailed";
+            active: number;
+            unfinished: number;
+            droppedStarts: number;
+            invalidCarriers: number;
+            detachFailures: number;
+            droppedEvents: number;
+            contextFailures: number;
+            rejectedStarts: number;
+            invalidAttributes: number;
+            complete: boolean;
+        }>;
+        durationMs?: number | undefined;
+        timings?: {
+            firstVisibleMs: number;
+            maxVisibleGapMs: number;
+        } | undefined;
+        failure?: string | undefined;
+    }[];
+    summary: {
+        measured: number;
+        passed: number;
+        unsuccessful: number;
+        medianMs: number | null;
+        minMs: number | null;
+        maxMs: number | null;
+    };
+};
+
 // (No @packageDocumentation comment for this package)
 
 ```
