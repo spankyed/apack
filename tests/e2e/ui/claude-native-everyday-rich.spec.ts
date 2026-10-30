@@ -110,7 +110,7 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
       await appPage.setViewportSize({width,height});
       await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
       const metrics=await area.evaluate(element=>{const b=element.getBoundingClientRect();return {height:b.height,top:b.top,bottom:b.bottom,scrollHeight:element.scrollHeight,clientHeight:element.clientHeight}});
-      observations.push({owner,width,height,metrics,sessionId:(await context()).sessionId,nativePid:(await context()).native.state.nativePid});
+      observations.push({owner,width,height,metrics,reading:[],sessionId:(await context()).sessionId,nativePid:(await context()).native.state.nativePid});
       await writeFile(join(workspace!,'native-rich-everyday-progress.json'),JSON.stringify(observations,null,2));
       await capture('native-rich-everyday-'+owner+'-'+width+'-before.png');
       expect(metrics.height).toBeGreaterThanOrEqual(width===680?88:112);
@@ -119,6 +119,8 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
       for(const [edge,target,delta]of [['top',editor.locator('h1'),-1600],['bottom',editor.locator('p').filter({hasText:'Keep the compatibility notes.'}),1600]]as const){
         await area.hover();await appPage.mouse.wheel(0,delta);
         await expect.poll(()=>target.evaluate(element=>{const r=element.getBoundingClientRect(),area=element.closest('[data-native-agent-draft-viewport],[data-testid="composer-editor-area"]')!.getBoundingClientRect();const range=document.createRange();range.selectNodeContents(element);const text=range.getBoundingClientRect(),hit=document.elementFromPoint(text.left+text.width/2,text.top+text.height/2);return r.top>=area.top-1&&r.bottom<=area.bottom+1&&r.top>=0&&r.bottom<=innerHeight&&r.left>=area.left-1&&r.right<=area.right+1&&!!hit&&element.contains(hit)})).toBe(true);
+        const reading=await target.evaluate(element=>{const r=element.getBoundingClientRect(),area=element.closest('[data-native-agent-draft-viewport],[data-testid="composer-editor-area"]')!.getBoundingClientRect();const range=document.createRange();range.selectNodeContents(element);const text=range.getBoundingClientRect(),hit=document.elementFromPoint(text.left+text.width/2,text.top+text.height/2);return {text:element.textContent,rect:r.toJSON(),viewport:area.toJSON(),hit:!!hit&&element.contains(hit)}});
+        observations.at(-1).reading.push({edge,...reading});await writeFile(join(workspace!,'native-rich-everyday-progress.json'),JSON.stringify(observations,null,2));
         await expect(button).toBeInViewport({ratio:1});await capture('native-rich-everyday-'+owner+'-'+width+'-'+edge+'.png');
         expect(await snapshot(editor)).toEqual(beforeReading);
       }
@@ -137,8 +139,11 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
     await expect(composer).toBeVisible();await expect.poll(()=>snapshot(composer)).toEqual(parentBefore);
     if(!await row.isVisible())await appPage.getByRole('button',{name:/^Native tools/}).first().click();
     await row.getByRole('button',{name:'Open Agent',exact:true}).click();await expect.poll(()=>snapshot(agentEditor)).toEqual(agentBefore);
+    const agentTranscript=focused.getByRole('region',{name:'Agent transcript',exact:true}),priorReplies=await agentTranscript.locator('[data-native-assistant]').count();
     await form.getByRole('button',{name:'Send to Agent',exact:true}).click();
-    await expect(agentEditor).toHaveText('');await expect(focused.getByRole('region',{name:'Agent transcript',exact:true})).toContainText('Keep the compatibility notes.');
+    await expect(agentEditor).toHaveText('');await expect(agentTranscript).toContainText('Keep the compatibility notes.');
+    await expect.poll(()=>agentTranscript.locator('[data-native-assistant]').count(),{timeout:20000}).toBeGreaterThan(priorReplies);
+    const agentReply=agentTranscript.locator('[data-native-assistant]').last();await expect(agentReply).toContainText('SubagentFixtureComplete');const agentReplyUuid=await agentReply.getAttribute('data-native-assistant');
     await focused.getByRole('button',{name:'Back to conversation',exact:true}).click();await expect.poll(()=>snapshot(composer)).toEqual(parentBefore);
     await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('');
     await expect.poll(async()=>(await context()).messages.filter((m:any)=>m.sender==='user'&&m.text===parentBefore.canonical).length).toBe(1);
@@ -148,7 +153,7 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
     const recovery='Continue the everyday rich release review.';
     await composer.focus();await composer.press('ControlOrMeta+a');await composer.press('Backspace');await composer.pressSequentially(recovery);await card.getByRole('button',{name:'Send',exact:true}).click();
     await expect.poll(async()=>(await context()).claude.chatState).toBe('success');const final=await context();expect(final.sessionId).toBe(sessionId);expect(final.messages.filter((m:any)=>m.sender==='user'&&m.text===recovery)).toHaveLength(1);expect(errors).toEqual([]);
-    await writeFile(join(workspace!,'native-rich-everyday-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,parentDraft,parentBefore,agentDraft,agentBefore,observations,final,recovery},null,2));
+    await writeFile(join(workspace!,'native-rich-everyday-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,parentDraft,parentBefore,agentDraft,agentBefore,agentReplyUuid,observations,final,recovery},null,2));
     await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeEverydayRich:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));
   }finally{
     await _electronApp.evaluate(({clipboard,nativeImage},saved)=>{const image=nativeImage.createFromDataURL(saved.image);clipboard.write({text:saved.text,html:saved.html,rtf:saved.rtf,...(!image.isEmpty()?{image}:{})})},saved);
