@@ -66,17 +66,18 @@ scope even though thread opening is the first vertical implementation slice.
   export policy). Their integration is now corrected; all 219 focused cases across the affected suites
   pass. Remaining broad checks still require completion. Evidence of that broad run:
   `node_modules/.cache/apack-chain/runs/2026-10-30T16-57-46Z-38340`.
-- No successful built-app performance scenario or overhead/timing acceptance yet. The first restored
-  Linux run built the native dependency and renderer, then exposed a nonportable inferred API declaration
-  type. A named public PerformanceRecordingReport and explicit endpoint output annotations fix it;
-  the actual API ESM/CJS/declaration build now passes. The report validator has a type-level compatibility
-  test against every required host report field. Retry the owned app run on this corrected checkpoint.
-- The first Linux
-  attempt failed Docker's disk preflight before launching work. Host free space recovered and Docker
-  is available again. Check `docker ps` for another expensive owner before launching; do not interfere
-  with another session's container/processes. The Linux test image now includes Xvfb/xauth for owned
-  headless Electron runs. Use the prescribed 2-core/6-GiB/no-swap runner, not native batches on macOS.
-- Next functional run: `npm run test:linux -- bash -lc 'npm run build:default-setup && npm run build:runtime -- --cores 1 && APACK_PERFORMANCE_TRIALS=1 xvfb-run -a npm run test:e2e -- --config tests/performance/playwright.config.ts'`.
+- No complete built-app performance scenario or overhead/timing acceptance yet. The Linux app now
+  builds and connects after correcting API declaration portability and guarding macOS-only window
+  controls. Three warmups completed with intact recording reports; the fourth failed the view
+  correctness predicate. Reports are preserved under `.apack/performance/linux-evidence/` locally.
+  Structured requested/observed message counts now distinguish page-bound violations from other
+  readiness failures. Do not treat these warmups as qualified latency measurements.
+- Docker is restored with about 25 GiB free. Check for another expensive owner before launching;
+  do not interfere with another session's containers/processes. The owned image includes Xvfb/xauth.
+- Linux runner bookkeeping files are declared by their owner and recorded as explicit untracked
+  exclusions in source/native manifests. Tracked edits and unrelated untracked source still mark a
+  run dirty; focused tests cover both. No native source or dependency pin is changed.
+- Next functional run: `npm run test:linux -- bash -lc 'npm run build:runtime -- --cores 1 && APACK_PERFORMANCE_TRIALS=1 xvfb-run -a npm run test:e2e -- --config tests/performance/playwright.config.ts'`.
   This is a contract/debug run, not statistical qualification. Generated Linux reports stay in its work
   volume; copy only owned reports back through a read-only helper container if needed.
 

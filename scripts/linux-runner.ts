@@ -293,6 +293,7 @@ const run = [
   'rm -f /work/node_modules/.cache/apack-unit-pool/*.lock',
   `bash -ec ${quote(sync)}`,
   // `exec` keeps fd 9, so the lock is held for as long as the command runs
+  `export APACK_EXECUTION_RECORDS=${quote(JSON.stringify({ source: [RUN_LOCK, CHECKOUT_FILE], native: [ELMDB_LOCK, ELMDB_BUILT, ELMDB_CHECKOUT_FILE] }))}`,
   `exec ${command.map(quote).join(' ')}`,
 ].join('\n');
 const script = ['set -e', run].join('\n');

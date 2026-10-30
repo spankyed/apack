@@ -25,8 +25,8 @@ it('balances revision order in each block rather than measuring all baselines fi
   expect(() => comparisonOrder(3)).toThrow();
 });
 it('refuses pooled results with dirty sources or different fixture and execution conditions', () => {
-  const manifest = manifestSchema.parse({ format: 1, source: { revision: 'one', dirty: false, diffSha256: 'clean' }, builds: [{ path: 'app', sha256: 'one' }],
-    fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} }, native: { pin: 'native', checkoutRevision: 'native', dirty: false }, mode: 'lightweight', cache: 'warm-process', warmups: 5,
+  const manifest = manifestSchema.parse({ format: 1, source: { revision: 'one', dirty: false, excludedUntracked: [], diffSha256: 'clean' }, builds: [{ path: 'app', sha256: 'one' }],
+    fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} }, native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] }, mode: 'lightweight', cache: 'warm-process', warmups: 5,
     runtime: { node: 'one', electron: 'two' }, machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' },
     clock: 'Local monotonic durations; cross-process epoch alignment is approximate' });
   const revision = { ...manifest, source: { ...manifest.source, revision: 'two' }, builds: [{ path: 'app', sha256: 'two' }], runtime: { electron: 'two', node: 'one' } };
