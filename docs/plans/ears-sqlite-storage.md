@@ -539,11 +539,12 @@ format-one derived metadata in place: recreate developer SQLite profiles rather 
 migration; production remains elmdb.
 [Physical refresh evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/physical-model-refresh/README.md)
 records the five focused cases, three reverted-code controls and current-pin integrated Linux qualification.
-Platform and installed qualification for these later changes remain required.
+Physical refresh passes all three platforms and full strict at `95515e6463`; installed qualification remains required.
 
-The remaining lifecycle integration must suspend/drain native services around live replacement/deletion,
-complete native rebuild/restore/audit ownership and finish trusted installed loading/signing. A same-schema
-primary replacement must not let an old worker result or old model become the new corpus's accepted epoch.
+Live replacement now retains native ownership through actual worker drain and resumes only after acceptance
+or restoration; its canonical transaction invalidates the old model epoch. Native audit/rebuild coverage is
+described below. Physical publication/deletion authority, damaged derived-storage recovery and trusted
+installed loading/signing remain required.
 No raw constructor or model-service claim grants physical replacement/deletion authority.
 Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,
 with transactional failure/retry and populated staging/reopen coverage. Populated stores missing it
@@ -732,3 +733,25 @@ failure after installation retains the prepared incumbent and reports `RECOVERY_
 replacement announcements are suppressed. Quarantined handles permit ownership leases for cleanup;
 all data reads/writes still refuse. Arbitrary directory publication, noncooperating writers and signed
 installed lifecycle remain separate acceptance work.
+
+### Native audit and derived rebuild
+
+Private audit snapshots also inspect pinned vec1 projections. SQLite's native integrity method checks native
+page membership. EARS checks catalog/model hashes, trigger definitions, canonical normalized vectors, owner
+sequences and trash visibility, complete ready membership and the visited prefix of building projections.
+It reports orphaned tables/shadows and missing catalog ownership. `comparedNativeModels` records the scope
+actually inspected; early failures in primary/logical checks can leave it zero. The source is never repaired
+by audit. SQL owns row scans; model hashing holds one trained model blob at a time. This is not a measured
+native memory/disk budget or a guarantee against arbitrary malformed native binary payloads.
+
+Public derived rebuild now runs within `withNativeModelsPaused`: it refuses an independent native owner,
+drains an attached worker and retains the claim. Admission invalidates old native models in the same
+transaction as fresh logical generations, preserving authoritative embedding bytes and the logical commit.
+After logical readiness, invalidated native rows retire in batches of at most 32 under the held claim before
+resumption/release. An existing service resumes; an offline rebuild does not start training.
+
+The failed-logical-generation test now allows finite old-model retirement before checking idle admission.
+A diagnostic at 0.5 CPU removed 2592 of 4608 native rows in 81 batches within five seconds, with 2016
+remaining; it was not stalled. This is evidence that a row bound is not a latency bound, not a performance
+pass. The separate frozen heartbeat limit remains 16 ms. Repair of missing/corrupt native structures,
+complete physical publication ownership, final platform/installed and resource qualification remain open.

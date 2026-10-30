@@ -85,9 +85,10 @@ export async function rebuildIndexes(database: EarsDatabase): Promise<void> {
   if (!(database instanceof SqliteDatabase)) {
     throw Object.assign(new Error('SQLite index rebuilding requires a SQLite database owner'), { code: 'UNSUPPORTED' });
   }
-  await database.withExclusiveWrites(async () => {
+  await withNativeModelsPaused(database,async () => {
     database.rebuildIndexes();
     await database.indexesReady();
+    while(database.collectInvalidatedNativeModels())await new Promise<void>(resolve=>setImmediate(resolve));
   });
 }
 

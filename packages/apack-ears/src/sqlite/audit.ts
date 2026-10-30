@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validateEmbeddingBytes } from './embeddings.ts';
+import { auditNativeVectors } from './vector-audit.ts';
 import { SqliteDatabase } from './database.ts';
 import { searchTable, type SqliteIndexJob } from './index-builds.ts';
 
@@ -16,6 +17,7 @@ export interface SqliteAuditReport {
   checkedEntities: number;
   checkedRelations: number;
   comparedIndexes: number;
+  comparedNativeModels: number;
 }
 function digest(db: SqliteDatabase, sql: string, parameters: unknown[] = []): string {
   const hash = createHash('sha256'), size = Buffer.alloc(4);
@@ -137,7 +139,7 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
       const originalPath = join(root, 'incumbent'), rebuiltPath = join(root, 'rebuilt');
       source.backup(originalPath);
       incumbent = new SqliteDatabase({ path: originalPath, readOnly: true, nativeVectorExtension: source.nativeVectorExtension });
-      const report: SqliteAuditReport = { scope: 'primary-values-and-active-derived-indexes', sequence: incumbent.sequence, ok: false, issues: [], issueCount: 0, checkedEntities: 0, checkedRelations: 0, comparedIndexes: 0 };
+      const report: SqliteAuditReport = { scope: 'primary-values-and-active-derived-indexes', sequence: incumbent.sequence, ok: false, issues: [], issueCount: 0, checkedEntities: 0, checkedRelations: 0, comparedIndexes: 0, comparedNativeModels: 0 };
       const issue = (message: string) => { report.issueCount++; if (report.issues.length < 100) report.issues.push(message); };
       for (const row of incumbent.all('PRAGMA integrity_check(100)')) {
         const message = String(Object.values(row)[0]); if (message !== 'ok') issue(message);
@@ -147,6 +149,8 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
       const jobs = incumbent.indexBuilds.jobs();
       for (const job of jobs) if (job.state !== 'ready') issue(`${job.type}.${job.name}: ${job.state}`);
       if (report.issueCount) return report;
+      report.comparedNativeModels=auditNativeVectors(incumbent,issue);
+      if(report.issueCount)return report;
       // FTS5's integrity command uses INSERT syntax, so run it only on the private writable snapshot.
       // rank=1 also compares external-content trigram postings against their documents (SQLite FTS5 §6.7).
       incumbent.close();

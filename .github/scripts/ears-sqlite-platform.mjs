@@ -34,6 +34,7 @@ if (mode === 'verify') {
     sdkContentRuntimeCasesPassed:sdkAll?passedIn(sdkAll,/\/tests\/testing\/content-runtime\.spec\.ts$/):null,
     sdkBackendCasesPassed:passedIn(sdkBackend,/\/tests\/testing\/database-backend\.spec\.ts$/),
     queryWorkCasesPassed:passedIn(queryWork,/\/tests\/features\/threads\/be\/query-work\.spec\.ts$/),
+    nativeAuditCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-audit\.spec\.ts$/),
     nativeOwnerCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-owner\.spec\.ts$/),
     nativePackageCasesPassed:passedIn(ears,/\/tests\/sqlite\/native-extension\.spec\.ts$/),
     nativeGenerationCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-index\.spec\.ts$/),
@@ -76,11 +77,12 @@ if (mode === 'verify') {
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.extension)).digest('hex'),nativeGeneration.extensionSha256);
   assert.equal(nativeGeneration.packagedExtensionSha256,nativeGeneration.extensionSha256,'Ordinary package and independent native build must match');
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.packagedExtension)).digest('hex'),nativeGeneration.extensionSha256);
+  assert.equal(result.nativeAuditCasesPassed,10,'All native audit and rebuild cases must execute');
   assert.equal(result.nativeOwnerCasesPassed,3,'All cross-process native service ownership cases must execute');
   assert.equal(result.nativePackageCasesPassed,5,'All ordinary package loading/integrity cases must execute');
   assert.equal(result.nativeGenerationCasesPassed,10,'All native generation lifecycle cases must execute');
   assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
-  assert.equal(result.nativeModelCasesPassed,34,'All durable native model admission cases must execute');
+  assert.equal(result.nativeModelCasesPassed,35,'All durable native model admission cases must execute');
   if(apiStartup){
     assert.equal(apiStartup.numFailedTests,0);assert.equal(apiStartup.numPendingTests,0);
     assert.equal(passedIn(apiStartup,/\/tests\/runtime\/sqlite-profile\.spec\.ts$/),5);

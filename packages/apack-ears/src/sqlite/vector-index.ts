@@ -12,6 +12,28 @@ function table(identity: number): string {
   return 'ann_' + identity;
 }
 
+/** Exact trigger definitions for a pinned physical model; audits compare persisted SQL with this contract. */
+export function nativeVectorTriggers(identity:number,generation:number):string[] {
+  const name=table(identity),gen=generation;
+  const project = `INSERT INTO ${name}(rowid,v,owner,active)
+      SELECT v.id,coalesce(p.normalized,v.embedding),e.seq,1-e.trashed
+      FROM embedding_values v JOIN entities e ON e.id=v.entity_id
+      LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE v.id=NEW.embedding_id AND NEW.generation=${gen};`;
+    // Native writes share the foreground transaction, including nested savepoints. Triggers also
+    // reconcile writes behind the admission cursor, so readiness never publishes an old snapshot.
+    const sql=`CREATE TRIGGER ${name}_insert AFTER INSERT ON chunks WHEN NEW.generation=${gen} BEGIN
+        ${project} END;
+      CREATE TRIGGER ${name}_update AFTER UPDATE OF embedding_id,generation,entity_id ON chunks
+        WHEN OLD.generation=${gen} OR NEW.generation=${gen} BEGIN
+        DELETE FROM ${name} WHERE rowid=OLD.embedding_id AND OLD.generation=${gen}; ${project} END;
+      CREATE TRIGGER ${name}_delete AFTER DELETE ON chunks WHEN OLD.generation=${gen} BEGIN
+        DELETE FROM ${name} WHERE rowid=OLD.embedding_id; END;
+      CREATE TRIGGER ${name}_trash AFTER UPDATE OF trashed ON entities WHEN OLD.trashed!=NEW.trashed BEGIN
+        UPDATE ${name} SET active=1-NEW.trashed WHERE rowid IN
+          (SELECT embedding_id FROM chunks WHERE entity_id=NEW.id AND generation=${gen} AND embedding_id IS NOT NULL); END;`;
+  return sql.split(/;(?=\s*CREATE TRIGGER)/).map(statement=>statement.trim().replace(/;$/,''));
+}
+
 export class SqliteVectorIndex {
   private readonly db: SqliteDatabase;
   constructor(db: SqliteDatabase, extension: string) {
@@ -43,22 +65,9 @@ export class SqliteVectorIndex {
     const name = table(Number(inserted.lastInsertRowid)), gen = job.generation;
     this.db.sql.exec(`CREATE VIRTUAL TABLE ${name} USING vec1(v,owner,active);`);
     this.db.run(`INSERT INTO ${name}(cmd,arg) VALUES ('rebuild',?)`, [Buffer.from(model)]);
-    const project = `INSERT INTO ${name}(rowid,v,owner,active)
-      SELECT v.id,coalesce(p.normalized,v.embedding),e.seq,1-e.trashed
-      FROM embedding_values v JOIN entities e ON e.id=v.entity_id
-      LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE v.id=NEW.embedding_id AND NEW.generation=${gen};`;
-    // Native writes share the foreground transaction, including nested savepoints. Triggers also
-    // reconcile writes behind the admission cursor, so readiness never publishes an old snapshot.
-    this.db.sql.exec(`CREATE TRIGGER ${name}_insert AFTER INSERT ON chunks WHEN NEW.generation=${gen} BEGIN
-        ${project} END;
-      CREATE TRIGGER ${name}_update AFTER UPDATE OF embedding_id,generation,entity_id ON chunks
-        WHEN OLD.generation=${gen} OR NEW.generation=${gen} BEGIN
-        DELETE FROM ${name} WHERE rowid=OLD.embedding_id AND OLD.generation=${gen}; ${project} END;
-      CREATE TRIGGER ${name}_delete AFTER DELETE ON chunks WHEN OLD.generation=${gen} BEGIN
-        DELETE FROM ${name} WHERE rowid=OLD.embedding_id; END;
-      CREATE TRIGGER ${name}_trash AFTER UPDATE OF trashed ON entities WHEN OLD.trashed!=NEW.trashed BEGIN
-        UPDATE ${name} SET active=1-NEW.trashed WHERE rowid IN
-          (SELECT embedding_id FROM chunks WHERE entity_id=NEW.id AND generation=${gen} AND embedding_id IS NOT NULL); END;`);
+    // Capture foreground changes in this same writer transaction, including writes behind the cursor.
+    for(const sql of nativeVectorTriggers(Number(inserted.lastInsertRowid),gen))this.db.sql.exec(sql);
+
   }
   /** The scheduler owns short transactions; concurrent changes are already captured by the triggers. */
   step(generation: number, limit: number): boolean {

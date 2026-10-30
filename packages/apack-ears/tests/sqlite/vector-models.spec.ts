@@ -10,7 +10,7 @@ import { SqliteVectorIndex } from '../../src/sqlite/vector-index.ts';
 import { SqliteVectorTraining } from '../../src/sqlite/vector-training.ts';
 import { exportLogicalSnapshot } from '../../src/sqlite/logical-export.ts';
 import { auditSqliteDatabase } from '../../src/sqlite/audit.ts';
-import { startVectorModels, waitForNativeModels, refreshNativeModels, withNativeModelsPaused } from '../../src/sqlite/index.ts';
+import { startVectorModels, waitForNativeModels, refreshNativeModels, withNativeModelsPaused, rebuildIndexes } from '../../src/sqlite/index.ts';
 
 const held:Array<{db:SqliteDatabase;models:SqliteVectorModels;path:string}>=[];
 afterEach(async()=>{
@@ -183,9 +183,13 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(failed).toBeDefined();
     expect(db.get('SELECT count(*) n FROM chunks WHERE generation=? AND embedding_id IS NOT NULL',[failed.generation])!.n)
       .toBeGreaterThan(4096);
-    for(let i=0;i<100;i++)db.indexBuilds.step();
-    expect(db.get('SELECT 1 FROM vector_training WHERE generation=?',[failed.generation])).toBeUndefined();
+    // Retirement may still own the previous model. Each cleanup step must retire at least one row;
+    // allow that finite work plus catalog cleanup without mistaking it for failed-generation polling.
+    const enqueue=vi.spyOn(models,'enqueue'),cleanupBudget=e.query('Row').count()+32;
+    for(let i=0;i<cleanupBudget&&models.hasWork();i++)db.indexBuilds.step();
     expect(models.hasWork()).toBe(false);
+    expect(enqueue.mock.calls.some(([job])=>job.generation===failed.generation)).toBe(false);
+    expect(db.get('SELECT 1 FROM vector_training WHERE generation=?',[failed.generation])).toBeUndefined();
     expect(e.query('Row').count()).toBe(4608);
   });
 
@@ -473,6 +477,16 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
         expect(entered).toBe(point==='resume');expect(models.isPaused).toBe(false);
       }finally{peer.close();}
     }
+  });
+
+  it('drains training during rebuild and resumes the retained service with fresh logical generations',async()=>{
+    const {db,e,models,job,write}=fixture();write(()=>models.enqueue(job));expect(models.start()).toBe(true);
+    const sequence=e.lastCommit(),vectors=db.all('SELECT * FROM embedding_values ORDER BY id');
+    await rebuildIndexes(db);expect(models.isPaused).toBe(false);
+    expect(db.indexBuilds.jobs().find(current=>current.kind==='vector')!.generation).not.toBe(job.generation);
+    expect(db.all('SELECT * FROM embedding_values ORDER BY id')).toEqual(vectors);expect(e.lastCommit()).toBe(sequence);
+    expect(db.get('SELECT 1 FROM vector_indexes')).toBeUndefined();await db.nativeModelsReady();
+    expect(await auditSqliteDatabase(db)).toMatchObject({ok:true,comparedNativeModels:0});
   });
 
   it('drains and closes a quarantined unknown-commit handle while preserving its committed data for inspection',async()=>{

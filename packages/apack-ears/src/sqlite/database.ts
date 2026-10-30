@@ -1296,6 +1296,7 @@ export class SqliteDatabase implements EarsDatabase {
       // Explicit offline maintenance rebuilds generationless membership in this same atomic admission.
       // SQLite owns the scan and insertion; the callback only decodes one authoritative array at a time.
       this.values.rebuildMembers();
+      this.invalidateNativeModels();
       const jobs = this.indexBuilds.jobs();
       this.indexBuilds.restart(jobs);
       // Offline maintenance already owns the writer. Prove absence natively instead of committing
@@ -1313,6 +1314,15 @@ export class SqliteDatabase implements EarsDatabase {
       this.indexBuilds.wake();
       for (const type of new Set(jobs.map(job => job.type))) this.indexesChanged(type);
     } catch (error) { this.abortFailedOperation(error); }
+  }
+  /** Called under native maintenance ownership; each transaction retires at most 32 derived rows. */
+  collectInvalidatedNativeModels():boolean {
+    this.writable();
+    if(!this.nativeReader)return false;
+    this.sql.exec('BEGIN IMMEDIATE');
+    try {
+      this.checkRevision();const progressed=this.nativeReader.collectSuperseded(32);this.commitWrite();return progressed;
+    }catch(error){this.abortFailedOperation(error);}
   }
   private invalidateNativeModels():void {
     if(!this.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='vector_indexes'"))return;

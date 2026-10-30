@@ -1,0 +1,48 @@
+(node:205) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ❯ |@apackdev/ears| tests/sqlite/vector-audit.spec.ts (10 tests | 1 failed | 9 skipped) 287ms
+   ↓ native projection maintenance > audits model identity, canonical vectors, owner visibility and triggers without modifying the source
+   ↓ native projection maintenance > reports missing-row drift independently of intact native pages
+   ↓ native projection maintenance > reports owner drift independently of intact native pages
+   ↓ native projection maintenance > reports model-hash drift independently of intact native pages
+   ↓ native projection maintenance > reports trigger drift independently of intact native pages
+   ↓ native projection maintenance > reports native page membership damage through the extension integrity method
+   ↓ native projection maintenance > reports a native table whose catalog ownership has been lost
+   ↓ native projection maintenance > allows an incomplete private projection but detects missing rows behind its committed cursor
+   × native projection maintenance > rebuilds offline under the native claim and retires invalidated models without changing canonical data 286ms
+     → expected { '1': 1 } to be undefined
+   ↓ native projection maintenance > refuses rebuild while an independent handle owns native work before admitting any generation
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@apackdev/ears| tests/sqlite/vector-audit.spec.ts > native projection maintenance > rebuilds offline under the native claim and retires invalidated models without changing canonical data
+AssertionError: expected { '1': 1 } to be undefined
+
+[32m- Expected:[39m
+undefined
+
+[31m+ Received:[39m
+{
+  "1": 1,
+}
+
+ ❯ tests/sqlite/vector-audit.spec.ts:62:71
+     60|     const {db,e,name}=await fixture(),before=e.lastCommit(),vectors=db…
+     61|     await rebuildIndexes(db);expect(e.lastCommit()).toBe(before);expec…
+     62|     expect(db.get("SELECT 1 FROM sqlite_schema WHERE name=?",[name])).…
+       |                                                                       ^
+     63|     expect(db.get('SELECT 1 FROM vector_indexes')).toBeUndefined();exp…
+     64|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  12:00:46
+   Duration  2.38s (transform 1.16s, setup 92ms, collect 1.42s, tests 287ms, environment 0ms, prepare 303ms)
+
+JSON report written to /results/keep-native-epoch-control.json
