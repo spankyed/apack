@@ -171,3 +171,11 @@ runs (five warmups and one measured sample), not overhead/variability evidence.
 Final boundary review moved startup provenance hashing after readiness timing and resource capture.
 That bookkeeping previously ran after launch but before the readiness check, unnecessarily delaying
 observation. Types and lint pass; final integrated-count qualification must use this corrected harness.
+
+The mode-comparison continuation now schedules five warmups per mode followed by individual ABBA
+trials, retains observed non-overlapping execution order and requires successful child exit plus identical
+source/build provenance. Warm scenarios switch modes in one warmed app; startup copies the same closed
+seed into a fresh process per trial. A manual bounded runner covers all four scenarios, and the 5%
+lightweight budget is evaluated only by full manual qualification. Six comparison contract tests and
+two runner configuration tests pass, alongside the existing fifteen report/store tests. End-to-end
+mode-pair verification, full overhead/sample evidence and cross-revision execution remain open.
