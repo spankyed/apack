@@ -94,10 +94,29 @@ scope even though thread opening is the first vertical implementation slice.
   This is a contract/debug run, not statistical qualification. Generated Linux reports stay in its work
   volume; copy only owned reports back through a read-only helper container if needed.
 
+## Search checkpoint
+
+- `APACK_PERFORMANCE_SCENARIO=search` selects a separate invocation/profile, preventing corpora from
+  leaking between scenarios. Thread-open remains the default. Its fixture and original measurements
+  are unchanged; the shared browser interface is type-only.
+- `522c8d3c35` passed five warmups and twenty measured searches in the prescribed Linux runner.
+  The corpus contains 1,200 large messages across twelve threads, exactly twenty matches per query.
+  Each action supersedes another query; completion requires the current query's correlated delivery,
+  full expected timestamp/thread set, unique rows and laid-out snippets. It excludes input debounce
+  and does not independently certify a forced late response or truncated-set ranking.
+- Raw successful evidence: local `search-lightweight-1793386293574`, with clean app/native source and
+  twenty expected/observed rows in every trial. A disposable Linux-copy mutation changed expected
+  timestamps while preserving the count: `search-lightweight-1793386368805` correctly retained a
+  failed `result-correctness` trial. Host authored source was unchanged. That counterfactual overlapped
+  another session's native build and supplies correctness evidence only, never timing qualification.
+- Tests-root typecheck and focused lint pass. No broad local gate is claimed for the new scenario yet;
+  the previously green full-chain checkpoint precedes it. Strict CI run `41109512527` was dispatched
+  for `c72035b90f` and was still queued at the last authoritative check.
+
 ## Required remaining work
 
-Successful thread-open slice and counterfactuals; raw actor queue context and coalesced-watch causal
-links; streaming/search/populated-startup scenarios; cross-revision orchestration and full manifest/
+Thread-open counterfactuals/overhead and independent late-search fault injection; raw actor queue context and coalesced-watch causal
+links; streaming/populated-startup scenarios; cross-revision orchestration and full manifest/
 trial consistency checks; detailed profiles/process statistics and overhead qualification; one
 supported application optimization; full repository and strict acceptance; dependent reviewable PRs.
 Keep PR #293 a draft until its slice is qualified. Do not treat the recorder, authored scenarios,
