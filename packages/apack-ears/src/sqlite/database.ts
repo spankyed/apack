@@ -2,6 +2,7 @@ import { createWriteLease, withoutWriteAuthority } from '../write-lease.ts';
 // SQLite storage for the structured EARS port. Scalar columns own small values; MessagePack is limited
 // to composite persistence and canonical metadata.
 /// <reference types="node" />
+import { inspectDatabaseFiles } from './file-ownership.ts';
 import { DATABASE_FORMAT, databaseFormatPragmas, readDatabaseFormat } from './format.ts';
 import { repairNativeVectors } from './vector-repair.ts';
 import { SqliteVectorIndex } from './vector-index.ts';
@@ -163,9 +164,10 @@ export class SqliteDatabase implements EarsDatabase {
         "WRONG_FORMAT",
         "Refusing an elmdb directory: this experimental backend requires a separate SQLite directory"
       );
-    if (this.readOnly && !existsSync(file))
+    const mainPresent = inspectDatabaseFiles(this.path);
+    if (this.readOnly && !mainPresent)
       fail("NO_DATABASE", `No SQLite database at ${file}`);
-    if (!this.readOnly && existsSync(file)) inspectExistingDatabase(file);
+    if (!this.readOnly && mainPresent) inspectExistingDatabase(file);
     this.sql = new NativeDatabase(file, { readonly: this.readOnly, timeout: 0 });
     try {
       const format = readDatabaseFormat(this);
@@ -1488,7 +1490,7 @@ export class SqliteDatabase implements EarsDatabase {
     if (this.active) fail("UNIT_OPEN", "A unit is open");
     mkdirSync(target, { recursive: true });
     const file = join(target, "data.sqlite3");
-    if (existsSync(file)) fail("IO", "Backup target exists");
+    inspectDatabaseFiles(target, { empty: true });
     this.run("VACUUM INTO ?", [file]);
   }
   replaceWith(source: string) {

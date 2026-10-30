@@ -1,0 +1,22 @@
+{
+  "before.log.gz": {
+    "rawSha256": "633d77fbbf86e87a005525c07cbcc85e5efc8a0e6139d8f722c20d2ea63fcc98",
+    "storedSha256": "7b6aefc98c263919ede924d09a1fc26d1bd31d4e3030487b8bee3753e1762ab7",
+    "rawBytes": 2921208
+  },
+  "focused.log": {
+    "rawSha256": "3984bb999b3e72e9e995ee96a599dcea77efd05714760f8d487153da6028e7be",
+    "storedSha256": "3984bb999b3e72e9e995ee96a599dcea77efd05714760f8d487153da6028e7be",
+    "rawBytes": 5154
+  },
+  "focused.json.gz": {
+    "rawSha256": "11fb1f3af72074ad7747892f905f58def2d0f9557cab80f84a38a895e72d6b35",
+    "storedSha256": "b18cb68293a3610cf2dd3fea6e7ff6a0355c3d9d440e65129e144d3f91f44a84",
+    "rawBytes": 19906
+  },
+  "inputs.json": {
+    "rawSha256": "ba0ee257f2ab942225829780156b2a6451edc745f9de5425a717929163ade23a",
+    "storedSha256": "ba0ee257f2ab942225829780156b2a6451edc745f9de5425a717929163ade23a",
+    "rawBytes": 370
+  }
+}

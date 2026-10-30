@@ -5,8 +5,8 @@
 
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
-The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 62f1798c9b
-and its native pin 95615ed8d4; full combined acceptance remains pending. Inspect the current handoff and actual source before continuing.
+The prototype checkpoint is 4a3fe698f8. The current detached integration combines master dc67febcce
+and its native pin 2441af4658; full combined acceptance remains pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
 Finished when the SQLite candidate runs the complete app data lifecycle, all required
@@ -193,8 +193,8 @@ No master merge, release, production adoption, implicit daily-profile conversion
 Source work stays in `/private/tmp/ears-sqlite-query-integration`; the clean publisher is
 `monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at earlier green
 `6cf6c8349e`; do not infer it contains later published work. The integrated committed master snapshot is
-`62f1798c9bec2c013ded929d7080b65d1083049e`, retaining native pin
-`95615ed8d493f9a7c2789eaf1f4c847ae375eb32`. Inspect actual Git and workflow state before continuing.
+`dc67febcce3f3a28e8b2bc75b867f0374d4f4610`, retaining native pin
+`2441af4658d961f547c7094cd041c2ac246668c5`. Inspect actual Git and workflow state before continuing.
 
 The published [graph checkpoint `836d3d1d1f`](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-contract-62f1798c9b/README.md)
 implements master's graph contract in the structured port and SQLite. It includes managed directory-lifetime
@@ -212,7 +212,8 @@ refuses foreign/mismatched SQLite identities before initialization, preserves fo
 read-only inspection, atomically publishes new identity/primary storage, and refuses missing primary tables.
 Probe cleanup preserves uncertain-connection authority. It fixes the signing fixture and the independently
 reproduced outer-app alias defect. The installed witness now requires persisted EARS identity in both stores;
-that additional witness is typechecked but not yet run in a packaged app at this source.
+that additional witness passes in the signed installed app at `f731a4a549`. A new signed run remains required
+after the native pin change.
 
 Current local gates pass 720 native-enabled EARS cases with zero skips, 1,929 host cases with one existing
 Windows-only skip, 38 storage cases, matching five normal package builds, three API reports, EARS/host and
@@ -221,15 +222,37 @@ exact scripts/repo/publish/E2E types, changed lint, three reverted safeguards/re
 No assertion or deadline was relaxed. Compiler/full checks stay in private disposable environments capped at
 two CPU/six GiB/no swap with dropped capabilities; focused checks use half a CPU/768 MiB. A quiet admission
 window avoids starting a broad suite between the other agent's builds. Published checkpoint `f731a4a549`
-now runs [full strict CI 41106571398](https://github.com/spankyed/apack/actions/runs/41106571398) and
+completed [full strict CI 41106571398](https://github.com/spankyed/apack/actions/runs/41106571398) and
 [signed installed Preview 41106578424](https://github.com/spankyed/apack/actions/runs/41106578424).
 Signed installed acceptance passes on `f731a4a549`, including both persisted-identity assertions. Strict
-runtime steps complete on all three SQLite hosts, but their final case verifier fails; Linux exposes its
-stale 27-case count. Other strict shards remain live at the retained snapshot. The
-[named-inventory fix](../references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/README.md)
+runtime steps pass on all three SQLite hosts, but their final case verifier fails; Linux exposes its stale
+27-case count. Integration-1 independently times out at the original 200-second deadline in the refused
+replacement facade-cache test. Producers, app-and-rest, both native shards and integration-2 pass.
+The timeout remains unresolved; do not raise its deadline or call the whole run green.
+The published [named-inventory fix `9fbea37d0d`](../references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/README.md)
 requires all 29 publication and 19 identity cases and passes eight real-report positive/negative controls.
-No passing additional case can mask a missing/skipped invariant. New verifier publication/CI is pending;
-no previous result certifies arbitrary filesystems or completes the remaining goal.
+No passing additional case can mask a missing/skipped invariant. Its retained platform run
+[41112243866](https://github.com/spankyed/apack/actions/runs/41112243866) has Linux success; macOS and Windows
+remain active at this snapshot. Recheck the same run rather than replacing its pending work.
+
+The [native 2441 integration](../references/evidence/ears-sqlite-implementation-2026-10-28/native-2441-integration/README.md)
+adapts the structured edge terminal and SQLite executor to master's direction field, preserving both public
+edge directions. A private matching binding/CLI build, typecheck, 56 query/relation cases per backend,
+five normal package builds, API reports and 720 full SQLite-selected EARS cases pass with no skips.
+Those checks do not replace final host, integration, platform, installed and performance acceptance.
+The [file ownership admission](../references/evidence/ears-sqlite-implementation-2026-10-28/file-ownership/README.md)
+refuses main/sidecar aliases, nonregular files and orphan sidecars before any native inspection or open;
+backups require an empty four-file namespace. Its 42 new ownership and 19 existing identity cases pass
+without skips. The unchanged parent fails 37 of the original 38 ownership cases, including external
+shared-memory target corruption. This is cooperative namespace admission, not atomic native no-follow
+opening or protection against arbitrary concurrent namespace replacement.
+Broader validation is waiting in private exec session `30957`, admission PID `63683`, until the other
+agent's live container yields a 30-second quiet window. Inspect that same handle and its
+`/private/tmp/ears-file-ownership-results` reports; do not restart a created run. It includes the exact
+CLI timeout case under its existing 200-second deadline, normal builds, types/lint and full EARS/host.
+The next implementation checkpoint is store-excluded reset and quarantine-parent durability; final
+platform/installed qualification and all performance/relevance requirements remain active.
+No previous result certifies arbitrary filesystems or completes the remaining goal.
 
 Earlier [full strict 41056724109](https://github.com/spankyed/apack/actions/runs/41056724109) is green at
 `3333361c3c`, including every required shard and all three SQLite hosts. Retained native audit/repair receipts
@@ -247,8 +270,8 @@ Next deliverables and their closing checks, without narrowing phases 3–7:
 - Qualify final native provenance after inner-library signing and before app sealing; qualify installed
   Electron/renderer/CLI, executable-pack/SDK flows and required OS/architectures. `asar:false` already keeps
   the native files on disk. Ordinary source/unsigned package builds do not prove installed/signing behavior.
-- Close remaining filesystem/format ownership work: enforce ordinary unaliased data files, qualify foreign
-  valid SQLite refusal and positive persisted format identity before initialization, and synchronize/qualify
+- Close remaining filesystem/format ownership work: qualify ordinary unaliased data files and foreign
+  valid SQLite refusal/positive persisted identity on final platforms, and synchronize/qualify
   history-quarantine parent publication. Acquire store-scoped exclusion before `db reset` deletes history,
   before clearing primary data, and test held handles/refusal/interruption. Test active worker shutdown and namespace operations through the
   supported managed lifecycle. Raw constructors, hard-linked files and arbitrary mount aliases are not

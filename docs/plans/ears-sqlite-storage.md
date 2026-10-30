@@ -825,10 +825,18 @@ through `closeDatabases` before close or filesystem changes.
 
 [Managed publication evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/managed-publication/README.md)
 retains both-format tests, live-writer process death, stale-publication and close-fault proofs, exact input hashes
-and seven reverted-safeguard controls. All three platform jobs require 27 specific publication witnesses with
-no skips. Local functional evidence does not certify final platform, alias/unmanaged-writer, directory durability
-or performance behavior. Data-file alias enforcement, positive SQLite format identity and quarantine-parent
-synchronization remain existing-phase work before adoption.
+and seven reverted-safeguard controls. The current named inventory requires 29 publication and 19 identity witnesses on every platform; extra passing cases
+cannot mask missing, skipped or duplicated required witnesses. Local functional evidence does not certify final
+platform, unmanaged-writer, directory durability or performance behavior.
+
+SQLite admission now checks the main file and `-wal`, `-shm` and `-journal` entries with `lstat` before any
+native open, including the read-only identity probe. Each present entry must be an ordinary file with exactly
+one link; dangling links and sidecars without a main database refuse with `IO`. Backup publication requires
+all four destination names to be absent before `VACUUM INTO`. This is admission within a cooperatively owned
+directory, not a claim that a path check excludes hostile concurrent namespace replacement or arbitrary mount
+aliases. The host's directory-lifetime claims and recovery exclusion remain necessary. Positive format identity
+is implemented and covered by the format-identity evidence; final platform qualification of the new file
+admission and quarantine-parent synchronization remain required before adoption.
 
 
 ### Current graph contract
