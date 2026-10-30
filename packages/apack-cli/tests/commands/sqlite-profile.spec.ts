@@ -129,6 +129,7 @@ it('preserves uncertain backup publication and cleanup errors while releasing th
   const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
   expect(failure).toBeInstanceOf(AggregateError);
   expect(failure).toMatchObject({ code: 'PUBLICATION_UNKNOWN', destinationPath: destination, cause: publication, errors: [publication, cleanup] });
+  expect(failure.message).toContain(destination); expect(failure.message).toContain(publication.message); expect(failure.message).toContain(cleanup.message);
   expect(findDatabaseWriter(f.dir)).toBeNull();
   expect(fs.existsSync(destination)).toBe(false);
   expect(fs.readdirSync(f.root).filter(name => name.startsWith('.apack-backup-'))).toHaveLength(1);
@@ -144,6 +145,7 @@ it('reports the retained published backup when staging cleanup fails and release
   syncBuiltinESMExports();
   const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
   expect(failure).toMatchObject({ publishedPath: destination, cause: cleanup, errors: [cleanup] });
+  expect(failure.message).toContain(`Published backup retained at ${destination}`); expect(failure.message).toContain(cleanup.message);
   expect(findDatabaseWriter(f.dir)).toBeNull();
   expect(JSON.parse((await command(['backup', 'verify', destination, '--json'])).out).valid).toBe(true);
 });
@@ -161,6 +163,7 @@ it('preserves uncertain backup publication when releasing the write lock also fa
   vi.spyOn(backups, 'publishBackupDirectory').mockImplementation(() => { throw publication; });
   const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
   expect(failure).toMatchObject({ code: 'PUBLICATION_UNKNOWN', destinationPath: destination, cause: publication, errors: [publication, cleanup] });
+  expect(failure.message).toContain(destination); expect(failure.message).toContain(publication.message); expect(failure.message).toContain(cleanup.message);
   expect(findDatabaseWriter(f.dir)).toBeNull();
   expect(fs.readdirSync(f.root).some(name => name.startsWith('.apack-backup-'))).toBe(false);
 });

@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { findRunningApp, holdDatabaseWriteLock, openRunHistory } from '@apackdev/host/database';
 import { databaseBackupStore, exportDatabase, publishBackupDirectory } from '@apackdev/host/backup';
 import { readHostCompatibility } from '@apackdev/host/packs';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { openTarget, parseDbArgs, realDestination, TARGET_USAGE, withDatabase, type DbIo } from './target';
 
 export const BACKUP_USAGE = [
@@ -59,10 +60,10 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
   if (failures.length) {
     const original = failures[0] as { code?: unknown; destinationPath?: unknown } | null | undefined;
     // Preserve uncertain publication metadata even when owned staging or lock cleanup also fails.
-    throw Object.assign(new AggregateError(failures, 'Backup failed; any published destination is retained', { cause: failures[0] }), {
+    throw Object.assign(new AggregateError(failures, `Backup to ${destination} failed: ${failures.map(errorMessage).join('\n  Also failed: ')}${published ? `\n  Published backup retained at ${destination}` : ''}`, { cause: failures[0] }), {
       ...(typeof original?.code === 'string' && { code: original.code }),
       ...(typeof original?.destinationPath === 'string' && { destinationPath: original.destinationPath }),
-      ...(published && { publishedPath: destination }),
+      ...(published ? { publishedPath: destination } : {}),
     });
   }
 }
