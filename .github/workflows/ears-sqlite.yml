@@ -56,6 +56,14 @@ jobs:
           2>&1 | tee .temp/sqlite-platform/sdk-backend.log
       - name: Build shipped pack for SQLite repository contracts
         run: npm run build:default-setup
+      - name: Complete SDK contracts on SQLite with built content runtime
+        if: runner.os == 'Linux'
+        env:
+          REQUIRE_CONTENT_RUNTIME: '1'
+        run: >-
+          npm test -w @apackdev/sdk -- --maxWorkers=2 --reporter=default --reporter=json
+          --outputFile=../../.temp/sqlite-platform/sdk-all-sqlite.json
+          2>&1 | tee .temp/sqlite-platform/sdk-all-sqlite.log
       - name: Current app repository queries on SQLite
         run: >-
           npm test -w @app/default-setup -- tests/features/threads/be/query-work.spec.ts --maxWorkers=2

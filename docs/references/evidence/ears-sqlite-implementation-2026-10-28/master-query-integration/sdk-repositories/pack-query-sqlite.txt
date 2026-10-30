@@ -1,0 +1,28 @@
+
+> @app/default-setup@0.1.0 pretest
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @app/default-setup@0.1.0 test
+> vitest run tests/features/threads/be/query-work.spec.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=/results/pack-sqlite.json
+
+
+ RUN  v3.2.7 /metrics/packages/default-setup
+
+stdout | tests/features/threads/be/query-work.spec.ts > what a view costs as the data grows > reads as much at ×1: the chat page, the list, both searches
+[notes] Bootstrapped REFERENCES relations for 60 notes
+
+stdout | tests/features/threads/be/query-work.spec.ts > what a view costs as the data grows > reads as much at ×2: the chat page, the list, both searches
+[notes] Bootstrapped REFERENCES relations for 120 notes
+
+ ✓ |@app/default-setup:backend| tests/features/threads/be/query-work.spec.ts (4 tests) 1939ms
+   ✓ what a view costs as the data grows > reads as much at ×1: the chat page, the list, both searches  481ms
+   ✓ what a view costs as the data grows > reads as much at ×2: the chat page, the list, both searches  857ms
+   ✓ what a view costs as the data grows > runs the chat page again for a change on the page, not for one to a message before it  389ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  23:53:11
+   Duration  4.67s (transform 1.03s, setup 2.58s, collect 12ms, tests 1.94s, environment 0ms, prepare 39ms)
+
+JSON report written to /results/pack-sqlite.json

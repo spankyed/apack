@@ -198,13 +198,20 @@ It brings app query-efficiency behavior/tests, the SDK testing `testCalls` expor
 `4d558a27543a74e2ea4c131aff1cb32455708994`. No source branch or other-agent checkout was merged/reset.
 The draft branch publishes this candidate for CI review; publication does not establish combined acceptance.
 Closing checks are matching native source/build, complete platform and full Strict gates, new app-query/SDK
-contracts, unchanged primary data/units/watches and final exact-input/clean-checkout verification. Resolve
+contracts, unchanged primary data/units/watches and final exact-input/clean-checkout verification.
+[Integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/master-query-integration/README.md)
+now records a clean matching Linux native build and real SDK/pack coverage at `e8750da8c6`:
+1,319 SQLite SDK cases pass with one built-prerequisite skip; that case passes separately after
+pack build. Both SDK fixture stores and four current repository cases pass on both backends;
+forced native fallback fails the candidate marker. New CI requires complete prepared SDK coverage.
+The unchanged own-unit embedding assertion still fails on exact native `4d558a2754`; preserve
+that failure and fix it in isolated native work before full Strict can be claimed. Resolve
 failures without weakening assertions; no old native artifact or old green substitutes for those checks.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains at `6cf6c8349e`, exact
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs green.
-Advance it only after a new exact full Strict green. The older baseline had an unresolved native own-unit
-embedding-visibility assertion; do not assume the new pin fixes it. Re-run the assertion on matching artifacts.
+Advance it only after a new exact full Strict green. The native own-unit embedding-visibility assertion is now reproduced on matching `4d558a2754`
+artifacts. A pin change does not complete that requirement; resolve the failure without weakening it.
 
 Implemented candidate behavior and evidence:
 
