@@ -1,11 +1,11 @@
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@apackdev/testing';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { performanceIdentity, chromeTrace, summarize, trialSchema, type PerformanceTrial } from '@apackdev/testing/performance';
+import { performanceIdentity, chromeTrace, summarize, streamingBacklog, trialSchema, type PerformanceTrial } from '@apackdev/testing/performance';
 import { streamingFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -91,6 +91,7 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
         let completed = false;
         let failure: string | undefined;
         const work: Record<string, number> = { scriptedChunks, visibleUpdates: 0 };
+        const viewProgress: Array<{ epochMs: number; chars: number }> = [];
         let persisted: { id: string; text: string; responseTimestamp?: number; commit: number; subscription?: string; delivery?: number } | undefined;
         try {
           await new Promise<void>((resolve, reject) => {
@@ -135,8 +136,13 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
             const detach = recording.onView(({ request, update }) => {
               const args = request.args as { id?: string } | undefined;
               if (request.ref !== 'default-setup/threads' || request.view !== 'message' || !args?.id || before.has(args.id) || !update.ok) return;
+              if (context().currentThread?.id !== `Thread-stream-${thread}` || !context().chatMessageIds.includes(args.id)) return;
               const value = update.value as { sender?: string; text?: string; responseTimestamp?: number } | null;
               if (value?.sender !== 'assistant' || !value.text || !expected.startsWith(value.text)) return;
+              if (value.text.length > (viewProgress.at(-1)?.chars ?? 0)) {
+                if (viewProgress.length < 64) viewProgress.push({ epochMs: Date.now(), chars: value.text.length });
+                else work.droppedProgress = (work.droppedProgress ?? 0) + 1;
+              }
               persisted = { id: args.id, text: value.text, responseTimestamp: value.responseTimestamp, commit: update.commit,
                 subscription: update.diagnostics?.subscription, delivery: update.diagnostics?.delivery };
               void check();
@@ -150,12 +156,21 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
         } catch (error) { failure = error instanceof Error && ['missing-intermediate-progress', 'message-bound'].includes(error.message) ? error.message : 'missing-view-ready'; }
         finally { action.end(completed ? 'ok' : 'error'); }
         const reports = await recording.stop();
-        return { completed, durationMs, reports, failure, work, timings: firstVisibleMs === undefined ? undefined : { firstVisibleMs, maxVisibleGapMs } };
+        return { completed, durationMs, reports, failure, work, viewProgress, timings: firstVisibleMs === undefined ? undefined : { firstVisibleMs, maxVisibleGapMs } };
       }, { mode, thread, expected: fixture.script.chunks.join(''), scriptedChunks: fixture.script.chunks.length });
+      let backlog: ReturnType<typeof streamingBacklog> | undefined;
+      let backlogFailure = false;
+      if (result.completed) try {
+        const productionFile = path.join(directory, `production-${thread}.jsonl`);
+        if (statSync(productionFile).size > 16 * 1024 || result.work.droppedProgress) throw Error('Progress capture exceeded its bound');
+        const produced = readFileSync(productionFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+        if (produced.length !== fixture.script.chunks.length) throw Error('Missing production progress');
+        backlog = streamingBacklog(produced, result.viewProgress, fixture.script.chunks.join('').length);
+      } catch { backlogFailure = true; }
       trials.push(trialSchema.parse({ scenario: 'streaming', index, warmup: index < warmups,
-        work: result.work, timings: result.timings, outcome: result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
-        correct: result.completed, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
-        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: result.failure }));
+        work: result.work, timings: result.timings, backlog, outcome: backlogFailure ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
+        correct: result.completed && !backlogFailure, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
+        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: backlogFailure ? 'backlog-capture' : result.failure }));
       save();
       expect(trials.at(-1)!.outcome, `Preserved evidence: ${output}`).toBe('passed');
     }

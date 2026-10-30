@@ -180,6 +180,23 @@ export const spanSchema: z.ZodObject<{
 }, z.core.$strip>;
 
 // @public
+export function streamingBacklog(producedInput: unknown, receivedInput: unknown, expectedChars: number): {
+    unit: "UTF-16 code units";
+    boundary: "producer enqueue to database-backed view receipt";
+    clock: "approximate process epoch alignment; not database commit latency";
+    produced: {
+        epochMs: number;
+        chars: number;
+    }[];
+    received: {
+        epochMs: number;
+        chars: number;
+    }[];
+    maxPendingChars: number;
+    clockOrderMismatches: number;
+};
+
+// @public
 export function summarize(input: readonly PerformanceTrial[]): {
     measured: number;
     passed: number;
@@ -215,6 +232,21 @@ export const trialSchema: z.ZodObject<{
     timings: z.ZodOptional<z.ZodObject<{
         firstVisibleMs: z.ZodNumber;
         maxVisibleGapMs: z.ZodNumber;
+    }, z.core.$strip>>;
+    backlog: z.ZodOptional<z.ZodObject<{
+        unit: z.ZodLiteral<"UTF-16 code units">;
+        boundary: z.ZodLiteral<"producer enqueue to database-backed view receipt">;
+        clock: z.ZodLiteral<"approximate process epoch alignment; not database commit latency">;
+        produced: z.ZodArray<z.ZodObject<{
+            epochMs: z.ZodNumber;
+            chars: z.ZodNumber;
+        }, z.core.$strip>>;
+        received: z.ZodArray<z.ZodObject<{
+            epochMs: z.ZodNumber;
+            chars: z.ZodNumber;
+        }, z.core.$strip>>;
+        maxPendingChars: z.ZodNumber;
+        clockOrderMismatches: z.ZodNumber;
     }, z.core.$strip>>;
     processes: z.ZodRecord<z.ZodString, z.ZodObject<{
         processStatistics: z.ZodOptional<z.ZodObject<{
@@ -348,6 +380,21 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
         timings?: {
             firstVisibleMs: number;
             maxVisibleGapMs: number;
+        } | undefined;
+        backlog?: {
+            unit: "UTF-16 code units";
+            boundary: "producer enqueue to database-backed view receipt";
+            clock: "approximate process epoch alignment; not database commit latency";
+            produced: {
+                epochMs: number;
+                chars: number;
+            }[];
+            received: {
+                epochMs: number;
+                chars: number;
+            }[];
+            maxPendingChars: number;
+            clockOrderMismatches: number;
         } | undefined;
         failure?: string | undefined;
     }[];

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Deterministic provider process for the real CLI service; never invokes another executable or a network.
-import { readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { setTimeout } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -24,12 +24,18 @@ input.on('line', async line => {
   const index = Number(JSON.stringify(message).match(/Performance trial ([0-9]+)/)?.[1] ?? 0);
   const suffix = String(index + 1).padStart(12, '0');
   const session = `00000000-0000-4000-8000-${suffix}`;
+  const progressFile = path.join(path.dirname(fileURLToPath(import.meta.url)), `production-${index}.jsonl`);
+  writeFileSync(progressFile, '');
+  let producedChars = 0;
   emit({ type: 'system', subtype: 'init', session_id: session, cwd: process.cwd(), model: 'performance-fixture' });
   emit({ type: 'stream_event', event: { type: 'message_start', message: { id: 'fixture-message', role: 'assistant', content: [] } } });
   emit({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
   for (const text of script.chunks) {
     await setTimeout(script.intervalMs);
+    producedChars += text.length;
+    const epochMs = Date.now();
     emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } } });
+    appendFileSync(progressFile, `${JSON.stringify({ epochMs, chars: producedChars })}\n`);
   }
   const text = script.chunks.join('');
   emit({ type: 'stream_event', event: { type: 'content_block_stop', index: 0 } });

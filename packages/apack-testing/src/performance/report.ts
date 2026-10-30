@@ -53,6 +53,13 @@ export const trialSchema = z.object({
   correct: z.boolean(), completion: z.enum(['view-ready', 'missing']),
   work: z.record(z.string().max(64), count),
   timings: z.object({ firstVisibleMs: z.number().finite().nonnegative(), maxVisibleGapMs: z.number().finite().nonnegative() }).optional(),
+  backlog: z.object({
+    unit: z.literal('UTF-16 code units'), boundary: z.literal('producer enqueue to database-backed view receipt'),
+    clock: z.literal('approximate process epoch alignment; not database commit latency'),
+    produced: z.array(z.object({ epochMs: count, chars: count })).min(1).max(64),
+    received: z.array(z.object({ epochMs: count, chars: count })).min(1).max(64),
+    maxPendingChars: count, clockOrderMismatches: count,
+  }).optional(),
   processes: z.record(z.string(), processReportSchema), failure: z.string().max(128).optional(),
 }).superRefine((trial, ctx) => {
   if (trial.scenario === 'streaming' && trial.outcome === 'passed' && (!trial.timings || trial.timings.firstVisibleMs >= (trial.durationMs ?? 0)
@@ -66,6 +73,29 @@ export const trialSchema = z.object({
 });
 export type PerformanceTrial = z.infer<typeof trialSchema>;
 export type PerformanceManifest = z.infer<typeof manifestSchema>;
+
+/** Pipeline backlog at view receipt, with raw clocks retained rather than claiming exact cross-process lag. */
+export function streamingBacklog(producedInput: unknown, receivedInput: unknown, expectedChars: number) {
+  const progress = z.array(z.object({ epochMs: count, chars: count })).min(1).max(64);
+  const produced = progress.parse(producedInput);
+  const received = progress.parse(receivedInput);
+  for (const points of [produced, received]) {
+    if (points.at(-1)!.chars !== expectedChars || points.some((point, index) => point.chars > expectedChars
+      || index > 0 && (point.epochMs < points[index - 1]!.epochMs || point.chars <= points[index - 1]!.chars))) throw Error('Incomplete or unordered streaming progress');
+  }
+  let maxPendingChars = 0;
+  let clockOrderMismatches = 0;
+  let productionIndex = 0;
+  for (const point of received) {
+    while (productionIndex < produced.length && produced[productionIndex]!.epochMs <= point.epochMs) productionIndex++;
+    const emitted = produced[productionIndex - 1]?.chars ?? 0;
+    if (emitted < point.chars) clockOrderMismatches++;
+    maxPendingChars = Math.max(maxPendingChars, emitted - point.chars);
+  }
+  return { unit: 'UTF-16 code units' as const, boundary: 'producer enqueue to database-backed view receipt' as const,
+    clock: 'approximate process epoch alignment; not database commit latency' as const,
+    produced, received, maxPendingChars, clockOrderMismatches };
+}
 
 /** Validate a complete run before comparison; partial/failing reports remain useful diagnostic evidence. */
 export function validatePerformanceRun(manifestInput: unknown, trialsInput: unknown, measured: number) {
