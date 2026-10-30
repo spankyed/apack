@@ -121,7 +121,10 @@ and releases on stop/navigation/destruction. A replaced debugger is never querie
 former owner. It collects named CDP task/layout/heap metrics and the shared detailed profile formats;
 frontend long-task aggregates retain no DOM/attribution data. Loss survives in process report fields.
 Four focused main tests and nine renderer tests pass, including stale leases, foreign ownership and
-observation faults. Public SDK/testing reports are regenerated; built-app verification remains pending.
+observation faults. Public SDK/testing reports are regenerated. On `7e2019da47`, six detailed built-app thread
+opens passed with clean source/native provenance, complete backend/renderer CPU and allocation
+profiles, all eight renderer metrics available and long-task support enabled:
+`thread-open-detailed-1793399557483`. Startup and injected-renderer-stall proof remain pending.
 The existing EARS `query.explain()` API provides actual native stages/indexes/visited counts; the
 maintained detailed workflow must make that capability explicit without silently rerunning business reads.
 
