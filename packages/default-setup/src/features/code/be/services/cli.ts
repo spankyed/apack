@@ -1,3 +1,4 @@
+import { replyBackgroundSession } from './claude-code/background-reply.ts'
 import { openBackgroundAttachment } from './claude-code/background-attachment.ts'
 import { backgroundSession } from './claude-code/background-sessions.ts'
 import { parseMcpElicitationForm, validateMcpElicitationForm } from '../../common/mcp-elicitation-form.ts'
@@ -59,6 +60,7 @@ export interface CliServiceType {
   claudeCode: {
     openBackgroundAttachment: typeof openBackgroundAttachment
     backgroundSession: typeof backgroundSession
+    replyBackgroundSession: typeof replyBackgroundSession
     parseMcpElicitationForm: typeof parseMcpElicitationForm
     validateMcpElicitationForm: typeof validateMcpElicitationForm
     query(opts: Omit<QueryOptions, 'cwd'> & { cwd?: string }): Promise<QueryHandle>
@@ -205,6 +207,7 @@ function createCliService(): CliServiceType {
     claudeCode: {
       openBackgroundAttachment,
       backgroundSession,
+      replyBackgroundSession,
       parseMcpElicitationForm,
       validateMcpElicitationForm,
       query(opts) {

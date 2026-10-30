@@ -442,6 +442,7 @@ describe('background reply ownership', () => {
   async function ready(replyBackground:NonNullable<Parameters<typeof createClaudeTerminalViews>[0]['replyBackground']>) {
     const send=vi.fn(),background=vi.fn(async()=>job),views=createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background,replyBackground})
     views.handle(mount,'one',send)
+    expect(send.mock.calls.at(-1)![0].canReplyBackground).toBe(true)
     views.handle({...mount,...link,type:'CLAUDE_TERMINAL_BACKGROUND',operation:'refresh',revision:1},'one',send)
     await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background?.status).toBe('done'))
     const request={...mount,...link,type:'CLAUDE_TERMINAL_BACKGROUND' as const,operation:'reply' as const,id:job.id,pid:job.pid,text:'Follow up.',revision:2}
