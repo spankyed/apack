@@ -72,6 +72,13 @@ scope even though thread opening is the first vertical implementation slice.
   correctness predicate. Reports are preserved under `.apack/performance/linux-evidence/` locally.
   Structured requested/observed message counts now distinguish page-bound violations from other
   readiness failures. Do not treat these warmups as qualified latency measurements.
+- On `82ac63c954`, five warmups and one measured trial passed with clean source/native provenance.
+  The default-length rerun reproduced `page-bound` on warmup 4: requestedMessages=100,
+  observedMessages=50, both recorders complete. Evidence is preserved in local run
+  `thread-open-lightweight-1793384389930`. Initial chat positioning now suppresses automatic paging
+  until its animation frames settle and cancels stale frames across thread changes/unmount. Seven
+  focused pack tests and pack typechecking pass; built-app verification remains required. This is a
+  correctness/work-bound fix, with no latency improvement claim.
 - Docker is restored with about 25 GiB free. Check for another expensive owner before launching;
   do not interfere with another session's containers/processes. The owned image includes Xvfb/xauth.
 - Linux runner bookkeeping files are declared by their owner and recorded as explicit untracked
