@@ -190,6 +190,17 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         const text = (await Promise.all((await readdir(projects,{withFileTypes:true})).filter(entry=>entry.isDirectory()).map(entry=>readFile(join(projects,entry.name,job.sessionId+'.jsonl'),'utf8').catch(()=>'')))).join('\n')
         return text.split('\n').filter(Boolean).map(line=>JSON.parse(line))
       }
+      const answered = async (text:string) => {
+        const rows=await childRows(),human=rows.find(row=>row.origin?.kind==='human'&&row.message?.content===text)
+        if(!human)return false
+        const byId=new Map(rows.filter(row=>row.uuid).map(row=>[row.uuid,row]))
+        return rows.some(row=>{
+          if(row.type!=='assistant'||!row.message?.content?.some((block:any)=>block.type==='text'&&block.text))return false
+          let parent=row.parentUuid;const seen=new Set<string>()
+          while(parent&&!seen.has(parent)&&seen.size<128){if(parent===human.uuid)return true;seen.add(parent);const prior=byId.get(parent);if(prior?.origin?.kind==='human')return false;parent=prior?.parentUuid}
+          return false
+        })
+      }
       await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeEnabled()
       await widget.getByRole('button',{name:'Reply',exact:true}).click()
       const input = widget.getByLabel('Message background session',{exact:true})
@@ -201,6 +212,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await expect(widget.getByRole('status').filter({hasText:'Message queued'})).toBeVisible({timeout:20000})
       await expect(input).toHaveValue('')
       await expect.poll(async()=>(await childRows()).filter(row=>row.origin?.kind==='human'&&row.message?.content===replyText).length,{timeout:15000}).toBe(1)
+      await expect.poll(()=>answered(replyText),{timeout:15000}).toBe(true)
       const retainedReply = 'Keep this separate follow-up through navigation.'
       await input.fill(retainedReply)
       await app.navigate('host/settings');await app.navigate('default-setup/threads')
@@ -209,6 +221,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await widget.getByRole('button',{name:'Send message',exact:true}).click()
       await expect(input).toHaveValue('',{timeout:20000})
       await expect.poll(async()=>(await childRows()).filter(row=>row.origin?.kind==='human'&&row.message?.content===retainedReply).length,{timeout:15000}).toBe(1)
+      await expect.poll(()=>answered(retainedReply),{timeout:15000}).toBe(true)
       const afterReply = await context()
       expect(afterReply.sessionId).toBe(sessionId);expect(afterReply.claude.totalCostUsd).toBe(beforeReply.claude.totalCostUsd)
       expect(afterReply.messages).toEqual(beforeReply.messages)
