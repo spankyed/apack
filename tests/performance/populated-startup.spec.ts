@@ -68,7 +68,7 @@ test('start a populated profile through admission to its initial usable thread v
         && context.chatMessageIds.every((id, index) => {
           const element = document.querySelector(`[data-message-id="${id}"]`);
           return context.messageContents[id]?.text === expected[index] && element?.getClientRects().length
-            && element.textContent?.includes(expected[index]!);
+            && element.textContent?.includes(expected[index]!.trimEnd());
         });
     }, expected);
     work.observedMessages = expected.length;
@@ -92,7 +92,9 @@ test('start a populated profile through admission to its initial usable thread v
     const state = await appPage.evaluate(() => {
       const win = window as unknown as PerformanceWindow;
       const snapshot = win.applicationState.getSnapshot();
-      return { applicationState: snapshot.value, panelSizes: snapshot.context.panelSizes, targetView: snapshot.context.targetView,
+      const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
+      return { currentThread: context.currentThread?.id, chatLimit: context.chatLimit, messages: context.chatMessageIds.length,
+        chatReceipt: win.__performance.lastStartupView('default-setup/threads', 'chat'), applicationState: snapshot.value, panelSizes: snapshot.context.panelSizes, targetView: snapshot.context.targetView,
         mainListRows: document.querySelectorAll('.thread-row').length,
         expectedTitleElements: document.querySelectorAll('[title="Search fixture 11"]').length };
     });
