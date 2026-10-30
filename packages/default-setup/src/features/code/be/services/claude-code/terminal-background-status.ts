@@ -49,6 +49,7 @@ export function createClaudeBackgroundStatus(options: {
     },
     get identity() { return closed || !lease ? undefined : { ...lease.identity } },
     get registration() { return acceptedRegistration },
+    get sequence() { return lease?.sequence ?? -1 },
     reset() { lease = undefined; acceptedRegistration = ++nextRegistration; if (expiry) clearTimeout(expiry); expiry = undefined; options.changed() },
     get value(): ClaudeBackgroundStatus | undefined { const info = lease?.info; return !closed && info && now() - info.observedAt <= 5000 ? info : undefined },
     close() { closed = true; lease = undefined; if (expiry) clearTimeout(expiry); expiry = undefined },

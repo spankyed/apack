@@ -9,6 +9,7 @@ export interface ClaudeBackgroundStatus {
   startedAt: number
   context?: { tokens: number; window: number; percent: number }
   totalCostUsd?: number
+  statusLine?: string
 }
 
 /** Original background job identity is distinct from the parent app conversation. */

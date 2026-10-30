@@ -594,6 +594,7 @@ interface ClaudeBackgroundStatus {
         percent: number;
     };
     totalCostUsd?: number;
+    statusLine?: string;
 }
 
 interface ClaudeBackgroundStatusIdentity {

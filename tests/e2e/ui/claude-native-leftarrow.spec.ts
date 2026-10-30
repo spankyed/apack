@@ -16,8 +16,9 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
   const parentOwnerLoss = process.env.CLAUDE_RESEARCH_BACKGROUND_OWNER_LOSS_APP === '1'
+  const childFormatter = process.env.CLAUDE_RESEARCH_BACKGROUND_FORMATTER_APP === '1'
   const childStatusLifecycle = process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_LIFECYCLE_APP === '1'
-  const childStatus = childStatusLifecycle || process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_APP === '1'
+  const childStatus = childFormatter || childStatusLifecycle || process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_APP === '1'
   const childReply = parentOwnerLoss || childStatus || process.env.CLAUDE_RESEARCH_BACKGROUND_REPLY_APP === '1'
   const childResume = process.env.CLAUDE_RESEARCH_BACKGROUND_RESUME_APP === '1'
   const childInteraction = process.env.CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP === '1'
@@ -316,6 +317,16 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await expect(input).toHaveValue('')
       await expect.poll(async()=>(await childRows()).filter(row=>row.origin?.kind==='human'&&row.message?.content===replyText).length,{timeout:15000}).toBe(1)
       await expect.poll(()=>answered(replyText),{timeout:15000}).toBe(true)
+      if(childFormatter){
+        const configured=widget.getByLabel('Background Claude configured status',{exact:true})
+        await expect(configured).toContainText('AppNativeMain '+job.sessionId,{timeout:15000})
+        await expect(configured).toContainText('Second native status line')
+        const info=await readInfo();expect(info.statusLine).toContain(job.sessionId)
+        const receipts=(await readFile(join(workspace!,'background-formatter-helper.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(row=>row.sessionId===job.sessionId)
+        expect(receipts.some(row=>row.stdout.trim().split('\n').flatMap((line:string)=>line.trim()||[]).join('\n')===info.statusLine)).toBe(true)
+        observations.childFormatter={info,receipts,parentStopped:parentOwnerLoss}
+      }
+
       const retainedReply = 'Keep this separate follow-up through navigation.'
       await input.fill(retainedReply)
       await app.navigate('host/settings');await app.navigate('default-setup/threads')
@@ -334,6 +345,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();if(parentOwnerLoss)await recordBackgroundReading('queued',name);await capture('apack-native-background-reply-queued-'+name+'.png')
       }
       if(childStatus){const info=await readInfo();expect(info.sessionId).toBe(job.sessionId);expect(info.pid).toBe(job.pid);expect(info.observedAt).toBeGreaterThan(observations.childStatus.before.observedAt);observations.childStatus={...observations.childStatus,after:info,parentAfter:afterReply,remountPreserved:true}}
+      if(childFormatter){await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toContainText(job.sessionId);observations.childFormatter.afterReturn=await readInfo()}
       observations.childReply = {replyText,retainedReply,rows:await childRows(),parentBefore:beforeReply,parentAfter:afterReply,workerBefore,workerAfter:await childProcessState(),queued:true,remountDraftPreserved:true}
       if(childStatusLifecycle){
         const auditPath=join(workspace!,'background-broker-audit.jsonl')
@@ -471,6 +483,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
     await expect(card).toContainText('This conversation moved to the background.')
     if(childStatus){await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0);observations.childStatus.retiredAfterStop=true}
+    if(childFormatter){await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toHaveCount(0);observations.childFormatter.retiredAfterStop=true}
     if(parentOwnerLoss&&childStatus){
       const authority=observations.independentStatusAuthority.beforeParentStop
       await expect.poll(async()=>{const current=await childProcessState(authority.pid);return !current||current.state==='Z'||current.start!==authority.process.start},{timeout:10000}).toBe(true)

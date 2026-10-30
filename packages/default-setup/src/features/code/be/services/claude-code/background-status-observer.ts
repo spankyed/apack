@@ -1,3 +1,4 @@
+import {createClaudeBackgroundFormatter, installClaudeBackgroundFormatterLauncher} from './background-formatter.ts'
 import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -32,28 +33,51 @@ export async function createClaudeBackgroundStatusObserver(options: {
     },
     changed,
   })
+  let formatter: ReturnType<typeof createClaudeBackgroundFormatter> | undefined
+  let launcher: Promise<string> | undefined
+  let formatterRegistration = -1, formatterSequence = -1
   const server = createServer(async (request, response) => {
     const reply = (code: number, value: unknown) => { if (!response.destroyed && !response.writableEnded) { response.writeHead(code, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)) } }
     try {
       if (closed || request.method !== 'POST' || request.headers['x-apack-native-token'] !== token) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
-      for await (const chunk of request) { bytes += chunk.length; if (bytes > 65536) return reply(413, {}); chunks.push(Buffer.from(chunk)) }
+      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/background-formatter' ? 262144 : 65536)) return reply(413, {}); chunks.push(Buffer.from(chunk)) }
       if (closed) return reply(409, {})
       const value = JSON.parse(Buffer.concat(chunks).toString('utf8'))
       if (!value || typeof value !== 'object' || Array.isArray(value)) return reply(400, {})
       if (request.url === '/background-register') {
         const lease = await status.register(value.sessionId, value.pid)
+        formatter?.reset()
         if (releaseTimer) clearTimeout(releaseTimer); releaseTimer = undefined
         reply(200, lease); return
       }
-      if (request.url === '/background-status') { await status.accept(value); reply(200, {}); return }
+      if (request.url === '/background-status') {
+        await status.accept(value)
+        const registration = status.registration, sequence = status.sequence
+        if (value.formatter && !formatter) {
+          launcher ??= installClaudeBackgroundFormatterLauncher()
+          const path = await launcher
+          if (closed || registration !== status.registration || sequence !== status.sequence) return reply(409, {})
+          formatter ??= createClaudeBackgroundFormatter({launcher: path, socketPath, brokerToken: token, changed})
+        }
+        const result = formatter?.configure(value)
+        formatterRegistration = status.registration; formatterSequence = status.sequence
+        changed(); reply(200, result ?? {}); return
+      }
+      if (request.url === '/background-formatter') {
+        const identity = status.identity, registration = status.registration
+        if (!identity || !status.value || !formatter?.matches(value)) return reply(409, {})
+        const fresh = await authority.identify(identity.sessionId, identity.pid, identity.cwd)
+        if (closed || registration !== status.registration || JSON.stringify(fresh) !== JSON.stringify(identity) || !status.value || !formatter?.matches(value)) return reply(409, {})
+        formatter!.accept(value); reply(200, {}); return
+      }
       reply(404, {})
     } catch { reply(409, {}) }
   })
   const close = () => closing ??= (async () => {
     closed = true; if (releaseTimer) clearTimeout(releaseTimer); if (monitor) clearInterval(monitor)
-    status.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
+    status.close(); formatter?.reset(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
     await authority.close(); await rm(directory, { recursive: true, force: true }); changed(); listeners.clear()
   })()
   async function checkReleasedChild() {
@@ -67,7 +91,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
     } catch {
       if (!closed && status.registration === registration && authority === current) {
         // Retire the process lease, retaining the small listener/plugin for a later original restart.
-        status.reset(); const retiring = current.close(); authority = options.authority(parentSessionId); await retiring
+        status.reset(); formatter?.reset(); const retiring = current.close(); authority = options.authority(parentSessionId); await retiring
       }
     } finally { checking = false }
   }
@@ -76,11 +100,11 @@ export async function createClaudeBackgroundStatusObserver(options: {
   return {
     directory, socketPath, token,
     get parentSessionId() { return parentSessionId },
-    get value() { return status.value },
+    get value() { const value = status.value; return value && formatterRegistration === status.registration && formatterSequence === status.sequence && formatter?.value !== undefined ? {...value, statusLine: formatter?.value} : value },
     get available() { return !closed },
     async resetParent(sessionId: string) {
       if (closed || sessionId === parentSessionId) return
-      parentSessionId = sessionId; status.reset()
+      parentSessionId = sessionId; status.reset(); formatter?.reset()
       const retiring = authority.close(); authority = options.authority(parentSessionId); await retiring
     },
     adoptParent(nextTarget: typeof options.target, changed: () => void) {

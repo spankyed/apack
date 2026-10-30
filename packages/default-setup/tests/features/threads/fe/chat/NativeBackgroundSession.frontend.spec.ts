@@ -56,3 +56,14 @@ it('shows child usage only for the listed live job and hides it when that worker
     info.pid=119;state.session!.state='stopped';await nextTick();expect(root.querySelector('[aria-label="Background session usage"]')).toBeNull()
   }finally{app.unmount();root.remove()}
 })
+
+it('renders original configured ANSI status only for the current live child worker',async()=>{
+ const state=reactive<ClaudeBackgroundSessionState>({...link,operation:'refresh',status:'done',revision:1,session:{id:'05ff1d31',sessionId:link.continuedInSessionId,cwd:'/owned',pid:119,state:'working'}})
+ const info={jobId:'05ff1d31',sessionId:link.continuedInSessionId,pid:119,observedAt:1,model:'sonnet',turns:2,startedAt:1,statusLine:'\u001b[32mOriginal helper\u001b[0m\nSecond line'}
+ const root=document.createElement('div');document.body.append(root)
+ const app=createApp(NativeBackgroundSession,{continuation:link,state,info});app.mount(root)
+ try{
+  const status=root.querySelector('[aria-label="Background Claude configured status"]')!;expect(status.textContent).toContain('Original helper');expect(status.textContent).toContain('Second line');expect(status.textContent).not.toContain('\u001b[')
+  state.session={...state.session!,pid:120};await nextTick();expect(root.querySelector('[aria-label="Background Claude configured status"]')).toBeNull()
+ }finally{app.unmount();root.remove()}
+})
