@@ -4,7 +4,7 @@ import * as fs from 'fs/promises'
 import { EARS } from '#generated/ears.ts'
 import type { DocumentDTO, CollectionDTO, LibraryIndex, LibraryItem, FolderItem, FolderContents, BreadcrumbItem } from '../types.ts'
 import { parentCollectionOf, collectionOfDocument, displayOrderOf, collectionPath } from '@apackdev/sdk/repositories'
-import { isRootCollection, formatFileSize, getContentLength } from './helpers.ts'
+import { formatFileSize, getContentLength } from './helpers.ts'
 import { isSymlinkId, isSymlinkCollection, getSymlinkFolderContents, resolveSymlinkPath } from './symlink.ts'
 import type { ContentSection, DocumentShortCode } from '#features/library/be/types.ts';
 
@@ -106,26 +106,45 @@ export const libraryQueries = {
     }
   },
 
+  /**
+   * Every folder as a tree, in four reads whatever its size: the folders, which have a parent (from anything,
+   * trashed or not, as `isRootCollection` asks), each one's live child folders in place order, and each one's
+   * documents. A folder's path is its parent's and its own name
+   */
   getCollections(): CollectionDTO[] {
-    const rootCollections = query(EARS.Entity.Collection)
-      .pick(['name', 'description', 'createdAt', 'updatedAt', 'symlinkPath'])
-      .filter(col => isRootCollection(col.id as EARS.EntityId))
+    const collections = query(EARS.Entity.Collection).pick(['name', 'description', 'createdAt', 'updatedAt', 'symlinkPath'])
+    if (!collections.length) return []
+    const ids = collections.map(col => col.id as EARS.EntityId)
+    const byId = new Map(collections.map(col => [col.id as string, col]))
+    const parented = new Set(query.withTrashed.ids(ids).inEdges(EARS.RelKind.PARENT_OF).map(edge => edge.target as string))
+    const children = new Map<string, string[]>()
+    for (const { source, target } of query.ids(ids).outEdges(EARS.RelKind.PARENT_OF, EARS.Entity.Collection)) {
+      const kept = children.get(source) ?? []
+      if (!kept.includes(target)) children.set(source, [...kept, target])
+    }
+    const documents = new Map<string, Set<string>>()
+    for (const { source, target } of query.ids(ids).outEdges(EARS.RelKind.CONTAINS, EARS.Entity.Document)) {
+      documents.set(source, (documents.get(source) ?? new Set()).add(target))
+    }
 
-    const buildTree = (cols: any[]): CollectionDTO[] =>
-      cols.map(col => ({
-        id: col.id,
-        name: col.name as string,
-        description: col.description as string | undefined,
-        path: collectionPath(col.id as EARS.EntityId),
-        documentCount: query.ids(col.id as EARS.EntityId).out(EARS.RelKind.CONTAINS, EARS.Entity.Document).count(),
-        childCollections: buildTree(query.ids(col.id as EARS.EntityId).out(EARS.RelKind.PARENT_OF, EARS.Entity.Collection).pick(['name', 'description', 'createdAt', 'updatedAt', 'symlinkPath'])),
-        displayOrder: displayOrderOf(col),
-        createdAt: new Date(col.createdAt as number).toISOString(),
-        updatedAt: new Date(col.updatedAt as number || col.createdAt as number).toISOString(),
-        ...(col.symlinkPath ? { symlinkPath: col.symlinkPath as string } : {}),
-      }))
+    const buildTree = (cols: typeof collections, parentPath: string[]): CollectionDTO[] =>
+      cols.map(col => {
+        const path = [...parentPath, col.name as string]
+        return {
+          id: col.id,
+          name: col.name as string,
+          description: col.description as string | undefined,
+          path,
+          documentCount: documents.get(col.id)?.size ?? 0,
+          childCollections: buildTree((children.get(col.id) ?? []).flatMap(id => byId.get(id) ?? []), path),
+          displayOrder: displayOrderOf(col),
+          createdAt: new Date(col.createdAt as number).toISOString(),
+          updatedAt: new Date(col.updatedAt as number || col.createdAt as number).toISOString(),
+          ...(col.symlinkPath ? { symlinkPath: col.symlinkPath as string } : {}),
+        }
+      })
 
-    return buildTree(rootCollections)
+    return buildTree(collections.filter(col => !parented.has(col.id)), [])
   },
 
   /** Whether a document is a file on disk under a symlinked folder, rather than one the library stores */
