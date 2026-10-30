@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "832f777303658d341b0ee745b5ad378536375d73",
+  "researchCommit": "e8f5ab7a5afea24c83eb9f48dd7f804eda1c29c4",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -37,7 +37,7 @@
     "src/analysis/native-export-graph.mjs": "1a545f4b579d1872b76b6d4eba0f0be96b62cb312f1e9d6833e7c7879dee93d1",
     "src/analysis/native-help-contracts.mjs": "df59564c2e6fc697fd279a756d2ce23566c208aff399449190f16916cb28652a",
     "src/analysis/native-platform-map.mjs": "5314bcc93beab93d815da1589d0e0a4d1b7957408fecdbbeba12c79cec607e4b",
-    "src/analysis/native-return-dialogs.mjs": "11810ae8535d7e2f808f0736865ac420b6c4a9e08aca7fe4ecc68a4a592eee1c",
+    "src/analysis/native-return-dialogs.mjs": "984c1221d2eaae9723a2c07d72467f7da646df1696add63352003be686c25edf",
     "src/analysis/native-sandbox-consent.mjs": "8849e6defcec8edbe0c6f8eac646305703a786897cfea3cbbea6b64561534aed",
     "src/analysis/nested-settings-schema.mjs": "18b7325340e055a4ff21818199b0ecf69035c8dd7553526818fbef5e17f63ea0",
     "src/analysis/protocol-schemas.mjs": "ad3d3b8138038efaf2d9c3294d1fe8335221f980585fdc061ab49585f6c248ee",
@@ -96,7 +96,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "b76f48f8cb0e4f5dc721723fba39395d0db59a030675adcd25ff98d7b6441cf5",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "7b2a40999fca7e94566c07804eb3540fffa7729a3c40a3a3f543097393c87559",
+    "src/integration/apack-terminal-owner-app.mjs": "4a9b508084ae778fdbc1801a1fba866f054f5d348162606b2370ce2ca50a53fd",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -130,6 +130,7 @@
     "src/integration/native-background-handoff.mjs": "2bdb8648d8bd98146832eb3d9b458970e5e076d249cf214dcae9f214c148ab1e",
     "src/integration/native-background-session.mjs": "5a09af5ca80cd4a026a7688f810bb773f9a42bcc462ac3ca83a71442929dacf1",
     "src/integration/native-credit-admission.mjs": "63659e6970b5dede4d832c79ee448be5349fc4caa0f4b8e8ac10f9fb74599ae2",
+    "src/integration/native-leftarrow-confirmation.mjs": "8dee80ad089e76b157855eb4169dab96ba914a5e4777ce96946d2c62be1b0acb",
     "src/integration/native-main-document-paste.mjs": "bd6890a462acd43ce026cb6d763f8e89bd03576f3565d514ba04b4f843715f33",
     "src/integration/native-os-policy-discovery.mjs": "70766dd350e4041f020a069e221068758e209a4fd0c8998c48faa81f24eaba1a",
     "src/integration/native-platform-preload.mjs": "d877c2c3a67aab23a73fc56438ee87d8455afb0e7754a01efef16e15f734fd24",
@@ -144,7 +145,7 @@
     "src/integration/retry.mjs": "1deafdeaff8c2e8c3bd6c2db8ee20c14fe08ab55050f4668e498a623dfdd6353",
     "src/integration/revalidate-held-helper.mjs": "2ffab9830556cd112944216225c2711a113c8d2626fff76a2ab6d5d45f58007b",
     "src/integration/revalidate-native-question-owner.mjs": "0ae408485822afb83be99d033f423195e6de112035347673fa67dd44e0dad6f0",
-    "src/integration/run-apack-controls.mjs": "6a8a484d96b11bed73d762b89775f1d145b08766be77885d8f2259de3812e899",
+    "src/integration/run-apack-controls.mjs": "c7980727f06b592283e9b77710abaf13d3397ce083e8bd5c4a91fc741802bbf8",
     "src/integration/runner-process-vitest.config.mjs": "4ca3fc61bb391a1503bb30c423045858a90ba11d1b9a6bff00f14c649fe238b7",
     "src/integration/skill-management-app-driver.mjs": "a79c5a8e5e93748aa2a95935d356cf6c9fcd1b89fcb0931810a277a3125f88a0",
     "src/integration/skill-management-app.mjs": "1ab63ebd9e63a9c6209bd17fef19f258c71828e4efb0e317a5accaed5cef55f3",
@@ -231,6 +232,8 @@
     "src/protocol/native-history-reopen-fixture.mjs": "35957458e3d38b8a938cee1d453655c4b153f98f0d9e26329dae85668affc8c4",
     "src/protocol/native-inline-eligibility-preload.mjs": "ad47a06d05a6250c9a202f84c7460c57869987ac3af744093121e98a524fcb3d",
     "src/protocol/native-large-document-fixture.mjs": "c0c05db460c2938c8528ec78825c1071de375977957e053877c5a7588f94d8c6",
+    "src/protocol/native-leftarrow-lookup-trace.mjs": "c1d7e40488c53215788f390e7aaddf439c0919e0490fe0d273ec963e0de05783",
+    "src/protocol/native-leftarrow-observation.mjs": "1cbfb96626bf303fa6e58925591e57eff8a827bb8d2f8ed1589b703c3a5b0fd4",
     "src/protocol/native-log-fixture.mjs": "a9b535f04463416b35cb2b45e6dad6361495bedbb05e588c16d2836e1224bfd6",
     "src/protocol/native-lsp-fixture.mjs": "266ef8970f3f7c5a93ecbfcbf45f74738b996e6acc620c596a5c5bbbe599e2ca",
     "src/protocol/native-lsp-recommendation.mjs": "006cdb3d06f1299688b6848c9a55d11eb4308c757f13a6cbe2077c99d678b636",
@@ -363,5 +366,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "7d677d509704bf61adff0d29d14b3570d5c382cf4dc0ebf0a12a6697e9111f92"
+  "archiveSha256": "41a882753bbc831dd41ab7af9dadce98458329c29f6daed96d2308dc6da57d74"
 }

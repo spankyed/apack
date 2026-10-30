@@ -170,3 +170,14 @@ the durable native `continued-in` row, saved app parent/cost and native stopped 
 attachment/approvals/questions/resume and task/left-arrow warnings remain separate acceptance.
 The original-only `native-background-session.mjs` and `native-background-handoff.mjs` probes
 require the same inspected offline boundary and fresh private HOME; they are not app acceptance.
+
+Use `CLAUDE_RESEARCH_LEFTARROW_APP=1` with kind `terminal-plan-app-theme` through
+`probeApackControls` for the distinct original left-arrow journey. Reuse the affected prebuilt
+app and the same locked, capped offline Linux boundary; the probe does not build it. The case
+exercises genuine Workflow admission, nonempty-draft refusal, original warning/Stay/Escape/confirm,
+retained parent identity/history/final cost, editable local notes with Send disabled, explicit
+Refresh and UI Stop at normal/compact sizes. Linux checks the original child process identity
+and exit after Stop. Open all eight captures and independently reconcile the original parent
+journal, durable child link, saved parent-only rows and exact cost; an exited-zero fixture alone
+is insufficient. Child attachment/resume, gesture discoverability, other owner/task/policy variants
+and original combined F1–F5 remain separate. No CI dispatch is authorized by this profile.
