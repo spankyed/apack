@@ -11,8 +11,8 @@ export class BrowserRecordingContext implements ContextManager {
   }
   bind<T>(context: Context, target: T): T {
     if (typeof target !== 'function') return target;
-    const manager = this;
-    return function(this: unknown, ...args: unknown[]) { return manager.with(context, target as (...args: unknown[]) => unknown, this, ...args); } as T;
+    const within = this.with.bind(this);
+    return function(this: unknown, ...args: unknown[]) { return within(context, target as (...args: unknown[]) => unknown, this, ...args); } as T;
   }
   enable(): this { return this; }
   disable(): this { this.context = ROOT_CONTEXT; return this; }
