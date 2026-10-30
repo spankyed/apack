@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 import { assertComparable, comparisonOrder, manifestSchema, processReportSchema, summarize, trialSchema } from '../../src/performance/report.ts';
 const processReport = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
-const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', processes: { renderer: processReport, backend: processReport } };
+const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', work: {}, processes: { renderer: processReport, backend: processReport } };
 it('refuses manufactured success without view readiness, a duration, or complete process reports', () => {
   for (const patch of [{ completion: 'missing' }, { durationMs: undefined }, { correct: false }, { processes: {} }, { processes: { renderer: { ...processReport, unfinished: 1 } } }]) {
     expect(trialSchema.safeParse({ ...trial, ...patch }).success).toBe(false);
