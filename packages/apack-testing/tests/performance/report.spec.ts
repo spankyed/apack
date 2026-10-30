@@ -1,4 +1,5 @@
 import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
+import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import type { z } from 'zod';
 import { expect, it } from 'vitest';
 import { assertComparable, comparisonOrder, manifestSchema, processReportSchema, summarize, trialSchema, validatePerformanceRun } from '../../src/performance/report.ts';
@@ -66,4 +67,14 @@ it('rejects incomplete and internally inconsistent whole runs before comparison'
     [trials[0], { ...trials[1], outcome: 'cancelled' }]]) {
     expect(() => validatePerformanceRun(manifest, changed, 1)).toThrow();
   }
+});
+
+it('preserves process statistics across the portable schema and rejects concealed sample loss', async () => {
+  const controller = createNodePerformanceController();
+  controller.start('lightweight');
+  const report = await controller.stop();
+  const parsed = processReportSchema.parse(report);
+  expect(parsed.processStatistics).toEqual(report.processStatistics);
+  expect(parsed.processStatistics).toBeDefined();
+  expect(processReportSchema.safeParse({ ...report, processStatisticsFailures: 1 }).success).toBe(false);
 });

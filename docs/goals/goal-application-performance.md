@@ -160,11 +160,25 @@ scope even though thread opening is the first vertical implementation slice.
   `/private/tmp/apack-performance-elmdb-pinned`, selected with `APACK_LINUX_ELMDB_ROOT`. This avoids
   concurrent edits in the live native checkout. All four scenarios need an integrated run on this pin.
 
+- On `c2c487ffe0`, all four integrated contracts passed against the frozen native pin, each with five
+  warmups and one measured trial. Startup's six fresh launches verified exact restored chat content,
+  page size, corpus and matching chat revision. All captures were complete. Retained local evidence:
+  `populated-startup-lightweight-1793392442047`, `thread-open-lightweight-1793392510435`,
+  `search-lightweight-1793392521893`, `streaming-lightweight-1793392532322`.
+  These focused contract runs do not establish 20-trial variability or overhead.
+- The built-app `search-supersession` counterfactual passed on that source: an actual old-query result
+  is deliberately delivered to the actor after supersession and cancellation. The actor retains current
+  results/empty cancelled state. This proves its query guard; transport generations are separately tested.
+- Node recording now has aggregate CPU, sampled RSS/heap maxima, GC and event-loop observations using
+  constant memory. Disabled mode starts no sampler. Timers/observers stop with recording; failed samples
+  remain explicit and make capture incomplete. Host lifecycle/fault tests and portable-schema roundtrip
+  pass, as do affected host/testing/API/test-root types. Built-app integration of these totals is pending.
+
 ## Required remaining work
 
 Remaining application counterfactuals/overhead and independent late-search fault injection; strong
 populated-startup verification and integrated four-scenario qualification; cross-revision orchestration and full manifest/
-trial consistency checks; detailed profiles/process statistics, streaming backlog and overhead qualification;
+trial consistency checks; detailed profiles/renderer resource observations, streaming backlog and overhead qualification;
 full repository and strict acceptance; dependent reviewable PRs.
 Keep PR #293 a draft until its slice is qualified. Do not treat the recorder, authored scenarios,
 passing unit tests, or capture-integrity flags as completion of the approved goal.

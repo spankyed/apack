@@ -10,6 +10,16 @@ export const spanSchema = z.object({
   links: z.array(z.object({ traceId: z.string(), spanId: z.string() })).max(32), droppedLinks: count,
 });
 export const processReportSchema = z.object({
+  processStatistics: z.object({
+    samplingFailures: count,
+    durationMs: z.number().finite().nonnegative(), cpuUserMicros: count, cpuSystemMicros: count,
+    rssStartBytes: count, rssEndBytes: count, rssSampledMaxBytes: count,
+    heapStartBytes: count, heapEndBytes: count, heapSampledMaxBytes: count,
+    gcCount: count, gcDurationMs: z.number().finite().nonnegative(),
+    eventLoopUtilization: z.number().finite().min(0).max(1),
+    eventLoopHistogramMaxMs: z.number().finite().nonnegative(), eventLoopLateTickMaxMs: z.number().finite().nonnegative(),
+  }).optional(),
+  processStatisticsFailures: count.optional(),
   observations: z.array(z.string().max(16 * 1024 * 1024)).max(10_000), bytes: count.max(16 * 1024 * 1024), dropped: count, truncated: z.boolean(),
   rejected: count, droppedMetadata: count, mode: z.enum(['disabled', 'lightweight', 'detailed']),
   active: count, unfinished: count, droppedStarts: count, invalidCarriers: count, detachFailures: count,
@@ -18,7 +28,8 @@ export const processReportSchema = z.object({
   const bytes = report.observations.reduce((sum, value) => sum + Buffer.byteLength(value), 0);
   if (bytes !== report.bytes) ctx.addIssue({ code: 'custom', message: 'Encoded observation byte count differs' });
   if (report.complete && (report.truncated || report.dropped || report.rejected || report.droppedMetadata || report.active
-    || report.unfinished || report.droppedStarts || report.invalidCarriers || report.detachFailures || report.droppedEvents || report.contextFailures || report.rejectedStarts || report.invalidAttributes)) {
+    || report.unfinished || report.droppedStarts || report.invalidCarriers || report.detachFailures || report.droppedEvents || report.contextFailures || report.rejectedStarts || report.invalidAttributes
+    || report.processStatisticsFailures || report.processStatistics?.samplingFailures)) {
     ctx.addIssue({ code: 'custom', message: 'Lossy recording cannot be complete' });
   }
   for (const encoded of report.observations) {

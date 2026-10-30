@@ -9,8 +9,29 @@ import { createEarsOperationObserver, EARS_SPAN_NAMES, EARS_SPAN_ATTRIBUTES } fr
 export interface TraceCarrier { traceparent?: string; tracestate?: string }
 export type RecordingMode = 'disabled' | 'lightweight' | 'detailed';
 
+/** Process totals for the recording window, never attributed to individual overlapping actions. */
+export interface PerformanceProcessStatistics {
+  samplingFailures: number;
+  durationMs: number;
+  cpuUserMicros: number;
+  cpuSystemMicros: number;
+  rssStartBytes: number;
+  rssEndBytes: number;
+  rssSampledMaxBytes: number;
+  heapStartBytes: number;
+  heapEndBytes: number;
+  heapSampledMaxBytes: number;
+  gcCount: number;
+  gcDurationMs: number;
+  eventLoopUtilization: number;
+  eventLoopHistogramMaxMs: number;
+  eventLoopLateTickMaxMs: number;
+}
+
 /** Encoded process observations and capture-integrity counters, portable across the API boundary. */
 export interface PerformanceRecordingReport {
+  processStatistics?: PerformanceProcessStatistics;
+  processStatisticsFailures?: number;
   observations: readonly string[];
   bytes: number;
   dropped: number;
