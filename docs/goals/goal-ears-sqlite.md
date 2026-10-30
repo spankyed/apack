@@ -192,7 +192,7 @@ No master merge, release, production adoption or version-only PR is authorized. 
 Active integration checkout: `/private/tmp/ears-sqlite-query-integration`. The preceding checkpoint is
 preserved at `/private/tmp/ears-sqlite-diagnosis-evidence`, `68cf78a2f4`.
 
-Current checkpoint: integrate automatic owner lifecycle and resolve admission responsiveness on committed master `59ed33cdb9` and native
+Current checkpoint: integrate claimed model ownership with separate logical/native readiness and resolve admission responsiveness on committed master `59ed33cdb9` and native
 `006d6cec88`. Detached merge `edf17cd0dc` integrates master’s runner cleanup and descendant native pin into
 `23a1e941c7`; exact-source combined acceptance remains pending. The preceding merge `399c4765f0` combines
 candidate `fbd3c1c441` with master `debeddc3a6a`,
@@ -201,8 +201,9 @@ retaining SQLite explanations/backend assertions, master reverse-traversal clari
 relocation and batched library queries. No source branch or other-agent checkout was merged/reset.
 The previous `330efa68e6` integration of `68cf78a2f4` and master `8b1a479b96` is historical.
 The draft branch publishes candidates for CI review; publication does not establish combined acceptance.
-Exact base `2d0a0e7d48` is now all-platform green; the later admission batching change has Linux
-qualification and requires new source qualification before final acceptance.
+Exact base `1efad34246` is now all-platform green in `41013324901`, including ordinary package loading,
+current app queries and native pin `006d6cec88`. Later service-ownership edits still need their own
+qualification. Full Strict and the complete adoption/performance criteria remain required.
 Closing checks are matching native source/build, complete platform and full Strict gates, all five
 current app-query/SDK contracts, unchanged primary data/units/watches and exact-input verification.
 [Integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/master-query-integration/README.md)
@@ -378,11 +379,28 @@ private-helper correction; the five corrected artifact cases, EARS/host/script t
 cases pass afterwards. Current platform CI must qualify Windows/macOS build flags and exact complete inputs.
 The first current-source platform run, `41012481990`, retains a Windows setup failure: early MSVC
 activation makes rustc resolve Git's unrelated `link.exe` in bash. Shared setup now pins the absolute
-Microsoft linker before native dependency compilation; exact Windows verification is pending. The
+Microsoft linker before native dependency compilation; exact run `41013324901` is now green on all three
+CI hosts. [Downloaded package/platform evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-package-distribution/platform-41013324901/README.md)
+verifies the new artifact cases, native binary equality and all current app queries. The
 [retained failure](../references/evidence/ears-sqlite-implementation-2026-10-28/native-package-distribution/windows-linker/README.md)
-does not qualify any package/contract tests on that host. Other jobs continue on their original source.
+qualifies no package/contract tests on that failed host. The corrected exact run supplies the subsequent qualification;
+source `38aecfe554` also completes Linux/macOS successfully.
 Signing must finalize native binary hashes after library signing and before app/installer sealing. Normal
 app owner creation/recovery, live replacement and physical refresh remain separate; no adoption is implied.
+
+[Cross-process model ownership](../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-ownership/README.md)
+now uses pinned `fs-native-extensions` 1.5.2 with a persistent per-store inode. File ownership excludes
+independent handles/processes and survives a handled termination signal until workers exit; process death
+releases it. Idle services release synchronously. Final ordinary package builds, all 646 SQLite EARS cases,
+types/boundaries/lint and two negative controls pass in private Linux; new dependency/platform qualification
+remains required. The earlier package/linker checkpoint `1efad34246` is green on all three CI hosts, with
+raw artifacts independently inspected; its result does not qualify these later ownership changes.
+
+Next separate logical index readiness from optional native model completion before activating app owners.
+Current startup/pack registration waits on `indexesReady()`, which includes native work and failure; leaving
+that unchanged would block ordinary ready queries on optional training. Preserve an explicit native wait
+for maintenance/benchmarks, then compose claimed recovery, normal owner creation and shutdown. Physical
+refresh, live replacement suspension and the complete performance/application gates remain required.
 
 Still required, without narrowing phases 3–7:
 

@@ -1,4 +1,5 @@
 // Durable native training/admission attempts. The shared scheduler owns their writer transactions.
+import { claimNativeVectorOwner } from './vector-owner.ts';
 import { randomUUID, createHash } from 'node:crypto';
 import type { SqliteDatabase } from './database.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
@@ -25,8 +26,11 @@ export class SqliteVectorModels {
   lastError?:unknown;
   constructor(db:SqliteDatabase,extension:string) {
     if(db.sql.inTransaction)fail('UNIT_OPEN','Construct the native model owner outside a foreground transaction');
-    this.db=db;this.release=db.claimVectorTrainingOwner();
+    this.db=db;const releaseHandle=db.claimVectorTrainingOwner();
+    let releaseFile:(()=>void)|undefined;
     try {
+      const fileClaim=claimNativeVectorOwner(db.path);releaseFile=fileClaim;
+      this.release=()=>{try{fileClaim();}finally{releaseHandle();}};
       this.index=new SqliteVectorIndex(db,extension);this.trainer=new SqliteVectorTraining(db,extension);
       this.admission=new SqliteVectorAdmission(db);
       db.sql.exec(`CREATE TABLE IF NOT EXISTS vector_training(
@@ -37,7 +41,12 @@ export class SqliteVectorModels {
       db.sql.exec('CREATE INDEX IF NOT EXISTS vector_training_state ON vector_training(state,generation)');
       this.orphanSweep=!!this.orphan();
       db.indexBuilds.attachVectorModels(this);
-    } catch(error){this.release();throw error;}
+    } catch(error){
+      try{releaseFile?.();}
+      catch(cleanup){throw Object.assign(new AggregateError([error,cleanup],'Native model construction and claim cleanup failed',{cause:error}),{code:(error as {code?:unknown})?.code});}
+      finally{releaseHandle();}
+      throw error;
+    }
   }
   invalidateAdmission(dependencies:ReadonlyMap<string,ReadonlySet<number>>):void { this.admission.invalidate(dependencies); }
   committed(changes:ReadonlySet<string>):void { this.admission.committed(changes); }
@@ -158,6 +167,13 @@ export class SqliteVectorModels {
   stop():Promise<void> {
     if(this.stopping)return this.stopping;
     this.stopped=true;
+    // With no running worker there is nothing asynchronous to join. A synchronous close may then
+    // reopen immediately; active workers keep the descriptor until their actual exit below.
+    if(!this.running) {
+      this.outcome=undefined;
+      try{this.release();this.stopping=Promise.resolve();}catch(error){this.stopping=Promise.reject(error);}
+      this.db.indexBuilds.detachVectorModels(this,this.stopping);return this.stopping;
+    }
     this.stopping=(async()=>{
       try{await this.trainer.stop();await this.running;}
       finally{this.outcome=undefined;this.release();}

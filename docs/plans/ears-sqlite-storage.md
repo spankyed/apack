@@ -505,6 +505,21 @@ owner overrides remain explicit. The CI wrapper requires independent/package byt
 is a declared package input; Windows compiler setup precedes package production. Signed/installed artifacts
 must finalize their binary hashes after library signing, before the outer app is sealed; that lifecycle is
 not supplied by an unsigned npm package. Automatic model-owner creation remains separate.
+Native model constructors now take an OS-backed service claim using pinned `fs-native-extensions` 1.5.2.
+One persistent empty inode per store prevents independently opened services from recovering each other's
+work. The descriptor remains held through actual worker exit; no signal/PID timeout releases it early.
+Idle owners release synchronously, and process death releases kernel ownership. The addon is loaded lazily
+through one typed consumed signature, avoiding ambient declarations in consuming workspace builds.
+This does not certify network filesystems, arbitrary inode deletion or noncooperating writers.
+
+Before normal app owner activation, separate logical generation readiness from optional native training:
+`SqliteIndexBuilds.indexesReady()` currently waits on `vectorModels.hasWork()` and reports model failure.
+Startup and live pack registration use that port; activating a service unchanged would block them on
+optional model admission even when ordinary queries are ready. Keep logical readiness usable while native
+work runs, provide an explicit native-completion wait for maintenance/benchmarks, and preserve readiness
+watch delivery without inventing logical commits. Then compose claimed recovery/owner creation and the
+already implemented drain path into normal boot. No claim or raw constructor implicitly grants physical
+replacement/deletion authority.
 The remaining integration must create/load normal app owners, preserve incumbents during physical model
 refresh, drain before file replacement/deletion, complete rebuild/restore/audit ownership, and distribute/load
 trusted native artifacts on every writer and read-only candidate connection. Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,

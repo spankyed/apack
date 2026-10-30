@@ -351,6 +351,21 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(e.query('Row').count()).toBe(520);
   });
 
+  it('excludes independent connections until the owning native worker actually drains',async()=>{
+    const {db,models,job,write}=fixture();
+    const extension=process.env.EARS_VEC1_EXTENSION!,peer=new SqliteDatabase({path:db.path,syncs:false,nativeVectorExtension:extension});
+    let second:SqliteVectorModels|undefined;
+    try {
+      expect(()=>new SqliteVectorModels(peer,extension)).toThrow(expect.objectContaining({code:'BACKGROUND_OWNER_EXISTS'}));
+      const release=peer.claimVectorTrainingOwner();release(); // A refused file claim must release its handle claim.
+      write(()=>models.enqueue(job));expect(models.start()).toBe(true);
+      const draining=db.drainBackground();
+      expect(()=>new SqliteVectorModels(peer,extension)).toThrow(expect.objectContaining({code:'BACKGROUND_OWNER_EXISTS'}));
+      await draining;second=new SqliteVectorModels(peer,extension);
+      expect(second).toBeDefined();
+    }finally{await second?.stop();peer.close();}
+  });
+
   it('enforces one owner and drains workers before allowing file close and a new owner',async()=>{
     const {db,e,models,job,write}=fixture();
     expect(()=>new SqliteVectorModels(db,process.env.EARS_VEC1_EXTENSION!)).toThrow(expect.objectContaining({code:'BACKGROUND_OWNER_EXISTS'}));
