@@ -179,3 +179,21 @@ seed into a fresh process per trial. A manual bounded runner covers all four sce
 lightweight budget is evaluated only by full manual qualification. Six comparison contract tests and
 two runner configuration tests pass, alongside the existing fifteen report/store tests. End-to-end
 mode-pair verification, full overhead/sample evidence and cross-revision execution remain open.
+
+On `e903d33ac0`, all four mode-pair contract paths passed in
+`qualification-disabled-vs-lightweight-1793402601416` (five warmups and two measured actions per mode).
+Startup includes fourteen independently launched/closed copies and passed mode-specific manifest and
+invocation admission. This contract run does not qualify overhead. A full search comparison then
+passed all forty measured correctness/capture checks but missed the declared 5% budget:
+10.60 ms disabled versus 11.65 ms lightweight median (+1.05 ms, +9.91%), with full raw ranges/samples in
+`qualification-disabled-vs-lightweight-1793402846262/search`. This is an unresolved acceptance failure,
+not a qualified lightweight result.
+
+Two bounded, explicitly unqualified diagnostics are retained: resource refusal keeps correct results
+but marks renderer capture incomplete (`search-resource-refusal-1793403194`); a CPU-only batch avoids
+per-action heap-export GC (`search-cpu-diagnostic-1793403516`). Refusing renderer metrics did not remove
+the gap. CPU sampling's largest apparent self-time entries were single 27/53 ms scheduling gaps, so
+these do not justify changing SDK attribute handling. Do not discard those samples or claim a CPU
+hotspot from them. All qualification results above and diagnostic profiles are copied to ignored
+`.apack/performance/linux-evidence/`. Cross-revision execution, remaining final-count mode evidence,
+the unresolved lightweight budget, final review and broad local/manual strict gates remain open.

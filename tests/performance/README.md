@@ -137,3 +137,12 @@ identities and the declared execution policy. A child failure, incomplete captur
 provenance cannot qualify. The disabled-to-lightweight median budget is 5%; a full manual qualification
 above that budget exits unsuccessfully while preserving evidence and finishing other selected actions.
 Ordinary CI never runs or enforces the clock budget. Detailed overhead has no assumed low-cost claim.
+
+For a demonstrated search-overhead investigation only, the runner-owned `/work` copy can execute
+`bash tests/performance/counterfactuals/search-resource-refusal.sh` or
+`bash tests/performance/counterfactuals/search-cpu-profile.sh`. Both restore their harness on exit.
+The first asserts correct business results plus explicit incomplete capture. The second uses existing
+Node Inspector and Playwright CDP for one CPU-only batch, with 16 MiB per profile and no heap sampler.
+Both deliberately modify the disposable harness; neither can qualify overhead. CPU samples include
+scheduling gaps and recording setup/export, so inspect sample counts and deltas before attributing
+wall time to a sampled function. Detailed combined profiles also include profiler setup/heap-stop work.
