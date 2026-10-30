@@ -42,3 +42,30 @@ it('binds the public helper PID to the original roster, dispatch, durable job an
  await expect(api(request)).resolves.toEqual(identity);expect(jobs.iZt).toHaveBeenCalledWith(119,'worker-start');expect(jobs.iZt).toHaveBeenCalledWith(100,'host-start')
  worker.replProcStart='';await expect(api(request)).rejects.toThrow('retired')
 })
+
+it('renews the producer lease on same-worker reload and immediately accepts its reset counter',async()=>{
+ const f=fixture();const old=(await f.store.register(child,119)).token
+ await f.store.accept({...f.message,token:old,sequence:100});const prior=f.store.value
+ const next=(await f.store.register(child,119)).token;expect(next).not.toBe(old);expect(f.store.value).toEqual(prior)
+ await expect(f.store.accept({...f.message,token:old,sequence:101})).rejects.toThrow('expired')
+ await f.store.accept({...f.message,token:next,sequence:1,metadata:{model:'sonnet',turns:3}})
+ expect(f.store.value?.turns).toBe(3)
+})
+
+it('refuses an old pending publication after a same-worker producer reload',async()=>{
+ const f=fixture();f.message.token=(await f.store.register(child,119)).token
+ let finish!:(value:typeof identity)=>void;f.identify.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+ const pending=f.store.accept(f.message);await vi.waitFor(()=>expect(f.identify).toHaveBeenCalledTimes(2))
+ const next=(await f.store.register(child,119)).token;finish(identity);await expect(pending).rejects.toThrow('replaced')
+ await f.store.accept({...f.message,token:next});expect(f.store.value?.model).toBe('sonnet')
+})
+
+it('publishes silence expiry so mounted app views do not wait for another heartbeat',async()=>{
+ vi.useFakeTimers();const f=fixture()
+ try{
+  f.message.token=(await f.store.register(child,119)).token;await f.store.accept(f.message);f.changed.mockClear()
+  f.advance(5001);await vi.advanceTimersByTimeAsync(5000)
+  expect(f.store.value).toBeUndefined();expect(f.changed).toHaveBeenCalledOnce()
+  f.store.close();f.changed.mockClear();await vi.advanceTimersByTimeAsync(10000);expect(f.changed).not.toHaveBeenCalled()
+ }finally{f.store.close();vi.useRealTimers()}
+})

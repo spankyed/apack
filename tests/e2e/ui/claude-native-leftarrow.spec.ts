@@ -2,8 +2,8 @@ import {createHash} from 'node:crypto'
 import {stripVTControlCharacters} from 'node:util'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { readFile, writeFile, readdir, rename } from 'node:fs/promises'
-import { join } from 'node:path'
+import { readFile, writeFile, readdir, rename, stat, unlink } from 'node:fs/promises'
+import { join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
@@ -14,7 +14,8 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
-  const childStatus = process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_APP === '1'
+  const childStatusLifecycle = process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_LIFECYCLE_APP === '1'
+  const childStatus = childStatusLifecycle || process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_APP === '1'
   const childReply = childStatus || process.env.CLAUDE_RESEARCH_BACKGROUND_REPLY_APP === '1'
   const childResume = process.env.CLAUDE_RESEARCH_BACKGROUND_RESUME_APP === '1'
   const childInteraction = process.env.CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP === '1'
@@ -251,6 +252,60 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       }
       if(childStatus){const info=await readInfo();expect(info.sessionId).toBe(job.sessionId);expect(info.pid).toBe(job.pid);expect(info.observedAt).toBeGreaterThan(observations.childStatus.before.observedAt);observations.childStatus={...observations.childStatus,after:info,parentAfter:afterReply,remountPreserved:true}}
       observations.childReply = {replyText,retainedReply,rows:await childRows(),parentBefore:beforeReply,parentAfter:afterReply,workerBefore,workerAfter:await childProcessState(),queued:true,remountDraftPreserved:true}
+      if(childStatusLifecycle){
+        const auditPath=join(workspace!,'background-broker-audit.jsonl')
+        const brokerRows=async()=>readFile(auditPath,'utf8').then(text=>text.trim().split('\n').filter(Boolean).map(line=>JSON.parse(line))).catch(error=>error.code==='ENOENT'?[]:Promise.reject(error))
+        const registrations=async()=>(await brokerRows()).filter(row=>row.path==='/background-register'&&row.status===200&&row.leaseHash)
+        const httpRows=async()=>{
+          const names=(await readdir(workspace!)).filter(name=>name.startsWith('native-background-http-'+job.sessionId+'-')&&name.endsWith('.json'))
+          return Promise.all(names.map(name=>readFile(join(workspace!,name),'utf8').then(JSON.parse)))
+        }
+        const attached=appPage.getByRole('region',{name:'Background Claude terminal',exact:true})
+        const attachment=()=>appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).find(Boolean) as any)
+        const open=async()=>{await widget.getByRole('button',{name:'Open session',exact:true}).click();await expect(attached).toBeVisible();await expect.poll(async()=>(await attachment())?.state?.output?.length??0).toBeGreaterThan(0)}
+        const close=async()=>{await attached.getByRole('button',{name:'Close connection',exact:true}).click();await expect(attached).toHaveCount(0);expect((await childProcessState())?.start).toBe(workerBefore?.start)}
+        const captureStatus=async(label:string)=>{for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await widget.scrollIntoViewIfNeeded();await capture('apack-native-background-'+label+'-'+name+'.png')}}
+        const state=JSON.parse(await readFile(join(workspace!,'.claude/jobs',job.id,'state.json'),'utf8'))
+        let pluginRoot:string|undefined
+        for(let i=0;i<state.respawnFlags.length-1;i++)if(state.respawnFlags[i]==='--plugin-dir'){
+          const path=state.respawnFlags[i+1];const manifest=await readFile(join(path,'.claude-plugin/plugin.json'),'utf8').then(JSON.parse).catch(()=>undefined)
+          if(manifest?.name==='apack-native-terminal')pluginRoot=path
+        }
+        expect(pluginRoot?.startsWith('/tmp/cc-app-')).toBe(true)
+        const observer=JSON.parse(await readFile(join(pluginRoot!,'../observer.json'),'utf8'));expect(observer.sessionId).toBe(sessionId)
+        const socket=join(dirname(pluginRoot!),'bridge.sock');expect(observer.socketPath).toBe(socket);expect((await stat(socket)).isSocket()).toBe(true)
+        const reload=async()=>{
+          const before=(await registrations()).at(-1);expect(before?.leaseHash).toBeTruthy()
+          const modulePath=join(pluginRoot!,'hooks/register.ts'),source=await readFile(modulePath,'utf8'),comment='\n// Owned research reload '+Date.now()+'\n'
+          await writeFile(modulePath,source+comment);expect(await readFile(modulePath,'utf8')).toBe(source+comment)
+          const moduleChange={beforeSha256:createHash('sha256').update(source).digest('hex'),afterSha256:createHash('sha256').update(source+comment).digest('hex'),commentOnly:true}
+          await open();const input=attached.locator('textarea.xterm-helper-textarea');await input.pressSequentially('/reload-plugins --force');await input.press('Enter')
+          await expect.poll(async()=>(await registrations()).at(-1)?.leaseHash,{timeout:15000}).not.toBe(before.leaseHash)
+          const after=(await registrations()).at(-1);expect(after?.leaseHash).toBeTruthy()
+          await expect.poll(async()=>stripVTControlCharacters((await attachment())?.state?.output?.map((row:any)=>row.text).join('')??''),{timeout:15000}).toContain('Reloaded')
+          await expect.poll(async()=>(await readInfo())?.observedAt??0,{timeout:5000}).toBeGreaterThan(after.at)
+          const info=await readInfo();expect(info.pid).toBe(job.pid);expect((await childProcessState())?.start).toBe(workerBefore?.start)
+          await close();return{before,after,info,moduleChange}
+        }
+        await expect.poll(async()=>(await registrations()).length).toBeGreaterThan(0)
+        const firstReload=await reload();await captureStatus('reload')
+        const hidden=socket+'.research-offline';let moved=false
+        let disconnected:any
+        try{
+          const at=Date.now();await writeFile(auditPath+'.disconnect','owned disconnect');await rename(socket,hidden);moved=true
+          await expect.poll(async()=>(await httpRows()).filter(row=>row.at>=at).length,{timeout:5000}).toBeGreaterThan(0)
+          await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0,{timeout:8000})
+          const before=await httpRows();expect(before.length).toBeLessThan(100)
+          const quietAt=Date.now();await appPage.waitForTimeout(2200);const after=await httpRows();expect(after).toHaveLength(before.length)
+          expect((await childProcessState())?.start).toBe(workerBefore?.start);expect((await childProcessState())?.state).not.toBe('Z')
+          disconnected={at,quietAt,checkedAt:Date.now(),httpBefore:before,httpAfter:after,infoRetired:true,worker:await childProcessState()};await captureStatus('broker-unavailable')
+        }finally{if(moved)await rename(hidden,socket);await unlink(auditPath+'.disconnect').catch(error=>{if(error.code!=='ENOENT')throw error})}
+        await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0)
+        const recovery=await reload();await captureStatus('broker-recovered')
+        const parent=await context();expect(parent.messages).toEqual(beforeReply.messages);expect(parent.claude.totalCostUsd).toBe(beforeReply.claude.totalCostUsd)
+        observations.childStatusLifecycle={firstReload,disconnected,recovery,brokerRows:await brokerRows(),httpRows:await httpRows(),parent,worker:await childProcessState(),restored:true}
+      }
+
     }
     if (attachChild && !childResume) {
       const normalizeScreen = (value:string) => stripVTControlCharacters(value).replace(/\s+/g,'')
@@ -435,7 +490,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
   } finally {
     if ((childInteraction && !observations.childInteraction) || (childResume && !observations.childResume?.workerRetired)) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))

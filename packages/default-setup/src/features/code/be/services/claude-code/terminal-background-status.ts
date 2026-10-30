@@ -12,15 +12,16 @@ export function createClaudeBackgroundStatus(options: {
 }) {
   const now = options.now ?? Date.now
   let closed = false, generation = 0
+  let expiry: ReturnType<typeof setTimeout> | undefined
   let lease: { token: string; identity: ClaudeBackgroundStatusIdentity; sequence: number; info?: ClaudeBackgroundStatus } | undefined
   return {
     async register(sessionId: string, pid: number) {
       if (closed || !Number.isSafeInteger(pid) || pid <= 1) throw new Error('Background status owner unavailable')
       const epoch = generation, identity = await options.identify(sessionId, pid)
       if (closed || generation !== epoch || identity.sessionId !== sessionId || identity.pid !== pid) throw new Error('Background status registration expired')
-      // Repeated registration cannot retire an in-flight lease for the same original process.
-      if (lease && JSON.stringify(lease.identity) === JSON.stringify(identity)) return { token: lease.token }
-      lease = { token: randomUUID(), identity, sequence: 0 }; generation++; options.changed()
+      // A reloaded hook starts its counter again, even when the native process has not changed.
+      const info = lease && JSON.stringify(lease.identity) === JSON.stringify(identity) ? lease.info : undefined
+      lease = { token: randomUUID(), identity, sequence: 0, info }; generation++; options.changed()
       return { token: lease.token }
     },
     async accept(value: Record<string, unknown>) {
@@ -35,9 +36,16 @@ export function createClaudeBackgroundStatus(options: {
       current.sequence = value.sequence
       current.info = { jobId: identity.jobId, sessionId: identity.sessionId, pid: identity.pid, observedAt: now(), model: metadata.model, turns: metadata.turns, startedAt: usage.startedAt,
         ...(context ? { context: { tokens: context.tokens as number, window: context.window as number, percent: context.percent as number } } : {}), ...(cost ? { totalCostUsd: cost.usd as number } : {}) }
+      if (expiry) clearTimeout(expiry)
+      const info = current.info
+      expiry = setTimeout(() => {
+        expiry = undefined
+        if (!closed && lease && lease.info === info) { lease.info = undefined; options.changed() }
+      }, 5000)
+      expiry.unref?.()
       options.changed()
     },
     get value(): ClaudeBackgroundStatus | undefined { const info = lease?.info; return !closed && info && now() - info.observedAt <= 5000 ? info : undefined },
-    close() { closed = true; generation++; lease = undefined },
+    close() { closed = true; generation++; lease = undefined; if (expiry) clearTimeout(expiry); expiry = undefined },
   }
 }
