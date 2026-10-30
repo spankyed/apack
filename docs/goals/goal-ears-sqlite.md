@@ -279,9 +279,19 @@ patch at `native/vectors/`: sorted membership covers sparse int32 and full-width
 an ID-range bitmap. All 625 SQLite EARS cases, 555 independent SQL comparisons, a mask-corruption
 mutation, allocation-site `SQLITE_NOMEM` refusal and ASan/UBSan comparisons pass in Linux.
 [Evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-membership/README.md)
-retains exact inputs and the missing-prerequisite static-check attempt. CI now requires the same builder
-and 555 comparisons on every host. Cross-platform and fresh performance/recall qualification are next;
-prior failed budgets remain failed. Older scratch bitmap/text patches are not used. Normal app model
+retains exact inputs and the missing-prerequisite static-check attempt. CI requires the same builder
+and 555 comparisons on every host. Platform `40985909864` passes Linux/macOS; Windows executes
+its cases but fails source-byte verification because Git converts generated C to CRLF. Canonical LF
+before compilation reproduces/fixes that exact failure without changing the required hash or C code;
+new exact platform validation is required. Older scratch bitmap/text patches are not used.
+
+The complete [fresh membership matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/native-membership/fresh/README.md)
+on `1860dd2eb1` now passes all patched query-latency and mean-recall gates (minimum 0.974), but still
+fails query/admission heartbeat. Initial 10k broad timed p95 is 52.64–52.99 ms versus upstream
+145.10–146.05 ms; broad 99,900 remains 20.13–20.26 ms and admission heartbeat p99 is 30.02 ms.
+Models differ and order is fixed; this is not paired same-model causal speedup evidence. All raw
+answers and failed original-budget verifications remain retained. Scope/count/rerank consolidation,
+native cost and FULL checkpoint scheduling remain the next performance work. Normal app model
 ownership/loading, packaging and physical failure qualification remain required. Do not retune frozen
 ANN settings or loosen thresholds.
 
