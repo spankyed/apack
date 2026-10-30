@@ -145,19 +145,29 @@ const reason = (error: unknown) => (errorMessage(error));
  */
 export async function withDatabase<T>(db: Pick<AppDatabase, 'close'>, use: () => Promise<T> | T): Promise<T> {
   let result: T;
-  let failure: unknown;
+  let failed = false, failure: unknown;
   try {
     result = await use();
   } catch (error) {
-    failure = error;
+    failed = true; failure = error;
   }
   try {
     db.close();
   } catch (closeFailure) {
-    if (failure === undefined) throw closeFailure;
-    throw new Error(`${reason(failure)}\n  The database also failed to close: ${reason(closeFailure)}`, { cause: failure });
+    if (!failed) throw closeFailure;
+    const original = failure as {
+      code?: unknown; recoveryPath?: unknown; destinationPath?: unknown; publishedPath?: unknown; dataInstalled?: unknown;
+    } | null | undefined;
+    throw Object.assign(new AggregateError([failure, closeFailure],
+      `${reason(failure)}\n  The database also failed to close: ${reason(closeFailure)}`, { cause: failure }), {
+      ...(typeof original?.code === 'string' && { code: original.code }),
+      ...(typeof original?.recoveryPath === 'string' && { recoveryPath: original.recoveryPath }),
+      ...(typeof original?.destinationPath === 'string' && { destinationPath: original.destinationPath }),
+      ...(typeof original?.publishedPath === 'string' && { publishedPath: original.publishedPath }),
+      ...(typeof original?.dataInstalled === 'boolean' && { dataInstalled: original.dataInstalled }),
+    });
   }
-  if (failure !== undefined) throw failure;
+  if (failed) throw failure;
   return result!;
 }
 

@@ -1,0 +1,18 @@
+{
+  "parent": "5486e5f75438d369786a2cb94c84f550b7d8b0cd",
+  "inputsSha256": {
+    "packages/apack-cli/src/commands/db/target.ts": "64e67a900537da029886c8c727983320adcdd126a5a695dc2a87c910d58198fe",
+    "packages/apack-cli/tests/commands/db-target.spec.ts": "b723ac125e7a644fb5cd27d338ce6a1c3bfdb0b184e59666160969f2a17278f4",
+    ".github/scripts/ears-sqlite-platform.mjs": "6d78077c92234d62c7c046ae837e4edb4c2b9bc2722788074cad8e359f2b96fa",
+    ".github/workflows/ears-sqlite.yml": "3851292915795ebf60429f1a83cbc7bd9e4d569c1bbdd6d1d420f7a4d760ab38"
+  },
+  "patchSha256": "e088c6f1b2ec3bce50c4d4b13fcc28b82673bbf096296a5fe0338f29f46b88a4",
+  "runtime": "apack-linux-test:74d4b8cfe839; Node23.11.1; Linux ARM64",
+  "limits": {
+    "cpus": 0.5,
+    "memoryMiB": 768,
+    "swapMiB": 0,
+    "capabilities": "ALL dropped"
+  },
+  "typesAndNormalPackages": "pending larger disposable/final CI qualification"
+}

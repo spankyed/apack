@@ -239,6 +239,12 @@ become passing cases; all 32 platform CLI cases, lint, syntax and twenty require
 Linux. CLI types/package builds and final integrated qualification remain pending. Platform run
 [41130505526](https://github.com/spankyed/apack/actions/runs/41130505526) is live at the preceding exclusive-move
 checkpoint `58ae8a7b0e`; it does not qualify the later cleanup changes.
+The [CLI close-wrapper correction](../references/evidence/ears-sqlite-implementation-2026-10-28/cli-close-outcomes/README.md)
+refuses thrown `undefined`, retains both command/close failures and preserves machine-readable commit/recovery
+outcomes. Five reproduced failures pass after correction; all 41 expanded platform CLI cases pass on Linux,
+along with lint, syntax, fourteen command-outcome controls and the preceding twenty backup controls.
+The platform workflow now includes the wrapper cases. Types, package builds and final integrated/platform
+qualification of these later inputs remain required; no live earlier run is restarted.
 The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
 The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
 remains unexplained. The older editor intermittent also remains unexplained despite ten unchanged repeats.

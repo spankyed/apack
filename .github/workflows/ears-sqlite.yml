@@ -117,7 +117,7 @@ jobs:
       - name: Offline SQLite maintenance and logical archive commands
         run: >-
           npm test -w @apackdev/cli -- tests/commands/db-rebuild.spec.ts tests/commands/db-logical.spec.ts
-          tests/commands/sqlite-profile.spec.ts
+          tests/commands/sqlite-profile.spec.ts tests/commands/db-target.spec.ts
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/cli-maintenance.json
           2>&1 | tee .temp/sqlite-platform/cli-maintenance.log
       - name: Built CLI logical archive round trip

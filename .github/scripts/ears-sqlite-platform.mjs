@@ -113,6 +113,14 @@ const requiredBackupPublicationCases = [
   "preserves uncertain backup publication when releasing the write lock also fails"
 ];
 
+const requiredCommandOutcomeCases = [
+  "rejects a thrown undefined from a database command and still closes it",
+  "preserves a database command COMMIT_UNKNOWN when close also fails",
+  "preserves a database command PUBLICATION_UNKNOWN when close also fails",
+  "preserves a database command NOT_DURABLE when close also fails",
+  "preserves a thrown undefined alongside a database close failure"
+];
+
 const evidence = resolve('.temp/sqlite-platform'), mode = process.argv[2];
 mkdirSync(evidence, { recursive: true });
 const save = (file, value) => writeFileSync(join(evidence, file), JSON.stringify(value, null, 2) + '\n');
@@ -135,6 +143,7 @@ if (mode === 'verify') {
   const identity = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/database-identity.spec.ts') ? test.assertionResults : []);
   const namespace = host.testResults.flatMap(test => /\/tests\/database\/(recovery-exclusion|quarantine-publication)\.spec\.ts$/.test(test.name.replaceAll('\\', '/')) ? test.assertionResults : []);
   const reset = cli.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/commands/sqlite-profile.spec.ts') ? test.assertionResults : []);
+  const commandOutcomes = cli.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/commands/db-target.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
@@ -243,6 +252,7 @@ if (mode === 'verify') {
   requirePassingCases(namespace, requiredNamespaceCases, 'Namespace publication');
   requirePassingCases(reset, requiredResetCases, 'SQLite reset');
   requirePassingCases(reset, requiredBackupPublicationCases, 'Backup publication');
+  requirePassingCases(commandOutcomes, requiredCommandOutcomeCases, 'CLI command outcomes');
   assert(selected.length > 0 && selected.every(test => test.status === 'passed') && result.recoveryCasesPassed > 0,
     'SQLite-selected text cases and recovery must execute and pass; native fallback is insufficient');
 } else {
