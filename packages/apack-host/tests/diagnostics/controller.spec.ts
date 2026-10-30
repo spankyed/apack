@@ -50,6 +50,8 @@ it('restores browser callback context after return, throw and asynchronous sched
   expect(manager.active()).toBe(ROOT_CONTEXT);
   const read = manager.bind(scope, () => manager.active().getValue(key));
   expect(read()).toBe(42);
+  const object = { value: 7, read: manager.bind(scope, function(this: { value: number }) { return [this.value, manager.active().getValue(key)]; }) };
+  expect(object.read()).toEqual([7, 42]);
   await manager.with(scope, async () => { await Promise.resolve(); expect(manager.active()).toBe(ROOT_CONTEXT); });
   expect(manager.active()).toBe(ROOT_CONTEXT);
 });

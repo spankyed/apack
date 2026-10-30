@@ -95,3 +95,11 @@ generic callback return type; that mock was fixed. Full renderer typechecking an
 transport/recording tests then passed. A separate stop/start race was fixed with a regression test:
 the window refuses new recording admission until both previous process stops settle. No timeout
 was increased. The remaining chain coverage must run before this checkpoint is considered gated.
+
+
+The resumed local gate passed the renderer typecheck, facade, specifier/tier checks and scripts/test
+typechecks, then found two lint issues. Observer registration now uses an explicit snapshot so
+replacements made inside callbacks affect the next operation (regression covered); browser callback
+binding preserves caller `this` using a bound context method. Lint, the seven EARS observation tests,
+three controller tests and affected typechecks passed after correction. The thread timing now starts
+before action-span creation, including that instrumentation cost. Remaining gate steps still need a run.

@@ -60,6 +60,7 @@ test('open a populated thread through the real transport and render its bounded 
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
         await recording.start(mode);
+        const started = performance.now();
         const action = recording.begin('app.thread.open', { 'app.scenario': 'thread-open', 'app.fixture': 'populated-threads-v1' })!;
         const target = `Thread-performance-${thread}`;
         const expected = `Fixture thread ${thread} message 99.`;
@@ -67,7 +68,6 @@ test('open a populated thread through the real transport and render its bounded 
         let durationMs: number | undefined;
         let lastDelivery: { subscription: string; delivery: number; commit: number } | undefined;
         let failure: string | undefined;
-        const started = performance.now();
         try {
           await new Promise<void>((resolve, reject) => {
             let checking = false;
