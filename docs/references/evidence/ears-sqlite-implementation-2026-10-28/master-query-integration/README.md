@@ -67,9 +67,8 @@ app-and-rest and integration-1 failed. This is the older pre-selector source, no
 
 Native diagnosis is isolated at `/private/tmp/ears-native-unit-fix`, an independent
 clone checked out at `4d558a2754`, with no shared target and no edits to the working
-agent's elmdb checkout. No native fix is committed or published yet. Before changing
-it, follow its root CLAUDE.md and owning design/engine/search/testing documents and
-run the required Rust/binding gates in disposable environments.
+agent's elmdb checkout. At that failed-Strict checkpoint no native fix had been
+committed or published. The later fix and its required validation are recorded below.
 
 ## Prepared SDK and current repository platform qualification
 
@@ -88,3 +87,35 @@ SDK selector and repository-query receipts are retained under `platform-40977802
 with original and normalized SHA-256 values. This qualifies the new SQLite platform
 coverage; it does not fix the older full Strict failures, qualify the uncommitted native
 patch, establish packaged Electron support or satisfy remaining performance budgets.
+
+## Native own-unit fix and unchanged CLI reproduction
+
+Native `8ab7088f9a583202f9ccc766381a31e39d19851f` overlays pending embeddings during
+unit reads while keeping graph writes deferred until commit. Cosine/L2 regression
+covers initial embeddings before graph metadata, replacement, scoped new items,
+savepoint rollback and deletion/abort. It passes all 23 vector cases, Clippy,
+348 Rust cases (ten existing ignored cases), doctests, protocol/one-LMDB checks,
+binding build/types and 33 applicable binding cases (four macOS cases skipped).
+Restoring the old implementation in a disposable copy fails the intended assertion.
+
+The original EARS own-unit test now passes once (seventeen unrelated cases filtered)
+on exact app `3931f0982f` with the recorded isolated fixed binding. Its native receipt
+names base `4d558a2754` plus the tested Rust patch and binary hash, rather than
+pretending the binary was built from the later commit. The only subsequent Rust
+change relocates an existing doc comment; `source-equivalence.json` verifies identical
+non-comment implementation and identical regression source. Exact native platform
+[CI 40982141666](https://github.com/spankyed/elmdb/actions/runs/40982141666) is running.
+The draft candidate now pins that published fix; no native main merge/release occurred.
+
+The unchanged CLI refused-replacement case also passes: 31.164 s test time, 33.638 s
+whole invocation, two CPUs / 6 GiB / no swap. Timestamped logs show all three real
+builds complete, with final facade assertions intact. Thirteen unrelated cases were
+filtered. The earlier 200 s CI timeout is retained and remains unexplained; this
+Linux reproduction does not prove the cause or qualify concurrent macOS execution.
+No timeout, assertion, compiler input check or phase was relaxed. Fresh private locked
+dependencies were installed after an earlier attempt stopped before setup because
+its old seed volume was missing. Full Strict must rerun on the new pinned candidate.
+
+`native-unit-fix/` retains exact app/native/mutation receipts and runners. Source
+and generation/training corpus payloads remain outside these records. All remaining
+performance, packaging and adoption requirements are unchanged.

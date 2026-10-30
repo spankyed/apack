@@ -1,0 +1,560 @@
+   Compiling libc v0.2.191
+   Compiling serde_core v1.0.229
+   Compiling cfg-if v1.0.5
+   Compiling memchr v2.8.3
+   Compiling jobserver v0.1.35
+   Compiling equivalent v1.0.3
+   Compiling cc v1.10.0
+   Compiling serde v1.0.229
+   Compiling allocator-api2 v0.2.21
+   Compiling itoa v1.0.18
+   Compiling zerofrom v0.1.8
+   Compiling foldhash v0.2.0
+   Compiling stable_deref_trait v1.2.1
+   Compiling yoke v0.8.4
+   Compiling hashbrown v0.17.1
+   Compiling once_cell v1.21.4
+   Compiling zerovec v0.11.9
+   Compiling indexmap v2.14.2
+   Compiling zmij v1.0.23
+   Compiling crossbeam-utils v0.8.23
+   Compiling rand_core v0.10.1
+   Compiling zerocopy v0.8.63
+   Compiling serde_json v1.0.154
+   Compiling bitflags v2.13.2
+   Compiling writeable v0.6.4
+   Compiling smallvec v1.16.4
+   Compiling num-traits v0.2.19
+   Compiling getrandom v0.4.3
+   Compiling tinystr v0.8.5
+   Compiling pin-project-lite v0.2.17
+   Compiling ryu v1.0.23
+   Compiling unicode-segmentation v1.13.3
+   Compiling litemap v0.8.3
+   Compiling either v1.19.0
+   Compiling zstd-sys v2.1.2+zstd.1.5.7
+   Compiling icu_locale_core v2.4.0
+   Compiling csv-core v0.1.13
+   Compiling potential_utf v0.1.6
+   Compiling zerotrie v0.2.5
+   Compiling scopeguard v1.2.0
+   Compiling regex-syntax v0.8.11
+   Compiling typenum v1.20.1
+   Compiling linux-raw-sys v0.12.1
+   Compiling rustix v1.1.5
+   Compiling hybrid-array v0.4.15
+   Compiling icu_provider v2.4.0
+   Compiling lmdb-master-sys v0.2.6
+   Compiling csv v1.4.0
+   Compiling crossbeam-epoch v0.9.21
+   Compiling chacha20 v0.10.2
+   Compiling aho-corasick v1.1.5
+   Compiling getrandom v0.2.17
+   Compiling byteorder v1.5.0
+   Compiling utf8_iter v1.0.4
+   Compiling fastrand v2.5.0
+   Compiling tempfile v3.27.0
+   Compiling icu_collections v2.4.0
+   Compiling rand_core v0.6.4
+   Compiling rand v0.10.3
+   Compiling irg-kvariants v0.1.1
+   Compiling crossbeam-deque v0.8.8
+   Compiling ppv-lite86 v0.2.21
+   Compiling crossbeam-queue v0.3.14
+   Compiling bincode v1.3.3
+   Compiling page_size v0.6.0
+   Compiling tinyvec v1.13.3
+   Compiling foldhash v0.1.5
+   Compiling heed-traits v0.20.0
+   Compiling heed-types v0.21.0
+   Compiling hashbrown v0.15.5
+   Compiling thiserror v2.0.21
+   Compiling bytemuck v1.25.2
+   Compiling synchronoise v1.0.1
+   Compiling rand_chacha v0.3.1
+   Compiling rayon-core v1.13.0
+   Compiling icu_normalizer_data v2.4.0
+   Compiling icu_locale_fallback_data v2.4.0
+   Compiling regex-automata v0.4.18
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling convert_case v0.8.0
+   Compiling rmp v0.8.15
+   Compiling tracing-core v0.1.36
+   Compiling seize v0.5.1
+   Compiling write16 v1.0.0
+   Compiling rustc-hash v2.1.3
+   Compiling const-oid v0.10.2
+   Compiling utf16_iter v1.0.5
+   Compiling utf8parse v0.2.2
+   Compiling anstyle-parse v1.0.0
+   Compiling icu_normalizer v2.4.0
+   Compiling digest v0.11.3
+   Compiling ref-cast v1.0.27
+   Compiling papaya v0.2.5
+   Compiling tracing v0.1.44
+   Compiling steppe v0.4.1
+   Compiling regex v1.13.1
+   Compiling icu_locale_fallback v2.4.0
+   Compiling rayon v1.12.0
+   Compiling zstd-safe v8.2.0
+   Compiling heed v0.23.0
+   Compiling rand v0.8.8
+   Compiling roaring v0.11.5
+   Compiling icu_collator_data v2.4.0
+   Compiling fst v0.4.7
+   Compiling whatlang v0.18.0
+   Compiling unicode-normalization v0.1.26
+   Compiling icu_properties v2.4.0
+   Compiling lock_api v0.5.0
+   Compiling parking_lot_core v0.10.0
+   Compiling crossbeam-channel v0.5.17
+   Compiling serde_bytes v0.11.19
+   Compiling thread_local v1.1.10
+   Compiling cpufeatures v0.3.1
+   Compiling madvise v0.1.0
+   Compiling anstyle-query v1.1.5
+   Compiling finl_unicode v1.5.0
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling min-max-heap v1.3.0
+   Compiling colorchoice v1.0.5
+   Compiling log v0.4.34
+   Compiling slice-group-by v0.3.1
+   Compiling anstyle v1.0.14
+   Compiling dyn-clone v1.0.20
+   Compiling anstream v1.0.0
+   Compiling schemars v1.2.3
+   Compiling charabia v0.10.0
+   Compiling fail v0.5.1
+   Compiling hannoy v0.3.0
+   Compiling sha2 v0.11.1
+   Compiling rmpv v1.3.1
+   Compiling icu_collator v2.4.0
+   Compiling parking_lot v0.13.0
+   Compiling zstd v0.14.3
+   Compiling ts-rs v12.0.1
+   Compiling rmp-serde v1.3.1
+   Compiling rust-stemmers v1.2.0
+   Compiling strsim v0.11.1
+   Compiling clap_lex v1.1.1
+   Compiling levenshtein_automata v0.2.1
+   Compiling ryu-js v1.0.3
+   Compiling clap_builder v4.6.7
+   Compiling elmdb v0.0.0 (/native/crates/elmdb)
+   Compiling clap v4.6.7
+   Compiling half v2.7.1
+   Compiling alloca v0.4.0
+   Compiling wait-timeout v0.2.1
+   Compiling quick-error v1.2.3
+   Compiling fnv v1.0.7
+   Compiling bit-vec v0.10.1
+   Compiling gimli v0.34.0
+   Compiling adler2 v2.0.1
+   Compiling ciborium-io v0.2.2
+   Compiling ciborium-ll v0.2.2
+   Compiling miniz_oxide v0.9.1
+   Compiling addr2line v0.27.1
+   Compiling bit-set v0.11.1
+   Compiling rusty-fork v0.3.1
+   Compiling parking_lot_core v0.9.12
+   Compiling lock_api v0.4.14
+   Compiling itertools v0.13.0
+   Compiling rand_xorshift v0.5.0
+   Compiling object v0.40.0
+   Compiling cast v0.3.0
+   Compiling core_detect v1.0.0
+   Compiling unarray v0.1.4
+   Compiling same-file v1.0.6
+   Compiling rustc-demangle v0.1.28
+   Compiling backtrace v0.3.77
+   Compiling walkdir v2.5.0
+   Compiling proptest v1.12.0
+   Compiling criterion-plot v0.8.2
+   Compiling parking_lot v0.12.5
+   Compiling ciborium v0.2.2
+   Compiling tinytemplate v1.2.1
+   Compiling mintex v0.1.4
+   Compiling thousands v0.2.0
+   Compiling anes v0.1.6
+   Compiling oorandom v11.1.5
+   Compiling lazy_static v1.5.1
+   Compiling rustc-hash v1.1.0
+   Compiling dhat v0.3.3
+   Compiling criterion v0.8.2
+   Compiling proptest-state-machine v0.9.0
+   Compiling futures-sink v0.3.34
+   Compiling futures-core v0.3.34
+   Compiling futures-channel v0.3.34
+   Compiling futures-io v0.3.34
+   Compiling futures-task v0.3.34
+   Compiling slab v0.4.12
+   Compiling futures-util v0.3.34
+   Compiling convert_case v0.12.0
+   Compiling libloading v0.9.0
+   Compiling ctor v1.0.13
+   Compiling napi-derive-backend v6.1.6
+   Compiling futures-executor v0.3.34
+   Compiling futures v0.3.34
+   Compiling napi-sys v3.4.1
+   Compiling elmdb-node v0.0.0 (/native/crates/elmdb-node)
+   Compiling nohash-hasher v0.2.0
+   Compiling napi v3.15.0
+   Compiling napi-derive v3.6.13
+   Compiling process_path v0.1.4
+   Compiling xtask v0.0.0 (/native/xtask)
+   Compiling elmdb-cli v0.0.0 (/native/crates/elmdb-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 01s
+────────────
+ Nextest run ID c1ba5e7c-02b6-4af6-bb71-e11c2abeb955 with nextest profile: ci
+    Starting 348 tests across 6 binaries (10 tests skipped)
+        PASS [   1.459s] (  1/348) elmdb database::tests::a_read_only_open_needs_a_database
+        PASS [   0.023s] (  2/348) elmdb database::tests::opens_creates_and_closes
+        PASS [   1.484s] (  3/348) elmdb database::tests::changes_the_schema_of_an_open_database_and_refuses_what_opening_refuses
+        PASS [   0.011s] (  4/348) elmdb database::tests::refuses_a_change_opening_cant_make_and_keeps_the_stored_schema
+        PASS [   0.009s] (  5/348) elmdb database::tests::refuses_a_second_open_in_one_process_and_allows_one_after_close
+        PASS [   0.009s] (  6/348) elmdb database::tests::stores_the_schema_reports_its_changes_and_keeps_it_across_opens
+        PASS [   0.263s] (  7/348) elmdb dump::tests::staged_load_preserves_foreign_files_and_refuses_a_publication_race
+        PASS [   0.299s] (  8/348) elmdb dump::tests::late_invalid_input_cleans_staged_batches_and_can_be_retried
+        PASS [   0.095s] (  9/348) elmdb engine::derive::audit_tests::chunk_cursors_visit_linear_rows_across_mixed_live_and_trash_ranges
+        PASS [   0.230s] ( 10/348) elmdb dump::tests::unwinding_before_publication_cleans_staging_and_postpublication_failure_keeps_the_database
+        PASS [   0.109s] ( 11/348) elmdb engine::derive::audit_tests::cycle_audit_handles_a_long_chain_and_parallel_forward_edges
+        PASS [   0.003s] ( 12/348) elmdb engine::derive::sorted::tests::a_truncated_frame_is_an_error_instead_of_an_end_marker
+        PASS [   0.004s] ( 13/348) elmdb engine::derive::sorted::tests::an_intermediate_merge_failure_removes_its_private_files
+        PASS [   0.003s] ( 14/348) elmdb engine::derive::sorted::tests::empty_and_larger_than_budget_rows_are_preserved
+        PASS [   0.012s] ( 15/348) elmdb engine::derive::audit_tests::recovery_emitters_stop_before_decoding_the_next_entity
+        PASS [   0.003s] ( 16/348) elmdb engine::derive::sorted::tests::interrupted_or_failed_sorting_removes_owned_scratch
+        PASS [   0.028s] ( 17/348) elmdb engine::derive::sorted::tests::runs_merge_by_level_sixteen_of_one_into_one_of_the_next
+        PASS [   0.071s] ( 18/348) elmdb engine::derive::sorted::tests::spilled_and_merged_runs_match_last_insert_wins_and_clean_up
+        PASS [   0.109s] ( 19/348) elmdb engine::derive::sorted::tests::incoming_runs_compact_without_retaining_every_path
+        PASS [   0.003s] ( 20/348) elmdb engine::ids::tests::ids_name_their_type_and_sort_relations_by_place
+        PASS [   0.026s] ( 21/348) elmdb engine::derive::sorted::tests::the_last_of_several_rows_pushed_under_one_key_wins_within_a_run
+        PASS [   0.003s] ( 22/348) elmdb engine::numbering::tests::reads_a_number_only_from_its_own_form
+        PASS [   0.028s] ( 23/348) elmdb engine::maintenance::export_tests::export_streams_primary_ranges_preserves_order_and_stops_on_consumer_error
+        PASS [   0.009s] ( 24/348) elmdb engine::tests::a_change_set_says_what_a_commit_changed
+        PASS [   0.008s] ( 25/348) elmdb engine::tests::a_number_past_javascript_s_largest_is_no_number_and_a_numbering_that_reaches_it_is_refused
+        PASS [   0.011s] ( 26/348) elmdb engine::tests::a_link_target_must_exist_at_commit_and_may_be_created_later_in_the_unit
+        PASS [   0.008s] ( 27/348) elmdb engine::tests::a_unique_index_refuses_a_second_entity_with_its_value
+        PASS [   0.009s] ( 28/348) elmdb engine::tests::a_unique_index_refuses_a_value_it_cant_hold_that_another_entity_holds
+        PASS [   0.011s] ( 29/348) elmdb engine::tests::a_unique_kind_keeps_one_edge_per_pair_whose_info_a_link_replaces
+        PASS [   0.010s] ( 30/348) elmdb engine::tests::a_unique_kind_refuses_moving_an_edge_onto_a_pair_another_joins
+        PASS [   0.008s] ( 31/348) elmdb engine::tests::an_acyclic_kind_refuses_a_link_closing_a_cycle
+        PASS [   0.010s] ( 32/348) elmdb engine::tests::cardinality_counts_far_ends_so_check_agrees_with_the_writes_it_allowed
+        PASS [   0.109s] ( 33/348) elmdb engine::tests::commits::a_failed_commit_keeps_schema_and_data_and_notifies_nobody
+        PASS [   0.140s] ( 34/348) elmdb engine::tests::commits::committed_operations_notify_before_reporting_a_failed_sync
+        PASS [   0.028s] ( 35/348) elmdb engine::tests::commits::reset_checkpoint_preserves_one_logical_commit_and_falls_back_on_failure
+        PASS [   0.008s] ( 36/348) elmdb engine::tests::commits::reset_checkpoint_respects_an_active_read_snapshot
+        PASS [   0.016s] ( 37/348) elmdb engine::tests::commits::unchanged_schema_marker_commits_finalize_before_failed_sync
+        PASS [   0.003s] ( 38/348) elmdb engine::tests::compression::a_frame_claiming_more_than_any_buffer_holds_is_corrupted_without_allocating_its_claim
+        PASS [   0.084s] ( 39/348) elmdb engine::tests::compression::a_frame_with_or_without_its_size_or_past_one_call_reads_back_and_one_cut_short_is_corrupted
+        PASS [   0.030s] ( 40/348) elmdb engine::tests::compression::a_large_value_is_stored_compressed_a_small_or_dense_one_as_its_msgpack
+        PASS [   0.066s] ( 41/348) elmdb engine::tests::compression::every_reader_sees_the_value_written_and_check_rebuild_and_a_dump_agree
+        PASS [   0.008s] ( 42/348) elmdb engine::tests::creates_an_entity_with_a_new_id_its_times_and_a_short_code
+        PASS [   0.010s] ( 43/348) elmdb engine::tests::derived::a_changed_index_is_rebuilt_and_a_removed_one_dropped
+        PASS [   0.010s] ( 44/348) elmdb engine::tests::derived::a_declaration_added_over_rows_it_breaks_is_enforced
+        PASS [   0.012s] ( 45/348) elmdb engine::tests::derived::a_plan_past_the_step_limit_is_refused_rather_than_overflowing_the_stack
+        PASS [   0.012s] ( 46/348) elmdb engine::tests::derived::a_rebuild_leaves_unbuilt_a_value_index_a_build_couldnt_finish
+        PASS [   0.009s] ( 47/348) elmdb engine::tests::derived::a_removed_field_keeps_its_data_until_purged
+        PASS [   0.012s] ( 48/348) elmdb engine::tests::derived::a_removed_type_keeps_its_entities_until_purged
+        PASS [   0.019s] ( 49/348) elmdb engine::tests::derived::a_removed_type_takes_its_indexes_data_with_it_and_keeps_its_rows
+        PASS [   0.009s] ( 50/348) elmdb engine::tests::derived::a_short_code_prefix_stored_codes_hold_stays_with_their_type
+        PASS [   0.401s] ( 51/348) elmdb engine::tests::commits::repeated_reset_and_load_reuse_the_freed_database_pages
+        PASS [   0.008s] ( 52/348) elmdb engine::tests::derived::a_unique_index_over_rows_holding_the_same_values_isnt_built_and_says_why
+        PASS [   0.007s] ( 53/348) elmdb engine::tests::derived::a_where_on_a_compound_index_s_first_field_answers_as_a_scan_does
+        PASS [   0.178s] ( 54/348) elmdb engine::tests::derived::an_index_added_over_data_builds_in_the_background_and_reads_walk_until_it_has
+        PASS [   0.197s] ( 55/348) elmdb engine::tests::derived::an_index_declared_on_an_open_database_is_built_and_read_and_writes_go_on_to_the_new_schema
+        PASS [   0.008s] ( 56/348) elmdb engine::tests::derived::an_indexed_string_is_held_to_bytes_and_a_key_past_lmdb_s_limit_is_refused
+        PASS [   0.009s] ( 57/348) elmdb engine::tests::derived::check_reports_damaged_derived_keys_and_rebuild_repairs_them
+        PASS [   0.008s] ( 58/348) elmdb engine::tests::derived::check_reports_missing_references_through_nested_lists_before_and_after_rebuild
+        PASS [   0.010s] ( 59/348) elmdb engine::tests::derived::check_reports_rows_that_break_a_rule_and_a_reference_to_nothing
+        PASS [   0.018s] ( 60/348) elmdb engine::tests::derived::chunked_index_build_resumes_across_mutations_and_reopening
+        PASS [   0.014s] ( 61/348) elmdb engine::tests::derived::duplicate_map_key_multiplicity_is_preserved_by_writes_and_audits
+        PASS [   0.028s] ( 62/348) elmdb engine::tests::derived::each_of_a_types_text_and_trigram_indexes_is_built_and_rebuilt_from_its_own_fields
+        PASS [   0.014s] ( 63/348) elmdb engine::tests::derived::rebuilding_one_index_refuses_one_the_schema_doesnt_declare
+        PASS [   0.014s] ( 64/348) elmdb engine::tests::derived::relation_audit_uses_primary_rows_for_every_declared_rule_even_after_rebuild
+        PASS [   0.008s] ( 65/348) elmdb engine::tests::derived::rename_field_and_rename_relation_move_data_to_a_declared_name
+        PASS [   0.008s] ( 66/348) elmdb engine::tests::derived::rename_type_into_a_type_with_entities_rewrites_their_refs_and_keeps_its_numbering
+        PASS [   0.010s] ( 67/348) elmdb engine::tests::derived::rename_type_rewrites_a_type_s_refs_to_itself_and_moves_its_embeddings
+        PASS [   0.009s] ( 68/348) elmdb engine::tests::derived::rename_type_rewrites_ids_their_relations_and_the_refs_naming_them
+        PASS [   0.025s] ( 69/348) elmdb engine::tests::derived::unchecked_cardinality_audit_counts_distinct_far_ends_for_all_four_kinds
+        PASS [   0.009s] ( 70/348) elmdb engine::tests::derived::unchecked_field_audit_covers_every_declared_value_type_and_presence_rule
+        PASS [   0.057s] ( 71/348) elmdb engine::tests::derived::uniqueness_audit_reads_primary_values_including_unindexed_values
+        PASS [   0.858s] ( 72/348) elmdb engine::tests::derived::waiting_for_index_builds_with_a_unit_open_is_refused_rather_than_waiting_for_good
+        PASS [   0.016s] ( 73/348) elmdb engine::tests::destroy_removes_the_entity_its_fields_its_relations_and_its_type_when_emptied
+        PASS [   0.024s] ( 74/348) elmdb engine::tests::field_writes::a_field_write_reads_what_it_replaces_and_what_its_indexes_need_and_nothing_twice
+        PASS [   0.008s] ( 75/348) elmdb engine::tests::keeps_a_short_code_once_written_and_an_upsert_may_only_repeat_it
+        PASS [   0.007s] ( 76/348) elmdb engine::tests::lifecycle::a_close_refuses_while_a_unit_is_open_and_closes_once_it_ends
+        PASS [   1.635s] ( 77/348) elmdb engine::tests::derived::a_unique_index_is_enforced_while_it_is_still_being_built
+        PASS [   0.139s] ( 78/348) elmdb engine::tests::lifecycle::a_unit_that_fills_the_map_says_so_and_refuses_what_follows
+        PASS [   0.010s] ( 79/348) elmdb engine::tests::lifecycle::the_sequence_follows_what_the_database_holds
+        PASS [   0.009s] ( 80/348) elmdb engine::tests::link_is_idempotent_on_the_whole_edge_and_another_info_is_another_edge
+        PASS [   0.010s] ( 81/348) elmdb engine::tests::list_writes_append_remove_at_remove_value_and_refuse_a_value_that_isnt_a_list
+        PASS [   0.186s] ( 82/348) elmdb engine::tests::lifecycle::an_aborted_unit_lets_the_map_grow_while_it_is_still_held
+        PASS [   0.069s] ( 83/348) elmdb engine::tests::maintenance::a_backup_is_one_moment_compacted_and_opens_on_its_own
+        PASS [   0.012s] ( 84/348) elmdb engine::tests::maintenance::a_bulk_load_takes_rows_the_checks_would_refuse
+        PASS [   0.066s] ( 85/348) elmdb engine::tests::maintenance::a_dump_and_a_load_each_write_something_new_and_a_damaged_dump_or_a_failed_load_leaves_nothing
+        PASS [   0.114s] ( 86/348) elmdb engine::tests::maintenance::a_compacted_backup_of_multi_page_values_can_be_emptied_in_one_transaction
+        PASS [   0.004s] ( 87/348) elmdb engine::tests::maintenance::a_report_is_clean_only_without_differences_and_violations
+        PASS [   0.015s] ( 88/348) elmdb engine::tests::maintenance::an_unset_load_removes_any_field_and_keeps_derived_data_with_it
+        PASS [   0.018s] ( 89/348) elmdb engine::tests::maintenance::check_names_a_relation_outside_its_endpoints_a_second_target_and_every_holder_of_a_unique_value
+        PASS [   0.082s] ( 90/348) elmdb engine::tests::maintenance::a_dump_loads_into_a_new_database_holding_what_the_first_held_in_the_order_it_was_made
+        PASS [   0.025s] ( 91/348) elmdb engine::tests::maintenance::replace_with_takes_another_databases_data_and_rebuilds_under_this_schema
+        PASS [   0.026s] ( 92/348) elmdb engine::tests::maintenance::scratch_failure_during_rebuild_and_replace_aborts_all_destination_changes
+        PASS [   0.010s] ( 93/348) elmdb engine::tests::maintenance::stats_count_entities_fields_relations_and_index_entries
+        PASS [   0.008s] ( 94/348) elmdb engine::tests::maintenance::unique_rebuild_does_not_merge_distinct_holders_with_a_corrupt_shared_sequence
+        PASS [   0.007s] ( 95/348) elmdb engine::tests::merge_combines_maps_and_sets_the_value_when_either_isnt_one
+        PASS [   0.368s] ( 96/348) elmdb engine::tests::maintenance::single_index_rebuilds_spill_and_late_uniqueness_failure_rolls_back
+        PASS [   2.079s] ( 97/348) elmdb engine::tests::model::generated_workloads_complete_every_kind_of_step_and_make_every_refusal
+        PASS [   7.430s] ( 98/348) elmdb engine::tests::model::crash::a_killed_writer_leaves_the_state_after_its_acknowledged_steps_or_one_more
+        PASS [   0.008s] ( 99/348) elmdb engine::tests::never_hands_a_short_code_out_twice_and_takes_none_for_a_refused_create
+        PASS [   0.010s] (100/348) elmdb engine::tests::numbers_labels_per_type_and_base
+        PASS [   0.009s] (101/348) elmdb engine::tests::numbers_short_codes_keeps_one_a_row_brings_and_refuses_one_malformed_taken_or_unnumbered
+        PASS [   1.149s] (102/348) elmdb engine::tests::plans::a_where_after_other_filters_reads_its_index_and_answers_as_the_walk_would
+        PASS [   1.070s] (103/348) elmdb engine::tests::plans::an_indexed_where_with_a_limit_visits_its_limit_not_every_match
+        PASS [   1.315s] (104/348) elmdb engine::tests::plans::explain_answers_each_stage_its_index_what_it_visited_and_kept
+        PASS [   0.008s] (105/348) elmdb engine::tests::plans::explain_names_each_index_a_stage_read_once
+        PASS [   1.650s] (106/348) elmdb engine::tests::plans::order_by_then_limit_answers_what_sorting_everything_would
+        PASS [   0.014s] (107/348) elmdb engine::tests::reads::a_deep_walk_and_a_link_filter_stop_at_the_trash
+        PASS [   0.010s] (108/348) elmdb engine::tests::reads::a_null_probe_matches_a_field_that_is_null_or_missing
+        PASS [   0.009s] (109/348) elmdb engine::tests::reads::a_query_asked_for_its_visits_answers_how_many_entities_its_walk_reached
+        PASS [   0.009s] (110/348) elmdb engine::tests::reads::a_row_read_says_whether_its_map_may_hold_proto
+        PASS [   0.010s] (111/348) elmdb engine::tests::reads::a_unit_reads_its_own_writes
+        PASS [   0.010s] (112/348) elmdb engine::tests::reads::a_walk_steps_around_a_far_end_in_the_trash
+        PASS [   0.008s] (113/348) elmdb engine::tests::reads::a_where_after_a_types_start_reads_every_type_indexed_or_not
+        PASS [   0.011s] (114/348) elmdb engine::tests::reads::descendants_and_ancestors_reach_each_entity_once_nearest_first
+        PASS [   0.008s] (115/348) elmdb engine::tests::reads::direct_reads_answer_a_row_a_field_and_a_relation
+        PASS [   0.009s] (116/348) elmdb engine::tests::reads::distinct_and_group_by
+        PASS [   0.008s] (117/348) elmdb engine::tests::reads::edges_leave_out_a_far_end_in_the_trash
+        PASS [   0.008s] (118/348) elmdb engine::tests::reads::every_answer_holding_rows_or_values_says_whether_a_map_may_hold_proto
+        PASS [   0.008s] (119/348) elmdb engine::tests::reads::filters_of_type_within_where_has_lacks_with_role_and_by_link
+        PASS [   0.007s] (120/348) elmdb engine::tests::reads::find_relations_by_both_ends_or_neither
+        PASS [   0.008s] (121/348) elmdb engine::tests::reads::first_exists_limit_and_count_read_only_as_far_as_their_answer
+        PASS [   0.008s] (122/348) elmdb engine::tests::reads::order_by_numbers_and_strings_missing_last_reverse_and_limit
+        PASS [   0.007s] (123/348) elmdb engine::tests::reads::order_by_puts_false_before_true_and_distinct_keeps_each_list
+        PASS [   0.008s] (124/348) elmdb engine::tests::reads::order_by_sorts_by_rank_then_value_a_timestamp_by_its_time
+        PASS [   0.008s] (125/348) elmdb engine::tests::reads::order_by_writes_a_list_s_numbers_as_json_stringify_does
+        PASS [   0.008s] (126/348) elmdb engine::tests::reads::out_and_in_walk_edges_by_kinds_and_types_and_edges_answer_relation_rows
+        PASS [   0.010s] (127/348) elmdb engine::tests::reads::rows_say_whether_a_map_may_hold_proto_and_hold_it_as_a_field
+        PASS [   0.010s] (128/348) elmdb engine::tests::reads::starts_from_a_type_types_ids_and_every_entity
+        PASS [   0.011s] (129/348) elmdb engine::tests::reads::terminals_count_first_last_exists_and_rows
+        PASS [   0.010s] (130/348) elmdb engine::tests::reads::the_filters_before_a_driving_index_keep_their_part
+        PASS [   0.009s] (131/348) elmdb engine::tests::reads::where_null_matches_an_entity_lacking_the_field_though_the_field_is_indexed
+        PASS [   0.010s] (132/348) elmdb engine::tests::reads::with_role_after_another_filter_keeps_what_that_filter_kept
+        PASS [   0.056s] (133/348) elmdb engine::tests::reads::with_role_before_a_driving_index_is_checked_per_match_while_the_role_index_is_unbuilt
+        PASS [   0.008s] (134/348) elmdb engine::tests::refuses_a_row_without_a_required_field_and_deleting_one
+        PASS [   0.009s] (135/348) elmdb engine::tests::refuses_a_self_link_an_unknown_kind_a_pair_its_endpoints_dont_allow_and_a_link_past_its_cardinality
+        PASS [   0.008s] (136/348) elmdb engine::tests::refuses_a_value_its_field_doesnt_take_and_a_field_its_type_doesnt_declare
+        PASS [   0.008s] (137/348) elmdb engine::tests::refuses_the_engines_fields_and_types_an_unknown_type_an_id_in_use_and_one_naming_another_type
+        PASS [   0.012s] (138/348) elmdb engine::tests::roles_grant_revoke_and_grant_exclusively_and_refuse_an_undeclared_one
+        PASS [   0.021s] (139/348) elmdb engine::tests::schema_versions::a_builder_with_an_earlier_declaration_refuses_before_writing_index_entries
+        PASS [   0.022s] (140/348) elmdb engine::tests::schema_versions::a_failed_schema_commit_keeps_its_error_when_recovery_sees_a_new_declaration
+        PASS [   0.019s] (141/348) elmdb engine::tests::schema_versions::a_schema_change_rechecks_primary_inventory_in_its_write_transaction
+        PASS [   0.021s] (142/348) elmdb engine::tests::schema_versions::a_schema_change_refuses_if_another_process_changes_its_input_before_the_write
+        PASS [   0.020s] (143/348) elmdb engine::tests::schema_versions::a_stale_handle_cannot_adopt_another_process_schema
+        PASS [   0.018s] (144/348) elmdb engine::tests::schema_versions::a_stale_handle_cannot_overwrite_another_process_schema
+        PASS [   0.051s] (145/348) elmdb engine::tests::schema_versions::cross_process_schema_changes_refuse_stale_reads_and_mutations
+        PASS [   0.008s] (146/348) elmdb engine::tests::schema_versions::interrupted_index_work_resumes_when_schema_change_and_refresh_both_fail
+        PASS [   0.008s] (147/348) elmdb engine::tests::takes_the_id_and_times_a_row_brings
+        PASS [   0.008s] (148/348) elmdb engine::tests::tracked::a_commit_names_the_tokens_whose_reads_it_wrote_into_and_no_others
+        PASS [   0.009s] (149/348) elmdb engine::tests::tracked::a_panicking_listener_is_removed_without_changing_the_commit_outcome
+        PASS [   0.013s] (150/348) elmdb engine::tests::tracked::a_panicking_watch_read_is_removed_and_does_not_hide_failed_durability
+        PASS [   0.009s] (151/348) elmdb engine::tests::tracked::a_scan_a_read_stopped_is_tracked_as_far_as_it_went
+        PASS [   0.009s] (152/348) elmdb engine::tests::tracked::a_threaded_read_holds_its_schema_before_taking_the_snapshot
+        PASS [   0.009s] (153/348) elmdb engine::tests::tracked::a_unit_names_its_tokens_when_it_commits_and_a_refused_batch_commits_nothing
+        PASS [   0.008s] (154/348) elmdb engine::tests::tracked::a_unit_opened_between_writer_checks_is_refused_without_holding_schema
+        PASS [   0.010s] (155/348) elmdb engine::tests::tracked::a_watch_delivers_each_answer_that_changed_after_a_commit_into_what_it_read
+        PASS [   0.007s] (156/348) elmdb engine::tests::tracked::a_watch_that_failed_delivers_the_next_answer_even_one_equal_to_the_last_before_the_failure
+        PASS [   0.009s] (157/348) elmdb engine::tests::tracked::a_watch_whose_listener_writes_into_what_it_reads_hears_that_write
+        PASS [   0.009s] (158/348) elmdb engine::tests::tracked::an_export_snapshot_keeps_its_schema_while_callbacks_can_change_the_live_schema
+        PASS [   0.008s] (159/348) elmdb engine::tests::tracked::callback_close_refuses_before_taking_the_store
+        PASS [   0.021s] (160/348) elmdb engine::tests::tracked::callback_schema_unwatch_and_nested_delivery_terminate
+        PASS [   0.007s] (161/348) elmdb engine::tests::tracked::database_cleanup_after_callback_tls_destruction_terminates
+        PASS [   0.012s] (162/348) elmdb engine::tests::tracked::dropping_a_listeners_last_database_reference_does_not_wait_on_its_unit
+        PASS [   0.011s] (163/348) elmdb engine::tests::tracked::the_sequence_rises_by_one_a_commit_and_outlasts_a_reset_and_a_reopen
+        PASS [   0.013s] (164/348) elmdb engine::tests::tracked::watch_delivery_from_thread_exit_destructors_is_guarded
+        PASS [   0.016s] (165/348) elmdb engine::tests::tracked::watch_delivery_refreshes_schema_after_callbacks_for_initial_batch_and_unit_delivery
+        PASS [   0.008s] (166/348) elmdb engine::tests::trash_keeps_the_first_time_restore_brings_it_back_and_trashed_at_is_the_engines
+        PASS [   0.010s] (167/348) elmdb engine::tests::trigram::a_pattern_the_syntax_doesnt_hold_is_refused_naming_it
+        PASS [   0.009s] (168/348) elmdb engine::tests::trigram::among_a_set_a_type_with_several_trigram_indexes_and_none_named_is_refused
+        PASS [   0.033s] (169/348) elmdb engine::tests::trigram::an_index_declared_after_the_rows_is_built_over_them_and_read_whole_until_then
+        PASS [   0.008s] (170/348) elmdb engine::tests::trigram::containing_reads_every_type_started_from_and_among_a_set_skips_a_type_without_the_index
+        PASS [   0.039s] (171/348) elmdb engine::tests::trigram::the_index_follows_every_write_and_check_and_rebuild_cover_it
+        PASS [   0.012s] (172/348) elmdb engine::tests::trigram::the_index_narrows_what_is_read_and_a_pattern_it_cant_narrow_by_reads_every_message
+        PASS [   0.028s] (173/348) elmdb engine::tests::trigram::what_a_search_finds_is_what_a_scan_finds
+        PASS [   0.011s] (174/348) elmdb engine::tests::units::a_link_target_missing_when_the_unit_commits_rolls_the_whole_unit_back
+        PASS [   0.010s] (175/348) elmdb engine::tests::units::a_refused_batch_in_a_unit_keeps_none_of_itself_and_the_unit_goes_on
+        PASS [   0.009s] (176/348) elmdb engine::tests::units::a_released_savepoint_is_undone_with_the_unit_around_it
+        PASS [   0.010s] (177/348) elmdb engine::tests::units::a_savepoint_rolled_back_undoes_only_its_own_writes_a_grown_list_included
+        PASS [   0.008s] (178/348) elmdb engine::tests::units::a_unit_dropped_uncommitted_keeps_nothing
+        PASS [   0.008s] (179/348) elmdb engine::tests::units::a_unit_reads_its_own_writes_and_commits_them_together
+        PASS [   0.008s] (180/348) elmdb engine::tests::unlink_and_remove_relation_remove_edges_and_their_keys_update_relation_moves_one
+        PASS [   0.008s] (181/348) elmdb engine::tests::updated_at_isnt_stamped_by_links_roles_the_trash_or_a_write_that_asked_not_to
+        PASS [   0.008s] (182/348) elmdb engine::tests::upsert_creates_with_the_id_when_none_has_it_and_writes_the_row_when_one_does
+        PASS [   0.102s] (183/348) elmdb engine::tests::walks::a_reverse_after_a_hop_answers_the_walk_reversed_and_a_limit_after_it_reads_only_what_it_keeps
+        PASS [   0.069s] (184/348) elmdb engine::tests::walks::a_reverse_after_a_hop_from_several_entities_or_kinds_reverses_the_whole_walk
+        PASS [   0.056s] (185/348) elmdb engine::tests::walks::a_reverse_after_a_hop_in_a_unit_reads_the_unit_s_own_edges
+        PASS [   0.057s] (186/348) elmdb engine::tests::walks::a_tracked_reverse_after_a_hop_is_written_into_as_far_back_as_it_read_and_no_further
+        PASS [   0.059s] (187/348) elmdb engine::tests::walks::an_end_linked_twice_is_where_its_first_edge_is_and_a_trashed_one_is_left_out
+        PASS [   0.007s] (188/348) elmdb engine::tests::writes_to_an_existing_entity_stamping_updated_at_and_refuses_an_id_no_entity_has
+        PASS [   0.010s] (189/348) elmdb engine::text::analyze::tests::a_code_is_a_term_beside_its_parts_at_the_first_parts_place
+        PASS [   0.010s] (190/348) elmdb engine::text::analyze::tests::a_language_stems_each_word_and_no_code
+        PASS [   0.010s] (191/348) elmdb engine::text::analyze::tests::byte_offsets_are_the_original_texts
+        PASS [   0.003s] (192/348) elmdb engine::text::analyze::tests::the_exact_analyzer_is_the_whole_value_case_folded
+        PASS [   0.010s] (193/348) elmdb engine::text::analyze::tests::the_standard_analyzer_folds_case_and_accents_and_splits_identifiers
+        PASS [   0.003s] (194/348) elmdb engine::text::labels::tests::a_case_change_starts_a_word_and_positions_are_utf16_units
+        PASS [   0.003s] (195/348) elmdb engine::text::labels::tests::matches_characters_in_order_and_nothing_else
+        PASS [   0.002s] (196/348) elmdb engine::text::labels::tests::word_starts_and_runs_beat_scattered_characters
+        PASS [   1.835s] (197/348) elmdb engine::text::search::seeking::a_fuzzy_walk_finds_what_reading_every_term_finds_and_reads_far_fewer
+        PASS [   0.018s] (198/348) elmdb engine::text::tests::a_fields_weight_counts_its_terms_that_many_times
+        PASS [   0.018s] (199/348) elmdb engine::text::tests::a_highlight_joins_the_terms_it_runs_across
+        PASS [   0.016s] (200/348) elmdb engine::text::tests::a_highlight_names_its_element_by_its_place_in_the_list
+        PASS [   0.003s] (201/348) elmdb engine::text::tests::a_query_parses_into_its_clauses_as_typed
+        PASS [   0.017s] (202/348) elmdb engine::text::tests::a_score_is_bm25_over_the_weighted_fields_searched
+        PASS [   0.018s] (203/348) elmdb engine::text::tests::a_search_combines_with_the_steps_around_it
+        PASS [   0.024s] (204/348) elmdb engine::text::tests::a_stemmed_index_matches_a_prefix_as_typed_and_suggests_words_not_stems
+        PASS [   0.016s] (205/348) elmdb engine::text::tests::a_stemmed_index_matches_a_words_other_forms
+        PASS [   0.057s] (206/348) elmdb engine::text::tests::a_term_too_long_for_a_key_is_held_by_no_index_and_keeps_its_neighbours_apart
+        PASS [   0.014s] (207/348) elmdb engine::text::tests::a_type_with_several_text_indexes_names_the_one_searched
+        PASS [   0.022s] (208/348) elmdb engine::text::tests::an_index_declared_over_existing_data_is_built_in_the_background_and_dropped_with_its_keys
+        PASS [   0.022s] (209/348) elmdb engine::text::tests::every_clause_matches_unless_any_and_negations_phrases_and_or_combine
+        PASS [   0.021s] (210/348) elmdb engine::text::tests::every_write_keeps_the_index_and_check_finds_it_as_primary_data_derives_it
+        PASS [   0.017s] (211/348) elmdb engine::text::tests::hits_answer_scores_terms_highlights_in_utf16_units_and_fields
+        PASS [   0.015s] (212/348) elmdb engine::text::tests::hits_of_a_search_say_whether_their_rows_may_hold_proto
+        PASS [   0.018s] (213/348) elmdb engine::text::tests::identifiers_codes_and_accents_match_as_typed
+        PASS [   0.018s] (214/348) elmdb engine::text::tests::labels_match_a_quick_opens_characters_in_order_across_types
+        PASS [   0.018s] (215/348) elmdb engine::text::tests::ranks_a_term_held_more_often_and_in_a_shorter_text_first
+        PASS [   0.017s] (216/348) elmdb engine::text::tests::recency_halves_a_score_every_half_life
+        PASS [   0.018s] (217/348) elmdb engine::text::tests::recency_multiplies_a_score_by_a_half_for_each_half_life
+        PASS [   0.019s] (218/348) elmdb engine::text::tests::suggestions_complete_a_word_most_held_first_and_correct_one_nearest_first
+        PASS [   0.024s] (219/348) elmdb engine::text::tests::the_last_word_matches_as_a_prefix_and_a_long_word_one_edit_away
+        PASS [   0.003s] (220/348) elmdb engine::tracking::tests::an_owner_reading_the_same_keys_and_ranges_again_files_them_once
+        PASS [   0.002s] (221/348) elmdb engine::tracking::tests::finds_a_range_by_a_key_at_its_low_end_and_not_at_its_high_end
+        PASS [   0.221s] (222/348) elmdb engine::tracking::tests::finds_exactly_the_owners_a_scan_of_every_read_set_finds
+        PASS [   0.003s] (223/348) elmdb engine::trigram::tests::a_list_s_elements_are_apart_and_case_is_folded
+        PASS [   0.004s] (224/348) elmdb engine::trigram::tests::a_pattern_needs_what_every_match_holds
+        PASS [   0.003s] (225/348) elmdb engine::trigram::tests::look_around_and_backreferences_are_refused_naming_the_pattern
+        PASS [   0.002s] (226/348) elmdb engine::values::tests::checks_values_against_their_field
+        PASS [   0.003s] (227/348) elmdb engine::values::tests::compares_as_javascript_does
+        PASS [   0.003s] (228/348) elmdb engine::values::tests::compresses_from_the_threshold_on
+        PASS [   0.002s] (229/348) elmdb engine::values::tests::files_scalars_and_each_list_element_once
+        PASS [   0.002s] (230/348) elmdb engine::values::tests::reads_each_timestamp_encoding_as_milliseconds
+        PASS [   0.003s] (231/348) elmdb engine::values::tests::refuses_a_value_outside_the_value_spec
+        PASS [   0.020s] (232/348) elmdb engine::vector::tests::a_chunk_is_pending_until_embedded_and_pending_again_when_its_text_changes
+        PASS [   0.017s] (233/348) elmdb engine::vector::tests::a_cosine_index_refuses_a_zero_vector_and_a_query_holding_a_number_that_isn_t_finite
+        PASS [   0.046s] (234/348) elmdb engine::vector::tests::a_dump_carries_the_embeddings_so_its_load_finds_by_them_with_nothing_pending
+        PASS [   0.017s] (235/348) elmdb engine::vector::tests::a_near_hit_scores_its_nearness_and_a_hybrid_one_its_fused_ranks
+        PASS [   0.022s] (236/348) elmdb engine::vector::tests::a_rebuild_keeps_the_stored_embeddings_and_builds_the_graphs_again
+        PASS [   0.019s] (237/348) elmdb engine::vector::tests::a_reset_empties_the_graphs_with_everything_else
+        PASS [   0.020s] (238/348) elmdb engine::vector::tests::a_unit_changes_the_graphs_as_it_commits_and_a_rolled_back_one_not_at_all
+        PASS [   0.019s] (239/348) elmdb engine::vector::tests::among_a_set_a_type_without_the_index_holds_no_match_and_one_named_or_started_from_is_refused
+        PASS [   0.016s] (240/348) elmdb engine::vector::tests::an_embedding_of_an_entity_destroyed_since_is_stale_and_the_rest_of_its_batch_is_stored
+        PASS [   0.017s] (241/348) elmdb engine::vector::tests::an_embedding_of_another_model_or_size_or_index_is_refused_and_one_of_no_entity_is_stale
+        PASS [   0.021s] (242/348) elmdb engine::vector::tests::an_index_declared_over_existing_data_queues_its_chunks_and_a_dropped_one_takes_its_embeddings
+        PASS [   0.003s] (243/348) elmdb engine::vector::tests::chunks_are_whole_paragraphs_or_markdown_sections
+        PASS [   0.010s] (244/348) elmdb engine::vector::tests::each_of_two_vector_indexes_declared_or_rebuilt_over_existing_data_queues_its_own_chunks
+        PASS [   0.017s] (245/348) elmdb engine::vector::tests::hybrid_fuses_the_text_and_vector_rankings_on_a_fixed_corpus
+        PASS [   0.043s] (246/348) elmdb engine::vector::tests::hybrid_fuses_the_vector_ranking_four_times_k_deep
+        PASS [   0.019s] (247/348) elmdb engine::vector::tests::like_searches_near_an_entitys_own_embedding_without_it
+        PASS [   0.030s] (248/348) elmdb engine::vector::tests::near_answers_k_live_entities_when_trashed_ones_sit_closer
+        PASS [   0.570s] (249/348) elmdb engine::vector::tests::near_asks_again_when_one_trashed_entity_s_chunks_fill_what_the_graph_answered
+        PASS [   0.019s] (250/348) elmdb engine::vector::tests::near_ranks_by_distance_within_the_steps_before_it_and_leaves_the_trash_out
+        PASS [   0.029s] (251/348) elmdb engine::vector::tests::re_embedding_a_chunk_names_a_tracked_near
+        PASS [   0.021s] (252/348) elmdb engine::vector::tests::single_vector_rebuild_spills_identifiers_and_preserves_embeddings_and_neighbors
+        PASS [   0.024s] (253/348) elmdb engine::vector::tests::unit_vector_reads_overlay_pending_graph_changes_and_savepoint_rollback
+        SLOW [> 60.000s] (───────) elmdb engine::tests::model::the_engine_holds_what_the_model_holds_after_every_step
+        PASS [  45.422s] (254/348) elmdb engine::vector::tests::vector_flush_drains_multiple_journal_batches_and_index_groups
+        PASS [   0.022s] (255/348) elmdb engine::watch::registration_tests::a_watch_retries_a_concurrent_commit_and_honors_removal_during_execution
+        PASS [   0.007s] (256/348) elmdb engine::watch::registration_tests::a_watch_whose_reads_meet_a_commit_twice_reads_a_third_time_under_the_lock
+        PASS [   0.007s] (257/348) elmdb engine::watch::registration_tests::an_intervening_commit_retries_before_filing_dependencies
+        PASS [   0.009s] (258/348) elmdb engine::watch::registration_tests::an_unwinding_read_drops_its_pending_registration
+        PASS [   0.006s] (259/348) elmdb engine::watch::registration_tests::reads_in_flight_together_each_file_their_own_dependencies
+        PASS [   0.006s] (260/348) elmdb engine::watch::registration_tests::repeated_conflicts_fall_back_once_and_untrack_cancels_in_flight_registration
+        PASS [   0.003s] (261/348) elmdb error::tests::as_str_is_the_serialized_name
+        PASS [   0.003s] (262/348) elmdb failpoints::tests::a_point_armed_for_a_path_fails_for_that_path_once_on_any_thread
+        PASS [   0.004s] (263/348) elmdb failpoints::tests::a_point_armed_on_one_thread_fails_there_once_and_nowhere_else
+        PASS [   0.003s] (264/348) elmdb failpoints::tests::a_run_runs_once_on_its_thread_and_the_site_goes_on
+        PASS [   0.024s] (265/348) elmdb format::key::tests::a_prefix_range_holds_exactly_the_keys_that_extend_the_prefix
+        PASS [   0.023s] (266/348) elmdb format::key::tests::byte_order_is_tuple_order
+        PASS [   0.018s] (267/348) elmdb format::key::tests::decodes_what_it_encodes
+        PASS [   0.003s] (268/348) elmdb format::key::tests::negative_zero_is_zero_and_strings_hold_nul
+        PASS [   0.003s] (269/348) elmdb format::key::tests::refuses_bytes_no_key_encodes_to
+        PASS [   0.003s] (270/348) elmdb format::tests::tags_are_distinct_and_name_their_kind
+        PASS [   0.002s] (271/348) elmdb format::value::tests::refuses_what_the_spec_leaves_out
+        PASS [   0.002s] (272/348) elmdb format::value::tests::takes_what_apack_stores_and_a_date
+        PASS [   0.004s] (273/348) elmdb schema::tests::a_collation_is_a_locale_the_collator_reads
+        PASS [   0.003s] (274/348) elmdb schema::tests::an_index_may_not_take_the_name_of_the_engine_s_own
+        PASS [   0.003s] (275/348) elmdb schema::tests::changes::a_changed_index_rebuilds_and_a_removed_one_drops
+        PASS [   0.003s] (276/348) elmdb schema::tests::changes::a_field_added_to_a_type_allowing_any_holds_its_rows_to_its_type
+        PASS [   0.004s] (277/348) elmdb schema::tests::changes::a_new_collation_is_applied_since_indexes_hold_values_as_written
+        PASS [   0.004s] (278/348) elmdb schema::tests::changes::a_removed_declaration_keeps_its_data
+        PASS [   0.004s] (279/348) elmdb schema::tests::changes::a_short_code_prefix_never_changes
+        PASS [   0.010s] (280/348) elmdb schema::tests::changes::a_tightened_rule_is_enforced_and_a_loosened_one_applied
+        PASS [   0.005s] (281/348) elmdb schema::tests::changes::additions_are_applied_and_new_indexes_build
+        PASS [   0.003s] (282/348) elmdb schema::tests::changes::an_unchanged_schema_changes_nothing
+        PASS [   0.003s] (283/348) elmdb schema::tests::checks_field_types
+        PASS [   0.006s] (284/348) elmdb schema::tests::checks_what_each_index_covers
+        PASS [   0.003s] (285/348) elmdb schema::tests::lists_every_problem_and_says_so_in_the_error
+        PASS [   0.003s] (286/348) elmdb schema::tests::reads_the_documented_example
+        PASS [   0.003s] (287/348) elmdb schema::tests::refuses_short_code_prefixes_that_are_malformed_or_taken
+        PASS [   0.003s] (288/348) elmdb schema::tests::refuses_the_wrong_language_and_reserved_names
+        PASS [   0.003s] (289/348) elmdb schema::tests::refuses_unknown_keys_at_every_level
+        PASS [   0.003s] (290/348) elmdb schema::tests::reproduces_the_documented_messages
+        PASS [   0.006s] (291/348) elmdb schema::tests::schemas_that_mean_the_same_thing_hash_alike
+        PASS [   0.006s] (292/348) elmdb schema::tests::the_canonical_form_is_the_same_whatever_order_a_set_is_listed_in
+        PASS [   0.003s] (293/348) elmdb schema::tests::the_canonical_form_writes_every_default_and_sorts_keys
+        PASS [   0.003s] (294/348) elmdb schema::tests::the_parser_and_the_stored_form_take_the_same_defaults
+        PASS [   0.003s] (295/348) elmdb store::backup::publication_tests::other_rename_errors_do_not_attempt_publication
+        PASS [   0.003s] (296/348) elmdb store::backup::publication_tests::unsupported_exclusive_rename_falls_back_without_overwriting
+        PASS [   0.059s] (297/348) elmdb store::sync::tests::a_failed_background_sync_fails_every_wait_after_it
+        PASS [   0.254s] (298/348) elmdb store::sync::tests::a_sync_queued_behind_a_failed_one_fails_its_caller_though_it_succeeds
+        PASS [   0.058s] (299/348) elmdb store::sync::tests::a_wait_given_up_on_keeps_no_outcome
+        PASS [   0.003s] (300/348) elmdb store::sync::tests::dropping_group_commit_syncs_what_it_owes
+        PASS [  19.002s] (301/348) elmdb store::sync::tests::failed_syncs::a_wait_resolves_only_on_a_covering_sync_before_any_failure_and_rejects_only_after_one
+        PASS [   0.064s] (302/348) elmdb store::sync::tests::rejects_every_caller_when_its_sync_fails_and_every_wait_after_it
+        PASS [   0.065s] (303/348) elmdb store::sync::tests::shares_the_running_sync_with_a_caller_that_committed_nothing_since
+        PASS [   0.114s] (304/348) elmdb store::sync::tests::starts_no_sync_when_nothing_was_committed_since_the_last_finished
+        PASS [   0.056s] (305/348) elmdb store::sync::tests::stopping_at_exit_drops_the_syncer_and_stops_the_worker_once_their_locks_come_free
+        PASS [   0.024s] (306/348) elmdb store::sync::tests::stopping_at_exit_waits_on_no_worker
+        PASS [   0.059s] (307/348) elmdb store::sync::tests::syncs_a_steady_stream_at_the_cap_after_its_first_unsynced_commit
+        PASS [   0.108s] (308/348) elmdb store::sync::tests::syncs_once_writes_pause_a_burst_one_sync_after_the_last
+        PASS [   0.003s] (309/348) elmdb store::sync::tests::the_policy_is_due_after_the_idle_time_or_the_cap
+        PASS [   0.313s] (310/348) elmdb store::sync::tests::waits_for_a_sync_begun_after_the_write_and_a_write_during_it_waits_for_the_next
+        PASS [   0.017s] (311/348) elmdb store::tests::a_backup_replaces_an_earlier_one_and_refuses_a_database_open_here
+        PASS [   0.010s] (312/348) elmdb store::tests::a_close_returns_though_a_wait_for_durability_is_still_held
+        PASS [   0.038s] (313/348) elmdb store::tests::a_commit_is_synced_on_its_own_once_writes_pause
+        PASS [   0.008s] (314/348) elmdb store::tests::a_durable_write_commits_with_its_sync_and_owes_nothing_after
+        PASS [   0.003s] (315/348) elmdb store::tests::a_new_map_is_twice_the_file_in_whole_steps_and_a_step_at_least
+        PASS [   0.011s] (316/348) elmdb store::tests::a_read_adopts_the_map_another_process_grew_the_file_past
+        PASS [   0.010s] (317/348) elmdb store::tests::a_read_after_another_process_commits_sees_the_commit_though_a_read_transaction_was_kept
+        PASS [   0.005s] (318/348) elmdb store::tests::a_read_leaves_its_transaction_for_the_next_and_at_most_max_idle_are_kept
+        PASS [   0.006s] (319/348) elmdb store::tests::a_read_only_environment_requires_a_real_lock_table
+        PASS [   0.008s] (320/348) elmdb store::tests::a_read_only_process_requires_registration_while_a_writer_is_open
+        PASS [   0.005s] (321/348) elmdb store::tests::a_read_only_store_refuses_a_write_and_reads_what_is_there
+        PASS [   0.007s] (322/348) elmdb store::tests::a_read_only_store_refuses_files_without_reader_registration
+        PASS [   0.112s] (323/348) elmdb store::tests::a_read_runs_while_a_growth_waits_for_the_open_unit
+        PASS [   0.007s] (324/348) elmdb store::tests::a_store_closing_at_exit_reports_a_sync_that_failed
+        PASS [   0.012s] (325/348) elmdb store::tests::a_unit_grows_the_map_first_once_the_map_is_more_than_half_used
+        PASS [   0.216s] (326/348) elmdb store::tests::a_wait_for_the_write_transaction_ends_when_the_unit_does_or_when_it_is_stopped
+        PASS [   0.002s] (327/348) elmdb store::tests::a_windows_read_only_map_never_claims_unmapped_file_capacity
+        PASS [   0.017s] (328/348) elmdb store::tests::a_writable_open_creates_the_graph_databases_it_lacks_and_a_read_only_one_opens_without_them
+        PASS [   0.015s] (329/348) elmdb store::tests::backup_creates_nested_destinations_and_leaves_only_the_complete_data_file
+        PASS [   0.020s] (330/348) elmdb store::tests::backup_failure_owns_only_its_private_file_and_releases_destination
+        PASS [   0.010s] (331/348) elmdb store::tests::backup_reports_a_postpublication_sync_failure_without_losing_the_complete_copy
+        PASS [   0.011s] (332/348) elmdb store::tests::backup_reserves_destination_against_open_and_another_publisher
+        PASS [   0.014s] (333/348) elmdb store::tests::grows_the_map_when_a_unit_fills_it
+        PASS [   0.007s] (334/348) elmdb store::tests::keeps_a_write_its_process_committed_though_the_process_is_killed_as_it_returns
+        PASS [   0.005s] (335/348) elmdb store::tests::keeps_what_was_committed_across_a_close_and_an_open
+        PASS [   0.012s] (336/348) elmdb store::tests::only_a_writable_store_that_syncs_runs_group_commit_and_counts_its_syncs
+        PASS [   0.008s] (337/348) elmdb store::tests::reads_run_on_other_threads_while_a_writer_writes
+        PASS [   0.009s] (338/348) elmdb store::tests::refuses_a_file_in_another_lmdb_data_version_naming_lmdb_js
+        PASS [   0.010s] (339/348) elmdb store::tests::refuses_a_newer_format_saying_to_update_and_an_older_one_saying_it_is_made_again
+        PASS [   0.008s] (340/348) elmdb store::tests::refuses_another_programs_lmdb_files
+        PASS [   0.005s] (341/348) elmdb store::tests::refuses_new_files_it_could_not_stamp_and_stamps_them_once_it_can
+        PASS [   0.086s] (342/348) elmdb-cli::cli inspects_checks_backs_up_dumps_and_loads_a_database
+        PASS [   0.006s] (343/348) elmdb-node process::tests::a_claim_held_elsewhere_in_the_process_is_refused_as_already_loaded_and_made_once_free
+        PASS [   0.002s] (344/348) elmdb-node process::tests::failed_claims_are_retryable_and_success_is_cached
+        PASS [   0.003s] (345/348) elmdb-node process::tests::independent_kernel_claims_conflict_and_are_reclaimed_on_close
+        PASS [   0.005s] (346/348) xtask::bin/xtask tests::counts_two_versions_and_two_crates_apart
+        PASS [   0.002s] (347/348) xtask::bin/xtask tests::finds_each_lmdb_sys_crate_once
+        PASS [  89.761s] (348/348) elmdb engine::tests::model::the_engine_holds_what_the_model_holds_after_every_step
+────────────
+     Summary [  96.883s] 348 tests run: 348 passed (1 slow), 10 skipped

@@ -1,0 +1,24 @@
+   Compiling elmdb v0.0.0 (/tmp/elmdb-overlay-mutant/crates/elmdb)
+    Finished `mutants` profile [unoptimized] target(s) in 2m 44s
+     Running unittests src/lib.rs (/native/target/mutants/deps/elmdb-ea0b59df1a9dc559)
+
+running 1 test
+test engine::vector::tests::unit_vector_reads_overlay_pending_graph_changes_and_savepoint_rollback ... FAILED
+
+failures:
+
+---- engine::vector::tests::unit_vector_reads_overlay_pending_graph_changes_and_savepoint_rollback stdout ----
+
+thread 'engine::vector::tests::unit_vector_reads_overlay_pending_graph_changes_and_savepoint_rollback' (678) panicked at crates/elmdb/src/engine/vector/tests.rs:701:9:
+assertion `left == right` failed
+  left: Array []
+ right: Array [String("Doc-a")]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    engine::vector::tests::unit_vector_reads_overlay_pending_graph_changes_and_savepoint_rollback
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 349 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p elmdb --lib`

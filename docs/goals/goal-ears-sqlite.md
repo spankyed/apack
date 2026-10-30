@@ -6,7 +6,7 @@
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
 The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 8b1a479b96
-and native engine 4d558a2754; combined acceptance is pending. Inspect the current handoff and actual source before continuing.
+and native fix 8ab7088f9a; combined acceptance is pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
 Finished when the SQLite candidate runs the complete app data lifecycle, all required
@@ -207,21 +207,27 @@ forced native fallback fails the candidate marker. Exact platform run
 [40977802135](https://github.com/spankyed/apack/actions/runs/40977802135) is now green
 on Linux/macOS/Windows at `d28e2de39c`; Linux executes all 1,320 prepared SDK cases
 with no skips. All hosts execute both fixture stores and four built-pack repository cases.
-The unchanged own-unit embedding assertion still fails on exact native `4d558a2754`; preserve
-that failure and fix it in isolated native work before full Strict can be claimed.
-Completed Strict job `app-and-rest` confirms the same assertion failure. `integration-1`
-also times out in the incumbent/refused-replacement facade test at its unchanged 200 s
-deadline. Retain both failures and diagnose actual work; do not relax tests. That full
-Strict run is terminal failure; its other seven jobs passed. The isolated native patch
-passes all 23 vector cases and Clippy; complete native qualification is still running.
-Native diagnosis checkout is `/private/tmp/ears-native-unit-fix` at
-exact `4d558a2754`, independent of the working agent and with no shared target. Resolve
-failures without weakening assertions; no old native artifact or old green substitutes for those checks.
+The unchanged own-unit embedding assertion fails on exact native `4d558a2754` and
+passes with the isolated journal-overlay fix, now committed/published as
+`8ab7088f9a583202f9ccc766381a31e39d19851f` and pinned by this candidate. All required
+Linux native checks pass, including 348 Rust cases, applicable binding tests and a
+negative control restoring the old implementation. Exact cross-platform native
+[CI 40982141666](https://github.com/spankyed/elmdb/actions/runs/40982141666) is running.
+The original app assertion passes on recorded base-plus-patch artifacts; exact combined
+CI remains required. Native fix checkout is `/private/tmp/ears-native-unit-fix`,
+independent of the working agent, with no shared target or main edits.
+
+Older full Strict `40974548264` is terminal failure: the native assertion above and
+the CLI incumbent/refused-replacement facade test exceeding its unchanged 200 s
+deadline; the other seven jobs passed. The unchanged CLI case passes in isolated
+Linux in 31.164 s; its timestamped three-build trace is retained. That does not explain
+the macOS CI timeout. Preserve its assertions/deadline and rerun full Strict on the
+new source before claiming combined acceptance.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains at `6cf6c8349e`, exact
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs green.
-Advance it only after a new exact full Strict green. The native own-unit embedding-visibility assertion is now reproduced on matching `4d558a2754`
-artifacts. A pin change does not complete that requirement; resolve the failure without weakening it.
+Advance it only after a new exact full Strict green. The native assertion now passes with the recorded fix;
+a pin change alone does not complete exact combined qualification.
 
 Implemented candidate behavior and evidence:
 
