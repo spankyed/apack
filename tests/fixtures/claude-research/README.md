@@ -197,3 +197,20 @@ The attached terminal occupies the full content area on compact windows so all c
 visible. A single-select original question submits immediately; do not invent a second review step.
 Reopening verifies the latest answer, not an older transcript frame. Other permission/question
 variants, stopped-child resume and structured desktop child bindings remain unaccepted.
+
+The stopped-child journey uses `CLAUDE_RESEARCH_BACKGROUND_RESUME_APP=1` with the same kind.
+It follows original admission order: trust No/Exit, trust Yes and same-child resume, input,
+explicit Refresh/Stop with actual resumed PID retirement, then missing-history refusal.
+The private journal is moved and restored with matching hashes; it is never deleted.
+Cached stopped/completed/failed states are labeled Last reported. Other refusal/policy variants
+and structured child desktop contracts remain open.
+
+Audit its exported records without executing Claude:
+
+```sh
+python3 src/integration/verify-background-resume.py <saved-app-run> <product-checkout> --commit a6fe066244bb3655b2bb1b127353325751469c6b
+```
+
+Run this from the research checkout or unpacked authored tools. No positive resume after the
+final journal restoration is claimed; the saved audit proves restored bytes and the exercised
+trusted-resume/refusal sequence.
