@@ -66,7 +66,12 @@ scope even though thread opening is the first vertical implementation slice.
   export policy). Their integration is now corrected; all 219 focused cases across the affected suites
   pass. Remaining broad checks still require completion. Evidence of that broad run:
   `node_modules/.cache/apack-chain/runs/2026-10-30T16-57-46Z-38340`.
-- No successful built-app performance scenario or overhead/timing acceptance yet. The first Linux
+- No successful built-app performance scenario or overhead/timing acceptance yet. The first restored
+  Linux run built the native dependency and renderer, then exposed a nonportable inferred API declaration
+  type. A named public PerformanceRecordingReport and explicit endpoint output annotations fix it;
+  the actual API ESM/CJS/declaration build now passes. The report validator has a type-level compatibility
+  test against every required host report field. Retry the owned app run on this corrected checkpoint.
+- The first Linux
   attempt failed Docker's disk preflight before launching work. Host free space recovered and Docker
   is available again. Check `docker ps` for another expensive owner before launching; do not interfere
   with another session's container/processes. The Linux test image now includes Xvfb/xauth for owned
