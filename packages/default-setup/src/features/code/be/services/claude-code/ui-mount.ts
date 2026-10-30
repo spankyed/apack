@@ -20,7 +20,7 @@ export interface ClaudeUiOwner {
   readonly sessionId?: string
   readonly billing?: import('../../../common/native-billing.ts').ClaudeBillingObservation
   subscribe(listener: (event: unknown) => void): () => void
-  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'backgroundReview' | 'settings' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'managedSettingsDiagnostics' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
+  handle: { ui: Pick<ClaudeUiControls, 'prepareParentCommand' | 'startParentCommand' | 'readParentCommand' | 'submitAgent' | 'agentsGesture' | 'backgroundReview' | 'settings' | 'agentPanel' | 'answerAgentCommand' | 'clientEvent' | 'servePrompt' | 'focus' | 'attach' | 'detach' | 'releaseInstance' | 'managedSettingsDiagnostics' | 'diagnostics' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'render' | 'key' | 'press' | 'input' | 'select' | 'promptEdit' | 'promptAutocomplete' | 'panes' | 'showPane' | 'focusPane' | 'closePane' | 'scroll'> }
 }
 
 /** One independent native attachment per mounted view; never starts or owns a conversation. */
@@ -60,6 +60,8 @@ export function mountClaudeUi(options: {
   let keyQueue: Promise<unknown> = Promise.resolve()
   let lastState: ClaudeUiMountState = { status: 'connecting' }
   let agent: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails | undefined
+  let gestureProblem: string | undefined
+  let agentsGestureSequence = 0
   let agentProblem: string | undefined
   let agentReading = false
   let agentTimer: ReturnType<typeof setInterval> | undefined
@@ -113,7 +115,7 @@ export function mountClaudeUi(options: {
     lastState = state
     const pane = panes?.state?.roster
     notices.setHeld(pane?.panes.find(value => value.id === pane.shown_id)?.hold_toasts === true)
-    try { options.publish({ ...state, billing: current() ? owner.billing : undefined, ...(messages.managedSettingsDiagnostics.length?{managedSettingsDiagnostics:messages.managedSettingsDiagnostics}:{}), ...(messages.diagnostics.length?{diagnostics:messages.diagnostics}:{}), ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
+    try { options.publish({ ...state, billing: current() ? owner.billing : undefined, ...(messages.managedSettingsDiagnostics.length?{managedSettingsDiagnostics:messages.managedSettingsDiagnostics}:{}), ...(messages.diagnostics.length?{diagnostics:messages.diagnostics}:{}), ...(actionKeyState ? { actionKeys: actionKeyState } : {}), ...(promptPalette ? { promptPalette } : {}), ...(agent ? { agent } : {}), ...(agentProblem ? { agentProblem } : {}), ...(gestureProblem ? { gestureProblem } : {}), ...(agentInput ? { agentInput } : {}), ...(question.state ? { question: question.state } : {}), ...(messages.state.some(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? { transcriptMessages: messages.state.filter(row=>!['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) } : {}), ...(messages.state.some(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component)) ? {composer:messages.state.filter(row=>['Spinner','SessionMode','PromptHint','InfoNotice'].includes(row.component))} : {}), ...(notices.state ? { notices: notices.state } : {}), ...(panes?.state ? { panes: panes.state } : {}), ...(scroll.state ? { scroll: scroll.state } : {}) }) } catch { /* presentation is not process authority */ }
   }
   function current(): boolean {
     if (disposed) return false
@@ -322,6 +324,20 @@ export function mountClaudeUi(options: {
         else agentInput = { revision, status: 'done', receipt: { messageId: result.messageId } }
         publish(lastState); if (agentInput.status === 'done') void refreshAgent()
       } catch (error) { if (current()) { agentInput = { revision, status: 'error', problem: error instanceof Error ? error.message : 'Agent input failed' }; publish(lastState) } }
+    },
+    async agentsGesture(sequence: number, revision: number) {
+      if (!current() || !Number.isSafeInteger(sequence) || sequence <= agentsGestureSequence || revision !== promptRevision) return
+      agentsGestureSequence = sequence
+      const work = async () => {
+        await ready
+        if (!current() || !attached || revision !== promptRevision) return
+        gestureProblem = undefined
+        try { await owner.handle.ui.agentsGesture({ client_id: client.client_id, sequence }) }
+        catch (error) { if (current()) gestureProblem = error instanceof Error ? error.message : 'Claude agents could not be opened' }
+        if (current()) publish(lastState)
+      }
+      keyQueue = keyQueue.catch(() => {}).then(work)
+      await keyQueue
     },
     async backgroundReview(revision: number, panelId: string, sourceRevision: string, decision: 'confirm' | 'cancel') {
       const state = agentInput

@@ -1569,6 +1569,8 @@ interface ClaudeNativeTerminalRecord {
 }
 
 interface ClaudeNativeTerminalState {
+    /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
+    handoffPending?: boolean;
     /** Available after the native dialog store has been observed; retained through owned shutdown. */
     messageRetirements?: ClaudeNativeMessageRetirements;
     mcpUrl?: ClaudeNativeMcpUrl;
@@ -2314,6 +2316,7 @@ type ClaudeUiMountState = ({
     promptPalette?: Record<string, string>;
     agent?: ClaudeNativeTaskDetails;
     agentProblem?: string;
+    gestureProblem?: string;
     agentInput?: {
         revision: number;
         status: 'blocked' | 'command_done' | 'command_output' | 'confirmation' | 'deciding' | 'done' | 'error' | 'panel' | 'panel_done' | 'pending' | 'review';
@@ -2713,6 +2716,12 @@ type ClaudeUiViewRequest = ({
     mountId: string;
     sequence: number;
 } & ClaudeUiActionKeyRequest) | {
+    type: 'CLAUDE_UI_AGENTS_GESTURE';
+    threadId: string;
+    mountId: string;
+    sequence: number;
+    revision: number;
+} | {
     type: 'CLAUDE_UI_BACKGROUND_REVIEW';
     threadId: string;
     mountId: string;
@@ -8647,6 +8656,12 @@ declare function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitiali
         title: string;
         confirmLabel: string;
         commandName?: string | undefined;
+    }>;
+    agentsGesture(options: {
+        client_id: string;
+        sequence: number;
+    }): Promise<{
+        handled: boolean;
     }>;
     backgroundReview(options: {
         client_id: string;

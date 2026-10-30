@@ -126,6 +126,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const output: { sequence: number; text: string }[] = []
   let sequence = 0, outputSize = 0, terminal: pty.IPty | undefined, closed = false
   let status: ClaudeNativeTerminalState['status'] = 'starting'
+  let handoffPending = false
   let continuation: ClaudeNativeContinuation | undefined
   let exitCode: number | undefined, stopping = false, changingModel = false, changingPermission = false
   let modelSelection = options.model
@@ -272,7 +273,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       } finally { operatingMcpForm = false; finish() }
     }
     return {
-      get state() { return { messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks } },
+      get state() { return { handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, pid: terminal?.pid, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks } },
       get modelSelection() { return bridge.session.metadata?.modelSelection ?? modelSelection },
       get busy() { return !closed && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
@@ -311,8 +312,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       async refreshNotice() {
         if (closed || !bridge.ready && !bridge.nativePid) return
         const sessionId = bridge.projection.sessionId
-        const result = await bridge.uiTransport.request({ subtype: 'apack_native_notice' }) as { notice?: unknown; retirements?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_native_notice' }) as { notice?: unknown; retirements?: unknown; handoffPending?: unknown }
         if (closed || sessionId !== bridge.projection.sessionId) return
+        if (typeof result.handoffPending !== 'boolean') throw new Error('Native agents progress was not observed')
+        if (handoffPending !== result.handoffPending) { handoffPending = result.handoffPending; changed() }
         const retired = ClaudeNativeMessageRetirementsSchema.parse(result.retirements)
         if (retired.some(item => item.sessionId !== sessionId && !bridge.transcripts.some(transcript => transcript.sessionId === item.sessionId))) throw new Error('Native retirement session is not owned')
         if (JSON.stringify(retired) !== JSON.stringify(messageRetirements)) { messageRetirements = retired; changed() }
@@ -322,8 +325,12 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerNotice(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native notice session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision }) as { answered?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision }) as { answered?: unknown; handoffPending?: unknown }
         if (result.answered !== true) throw new Error('Native notice was not acknowledged')
+        if (response.decision === 'background_confirm' || response.decision === 'background_stay') {
+          if (typeof result.handoffPending !== 'boolean') throw new Error('Native agents progress was not acknowledged')
+          handoffPending = result.handoffPending; changed()
+        }
         if (response.decision === 'compact_previous' || response.decision === 'compact_next') { await this.refreshNotice(); return }
         if (notice?.id === response.id && notice.revision === response.revision) { notice = undefined; changed() }
       },
@@ -508,6 +515,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         } finally { changingPermission = false; changed() }
       },
       async submit(text, images, phase) {
+        if (handoffPending || continuation?.sessionId === bridge.projection.sessionId) throw new Error('This conversation is moving to the background; your draft was retained')
         if (changingModel || changingPermission || changingView || preparingParent) throw new Error('Native input is changing; your draft was retained')
         const sessionId = bridge.projection.sessionId; preparingParent = true; changed()
         try {

@@ -76,6 +76,7 @@
           />
         </div>
 
+        <p v-if="nativeBackgrounded" role="status" class="px-4 py-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Use the native interface to continue it, or start a new thread.</p>
         <NativePromptCompletions :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || submitting" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
 
         <div v-if="nativeUi?.composer?.length" class="flex min-w-0 items-end gap-2 px-5">
@@ -195,7 +196,7 @@
             <Button
               type="submit"
               aria-label="Send"
-              :disabled="submitting || (!hasTextContent && !hasAttachments) || disabled"
+              :disabled="nativeBackgrounded || submitting || (!hasTextContent && !hasAttachments) || disabled"
               class="h-8 gap-2 rounded-lg px-3 text-xs font-medium shadow-sm @lg:px-3.5"
             >
               <span class="hidden @lg:inline">Send</span>
@@ -286,6 +287,7 @@ const props = defineProps<{
   nativePrompt?: { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; attachmentId?: string; revision?: number; reply?: import('#generated/types.ts').ClaudePromptReply; completionRevision?: number; completions?: import('#generated/types.ts').ClaudePromptCompletionReply }
   nativeFocus?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusReply
   nativeBackground?: boolean
+  nativeBackgrounded?: boolean
   nativeSubmit?: (text: string, references: MessageReferences) => Promise<ClaudeComposerSubmitResult>
   nativeUi?: ClaudeUiMountState
 }>()
@@ -314,6 +316,7 @@ const emit = defineEmits<{
   (e: 'summarize-from-here', messageId: string): void
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
+  (e: 'native-agents-gesture', request: { mountId: string; revision: number }): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void
   (e: 'native-ui-notice', event: import('#generated/types.ts').ClaudeUiNoticeEvent): void
   (e: 'native-ui-scroll', event: import('#generated/types.ts').ClaudeUiScrollEvent): void
@@ -381,7 +384,19 @@ const statusLineRef = ref<InstanceType<typeof StatusLine> | null>(null)
 function handleComposerNativeHotkey(event: KeyboardEvent) {
   const editor = tiptapRef.value?.editor
   if (props.disabled || !editor?.isEmpty || hasAttachments.value || !(event.target instanceof Node) || !editor.view.dom.contains(event.target)) return
+  if (props.nativeBackground && props.nativePrompt && event.key === 'ArrowLeft' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey && !event.isComposing && event.keyCode !== 229 && !editor.view.composing && !submitting.value) {
+    event.preventDefault(); event.stopPropagation(); void pressNativeAgentsGesture(); return
+  }
   statusLineRef.value?.pressComposerHotkey(event)
+}
+async function pressNativeAgentsGesture() {
+  const editor = tiptapRef.value?.editor, bridge = promptEditor, mountId = props.nativePrompt?.mountId
+  if (!editor || !bridge || !mountId) return
+  const revision = bridge.revision, epoch = composerEpoch
+  try {
+    if (!await bridge.settle() || promptEditor !== bridge || bridge.revision !== revision || props.nativePrompt?.mountId !== mountId || epoch !== composerEpoch || props.disabled || submitting.value || !props.nativeBackground || editor.isDestroyed || !editor.isEmpty || hasAttachments.value || editor.view.composing) return
+    emit('native-agents-gesture', { mountId, revision })
+  } catch (error) { if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : 'Claude agents could not be opened' }
 }
 const nativePromptProblem = ref<string>()
 const hostPopupActive = ref(false)
@@ -730,7 +745,7 @@ const leftButtons = computed<ActionButton[]>(() => {
       action: 'quick-message'
     },
   ]
-  if (props.nativeSubmit && props.nativePrompt) buttons.push(
+  if (props.nativeSubmit && props.nativePrompt && !props.nativeBackgrounded) buttons.push(
     { icon: Settings2, label: 'Claude settings', action: 'native-settings' },
     { icon: Settings2, label: 'Claude themes', action: 'native-themes' },
     { icon: Cpu, label: 'Choose Claude model', action: 'native-model' },
@@ -850,7 +865,7 @@ function collectContextReferences(editor: NonNullable<typeof tiptapRef.value>['e
 async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp' | '/theme' | '/background') {
   const label = command === '/background' ? 'background session review' : command === '/theme' ? 'themes' : command === '/model' ? 'model selection' : command === '/tasks' ? 'task manager' : command === '/mcp' ? 'MCP servers' : 'settings'
   const editor = tiptapRef.value?.editor, bridge = promptEditor, submit = props.nativeSubmit
-  if (props.disabled || submitting.value || !editor || !bridge || !submit) return
+  if (props.disabled || props.nativeBackgrounded || submitting.value || !editor || !bridge || !submit) return
   const epoch = composerEpoch, revision = bridge.revision
   submitting.value = true; submissionProblem.value = undefined
   try {
@@ -863,8 +878,10 @@ async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp'
   } finally { submitting.value = false }
 }
 
+watch(() => props.nativeBackgrounded, (value, previous) => { if (value && !previous) composerEpoch++ })
+
 const handleSubmit = async () => {
-  if (props.disabled || submitting.value) return
+  if (props.disabled || props.nativeBackgrounded || submitting.value) return
   const editor = tiptapRef.value?.editor
   if (!editor) return
   const epoch = composerEpoch, bridge = promptEditor

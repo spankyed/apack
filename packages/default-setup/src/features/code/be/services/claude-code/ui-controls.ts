@@ -197,6 +197,11 @@ export function createClaudeUiControls(initialized: Promise<Pick<ClaudeInitializ
         z.object({ kind: z.literal('confirmation'), id: z.string().uuid(), title: z.string().max(16384), confirmLabel: z.string().max(16384), commandName: z.string().max(256).optional() }).strict(),
       ]).parse(await request({ subtype: 'apack_ui_agent_dispatch', ...valid }))
     },
+    async agentsGesture(options: { client_id: string; sequence: number }) {
+      const valid = z.object({ client_id: clientId, sequence: z.number().int().positive().safe() }).strict().parse(options)
+      if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native agents gesture capability is unavailable')
+      return z.object({ handled: z.boolean() }).strict().parse(await request({ subtype: 'apack_native_agents_gesture', ...valid }))
+    },
     async backgroundReview(options: { client_id: string; panel_id: string } & ({ operation: 'read' } | { operation: 'confirm' | 'cancel'; revision: string })) {
       const identity = { client_id: clientId.parse(options.client_id), panel_id: z.string().uuid().parse(options.panel_id) }
       if (!(await initialized).capabilities?.includes('apack_native_view_v1')) throw new ClaudeProtocolError('native background panel capability is unavailable')

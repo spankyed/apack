@@ -42,6 +42,7 @@
         <NativeAgentView v-if="focusedAgent && currentThread?.id" :key="JSON.stringify(focusedAgent.target)" :thread-id="currentThread.id" :target="focusedAgent.target" :name="focusedAgent.name" :status-text="focusedAgent.statusText" :active="!nativeTerminalActive" :draft="agentDrafts[agentDraftKey(focusedAgent.target)]?.text ?? ''" :draft-snapshot="agentDrafts[agentDraftKey(focusedAgent.target)]?.snapshot" :scroll-position="agentScrollPositions[agentDraftKey(focusedAgent.target)]" @scroll-position="saveAgentScrollPosition" @draft="saveAgentDraft" @draft-snapshot="saveAgentDraftSnapshot" @pending="agentPending = $event" @returning="agentReturning = $event" @returned="returnFromAgent" />
         <!-- Shrinkable content area -->
         <div v-show="!nativeTerminalActive && !focusedAgent && !agentSelection" class="flex flex-col flex-grow overflow-hidden min-h-0" ref="composerAreaRef" data-testid="chat-composer-area" @keydown.capture="nativeActionKey($event, composerAreaRef)" @focusout="nativeActionKey.leave($event, composerAreaRef)">
+          <p v-if="nativeUiDrawing?.gestureProblem" role="alert" class="px-4 py-2 text-sm text-amber-200">{{ nativeUiDrawing.gestureProblem }}</p>
           <NativeMainCommand v-if="nativeComposerOwner" :state="mainCommand" :frame="nativeUiDrawing?.transcriptMessages?.find(frame => frame.component === 'CommandOutput' && frame.uuid === mainCommand?.output?.messageId)" @press="pressNativeUi" @field="editNativeUi" :owner-id="nativeComposerOwner.ownerId" :output="nativeComposerView?.output ?? []" :dismissed="mainOutputDismissed" :expanded="mainOutputExpanded" @panel="mainPanel" @settings="mainSettings" @background="mainBackgroundReview" @resize="mainPanelResize" @decide="mainCommandDecision" @dismiss="dismissMainOutput" @expand="mainOutputExpanded = $event" />
           <p v-if="nativeComposerView?.submission?.status === 'accepted' && nativeComposerView.submission.command?.kind === 'command_complete'" role="status" class="mx-4 mb-2 shrink-0 text-xs text-neutral-400">/{{ nativeComposerView.submission.command.commandName }} completed<span v-if="nativeComposerView.submission.command.sessionId"> · New conversation ready</span></p>
           <NativeMcpUrl v-if="nativeComposerOwner?.mcpUrl" :key="nativeComposerOwner.mcpUrl.id + nativeComposerOwner.mcpUrl.revision" :url="nativeComposerOwner.mcpUrl" :operation="nativeComposerView?.mcpOperation" @operate="operateMcpUrl" />
@@ -130,7 +131,7 @@
           <!-- Input -->
           <div v-show="!mainPanelActive && !mainOutputExpanded && !pendingNativeApproval && !pendingNativeQuestion && !pendingNativePlan" class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput ref="mainComposer" @native-tools-expanded="nativeToolsExpanded = $event"
-              :disabled="mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main'"
+              :disabled="nativeAgentsDecisionPending || mainCommandActive || !!taskView?.[1].state && taskView[1].state.view?.kind !== 'main'"
               :disabled-reason="taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
               :current-thread="currentThread"
               :current-mode="currentMode"
@@ -146,12 +147,12 @@
               :quick-prompt-cursor="quickPromptCursor"
               :recording-limit-minutes="recordingLimitMinutes"
               :status-line="statusLine"
-              :native-status="nativeComposerOwner?.mainStatus" :native-background="nativeComposerOwner?.view?.kind === 'main'"
+              :native-status="nativeComposerOwner?.mainStatus" :native-background="nativeComposerOwner?.view?.kind === 'main' && !nativeSessionBackgrounded" :native-backgrounded="nativeSessionBackgrounded"
               :status-line-cwd="statusLineCwd"
               :native-ui="nativeUiDrawing" :native-focus="nativeFocus"
               :native-submit="nativeComposerOwner ? submitNativeMessage : undefined"
               :native-prompt="nativePrompt"
-              @native-prompt-edit="editNativePrompt" @native-prompt-host-response="answerPromptHost"
+              @native-agents-gesture="pressNativeAgentsGesture" @native-prompt-edit="editNativePrompt" @native-prompt-host-response="answerPromptHost"
               @native-prompt-autocomplete="completeNativePrompt"
               @native-ui-press="pressNativeUi"
               @native-ui-notice="operateNativeNotice" @native-ui-scroll="scrollNativeUi" @native-ui-pane="operateNativePane" @native-ui-field="editNativeUi" @native-ui-focus="focusNativeUi"
@@ -316,6 +317,8 @@ watch(composerAreaRef, (element, _previous, onCleanup) => {
   onCleanup(() => { observer.disconnect(); element.style.removeProperty('--composer-available-height') })
 }, { flush: 'post' })
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
+const nativeAgentsDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && (view.state?.notice?.kind === 'left_arrow_confirm' || view.state?.handoffPending === true)))
+const nativeSessionBackgrounded = computed(() => { const native = currentThread.value?.context?.claudeCode; return currentMode.value === 'Claude Code' && !!native?.nativeContinuation && native.nativeContinuation.sessionId === native.sessionId })
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
@@ -512,7 +515,7 @@ const conversationBusy = useSelector(actor, ({ context }) => {
   return !!context.currentThread?.context?.claudeCode?.pendingElicitation || !!busyId && !!threadId && context.chatStates[threadId] === busyId
 })
 // A live native owner knows whether foreground input is busy after Pause; stored chat state may still describe its background shell.
-const isBusy = computed(() => nativeComposerOwner.value
+const isBusy = computed(() => nativeSessionBackgrounded.value ? false : nativeComposerOwner.value
   ? nativeComposerOwner.value.busy || !!currentThread.value?.context?.claudeCode?.pendingElicitation
   : conversationBusy.value)
 const statusLineCwd = computed(() => {
@@ -593,6 +596,12 @@ function dismissMainOutput() { mainDismissedRevision.value = mainCommand.value?.
 function mainPanel(text?: string) {
   const mount = nativeUiMount.value, state = mainCommand.value
   if (mount && state?.panel) actor.send({ type: 'CLAUDE_UI_COMMAND_PANEL', ...mount, revision: state.revision, panelId: state.panel.id, ...(text !== undefined ? { text } : {}) })
+}
+let agentsGestureSequence = 0
+function pressNativeAgentsGesture(request: { mountId: string; revision: number }) {
+  const mount = nativeUiMount.value, owner = nativeComposerOwner.value
+  if (!mount || mount.mountId !== request.mountId || owner?.view?.kind !== 'main') return
+  actor.send({ type: 'CLAUDE_UI_AGENTS_GESTURE', ...mount, sequence: ++agentsGestureSequence, revision: request.revision })
 }
 function mainBackgroundReview(request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }) {
   const mount = nativeUiMount.value, state = mainCommand.value

@@ -38,7 +38,7 @@ beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); vi.stubGlobal
 afterEach(() => { vi.useRealTimers(); app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
-  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
+  const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeBackgrounded: false, isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
   const send = vi.fn(), hostResponse = vi.fn(), press = vi.fn(), command = vi.fn(), prompt = vi.fn(), complete = vi.fn(), root = document.createElement('div'); document.body.append(root)
   app = createApp({ render: () => h(SurfaceScope, { surface: 'default-setup/threads' }, { default: () => h(ChatInput, { ...state, onSendMessage: send, onNativeUiPress: press, onSendCommand: command, onNativePromptHostResponse: hostResponse, onNativePromptEdit: prompt, onNativePromptAutocomplete: complete }) }) }); app.mount(root)
   editor.commands.setContent('first')
@@ -388,4 +388,12 @@ it.each(['reset','replacement'] as const)('retires an upload on same-thread Clau
   expect(f.command).not.toHaveBeenCalled()
   expect(editor.state.doc.textContent).toBe('first')
   expect(attachments.pendingImages.value.map(image=>image.name)).toEqual(['pending-reset.png'])
+})
+
+it('keeps backgrounded conversation notes editable but refuses sending to the retired parent', async () => {
+  const f = mount(vi.fn().mockResolvedValue(undefined)); f.state.nativeBackgrounded = true; await nextTick()
+  editor.commands.setContent('Keep these notes for the background conversation.'); await nextTick(); f.submit(); await nextTick()
+  expect(f.send).not.toHaveBeenCalled(); expect(editor.state.doc.textContent).toBe('Keep these notes for the background conversation.')
+  expect(f.root.textContent).toContain('This conversation moved to the background.')
+  expect(f.root.querySelector<HTMLButtonElement>('[aria-label="Send"]')?.disabled).toBe(true)
 })
