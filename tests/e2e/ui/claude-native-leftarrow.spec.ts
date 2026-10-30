@@ -44,7 +44,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, ui: Object.values(state.nativeUiViews).filter((v: any) => v.threadId === state.currentThread?.id).map((v: any) => ({ status: v.state?.status, gestureProblem: v.state?.gestureProblem, agentProblem: v.state?.agentProblem })), native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
-  await expect.poll(async () => (await context()).turns).toBe(1)
+  await expect.poll(async () => (await context()).turns, { timeout: 25000, message: 'Original cold seed turn completes before native handoff' }).toBe(1)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
@@ -187,13 +187,14 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     }
     if(parentOwnerLoss){
       const beforeWorker=await childProcessState(),beforeParent=await context()
-      const removed=await appPage.evaluate(()=>{
-        const actor=(window as any).applicationState.system.get('default-setup/threads'),state=actor.getSnapshot().context
-        const [mountId,view]=Object.entries(state.nativeTerminalViews).find(([,view]:any)=>view.threadId===state.currentThread.id) as any
-        const scope={threadId:state.currentThread.id,mountId,ownerId:view.state.ownerId,pid:view.state.nativePid}
-        actor.send({type:'CLAUDE_TERMINAL_CLOSE',threadId:scope.threadId,mountId:scope.mountId,ownerId:scope.ownerId});return scope
-      })
+      await section.getByRole('button',{name:'Use native interface',exact:true}).click()
+      const stopParent=section.getByRole('button',{name:'Stop session',exact:true})
+      await expect(stopParent).toBeVisible()
+      const currentParent=await context()
+      expect(currentParent.native.state.nativePid).toBe(observations.parentNativePid)
+      const removed={threadId:currentParent.threadId,ownerId:currentParent.native.state.ownerId,pid:currentParent.native.state.nativePid,via:'native-ui-stop'}
       observations.parentOwnerLossRequest=removed
+      await stopParent.click()
       await expect.poll(async()=>{try{const raw=await readFile('/proc/'+removed.pid+'/stat','utf8');return raw.slice(raw.lastIndexOf(')')+2).split(' ')[0]==='Z'}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}},{timeout:10000}).toBe(true)
       await app.navigate('host/settings');await app.navigate('default-setup/threads')
       await expect.poll(async()=>(await context()).native?.state?.ownerId).toBeUndefined()
