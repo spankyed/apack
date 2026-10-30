@@ -98,7 +98,7 @@ Allocation sampling includes objects discarded by major/minor GC; it does not re
 `APACK_PERFORMANCE_SCENARIO=query-plans` runs explicit native `explain()` probes against the search
 fixture outside all measured actions. It retains stage/index names, visited/kept counts, durations and
 result counts, with the source/build manifest; it excludes result ids and payloads. The ids terminal
-explains filtering/traversal, not projection/codec work. Native visited counts are not unique-row counts.
+explains filtering/traversal, not projection/codec work. Native visited counters are stage-defined, not exhaustive physical work or unique-row counts.
 
 Detailed profiles reserve 8 MiB of the existing 16 MiB recording budget, leaving 8 MiB for spans.
 The measured startup CPU/allocation exports were 2.83/3.54 MB, which exceeded the original 2 MiB

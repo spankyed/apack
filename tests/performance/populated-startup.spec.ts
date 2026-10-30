@@ -42,9 +42,6 @@ test('start a populated profile through admission to its initial usable thread v
   const index = Number(process.env.APACK_PERFORMANCE_INDEX);
   if (!Number.isSafeInteger(index) || index < 0) throw Error('Invalid trial index');
   const fixture = manifestSchema.shape.fixture.parse(JSON.parse(readFileSync(process.env.APACK_PERFORMANCE_SEED_REPORT!, 'utf8')));
-  const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
-  const manifest = performanceIdentity({ fixture, mode, runtime, cache: 'fresh-process-warm-filesystem', warmups: 5 });
-  writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
   let correct = false;
   let failure: string | undefined;
   let durationMs: number | undefined;
@@ -105,6 +102,10 @@ test('start a populated profile through admission to its initial usable thread v
   action.end(correct ? 'ok' : 'error');
   const reports = await appPage.evaluate(() => (window as unknown as PerformanceWindow).__performance.stop());
   const driver = await parent.stop();
+  // Provenance hashing is outside launch-to-view readiness and every resource recording.
+  const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
+  const manifest = performanceIdentity({ fixture, mode, runtime, cache: 'fresh-process-warm-filesystem', warmups: 5 });
+  writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
   const backend = reports.backend;
   if (correct && mode !== 'disabled' && !backend?.observations.some(value => JSON.parse(value).name === 'app.index.admission')) {
     correct = false; failure = 'missing-admission-observation';

@@ -134,14 +134,12 @@ maintained detailed workflow must make that capability explicit without silently
 
 ## Dependency-ordered remaining work
 
-1. Detailed CPU/allocation profiles and renderer resource observations, with explicit bounded capture,
-   cleanup and failure semantics. Preserve the implemented business/recording contracts.
-2. Maintained bounded run/comparison orchestration and manifest/trial consistency, including balanced
+1. Maintained bounded run/comparison orchestration and manifest/trial consistency, including balanced
    ABBA execution and matched-source disabled/lightweight/detailed overhead qualification. Preserve raw
    failures, declare budgets before tuning, and report absolute samples/effects/ranges without tail claims.
-3. Complete the prescribed final trial counts on the integrated final source/native identities, including
+2. Complete the prescribed final trial counts on the integrated final source/native identities, including
    populated startup. Reuse valid functional evidence; no timing claim from focused six-trial runs.
-4. Final correctness/completeness review, material fixes, broad local/strict validation on pinned tips,
+3. Final correctness/completeness review, material fixes, broad local/strict validation on pinned tips,
    source-qualified decision evidence and dependent reviewable PRs. Keep #293 draft until qualified.
 
 Do not mark the goal complete from implemented infrastructure, passing individual scenarios or capture
@@ -162,4 +160,14 @@ startup-only deeply nested allocation failure. The fix uses standard non-flatten
 the existing owned debugger and JS JSON decoding, preserving deadlines and a bounded response size.
 The profile budget is rebalanced to 8 MiB, leaving 8 MiB for spans within the original 16 MiB total;
 sampling frequency is unchanged. Eight main transport/resource tests, eight profile tests and fifteen
-report/store tests pass. Rebuilt application verification of this fix remains pending.
+report/store tests pass. On rebuilt `d90a8240e6`, all six detailed thread trials and all six fresh detailed startup launches
+passed. The bounded reader admitted both runs, including startup invocation/manifest consistency:
+`thread-open-detailed-1793401455669` and `populated-startup-detailed-1793401461359`.
+The first startup renderer allocation tree is 124 frames deep; backend is 128. All CPU/allocation
+exports are complete, with no profile failures. This verifies the nested transport against the actual
+previously failing depth, without changing the deadline or sampling frequency. These are functional
+runs (five warmups and one measured sample), not overhead/variability evidence.
+
+Final boundary review moved startup provenance hashing after readiness timing and resource capture.
+That bookkeeping previously ran after launch but before the readiness check, unnecessarily delaying
+observation. Types and lint pass; final integrated-count qualification must use this corrected harness.
