@@ -21,7 +21,12 @@ const test = base.extend<{}, { startupRecording: void }>({
     process.env.APACK_PERFORMANCE_STARTUP = JSON.stringify({ mode, carrier: action.carrier() });
     try { await use(); }
     finally {
-      action.end('cancelled'); await parent.stop();
+      if (parent.snapshot()) {
+        action.end('cancelled');
+        const report = await parent.stop();
+        const directory = process.env.APACK_PERFORMANCE_OUTPUT;
+        if (directory) { mkdirSync(directory, { recursive: true }); writeFileSync(path.join(directory, 'driver-failure.json'), JSON.stringify(report)); }
+      }
       if (previous === undefined) delete process.env.APACK_PERFORMANCE_STARTUP;
       else process.env.APACK_PERFORMANCE_STARTUP = previous;
     }
