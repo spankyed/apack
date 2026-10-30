@@ -376,6 +376,11 @@ no runtime build/download is added. Offline builds and an independent build matc
 binary; 555 comparisons and an extracted npm artifact pass. All 642 SQLite EARS cases pass before a test-only
 private-helper correction; the five corrected artifact cases, EARS/host/script types and 78 build-coverage
 cases pass afterwards. Current platform CI must qualify Windows/macOS build flags and exact complete inputs.
+The first current-source platform run, `41012481990`, retains a Windows setup failure: early MSVC
+activation makes rustc resolve Git's unrelated `link.exe` in bash. Shared setup now pins the absolute
+Microsoft linker before native dependency compilation; exact Windows verification is pending. The
+[retained failure](../references/evidence/ears-sqlite-implementation-2026-10-28/native-package-distribution/windows-linker/README.md)
+does not qualify any package/contract tests on that host. Other jobs continue on their original source.
 Signing must finalize native binary hashes after library signing and before app/installer sealing. Normal
 app owner creation/recovery, live replacement and physical refresh remain separate; no adoption is implied.
 
