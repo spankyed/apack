@@ -39,12 +39,27 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
     writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify(fixture.data));
     await app.waitForSurface('default-setup/threads');
     await app.navigate('default-setup/threads');
-    await appPage.evaluate(({ executable, directory }) => {
-      const win = window as unknown as PerformanceWindow;
-      const target = { kind: 'feature', featureRef: 'default-setup/code' };
-      win.__sendToSystem('host/settings', { type: 'UPDATE_SETTINGS', target, path: ['cliPaths', 'claude-code'], value: executable });
-      win.__sendToSystem('host/settings', { type: 'UPDATE_SETTINGS', target, path: ['baseDirectory'], value: directory });
-    }, { executable, directory });
+    await app.waitForSurface('default-setup/code');
+    await app.navigate('host/settings');
+    await appPage.evaluate(() => {
+      const actor = (window as unknown as PerformanceWindow).applicationState.system.get('host/settings');
+      actor.send({ type: 'TAB.SELECT', tab: 'general' });
+      actor.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' });
+    });
+    const inputs = appPage.getByPlaceholder('Path override (auto-detected if empty)');
+    const cli = appPage.locator('div').filter({ has: appPage.getByText('Claude Code CLI', { exact: true }) })
+      .filter({ has: inputs }).last().getByPlaceholder('Path override (auto-detected if empty)');
+    await cli.fill(executable);
+    await expect.poll(() => appPage.evaluate(() => {
+      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/code').getSnapshot().context as unknown as { settings: { cliPaths?: Record<string, string> } };
+      return context.settings.cliPaths?.['claude-code'];
+    })).toBe(executable);
+    await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/code', { type: 'SET_BASE_DIRECTORY', path: directory }), directory);
+    await expect.poll(() => appPage.evaluate(() => {
+      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/code').getSnapshot().context as unknown as { baseDirectory?: string };
+      return context.baseDirectory;
+    })).toBe(directory);
+    await app.navigate('default-setup/threads');
     await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
     // Preparation is outside every measured interval. The public import need not invoke a model.
     await appPage.waitForFunction(last => {
