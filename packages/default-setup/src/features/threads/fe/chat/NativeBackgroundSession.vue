@@ -3,6 +3,7 @@
     <div class="background-session__body">
       <h3>{{ panel.session?.name || 'Background session' }}</h3>
       <p role="status">{{ panel.label }}</p>
+      <p v-if="panel.info" aria-label="Background session usage" class="background-session__detail">{{ panel.info.model }} · {{ panel.info.turns }} {{ panel.info.turns === 1 ? 'turn' : 'turns' }}<template v-if="panel.info.context"> · {{ panel.info.context.percent }}% context</template><template v-if="panel.info.totalCostUsd !== undefined"> · Session total ${{ panel.info.totalCostUsd.toFixed(6) }}</template></p>
       <p v-if="panel.session?.waitingFor" class="background-session__detail">{{ panel.session.waitingFor }}</p>
       <p v-if="panel.problem" role="alert" class="background-session__problem">{{ panel.problem }}</p>
     </div>
@@ -28,9 +29,9 @@ import { surfaceSessionStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 import { claudeWindowStorageKey } from './native-window-storage.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
-import type { ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundSession } from '#features/code/common/native-background.ts'
+import type { ClaudeBackgroundStatus, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundSession } from '#features/code/common/native-background.ts'
 import type { ClaudeBackgroundSessionState } from '#features/threads/be/claude-terminal-views.ts'
-const props = defineProps<{ continuation: ClaudeNativeContinuation; state?: ClaudeBackgroundSessionState; attached?: boolean; canReply?: boolean }>()
+const props = defineProps<{ continuation: ClaudeNativeContinuation; state?: ClaudeBackgroundSessionState; info?: ClaudeBackgroundStatus; attached?: boolean; canReply?: boolean }>()
 const emit = defineEmits<{ open: [target: ClaudeNativeContinuation, jobId: string]; operate: [target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest] }>()
 const draft = ref(''), replyOpen = ref(false), replyInputId = useId()
 let submitted: {text: string; revision: number} | undefined
@@ -75,7 +76,8 @@ const panels = computed(() => {
   const label = session ? session.state === 'stopped' ? 'Last reported: stopped' : session.state === 'done' ? 'Last reported: completed' : session.state === 'failed' ? 'Last reported: failed'
     : !session.pid ? 'Last reported: awaiting a background worker' : session.state === 'blocked' || session.status === 'waiting' ? 'Last reported: needs input' : session.status === 'busy' ? 'Last reported: working in background' : 'Last reported: running in background'
     : pending || !state ? 'Checking background session…' : 'Background session is not listed'
-  return [{ key: JSON.stringify([target.sessionId, target.continuedInSessionId, session?.id, session?.pid]), target, session, pending, operation: state?.operation, problem: state?.problem, label }]
+  const info = session?.pid && ['working','blocked'].includes(session.state) && props.info?.sessionId === target.continuedInSessionId && props.info.jobId === session.id && props.info.pid === session.pid ? props.info : undefined
+  return [{ key: JSON.stringify([target.sessionId, target.continuedInSessionId, session?.id, session?.pid]), target, session, info, pending, operation: state?.operation, problem: state?.problem, label }]
 })
 </script>
 <style scoped>

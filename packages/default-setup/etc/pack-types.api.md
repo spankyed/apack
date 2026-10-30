@@ -579,6 +579,23 @@ interface ClaudeBackgroundSessionState {
     problem?: string;
 }
 
+/** Original session totals belong to the child snapshot; they are never parent billing deltas. */
+interface ClaudeBackgroundStatus {
+    jobId: string;
+    sessionId: string;
+    pid: number;
+    observedAt: number;
+    model: string;
+    turns: number;
+    startedAt: number;
+    context?: {
+        tokens: number;
+        window: number;
+        percent: number;
+    };
+    totalCostUsd?: number;
+}
+
 interface ClaudeBillingObservation {
     sessionId: string;
     observedAt: number;
@@ -1515,6 +1532,7 @@ interface ClaudeNativeTerminalOptions {
 }
 
 interface ClaudeNativeTerminalOwner {
+    readonly backgroundInfo?: ClaudeBackgroundStatus;
     /** Reviewed native UI operations; reverse hosts and the full UI owner are integrated separately. */
     readonly uiTransport: ClaudeTerminalUiTransport;
     readonly state: ClaudeNativeTerminalState;
@@ -2195,6 +2213,7 @@ type ClaudeTerminalViewRequest = {
 });
 
 type ClaudeTerminalViewSnapshot = {
+    backgroundInfo?: ClaudeBackgroundStatus;
     canReplyBackground?: boolean;
     attachment?: ClaudeBackgroundAttachmentView;
     background?: ClaudeBackgroundSessionState;

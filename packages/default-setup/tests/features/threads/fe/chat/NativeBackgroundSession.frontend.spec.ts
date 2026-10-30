@@ -45,3 +45,14 @@ it('retains a refused draft through remount and clears only its acknowledged rep
     state.status='done';await nextTick();expect(root.querySelector('textarea')!.value).toBe('');expect(root.textContent).toContain('Message queued')
   }finally{app.unmount();root.remove()}
 })
+
+it('shows child usage only for the listed live job and hides it when that worker is stopped', async () => {
+  const state=reactive<ClaudeBackgroundSessionState>({...link,operation:'refresh',status:'done',revision:1,session:{id:'05ff1d31',sessionId:link.continuedInSessionId,cwd:'/owned',pid:119,state:'working'}})
+  const info=reactive({jobId:'05ff1d31',sessionId:link.continuedInSessionId,pid:119,observedAt:10000,startedAt:1,model:'sonnet',turns:2,context:{tokens:40,window:200000,percent:0},totalCostUsd:0.001})
+  const root=document.createElement('div');document.body.append(root);const app=createApp(NativeBackgroundSession,{continuation:link,state,info});app.mount(root)
+  try{
+    expect(root.querySelector('[aria-label="Background session usage"]')?.textContent).toContain('sonnet · 2 turns · 0% context · Session total $0.001000')
+    info.pid=120;await nextTick();expect(root.querySelector('[aria-label="Background session usage"]')).toBeNull()
+    info.pid=119;state.session!.state='stopped';await nextTick();expect(root.querySelector('[aria-label="Background session usage"]')).toBeNull()
+  }finally{app.unmount();root.remove()}
+})
