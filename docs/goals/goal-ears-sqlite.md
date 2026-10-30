@@ -218,14 +218,17 @@ The original app assertion passes on recorded base-plus-patch artifacts; exact c
 CI remains required. Native fix checkout is `/private/tmp/ears-native-unit-fix`,
 independent of the working agent, with no shared target or main edits.
 
-Older full Strict `40974548264` is terminal failure: the native assertion above and
-the CLI incumbent/refused-replacement facade test exceeding its unchanged 200 s
-deadline; the other seven jobs passed. The unchanged CLI case passes in isolated
-Linux in 31.164 s; its timestamped three-build trace is retained. That does not explain
-the macOS CI timeout. Preserve its assertions/deadline and rerun full Strict on the
-new source before claiming combined acceptance. Exact full
-[Strict 40982500877](https://github.com/spankyed/apack/actions/runs/40982500877) is running
-on `dd5d7da67e`; producers and all three SQLite platform jobs pass, with five consumers still live.
+Older full Strict `40974548264` failed native unit visibility and the CLI refused-replacement
+case. Native visibility is fixed as above; the latter case also passes full Strict at 93.541 s
+under its unchanged 200 s deadline. Exact
+[Strict 40982500877](https://github.com/spankyed/apack/actions/runs/40982500877), on `dd5d7da67e`,
+is terminal failure with **new** findings: packed/workspace facade equality resolves Ajv 6
+instead of EARS' private Ajv 8, and the host suite exceeds its unchanged 600 s deadline.
+Its other seven jobs pass. The packed fixture now retains owning packages' private external
+dependencies; six focused cases and a control restoring the flattened fixture prove the fix.
+[Evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/packed-dependencies/README.md)
+retains exact logs and source hashes. The host timeout remains unexplained; collect file/phase
+progress before changing implementation. Do not relax its deadline or treat a partial run as green.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains at `6cf6c8349e`, exact
 [Strict 40861662941](https://github.com/spankyed/apack/actions/runs/40861662941), all nine jobs green.

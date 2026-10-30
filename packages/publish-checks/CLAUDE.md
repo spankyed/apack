@@ -12,6 +12,11 @@ SDK and UI into a temporary consumer and compile it across the TypeScript matrix
 the *publish*, owned by no single package: `published-exports` and `published-declarations` install all
 three at once, so there is no one package they could move to.
 
+The packed consumer links external dependencies from the installed workspace graph, including each package's
+private `node_modules` overrides. Flattening those onto the repository root can silently select another major
+version (for example Ajv 6 instead of EARS' Ajv 8). Packed `@apackdev` packages remain the consumer's tarballs;
+private workspace links must not shadow them. The exports suite checks owner-specific dependency resolution.
+
 The fixture decided the shape. Three `@apackdev/cli` specs — `facade-typing`, `fe-bundler-host-registry`,
 `types-bundler-determinism` — use a packed consumer to test the CLI's own bundlers, and they stay there.
 So `installPublishedPackages` has to be reachable from two packages without a relative path across one,

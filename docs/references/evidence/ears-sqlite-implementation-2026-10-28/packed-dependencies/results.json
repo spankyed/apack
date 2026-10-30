@@ -1,0 +1,69 @@
+[
+  {
+    "label": "packages-before-control",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 28.549755057989387
+  },
+  {
+    "label": "reject-flattened-dependencies",
+    "args": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--config",
+      "vitest.integration.config.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/publish-checks/tests/published-exports.integration.spec.ts",
+      "-t",
+      "preserves each packed package",
+      "--outputFile=/results/flattened.json"
+    ],
+    "exitCode": 1,
+    "seconds": 1.7973564970016014
+  },
+  {
+    "label": "packages-fixed",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 27.74697139300406
+  },
+  {
+    "label": "packed-and-workspace-contracts",
+    "args": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--config",
+      "vitest.integration.config.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/publish-checks/tests/published-exports.integration.spec.ts",
+      "packages/apack-cli/tests/build/types-bundler-determinism.integration.spec.ts",
+      "--outputFile=/results/fixed.json"
+    ],
+    "exitCode": 0,
+    "seconds": 42.36962738001603
+  },
+  {
+    "label": "specifiers",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.831425902986666
+  }
+]
