@@ -1,5 +1,5 @@
 <template>
-  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment }]" aria-label="Claude native interface">
+  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment, 'native-launch--background': !!continuation && !active && !view?.attachment }]" aria-label="Claude native interface">
     <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
     <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" :info="view?.backgroundInfo" :can-reply="view?.canReplyBackground === true" @operate="operateBackground" @open="openBackground">
       <template #parent-interface>
@@ -268,6 +268,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 <style scoped>
 .native-button.native-parent-interface { min-height: 30px; width: 32px; padding-inline: 5px; border: 1px solid #ffffff1a; }
 .native-launch { display: flex; flex-direction: column; flex-shrink: 0; justify-content: flex-end; padding: 6px 20px; }
+.native-launch--background { flex-shrink: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; justify-content: flex-start; }
 .native-launch__actions { justify-content: flex-end; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .native-launch__actions .native-problem { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
 .native-launch__actions .native-button { flex-shrink: 0; }

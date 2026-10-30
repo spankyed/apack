@@ -323,7 +323,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         await expect(configured).toContainText('Second native status line')
         const info=await readInfo();expect(info.statusLine).toContain(job.sessionId)
         const receipts=(await readFile(join(workspace!,'background-formatter-helper.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(row=>row.sessionId===job.sessionId)
-        expect(receipts.some(row=>row.stdout.trim().split('\n').flatMap((line:string)=>line.trim()||[]).join('\n')===info.statusLine)).toBe(true)
+        expect(receipts.some(row=>(!parentOwnerLoss||row.at>observations.parentOwnerLoss.closedAt)&&row.stdout.trim().split('\n').flatMap((line:string)=>line.trim()||[]).join('\n')===info.statusLine)).toBe(true)
         observations.childFormatter={info,receipts,parentStopped:parentOwnerLoss}
       }
 
@@ -345,7 +345,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();if(parentOwnerLoss)await recordBackgroundReading('queued',name);await capture('apack-native-background-reply-queued-'+name+'.png')
       }
       if(childStatus){const info=await readInfo();expect(info.sessionId).toBe(job.sessionId);expect(info.pid).toBe(job.pid);expect(info.observedAt).toBeGreaterThan(observations.childStatus.before.observedAt);observations.childStatus={...observations.childStatus,after:info,parentAfter:afterReply,remountPreserved:true}}
-      if(childFormatter){await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toContainText(job.sessionId);observations.childFormatter.afterReturn=await readInfo()}
+      if(childFormatter){await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toContainText(job.sessionId);await expect.poll(async()=>(await readInfo())?.statusLine,{timeout:10000}).not.toBe(observations.childFormatter.info.statusLine);observations.childFormatter.afterReturn=await readInfo()}
       observations.childReply = {replyText,retainedReply,rows:await childRows(),parentBefore:beforeReply,parentAfter:afterReply,workerBefore,workerAfter:await childProcessState(),queued:true,remountDraftPreserved:true}
       if(childStatusLifecycle){
         const auditPath=join(workspace!,'background-broker-audit.jsonl')
