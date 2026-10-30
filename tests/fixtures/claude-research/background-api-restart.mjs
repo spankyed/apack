@@ -1,5 +1,6 @@
 import {request} from 'node:http';
-import {readFile,writeFile} from 'node:fs/promises';
+import {readFile,writeFile,readdir} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {resolveAppEnvironment} from '@apackdev/sdk/env';
 import {waitForAppReady} from '@apackdev/testing';
@@ -25,6 +26,11 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
  const draft=await composer.textContent();await input.fill(retainedReply);
  const observation={before,workerBefore,infoBefore,mainPid,apiBefore,apiProcessStart:fields[19],draft,retainedReply,oldPost,oldConfig,phase:'before-crash'};
  const save=()=>writeFile(destination,JSON.stringify(observation,null,2));
+ const checkpoints=async()=>{const root=join(tmpdir(),'apack-claude-background-'+process.getuid()),result=[];for(const folder of(await readdir(root).catch(error=>error.code==='ENOENT'?[]:Promise.reject(error))).slice(0,16)){const path=join(root,folder);for(const file of(await readdir(path)).slice(0,32)){const text=await readFile(join(path,file),'utf8');if(text.length<=4096)result.push({folder,file,text});}}return result;};
+ const apiEnvironment=async pid=>Object.fromEntries((await readFile('/proc/'+pid+'/environ','utf8')).split('\0').filter(row=>['APACK_USER_DATA_DIR','APACK_ENV','TMPDIR'].includes(row.split('=')[0])).map(row=>{const at=row.indexOf('=');return[row.slice(0,at),row.slice(at+1)]}));
+ observation.checkpointsBefore=await checkpoints();observation.apiEnvironmentBefore=await apiEnvironment(apiBefore.pid);
+ const sendOldPost=()=>new Promise((resolve,reject)=>{const req=request({socketPath:oldConfig.socketPath,path:'/background-formatter',method:'POST',headers:{'x-apack-native-token':oldConfig.brokerToken,'content-type':'application/json'},timeout:3000},response=>{response.resume();response.on('end',()=>resolve({status:response.statusCode,at:Date.now()}));});req.on('error',reject);req.on('timeout',()=>req.destroy(Error('Old API formatter replay timed out')));req.end(JSON.stringify({...oldPost.input,startedAt:process.hrtime.bigint().toString()}));});
+
  const pictures=async stage=>{for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]){await appPage.setViewportSize(size);await widget.scrollIntoViewIfNeeded();await capture('apack-native-background-api-'+stage+'-'+name+'.png');}};
  await save();await pictures('before');
  try{
@@ -43,10 +49,11 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
   observation.after=await context();await save();
   expect(observation.after.sessionId).toBe(before.sessionId);expect(observation.after.claude.totalCostUsd).toBe(before.claude.totalCostUsd);
   await widget.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeEnabled();
+  observation.checkpointsAfter=await checkpoints();observation.apiEnvironmentAfter=await apiEnvironment(observation.apiAfter.pid);observation.brokerProbe=await sendOldPost().catch(error=>({problem:String(error)}));await save();
   await expect.poll(async()=>(await readInfo())?.observedAt??0,{timeout:10000}).toBeGreaterThan(observation.reconnectedAt);
   observation.infoAfter=await readInfo();expect(observation.infoAfter.sessionId).toBe(job.sessionId);expect(observation.infoAfter.pid).toBe(job.pid);
   await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toContainText('AppNativeMain '+job.sessionId);
-  observation.stalePost=await new Promise((resolve,reject)=>{const req=request({socketPath:oldConfig.socketPath,path:'/background-formatter',method:'POST',headers:{'x-apack-native-token':oldConfig.brokerToken,'content-type':'application/json'},timeout:3000},response=>{response.resume();response.on('end',()=>resolve({status:response.statusCode,at:Date.now()}));});req.on('error',reject);req.on('timeout',()=>req.destroy(Error('Old API formatter replay timed out')));req.end(JSON.stringify({...oldPost.input,startedAt:process.hrtime.bigint().toString()}));});
+  observation.stalePost=await sendOldPost();
   expect(observation.stalePost.status).toBe(409);
   observation.newProducer=(await audit()).filter(row=>row.path==='/background-status'&&row.status===200&&row.pid===observation.apiAfter.pid&&row.input?.sessionId===job.sessionId&&row.reply?.shellPrefix).map(row=>JSON.parse(Buffer.from(row.reply.shellPrefix.slice(row.reply.shellPrefix.lastIndexOf(' -')+2),'base64url').toString())).at(-1);
   expect(observation.newProducer?.generation).not.toBe(oldConfig.generation);expect(observation.newProducer?.token).not.toBe(oldConfig.token);
@@ -55,5 +62,5 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
   expect(active).toHaveLength(1);observation.authorityAfter=active[0];
   await pictures('recovered');observation.phase='recovered';await save();
   return observation;
- }catch(error){observation.phase='failed-'+observation.phase;observation.problem=String(error);observation.lastContext=await context().catch(()=>null);observation.lastInfo=await readInfo().catch(()=>null);observation.workerAtFailure=await childProcessState().catch(()=>null);await save();for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]){await appPage.setViewportSize(size);await capture('apack-native-background-api-failed-'+name+'.png').catch(()=>{});}throw error;}
+ }catch(error){observation.phase='failed-'+observation.phase;observation.problem=String(error);observation.lastContext=await context().catch(()=>null);observation.lastInfo=await readInfo().catch(()=>null);observation.workerAtFailure=await childProcessState().catch(()=>null);observation.checkpointsAtFailure=await checkpoints().catch(error=>({problem:String(error)}));observation.allViewsAtFailure=await appPage.evaluate(()=>window.applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).catch(()=>null);await save();for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]){await appPage.setViewportSize(size);await capture('apack-native-background-api-failed-'+name+'.png').catch(()=>{});}throw error;}
 }
