@@ -51,7 +51,7 @@ Inspect exact live/terminal CI state before advancing canonical. All remaining q
 ANN/WAL/resource/packaging/adoption gates stay in the goal. JSON formatting is normalized
 without changing values; original and retained hashes are in `receipts.json`.
 
-## Completed failed Strict jobs (remaining jobs were still live)
+## Completed Strict run
 
 On exact pre-selector `0961982729`, completed job `123802305982` (`app-and-rest`)
 fails the same unchanged own-unit vector assertion reproduced locally. Its host pool
@@ -61,11 +61,30 @@ whole Strict run. Completed job `123802306004` (`integration-1`) has a separate 
 with stamps from a refused replacement" exceeds its 200,000 ms test deadline. Keep the
 assertion and deadline; diagnose fixture/build cost before a targeted rerun. Expected
 refusal stderr elsewhere in these logs is not classified as an additional failure.
-Raw exact logs are under `strict-40974548264/`. Other live jobs must still be polled;
-no terminal parent conclusion is invented from these completed failures.
+Raw exact logs are under `strict-40974548264/`. The parent is now terminal **failure**:
+producers, both native jobs, integration-2 and all three SQLite jobs passed; only
+app-and-rest and integration-1 failed. This is the older pre-selector source, not current full acceptance.
 
 Native diagnosis is isolated at `/private/tmp/ears-native-unit-fix`, an independent
 clone checked out at `4d558a2754`, with no shared target and no edits to the working
 agent's elmdb checkout. No native fix is committed or published yet. Before changing
 it, follow its root CLAUDE.md and owning design/engine/search/testing documents and
 run the required Rust/binding gates in disposable environments.
+
+## Prepared SDK and current repository platform qualification
+
+[Platform 40977802135](https://github.com/spankyed/apack/actions/runs/40977802135)
+is terminal **success** on exact `d28e2de39c974a2b7e96cfafdc38185c1a05d75c`:
+Linux x64, macOS ARM64 and Windows x64 jobs all pass. Each host actually executes
+both SDK database-selector cases, four built-pack repository-query cases, seventeen
+native generation/training/model cases and five profile-conversion kill cases.
+Linux's complete prepared SQLite SDK run has **1,320 passed, zero failed or skipped**,
+including the built-content runtime case. Linux also qualifies native baseline and
+converted-profile API boot, live pack update and restart. Windows retains its explicit
+POSIX/directory-sync omissions: 624 EARS / 122 host cases versus 625 / 135 on POSIX.
+
+Raw suite artifacts remain attached to that exact run. Compact verification, runtime,
+SDK selector and repository-query receipts are retained under `platform-40977802135/`,
+with original and normalized SHA-256 values. This qualifies the new SQLite platform
+coverage; it does not fix the older full Strict failures, qualify the uncommitted native
+patch, establish packaged Electron support or satisfy remaining performance budgets.

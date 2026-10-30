@@ -203,13 +203,18 @@ contracts, unchanged primary data/units/watches and final exact-input/clean-chec
 now records a clean matching Linux native build and real SDK/pack coverage at `e8750da8c6`:
 1,319 SQLite SDK cases pass with one built-prerequisite skip; that case passes separately after
 pack build. Both SDK fixture stores and four current repository cases pass on both backends;
-forced native fallback fails the candidate marker. New CI requires complete prepared SDK coverage.
+forced native fallback fails the candidate marker. Exact platform run
+[40977802135](https://github.com/spankyed/apack/actions/runs/40977802135) is now green
+on Linux/macOS/Windows at `d28e2de39c`; Linux executes all 1,320 prepared SDK cases
+with no skips. All hosts execute both fixture stores and four built-pack repository cases.
 The unchanged own-unit embedding assertion still fails on exact native `4d558a2754`; preserve
 that failure and fix it in isolated native work before full Strict can be claimed.
 Completed Strict job `app-and-rest` confirms the same assertion failure. `integration-1`
 also times out in the incumbent/refused-replacement facade test at its unchanged 200 s
-deadline. Retain both failures and diagnose actual work; do not relax tests. Other jobs
-may still be live. Native diagnosis checkout is `/private/tmp/ears-native-unit-fix` at
+deadline. Retain both failures and diagnose actual work; do not relax tests. That full
+Strict run is terminal failure; its other seven jobs passed. The isolated native patch
+passes all 23 vector cases and Clippy; complete native qualification is still running.
+Native diagnosis checkout is `/private/tmp/ears-native-unit-fix` at
 exact `4d558a2754`, independent of the working agent and with no shared target. Resolve
 failures without weakening assertions; no old native artifact or old green substitutes for those checks.
 
