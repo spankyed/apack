@@ -526,6 +526,14 @@ interface ClaudeBackgroundAttachmentView {
     problem?: string;
 }
 
+/** Native next-turn reply; an acknowledgement means queued, not a stored transcript receipt. */
+interface ClaudeBackgroundReplyRequest {
+    operation: 'reply';
+    id: string;
+    pid: number;
+    text: string;
+}
+
 interface ClaudeBackgroundReview {
     revision: string;
     title: string;
@@ -565,7 +573,7 @@ interface ClaudeBackgroundSessionState {
     sessionId: string;
     continuedInSessionId: string;
     revision: number;
-    operation: 'refresh' | 'stop';
+    operation: 'refresh' | 'reply' | 'stop';
     status: 'done' | 'error' | 'pending';
     session?: ClaudeBackgroundSession;
     problem?: string;
@@ -1520,6 +1528,8 @@ interface ClaudeNativeTerminalOwner {
         sequence: number;
         text: string;
     }[];
+    readonly canReplyBackground: boolean;
+    replyBackground(jobId: string, pid: number, text: string): Promise<ClaudeBackgroundSession>;
     refreshMcpInput(): Promise<void>;
     operateMcpForm(request: ClaudeNativeMcpFormRequest): Promise<void>;
     operateMcpUrl(request: ClaudeNativeMcpUrlRequest): Promise<void>;
@@ -2161,7 +2171,7 @@ type ClaudeTerminalViewRequest = {
     sessionId: string;
     continuedInSessionId: string;
     revision: number;
-} & ClaudeBackgroundSessionRequest) | {
+} & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest)) | {
     type: 'CLAUDE_BACKGROUND_OPEN';
     sessionId: string;
     continuedInSessionId: string;
@@ -2185,6 +2195,7 @@ type ClaudeTerminalViewRequest = {
 });
 
 type ClaudeTerminalViewSnapshot = {
+    canReplyBackground?: boolean;
     attachment?: ClaudeBackgroundAttachmentView;
     background?: ClaudeBackgroundSessionState;
     mcpOperation?: {

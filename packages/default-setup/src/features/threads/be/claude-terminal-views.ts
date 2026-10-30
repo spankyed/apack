@@ -1,7 +1,7 @@
 import type {ClaudeBackgroundAttachment} from '#features/code/be/services/claude-code/background-attachment.ts'
 import type {ClaudeBackgroundAttachmentSnapshot} from '#features/code/common/native-background.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
-import type { ClaudeBackgroundSession, ClaudeBackgroundSessionRequest } from '#features/code/common/native-background.ts'
+import type { ClaudeBackgroundSession, ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest } from '#features/code/common/native-background.ts'
 import { isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
 import { randomUUID } from 'node:crypto'
 import type { MessageReferences } from './types.ts'
@@ -22,7 +22,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
-  | ({ type: 'CLAUDE_TERMINAL_BACKGROUND'; sessionId: string; continuedInSessionId: string; revision: number } & ClaudeBackgroundSessionRequest)
+  | ({ type: 'CLAUDE_TERMINAL_BACKGROUND'; sessionId: string; continuedInSessionId: string; revision: number } & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest))
   | { type: 'CLAUDE_BACKGROUND_OPEN'; sessionId: string; continuedInSessionId: string; jobId: string; revision: number }
   | { type: 'CLAUDE_BACKGROUND_INPUT'; attachmentId: string; text: string }
   | { type: 'CLAUDE_BACKGROUND_RESIZE'; attachmentId: string; columns: number; rows: number }
@@ -56,7 +56,7 @@ export interface ClaudeBackgroundSessionState {
   sessionId: string
   continuedInSessionId: string
   revision: number
-  operation: 'refresh' | 'stop'
+  operation: 'refresh' | 'stop' | 'reply'
   status: 'pending' | 'done' | 'error'
   session?: ClaudeBackgroundSession
   problem?: string
@@ -71,6 +71,7 @@ export interface ClaudeBackgroundAttachmentView {
   problem?: string
 }
 export type ClaudeTerminalViewSnapshot = {
+  canReplyBackground?: boolean
   attachment?: ClaudeBackgroundAttachmentView
   background?: ClaudeBackgroundSessionState
   mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
@@ -117,6 +118,7 @@ interface View {
 
 /** Window leases own subscriptions; detaching a view never stops the native session. */
 export function createClaudeTerminalViews(dependencies: {
+  replyBackground?(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundReplyRequest, threadId: string): Promise<ClaudeBackgroundSession | undefined>
   openAttachment?(continuation: ClaudeNativeContinuation, jobId: string, threadId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
   continuation?(threadId: string): ClaudeNativeContinuation | undefined
   background?(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, threadId: string): Promise<ClaudeBackgroundSession | undefined>
@@ -151,7 +153,7 @@ export function createClaudeTerminalViews(dependencies: {
     if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
-      view.send({ type: 'CLAUDE_TERMINAL_STATE', threadId: view.threadId, mountId: view.mountId,
+      view.send({ type: 'CLAUDE_TERMINAL_STATE', canReplyBackground: dependencies.get(view.threadId)?.canReplyBackground === true, threadId: view.threadId, mountId: view.mountId,
         state: view.owner?.state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
@@ -241,15 +243,16 @@ export function createClaudeTerminalViews(dependencies: {
       }
       if (event.type === 'CLAUDE_TERMINAL_BACKGROUND') {
         const continuation = dependencies.continuation?.(event.threadId)
-        if (!continuation || !dependencies.background || continuation.sessionId !== event.sessionId || continuation.continuedInSessionId !== event.continuedInSessionId
+        if (!continuation || (event.operation === 'reply' ? !dependencies.replyBackground : !dependencies.background) || continuation.sessionId !== event.sessionId || continuation.continuedInSessionId !== event.continuedInSessionId
           || !Number.isSafeInteger(event.revision) || event.revision <= (target.background?.revision ?? 0) || target.background?.sessionId === continuation.sessionId && target.background.continuedInSessionId === continuation.continuedInSessionId && target.background.status === 'pending') return
         const previous = target.background?.continuedInSessionId === continuation.continuedInSessionId ? target.background.session : undefined
+        if (event.operation === 'reply' && (previous?.id !== event.id || previous.pid !== event.pid || !['working','blocked'].includes(previous.state))) return
         const operation: ClaudeBackgroundSessionState = { ...continuation, revision: event.revision, operation: event.operation, status: 'pending', session: previous }
         target.background = operation; publish(key, target)
         const current = () => views.get(key) === target && target.background === operation
           && dependencies.continuation?.(event.threadId)?.sessionId === continuation.sessionId
           && dependencies.continuation?.(event.threadId)?.continuedInSessionId === continuation.continuedInSessionId
-        void Promise.resolve().then(() => { if (current()) return dependencies.background!(continuation, event, event.threadId) }).then(session => {
+        void Promise.resolve().then(() => { if (current()) return event.operation === 'reply' ? dependencies.replyBackground!(continuation, event, event.threadId) : dependencies.background!(continuation, event, event.threadId) }).then(session => {
           if (!current()) return
           operation.session = session; operation.status = 'done'; publish(key, target)
         }, error => { if (current()) { operation.status = 'error'; operation.problem = error instanceof Error ? error.message : 'Background session operation failed'; publish(key, target) } })

@@ -11,6 +11,9 @@ export interface ClaudeBackgroundSession {
 }
 export type ClaudeBackgroundSessionRequest = { operation: 'refresh' } | { operation: 'stop'; id: string; pid: number }
 
+/** Native next-turn reply; an acknowledgement means queued, not a stored transcript receipt. */
+export interface ClaudeBackgroundReplyRequest { operation: 'reply'; id: string; pid: number; text: string }
+
 export interface ClaudeBackgroundReview {
   revision: string
   title: string

@@ -12,6 +12,8 @@ export const claudeNativeLinuxBindings: {
   "binarySha256": "2bd4f4e5ed5cb09955b490098f745321cb5491e7ea8c752ba1e3bb010cdadb10",
   "platform": "linux",
   "modules": {
+    "chunk-tj6zgtfh.js": { "module": "chunk-ncvt4jr6.js", "exports": { "io": "io", "Kp": "Kp", "Zr": "Zr", "uL": "aL", "iZt": "KQt" } },
+    "chunk-mnx9wh8s.js": { "module": "chunk-ff49f49a.js", "exports": { "Ptt": "ktt" } },
     "chunk-0d2czwx3.js": { "module": "chunk-b5ytc2xy.js", "exports": { "Fi": "$i", "Xe": "Xe" } },
     "chunk-35cyt9ex.js": { "module": "chunk-v1an8syz.js", "exports": { "Se": "be" } },
     "chunk-07y7va8x.js": { "module": "chunk-eefy8bve.js", "exports": { "qh": "Kh" } },
@@ -516,6 +518,7 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "c3b67e62aaed8df6ac6850195265ab5bcc7c66780b78befd952b0033174efb5c": "426ae5533b43397b85970ad3c5b897b2ad3723e30060ed1de9dbd0b57eebdb7f",
     "0c022fe3a5b853cbf1707808364eaafa917d49195c7f0d253b99b03fff334226": "79129980ee1e0384f25e2717253ccbd9734fd8d0b8896389bc3d0cbda584de66",
     "39b95d1b454fef19f950ddaf79058089fe1fcfa30bc792c3a7ec22da84bb3535": "c162884e05a8838dc6e3321e4a147d5d38445dc7ff537423149817c80a551ef3",
     "e611c57cc8b263026de5a0b2a40644179fda5bc54e5a40b49919b51d8adc08f4": "d65b730db759ee8145211af18d54722f70d611f82d876eaf5d25075e5eaaf6b1",

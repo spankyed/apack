@@ -1,3 +1,5 @@
+import type { ClaudeBackgroundSession } from '../../../common/native-background.ts'
+import { backgroundSession } from './background-sessions.ts'
 import { ClaudeNativeMessageRetirementsSchema, type ClaudeNativeMessageRetirements } from '../../../common/native-notice.ts'
 import { copyClaudeChannelSelection } from '../../../common/native-channels.ts'
 import { ClaudeNativeMcpUrlSchema, ClaudeNativeMcpUrlOperationSchema, type ClaudeNativeMcpUrl, type ClaudeNativeMcpUrlRequest } from '../../../common/native-mcp-url.ts'
@@ -42,6 +44,8 @@ export interface ClaudeNativeTerminalOwner {
   beforeRelease(listener: () => Promise<void>): void
   /** Raw native terminal bytes, sequenced independently of presentation metadata. */
   readonly output: readonly { sequence: number; text: string }[]
+  readonly canReplyBackground: boolean
+  replyBackground(jobId: string, pid: number, text: string): Promise<ClaudeBackgroundSession>
   refreshMcpInput(): Promise<void>
   operateMcpForm(request: ClaudeNativeMcpFormRequest): Promise<void>
   operateMcpUrl(request: ClaudeNativeMcpUrlRequest): Promise<void>
@@ -279,6 +283,16 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       : currentState()
     return {
       get state() { return readState() },
+      get canReplyBackground() { return !closed && !!backgroundState?.continuation },
+      async replyBackground(jobId, pid, text) {
+        const continuation = backgroundState?.continuation
+        if (closed || !continuation || typeof text !== 'string' || !text.trim() || text.length > 32768) throw new Error('Background reply owner is unavailable')
+        const current = await backgroundSession(continuation, {operation:'refresh'}, {cwd:options.cwd,env:options.env,cliPath:options.cliPath,timeoutMs:10000})
+        if (closed || backgroundState?.continuation !== continuation || !current || current.id !== jobId || current.pid !== pid || !['working','blocked'].includes(current.state)) throw new Error('Background session changed; refresh before sending')
+        const result = await bridge.uiTransport.request({subtype:'apack_background_reply',parent_session_id:continuation.sessionId,child_session_id:continuation.continuedInSessionId,job_id:jobId,pid,cwd:current.cwd,text}) as {queued?:unknown}
+        if (result.queued !== true) throw new Error('Native background reply was not acknowledged')
+        return current
+      },
       get modelSelection() { return backgroundState ? backgroundState.session?.modelSelection ?? modelSelection : bridge.session.metadata?.modelSelection ?? modelSelection },
       get busy() { return !closed && !backgroundState && (changingModel || changingPermission || preparingParent || bridge.busy || bridge.projection.tasks.some(task => !['completed', 'failed', 'killed'].includes(task.status))) },
       get output() { return output },
