@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,7 +9,7 @@ import { SqliteVectorIndex } from '../../src/sqlite/vector-index.ts';
 import { auditDatabase, rebuildIndexes, startVectorModels } from '../../src/sqlite/index.ts';
 
 const held:SqliteDatabase[]=[],roots:string[]=[];
-afterEach(async()=>{for(const db of held.splice(0)){await db.drainBackground();db.close();}for(const path of roots.splice(0))rmSync(path,{recursive:true,force:true});});
+afterEach(async()=>{vi.restoreAllMocks();for(const db of held.splice(0)){await db.drainBackground();db.close();}for(const path of roots.splice(0))rmSync(path,{recursive:true,force:true});});
 const bytes=(n:number)=>Buffer.from(Float32Array.from(Array.from({length:8},(_,j)=>Math.sin((n+1)*(j+1)*1.71))).buffer);
 async function fixture(ready=true) {
   const path=mkdtempSync(join(tmpdir(),'ears-native-audit-'));roots.push(path);
@@ -61,6 +61,67 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     await rebuildIndexes(db);expect(e.lastCommit()).toBe(before);expect(db.all('SELECT * FROM embedding_values ORDER BY id')).toEqual(vectors);
     expect(db.get("SELECT 1 FROM sqlite_schema WHERE name=?",[name])).toBeUndefined();
     expect(db.get('SELECT 1 FROM vector_indexes')).toBeUndefined();expect(await auditDatabase(db)).toMatchObject({ok:true,comparedNativeModels:0});
+  });
+  it.each(['missing-trigger','missing-table','missing-model','corrupt-model','missing-shadow','damaged-pages','orphan-catalog','missing-catalog','wrong-shadow-schema'] as const)('repairs %s from canonical data under explicit rebuild',async damage=>{
+    const {db,e,name}=await fixture(),sequence=e.lastCommit(),vectors=db.all('SELECT * FROM embedding_values ORDER BY id');
+    if(damage==='missing-trigger')db.sql.exec(`DROP TRIGGER ${name}_insert`);
+    if(damage==='missing-table')db.sql.exec(`DROP TABLE ${name}`);
+    if(damage==='missing-model')db.sql.exec(`DELETE FROM ${name}_model`);
+    if(damage==='corrupt-model')db.run(`UPDATE ${name}_model SET val=?`,[Buffer.alloc(12,255)]);
+    if(damage==='missing-shadow')db.sql.exec(`DROP TABLE ${name}_config`);
+    if(damage==='damaged-pages')db.sql.exec(`DELETE FROM ${name}_idx`);
+    if(damage==='orphan-catalog')db.sql.exec('DELETE FROM vector_indexes');
+    if(damage==='missing-catalog')db.sql.exec('DROP TABLE vector_indexes');
+    if(damage==='wrong-shadow-schema')db.sql.exec(`ALTER TABLE ${name}_base RENAME COLUMN vector TO malformed_vector`);
+    expect((await auditDatabase(db)).ok).toBe(false);
+    await rebuildIndexes(db);
+    expect(e.lastCommit()).toBe(sequence);expect(db.all('SELECT * FROM embedding_values ORDER BY id')).toEqual(vectors);
+    expect(db.get("SELECT 1 FROM sqlite_schema WHERE name GLOB ? LIMIT 1",[name+'*'])).toBeUndefined();
+    expect(await auditDatabase(db)).toMatchObject({ok:true,comparedNativeModels:0});
+    expect(()=>e.create('Row',{title:'after repair'})).not.toThrow();
+  });
+  it('rolls back repair and logical admission together when the commit is refused',async()=>{
+    const {db,e,name}=await fixture(),sequence=e.lastCommit();db.sql.exec(`DROP TRIGGER ${name}_insert`);
+    const exec=db.sql.exec.bind(db.sql),failure=Object.assign(Error('repair commit refused'),{code:'SQLITE_BUSY'});let refused=false;
+    const original=vi.spyOn(db.sql,'exec').mockImplementation(sql=>{if(sql==='COMMIT'&&!refused){refused=true;throw failure;}return exec(sql);});
+    await expect(rebuildIndexes(db)).rejects.toBe(failure);original.mockRestore();
+    expect(db.get('SELECT state FROM vector_indexes')!.state).toBe('ready');
+    expect(db.get(`SELECT count(*) n FROM ${name}_base`)!.n).toBe(8);expect(e.lastCommit()).toBe(sequence);
+    await rebuildIndexes(db);expect(await auditDatabase(db)).toMatchObject({ok:true});
+  });
+  it('does not classify a native integrity I/O error as permission to discard the model',async()=>{
+    const {db,name}=await fixture(),getAll=db.all.bind(db),failure=Object.assign(Error('native integrity I/O failed'),{code:'SQLITE_IOERR_READ'});
+    const fault=vi.spyOn(db,'all').mockImplementation((sql,parameters=[])=>{if(sql===`PRAGMA integrity_check(${name})`)throw failure;return getAll(sql,parameters);});
+    await expect(rebuildIndexes(db)).rejects.toBe(failure);fault.mockRestore();
+    expect(db.get('SELECT state FROM vector_indexes')!.state).toBe('ready');expect(await auditDatabase(db)).toMatchObject({ok:true,comparedNativeModels:1});
+  });
+  it('refuses an unrecognized table in the native namespace without deleting its rows',async()=>{
+    const {db}=await fixture();db.sql.exec('CREATE TABLE ann_999999(payload); INSERT INTO ann_999999 VALUES (42)');
+    await expect(rebuildIndexes(db)).rejects.toMatchObject({code:'CORRUPT'});
+    expect(db.get('SELECT payload FROM ann_999999')).toEqual({payload:42});
+  });
+  it('rolls back a native DROP when later cleanup reports an I/O failure',async()=>{
+    const {db,name}=await fixture();db.sql.exec(`DROP TRIGGER ${name}_insert`);
+    const exec=db.sql.exec.bind(db.sql),failure=Object.assign(Error('repair cleanup I/O failed'),{code:'SQLITE_IOERR'});
+    const fault=vi.spyOn(db.sql,'exec').mockImplementation(sql=>{if(sql===`DROP TABLE IF EXISTS ${name}_base`)throw failure;return exec(sql);});
+    await expect(rebuildIndexes(db)).rejects.toBe(failure);fault.mockRestore();
+    expect(db.get(`SELECT count(*) n FROM ${name}_base`)!.n).toBe(8);expect(db.get('SELECT state FROM vector_indexes')!.state).toBe('ready');
+    await rebuildIndexes(db);expect(await auditDatabase(db)).toMatchObject({ok:true});
+  });
+  it('quarantines an unacknowledged committed repair and recovers its persisted state only after reopen',async()=>{
+    const {db,e,name}=await fixture(),sequence=e.lastCommit(),vectors=db.all('SELECT * FROM embedding_values ORDER BY id');db.sql.exec(`DROP TRIGGER ${name}_insert`);
+    const exec=db.sql.exec.bind(db.sql),failure=Object.assign(Error('repair commit acknowledgement lost'),{code:'SQLITE_IOERR'});let injected=false;
+    const fault=vi.spyOn(db.sql,'exec').mockImplementation(sql=>{const value=exec(sql);if(sql==='COMMIT'&&!injected){injected=true;throw failure;}return value;});
+    await expect(rebuildIndexes(db)).rejects.toMatchObject({code:'COMMIT_UNKNOWN'});fault.mockRestore();
+    expect(()=>e.query('Row').count()).toThrow(expect.objectContaining({code:'COMMIT_UNKNOWN'}));await db.drainBackground();db.close();
+    const reopened=new SqliteDatabase({path:db.path,syncs:false,nativeVectorExtension:process.env.EARS_VEC1_EXTENSION!});held.push(reopened);await reopened.indexesReady();
+    expect(reopened.sequence).toBe(sequence);expect(reopened.all('SELECT * FROM embedding_values ORDER BY id')).toEqual(vectors);
+    expect(reopened.get("SELECT 1 FROM sqlite_schema WHERE name=?",[name])).toBeUndefined();expect(await auditDatabase(reopened)).toMatchObject({ok:true});
+  });
+  it('refuses an unsafe catalog identity without discarding native storage',async()=>{
+    const {db,name}=await fixture();db.sql.exec('UPDATE vector_indexes SET id=-1');
+    await expect(rebuildIndexes(db)).rejects.toMatchObject({code:'CORRUPT'});
+    expect(db.get('SELECT id FROM vector_indexes')).toEqual({id:-1});expect(db.get(`SELECT count(*) n FROM ${name}_base`)!.n).toBe(8);
   });
   it('refuses rebuild while an independent handle owns native work before admitting any generation',async()=>{
     const {db}=await fixture(),before=db.indexBuilds.jobs();

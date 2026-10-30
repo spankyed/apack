@@ -33,3 +33,5 @@ This is private Linux source-overlay evidence. Final combined CI, signed install
 maintenance/publication authority, performance/recall/WAL/resource and filesystem fault gates remain open.
 The prior published commit's all-platform/full strict qualification is retained separately in
 [physical refresh](../physical-model-refresh/platform-41040846758/README.md). Production remains elmdb.
+
+[Exact-source platform receipts](platform-41050219130/README.md) now qualify live maintenance on all three CI hosts. The full strict run has an unresolved bundled-editor app test failure; platform success does not qualify the complete chain.

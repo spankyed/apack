@@ -1,0 +1,23 @@
+(node:19) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@apackdev/ears| tests/sqlite/vector-audit.spec.ts (21 tests | 10 skipped) 4392ms
+   ✓ native projection maintenance > repairs missing-trigger from canonical data under explicit rebuild  707ms
+   ✓ native projection maintenance > repairs missing-table from canonical data under explicit rebuild  522ms
+   ✓ native projection maintenance > repairs missing-model from canonical data under explicit rebuild  465ms
+   ✓ native projection maintenance > repairs missing-shadow from canonical data under explicit rebuild  389ms
+   ✓ native projection maintenance > repairs damaged-pages from canonical data under explicit rebuild  343ms
+   ✓ native projection maintenance > repairs orphan-catalog from canonical data under explicit rebuild  408ms
+   ✓ native projection maintenance > repairs missing-catalog from canonical data under explicit rebuild  360ms
+   ✓ native projection maintenance > repairs wrong-shadow-schema from canonical data under explicit rebuild  493ms
+   ✓ native projection maintenance > rolls back repair and logical admission together when the commit is refused  326ms
+ ↓ |@apackdev/ears| tests/sqlite/vector-models.spec.ts (35 tests | 35 skipped)
+
+ Test Files  1 passed | 1 skipped (2)
+      Tests  11 passed | 45 skipped (56)
+   Start at  12:12:26
+   Duration  7.21s (transform 1.22s, setup 15ms, collect 2.02s, tests 4.39s, environment 0ms, prepare 357ms)
+
+JSON report written to /results/focused.json

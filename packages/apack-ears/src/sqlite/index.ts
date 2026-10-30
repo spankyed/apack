@@ -80,13 +80,13 @@ export function waitForNativeModels(database: EarsDatabase): Promise<void> {
   return database.nativeModelsReady();
 }
 
-/** Rebuild derived indexes from primary data, excluding other writes until current generations are ready. */
+/** Repair damaged native groups and rebuild derived indexes from primary data under maintenance ownership. */
 export async function rebuildIndexes(database: EarsDatabase): Promise<void> {
   if (!(database instanceof SqliteDatabase)) {
     throw Object.assign(new Error('SQLite index rebuilding requires a SQLite database owner'), { code: 'UNSUPPORTED' });
   }
   await withNativeModelsPaused(database,async () => {
-    database.rebuildIndexes();
+    database.rebuildIndexes({repairNative:true});
     await database.indexesReady();
     while(database.collectInvalidatedNativeModels())await new Promise<void>(resolve=>setImmediate(resolve));
   });

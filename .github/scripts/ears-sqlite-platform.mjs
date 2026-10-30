@@ -77,7 +77,7 @@ if (mode === 'verify') {
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.extension)).digest('hex'),nativeGeneration.extensionSha256);
   assert.equal(nativeGeneration.packagedExtensionSha256,nativeGeneration.extensionSha256,'Ordinary package and independent native build must match');
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.packagedExtension)).digest('hex'),nativeGeneration.extensionSha256);
-  assert.equal(result.nativeAuditCasesPassed,10,'All native audit and rebuild cases must execute');
+  assert.equal(result.nativeAuditCasesPassed,25,'All native audit and rebuild cases must execute');
   assert.equal(result.nativeOwnerCasesPassed,3,'All cross-process native service ownership cases must execute');
   assert.equal(result.nativePackageCasesPassed,5,'All ordinary package loading/integrity cases must execute');
   assert.equal(result.nativeGenerationCasesPassed,10,'All native generation lifecycle cases must execute');

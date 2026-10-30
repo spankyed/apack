@@ -92,6 +92,9 @@ export class SqliteIndexBuilds {
   assertNativeModelsAvailable():void {
     if(this.nativeMaintenanceRelease||this.vectorModels?.isPaused)fail('BACKGROUND_PAUSED','Native model maintenance is in progress');
   }
+  assertNativeMaintenanceOwnership():void {
+    if(!this.nativeMaintenanceRelease&&!this.vectorModels?.isPaused)fail('BACKGROUND_OWNER_REQUIRED','Suspend native work and retain its claim before repairing projections');
+  }
   releaseNativeMaintenance():void {
     const release=this.nativeMaintenanceRelease;this.nativeMaintenanceRelease=undefined;release?.();
   }

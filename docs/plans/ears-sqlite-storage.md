@@ -543,8 +543,8 @@ Physical refresh passes all three platforms and full strict at `95515e6463`; ins
 
 Live replacement now retains native ownership through actual worker drain and resumes only after acceptance
 or restoration; its canonical transaction invalidates the old model epoch. Native audit/rebuild coverage is
-described below. Physical publication/deletion authority, damaged derived-storage recovery and trusted
-installed loading/signing remain required.
+described below. Physical publication/deletion authority, physical-file recovery and trusted
+installed loading/signing remain required; explicit native group repair is described below.
 No raw constructor or model-service claim grants physical replacement/deletion authority.
 Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,
 with transactional failure/retry and populated staging/reopen coverage. Populated stores missing it
@@ -739,9 +739,10 @@ installed lifecycle remain separate acceptance work.
 Private audit snapshots also inspect pinned vec1 projections. SQLite's native integrity method checks native
 page membership. EARS checks catalog/model hashes, trigger definitions, canonical normalized vectors, owner
 sequences and trash visibility, complete ready membership and the visited prefix of building projections.
-It reports orphaned tables/shadows and missing catalog ownership. `comparedNativeModels` records the scope
-actually inspected; early failures in primary/logical checks can leave it zero. The source is never repaired
-by audit. SQL owns row scans; model hashing holds one trained model blob at a time. This is not a measured
+It reports orphaned tables/shadows and missing catalog ownership. Shadow schema/model identity are now
+checked before native integrity code sees potentially damaged payloads. `comparedNativeModels` and the other
+checked counters record each completed inspection phase; an early failure can leave later counters zero.
+The source is never repaired by audit. SQL owns row scans; model hashing holds one trained model blob at a time. This is not a measured
 native memory/disk budget or a guarantee against arbitrary malformed native binary payloads.
 
 Public derived rebuild now runs within `withNativeModelsPaused`: it refuses an independent native owner,
@@ -753,5 +754,27 @@ resumption/release. An existing service resumes; an offline rebuild does not sta
 The failed-logical-generation test now allows finite old-model retirement before checking idle admission.
 A diagnostic at 0.5 CPU removed 2592 of 4608 native rows in 81 batches within five seconds, with 2016
 remaining; it was not stalled. This is evidence that a row bound is not a latency bound, not a performance
-pass. The separate frozen heartbeat limit remains 16 ms. Repair of missing/corrupt native structures,
-complete physical publication ownership, final platform/installed and resource qualification remain open.
+pass. The separate frozen heartbeat limit remains 16 ms. Explicit group repair is implemented below; physical-file recovery, complete physical publication ownership,
+final platform/installed and resource qualification remain open.
+
+### Repair damaged native groups during explicit rebuild
+
+Public rebuild diagnoses native groups under the retained maintenance claim and inside the logical rebuild
+transaction. Missing/malformed shadow structures, missing/corrupt model bytes, missing/altered triggers,
+canonical row drift, native page membership damage and orphaned groups are disposable derived storage.
+Verified damaged groups are removed by the pinned vec1 `xDestroy` path, which drops its shadows without
+parsing the damaged model/config. Orphan shadows are removed only from the reserved native namespace.
+Healthy invalidated groups still retire in batches of at most 32 rows; damaged-group DROP is an explicit
+repair path with no claimed latency bound. Model hashing examines raw bytes before invoking native integrity.
+
+Repair and new logical admission commit together. A refused COMMIT or a later I/O failure rolls back both;
+committed-but-unacknowledged repair quarantines the handle and requires reopen/inspection, never blind replay.
+Ordinary integrity I/O errors do not authorize deletion. Unsafe catalog identities and foreign tables in the
+native namespace refuse rather than guessing ownership. Unreadable primary/catalog files require recovery
+from a retained copy or logical export/staging into a new private profile; this repair is not a general file
+salvager. The existing logical archive operations retain canonical bytes independently of derived models.
+
+[Native derived repair evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-derived-repair/README.md)
+records the exact overlay, fault cases and four negative controls. Final all-platform, physical-publication,
+installed/signing and unchanged performance gates remain required. Full strict at the preceding live-maintenance
+checkpoint also has an unresolved bundled-editor app assertion; native platform success does not close it.

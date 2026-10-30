@@ -3,6 +3,7 @@ import { createWriteLease, withoutWriteAuthority } from '../write-lease.ts';
 // to composite persistence and canonical metadata.
 /// <reference types="node" />
 import { DATABASE_FORMAT } from './format.ts';
+import { repairNativeVectors } from './vector-repair.ts';
 import { SqliteVectorIndex } from './vector-index.ts';
 import { nativeVectorCandidateOwners } from './vector-candidates.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
@@ -1286,13 +1287,14 @@ export class SqliteDatabase implements EarsDatabase {
     this.indexBuilds.wake();
   }
   /** Admit fresh derived generations without changing primary data or its logical commit identity. */
-  rebuildIndexes(): void {
+  rebuildIndexes(options: {repairNative?:boolean} = {}): void {
     this.writable();
     if (this.active) fail('UNIT_OPEN', 'Commit or abort the open unit before rebuilding indexes');
     this.indexBuilds.assertRunning();
     this.sql.exec('BEGIN IMMEDIATE');
     try {
       this.checkRevision();
+      if(options.repairNative){this.indexBuilds.assertNativeMaintenanceOwnership();repairNativeVectors(this);}
       // Explicit offline maintenance rebuilds generationless membership in this same atomic admission.
       // SQLite owns the scan and insertion; the callback only decodes one authoritative array at a time.
       this.values.rebuildMembers();

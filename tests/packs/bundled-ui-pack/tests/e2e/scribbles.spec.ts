@@ -18,6 +18,23 @@ test('renders and edits with its bundled @apackdev/ui editor', async ({ appPage,
     await expect(appPage.getByTestId('scribbles-text')).toContainText('Bundled editor typed');
     // Two ProseMirror copies fail here ("Adding different instances of a keyed surface", instanceof checks)
     expect(errors).toEqual([]);
+  } catch (error) {
+    // Preserve the original assertion and capture whether DOM editing reached ProseMirror's document.
+    // A console-only trace cannot distinguish an editor transaction from a lost model update.
+    try {
+      const states = await editor.evaluateAll(elements => elements.map(element => {
+        const instance = (element as HTMLElement & { editor?: {
+          isInitialized?: boolean; isDestroyed?: boolean; state?: { doc?: { textContent?: string } };
+        } }).editor;
+        return { domText: element.textContent, documentText: instance?.state?.doc?.textContent,
+          initialized: instance?.isInitialized, destroyed: instance?.isDestroyed,
+          editable: element.getAttribute('contenteditable') };
+      }));
+      await testInfo.attach('bundled-editor-state', { body: JSON.stringify(states), contentType: 'application/json' });
+    } catch (diagnostic) {
+      await testInfo.attach('bundled-editor-diagnostic-error', { body: String(diagnostic), contentType: 'text/plain' }).catch(() => {});
+    }
+    throw error;
   } finally {
     const path = testInfo.outputPath('console-errors.json');
     await writeFile(path, JSON.stringify(errors));

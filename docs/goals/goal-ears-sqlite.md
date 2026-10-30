@@ -208,11 +208,12 @@ corpus epoch; rollback restores it. Recovery/settings cleanup failures preserve 
 report installed state truthfully and close both stores without success announcements. Quarantined handles
 allow cleanup ownership while all data operations still refuse. [Local evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/live-model-maintenance/README.md)
 passes 665 EARS, 1898 host (one Windows-only skip), 141 API, affected types/static/API checks and four negative
-controls. Exact full strict [41050219130](https://github.com/spankyed/apack/actions/runs/41050219130) is still
-running: producers and Linux/macOS SQLite pass; Windows and remaining strict shards must finish.
-Re-poll that handle; do not restart it because observation expires.
+controls. [All three SQLite platform jobs now pass](../references/evidence/ears-sqlite-implementation-2026-10-28/live-model-maintenance/platform-41050219130/README.md)
+at that exact source. Full strict [41050219130](https://github.com/spankyed/apack/actions/runs/41050219130)
+has an app-and-rest failure in the bundled-editor editing assertion; producers/integration-2/native-2 pass,
+and integration-1/native-1 remain live at this handoff. Re-poll that handle; do not restart it because observation expires.
 
-Current implementation adds [native audit and owned rebuild](../references/evidence/ears-sqlite-implementation-2026-10-28/native-audit-rebuild/README.md)
+Checkpoint `212b819db6` adds [native audit and owned rebuild](../references/evidence/ears-sqlite-implementation-2026-10-28/native-audit-rebuild/README.md)
 on that published parent. Audit checks native page integrity, model hashes, exact trigger SQL, canonical
 vectors/owners/visibility, ready membership, building prefixes and catalog/table ownership on private
 snapshots. Public rebuild suspends actual training, retains ownership, invalidates native models with fresh
@@ -223,10 +224,26 @@ three negative controls. The old failed-logical-generation assertion now allows 
 its original failures and 81-batch progress diagnostic remain recorded. A row bound does not establish
 latency. Final combined/platform/installed and performance qualification remains required.
 
+Current [native derived repair](../references/evidence/ears-sqlite-implementation-2026-10-28/native-derived-repair/README.md)
+adds diagnosis and transactional removal of verified damaged/orphaned groups during owned rebuild. Audit
+checks raw shadow schema/model identity before native integrity. Primary bytes/commit identity survive repair,
+refused commits and rollback after DROP; unacknowledged committed repair quarantines until reopen. I/O does
+not authorize deletion; unsafe identities and foreign tables refuse. Private Linux passes 690 EARS cases with
+zero skips, 98 host backup/import cases, seven API lifecycle cases, affected types/static/API checks, then all
+25 native maintenance cases including an additional malformed-model witness and four negative controls.
+This qualifies source overlays, not final combined/platform/installed behavior or performance.
+
+Exact-source full strict [41052678824](https://github.com/spankyed/apack/actions/runs/41052678824) remains
+queued at `212b819db6`. Do not dispatch another full strict while it still occupies the pending slot: GitHub
+can replace pending runs even with cancel-in-progress disabled. Once it starts, queue the repaired checkpoint
+once. The bundled-editor assertion is unchanged; failure-only DOM/ProseMirror state diagnostics are added,
+typechecked and linted. A focused app diagnostic run must reproduce/resolve the failure; no timeout or
+success assertion has been weakened. Preserve original logs/trace/empty console and every live CI handle.
+
 Next deliverables and their closing checks, without narrowing phases 3–7:
 
-- Repair missing/corrupt native structures safely, complete audit/rebuild/restore/retirement and physical
-  publication/deletion authority, and verify fault/interruption/reopen outcomes under cooperating ownership.
+- Qualify native repair faults on the final platforms, complete physical publication/deletion authority and
+  physical-file recovery, and verify interruption/reopen outcomes under cooperating ownership.
   Claims inside a database directory do not authorize arbitrary rename/delete or noncooperating writers.
 - Finalize native provenance after inner-library signing and before app sealing; qualify installed
   Electron/renderer/CLI, executable-pack/SDK flows and required OS/architectures. `asar:false` already keeps
