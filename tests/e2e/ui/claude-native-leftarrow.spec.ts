@@ -7,6 +7,7 @@ import { join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
+const project = process.env.CLAUDE_RESEARCH_PROJECT ?? workspace
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
 test.afterEach(async ({ appPage }, info) => { if (info.status !== info.expectedStatus && !appPage.isClosed()) { await appPage.screenshot({ path: info.outputPath('background-confirmation-failure.png') }).catch(() => {}); const editor = await appPage.locator('[data-onboarding-id="agent-chat-input"] [contenteditable]').evaluate((el: any) => { const view = el.pmViewDesc?.view; return { text: el.textContent, contenteditable: el.getAttribute('contenteditable'), doc: view?.state.doc.toJSON(), selection: view?.state.selection.toJSON() } }).catch(() => null); await writeFile(info.outputPath('editor-failure.json'), JSON.stringify(editor)) } })
 test('left-arrow entry and handoff: hands an original native conversation to a separate background session from the everyday composer', async ({ app, appPage, electronApp }, testInfo) => {
@@ -30,7 +31,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   await provider.getByPlaceholder('Path override (auto-detected if empty)').fill(launcher!)
   await appPage.waitForTimeout(700)
   await app.navigate('default-setup/threads')
-  await appPage.evaluate(({ cwd, phase }) => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase }) }, { cwd: workspace!, phase: 'Edit' })
+  await appPage.evaluate(({ cwd, phase }) => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase }) }, { cwd: project!, phase: 'Edit' })
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   async function command(name: string, args = '') {
     const editor = card.locator('[contenteditable="true"]')
@@ -40,7 +41,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect(editor).toHaveText('')
   }
-  await command('cc-set-dir', workspace!)
+  await command('cc-set-dir', project!)
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, ui: Object.values(state.nativeUiViews).filter((v: any) => v.threadId === state.currentThread?.id).map((v: any) => ({ status: v.state?.status, gestureProblem: v.state?.gestureProblem, agentProblem: v.state?.agentProblem })), native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
@@ -54,7 +55,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   await expect.poll(async () => {
     const current = await context(), native = current.native
     const text = native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
-    const screen = recognizeOnboardingPrompt(text, workspace)
+    const screen = recognizeOnboardingPrompt(text, project)
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; await input.press('ArrowDown') }
@@ -72,7 +73,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   }
   const run = promisify(execFile)
   const cli = async (args: string[]) => (await run(launcher!, args, { cwd: workspace, timeout: 20000, maxBuffer: 2 * 1024 * 1024 })).stdout
-  const list = async () => JSON.parse(await cli(['agents', '--json', '--all', '--cwd', workspace!])) as any[]
+  const list = async () => JSON.parse(await cli(['agents', '--json', '--all', '--cwd', project!])) as any[]
   const before = await list()
   let job: any
   const observations: any = { parentSessionId: sessionId, parentNativePid: original.native.state.nativePid, before, errors }
