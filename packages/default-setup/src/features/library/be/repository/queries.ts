@@ -11,15 +11,6 @@ import type { ContentSection, DocumentShortCode } from '#features/library/be/typ
 /** The fields a folder item reads */
 const FOLDER_FIELDS = ['name', 'symlinkPath', 'displayOrder', 'createdAt', 'updatedAt'] as const
 
-/**
- * Which of `ids` are the target of a `kind` relation from anything, trashed or not, as `parentCollectionOf` and
- * `collectionOfDocument` ask one at a time: one read for all of them
- */
-function targetsOf(ids: readonly string[], kind: EARS.RelKind): Set<string> {
-  if (!ids.length) return new Set()
-  return new Set(query.withTrashed.ids(ids as EARS.EntityId[]).inEdges(kind).map(edge => edge.target as string))
-}
-
 export const libraryQueries = {
   getDocuments(collectionId?: string): DocumentDTO[] {
     const allDocuments = query(EARS.Entity.Document)
@@ -126,7 +117,7 @@ export const libraryQueries = {
         name: col.name as string,
         description: col.description as string | undefined,
         path: collectionPath(col.id as EARS.EntityId),
-        documentCount: query.ids(col.id as EARS.EntityId).out(EARS.RelKind.CONTAINS, EARS.Entity.Document).ids().length,
+        documentCount: query.ids(col.id as EARS.EntityId).out(EARS.RelKind.CONTAINS, EARS.Entity.Document).count(),
         childCollections: buildTree(query.ids(col.id as EARS.EntityId).out(EARS.RelKind.PARENT_OF, EARS.Entity.Collection).pick(['name', 'description', 'createdAt', 'updatedAt', 'symlinkPath'])),
         displayOrder: displayOrderOf(col),
         createdAt: new Date(col.createdAt as number).toISOString(),
@@ -182,9 +173,7 @@ export const libraryQueries = {
     // The folders in this directory: at the root, the collections nothing is a parent of
     let folders: any[]
     if (folderId === null) {
-      const allCollections = query(EARS.Entity.Collection).pick(FOLDER_FIELDS)
-      const parented = targetsOf(allCollections.map(col => col.id), EARS.RelKind.PARENT_OF)
-      folders = allCollections.filter(col => !parented.has(col.id))
+      folders = query(EARS.Entity.Collection).unlinkedFrom(EARS.RelKind.PARENT_OF).pick(FOLDER_FIELDS)
     } else {
       folders = query.ids(folderId).out(EARS.RelKind.PARENT_OF, EARS.Entity.Collection).pick(FOLDER_FIELDS)
     }
@@ -230,10 +219,7 @@ export const libraryQueries = {
     let documents: any[] = []
 
     if (folderId === null) {
-      const allIds = query(EARS.Entity.Document).ids()
-      const contained = targetsOf(allIds, EARS.RelKind.CONTAINS)
-      const rootIds = allIds.filter(id => !contained.has(id))
-      documents = rootIds.length ? query.ids(rootIds).pickAll() : []
+      documents = query(EARS.Entity.Document).unlinkedFrom(EARS.RelKind.CONTAINS).pickAll()
     } else {
       // Get documents in this collection
       documents = query.ids(folderId)

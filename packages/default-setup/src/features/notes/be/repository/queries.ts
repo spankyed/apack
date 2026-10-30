@@ -6,11 +6,10 @@ import type { NoteEntity } from '#features/notes/be/types.ts';
 
 function toDTO(note: NoteEntity): NoteDTO {
   // Find parent: who CONTAINS this note?
-  const parents = query.ids(note.id).in(EARS.RelKind.CONTAINS, EARS.Entity.Note).ids();
-  const parentId = parents.length > 0 ? parents[0] : null;
+  const parentId = query.ids(note.id).in(EARS.RelKind.CONTAINS, EARS.Entity.Note).first() ?? null;
 
   // Count children: what does this note CONTAIN?
-  const childCount = query.ids(note.id).out(EARS.RelKind.CONTAINS, EARS.Entity.Note).ids().length;
+  const childCount = query.ids(note.id).out(EARS.RelKind.CONTAINS, EARS.Entity.Note).count();
 
   return {
     id: note.id,
