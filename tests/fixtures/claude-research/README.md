@@ -181,3 +181,11 @@ and exit after Stop. Open all eight captures and independently reconcile the ori
 journal, durable child link, saved parent-only rows and exact cost; an exited-zero fixture alone
 is insufficient. Child attachment/resume, gesture discoverability, other owner/task/policy variants
 and original combined F1–F5 remain separate. No CI dispatch is authorized by this profile.
+
+The live background-child attachment journey uses `CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP=1`
+with kind `terminal-plan-app-theme` and the same offline/resource boundary above. It confirms
+the original left-arrow fork once, then opens the exact child through original `claude attach`,
+submits input, closes/reopens only the client and verifies retained parent state before UI Stop.
+The separate default left-arrow profile retains Stay/Escape coverage; this profile does not
+retest those decisions. Live terminal acceptance does not establish stopped-child resume,
+child approval/question journeys or structured desktop child prompt/status contracts.
