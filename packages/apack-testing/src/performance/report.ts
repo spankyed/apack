@@ -31,6 +31,11 @@ export const spanSchema = z.object({
 });
 export const processReportSchema = z.object({
   profiles: profilesSchema.optional(), profileFailures: count.optional(),
+  rendererResourceFailures: count.optional(), rendererListenerFailures: count.optional(),
+  rendererStatistics: z.object({ source: z.literal('chromium-cdp'), pid: count,
+    metrics: z.array(z.object({ name: z.string().max(64), unit: z.enum(['seconds', 'bytes', 'count']), before: z.number().finite().nonnegative(), after: z.number().finite().nonnegative() })).max(16),
+    unavailable: z.array(z.string().max(64)).max(16), failures: count }).optional(),
+  rendererLongTasks: z.object({ supported: z.boolean(), count, totalMs: z.number().finite().nonnegative(), maxMs: z.number().finite().nonnegative(), failures: count }).optional(),
   processStatistics: z.object({
     samplingFailures: count,
     durationMs: z.number().finite().nonnegative(), cpuUserMicros: count, cpuSystemMicros: count,
@@ -51,7 +56,7 @@ export const processReportSchema = z.object({
   if (report.bytes + (report.profiles?.bytes ?? 0) > 16 * 1024 * 1024) ctx.addIssue({ code: 'custom', message: 'Combined recording budget exceeded' });
   if (report.complete && (report.truncated || report.dropped || report.rejected || report.droppedMetadata || report.active
     || report.unfinished || report.droppedStarts || report.invalidCarriers || report.detachFailures || report.droppedEvents || report.contextFailures || report.rejectedStarts || report.invalidAttributes
-    || report.processStatisticsFailures || report.processStatistics?.samplingFailures || report.profileFailures || report.profiles && !report.profiles.complete)) {
+    || report.processStatisticsFailures || report.processStatistics?.samplingFailures || report.rendererResourceFailures || report.rendererListenerFailures || report.rendererStatistics?.failures || report.rendererLongTasks?.failures || report.profileFailures || report.profiles && !report.profiles.complete)) {
     ctx.addIssue({ code: 'custom', message: 'Lossy recording cannot be complete' });
   }
   for (const encoded of report.observations) {

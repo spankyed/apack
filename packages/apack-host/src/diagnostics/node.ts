@@ -53,3 +53,5 @@ export function createNodePerformanceController() {
     },
   };
 }
+
+export { createPerformanceProfiles, type PerformanceProfileTransport } from './profiles.ts';

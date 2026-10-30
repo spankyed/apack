@@ -141,6 +141,31 @@ export const processReportSchema: z.ZodObject<{
         }>;
     }, z.core.$strip>>;
     profileFailures: z.ZodOptional<z.ZodNumber>;
+    rendererResourceFailures: z.ZodOptional<z.ZodNumber>;
+    rendererListenerFailures: z.ZodOptional<z.ZodNumber>;
+    rendererStatistics: z.ZodOptional<z.ZodObject<{
+        source: z.ZodLiteral<"chromium-cdp">;
+        pid: z.ZodNumber;
+        metrics: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            unit: z.ZodEnum<{
+                bytes: "bytes";
+                count: "count";
+                seconds: "seconds";
+            }>;
+            before: z.ZodNumber;
+            after: z.ZodNumber;
+        }, z.core.$strip>>;
+        unavailable: z.ZodArray<z.ZodString>;
+        failures: z.ZodNumber;
+    }, z.core.$strip>>;
+    rendererLongTasks: z.ZodOptional<z.ZodObject<{
+        supported: z.ZodBoolean;
+        count: z.ZodNumber;
+        totalMs: z.ZodNumber;
+        maxMs: z.ZodNumber;
+        failures: z.ZodNumber;
+    }, z.core.$strip>>;
     processStatistics: z.ZodOptional<z.ZodObject<{
         samplingFailures: z.ZodNumber;
         durationMs: z.ZodNumber;
@@ -289,6 +314,31 @@ export const trialSchema: z.ZodObject<{
             }>;
         }, z.core.$strip>>;
         profileFailures: z.ZodOptional<z.ZodNumber>;
+        rendererResourceFailures: z.ZodOptional<z.ZodNumber>;
+        rendererListenerFailures: z.ZodOptional<z.ZodNumber>;
+        rendererStatistics: z.ZodOptional<z.ZodObject<{
+            source: z.ZodLiteral<"chromium-cdp">;
+            pid: z.ZodNumber;
+            metrics: z.ZodArray<z.ZodObject<{
+                name: z.ZodString;
+                unit: z.ZodEnum<{
+                    bytes: "bytes";
+                    count: "count";
+                    seconds: "seconds";
+                }>;
+                before: z.ZodNumber;
+                after: z.ZodNumber;
+            }, z.core.$strip>>;
+            unavailable: z.ZodArray<z.ZodString>;
+            failures: z.ZodNumber;
+        }, z.core.$strip>>;
+        rendererLongTasks: z.ZodOptional<z.ZodObject<{
+            supported: z.ZodBoolean;
+            count: z.ZodNumber;
+            totalMs: z.ZodNumber;
+            maxMs: z.ZodNumber;
+            failures: z.ZodNumber;
+        }, z.core.$strip>>;
         processStatistics: z.ZodOptional<z.ZodObject<{
             samplingFailures: z.ZodNumber;
             durationMs: z.ZodNumber;
@@ -414,6 +464,27 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
                 allocation?: string | undefined;
             } | undefined;
             profileFailures?: number | undefined;
+            rendererResourceFailures?: number | undefined;
+            rendererListenerFailures?: number | undefined;
+            rendererStatistics?: {
+                source: "chromium-cdp";
+                pid: number;
+                metrics: {
+                    name: string;
+                    unit: "bytes" | "count" | "seconds";
+                    before: number;
+                    after: number;
+                }[];
+                unavailable: string[];
+                failures: number;
+            } | undefined;
+            rendererLongTasks?: {
+                supported: boolean;
+                count: number;
+                totalMs: number;
+                maxMs: number;
+                failures: number;
+            } | undefined;
             processStatistics?: {
                 samplingFailures: number;
                 durationMs: number;

@@ -18,3 +18,34 @@ export function _performanceExecution(): PerformanceExecution | undefined {
   if (_isHostBound()) return boundHost().diagnostics?.performance;
   return undefined;
 }
+
+/** @internal Portable diagnostic data shared by app processes. */
+export interface _PerformanceProfiles {
+  sampling: { cpuIntervalMicros: number; allocationIntervalBytes: number; allocationStackDepth: number; includeCollectedAllocations: boolean };
+  cpu?: string;
+  allocation?: string;
+  bytes: number;
+  failures: number;
+  complete: boolean;
+  windowLimitMs: number;
+  durationMs: number;
+  stoppedBy: 'owner' | 'limit';
+}
+
+
+/** @internal Renderer process observations, separate from action attribution. */
+export interface _RendererPerformanceStatistics {
+  source: 'chromium-cdp';
+  pid: number;
+  metrics: Array<{ name: string; unit: 'seconds' | 'bytes' | 'count'; before: number; after: number }>;
+  unavailable: string[];
+  failures: number;
+}
+
+/** @internal The window-owned main/preload recording result. */
+export interface _RendererPerformanceResources {
+  statistics: _RendererPerformanceStatistics;
+  profiles?: _PerformanceProfiles;
+  profileFailures: number;
+  complete: boolean;
+}
