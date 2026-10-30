@@ -225,7 +225,7 @@ export const threadCommands = {
   },
 
   forkCount: (sourceThreadId: EARS.EntityId): number => {
-    return query.ids(sourceThreadId).in(EARS.RelKind.FORKED_FROM, EARS.Entity.Thread).ids().length;
+    return query.ids(sourceThreadId).in(EARS.RelKind.FORKED_FROM, EARS.Entity.Thread).count();
   },
 
   setParent: (parentId: EARS.EntityId, childIds: EARS.EntityId[]): { reparented: string[]; skipped: string[] } => {

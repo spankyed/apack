@@ -5774,6 +5774,11 @@ declare const libraryQueries: {
     readonly findDocumentByShortCode: (shortCode: DocumentShortCode) => DocumentDTO | null;
     /** Every document and folder by name, for the reference picker and the panel's stats */
     readonly getIndex: () => LibraryIndex;
+    /**
+     * Every folder as a tree, in four reads whatever its size: the folders, which have a parent (from anything,
+     * trashed or not, as `isRootCollection` asks), each one's live child folders in place order, and each one's
+     * documents. A folder's path is its parent's and its own name
+     */
     readonly getCollections: () => CollectionDTO[];
     /** Whether a document is a file on disk under a symlinked folder, rather than one the library stores */
     readonly isDiskDocument: (id: string) => boolean;
