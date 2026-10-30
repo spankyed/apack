@@ -1,3 +1,4 @@
+import type { createClaudeBackgroundStatusAuthority } from './background-status-authority.ts'
 import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createClaudeTerminalPlugin } from './terminal-plugin.ts'
 import { createClaudeBackgroundStatus, type ClaudeBackgroundStatusIdentity } from './terminal-background-status.ts'
@@ -28,6 +29,7 @@ const command = (value: unknown): string | undefined => { const entry = object(v
 export async function createClaudeTerminalBridge(options: {
   sessionId: string
   backgroundTarget?(): { sessionId: string; cwd: string } | undefined
+  backgroundAuthority?: ReturnType<typeof createClaudeBackgroundStatusAuthority>
   restorePlan?: { sessionId: string; mode: import('./types.ts').PermissionMode }
   settings: ClaudeSettings
   bunOptions?: string
@@ -74,7 +76,8 @@ export async function createClaudeTerminalBridge(options: {
     async identify(sessionId, pid) {
       const target = options.backgroundTarget?.()
       if (closed || !target || target.sessionId !== sessionId || sessionId === projection.sessionId) throw new Error('Background session is not linked to this parent')
-      const result = object(await ui.transport.request({ subtype: 'apack_background_identity', parent_session_id: projection.sessionId, child_session_id: sessionId, pid, cwd: target.cwd }))
+      if (!options.backgroundAuthority) throw new Error('Background status authority is unavailable')
+      const result = object(await options.backgroundAuthority.identify(sessionId, pid, target.cwd))
       if (closed || options.backgroundTarget?.()?.sessionId !== sessionId || !result || result.sessionId !== sessionId || result.pid !== pid || typeof result.jobId !== 'string' || typeof result.start !== 'string' || !result.start || typeof result.hostStart !== 'string' || !result.hostStart || !Number.isSafeInteger(result.hostPid) || result.cwd !== target.cwd) throw new Error('Background status identity changed')
       return result as unknown as ClaudeBackgroundStatusIdentity
     },
@@ -383,13 +386,13 @@ export async function createClaudeTerminalBridge(options: {
       },
       async close() {
         if (closed) return
-        closed = true; background.close(); busy = false; focus = undefined; activity = undefined; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
+        closed = true; background.close(); await options.backgroundAuthority?.close(); busy = false; focus = undefined; activity = undefined; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
         waiting.length = 0; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
         await rm(directory, { recursive: true, force: true })
       },
     }
   } catch (error) {
-    ui.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
+    await options.backgroundAuthority?.close(); ui.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
     await rm(directory, { recursive: true, force: true }); throw error
   }
 }

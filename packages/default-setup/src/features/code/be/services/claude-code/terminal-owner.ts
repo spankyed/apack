@@ -1,3 +1,4 @@
+import { createClaudeBackgroundStatusAuthority } from './background-status-authority.ts'
 import type { ClaudeBackgroundSession } from '../../../common/native-background.ts'
 import { backgroundSession } from './background-sessions.ts'
 import { ClaudeNativeMessageRetirementsSchema, type ClaudeNativeMessageRetirements } from '../../../common/native-notice.ts'
@@ -140,7 +141,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let resolveDone!: () => void
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
-  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundTarget: () => continuation ? {sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid), changed,
+  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundAuthority: createClaudeBackgroundStatusAuthority(options.sessionId, {cwd: options.cwd, cliPath: executable, env}), backgroundTarget: () => continuation ? {sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: pid => isClaudeNativeDescendant(pid, terminal?.pid), changed,
     pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\x1b[200~' + path + '\x1b[201~') },
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); terminal.write('\r') } })
   const imageCache = createClaudeTerminalImageCache()
