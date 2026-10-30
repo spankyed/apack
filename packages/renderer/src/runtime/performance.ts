@@ -20,7 +20,7 @@ const listeners = new Set<(delivery: PerformanceViewDelivery) => void>();
 export function notifyPerformanceView(delivery: PerformanceViewDelivery) {
   if (!controller) return;
   const chatId = delivery.request.view === 'chat' && typeof delivery.request.args === 'object' && delivery.request.args !== null
-    ? (delivery.request.args as { id?: unknown }).id : undefined;
+    ? (delivery.request.args as { threadId?: unknown }).threadId : undefined;
   if (startupAction && (delivery.request.args === undefined || typeof chatId === 'string' && chatId.length <= 128)) {
     const { ref, view } = delivery.request;
     const key = `${ref}\0${view}`;
