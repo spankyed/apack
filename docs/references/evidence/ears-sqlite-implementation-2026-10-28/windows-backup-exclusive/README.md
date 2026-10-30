@@ -50,3 +50,13 @@ required case is removed and independently marked pending; all ten controls reje
 reject, extra passing cases remain accepted, and Windows separator normalization uses the same selection.
 The exact control source, report, verifier hash and outcomes are retained. These protect evidence coverage;
 they do not substitute for actual Windows execution. The product fix is committed as `93db5cfa8c`.
+
+## Actual three-platform qualification
+
+[Run 41130505526](https://github.com/spankyed/apack/actions/runs/41130505526) is **terminal success** at
+`58ae8a7b0ecc200091080916fce40ba0bfa4d1c9`: macOS job 124319883170, Windows 124319883626 and Linux
+124319883637 all pass. Original raw logs and full run/job metadata are retained. The Windows/macOS logs
+explicitly execute all four raced-destination cases and the literal-metacharacter path case; the existing
+whole backup/verify/import case and final named-witness verifier also pass. This qualifies the exclusive
+Windows move on that CI host, not directory-flush durability, arbitrary filesystems or the later backup
+cleanup/CLI-close changes at `5486e5f754` and `a8e12b1cd1`. Their current full strict run is 41132219406.

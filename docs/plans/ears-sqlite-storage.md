@@ -903,10 +903,19 @@ xSync flushes buffered native writers during COMMIT, outside the current project
 retains Float32 inputs; database growth during admission is approximately 844 MB. These are attribution
 results, not a speedup comparison or acceptance.
 
-Before adding a writer service or extending native storage, measure supported upstream physical allocation
-controls on one fixed model, including blocksize-min, with unchanged FULL, checkpoint policy and primary
-bytes. Compare deferred COMMIT work, write volume, all query scopes/updates/recall, memory and disk. Reject a
-layout that improves admission by degrading the original query/recall/resource gates. A background worker
+The [fixed-model allocation diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/fixed-model-allocation/README.md)
+compares upstream 16-KiB and 4-KiB `blocksize-min` with unchanged FULL, default checkpoints and canonical
+bytes. Both finish the complete query/update matrix with matching paired answers and minimum cohort mean
+recall 0.971, but neither establishes the responsiveness gate. The guard paused only our container when other
+agents started work, contaminating some timing samples; single fixed-order observations are not causal layout
+or peak-resource qualification. The production default stays unchanged. The first harness's REAL/integer
+parameter refusal and corrected BigInt preflight are retained alongside the complete report.
+
+Next attribute scoped-vector eligibility, native candidates and reranking with actual SQL plans and timing,
+and deferred COMMIT independently. Add wall-clock phase markers and obtain uninterrupted disposable timing;
+do not discard paused/outlier samples or relax the original gates. Supported allocation controls alone have
+not established a solution. Compare write volume, all query scopes/updates/recall, memory and disk before
+adopting any layout. A background worker
 alternative must coordinate its SQLite writer with synchronous foreground units and qualify worker death,
 commit uncertainty, schema/generation changes, maintenance and shutdown. Merely adding a second writer
 connection would introduce internal BUSY failures; enlarging slices or hiding fsync changes is not a solution.

@@ -216,7 +216,7 @@ witnesses. The original assertions/deadlines were not relaxed. Broad/compiler wo
 Linux/CI, capped at two CPUs/six GiB/no swap with a quiet admission window; focused checks use half a CPU/768 MiB.
 
 [Platform run 41112243866](https://github.com/spankyed/apack/actions/runs/41112243866) passes all three hosts
-at `9fbea37d0d`, before the native/ownership/reset changes. Current runtime `a95039a8c7` passes
+at `9fbea37d0d`, before the native/ownership/reset changes. Reset checkpoint `a95039a8c7` passes
 [signed installed Preview 41120611981](https://github.com/spankyed/apack/actions/runs/41120611981), including
 both store identities, and Linux/macOS SQLite qualification in [strict run 41120604961](https://github.com/spankyed/apack/actions/runs/41120604961).
 That strict run is a terminal failure: producers, both native and both integration shards pass; the app/unit
@@ -229,22 +229,30 @@ its direct Windows rename replaces competing files and dangling symlinks. Linux/
 Windows fails two preservation assertions. The [exclusive-publication correction](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-backup-exclusive/README.md)
 uses the system Windows Directory.Move operation with paths passed as data and retains all race assertions.
 All 29 platform CLI cases pass on Linux, including twelve focused profile cases and a literal metacharacter
-path; actual Windows qualification remains required. All five backup invariants are required by name in the
-platform verifier, with fourteen real-report omission/skip/duplicate/path controls passing. Host types pass with an explicit 512 MiB heap; CLI types exhaust that heap and require the
-larger disposable budget or CI. These resource failures are retained, not counted as passing checks.
+path. [Run 41130505526](https://github.com/spankyed/apack/actions/runs/41130505526) now passes all three hosts at
+exclusive-move source `58ae8a7b0e`, including the actual Windows races and literal path. That does not qualify
+the later cleanup/close-wrapper inputs or physical directory durability. All five backup invariants are required by name in the
+platform verifier, with fourteen real-report omission/skip/duplicate/path controls passing. Earlier CLI types exhausted the small 512-MiB heap; those failures remain retained. The adequate-budget
+local qualification below passes, without treating the earlier resource failures as passing checks.
 The [backup cleanup correction](../references/evidence/ears-sqlite-implementation-2026-10-28/backup-cleanup/README.md)
 preserves the original publication outcome alongside staging/lock cleanup errors, still attempts lock release,
 and reports a retained `publishedPath` after successful publication. Three exact-source baseline failures
 become passing cases; all 32 platform CLI cases, lint, syntax and twenty required-witness controls pass on
-Linux. CLI types/package builds and final integrated qualification remain pending. Platform run
-[41130505526](https://github.com/spankyed/apack/actions/runs/41130505526) is live at the preceding exclusive-move
-checkpoint `58ae8a7b0e`; it does not qualify the later cleanup changes.
+Linux. Final integrated qualification remains pending; latest local types/builds are recorded below. Platform run 41130505526 qualifies the preceding exclusive-move checkpoint `58ae8a7b0e`; it does not qualify
+the later cleanup changes.
 The [CLI close-wrapper correction](../references/evidence/ears-sqlite-implementation-2026-10-28/cli-close-outcomes/README.md)
 refuses thrown `undefined`, retains both command/close failures and preserves machine-readable commit/recovery
 outcomes. Five reproduced failures pass after correction; all 41 expanded platform CLI cases pass on Linux,
 along with lint, syntax, fourteen command-outcome controls and the preceding twenty backup controls.
-The platform workflow now includes the wrapper cases. Types, package builds and final integrated/platform
-qualification of these later inputs remain required; no live earlier run is restarted.
+The platform workflow now includes the wrapper cases. [Full strict run 41132219406](https://github.com/spankyed/apack/actions/runs/41132219406)
+at `a8e12b1cd1` fails its producer at CLI TS2698; its independent platform jobs must finish through the same
+handle. Consumers cannot qualify when their producer fails. The [diagnostics/type correction](../references/evidence/ears-sqlite-implementation-2026-10-28/backup-cli-diagnostics/README.md)
+at `dd0ddfeb86` uses an explicit object ternary for callback-assigned publication state. Backup error messages
+now print all failures and the destination/retained published path, matching the CLI's actual message-only
+reporter. Three baseline message failures become passing cases. CLI/testing types with incremental cache
+disabled, all five normal package builds, lint and all 41 platform CLI cases pass in one properly capped
+2-CPU/6-GiB/no-swap container with an explicit 4096-MiB Node heap. Original resource/type failures remain.
+Final exact-source strict/platform/installed qualification is still required; do not mislabel the earlier run green.
 The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
 The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
 remains unexplained. The older editor intermittent also remains unexplained despite ten unchanged repeats.
@@ -252,8 +260,10 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: qualify exclusive Windows backup publication through the existing platform witness,
-complete pending source checks, and continue responsiveness, real-corpus and full app/operational requirements below.
+Next checkpoint: finish inspecting strict 41132219406 and qualify the diagnosed producer fix on exact inputs;
+then attribute scoped
+vector queries and deferred COMMIT work using phase timestamps and uninterrupted disposable measurement.
+The existing fixed-model study below does not justify a production setting change. Continue all app/operational requirements.
 No evidence here certifies arbitrary filesystems or completes the goal.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:
@@ -271,13 +281,18 @@ Next deliverables and their closing checks, without narrowing phases 3–7:
   Test active worker shutdown and namespace operations through the supported managed lifecycle. Directory
   claims cannot exclude noncooperating raw SQLite writers or arbitrary mount aliases; data-file admission is
   a separate guard. These remain phases 2/5/6, not completed requirements.
-- Resolve the existing failed responsiveness gate. Latest recorded 99,900-vector admission takes 20.77 s
+- Resolve the existing failed responsiveness gate. The original representative 99,900-vector admission takes 20.77 s
   with heartbeat p99 48.14 ms against 16 ms. Projection batching improves throughput but does not prove a
   heartbeat win. A [current-source attribution run](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-responsiveness/README.md)
   still fails at p99 31.05 ms: 11.32 seconds of COMMIT wall time includes deferred vec1 work and substantial
   blocked time, with no cgroup throttling. The projection slice alone does not bound its transaction. This is
-  not a speedup comparison or acceptance. Next measure supported physical allocation controls on a fixed model
-  before adding native storage or writer coordination. In a later 0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;
+  not a speedup comparison or acceptance. The [fixed-model allocation study](../references/evidence/ears-sqlite-implementation-2026-10-28/fixed-model-allocation/README.md)
+  completes both 16-KiB and 4-KiB variants: all canonical rows verify, all 7,200 paired query answers match and
+  minimum cohort mean recall is 0.971. Both fail frozen query gates; recorded admission heartbeat p99 is 31.42/
+  64.50 ms. Resource-driven pauses contaminate some timings, so this is not timing certification or a causal
+  layout comparison. No production setting changes. Next attribute repeated scope eligibility/native/rerank
+  SQL and COMMIT, adding wall-clock phase markers for uninterrupted disposable qualification. In a later
+  0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;
   bounded native deletion still needs latency/WAL/resource qualification. FULL writes, canonical bytes,
   default checkpoints and original budgets remain unchanged. Do not relax gates around these results.
 - Complete representative search usefulness (language/identifier/typo/phrases/highlights/field restrictions),

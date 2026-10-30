@@ -64,5 +64,29 @@
     "originalBytes": 2692,
     "originalSha256": "c7e59e64429da40aec3ca3e14abefca89c676872802097bf954fb86f48ff2763",
     "storedSha256": "a3324769ea9bf7a61e813da1f386c6e8a42af9ffacfd9700f72a907481ff5344"
+  },
+  {
+    "file": "platform-41130505526.json.gz",
+    "originalBytes": 18717,
+    "originalSha256": "880f9640b733aeed340a7ee71b2c3bd372f3498b6e7ef451210dc44b120f1c88",
+    "storedSha256": "85d08d2f81edae7d7e80740654c275d8bc5ca984006c1607d47c63588cec5cca"
+  },
+  {
+    "file": "platform-windows-41130505526.log.gz",
+    "originalBytes": 624814,
+    "originalSha256": "fe1ba846b15d402fe06431ddc5309428b510b3e52285b7772bde81c63c92546c",
+    "storedSha256": "84929635a7a543cae33d1caa8fa8af17eae26636ec25e99a2d58512fa17e57fc"
+  },
+  {
+    "file": "platform-macos-41130505526.log.gz",
+    "originalBytes": 175891,
+    "originalSha256": "cb62f68fe1436702620c18267c56f981d79343a71c6042f2255fd3418933ad5d",
+    "storedSha256": "ec70fcb7e27f977f9d9b5b97fe76669bbc49cd3a5ac461324efcc0c7c2693b0a"
+  },
+  {
+    "file": "platform-linux-41130505526.log.gz",
+    "originalBytes": 262612,
+    "originalSha256": "5a13c8a7c52d4fc2f83cb398dddeba263271eac5268e20743d2904da957c0eeb",
+    "storedSha256": "ea52d85383f9963817b7e62e9141e82a381267f3f27bea3d61a760f51398a14b"
   }
 ]

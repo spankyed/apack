@@ -1,0 +1,44 @@
+{
+  "qualification": false,
+  "source": "8d1a166c191815d999da197d13efcbe1aed2d7da",
+  "earsInputsStillMatchAt": "a8e12b1cd1fbbbb47ec8c4d149669319d836b53e",
+  "modelSha256": "0aaf9fc3272f9481eb38a5c1e1dd51df523b4f5bdfc0684675b75516d93081d3",
+  "singleFixedOrder": true,
+  "paused": true,
+  "variants": [
+    {
+      "minimum": 16384,
+      "admissionMs": 15199.887369000004,
+      "admissionHeartbeatP99Ms": 31.42126199998893,
+      "batches": 1117,
+      "commitTotalMs": 10489.257005000058,
+      "commitP99Ms": 27.958242999986396,
+      "projectionP99Ms": 4.142368999993778,
+      "minimumMeanRecall": 0.971,
+      "failingHeartbeatPasses": 27,
+      "nativeCandidateCalls": 2400,
+      "databaseBytes": 1798057984,
+      "walBytes": 6888672,
+      "cumulativeProcessMaxRssKiB": 1067784,
+      "frozenQueryGatesPassed": false
+    },
+    {
+      "minimum": 4096,
+      "admissionMs": 20386.48762500001,
+      "admissionHeartbeatP99Ms": 64.5027349999873,
+      "batches": 1645,
+      "commitTotalMs": 13467.627298999985,
+      "commitP99Ms": 61.19871699999203,
+      "projectionP99Ms": 4.15056400001049,
+      "minimumMeanRecall": 0.971,
+      "failingHeartbeatPasses": 28,
+      "nativeCandidateCalls": 2400,
+      "databaseBytes": 1820045312,
+      "walBytes": 6616752,
+      "cumulativeProcessMaxRssKiB": 1067784,
+      "frozenQueryGatesPassed": false
+    }
+  ],
+  "identicalOrderedQueryAnswers": 7200,
+  "totalQueryExecutions": 14400
+}
