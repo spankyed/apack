@@ -1,3 +1,4 @@
+import type { PerformanceExecution } from './performance.ts';
 import type { StepFrontendBinding } from '../fe/step-bindings.ts';
 import type { ArtifactFrontendBinding, BlockFrontendBinding } from '../fe/viewer-bindings.ts';
 import type { PackCatalogView } from '../framework/catalog-view.ts';
@@ -49,6 +50,8 @@ export interface FePackRegistryView extends PackExtensionsView {
 
 /** The running app, as the SDK reaches it in the renderer */
 export interface FeHostRuntime {
+  /** Opt-in diagnostics owned by this window; absent in ordinary production operation. */
+  diagnostics?: PerformanceExecution;
   /** Common declarations, independent of the accepted executable frontend registry. */
   catalog: PackCatalogView;
   /** The app shell, which spawns the surfaces, holds which is open and lays out the panels */

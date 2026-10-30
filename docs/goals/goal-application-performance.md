@@ -54,3 +54,35 @@ for the initial delivery, even though thread opening is the first vertical imple
   application optimization only after evidence. No end-to-end or performance acceptance is claimed.
 - Required chain, strict validation, API checks, real process scenarios and reviewable PRs remain.
   Preserve all four scenarios and optimization scope; do not stop at unit-test instrumentation.
+
+## Implementation checkpoint after recorder foundation
+
+Work after `90fcca9287` adds recording sessions, bounded context/event lifetimes, standard W3C
+transport carriers, opt-in process/window composition, connection ownership and stop/disconnect
+cleanup. New public SDK metadata stays outside business events and view keys. View subscriptions
+carry a unique subscription identity and delivery ordinal. Initial view reads have action ancestry;
+delayed/coalesced re-reads deliberately have no parent until contributing commit links are implemented.
+The trace's `complete` flag describes capture integrity, not completeness of application coverage.
+
+A manual `tests/performance/` suite now authors the populated-thread-open scenario with deterministic
+public-import data, five warmups and twenty measured trials by default. It requires the requested
+thread, correlated new subscription delivery, all fifty message bodies and Vue flush before recording
+view readiness. It preserves trial failures and bounded process reports. Report schemas, Chrome Trace
+conversion, manifest identities and comparison-order/compatibility contracts are implemented.
+This scenario has **not yet run successfully**. No timing or overhead acceptance is claimed.
+
+Focused tests and source typechecks pass. SDK API reports were regenerated and their metadata changes
+reviewed; the build report also has a derived Zod property-order change. Existing report line endings
+were retained. Final chain/API verification remains outstanding.
+The attempted bounded Linux qualification failed in Docker's free-space preflight (`unexpected EOF`),
+before any build or app launch. The host briefly had only 688 MiB free; it subsequently showed 11 GiB,
+but Docker remained unavailable. The user was asked to restore free space/OrbStack asynchronously.
+Do not retry app builds while storage is critically low, remove another session's files, or bypass
+native-runtime execution safeguards. No workload from that attempt is running.
+
+Still required: successful real-process thread-open proof and counterfactuals; queued raw-actor context
+coverage and coalesced-watch causal links; streaming/search/populated-startup scenarios; reusable
+cross-revision orchestration and overhead qualification; detailed profiles/process statistics; one
+supported application optimization; full repository and strict acceptance; dependent reviewable PRs.
+The new manual runner's completion test and provenance collection also need verification in the real
+built app. Preserve this broader scope; these primitives and authored scenarios do not complete it.

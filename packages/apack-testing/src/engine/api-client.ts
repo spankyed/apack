@@ -35,6 +35,7 @@ import { API_HOST } from '@apackdev/sdk/utils/pure';
 
 /** A message on the app's bus, as `bus.sub` delivers it */
 export interface BusMessage {
+  readonly diagnostics?: { traceparent?: string; tracestate?: string };
   readonly to: string;
   readonly event: { type: string;[key: string]: unknown };
   readonly from?: string;

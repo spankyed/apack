@@ -1,3 +1,5 @@
+import { _performanceExecution } from '@apackdev/sdk/runtime';
+import { diagnosticCarrier } from './diagnostics.ts';
 // Lets declaration emit name tRPC's router types through a public entry (TS2742 under bundler resolution)
 import type {} from '@trpc/server/unstable-core-do-not-import';
 import { observable } from '@trpc/server/observable';
@@ -57,7 +59,7 @@ export const systemBusRouter = router({
     // today means every caller holds the API token and no pack exists outside this repo — a premise the root
     // CLAUDE.md gives an expiry for. Closing it properly needs per-connection knowledge of which surfaces a
     // window actually loaded, which `packClientReady` does not keep.
-    .input(z.object({ to: z.string().min(1), from: z.string().min(1).optional(), via: z.string().min(1).optional(), sender: z.string().min(1).optional(), call: z.string().min(1).optional(), answering: z.string().min(1).optional(), settingsCredential: z.string().min(1).optional(), event: z.object({ type: z.string().min(1) }).passthrough() }))
+    .input(z.object({ to: z.string().min(1), from: z.string().min(1).optional(), via: z.string().min(1).optional(), sender: z.string().min(1).optional(), call: z.string().min(1).optional(), answering: z.string().min(1).optional(), settingsCredential: z.string().min(1).optional(), diagnostics: diagnosticCarrier, event: z.object({ type: z.string().min(1) }).passthrough() }))
     .mutation(({ input, ctx }) => {
       if (input.sender !== undefined && !addressable(input.sender)) {
         throw new TRPCError({
@@ -73,7 +75,10 @@ export const systemBusRouter = router({
           access.resolve(ctx.client, settingsCredential);
           bindSettingsRequest(message.event, () => access.resolve(ctx.client, settingsCredential));
         }
-        receiveClientEvent(appPacks, { ...message, client: ctx.client });
+        const deliver = () => receiveClientEvent(appPacks, { ...message, client: ctx.client });
+        const performance = _performanceExecution();
+        if (performance) performance.withCarrier(message.diagnostics, deliver);
+        else deliver();
       } catch (error) {
         if (error instanceof SettingsRefusedError) throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
         if (error instanceof UnknownClientEventError) throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });

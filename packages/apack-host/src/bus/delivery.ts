@@ -1,3 +1,4 @@
+import { _performanceExecution } from '@apackdev/sdk/runtime';
 // Names the message a system is handling, for the duration of the call that delivers it.
 //
 // **It is a plain variable, set and restored around the send, and that is the whole mechanism** — the same
@@ -48,6 +49,9 @@ function askerOf({ sender, client }: Pick<Message, 'sender' | 'client'>): _Asker
  * Synchronous by design — see the header. A send a handler makes after an `await` carries no sender, which
  * `tests/bus/delivery-is-synchronous.spec.ts` pins, so the limit is a decision rather than a surprise.
  */
-export function deliverAs<T>(message: Pick<Message, 'to' | 'sender' | 'client' | 'call'>, event: object, body: () => T): T {
-  return _runDelivery({ receiver: message.to, asker: askerOf(message), event, ...(message.call === undefined ? {} : { call: message.call }) }, body);
+export function deliverAs<T>(message: Pick<Message, 'to' | 'sender' | 'client' | 'call' | 'diagnostics'>, event: object, body: () => T): T {
+  const performance = _performanceExecution();
+  performance?.carryEvent(event, message.diagnostics);
+  const run = () => _runDelivery({ receiver: message.to, asker: askerOf(message), event, ...(message.call === undefined ? {} : { call: message.call }) }, body);
+  return performance ? performance.withEvent(event, run) : run();
 }
