@@ -391,3 +391,47 @@ describe('background session view lifetime', () => {
   })
 
 })
+
+async function attachmentFixture() {
+  let link = {sessionId:randomUUID(),continuedInSessionId:randomUUID(),timestamp:'2026-10-30T09:00:00Z'}, listener:(()=>void)|undefined
+  const job = {id:'abcdef12',sessionId:link.continuedInSessionId,cwd:'/child',state:'working' as const,pid:99}
+  const child = {snapshot:{id:randomUUID(),jobId:job.id,sessionId:job.sessionId,cwd:job.cwd,clientPid:123,status:'live' as const,output:[{sequence:1,text:'original child'}]},subscribe:vi.fn((value:()=>void)=>{listener=value;return vi.fn()}),input:vi.fn(),resize:vi.fn(),close:vi.fn(async()=>{})}
+  const openAttachment = vi.fn(async(_continuation:typeof link,_jobId:string,_threadId:string,_signal:AbortSignal)=>child), background = vi.fn(async()=>job), send = vi.fn()
+  const views = createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background,openAttachment})
+  views.handle(mount,'one',send)
+  views.handle({...mount,type:'CLAUDE_TERMINAL_BACKGROUND',...link,revision:1,operation:'refresh'},'one',send)
+  await vi.waitFor(()=>expect(send.mock.calls.at(-1)![0].background.status).toBe('done'))
+  const request = {...mount,type:'CLAUDE_BACKGROUND_OPEN' as const,...link,jobId:job.id,revision:1}
+  return {views,send,child,openAttachment,background,request,notify:()=>listener?.(),changeLink:()=>{link={...link,continuedInSessionId:randomUUID()}}}
+}
+it('opens only the listed linked child and keeps input/resize authority on its own attachment',async()=>{
+  const f=await attachmentFixture()
+  try {
+    f.views.handle({...f.request,jobId:'12345678'},'one',f.send);expect(f.openAttachment).not.toHaveBeenCalled()
+    f.views.handle(f.request,'one',f.send);await vi.waitFor(()=>expect(f.send.mock.calls.at(-1)![0].attachment?.status).toBe('ready'))
+    f.views.handle({...mount,type:'CLAUDE_BACKGROUND_INPUT',attachmentId:'stale',text:'no'},'one',f.send);expect(f.child.input).not.toHaveBeenCalled()
+    f.views.handle({...mount,type:'CLAUDE_BACKGROUND_INPUT',attachmentId:f.child.snapshot.id,text:'yes'},'one',f.send);expect(f.child.input).toHaveBeenCalledExactlyOnceWith(f.child.snapshot.id,'yes')
+    f.views.handle({...mount,type:'CLAUDE_BACKGROUND_RESIZE',attachmentId:f.child.snapshot.id,columns:80,rows:24},'one',f.send);expect(f.child.resize).toHaveBeenCalledExactlyOnceWith(f.child.snapshot.id,80,24)
+    const requestId=f.send.mock.calls.at(-1)![0].attachment.requestId
+    f.views.handle({...mount,type:'CLAUDE_BACKGROUND_CLOSE',requestId},'one',f.send);expect(f.child.close).toHaveBeenCalled();expect(f.background.mock.calls).toHaveLength(1)
+    f.views.handle(f.request,'one',f.send);expect(f.openAttachment).toHaveBeenCalledOnce()
+  }finally{f.views.clear()}
+})
+it('aborts a pending attach on window unmount and closes an ignored late result',async()=>{
+  const f=await attachmentFixture();let finish!:(value:typeof f.child)=>void
+  f.openAttachment.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+  try {
+    f.views.handle(f.request,'one',f.send);await vi.waitFor(()=>expect(f.openAttachment).toHaveBeenCalledOnce())
+    const signal=f.openAttachment.mock.calls[0]![3]
+    f.views.handle({...mount,type:'CLAUDE_TERMINAL_UNMOUNT'},'one',f.send);expect(signal.aborted).toBe(true)
+    const count=f.send.mock.calls.length;finish(f.child);await vi.waitFor(()=>expect(f.child.close).toHaveBeenCalledOnce());expect(f.send.mock.calls).toHaveLength(count)
+  }finally{f.views.clear()}
+})
+it('retires the child client when the durable continuation changes without redirecting old input',async()=>{
+  const f=await attachmentFixture()
+  try {
+    f.views.handle(f.request,'one',f.send);await vi.waitFor(()=>expect(f.send.mock.calls.at(-1)![0].attachment?.status).toBe('ready'))
+    f.changeLink();f.views.handle({...mount,type:'CLAUDE_BACKGROUND_INPUT',attachmentId:f.child.snapshot.id,text:'stale'},'one',f.send);expect(f.child.input).not.toHaveBeenCalled()
+    f.notify();expect(f.child.close).toHaveBeenCalledOnce();expect(f.send.mock.calls.at(-1)![0].attachment).toBeUndefined()
+  }finally{f.views.clear()}
+})

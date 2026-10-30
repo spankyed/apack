@@ -493,6 +493,39 @@ interface ClaudeAgentHandback {
     warning?: string;
 }
 
+interface ClaudeBackgroundAttachment {
+    readonly snapshot: ClaudeBackgroundAttachmentSnapshot;
+    subscribe(listener: () => void): () => void;
+    input(id: string, text: string): boolean;
+    resize(id: string, columns: number, rows: number): boolean;
+    close(): Promise<void>;
+}
+
+/** An attach client is separate from the background worker it displays. */
+interface ClaudeBackgroundAttachmentSnapshot {
+    id: string;
+    jobId: string;
+    sessionId: string;
+    cwd: string;
+    clientPid: number;
+    status: 'exited' | 'live';
+    exitCode?: number;
+    output: {
+        sequence: number;
+        text: string;
+    }[];
+}
+
+interface ClaudeBackgroundAttachmentView {
+    requestId: string;
+    revision: number;
+    sessionId: string;
+    continuedInSessionId: string;
+    status: 'error' | 'opening' | 'ready';
+    state?: ClaudeBackgroundAttachmentSnapshot;
+    problem?: string;
+}
+
 interface ClaudeBackgroundReview {
     revision: string;
     title: string;
@@ -2129,11 +2162,30 @@ type ClaudeTerminalViewRequest = {
     continuedInSessionId: string;
     revision: number;
 } & ClaudeBackgroundSessionRequest) | {
+    type: 'CLAUDE_BACKGROUND_OPEN';
+    sessionId: string;
+    continuedInSessionId: string;
+    jobId: string;
+    revision: number;
+} | {
+    type: 'CLAUDE_BACKGROUND_INPUT';
+    attachmentId: string;
+    text: string;
+} | {
+    type: 'CLAUDE_BACKGROUND_RESIZE';
+    attachmentId: string;
+    columns: number;
+    rows: number;
+} | {
+    type: 'CLAUDE_BACKGROUND_CLOSE';
+    requestId: string;
+} | {
     type: 'CLAUDE_TERMINAL_CLOSE';
     ownerId: string;
 });
 
 type ClaudeTerminalViewSnapshot = {
+    attachment?: ClaudeBackgroundAttachmentView;
     background?: ClaudeBackgroundSessionState;
     mcpOperation?: {
         sequence: number;
@@ -2850,6 +2902,7 @@ interface CliServiceType {
         error: string;
     }>;
     claudeCode: {
+        openBackgroundAttachment: typeof openBackgroundAttachment;
         backgroundSession: typeof backgroundSession;
         parseMcpElicitationForm: typeof parseMcpElicitationForm;
         validateMcpElicitationForm: typeof validateMcpElicitationForm;
@@ -9485,6 +9538,9 @@ declare const noteQueries: {
     readonly trashedDTOs: () => NoteDTO[];
     readonly expiredSoftDeleted: (maxAgeDays: number) => NoteEntity[];
 };
+
+/** Own the original attach client; never send Stop to its background worker on close. */
+declare function openBackgroundAttachment(continuation: ClaudeNativeContinuation, jobId: string, options?: SubcommandOptions): Promise<ClaudeBackgroundAttachment>;
 
 declare const paneRoster: z.ZodObject<{
     panes: z.ZodArray<z.ZodObject<{

@@ -1,7 +1,8 @@
 <template>
-  <section :class="[active ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
+  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
     <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
-    <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" @operate="operateBackground" />
+    <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" @operate="operateBackground" @open="openBackground" />
+    <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
     <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
     <section v-for="panel in noticePanels" :key="panel.key" :data-native-notice="panel.notice.kind" :aria-label="panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
@@ -47,7 +48,7 @@
         </template>
       </div>
     </section>
-    <div v-if="!active" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt'" class="native-launch__actions">
+    <div v-if="!active && !view?.attachment" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt'" class="native-launch__actions">
       <span v-if="launchProblem" role="status" class="native-problem" :class="{ 'native-problem--expected': managedPolicyDeclined }">{{ launchProblem }}</span>
       <button type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
@@ -55,7 +56,7 @@
       </button>
       <button v-if="view?.opening && view.openingId" type="button" class="native-button" :disabled="view.cancelling" @click="cancelOpen">Cancel startup</button>
     </div>
-    <template v-else>
+    <template v-else-if="!view?.attachment">
       <header class="native-header">
         <div class="native-identity">
           <span class="native-mark" aria-hidden="true">›_</span>
@@ -112,6 +113,7 @@ import { useSelector } from '@xstate/vue'
 import { useSurface } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
+import NativeBackgroundAttachment from './NativeBackgroundAttachment.vue'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeManagedSecurityReview from './NativeManagedSecurityReview.vue'
 import NativeSandboxNetworkReview from './NativeSandboxNetworkReview.vue'
@@ -196,6 +198,7 @@ const dismissed = ref(false)
 const requested = ref(false)
 const ended = computed(() => ['exited', 'error'].includes(view.value?.state?.status ?? ''))
 const active = computed(() => !!view.value?.state && !view.value.opening && requested.value && !dismissed.value)
+const displayActive = computed(() => active.value || !!view.value?.attachment)
 // Rendered actions retain their original owner and revision until Vue replaces the panel.
 const noticePanels = computed(() => {
   if (active.value) return []
@@ -213,6 +216,14 @@ function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBack
   actor.send({ type: 'CLAUDE_TERMINAL_BACKGROUND', ...identity(), sessionId: target.sessionId, continuedInSessionId: target.continuedInSessionId,
     revision: (view.value?.background?.revision ?? 0) + 1, ...request })
 }
+let attachmentRevision = 0
+function openBackground(target: ClaudeNativeContinuation, jobId: string) {
+  if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.attachment) return
+  actor.send({type:'CLAUDE_BACKGROUND_OPEN',...identity(),sessionId:target.sessionId,continuedInSessionId:target.continuedInSessionId,jobId,revision:++attachmentRevision})
+}
+function closeBackground(requestId: string) {actor.send({type:'CLAUDE_BACKGROUND_CLOSE',...identity(),requestId})}
+function inputBackground(attachmentId: string,text: string) {actor.send({type:'CLAUDE_BACKGROUND_INPUT',...identity(),attachmentId,text})}
+function resizeBackground(attachmentId: string,columns: number,rows: number) {actor.send({type:'CLAUDE_BACKGROUND_RESIZE',...identity(),attachmentId,columns,rows})}
 function open() { returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
 function cancelOpen() {
   const openingId = view.value?.openingId
@@ -222,7 +233,7 @@ function cancelOpen() {
 }
 function stop() { const ownerId = view.value?.state?.ownerId; if (ownerId) actor.send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId }) }
 function detach() { observer?.disconnect(); observer = undefined; terminal?.detach(); terminal = undefined; attachedOwner = undefined }
-watch(active, value => emit('active', value), { immediate: true })
+watch(displayActive, value => emit('active', value), { immediate: true })
 watch([view, active], async ([value, showing]) => {
   if (!showing) { detach(); return }
   const ownerId = value?.state?.ownerId

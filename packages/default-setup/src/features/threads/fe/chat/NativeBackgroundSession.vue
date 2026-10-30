@@ -7,6 +7,7 @@
       <p v-if="panel.problem" role="alert" class="background-session__problem">{{ panel.problem }}</p>
     </div>
     <div class="background-session__controls">
+      <button v-if="panel.session" type="button" :disabled="panel.pending || attached" @click="openSession(panel.target, panel.session.id)">Open session</button>
       <button type="button" :disabled="panel.pending" @click="operate(panel.target, { operation: 'refresh' })">{{ panel.pending ? panel.operation === 'stop' ? 'Stopping…' : 'Checking…' : 'Refresh status' }}</button>
       <button v-if="panel.session?.pid && ['working', 'blocked'].includes(panel.session.state)" type="button" :disabled="panel.pending" @click="operate(panel.target, { operation: 'stop', id: panel.session.id, pid: panel.session.pid })">Stop background session</button>
     </div>
@@ -17,8 +18,14 @@ import { computed } from 'vue'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeBackgroundSessionRequest } from '#features/code/common/native-background.ts'
 import type { ClaudeBackgroundSessionState } from '#features/threads/be/claude-terminal-views.ts'
-const props = defineProps<{ continuation: ClaudeNativeContinuation; state?: ClaudeBackgroundSessionState }>()
-const emit = defineEmits<{ operate: [target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest] }>()
+const props = defineProps<{ continuation: ClaudeNativeContinuation; state?: ClaudeBackgroundSessionState; attached?: boolean }>()
+const emit = defineEmits<{ open: [target: ClaudeNativeContinuation, jobId: string]; operate: [target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest] }>()
+function openSession(target: ClaudeNativeContinuation, jobId: string) {
+  const current = props.state
+  if (props.attached || current?.status === 'pending' || current?.sessionId !== target.sessionId || current.continuedInSessionId !== target.continuedInSessionId || current.session?.id !== jobId
+    || props.continuation.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId) return
+  emit('open', target, jobId)
+}
 function operate(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest) {
   if (props.continuation.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId) return
   const current = props.state?.sessionId === target.sessionId && props.state.continuedInSessionId === target.continuedInSessionId ? props.state : undefined

@@ -24,3 +24,15 @@ export interface ClaudeBackgroundReviewState {
   review?: ClaudeBackgroundReview
   problem?: string
 }
+
+/** An attach client is separate from the background worker it displays. */
+export interface ClaudeBackgroundAttachmentSnapshot {
+  id: string
+  jobId: string
+  sessionId: string
+  cwd: string
+  clientPid: number
+  status: 'live' | 'exited'
+  exitCode?: number
+  output: { sequence: number; text: string }[]
+}
