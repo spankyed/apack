@@ -205,7 +205,12 @@ now records a clean matching Linux native build and real SDK/pack coverage at `e
 pack build. Both SDK fixture stores and four current repository cases pass on both backends;
 forced native fallback fails the candidate marker. New CI requires complete prepared SDK coverage.
 The unchanged own-unit embedding assertion still fails on exact native `4d558a2754`; preserve
-that failure and fix it in isolated native work before full Strict can be claimed. Resolve
+that failure and fix it in isolated native work before full Strict can be claimed.
+Completed Strict job `app-and-rest` confirms the same assertion failure. `integration-1`
+also times out in the incumbent/refused-replacement facade test at its unchanged 200 s
+deadline. Retain both failures and diagnose actual work; do not relax tests. Other jobs
+may still be live. Native diagnosis checkout is `/private/tmp/ears-native-unit-fix` at
+exact `4d558a2754`, independent of the working agent and with no shared target. Resolve
 failures without weakening assertions; no old native artifact or old green substitutes for those checks.
 
 Canonical `monorepo-worktrees.noindex/sqlite-evaluation` remains at `6cf6c8349e`, exact

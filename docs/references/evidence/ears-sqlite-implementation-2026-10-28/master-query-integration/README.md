@@ -50,3 +50,22 @@ Later selector/CI additions are not qualified by the earlier `0961982729` full r
 Inspect exact live/terminal CI state before advancing canonical. All remaining query/
 ANN/WAL/resource/packaging/adoption gates stay in the goal. JSON formatting is normalized
 without changing values; original and retained hashes are in `receipts.json`.
+
+## Completed failed Strict jobs (remaining jobs were still live)
+
+On exact pre-selector `0961982729`, completed job `123802305982` (`app-and-rest`)
+fails the same unchanged own-unit vector assertion reproduced locally. Its host pool
+reports 6,178 passed, one failed and 316 skipped; these counts are that pool, not the
+whole Strict run. Completed job `123802306004` (`integration-1`) has a separate failure:
+`build-output-swap.integration.spec.ts` /"does not reuse facade files from an incumbent
+with stamps from a refused replacement" exceeds its 200,000 ms test deadline. Keep the
+assertion and deadline; diagnose fixture/build cost before a targeted rerun. Expected
+refusal stderr elsewhere in these logs is not classified as an additional failure.
+Raw exact logs are under `strict-40974548264/`. Other live jobs must still be polled;
+no terminal parent conclusion is invented from these completed failures.
+
+Native diagnosis is isolated at `/private/tmp/ears-native-unit-fix`, an independent
+clone checked out at `4d558a2754`, with no shared target and no edits to the working
+agent's elmdb checkout. No native fix is committed or published yet. Before changing
+it, follow its root CLAUDE.md and owning design/engine/search/testing documents and
+run the required Rust/binding gates in disposable environments.
