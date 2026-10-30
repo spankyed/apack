@@ -49,3 +49,21 @@ it('adopts early startup capture through normal connection ownership without res
   await expect(startupOwner.start({ mode: 'lightweight', startup: true })).rejects.toThrow('matching startup');
   resource.startup = undefined;
 });
+
+it('cleans up a connection closed during profiler admission without retaining its ownership', async () => {
+  resource.current = createNodePerformanceController();
+  let resume!: () => void;
+  const ready = vi.spyOn(resource.current, 'ready').mockReturnValue(new Promise(resolve => { resume = resolve; }));
+  const closed = new AbortController();
+  const initializing = performanceRouter.createCaller({ client: 'initializing', closed: closed.signal });
+  const pending = initializing.start({ mode: 'lightweight' });
+  await vi.waitFor(() => expect(ready).toHaveBeenCalled());
+  closed.abort();
+  await resource.current.stop();
+  const rejected = expect(pending).rejects.toThrow('connection is closed');
+  resume();
+  await rejected;
+  ready.mockRestore();
+  await stranger.start({ mode: 'disabled' });
+  expect(await stranger.stop()).toMatchObject({ complete: true });
+});

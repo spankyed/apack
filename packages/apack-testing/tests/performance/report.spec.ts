@@ -88,3 +88,14 @@ it('retains bounded raw streaming backlog, detects clock uncertainty and refuses
   expect(() => streamingBacklog(produced, [received[1], received[0]], 30)).toThrow();
   expect(() => streamingBacklog(Array(65).fill(produced[0]), received, 30)).toThrow();
 });
+
+it('retains real V8 profiles across report admission and rejects hidden profile failure', async () => {
+  const controller = createNodePerformanceController();
+  controller.start('detailed');
+  await controller.ready();
+  const report = await controller.stop();
+  expect(report.complete).toBe(true);
+  expect(processReportSchema.parse(report).profiles).toEqual(report.profiles);
+  expect(processReportSchema.safeParse({ ...report, profileFailures: 1 }).success).toBe(false);
+  expect(processReportSchema.safeParse({ ...report, profiles: { ...report.profiles, bytes: 0 } }).success).toBe(false);
+});

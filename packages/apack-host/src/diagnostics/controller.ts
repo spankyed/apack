@@ -2,6 +2,7 @@ import type { EarsAdmin } from '@apackdev/ears';
 import type { PerformanceExecution } from '@apackdev/sdk/runtime';
 import type { ContextManager } from '@opentelemetry/api';
 import { createTraceSession, type RecordingMode } from './session.ts';
+import { PROFILE_BYTES } from './profiles.ts';
 
 export const APPLICATION_SPAN_NAMES = new Set([
   'app.thread.open', 'app.reply.stream', 'app.search', 'app.startup',
@@ -34,7 +35,8 @@ export function createPerformanceController(contextManager: () => ContextManager
     },
     start(mode: RecordingMode) {
       if (recording || stopping) throw new Error('A performance recording is already active or stopping');
-      const session = createTraceSession({ mode, contextManager, names: APPLICATION_SPAN_NAMES, attributes: APPLICATION_SPAN_ATTRIBUTES });
+      const limits = mode === 'detailed' ? { observations: 10_000, bytes: 16 * 1024 * 1024 - PROFILE_BYTES } : undefined;
+      const session = createTraceSession({ mode, limits, contextManager, names: APPLICATION_SPAN_NAMES, attributes: APPLICATION_SPAN_ATTRIBUTES });
       try {
         for (const [database, engine] of engines) session.attach(engine, database);
       } catch (error) {
