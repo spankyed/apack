@@ -89,6 +89,8 @@ export interface EarsDatabase {
   indexesReady(): Promise<void>;
   /** Backend visibility changes after a derived generation commits; no new logical commit is invented. */
   onIndexesChanged?(listener: (changes: Changes) => void): () => void;
+  /** Terminal background shutdown before close/removal. Once begun, new writes refuse until reopen. */
+  drainBackground?(): Promise<void>;
   close(): void;
 }
 

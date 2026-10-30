@@ -70,6 +70,7 @@ export class SqliteDatabase implements EarsDatabase {
   readonly sql: DatabaseSync;
   private readonly writeLease = createWriteLease();
   private opened = true;
+  private draining?: Promise<void>;
   private readonly closeController = new AbortController();
   private vectorTrainingOwner?: symbol;
   get closeSignal(): AbortSignal { return this.closeController.signal; }
@@ -309,6 +310,7 @@ export class SqliteDatabase implements EarsDatabase {
   private writable() {
     this.assertOpen();
     this.writeLease.assertWritable();
+    if (this.draining) fail("WRITE_PAUSED", "Background shutdown has begun; close and reopen before writing");
     if (this.readOnly) fail("READ_ONLY", "The database was open read-only");
   }
   statement(sql: string) {
@@ -1479,7 +1481,8 @@ export class SqliteDatabase implements EarsDatabase {
     if(!this.opened)return;
     this.writeLease.assertWritable();
     if(this.active)fail('UNIT_OPEN','End the open unit before draining background work');
-    await this.indexBuilds.drain();
+    this.draining ??= this.indexBuilds.drain();
+    await this.draining;
   }
   close() {
     if (!this.opened) return;

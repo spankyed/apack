@@ -352,9 +352,12 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
   });
 
   it('enforces one owner and drains workers before allowing file close and a new owner',async()=>{
-    const {db,models,job,write}=fixture();
+    const {db,e,models,job,write}=fixture();
     expect(()=>new SqliteVectorModels(db,process.env.EARS_VEC1_EXTENSION!)).toThrow(expect.objectContaining({code:'BACKGROUND_OWNER_EXISTS'}));
-    write(()=>models.enqueue(job));models.start();await db.drainBackground();
+    write(()=>models.enqueue(job));models.start();const draining=db.drainBackground();
+    expect(()=>e.create('Row',{title:'during drain'})).toThrow(expect.objectContaining({code:'WRITE_PAUSED'}));
+    await draining;await db.drainBackground();
+    expect(()=>e.create('Row',{title:'after drain'})).toThrow(expect.objectContaining({code:'WRITE_PAUSED'}));
     await models.stop();await models.stop();db.close();
     const path=db.path,reopened=own(path);reopened.write(()=>reopened.models.recover());
     await reopened.db.indexesReady();expect(reopened.db.get('SELECT state FROM vector_training')!.state).toBe('ready');

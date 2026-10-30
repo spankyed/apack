@@ -360,6 +360,15 @@ Normal host artifact resolution/owner creation, signing, physical refresh and ma
 The new checks do not certify unconfigured writers, exhaustive native integrity, installed app loading, current
 native-pin combined CI or performance acceptance.
 
+Graceful API shutdown now awaits host-managed write exclusion, terminal worker drain and close for both
+stores before process exit. Repeated signals share one attempt, hooks run once, failures aggregate and report
+an unsuccessful exit. SQLite refuses new writes once terminal drain begins; reads and repeat drains remain
+available. Live import suspend/resume, replacement/deletion authority, forced termination and installed
+process coverage are still required; terminal drain cannot resume the same scheduler. Qualification is recorded
+in [shutdown ownership](../references/evidence/ears-sqlite-implementation-2026-10-28/shutdown-ownership/README.md):
+637 SQLite cases, four host and eighteen affected API cases, types/boundaries/package/API checks, and two
+negative controls pass. The API signal boundary is controlled, not installed-process qualification.
+
 Still required, without narrowing phases 3–7:
 
 - Normal app owner creation/loading and automatic admission integration, incumbent-preserving physical refresh, host drain before file replacement/

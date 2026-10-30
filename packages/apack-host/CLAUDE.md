@@ -37,6 +37,11 @@ A feature's halves sit together: `features/packs/be/system.ts` answers `features
 for what they hold, never for a layer — no `core/`, `shared/`, `lib/` or `utils/`, at any depth, as in the API and
 the renderer.
 
+`database/close.ts` owns graceful app-store shutdown: hold each handle's write exclusion, await its
+optional background drain, then close it. Stores settle independently and failures are aggregated;
+a failed drain leaves that handle open for explicit failure handling. This is terminal shutdown,
+not live import suspension or filesystem publication authority.
+
 SQLite's app-only logical archive API is composed by `backup/logical.ts` and `backup/index.ts`.
 `exportLogicalDatabase(database, file)` synchronizes a private 0600 archive before exclusive hard-link
 publication; existing/racing targets survive, unsupported hard-link filesystems refuse, and a published

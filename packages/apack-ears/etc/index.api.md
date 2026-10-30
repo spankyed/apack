@@ -208,6 +208,7 @@ export interface EarsDatabase {
     bulkLoad(loads: readonly Load[]): void;
     // (undocumented)
     close(): void;
+    drainBackground?(): Promise<void>;
     // (undocumented)
     durable(): Promise<void>;
     readonly format: string;

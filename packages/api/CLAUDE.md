@@ -9,6 +9,11 @@ assets retain package-relative ownership. Declare EARS as a runtime dependency, 
 engine entries bundled with the SDK bridge (`noExternal`). `tests/runtime/sqlite-bundle.spec.ts` executes that boundary;
 profile tests cover persistence and partial-open cleanup. Node boot evidence does not certify Electron ABI.
 
+Graceful SIGTERM shutdown stops actors/transport, runs shutdown hooks once, awaits the host's
+exclusive database drain/close for both app stores, then exits. Repeated signals share one attempt;
+failed draining reports failure and exits unsuccessfully. The synchronous `exit` hook remains a
+safety net, not proof that background workers drained. Installed app forced-kill coverage remains required.
+
 ## Layout
 
 `src/` is one folder per job this package does, and `packages/renderer/src` is the same four plus `views/`, so a

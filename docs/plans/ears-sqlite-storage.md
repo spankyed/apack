@@ -492,6 +492,12 @@ writable handles, without automatically creating a trainer. Private export/audit
 inherit the owner's loader, never a path from stored data. [Connection evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-connections/README.md)
 retains 637 passing SQLite cases, generated API/package checks and two negative controls. This is the
 connection contract; normal packaged-artifact resolution and host ownership are still required.
+Graceful API SIGTERM now uses host `closeDatabases`: per-handle write exclusion remains held until
+optional terminal drain and close complete. Other stores still settle if one fails; repeated signals and
+shutdown hooks are idempotent. SQLite's terminal drain rejects new writes until close/reopen. This does
+not implement live replacement suspension/resume or offline publication; those require separate ownership.
+[Shutdown qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/shutdown-ownership/README.md)
+retains real worker-drain tests and host/API controls, without claiming installed-process acceptance.
 The remaining integration must create/load normal app owners, preserve incumbents during physical model
 refresh, drain before file replacement/deletion, complete rebuild/restore/audit ownership, and distribute/load
 trusted native artifacts on every writer and read-only candidate connection. Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,

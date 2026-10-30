@@ -8,3 +8,5 @@ export { assertNoDatabaseWriter, findDatabaseWriter, holdDatabaseWriteLock, type
 export { storedSettings, readSettingsOverrides } from './settings.ts';
 
 export { configuredDatabaseFormat, databaseStorage, type DatabaseStorage } from './storage.ts';
+
+export { closeDatabases } from './close.ts';

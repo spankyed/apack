@@ -1,0 +1,13 @@
+{
+  "generatedSha256": "374f6231595cea05d51ee94b718ca1edd0cbe1240e5ca8b6b3232ca861995ec0",
+  "normalizedSha256": "280720e60fc85aff773c7f3a1d644527d99dc9d65794aef5ca34d4c5c4109fb6",
+  "transformation": "CRLF to LF only, preserving repository index.api.md line endings",
+  "args": [
+    "npm",
+    "run",
+    "api:check",
+    "-w",
+    "@apackdev/ears"
+  ],
+  "exitCode": 0
+}
