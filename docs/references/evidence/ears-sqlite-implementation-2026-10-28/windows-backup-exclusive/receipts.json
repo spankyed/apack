@@ -52,5 +52,17 @@
     "originalBytes": 0,
     "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "storedSha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+  },
+  {
+    "file": "backup-verifier-controls.json.gz",
+    "originalBytes": 1783,
+    "originalSha256": "461549e6e0dcf8569e6060b11939d9624319627df7fc8a34d5e05b78568be3ee",
+    "storedSha256": "2da3578f36dea4f86a6ad5418958272a7908f626646d878d0f377e1af2446104"
+  },
+  {
+    "file": "backup-verifier-control.cjs.gz",
+    "originalBytes": 2692,
+    "originalSha256": "c7e59e64429da40aec3ca3e14abefca89c676872802097bf954fb86f48ff2763",
+    "storedSha256": "a3324769ea9bf7a61e813da1f386c6e8a42af9ffacfd9700f72a907481ff5344"
   }
 ]

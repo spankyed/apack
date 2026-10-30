@@ -228,8 +228,9 @@ passes Linux but [platform run 41125212261](https://github.com/spankyed/apack/ac
 its direct Windows rename replaces competing files and dangling symlinks. Linux/macOS pass that run;
 Windows fails two preservation assertions. The [exclusive-publication correction](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-backup-exclusive/README.md)
 uses the system Windows Directory.Move operation with paths passed as data and retains all race assertions.
-Twelve focused CLI cases pass on Linux, including a literal metacharacter path; actual Windows qualification
-remains required. Host types pass with an explicit 512 MiB heap; CLI types exhaust that heap and require the
+All 29 platform CLI cases pass on Linux, including twelve focused profile cases and a literal metacharacter
+path; actual Windows qualification remains required. All five backup invariants are required by name in the
+platform verifier, with fourteen real-report omission/skip/duplicate/path controls passing. Host types pass with an explicit 512 MiB heap; CLI types exhaust that heap and require the
 larger disposable budget or CI. These resource failures are retained, not counted as passing checks.
 The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
 The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout

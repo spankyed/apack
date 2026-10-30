@@ -102,6 +102,14 @@ const requiredResetCases = [
   "permits a SQLite reset dry run while history is held without deleting primary data"
 ];
 
+const requiredBackupPublicationCases = [
+  "refuses a backup destination raced by a file without replacing it",
+  "refuses a backup destination raced by a empty directory without replacing it",
+  "refuses a backup destination raced by a populated directory without replacing it",
+  "refuses a backup destination raced by a dangling symlink without replacing it",
+  "publishes a backup whose path contains shell metacharacters as literal data"
+];
+
 const evidence = resolve('.temp/sqlite-platform'), mode = process.argv[2];
 mkdirSync(evidence, { recursive: true });
 const save = (file, value) => writeFileSync(join(evidence, file), JSON.stringify(value, null, 2) + '\n');
@@ -231,6 +239,7 @@ if (mode === 'verify') {
   requirePassingCases(identity, requiredIdentityCases, 'Database identity');
   requirePassingCases(namespace, requiredNamespaceCases, 'Namespace publication');
   requirePassingCases(reset, requiredResetCases, 'SQLite reset');
+  requirePassingCases(reset, requiredBackupPublicationCases, 'Backup publication');
   assert(selected.length > 0 && selected.every(test => test.status === 'passed') && result.recoveryCasesPassed > 0,
     'SQLite-selected text cases and recovery must execute and pass; native fallback is insufficient');
 } else {

@@ -40,3 +40,13 @@ or the required CI gate. All focused containers are capped at half a CPU/768 MiB
 
 `receipts.json` binds compressed evidence to its original bytes. Product changes are based on `8d1a166c19`,
 master `dc67febcce`, native pin `2441af4658`. Final exact-source full acceptance remains outstanding.
+
+## Required safety witnesses
+
+The platform verifier now names all four destination races and the literal-path case, so removing a case
+cannot be concealed by an unrelated passing test. Fourteen controls run the actual helper, required names,
+selector and call extracted from the production verifier against the real passing 29-case report. Each
+required case is removed and independently marked pending; all ten controls reject. Duplicate witnesses
+reject, extra passing cases remain accepted, and Windows separator normalization uses the same selection.
+The exact control source, report, verifier hash and outcomes are retained. These protect evidence coverage;
+they do not substitute for actual Windows execution. The product fix is committed as `93db5cfa8c`.
