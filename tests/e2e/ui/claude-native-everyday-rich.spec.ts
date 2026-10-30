@@ -110,7 +110,9 @@ test('reads and submits everyday rich parent and Agent drafts across compact ret
       await appPage.setViewportSize({width,height});
       await appPage.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
       const metrics=await area.evaluate(element=>{const b=element.getBoundingClientRect();return {height:b.height,top:b.top,bottom:b.bottom,scrollHeight:element.scrollHeight,clientHeight:element.clientHeight}});
-      observations.push({owner,width,height,metrics,reading:[],sessionId:(await context()).sessionId,nativePid:(await context()).native.state.nativePid});
+      const transcriptHeight=agent?await appPage.getByRole('region',{name:'Agent transcript',exact:true}).evaluate(element=>element.getBoundingClientRect().height):undefined;
+      if(agent)expect(transcriptHeight).toBeGreaterThanOrEqual(80);
+      observations.push({owner,width,height,metrics,transcriptHeight,reading:[],sessionId:(await context()).sessionId,nativePid:(await context()).native.state.nativePid});
       await writeFile(join(workspace!,'native-rich-everyday-progress.json'),JSON.stringify(observations,null,2));
       await capture('native-rich-everyday-'+owner+'-'+width+'-before.png');
       expect(metrics.height).toBeGreaterThanOrEqual(width===680?88:112);

@@ -192,7 +192,8 @@ onBeforeUnmount(() => {
   .native-agent-composer { margin-bottom: .75rem; }
   /* Rich drafts need reading space without hiding native status or the transcript. */
   .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) {
-    max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 9.5rem));
+    max-height: max(7rem, calc(var(--agent-available-height, 32rem) - 8.5rem));
+    margin-bottom: 0;
   }
   .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) :deep([data-testid="composer-session-strip"]) { padding-block: .25rem; }
   .native-agent-composer:has(.native-agent-editor :is(h1, h2, h3, pre, ul, ol, blockquote)):not(.native-agent-composer--tools) .native-agent-actions { padding-block: .25rem; }
