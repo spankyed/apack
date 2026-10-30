@@ -300,10 +300,22 @@ it('keeps left-arrow decisions bound to the rendered native owner and revision',
 it('keeps the parent interface action in the background card bound to this mounted owner',async()=>{
  const f=await fixture({sessionId:'session',continuedInSessionId:'child',timestamp:'2026-10-30T16:30:00Z'})
  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ expect(f.root.querySelector('.native-console')).toBeNull()
  const open=f.root.querySelector<HTMLButtonElement>('[aria-label="Background Claude session"] [aria-label="Use native interface"]')!
  expect(open).not.toBeNull();expect(f.root.querySelectorAll('[aria-label="Use native interface"]')).toHaveLength(1)
  f.publish({...f.snapshot,state:{...f.snapshot.state!,view:{kind:'main',revision:3}}});await nextTick();open.click();await nextTick()
  expect(actor.send).toHaveBeenLastCalledWith({type:'CLAUDE_TERMINAL_OPEN',threadId:'thread',mountId:f.mount.mountId})
  Array.from(f.root.querySelectorAll('button')).find(button=>button.textContent==='Stop session')!.click()
  expect(actor.send).toHaveBeenLastCalledWith({type:'CLAUDE_TERMINAL_CLOSE',threadId:'thread',mountId:f.mount.mountId,ownerId:'owner'})
+})
+
+it('retains parent startup cancellation and refusal feedback beside background controls',async()=>{
+ const f=await fixture({sessionId:'session',continuedInSessionId:'child',timestamp:'2026-10-30T16:30:00Z'}),openingId=crypto.randomUUID()
+ f.publish({opening:true,openingId,output:[]});await nextTick()
+ expect(f.root.querySelector('.native-console')).toBeNull();expect(f.root.textContent).toContain('Opening native interface…')
+ Array.from(f.root.querySelectorAll('button')).find(button=>button.textContent==='Cancel startup')!.click()
+ expect(actor.send).toHaveBeenLastCalledWith({type:'CLAUDE_TERMINAL_CANCEL_OPEN',threadId:'thread',mountId:f.mount.mountId,openingId})
+ f.publish({opening:false,output:[],problem:'Original parent startup refusal'});await nextTick()
+ expect(f.root.querySelector('.native-launch__actions')?.textContent).toContain('Original parent startup refusal')
+ expect(f.root.querySelector('.native-console')).toBeNull()
 })
