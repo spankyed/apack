@@ -71,3 +71,13 @@ it('adopts startup before creating the renderer recording and retains the startu
   const spans = report.renderer!.observations.map(value => JSON.parse(value) as { name: string; spanId: string; parentSpanId?: string });
   expect(spans.find(span => span.name === 'app.view.ready')?.parentSpanId).toBe(spans.find(span => span.name === 'app.startup')?.spanId);
 });
+
+it('retains only bounded metadata for argumentless startup views and clears it on stop', async () => {
+  await windowPerformance.start('lightweight', { startup: true });
+  notifyPerformanceView({ request: { ref: 'pack/feature', view: 'list' }, update: { ok: true, value: 'private payload', commit: 7 }, generation: 1, delivery: 1 });
+  expect(windowPerformance.lastStartupView('pack/feature', 'list')).toEqual({ ok: true, commit: 7, subscription: undefined, delivery: undefined });
+  notifyPerformanceView({ request: { ref: 'pack/feature', view: 'detail', args: { private: 'argument' } }, update: { ok: true, value: 'private payload', commit: 8 }, generation: 1, delivery: 2 });
+  expect(windowPerformance.lastStartupView('pack/feature', 'detail')).toBeUndefined();
+  expect(JSON.stringify(await windowPerformance.stop())).not.toContain('private payload');
+  expect(windowPerformance.lastStartupView('pack/feature', 'list')).toBeUndefined();
+});
