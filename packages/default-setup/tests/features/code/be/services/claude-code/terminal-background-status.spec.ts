@@ -37,9 +37,15 @@ it('binds the public helper PID to the original roster, dispatch, durable job an
  const worker={pid:100,procStart:'host-start',replPid:119,replProcStart:'worker-start',dispatch:{sessionId:child,cwd:'/owned'}}
  const jobs={uL:vi.fn(async()=>({workers:{'05ff1d31':worker}})),io:vi.fn(()=>'/job'),Kp:vi.fn(),Zr:vi.fn(async()=>({sessionId:child,cwd:'/owned',daemonShort:'05ff1d31'})),iZt:vi.fn(async()=>true)}
  const source=rewriteClaudeNativePlatformSelectors(claudeTerminalBackgroundStatusRuntime)
- const api=new Function('config','importClaudeNativeModule',source+';return identifyNativeBackground')({sessionId:parent},async()=>jobs)
+ const processIdentity={jh:vi.fn(async ():Promise<boolean|undefined>=>true)}
+ const api=new Function('config','importClaudeNativeModule',source+';return identifyNativeBackground')({sessionId:parent},async(name:string)=>name==='chunk-0xj14bee.js'?processIdentity:jobs)
  const request={parent_session_id:parent,child_session_id:child,pid:119,cwd:'/owned'}
  await expect(api(request)).resolves.toEqual(identity);expect(jobs.iZt).toHaveBeenCalledWith(119,'worker-start');expect(jobs.iZt).toHaveBeenCalledWith(100,'host-start')
+ expect(processIdentity.jh.mock.calls).toEqual([[119,'worker-start'],[100,'host-start']])
+ for(const fresh of [false,undefined]){
+  processIdentity.jh.mockResolvedValueOnce(fresh);await expect(api(request)).rejects.toThrow('retired')
+ }
+ processIdentity.jh.mockResolvedValueOnce(true).mockResolvedValueOnce(false);await expect(api(request)).rejects.toThrow('retired')
  worker.replProcStart='';await expect(api(request)).rejects.toThrow('retired')
 })
 

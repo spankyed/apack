@@ -5,12 +5,13 @@ function fixture() {
   const state = {sessionId:child,cwd:'/owned',daemonShort:'05ff1d31'}
   const worker = {pid:100,procStart:'host-start',replPid:119,replProcStart:'owned-start',dispatch:{sessionId:child,cwd:'/owned'}}
   const jobs = {io:vi.fn(() => '/original-job'),Kp:vi.fn(),Zr:vi.fn(async () => state),uL:vi.fn(async () => ({workers:{'05ff1d31':worker}})),iZt:vi.fn(async () => true)}
-  const Ptt = vi.fn(async () => null), load = vi.fn(async (name:string) => name === 'chunk-tj6zgtfh.js' ? jobs : {Ptt})
+  const processIdentity={jh:vi.fn(async ():Promise<boolean|undefined>=>true)}
+  const Ptt = vi.fn(async () => null), load = vi.fn(async (name:string) => name === 'chunk-tj6zgtfh.js' ? jobs : name === 'chunk-0xj14bee.js' ? processIdentity : {Ptt})
   const digest = vi.fn(() => 'reviewed'), update = vi.fn(() => ({digest})), hash = vi.fn(() => ({update}))
   const source = rewriteClaudeNativePlatformSelectors(claudeTerminalBackgroundReplyRuntime)
   const api = new Function('config','importClaudeNativeModule','createHash','nativeFunctionHash',source+';return replyNativeBackground')({sessionId:parent},load,hash,()=> 'reviewed')
   const request = {parent_session_id:parent,child_session_id:child,job_id:'05ff1d31',pid:119,cwd:'/owned',text:'Follow up on the review.'}
-  return {api,request,state,worker,jobs,Ptt,load,digest,update}
+  return {api,request,state,worker,jobs,processIdentity,Ptt,load,digest,update}
 }
 it('uses original identity, liveness and next-turn reply with the original known state', async () => {
   const f=fixture();await expect(f.api(f.request)).resolves.toEqual({queued:true})
@@ -38,4 +39,14 @@ it('does not accept a second reply while the first original operation is unresol
   const first=f.api(f.request);await vi.waitFor(()=>expect(f.Ptt).toHaveBeenCalledOnce())
   await expect(f.api(f.request)).rejects.toThrow('already pending');finish(null);await first;f.Ptt.mockResolvedValue(null)
   await expect(f.api(f.request)).resolves.toEqual({queued:true})
+})
+
+it.each([false,undefined])('refuses a nonmatching or unavailable fresh process start (%s) even when native cached liveness passes',async fresh=>{
+ const f=fixture();f.processIdentity.jh.mockResolvedValue(fresh)
+ await expect(f.api(f.request)).rejects.toThrow('Background session changed')
+ expect(f.Ptt).not.toHaveBeenCalled()
+})
+it('checks both fresh process incarnations before delivering the original reply',async()=>{
+ const f=fixture();await f.api(f.request)
+ expect(f.processIdentity.jh.mock.calls).toEqual([[119,'owned-start'],[100,'host-start']])
 })
