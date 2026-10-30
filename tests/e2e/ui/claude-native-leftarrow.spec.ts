@@ -14,9 +14,10 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
+  const parentOwnerLoss = process.env.CLAUDE_RESEARCH_BACKGROUND_OWNER_LOSS_APP === '1'
   const childStatusLifecycle = process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_LIFECYCLE_APP === '1'
   const childStatus = childStatusLifecycle || process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_APP === '1'
-  const childReply = childStatus || process.env.CLAUDE_RESEARCH_BACKGROUND_REPLY_APP === '1'
+  const childReply = parentOwnerLoss || childStatus || process.env.CLAUDE_RESEARCH_BACKGROUND_REPLY_APP === '1'
   const childResume = process.env.CLAUDE_RESEARCH_BACKGROUND_RESUME_APP === '1'
   const childInteraction = process.env.CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP === '1'
   const attachChild = childResume || childInteraction || process.env.CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP === '1'
@@ -183,6 +184,23 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
         throw error
       }
+    }
+    if(parentOwnerLoss){
+      const beforeWorker=await childProcessState(),beforeParent=await context()
+      const removed=await appPage.evaluate(()=>{
+        const actor=(window as any).applicationState.system.get('default-setup/threads'),state=actor.getSnapshot().context
+        const [mountId,view]=Object.entries(state.nativeTerminalViews).find(([,view]:any)=>view.threadId===state.currentThread.id) as any
+        const scope={threadId:state.currentThread.id,mountId,ownerId:view.state.ownerId,pid:view.state.nativePid}
+        actor.send({type:'CLAUDE_TERMINAL_CLOSE',...scope});return scope
+      })
+      await expect.poll(async()=>{try{const raw=await readFile('/proc/'+removed.pid+'/stat','utf8');return raw.slice(raw.lastIndexOf(')')+2).split(' ')[0]==='Z'}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}},{timeout:10000}).toBe(true)
+      await app.navigate('host/settings');await app.navigate('default-setup/threads')
+      await expect.poll(async()=>(await context()).native?.state?.ownerId).toBeUndefined()
+      await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeEnabled()
+      const afterWorker=await childProcessState();expect(afterWorker?.start).toBe(beforeWorker?.start);expect(afterWorker?.state).not.toBe('Z')
+      expect((await context()).messages).toEqual(beforeParent.messages);expect((await context()).claude.totalCostUsd).toBe(beforeParent.claude.totalCostUsd)
+      observations.parentOwnerLoss={removed,beforeWorker,afterWorker,closedAt:Date.now(),parentProcessRetired:true,remountedWithoutOwner:true,parentPreserved:true}
+      for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await expect(composer).toHaveText(retainedDraft);await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeInViewport({ratio:1});await capture('apack-native-background-parent-disconnected-'+name+'.png')}
     }
     if (childReply) {
       const beforeReply = await context(), workerBefore = await childProcessState()
@@ -490,7 +508,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(parentOwnerLoss?{nativeBackgroundParentOwnerLoss:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
   } finally {
     if ((childInteraction && !observations.childInteraction) || (childResume && !observations.childResume?.workerRetired)) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))

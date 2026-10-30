@@ -2934,6 +2934,7 @@ interface CliServiceType {
     claudeCode: {
         openBackgroundAttachment: typeof openBackgroundAttachment;
         backgroundSession: typeof backgroundSession;
+        replyBackgroundSession: typeof replyBackgroundSession;
         parseMcpElicitationForm: typeof parseMcpElicitationForm;
         validateMcpElicitationForm: typeof validateMcpElicitationForm;
         query(opts: Omit<QueryOptions, 'cwd'> & {
@@ -9829,6 +9830,9 @@ declare const renderResult: z.ZodObject<{
     drawn_by: z.ZodOptional<z.ZodArray<z.ZodString>>;
     client_modules: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
 }, z.core.$loose>;
+
+/** A fresh original CLI sends to the existing supervisor; it never resumes or writes the conversation. */
+declare function replyBackgroundSession(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundReplyRequest, options?: SubcommandOptions): Promise<ClaudeBackgroundSession>;
 
 /**
  * Resolve all message reference types (images, files, notes, threads,

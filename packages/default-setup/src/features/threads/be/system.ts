@@ -34,8 +34,12 @@ const terminalViews = createClaudeTerminalViews({
   async replyBackground(continuation, request, key) {
     const owner = services.cli.claudeCode.getNativeTerminal(key)
     const current = owner?.state.continuation
-    if (!owner || current?.sessionId !== continuation.sessionId || current.continuedInSessionId !== continuation.continuedInSessionId) throw new Error('Background reply owner is unavailable')
-    return owner.replyBackground(request.id, request.pid, request.text)
+    if (owner) {
+      if (current?.sessionId !== continuation.sessionId || current.continuedInSessionId !== continuation.continuedInSessionId) throw new Error('Background reply owner is unavailable')
+      return owner.replyBackground(request.id, request.pid, request.text)
+    }
+    return services.cli.claudeCode.replyBackgroundSession(continuation, request,
+      { cwd: repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd, timeoutMs: 15000 })
   },
   openAttachment: (continuation,jobId,key,signal) => services.cli.claudeCode.openBackgroundAttachment(continuation,jobId,{cwd:repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode?.cwd,timeoutMs:15000,signal}),
   continuation(key) {
