@@ -10,7 +10,6 @@ import type {ClaudeNativeContinuation} from './terminal-session.ts'
 import type {ClaudeBackgroundReplyRequest,ClaudeBackgroundSession} from '../../../common/native-background.ts'
 
 const pending = new Set<string>()
-const quote = (value:string) => "'" + value.replaceAll("'", "'\"'\"'") + "'"
 
 /** A fresh original CLI sends to the existing supervisor; it never resumes or writes the conversation. */
 export async function replyBackgroundSession(continuation:ClaudeNativeContinuation,request:ClaudeBackgroundReplyRequest,options:SubcommandOptions={}):Promise<ClaudeBackgroundSession> {
@@ -34,7 +33,7 @@ ${rewriteClaudeNativePlatformSelectors(claudeTerminalBackgroundReplyRuntime)}
 try{requireClaudeNativePlatform();const result=await replyNativeBackground(${JSON.stringify(target)});writeFileSync(${JSON.stringify(resultPath)},JSON.stringify(result),{mode:0o600});process.exit(0);}catch(error){process.stderr.write(String(error));process.exit(1);}`
   await writeFile(preload,source,{mode:0o600})
   if(options.signal?.aborted)throw Error('Background reply cancelled')
-  await execOnce(['--version'],{...options,cwd:current.cwd,env:{...env,BUN_OPTIONS:(env.BUN_OPTIONS?env.BUN_OPTIONS+' ':'')+'--preload='+quote(preload)},timeoutMs:options.timeoutMs??15000})
+  await execOnce(['--version'],{...options,cwd:current.cwd,env:{...env,BUN_OPTIONS:(env.BUN_OPTIONS?env.BUN_OPTIONS+' ':'')+'--preload='+preload},timeoutMs:options.timeoutMs??15000})
   const result:unknown=JSON.parse(await readFile(resultPath,'utf8'))
   if(!result||typeof result!=='object'||!('queued' in result)||result.queued!==true)throw Error('Native background reply was not acknowledged')
   return current
