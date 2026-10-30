@@ -9,7 +9,7 @@ it('registers and publishes child status before parent-only transcript reporting
   process:{run:vi.fn(async()=>({exitCode:0,stdout:'119',stderr:''}))},
   http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)});return{ok:!['/transcript','/ui-ready'].includes(path),text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-register'?{token:'child-lease'}:{})}})},
  }
- const register=new Function(createClaudeTerminalPlugin('/owned.sock','private-token').replace('export function register','function register')+';return register')()
+ const register=new Function(createClaudeTerminalPlugin('/owned.sock','private-token',{parentSessionId:'11111111-1111-4111-8111-111111111111',socketPath:'/child.sock',token:'child-token'}).replace('export function register','function register')+';return register')()
  register((event:string,...args:any[])=>hooks.set(event,args.at(-1)))
  const next=async(value:any)=>value
  await hooks.get('classic.*')!(api,{session_id:child,transcript_path:'/owned/'+child+'.jsonl'},next)
@@ -19,6 +19,7 @@ it('registers and publishes child status before parent-only transcript reporting
  tick();await vi.waitFor(()=>expect(requests.some(x=>x.path==='/background-status')).toBe(true))
  expect(api.process.run).toHaveBeenCalledOnce()
  expect(requests.filter(x=>x.path==='/transcript')).toHaveLength(1)
+ expect(api.http.fetch.mock.calls.filter(([url])=>String(url).includes('/background-')).every(([,init])=>init.socketPath==='/child.sock'&&init.headers['x-apack-native-token']==='child-token')).toBe(true)
  expect(requests.find(x=>x.path==='/background-status')?.body).toMatchObject({sessionId:child,pid:119,token:'child-lease',sequence:1,metadata:{model:'sonnet',turns:2}})
  await hooks.get('ui.render')!(api,{},next);expect(api.clock.every).toHaveBeenCalledOnce()
 })

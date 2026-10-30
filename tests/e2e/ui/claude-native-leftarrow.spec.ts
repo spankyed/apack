@@ -190,9 +190,9 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeInViewport({ ratio: 1 })
       await capture('apack-native-background-running-' + name + '.png')
     }
-    const childProcessState = async () => {
+    const childProcessState = async (pid: number = job.pid) => {
       try {
-        const stat = await readFile('/proc/' + job.pid + '/stat', 'utf8')
+        const stat = await readFile('/proc/' + pid + '/stat', 'utf8')
         const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
         return { state: fields[0], start: fields[19] }
       } catch (error) {
@@ -219,6 +219,16 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         expect(r.hit).toBe(true)
         for(const clip of [{left:0,top:0,right:metric.viewport.width,bottom:metric.viewport.height},...metric.clippingRects]){expect(r.left).toBeGreaterThanOrEqual(clip.left-1);expect(r.right).toBeLessThanOrEqual(clip.right+1);expect(r.top).toBeGreaterThanOrEqual(clip.top-1);expect(r.bottom).toBeLessThanOrEqual(clip.bottom+1)}
       }
+    }
+    if(parentOwnerLoss&&childStatus){
+      await expect(widget.getByLabel('Background session usage',{exact:true})).toBeVisible({timeout:15000})
+      observations.childStatusBeforeParentStop=(await context()).native.backgroundInfo
+      expect(observations.childStatusBeforeParentStop?.sessionId).toBe(job.sessionId)
+      const starts=(await readFile(join(workspace!,'native-children.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line)).filter(row=>JSON.stringify(row.args)===JSON.stringify(['--version']))
+      const active=[]
+      for(const start of starts){const state=await childProcessState(start.pid);if(state&&state.state!=='Z')active.push({...start,process:state})}
+      expect(active).toHaveLength(1);observations.independentStatusAuthority={beforeParentStop:active[0]}
+
     }
     if(parentOwnerLoss){
       const beforeWorker=await childProcessState(),beforeParent=await context()
@@ -264,6 +274,16 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
           throw error
         }
         const info=await readInfo();expect(info.sessionId).toBe(job.sessionId);expect(info.jobId).toBe(job.id);expect(info.pid).toBe(job.pid);expect(info.model).toBeTruthy();expect(info.turns).toBeGreaterThan(0)
+        if(parentOwnerLoss){
+          await expect.poll(async()=>(await readInfo())?.observedAt??0,{timeout:8000}).toBeGreaterThan(observations.parentOwnerLoss.closedAt)
+          observations.childStatusAfterParentStop=await readInfo()
+          const authority=observations.independentStatusAuthority.beforeParentStop,authorityProcess=await childProcessState(authority.pid)
+          expect(authorityProcess?.start).toBe(authority.process.start);expect(authorityProcess?.state).not.toBe('Z')
+          observations.independentStatusAuthority.afterParentStop={pid:authority.pid,process:authorityProcess}
+
+          expect(observations.childStatusAfterParentStop.sessionId).toBe(job.sessionId)
+          expect(observations.childStatusAfterParentStop.pid).toBe(job.pid)
+        }
         observations.childStatus={before:info,parentBefore:beforeReply}
       }
 
@@ -334,9 +354,8 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
           const path=state.respawnFlags[i+1];const manifest=await readFile(join(path,'.claude-plugin/plugin.json'),'utf8').then(JSON.parse).catch(()=>undefined)
           if(manifest?.name==='apack-native-terminal')pluginRoot=path
         }
-        expect(pluginRoot?.startsWith('/tmp/cc-app-')).toBe(true)
-        const observer=JSON.parse(await readFile(join(pluginRoot!,'../observer.json'),'utf8'));expect(observer.sessionId).toBe(sessionId)
-        const socket=join(dirname(pluginRoot!),'bridge.sock');expect(observer.socketPath).toBe(socket);expect((await stat(socket)).isSocket()).toBe(true)
+        expect(pluginRoot?.startsWith('/tmp/cc-child-')).toBe(true)
+        const socket=join(dirname(pluginRoot!),'status.sock');expect((await stat(socket)).isSocket()).toBe(true)
         const reload=async()=>{
           const before=(await registrations()).at(-1);expect(before?.leaseHash).toBeTruthy()
           const modulePath=join(pluginRoot!,'hooks/register.ts'),source=await readFile(modulePath,'utf8'),comment='\n// Owned research reload '+Date.now()+'\n'
@@ -452,6 +471,11 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled()
     await expect(card).toContainText('This conversation moved to the background.')
     if(childStatus){await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0);observations.childStatus.retiredAfterStop=true}
+    if(parentOwnerLoss&&childStatus){
+      const authority=observations.independentStatusAuthority.beforeParentStop
+      await expect.poll(async()=>{const current=await childProcessState(authority.pid);return !current||current.state==='Z'||current.start!==authority.process.start},{timeout:10000}).toBe(true)
+      observations.independentStatusAuthority.retiredAfterChildStop=true
+    }
     observations.uiStop = true
     if (process.platform === 'linux') {
       await expect.poll(async () => { const current = await childProcessState(); return !current || current.start !== childBeforeStop!.start || current.state === 'Z' }).toBe(true)

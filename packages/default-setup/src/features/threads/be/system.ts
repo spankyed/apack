@@ -1,3 +1,4 @@
+import { getNativeBackgroundStatus, subscribeNativeBackgroundStatus } from '#features/code/be/services/claude-code/handle-store.ts';
 import { parseClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts';
 import { copyClaudeChannelSelection } from '#features/code/common/native-channels.ts';
 import { readSavedClaudeNativeLaunch, readClaudePlanRestoreMode } from '#features/code/be/services/claude-code/native-launch.ts';
@@ -31,6 +32,12 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const terminalHistory = new WeakMap<Awaited<ReturnType<typeof services.cli.claudeCode.openNativeTerminal>>, ReturnType<typeof syncClaudeTerminalThread>>();
 const terminalViews = createClaudeTerminalViews({
+  backgroundInfo(key) {
+    const state = repository.threadQueries.byId(key as EARS.EntityId)?.context?.claudeCode;
+    const continuation = state?.sessionId ? parseClaudeNativeContinuation({ ...state.nativeContinuation, type: 'continued-in' }, state.sessionId) : undefined;
+    return getNativeBackgroundStatus(key, continuation);
+  },
+  subscribeBackground: subscribeNativeBackgroundStatus,
   async replyBackground(continuation, request, key) {
     const owner = services.cli.claudeCode.getNativeTerminal(key)
     const current = owner?.state.continuation

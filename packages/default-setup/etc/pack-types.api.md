@@ -596,6 +596,18 @@ interface ClaudeBackgroundStatus {
     totalCostUsd?: number;
 }
 
+interface ClaudeBackgroundStatusIdentity {
+    jobId: string;
+    sessionId: string;
+    pid: number;
+    start: string;
+    hostPid: number;
+    hostStart: string;
+    cwd: string;
+}
+
+type ClaudeBackgroundStatusObserver = Awaited<ReturnType<typeof createClaudeBackgroundStatusObserver>>;
+
 interface ClaudeBillingObservation {
     sessionId: string;
     observedAt: number;
@@ -1532,6 +1544,7 @@ interface ClaudeNativeTerminalOptions {
 }
 
 interface ClaudeNativeTerminalOwner {
+    readonly backgroundObserver?: ClaudeBackgroundStatusObserver;
     readonly backgroundInfo?: ClaudeBackgroundStatus;
     /** Reviewed native UI operations; reverse hosts and the full UI owner are integrated separately. */
     readonly uiTransport: ClaudeTerminalUiTransport;
@@ -7075,6 +7088,18 @@ type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
 
+interface SpawnStreamOptions {
+    cwd?: string;
+    /**
+     * Merge overrides into the inherited child environment. ANTHROPIC_API_KEY
+     * and NODE_ENV are always removed, including explicit overrides. Native
+     * file checkpointing defaults on only when its environment switch is unset.
+     */
+    env?: NodeJS.ProcessEnv;
+    signal?: AbortSignal;
+    cliPath?: string;
+}
+
 interface StashEntry {
     index: number;
     ref: string;
@@ -8593,6 +8618,35 @@ declare function configuredRecentThreads(): {
 declare function create(options: CreateArtifactOptions): {
     artifactId: EARS.EntityId;
 };
+
+/** A read-only original runtime owns identity checks independently of the parent's UI socket. */
+declare function createClaudeBackgroundStatusAuthority(parentSessionId: string, options: SpawnStreamOptions): {
+    identify(sessionId: string, pid: number, cwd: string): Promise<ClaudeBackgroundStatusIdentity>;
+    close: () => Promise<void>;
+};
+
+/** The linked child owns this transport and plugin directory after the parent writer exits. */
+declare function createClaudeBackgroundStatusObserver(options: {
+    parentSessionId: string;
+    target(): {
+        sessionId: string;
+        cwd: string;
+    } | undefined;
+    authority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>;
+    changed(): void;
+}): Promise<{
+    directory: string;
+    socketPath: string;
+    token: string;
+    readonly parentSessionId: string;
+    readonly value: ClaudeBackgroundStatus | undefined;
+    readonly available: boolean;
+    resetParent(sessionId: string): Promise<void>;
+    adoptParent(nextTarget: typeof options.target, changed: () => void): void;
+    subscribe(listener: () => void): () => void;
+    releaseParent(): Promise<void>;
+    close: () => Promise<void>;
+}>;
 
 /** Process-local reverse UI requests. These never enter a conversation turn or permission queue. */
 declare function createClaudePromptHosts(write: (value: unknown) => boolean, paintFill?: (clientId: string, input: ClaudePromptHostFill) => Promise<ClaudePromptHostFill>): {

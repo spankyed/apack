@@ -1,7 +1,7 @@
 import type { createClaudeBackgroundStatusAuthority } from './background-status-authority.ts'
 import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createClaudeTerminalPlugin } from './terminal-plugin.ts'
-import { createClaudeBackgroundStatus, type ClaudeBackgroundStatusIdentity } from './terminal-background-status.ts'
+import { createClaudeBackgroundStatusObserver, type ClaudeBackgroundStatusObserver } from './background-status-observer.ts'
 import { createClaudeBillingState } from '../../../common/native-billing.ts'
 import { readClaudeUiActionKeys } from './ui-controls.ts'
 import { readClaudePromptPalette } from '../../../common/native-prompt-theme.ts'
@@ -28,8 +28,9 @@ const command = (value: unknown): string | undefined => { const entry = object(v
 /** Native plugin and native-invoked command helpers share one private, session-scoped broker. */
 export async function createClaudeTerminalBridge(options: {
   sessionId: string
-  backgroundTarget?(): { sessionId: string; cwd: string } | undefined
-  backgroundAuthority?: ReturnType<typeof createClaudeBackgroundStatusAuthority>
+  backgroundTarget?(): { parentSessionId: string; sessionId: string; cwd: string } | undefined
+  backgroundObserver?: ClaudeBackgroundStatusObserver
+  backgroundAuthority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>
   restorePlan?: { sessionId: string; mode: import('./types.ts').PermissionMode }
   settings: ClaudeSettings
   bunOptions?: string
@@ -72,17 +73,8 @@ export async function createClaudeTerminalBridge(options: {
   let nativePolling = false
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
-  const background = createClaudeBackgroundStatus({
-    async identify(sessionId, pid) {
-      const target = options.backgroundTarget?.()
-      if (closed || !target || target.sessionId !== sessionId || sessionId === projection.sessionId) throw new Error('Background session is not linked to this parent')
-      if (!options.backgroundAuthority) throw new Error('Background status authority is unavailable')
-      const result = object(await options.backgroundAuthority.identify(sessionId, pid, target.cwd))
-      if (closed || options.backgroundTarget?.()?.sessionId !== sessionId || !result || result.sessionId !== sessionId || result.pid !== pid || typeof result.jobId !== 'string' || typeof result.start !== 'string' || !result.start || typeof result.hostStart !== 'string' || !result.hostStart || !Number.isSafeInteger(result.hostPid) || result.cwd !== target.cwd) throw new Error('Background status identity changed')
-      return result as unknown as ClaudeBackgroundStatusIdentity
-    },
-    changed: options.changed,
-  })
+  let backgroundObserver: ClaudeBackgroundStatusObserver | undefined
+  const linkedBackground = () => { const target = options.backgroundTarget?.(); return target?.parentSessionId === projection.sessionId ? target : undefined }
   let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; prepared?: boolean; entered?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
   const settle = (error?: Error, receipt?: ClaudeNativeSubmissionReceipt) => {
     const current = pending
@@ -99,8 +91,6 @@ export async function createClaudeTerminalBridge(options: {
       for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/native-status' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536)) return reply(413, {}); chunks.push(chunk) }
       const value = object(JSON.parse(Buffer.concat(chunks).toString()))
       if (!value || typeof value.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.sessionId)) return reply(400, {})
-      if (request.url === '/background-register') return reply(200, await background.register(value.sessionId, Number(value.pid)))
-      if (request.url === '/background-status') { await background.accept(value); return reply(200, {}) }
       if (request.url === '/observer-ready') {
         if (value.sessionId !== options.sessionId || !Number.isSafeInteger(value.pid) || (value.pid as number) < 2 || (observerPid !== undefined && observerPid !== value.pid) || !await options.ownsProcess?.(value.pid as number)) return reply(409, {})
         observerPid = value.pid as number; observerProblem = undefined; options.changed(); return reply(200, {})
@@ -158,7 +148,7 @@ export async function createClaudeTerminalBridge(options: {
       }
       if (request.url === '/owner-pending') return value.sessionId === projection.sessionId ? reply(200, { pending: !!pending, ...(pending?.entered ? { id: pending.id } : {}) }) : reply(409, {})
       if (request.url === '/poll') {
-        if (value.directOwner !== true && value.sessionId !== projection.sessionId) return reply(200, { background: options.backgroundTarget?.()?.sessionId === value.sessionId })
+        if (value.directOwner !== true && value.sessionId !== projection.sessionId) return reply(200, { background: linkedBackground()?.sessionId === value.sessionId })
         // Once the native owner takes over, a late plugin poll cannot restore older policy metadata.
         if (nativePolling && value.directOwner !== true) return reply(200, {})
         if (value.directOwner === true && (typeof value.busy !== 'boolean' || value.turn !== null && (!object(value.turn) || typeof object(value.turn)?.id !== 'string' || typeof object(value.turn)?.cancelled !== 'boolean'))) return reply(400, {})
@@ -187,7 +177,7 @@ export async function createClaudeTerminalBridge(options: {
           const kind = event.kind as 'main' | 'subagent'
           if ((event.policyKey === helperPolicyKey || !policyChanged && event.policyKey === undefined) && event.sessionId === projection.sessionId && event.parentPid === observerPid && event.generation === previous[kind] && matches(event)) projection.accept(event)
         }
-        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')) }
+        if (changedSession) { billing.reset(value.sessionId, billing.value?.observedAt ?? -1); preview = undefined; focus = undefined; activity = undefined; nativeView = undefined; session.reset(value.sessionId); lastTurn = undefined; busy = false; settle(new Error('Native session changed before submission completed')); await backgroundObserver?.resetParent(value.sessionId) }
         if (value.metadata !== undefined) {
           const metadata = parseClaudeTerminalMetadata(value.metadata)!
           if (metadata.totalCostUsd !== undefined) {
@@ -342,6 +332,11 @@ export async function createClaudeTerminalBridge(options: {
   })
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve) })
+    if (options.backgroundObserver?.available) {
+      if (options.backgroundObserver.parentSessionId !== options.sessionId) throw new Error('Background observer belongs to another parent')
+      backgroundObserver = options.backgroundObserver
+      backgroundObserver.adoptParent(linkedBackground, options.changed)
+    } else backgroundObserver = await createClaudeBackgroundStatusObserver({ parentSessionId: options.sessionId, target: linkedBackground, authority: options.backgroundAuthority, changed: options.changed })
     const runtime = join(directory, 'status.mjs'), observerConfig = join(directory, 'observer.json')
     await writeFile(runtime, claudeTerminalStatusRuntime, { mode: 0o600 })
     await writeFile(join(directory, 'ui.mjs'), claudeTerminalUiRuntime, { mode: 0o600 })
@@ -357,15 +352,16 @@ export async function createClaudeTerminalBridge(options: {
     }
     await saveObserver()
     const bunOptions = (options.bunOptions ? options.bunOptions + ' ' : '') + '--preload=' + nativeQuote(runtime)
-    const pluginRoot = join(directory, 'plugin')
+    const pluginRoot = join(backgroundObserver.directory, 'plugin')
     await mkdir(join(pluginRoot, '.claude-plugin'), { recursive: true }); await mkdir(join(pluginRoot, 'hooks'))
     await writeFile(join(pluginRoot, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'apack-native-terminal', version: '0.0.1' }), { mode: 0o600 })
     await writeFile(join(pluginRoot, 'hooks/hooks.json'), JSON.stringify({ modules: ['./register.ts'] }), { mode: 0o600 })
-    const plugin = createClaudeTerminalPlugin(socketPath, token)
+    const plugin = createClaudeTerminalPlugin(socketPath, token, { parentSessionId: options.sessionId, socketPath: backgroundObserver.socketPath, token: backgroundObserver.token })
     await writeFile(join(pluginRoot, 'hooks/register.ts'), plugin, { mode: 0o600 })
     return {
       directory, pluginRoot, bunOptions, projection, session, transcripts, uiTransport: ui.transport,
-      get backgroundInfo() { return background.value },
+      get backgroundInfo() { return backgroundObserver?.value },
+      get backgroundObserver() { return backgroundObserver! },
       get problem() { return observerProblem },
       get nativePid() { return observerPid },
       get view() { return nativeView },
@@ -386,13 +382,13 @@ export async function createClaudeTerminalBridge(options: {
       },
       async close() {
         if (closed) return
-        closed = true; background.close(); await options.backgroundAuthority?.close(); busy = false; focus = undefined; activity = undefined; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
+        closed = true; await backgroundObserver?.releaseParent(); busy = false; focus = undefined; activity = undefined; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
         waiting.length = 0; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
         await rm(directory, { recursive: true, force: true })
       },
     }
   } catch (error) {
-    await options.backgroundAuthority?.close(); ui.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
+    if (backgroundObserver === options.backgroundObserver) await backgroundObserver?.releaseParent(); else await backgroundObserver?.close(); ui.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
     await rm(directory, { recursive: true, force: true }); throw error
   }
 }

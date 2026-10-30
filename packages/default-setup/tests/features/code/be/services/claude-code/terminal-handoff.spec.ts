@@ -1,6 +1,6 @@
 import { PassThrough } from 'node:stream'
 import { runThreadTeardown } from '#features/threads/be/thread-teardown.ts'
-import { storeHandle, clearHandle, openConversation, getNativeLaunch, openNativeTerminal, getNativeTerminal, getConversation, isConversationBusy, killAllHandles } from '#features/code/be/services/claude-code/handle-store.ts'
+import { getNativeBackgroundStatus, storeHandle, clearHandle, openConversation, getNativeLaunch, openNativeTerminal, getNativeTerminal, getConversation, isConversationBusy, killAllHandles } from '#features/code/be/services/claude-code/handle-store.ts'
 import type { QueryHandle } from '#features/code/be/services/claude-code/query.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 const mocks = { prepare: vi.fn() }
@@ -25,7 +25,7 @@ it('prepares before close, starts after print exit, and refuses a second owner',
   const prepared = { start: vi.fn(async () => { await first.owner.done; expect(first.handle.close).toHaveBeenCalledOnce(); return native }), dispose: vi.fn(async () => {}) }
   mocks.prepare.mockImplementation(async () => { expect(first.handle.close).not.toHaveBeenCalled(); return prepared })
   expect(await openNativeTerminal('thread', { cliPath: '/native' }, mocks.prepare)).toBe(native)
-  expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/native-cwd', sessionId: session, model: 'native-model', permissionMode: 'plan' }))
+  expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/native-cwd', sessionId: session, model: 'native-model', permissionMode: 'plan' }), undefined)
   expect(getConversation('thread')).toBeUndefined(); expect(getNativeTerminal('thread')).toBe(native)
   await expect(openConversation('thread', 'other', async () => first.handle, async () => {})).rejects.toThrow('already exists')
   expect(() => storeHandle('thread', first.handle)).toThrow('Native terminal owns')
@@ -92,7 +92,7 @@ it('reopens a stopped native session only after fresh settings preflight finishe
   expect(mocks.prepare).toHaveBeenCalledTimes(1); expect(isConversationBusy('thread')).toBe(true)
   await expect(openNativeTerminal('thread', {}, mocks.prepare, read)).rejects.toThrow('idle')
   finish(fresh); expect(await pending).toBe(second)
-  expect(mocks.prepare).toHaveBeenLastCalledWith(expect.objectContaining({ settings: fresh.settings, sessionId: session, permissionMode: 'plan' }))
+  expect(mocks.prepare).toHaveBeenLastCalledWith(expect.objectContaining({ settings: fresh.settings, sessionId: session, permissionMode: 'plan' }), undefined)
 })
 
 it('cancels a stopped-session preflight on teardown and cannot resurrect its launch', async () => {
@@ -125,7 +125,7 @@ it('reopens validated persisted launch intent without any in-memory prior owner'
   const resume = {sessionId:session,cwd:'/saved',allowedTools:['Read'],disallowedTools:['Bash'],appendSystemPrompt:'Saved review instructions',addDir:['/reference']}
   expect(await openNativeTerminal('cold', {resume}, prepare, read)).toBe(native)
   expect(read).toHaveBeenCalledWith(expect.objectContaining(resume))
-  expect(prepare).toHaveBeenCalledWith(expect.objectContaining({...resume,permissionMode:'plan'}))
+  expect(prepare).toHaveBeenCalledWith(expect.objectContaining({...resume,permissionMode:'plan'}), undefined)
   expect(await getNativeLaunch('cold')).not.toHaveProperty('settings')
   await expect(openNativeTerminal('invalid', {resume:{...resume,env:{TOKEN:'not persisted'}} as typeof resume}, prepare, read)).rejects.toThrow()
   expect(prepare).toHaveBeenCalledTimes(1)
@@ -157,7 +157,7 @@ it('aborts a pending read-only handoff without closing the print owner or admitt
 it('applies staged directory roots during a live print handoff while preserving original launch restrictions',async()=>{
  await printOwner();const native=terminal();mocks.prepare.mockResolvedValue({start:async()=>native,dispose:async()=>{}})
  await openNativeTerminal('thread',{resume:{sessionId:session,cwd:'/native-cwd',addDir:['/extra project']}},mocks.prepare)
- expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({sessionId:session,cwd:'/native-cwd',addDir:['/extra project'],model:'native-model',permissionMode:'plan'}))
+ expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({sessionId:session,cwd:'/native-cwd',addDir:['/extra project'],model:'native-model',permissionMode:'plan'}), undefined)
  expect((await getNativeLaunch('thread'))?.addDir).toEqual(['/extra project'])
 })
 it('refuses staged roots from a different session before closing the live print owner',async()=>{
@@ -170,5 +170,20 @@ it.each([{channels:['plugin:review@owned']},{channels:[]}])('uses saved channel 
  await printOwner();const native=terminal()
  mocks.prepare.mockResolvedValueOnce({start:async()=>native,dispose:async()=>{}})
  await openNativeTerminal('thread',{resume:{sessionId:session,cwd:'/native-cwd',channels}},mocks.prepare)
- expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({channels}))
+ expect(mocks.prepare).toHaveBeenCalledWith(expect.objectContaining({channels}), undefined)
+})
+
+it('retains the original child observer after parent exit and reuses it on same-session reopening',async()=>{
+ await printOwner()
+ const child='22222222-2222-4222-8222-222222222222',continuation={sessionId:session,continuedInSessionId:child,timestamp:'2026-10-30T00:00:00Z'}
+ const observer={parentSessionId:session,value:{sessionId:child,pid:119},subscribe:vi.fn(()=>()=>{}),close:vi.fn(async()=>{})} as unknown as NonNullable<ClaudeNativeTerminalOwner['backgroundObserver']>
+ const first={...terminal(),backgroundObserver:observer},second={...terminal(),backgroundObserver:observer}
+ mocks.prepare.mockResolvedValueOnce({start:async()=>first,dispose:async()=>{}})
+ await openNativeTerminal('thread',{},mocks.prepare);await first.close();await first.done
+ expect(getNativeTerminal('thread')).toBeUndefined();expect(getNativeBackgroundStatus('thread',continuation)?.pid).toBe(119)
+ expect(getNativeBackgroundStatus('thread',{...continuation,sessionId:child})).toBeUndefined()
+ mocks.prepare.mockResolvedValueOnce({start:async()=>second,dispose:async()=>{}})
+ await openNativeTerminal('thread',{},mocks.prepare,async()=>({settings:{effective:{},sources:[]},permissionMode:'plan'}))
+ expect(mocks.prepare.mock.calls.at(-1)?.[1]).toBe(observer);expect(observer.close).not.toHaveBeenCalled()
+ runThreadTeardown('thread');expect(observer.close).toHaveBeenCalledOnce();expect(getNativeBackgroundStatus('thread',continuation)).toBeUndefined()
 })

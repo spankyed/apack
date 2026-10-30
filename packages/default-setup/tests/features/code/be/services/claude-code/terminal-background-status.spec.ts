@@ -95,3 +95,12 @@ it('does not let a failed later identity lookup poison a valid pending registrat
  const valid=f.store.register(child,119);await expect(f.store.register(child,119)).rejects.toThrow('Original identity refused')
  finish(identity);const lease=await valid;await f.store.accept({...f.message,token:lease.token});expect(f.store.value?.pid).toBe(119);f.store.close()
 })
+
+it('invalidates pending registrations and publications when the independently owned process lease resets',async()=>{
+ const f=fixture();let finish!:(value:typeof identity)=>void
+ f.identify.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
+ const pending=f.store.register(child,119);f.store.reset();finish(identity)
+ await expect(pending).rejects.toThrow('expired');expect(f.store.identity).toBeUndefined()
+ const token=(await f.store.register(child,119)).token;await f.store.accept({...f.message,token});f.store.reset()
+ await expect(f.store.accept({...f.message,token,sequence:2})).rejects.toThrow('expired');expect(f.store.value).toBeUndefined();f.store.close()
+})
