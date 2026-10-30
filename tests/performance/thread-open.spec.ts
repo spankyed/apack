@@ -2,25 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
-import type { createPerformanceController, RecordingMode } from '@apackdev/host/diagnostics';
-import type { ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
+import type { RecordingMode } from '@apackdev/host/diagnostics';
 import { performanceIdentity, chromeTrace, summarize, trialSchema, type PerformanceTrial } from '@apackdev/testing/performance';
 import { threadFixture } from './fixture.ts';
-
-type Controller = ReturnType<typeof createPerformanceController>;
-interface PerformanceWindow {
-  __sendToSystem(system: string, event: Record<string, unknown>): void;
-  __performance: {
-    start(mode: RecordingMode): Promise<void>;
-    begin: Controller['begin']; flushView(): Promise<void>;
-    onView(listener: (delivery: { request: ViewRequest; update: ViewUpdate; generation: number; delivery: number }) => void): () => void;
-    stop(): Promise<{ renderer?: Awaited<ReturnType<Controller['stop']>>; backend?: Awaited<ReturnType<Controller['stop']>>; complete: boolean }>;
-  };
-  applicationState: {
-    send(event: Record<string, unknown>): void;
-    system: { get(ref: string): { getSnapshot(): { context: { currentThread?: { id: string }; chatMessageIds: string[]; chatLimit: number } } } };
-  };
-}
+import type { PerformanceWindow } from './window.ts';
 
 /** Own profile per worker/run; interactive trials deliberately share a warmed process and filesystem cache. */
 test('open a populated thread through the real transport and render its bounded page', async ({ app, appPage, electronApp }) => {
@@ -127,7 +112,7 @@ test('open a populated thread through the real transport and render its bounded 
         return { completed, durationMs, reports, failure, lastDelivery, work };
       }, { mode, thread, expectedBodies: fixture.data.threads[thread]!.messages.slice(50).map(message => message.text.trimEnd()) });
       trials.push(trialSchema.parse({ scenario: 'thread-open', index, warmup: index < warmups,
-        work: result.work, outcome: result.completed && result.reports.complete ? 'passed' : 'incomplete',
+        work: result.work, outcome: result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
         correct: result.completed, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
         processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: result.failure }));
       save();
