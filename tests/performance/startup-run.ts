@@ -18,7 +18,11 @@ const seed = path.join(work, 'seed');
 const seedReport = path.join(output, 'seed.json');
 const trials: PerformanceTrial[] = [];
 const invocations: Array<{ phase: string; index?: number; exitCode: number | null; signal: NodeJS.Signals | null }> = [];
-const save = () => writeFileSync(path.join(output, 'results.json'), JSON.stringify({ format: 1, trials, summary: summarize(trials), invocations }, null, 2));
+const save = () => {
+  const failed = invocations.some(invocation => invocation.exitCode !== 0) || trials.some(trial => trial.outcome !== 'passed');
+  const complete = invocations.length === 6 + measured && trials.length === 5 + measured;
+  writeFileSync(path.join(output, 'results.json'), JSON.stringify({ format: 1, status: failed ? 'failed' : complete ? 'passed' : 'incomplete', trials, summary: summarize(trials), invocations }, null, 2));
+};
 async function run(phase: string, profile: string, index?: number) {
   const environment: NodeJS.ProcessEnv = { ...process.env, E2E_DATA_DIR: profile, APACK_PERFORMANCE_SCENARIO: phase,
     APACK_PERFORMANCE_MODE: mode, APACK_PERFORMANCE_SEED_REPORT: seedReport,
@@ -36,7 +40,15 @@ async function run(phase: string, profile: string, index?: number) {
     try {
       const report = JSON.parse(readFileSync(path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'results.json'), 'utf8'));
       trials.push(...report.trials.map((value: unknown) => trialSchema.parse(value)));
-    } catch (error) { save(); throw error; }
+    } catch (error) {
+      const file = path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'driver-failure.json');
+      try {
+        const driver = JSON.parse(readFileSync(file, 'utf8'));
+        trials.push(trialSchema.parse({ scenario: 'populated-startup', index, warmup: index < 5, outcome: 'incomplete', correct: false,
+          completion: 'missing', work: {}, processes: { driver }, failure: 'startup-process-failed' }));
+      } catch { /* Invocation failure remains explicit even when the worker could not write a capture. */ }
+      save(); throw error;
+    }
   }
   save();
   if (result.exitCode !== 0) throw Error(`Startup ${phase} failed; preserved evidence: ${output}`);
