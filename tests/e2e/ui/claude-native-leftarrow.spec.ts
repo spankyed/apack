@@ -191,8 +191,9 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         const actor=(window as any).applicationState.system.get('default-setup/threads'),state=actor.getSnapshot().context
         const [mountId,view]=Object.entries(state.nativeTerminalViews).find(([,view]:any)=>view.threadId===state.currentThread.id) as any
         const scope={threadId:state.currentThread.id,mountId,ownerId:view.state.ownerId,pid:view.state.nativePid}
-        actor.send({type:'CLAUDE_TERMINAL_CLOSE',...scope});return scope
+        actor.send({type:'CLAUDE_TERMINAL_CLOSE',threadId:scope.threadId,mountId:scope.mountId,ownerId:scope.ownerId});return scope
       })
+      observations.parentOwnerLossRequest=removed
       await expect.poll(async()=>{try{const raw=await readFile('/proc/'+removed.pid+'/stat','utf8');return raw.slice(raw.lastIndexOf(')')+2).split(' ')[0]==='Z'}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}},{timeout:10000}).toBe(true)
       await app.navigate('host/settings');await app.navigate('default-setup/threads')
       await expect.poll(async()=>(await context()).native?.state?.ownerId).toBeUndefined()
