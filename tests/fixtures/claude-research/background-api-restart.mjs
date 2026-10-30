@@ -8,6 +8,8 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
  const destination=join(workspace,'background-api-restart-observation.json');
  const portFile=resolveAppEnvironment({env:'test',userDataDir:join(workspace,'app-data')}).apiPortFile;
  const endpoint=async()=>JSON.parse(await readFile(portFile,'utf8'));
+ const bus=()=>appPage.evaluate(()=>window.applicationState.getSnapshot().context.busSubscribed);
+ await expect.poll(bus).toBe(true);
  const before=await context(),workerBefore=await childProcessState(),infoBefore=await readInfo();
  const mainPid=electronApp.process().pid,apiBefore=await endpoint();
  expect(Number.isSafeInteger(apiBefore.pid)&&apiBefore.pid>1).toBe(true);expect(apiBefore.pid).not.toBe(mainPid);expect(apiBefore.pid).not.toBe(process.pid);
@@ -21,8 +23,10 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
  await save();await pictures('before');
  try{
   observation.crashedAt=Date.now();await save();process.kill(apiBefore.pid,'SIGKILL');
+  await expect.poll(bus,{timeout:10000}).toBe(false);observation.disconnectedAt=Date.now();await save();
   await expect.poll(async()=>endpoint().then(v=>v.pid).catch(error=>error.code==='ENOENT'?apiBefore.pid:Promise.reject(error)),{timeout:15000}).not.toBe(apiBefore.pid);
   observation.apiAfter=await endpoint();expect(observation.apiAfter.pid).not.toBe(apiBefore.pid);await save();
+  await expect.poll(bus,{timeout:15000}).toBe(true);observation.busResubscribedAt=Date.now();await save();
   await waitForAppReady(appPage,{timeout:15000});await app.waitForSurface('default-setup/threads');await app.navigate('default-setup/threads');
   await appPage.evaluate(id=>window.applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId:id,restore:true}),before.threadId);
   await expect.poll(async()=>(await context()).threadId,{timeout:10000}).toBe(before.threadId);
@@ -36,5 +40,5 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
   await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toContainText('AppNativeMain '+job.sessionId);
   await pictures('recovered');observation.phase='recovered';await save();
   return observation;
- }catch(error){observation.phase='failed-'+observation.phase;observation.problem=String(error);observation.lastContext=await context().catch(()=>null);observation.lastInfo=await readInfo().catch(()=>null);observation.workerAtFailure=await childProcessState().catch(()=>null);await save();throw error;}
+ }catch(error){observation.phase='failed-'+observation.phase;observation.problem=String(error);observation.lastContext=await context().catch(()=>null);observation.lastInfo=await readInfo().catch(()=>null);observation.workerAtFailure=await childProcessState().catch(()=>null);await save();for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]){await appPage.setViewportSize(size);await capture('apack-native-background-api-failed-'+name+'.png').catch(()=>{});}throw error;}
 }
