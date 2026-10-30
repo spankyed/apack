@@ -11,17 +11,19 @@ export function createClaudeBackgroundStatus(options: {
   now?(): number
 }) {
   const now = options.now ?? Date.now
-  let closed = false, generation = 0
+  let closed = false, nextRegistration = 0, acceptedRegistration = 0
   let expiry: ReturnType<typeof setTimeout> | undefined
   let lease: { token: string; identity: ClaudeBackgroundStatusIdentity; sequence: number; info?: ClaudeBackgroundStatus } | undefined
   return {
     async register(sessionId: string, pid: number) {
       if (closed || !Number.isSafeInteger(pid) || pid <= 1) throw new Error('Background status owner unavailable')
-      const epoch = generation, identity = await options.identify(sessionId, pid)
-      if (closed || generation !== epoch || identity.sessionId !== sessionId || identity.pid !== pid) throw new Error('Background status registration expired')
+      const registration = ++nextRegistration, identity = await options.identify(sessionId, pid)
+      if (closed || registration < acceptedRegistration || identity.sessionId !== sessionId || identity.pid !== pid) throw new Error('Background status registration expired')
+      // Completion order must not let an older lookup displace a newer accepted producer.
+      // Failed identity lookups do not retire another pending registration.
       // A reloaded hook starts its counter again, even when the native process has not changed.
       const info = lease && JSON.stringify(lease.identity) === JSON.stringify(identity) ? lease.info : undefined
-      lease = { token: randomUUID(), identity, sequence: 0, info }; generation++; options.changed()
+      lease = { token: randomUUID(), identity, sequence: 0, info }; acceptedRegistration = registration; options.changed()
       return { token: lease.token }
     },
     async accept(value: Record<string, unknown>) {
@@ -46,6 +48,6 @@ export function createClaudeBackgroundStatus(options: {
       options.changed()
     },
     get value(): ClaudeBackgroundStatus | undefined { const info = lease?.info; return !closed && info && now() - info.observedAt <= 5000 ? info : undefined },
-    close() { closed = true; generation++; lease = undefined; if (expiry) clearTimeout(expiry); expiry = undefined },
+    close() { closed = true; lease = undefined; if (expiry) clearTimeout(expiry); expiry = undefined },
   }
 }

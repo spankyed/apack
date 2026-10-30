@@ -69,3 +69,23 @@ it('publishes silence expiry so mounted app views do not wait for another heartb
   f.store.close();f.changed.mockClear();await vi.advanceTimersByTimeAsync(10000);expect(f.changed).not.toHaveBeenCalled()
  }finally{f.store.close();vi.useRealTimers()}
 })
+
+it.each(['older-first','newer-first'])('keeps the newest valid registration when identity lookups finish %s',async order=>{
+ const f=fixture();let finishOld!:(value:typeof identity)=>void,finishNew!:(value:typeof identity)=>void
+ f.identify.mockImplementationOnce(()=>new Promise(resolve=>{finishOld=resolve})).mockImplementationOnce(()=>new Promise(resolve=>{finishNew=resolve}))
+ const old=f.store.register(child,119),fresh=f.store.register(child,119)
+ let token:string
+ if(order==='older-first'){
+  finishOld(identity);const former=await old;finishNew(identity);token=(await fresh).token
+  expect(token).not.toBe(former.token);await expect(f.store.accept({...f.message,token:former.token})).rejects.toThrow('expired')
+ }else{
+  finishNew(identity);token=(await fresh).token;finishOld(identity);await expect(old).rejects.toThrow('expired')
+ }
+ await f.store.accept({...f.message,token});expect(f.store.value?.sessionId).toBe(child);f.store.close()
+})
+it('does not let a failed later identity lookup poison a valid pending registration',async()=>{
+ const f=fixture();let finish!:(value:typeof identity)=>void
+ f.identify.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve})).mockRejectedValueOnce(Error('Original identity refused'))
+ const valid=f.store.register(child,119);await expect(f.store.register(child,119)).rejects.toThrow('Original identity refused')
+ finish(identity);const lease=await valid;await f.store.accept({...f.message,token:lease.token});expect(f.store.value?.pid).toBe(119);f.store.close()
+})
