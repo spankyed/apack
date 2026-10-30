@@ -12,6 +12,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
+  const attachChild = process.env.CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP === '1'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -104,6 +105,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       return dialog
     }
     let dialog = await review()
+    if (!attachChild) {
     for (const [name, size] of [['normal', { width: 1100, height: 900 }], ['compact', { width: 680, height: 600 }]] as const) {
       await appPage.setViewportSize(size)
       await expect(dialog.getByRole('button', { name: 'Stay', exact: true })).toBeInViewport({ ratio: 1 })
@@ -122,6 +124,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await expect(composer).toHaveText('')
     await expect(composer).toBeEditable()
     dialog = await review()
+    }
     await dialog.getByRole('button', { name: 'Background anyway (1 subagent restarts)', exact: true }).click()
     await expect.poll(async () => (await context()).claude.nativeContinuation).toMatchObject({ sessionId })
     await expect(card).toContainText('This conversation moved to the background.')
@@ -174,6 +177,56 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         throw error
       }
     }
+    if (attachChild) {
+      const attachment = () => appPage.evaluate(() => {
+        const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
+        return (Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id && view.attachment) as any)?.attachment
+      })
+      const attached = appPage.getByRole('region', {name: 'Background Claude terminal', exact:true})
+      const parentBefore = await context()
+      const workerBefore = await childProcessState()
+      async function openChild() {
+        await widget.getByRole('button', {name:'Open session',exact:true}).click()
+        await expect(attached).toBeVisible()
+        await expect.poll(async () => (await attachment())?.state?.output.map((chunk:any)=>chunk.text).join(''), {timeout:20000}).toContain('ParentSubagentFixtureComplete')
+        const current = await attachment()
+        expect(current.status).toBe('ready')
+        expect(current.state.sessionId).toBe(job.sessionId)
+        expect(current.state.jobId).toBe(job.id)
+        expect(current.state.clientPid).not.toBe(job.pid)
+        expect((await childProcessState())?.start).toBe(workerBefore?.start)
+        await expect(card).toBeHidden()
+        return current
+      }
+      const first = await openChild()
+      const childText = 'Confirm this attached background session received my review.'
+      await attached.locator('textarea.xterm-helper-textarea').fill(childText)
+      await attached.locator('textarea.xterm-helper-textarea').press('Enter')
+      const projects = join(workspace!, '.claude', 'projects')
+      const childJournal = async () => (await Promise.all((await readdir(projects,{withFileTypes:true})).filter(entry=>entry.isDirectory()).map(entry=>readFile(join(projects,entry.name,job.sessionId+'.jsonl'),'utf8').catch(()=>'')))).join('\n')
+      await expect.poll(childJournal,{timeout:15000}).toContain(childText)
+      for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
+        await appPage.setViewportSize(size)
+        await expect(attached.getByRole('button',{name:'Close connection',exact:true})).toBeInViewport({ratio:1})
+        await expect(attached.locator('textarea.xterm-helper-textarea')).toBeAttached()
+        await capture('apack-native-child-attached-'+name+'.png')
+      }
+      await attached.getByRole('button',{name:'Close connection',exact:true}).click()
+      await expect(attached).toHaveCount(0)
+      await expect(composer).toHaveText(retainedDraft)
+      expect((await childProcessState())?.start).toBe(workerBefore?.start)
+      await expect.poll(async()=>readFile('/proc/'+first.state.clientPid+'/stat','utf8').then(value=>value.slice(value.lastIndexOf(')')+2).split(' ')[0]).catch(error=>error.code==='ENOENT'?'gone':Promise.reject(error))).toMatch(/^(gone|Z)$/)
+      const second = await openChild()
+      expect(second.state.id).not.toBe(first.state.id)
+      await attached.getByRole('button',{name:'Close connection',exact:true}).click()
+      await expect(attached).toHaveCount(0)
+      await expect(composer).toHaveText(retainedDraft)
+      const parentAfter = await context()
+      expect(parentAfter.messages).toEqual(parentBefore.messages)
+      expect(parentAfter.claude.totalCostUsd).toBe(parentBefore.claude.totalCostUsd)
+      expect(parentAfter.sessionId).toBe(sessionId)
+      observations.childAttachment = {first,second,workerBefore,workerAfter:await childProcessState(),childText,parentHistoryPreserved:true,parentDraftPreserved:true,closedClientOnly:true}
+    }
     const childBeforeStop = process.platform === 'linux' ? await childProcessState() : undefined
     if (process.platform === 'linux') { expect(childBeforeStop?.start).toBeTruthy(); expect(childBeforeStop?.state).not.toBe('Z') }
     await widget.getByRole('button', { name: 'Stop background session', exact: true }).click()
@@ -210,7 +263,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild?{nativeBackgroundAttachment:true}:{}), appHandoffAccepted: false }))
   } finally {
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
     if (job) {

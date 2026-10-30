@@ -1,3 +1,5 @@
+import type {ClaudeBackgroundAttachment} from '#features/code/be/services/claude-code/background-attachment.ts'
+import type {ClaudeBackgroundAttachmentSnapshot} from '#features/code/common/native-background.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeBackgroundSession, ClaudeBackgroundSessionRequest } from '#features/code/common/native-background.ts'
 import { isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
@@ -21,6 +23,10 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
   | ({ type: 'CLAUDE_TERMINAL_BACKGROUND'; sessionId: string; continuedInSessionId: string; revision: number } & ClaudeBackgroundSessionRequest)
+  | { type: 'CLAUDE_BACKGROUND_OPEN'; sessionId: string; continuedInSessionId: string; jobId: string; revision: number }
+  | { type: 'CLAUDE_BACKGROUND_INPUT'; attachmentId: string; text: string }
+  | { type: 'CLAUDE_BACKGROUND_RESIZE'; attachmentId: string; columns: number; rows: number }
+  | { type: 'CLAUDE_BACKGROUND_CLOSE'; requestId: string }
   | { type: 'CLAUDE_TERMINAL_CLOSE'; ownerId: string }
 )
 export interface ClaudeTerminalTaskState {
@@ -55,7 +61,17 @@ export interface ClaudeBackgroundSessionState {
   session?: ClaudeBackgroundSession
   problem?: string
 }
+export interface ClaudeBackgroundAttachmentView {
+  requestId: string
+  revision: number
+  sessionId: string
+  continuedInSessionId: string
+  status: 'opening' | 'ready' | 'error'
+  state?: ClaudeBackgroundAttachmentSnapshot
+  problem?: string
+}
 export type ClaudeTerminalViewSnapshot = {
+  attachment?: ClaudeBackgroundAttachmentView
   background?: ClaudeBackgroundSessionState
   mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
   noticeAnswer?: { id: string; revision: string; status: 'pending' | 'done' | 'error'; problem?: string }
@@ -79,6 +95,11 @@ interface View {
   mountId: string
   expires: number
   send(reply: ClaudeTerminalViewReply): void
+  attachment?: ClaudeBackgroundAttachmentView
+  attachmentRevision?: number
+  attachmentOwner?: ClaudeBackgroundAttachment
+  attachmentAbort?: AbortController
+  attachmentUnsubscribe?: () => void
   owner?: ClaudeNativeTerminalOwner
   unsubscribe?: () => void
   sequence: number
@@ -96,6 +117,7 @@ interface View {
 
 /** Window leases own subscriptions; detaching a view never stops the native session. */
 export function createClaudeTerminalViews(dependencies: {
+  openAttachment?(continuation: ClaudeNativeContinuation, jobId: string, threadId: string, signal: AbortSignal): Promise<ClaudeBackgroundAttachment>
   continuation?(threadId: string): ClaudeNativeContinuation | undefined
   background?(continuation: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest, threadId: string): Promise<ClaudeBackgroundSession | undefined>
   get(threadId: string): ClaudeNativeTerminalOwner | undefined
@@ -107,17 +129,30 @@ export function createClaudeTerminalViews(dependencies: {
 }) {
   const views = new Map<string, View>()
   let timer: ReturnType<typeof setInterval> | undefined
+  function retireAttachment(view: View) {
+    view.attachmentAbort?.abort(); view.attachmentAbort = undefined
+    view.attachmentUnsubscribe?.(); view.attachmentUnsubscribe = undefined
+    void view.attachmentOwner?.close().catch(() => {})
+    view.attachmentOwner = undefined; view.attachment = undefined
+  }
+  function attachmentCurrent(view: View) {
+    const continuation = dependencies.continuation?.(view.threadId)
+    return !!view.attachment && continuation?.sessionId === view.attachment.sessionId && continuation.continuedInSessionId === view.attachment.continuedInSessionId
+  }
   function drop(key: string) {
+    const view = views.get(key); if (view) retireAttachment(view)
     views.get(key)?.launch?.abort.abort()
     views.get(key)?.unsubscribe?.(); views.delete(key)
     if (!views.size && timer) { clearInterval(timer); timer = undefined }
   }
   function publish(key: string, view: View) {
     if (views.get(key) !== view) return
+    if (view.attachment && !attachmentCurrent(view)) retireAttachment(view)
+    if (view.attachment && view.attachmentOwner) view.attachment.state = view.attachmentOwner.snapshot
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', threadId: view.threadId, mountId: view.mountId,
-        state: view.owner?.state, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state: view.owner?.state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -154,6 +189,36 @@ export function createClaudeTerminalViews(dependencies: {
       }
       if (!view) return
       const target = view
+      if (event.type === 'CLAUDE_BACKGROUND_OPEN') {
+        const continuation = dependencies.continuation?.(event.threadId)
+        if (!continuation || !dependencies.openAttachment || event.sessionId !== continuation.sessionId || event.continuedInSessionId !== continuation.continuedInSessionId
+          || !Number.isSafeInteger(event.revision) || event.revision <= (target.attachmentRevision ?? 0) || target.attachment?.status === 'opening'
+          || target.background?.session?.id !== event.jobId || target.background.sessionId !== continuation.sessionId || target.background.continuedInSessionId !== continuation.continuedInSessionId) return
+        target.attachmentRevision = event.revision
+        if (target.attachmentOwner?.snapshot.jobId === event.jobId && target.attachmentOwner.snapshot.status === 'live') {publish(key,target);return}
+        retireAttachment(target)
+        const operation: ClaudeBackgroundAttachmentView = {...continuation, requestId:randomUUID(), revision:event.revision, status:'opening'}
+        const abort = new AbortController(); target.attachmentAbort = abort; target.attachment = operation; publish(key,target)
+        const current = () => views.get(key) === target && target.attachment === operation && attachmentCurrent(target) && !abort.signal.aborted
+        void Promise.resolve().then(() => current() ? dependencies.openAttachment!(continuation,event.jobId,event.threadId,abort.signal) : undefined).then(owner => {
+          if (!owner) return
+          if (!current()) {void owner.close().catch(() => {}); return}
+          target.attachmentOwner = owner; operation.status = 'ready'
+          target.attachmentUnsubscribe = owner.subscribe(() => {if (views.get(key) === target && target.attachment === operation) publish(key,target)})
+          publish(key,target)
+        },error => {if (current()) {operation.status='error';operation.problem=error instanceof Error?error.message:'Background attachment failed';publish(key,target)}})
+        return
+      }
+      if (event.type === 'CLAUDE_BACKGROUND_CLOSE') {
+        if (target.attachment?.requestId === event.requestId) {retireAttachment(target);publish(key,target)}
+        return
+      }
+      if (event.type === 'CLAUDE_BACKGROUND_INPUT' || event.type === 'CLAUDE_BACKGROUND_RESIZE') {
+        if (!attachmentCurrent(target) || target.attachmentOwner?.snapshot.id !== event.attachmentId) return
+        if (event.type === 'CLAUDE_BACKGROUND_INPUT') target.attachmentOwner.input(event.attachmentId,event.text)
+        else target.attachmentOwner.resize(event.attachmentId,event.columns,event.rows)
+        return
+      }
       if (event.type === 'CLAUDE_TERMINAL_OPEN') {
         if (target.opening) return
         const existing = dependencies.get(event.threadId)
