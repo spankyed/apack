@@ -828,6 +828,9 @@ Replace the database and the run history the backup holds, and the media folder 
 
 Delete all of the app's data, as Reset Database in the Database settings does: the database, the run history and the stored secrets. The app creates its default data (settings, written flows, the packs' content) on its next start and shows onboarding. Without `--force` it lists the entities per type and each stored secret it would delete.
 
+Close tools reading or writing the run history before a forced reset; it refuses them before deleting data.
+A reset interrupted between its separate stores can leave part of the reset complete. Run it again to finish.
+
 No backup holds the secrets — `export` and the Database settings' backups copy the databases and the media folder, never the secrets or the data key that encrypts them — so a deleted secret is entered again in Settings → Secrets. That's why the listing names each one by provider and label (never its value), and why `--keep-keys` leaves them where they are and deletes only the data.
 
 #### `apack db clear-settings [--force]` (names its data dir)

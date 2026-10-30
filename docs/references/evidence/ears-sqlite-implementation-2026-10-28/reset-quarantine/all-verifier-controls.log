@@ -1,0 +1,23 @@
+[{"name":"real passing reports","passed":true},{"name":"missing stale sibling refusal rejects","passed":true},{"name":"skipped uncertain-close witness rejects","passed":true},{"name":"missing read-only history refusal rejects","passed":true},{"name":"skipped dry run witness rejects","passed":true},{"name":"duplicate namespace witness rejects","passed":true},{"name":"additional passing namespace witness accepted","passed":true},{"name":"additional passing case cannot hide missing reset witness","passed":true},{"name":"Windows report paths use the same selectors","passed":true}]
+[
+  {
+    name: 'all actual passing witnesses',
+    passed: true,
+    result: { publication: 29, identity: 19 }
+  },
+  { name: 'missing foreign-history refusal', refused: true },
+  { name: 'skipped WRONG_FORMAT classification', refused: true },
+  { name: 'missing foreign WAL identity', refused: true },
+  { name: 'skipped primary refusal', refused: true },
+  { name: 'duplicate safety witness', refused: true },
+  {
+    name: 'additional passing case does not break inventory',
+    passed: true,
+    result: { publication: 30, identity: 19 }
+  },
+  {
+    name: 'Windows separator normalization',
+    passed: true,
+    result: { publication: 29, identity: 19 }
+  }
+]

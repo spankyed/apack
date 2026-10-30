@@ -186,83 +186,49 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The full goal remains active, with all phases and original acceptance budgets required. Deliverable:
+The full goal remains active; all phases and original acceptance budgets still apply. Deliverable:
 [draft PR #286](https://github.com/spankyed/apack/pull/286), `session/ears-sqlite`. Production stays elmdb.
-No master merge, release, production adoption, implicit daily-profile conversion or version-only PR is authorized.
+No master merge, release, adoption, implicit daily-profile conversion or version-only PR is authorized.
 
-Source work stays in `/private/tmp/ears-sqlite-query-integration`; the clean publisher is
-`monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at earlier green
-`6cf6c8349e`; do not infer it contains later published work. The integrated committed master snapshot is
-`dc67febcce3f3a28e8b2bc75b867f0374d4f4610`, retaining native pin
-`2441af4658d961f547c7094cd041c2ac246668c5`. Inspect actual Git and workflow state before continuing.
+Source work is `/private/tmp/ears-sqlite-query-integration`; detached publisher:
+`monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains earlier `6cf6c8349e`;
+it does not contain later published work. Current committed master baseline is `dc67febcce` and native pin
+`2441af4658d961f547c7094cd041c2ac246668c5`. Inspect actual Git/workflow state before continuing.
 
-The published [graph checkpoint `836d3d1d1f`](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-contract-62f1798c9b/README.md)
-implements master's graph contract in the structured port and SQLite. It includes managed directory-lifetime
-claims for writable/read-only handles, scoped quarantine/recovery, stale-publication refusal and retained
-claims when failed opens cannot close. [Strict CI 41095887025](https://github.com/spankyed/apack/actions/runs/41095887025)
-is terminal failure with only the app shard failing the signing unit's canonical-path assertion. Producers,
-both integration shards, both native shards and all three SQLite platforms pass. Its original failure is
-retained; this is not whole-run success. [Signed installed Preview 41095894244](https://github.com/spankyed/apack/actions/runs/41095894244)
-passes on `836d3d1d1f`: cold build, unsigned/signed native smoke, strict Developer ID bundle verification and
-all six actual executable cases including the two-store/model-ownership witness. That qualifies macOS ARM64
-at that parent, before the following changes.
+The candidate includes the structured graph/query port, native query execution, identity/atomic bootstrap and
+foreign-WAL preservation, canonical signing recognition, managed directory claims, file/sidecar admission,
+logical recovery/conversion and model/index lifecycle. [Native integration](../references/evidence/ears-sqlite-implementation-2026-10-28/native-2441-integration/README.md),
+[identity/signing](../references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/README.md) and
+[file ownership](../references/evidence/ears-sqlite-implementation-2026-10-28/file-ownership/README.md) retain their
+source-bound evidence. The EARS ownership checkpoint passes 762 SQLite-selected cases (zero skips).
 
-The [current identity/signing checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/README.md)
-refuses foreign/mismatched SQLite identities before initialization, preserves foreign committed WALs through
-read-only inspection, atomically publishes new identity/primary storage, and refuses missing primary tables.
-Probe cleanup preserves uncertain-connection authority. It fixes the signing fixture and the independently
-reproduced outer-app alias defect. The installed witness now requires persisted EARS identity in both stores;
-that additional witness passes in the signed installed app at `f731a4a549`. A new signed run remains required
-after the native pin change.
+The [reset/quarantine checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/README.md)
+excludes history handles before primary reset, verifies unrelated sibling identities even when history is
+absent, and syncs POSIX quarantine/replacement parent publication. Failed publication preserves the original
+refusal, sync/cleanup errors, forensic path and uncertain directory authority. Tests prove held-handle refusal,
+new-open exclusion, cleanup and actual killed-process reset recovery. Windows directory flushing remains
+unimplemented in the shared helper; passing ordering/fault tests there do not prove physical durability.
+Local host/CLI types, lint, syntax, 106 focused host cases, seven SQLite CLI cases, five package builds,
+shipped-pack build, nine reset integration cases and 1953 full host cases
+(1 existing platform skip) pass. Baseline failures, reverted guard, restored source and
+initial test-development failures are retained. Nine actual-report controls protect the new named platform
+witnesses. The original assertions/deadlines were not relaxed. Broad/compiler work stays in private
+Linux/CI, capped at two CPUs/six GiB/no swap with a quiet admission window; focused checks use half a CPU/768 MiB.
 
-Current local gates pass 720 native-enabled EARS cases with zero skips, 1,929 host cases with one existing
-Windows-only skip, 38 storage cases, matching five normal package builds, three API reports, EARS/host and
-exact scripts/repo/publish/E2E types, changed lint, three reverted safeguards/restored 19 identity cases and
-10 signing cases. The resource-paused failed host run and unchanged-source successful rerun are both retained.
-No assertion or deadline was relaxed. Compiler/full checks stay in private disposable environments capped at
-two CPU/six GiB/no swap with dropped capabilities; focused checks use half a CPU/768 MiB. A quiet admission
-window avoids starting a broad suite between the other agent's builds. Published checkpoint `f731a4a549`
-completed [full strict CI 41106571398](https://github.com/spankyed/apack/actions/runs/41106571398) and
-[signed installed Preview 41106578424](https://github.com/spankyed/apack/actions/runs/41106578424).
-Signed installed acceptance passes on `f731a4a549`, including both persisted-identity assertions. Strict
-runtime steps pass on all three SQLite hosts, but their final case verifier fails; Linux exposes its stale
-27-case count. Integration-1 independently times out at the original 200-second deadline in the refused
-replacement facade-cache test. Producers, app-and-rest, both native shards and integration-2 pass.
-The timeout remains unresolved; do not raise its deadline or call the whole run green.
-The published [named-inventory fix `9fbea37d0d`](../references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/README.md)
-requires all 29 publication and 19 identity cases and passes eight real-report positive/negative controls.
-No passing additional case can mask a missing/skipped invariant. Its retained platform run
-[41112243866](https://github.com/spankyed/apack/actions/runs/41112243866) has Linux success; macOS and Windows
-remain active at this snapshot. Recheck the same run rather than replacing its pending work.
+[Platform run 41112243866](https://github.com/spankyed/apack/actions/runs/41112243866) is terminal success on all
+three hosts at `9fbea37d0d`; that predates the native pin, file ownership and reset changes. [Signed installed
+41106578424](https://github.com/spankyed/apack/actions/runs/41106578424) passes at `f731a4a549`, including both
+persisted-identity witnesses. Final exact-source strict/platform and signed-installed runs remain required.
+The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
+The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
+remains unexplained. The older editor intermittent also remains unexplained despite ten unchanged repeats.
+Neither partial/source checks nor six installed smokes complete app/performance acceptance. The
+[prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
+preserves historical sources, CI boundaries and failures.
 
-The [native 2441 integration](../references/evidence/ears-sqlite-implementation-2026-10-28/native-2441-integration/README.md)
-adapts the structured edge terminal and SQLite executor to master's direction field, preserving both public
-edge directions. A private matching binding/CLI build, typecheck, 56 query/relation cases per backend,
-five normal package builds, API reports and 720 full SQLite-selected EARS cases pass with no skips.
-Those checks do not replace final host, integration, platform, installed and performance acceptance.
-The [file ownership admission](../references/evidence/ears-sqlite-implementation-2026-10-28/file-ownership/README.md)
-refuses main/sidecar aliases, nonregular files and orphan sidecars before any native inspection or open;
-backups require an empty four-file namespace. Its 42 new ownership and 19 existing identity cases pass
-without skips. The unchanged parent fails 37 of the original 38 ownership cases, including external
-shared-memory target corruption. This is cooperative namespace admission, not atomic native no-follow
-opening or protection against arbitrary concurrent namespace replacement.
-Broader isolated validation passes typechecking, changed-file lint, five normal package builds, 762 full
-SQLite-selected EARS cases (zero skips), and 1929 host cases (1 existing platform skip).
-The exact CLI case passes in 28.6 seconds on Linux under its unchanged 200-second deadline, with the other
-13 cases intentionally unselected. Its earlier macOS CI timeout remains unexplained and final integration
-acceptance is still required. The retained run is terminal success; reports and original/fixed evidence are
-in the linked file-ownership evidence. No assertion or deadline was relaxed.
-The next implementation checkpoint is store-excluded reset and quarantine-parent durability; final
-platform/installed qualification and all performance/relevance requirements remain active.
-No previous result certifies arbitrary filesystems or completes the remaining goal.
-
-Earlier [full strict 41056724109](https://github.com/spankyed/apack/actions/runs/41056724109) is green at
-`3333361c3c`, including every required shard and all three SQLite hosts. Retained native audit/repair receipts
-verify all 25 maintenance cases per host at that source. The original bundled-editor intermittent failure
-remains unexplained despite ten later unchanged repetitions passing. This handoff's history and prior source
-boundaries are preserved in the [prior snapshot](../references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/prior-handoff.md),
-[earlier checkpoints](../references/evidence/ears-sqlite-implementation-2026-10-28/checkpoint-history.md) and
-linked evidence. Source checks, partial CI and smoke cases are not whole-app or performance acceptance.
+Next checkpoint: publish this tested runtime, run final pinned strict/platform/installed acceptance, resolve
+resulting failures and continue the responsiveness, real-corpus and full app/operational requirements below.
+No evidence here certifies arbitrary filesystems or completes the goal.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:
 
@@ -274,10 +240,11 @@ Next deliverables and their closing checks, without narrowing phases 3–7:
   the native files on disk. Ordinary source/unsigned package builds do not prove installed/signing behavior.
 - Close remaining filesystem/format ownership work: qualify ordinary unaliased data files and foreign
   valid SQLite refusal/positive persisted identity on final platforms, and synchronize/qualify
-  history-quarantine parent publication. Acquire store-scoped exclusion before `db reset` deletes history,
-  before clearing primary data, and test held handles/refusal/interruption. Test active worker shutdown and namespace operations through the
-  supported managed lifecycle. Raw constructors, hard-linked files and arbitrary mount aliases are not
-  excluded by a managed profile's directory claims. These remain phases 2/5/6, not completed requirements.
+  history-quarantine parent publication, including Windows directory flushing. Reset exclusion before
+  primary mutation and held-handle/interruption cases are implemented; final platform qualification remains.
+  Test active worker shutdown and namespace operations through the supported managed lifecycle. Directory
+  claims cannot exclude noncooperating raw SQLite writers or arbitrary mount aliases; data-file admission is
+  a separate guard. These remain phases 2/5/6, not completed requirements.
 - Resolve the existing failed responsiveness gate. Latest recorded 99,900-vector admission takes 20.77 s
   with heartbeat p99 48.14 ms against 16 ms. Projection batching improves throughput but does not prove a
   heartbeat win. In a later 0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { settingsBackupValidator } from './backup-validation';
 import type { EARS } from '@apackdev/ears';
 import { databaseBackupStore, importDatabase, readBackup, type BackupLog } from '@apackdev/host/backup';
-import { openRunHistory, type AppDatabase } from '@apackdev/host/database';
+import { holdRecoveryExclusion, openRunHistory, type AppDatabase } from '@apackdev/host/database';
 import { createSecretsStore } from '@apackdev/host/secrets';
 import { _secretProviderLabel } from '@apackdev/sdk/services';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
@@ -93,11 +93,14 @@ export async function dbReset(args: string[], io: DbIo): Promise<void> {
       io.out(`\n${DRY_RUN}`);
       return null;
     }
-    // Every entry but the database's format and schema
-    db.admin.clear();
-    // The write lock is held and no app runs on the data dir, so nothing has the run history open
-    if (hasHistory) fs.rmSync(db.paths.runHistory, { recursive: true, force: true });
-    if (!keepKeys) secrets.clearAll();
+    // The tool's write lock does not exclude read-only history tools. Refuse them before changing
+    // primary data, and prevent new managed opens until deletion finishes, even if history is absent.
+    const exclusion = holdRecoveryExclusion(db.paths.runHistory, 'store');
+    try {
+      db.admin.clear();
+      if (fs.existsSync(db.paths.runHistory)) fs.rmSync(db.paths.runHistory, { recursive: true, force: true });
+      if (!keepKeys) secrets.clearAll();
+    } finally { exclusion.release(); }
     return '\nReset. apack creates its default data on its next start.';
   });
   if (done) io.out(done);

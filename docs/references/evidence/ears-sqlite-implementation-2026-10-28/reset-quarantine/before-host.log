@@ -1,0 +1,62 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+ ❯ tests/database/recovery-exclusion.spec.ts (16 tests | 4 failed) 807ms
+   × store exclusion (elmdb/1) > permits a verified unrelated primary handle when history is absent (readOnly=false) 96ms
+     → Close apps and tools using this profile before recovery: writable database handle (pid 37)
+   × store exclusion (elmdb/1) > permits a verified unrelated primary handle when history is absent (readOnly=true) 24ms
+     → Close apps and tools using this profile before recovery: read-only database tool (pid 37)
+   ✓ store exclusion (elmdb/1) > refuses an existing history handle and releases failed exclusion (readOnly=false) 34ms
+   ✓ store exclusion (elmdb/1) > refuses an existing history handle and releases failed exclusion (readOnly=true) 30ms
+   ✓ store exclusion (elmdb/1) > refuses unknown claims even when history is absent 15ms
+   ✓ store exclusion (elmdb/1) > refuses stale identity claims even when history is absent 15ms
+   ✓ store exclusion (elmdb/1) > refuses target name claims even when history is absent 17ms
+   ✓ store exclusion (elmdb/1) > keeps profile exclusion broader than store exclusion 15ms
+   × store exclusion (sqlite/1) > permits a verified unrelated primary handle when history is absent (readOnly=false) 79ms
+     → Close apps and tools using this profile before recovery: writable database handle (pid 37)
+   × store exclusion (sqlite/1) > permits a verified unrelated primary handle when history is absent (readOnly=true) 59ms
+     → Close apps and tools using this profile before recovery: read-only database tool (pid 37)
+   ✓ store exclusion (sqlite/1) > refuses an existing history handle and releases failed exclusion (readOnly=false) 121ms
+   ✓ store exclusion (sqlite/1) > refuses an existing history handle and releases failed exclusion (readOnly=true) 105ms
+   ✓ store exclusion (sqlite/1) > refuses unknown claims even when history is absent 48ms
+   ✓ store exclusion (sqlite/1) > refuses stale identity claims even when history is absent 53ms
+   ✓ store exclusion (sqlite/1) > refuses target name claims even when history is absent 46ms
+   ✓ store exclusion (sqlite/1) > keeps profile exclusion broader than store exclusion 50ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/database/recovery-exclusion.spec.ts > store exclusion (elmdb/1) > permits a verified unrelated primary handle when history is absent (readOnly=false)
+ FAIL  tests/database/recovery-exclusion.spec.ts > store exclusion (sqlite/1) > permits a verified unrelated primary handle when history is absent (readOnly=false)
+Error: Close apps and tools using this profile before recovery: writable database handle (pid 37)
+ ❯ holdRecoveryExclusion src/database/recovery-lock.ts:59:28
+     57|   try {
+     58|     const held = activeReaders(databasePath, scope);
+     59|     if (held.length) throw new Error(`Close apps and tools using this …
+       |                            ^
+     60|     return lock;
+     61|   } catch (error) { lock.release(); throw error; }
+ ❯ tests/database/recovery-exclusion.spec.ts:24:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/database/recovery-exclusion.spec.ts > store exclusion (elmdb/1) > permits a verified unrelated primary handle when history is absent (readOnly=true)
+ FAIL  tests/database/recovery-exclusion.spec.ts > store exclusion (sqlite/1) > permits a verified unrelated primary handle when history is absent (readOnly=true)
+Error: Close apps and tools using this profile before recovery: read-only database tool (pid 37)
+ ❯ holdRecoveryExclusion src/database/recovery-lock.ts:59:28
+     57|   try {
+     58|     const held = activeReaders(databasePath, scope);
+     59|     if (held.length) throw new Error(`Close apps and tools using this …
+       |                            ^
+     60|     return lock;
+     61|   } catch (error) { lock.release(); throw error; }
+ ❯ tests/database/recovery-exclusion.spec.ts:24:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 12 passed (16)
+   Start at  19:39:49
+   Duration  2.63s (transform 883ms, setup 13ms, collect 1.41s, tests 807ms, environment 0ms, prepare 108ms)
+
+JSON report written to /results/before-host.json

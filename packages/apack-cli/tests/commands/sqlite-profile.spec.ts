@@ -57,3 +57,29 @@ it('refuses default candidate storage during argument parsing before commands ca
   vi.stubEnv('APACK_USER_DATA_DIR', undefined);
   expect(() => parseDbArgs(['--data-dir', appDataDirFor('test')], {}, 'usage')).toThrow('isolated profile');
 });
+
+
+it.each([false, true])('refuses reset before changing SQLite primary data while history is open (readOnly=%s)', async readOnly => {
+  const f = fixture(), held = openRunHistory(f.paths.runHistory, { readOnly, storageFormat: DATABASE_FORMAT });
+  try {
+    await expect(command(['reset', '--force', '--keep-keys', '--data-dir', f.dir])).rejects.toThrow('Close apps and tools');
+    expect(JSON.parse((await command(['query', '--data-dir', f.dir, '--output', 'json', 'return getRow("Prompt-cli").label'])).out)).toBe('before');
+    expect(fs.existsSync(f.paths.runHistory)).toBe(true);
+  } finally { held.database.close(); }
+  await command(['reset', '--force', '--keep-keys', '--data-dir', f.dir]);
+  expect(fs.existsSync(f.paths.runHistory)).toBe(false);
+});
+it('resets a SQLite profile whose history is absent while retaining primary handle exclusion', async () => {
+  const f = fixture(); fs.rmSync(f.paths.runHistory, { recursive: true });
+  await command(['reset', '--force', '--keep-keys', '--data-dir', f.dir]);
+  expect(JSON.parse((await command(['query', '--data-dir', f.dir, '--output', 'json', 'return query.all().count()'])).out)).toBe(0);
+  expect(fs.existsSync(f.paths.runHistory)).toBe(false); expect(findDatabaseWriter(f.dir)).toBeNull();
+});
+it('permits a SQLite reset dry run while history is held without deleting primary data', async () => {
+  const f = fixture(), held = openRunHistory(f.paths.runHistory, { storageFormat: DATABASE_FORMAT });
+  try {
+    expect((await command(['reset', '--data-dir', f.dir])).out).toContain('Dry run: nothing was changed');
+    expect(JSON.parse((await command(['query', '--data-dir', f.dir, '--output', 'json', 'return query.all().count()'])).out)).toBe(1);
+    expect(fs.existsSync(f.paths.runHistory)).toBe(true);
+  } finally { held.database.close(); }
+});

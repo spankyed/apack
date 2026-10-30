@@ -69,6 +69,39 @@ const requiredIdentityCases = [
   "SQLite database identity preserves a foreign committed WAL after its writer dies (readOnly=true)"
 ];
 
+const requiredNamespaceCases = [
+  "quarantine publication (elmdb/1) syncs the rename before opening a replacement and the parent after creating it",
+  "quarantine publication (elmdb/1) reports publication uncertainty and retains the quarantine when parent sync 0 fails",
+  "quarantine publication (elmdb/1) reports publication uncertainty and retains the quarantine when parent sync 1 fails",
+  "quarantine publication (sqlite/1) syncs the rename before opening a replacement and the parent after creating it",
+  "quarantine publication (sqlite/1) reports publication uncertainty and retains the quarantine when parent sync 0 fails",
+  "quarantine publication (sqlite/1) reports publication uncertainty and retains the quarantine when parent sync 1 fails",
+  "store exclusion (elmdb/1) permits a verified unrelated primary handle when history is absent (readOnly=false)",
+  "store exclusion (elmdb/1) permits a verified unrelated primary handle when history is absent (readOnly=true)",
+  "store exclusion (elmdb/1) refuses an existing history handle and releases failed exclusion (readOnly=false)",
+  "store exclusion (elmdb/1) refuses an existing history handle and releases failed exclusion (readOnly=true)",
+  "store exclusion (elmdb/1) refuses unknown claims even when history is absent",
+  "store exclusion (elmdb/1) refuses stale identity claims even when history is absent",
+  "store exclusion (elmdb/1) refuses target name claims even when history is absent",
+  "store exclusion (elmdb/1) keeps profile exclusion broader than store exclusion",
+  "store exclusion (sqlite/1) permits a verified unrelated primary handle when history is absent (readOnly=false)",
+  "store exclusion (sqlite/1) permits a verified unrelated primary handle when history is absent (readOnly=true)",
+  "store exclusion (sqlite/1) refuses an existing history handle and releases failed exclusion (readOnly=false)",
+  "store exclusion (sqlite/1) refuses an existing history handle and releases failed exclusion (readOnly=true)",
+  "store exclusion (sqlite/1) refuses unknown claims even when history is absent",
+  "store exclusion (sqlite/1) refuses stale identity claims even when history is absent",
+  "store exclusion (sqlite/1) refuses target name claims even when history is absent",
+  "store exclusion (sqlite/1) keeps profile exclusion broader than store exclusion",
+  "quarantine publication (elmdb/1) retains directory authority if publication cleanup cannot close the replacement",
+  "quarantine publication (sqlite/1) retains directory authority if publication cleanup cannot close the replacement"
+];
+const requiredResetCases = [
+  "refuses reset before changing SQLite primary data while history is open (readOnly=false)",
+  "refuses reset before changing SQLite primary data while history is open (readOnly=true)",
+  "resets a SQLite profile whose history is absent while retaining primary handle exclusion",
+  "permits a SQLite reset dry run while history is held without deleting primary data"
+];
+
 const evidence = resolve('.temp/sqlite-platform'), mode = process.argv[2];
 mkdirSync(evidence, { recursive: true });
 const save = (file, value) => writeFileSync(join(evidence, file), JSON.stringify(value, null, 2) + '\n');
@@ -89,6 +122,8 @@ if (mode === 'verify') {
   const publication = host.testResults.flatMap(test => /\/tests\/(backup\/recovery|database\/storage)\.spec\.ts$/.test(test.name.replaceAll('\\', '/')) ? test.assertionResults : [])
     .filter(test => /excludes writable|refuses a new writable|store-only publication|quarantines corrupt|history quarantine|never treats|failed SQLite constructor|managed database-leaf aliases|excludes physical directory identity|refuses stale|foreign valid SQLite history/.test(test.fullName));
   const identity = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/database-identity.spec.ts') ? test.assertionResults : []);
+  const namespace = host.testResults.flatMap(test => /\/tests\/database\/(recovery-exclusion|quarantine-publication)\.spec\.ts$/.test(test.name.replaceAll('\\', '/')) ? test.assertionResults : []);
+  const reset = cli.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/commands/sqlite-profile.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
@@ -115,6 +150,8 @@ if (mode === 'verify') {
     logicalHostCasesPassed: logical.filter(test => test.status === 'passed').length,
     logicalHostSkipped: logicalSkipped.map(test => ({ name: test.fullName, status: test.status })),
     databaseIdentityCasesPassed: identity.filter(test => test.status === 'passed').length,
+    namespaceCasesPassed: namespace.filter(test => test.status === 'passed').length,
+    sqliteProfileCasesPassed: reset.filter(test => test.status === 'passed').length,
     managedPublicationCasesPassed: publication.filter(test => test.status === 'passed').length,
     hostPassed: host.numPassedTests, recoveryCasesPassed: passedIn(host, /\/backup\/recovery\.spec\.ts$/) };
   save('verification.json', result);
@@ -192,6 +229,8 @@ if (mode === 'verify') {
     'Only Windows directory-sync qualification may be skipped in the logical archive cases');
   requirePassingCases(publication, requiredPublicationCases, 'Managed publication');
   requirePassingCases(identity, requiredIdentityCases, 'Database identity');
+  requirePassingCases(namespace, requiredNamespaceCases, 'Namespace publication');
+  requirePassingCases(reset, requiredResetCases, 'SQLite reset');
   assert(selected.length > 0 && selected.every(test => test.status === 'passed') && result.recoveryCasesPassed > 0,
     'SQLite-selected text cases and recovery must execute and pass; native fallback is insufficient');
 } else {

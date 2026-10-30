@@ -10,3 +10,5 @@ export { storedSettings, readSettingsOverrides } from './settings.ts';
 export { configuredDatabaseFormat, databaseStorage, startDatabaseBackground, type DatabaseStorage } from './storage.ts';
 
 export { closeDatabases } from './close.ts';
+
+export { holdRecoveryExclusion } from './recovery-lock.ts';

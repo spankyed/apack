@@ -110,12 +110,14 @@ jobs:
           tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/backup/logical.spec.ts
           tests/backup/logical-crash.spec.ts
           tests/backup/storage.spec.ts tests/database/storage.spec.ts
+          tests/database/recovery-exclusion.spec.ts tests/database/quarantine-publication.spec.ts
           tests/database/open-app-database.spec.ts tests/database/write-lock.spec.ts
           --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/host.json
           2>&1 | tee .temp/sqlite-platform/host.log
       - name: Offline SQLite maintenance and logical archive commands
         run: >-
           npm test -w @apackdev/cli -- tests/commands/db-rebuild.spec.ts tests/commands/db-logical.spec.ts
+          tests/commands/sqlite-profile.spec.ts
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/cli-maintenance.json
           2>&1 | tee .temp/sqlite-platform/cli-maintenance.log
       - name: Built CLI logical archive round trip

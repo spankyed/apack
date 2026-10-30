@@ -839,6 +839,26 @@ is implemented and covered by the format-identity evidence; final platform quali
 admission and quarantine-parent synchronization remain required before adoption.
 
 
+### Reset and quarantine publication
+
+A forced CLI reset takes store-scoped recovery exclusion for history before clearing primary data or
+secrets, even when history is absent. It refuses existing managed history readers and writers; new managed
+opens are blocked until deletion finishes. A sibling primary claim is excluded from that decision only
+when its distinct leaf and physical directory identity still agree. Unknown, same-store and stale claims
+remain refusals. Dry runs remain read-only and take no destructive exclusion. All error paths release the
+exclusion. Reset spans separate stores and secrets rather than one atomic transaction: an interrupted
+reset may have cleared primary data while retaining history, and can be explicitly retried.
+
+Unreadable history moves to a timestamped, unique quarantine name under store exclusion. On POSIX, the
+parent is synchronized before replacement opens, and again after the replacement directory is created.
+A failed synchronization reports `PUBLICATION_NOT_DURABLE`, preserves the original open refusal and sync
+error, and names the retained quarantine. If closing a failed replacement also fails, both the cleanup
+error and its managed directory claim survive; uncertainty never authorizes another quarantine.
+The existing directory-sync helper does not flush Windows directories. Ordering/fault tests on Windows
+therefore do not establish physical namespace durability; Windows durability and actual filesystem/power-loss
+qualification remain required before adoption.
+
+
 ### Current graph contract
 
 The private structured plan carries `both`, bounded hierarchy walks, shortest `pathTo` and terminal

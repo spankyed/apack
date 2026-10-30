@@ -1,0 +1,9 @@
+{
+  "originalSha256": "3364d442d7b84ba04135298ae589eea017f3cd7e8d0c5a14f00a1a6223cdddf1",
+  "exitCode": 1,
+  "failedCases": [
+    "refuses reset before changing SQLite primary data while history is open (readOnly=false)",
+    "refuses reset before changing SQLite primary data while history is open (readOnly=true)"
+  ],
+  "reason": "Without exclusion, reset incorrectly resolves while history handles remain open"
+}

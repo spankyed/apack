@@ -43,7 +43,12 @@ function activeReaders(databasePath: string, scope: 'profile' | 'store' = 'profi
     const file = path.join(dir, name), holder = findLockHolder(file);
     if (holder) {
       const claim = scope === 'store' ? claimDirectory(file) : undefined;
-      if (!target || !claim || claim.directory === target || claim.database === path.basename(path.resolve(databasePath))) active.push(holder);
+      // A missing target is safe to remove only when every other claim still names its own sibling.
+      // Stale or unresolved identities cannot authorize deleting a directory that might have moved.
+      const unrelated = claim && claim.database !== path.basename(path.resolve(databasePath))
+        && claim.directory !== target
+        && directoryIdentity(path.join(path.dirname(databasePath), claim.database)) === claim.directory;
+      if (!unrelated) active.push(holder);
     }
     else fs.rmSync(file, { force: true }); // Unique claim names are never reused, even after PID reuse.
   }

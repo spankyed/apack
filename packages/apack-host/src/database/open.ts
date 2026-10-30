@@ -1,5 +1,7 @@
 import { directoryIdentity, holdRecoveryExclusion, openProfileDatabase } from './recovery-lock.ts';
-import { assertNoImportRecovery } from '../backup/recovery.ts';
+import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { assertNoImportRecovery, syncRecoveryDirectory } from '../backup/recovery.ts';
 // Opening an app's database: the one composition of the elmdb database and the engine, which the API's boot and tools
 // (apack db) share, so both open a data dir the same way
 import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears } from '@apackdev/ears';
@@ -75,16 +77,28 @@ export function openRunHistory(dir: string, { readOnly, storageFormat = configur
     return open();
   } catch (error) {
     if (readOnly || !replaceUnreadable || !fs.existsSync(dir) || !databaseStorage(storageFormat).isUnreadableOpenError(error)) throw error;
-    const aside = `${dir}.unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    const aside = `${dir}.unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`;
+    const publicationFailure = (failure: unknown, cleanup: readonly unknown[] = []) => Object.assign(new AggregateError(
+      [error, failure, ...cleanup],
+      `Run-history publication could not be synchronized; retained unreadable history at ${aside}`, { cause: failure }),
+      { code: 'PUBLICATION_NOT_DURABLE', quarantinePath: aside, ...(cleanup.length > 0 && { databaseConnectionUnclosed: true }) });
     const exclusion = holdRecoveryExclusion(dir, 'store');
     try {
       if (!incumbent || directoryIdentity(dir) !== incumbent) throw Object.assign(
         new Error(`Run-history directory identity cannot be confirmed; retry or inspect ${dir} before replacing it`),
         { code: 'PUBLICATION_REFUSED' });
       fs.renameSync(dir, aside);
+      try { syncRecoveryDirectory(dirname(dir)); }
+      catch (failure) { throw publicationFailure(failure); }
     }
     finally { exclusion.release(); }
     const replacement = open();
+    try { syncRecoveryDirectory(dirname(dir)); }
+    catch (failure) {
+      try { replacement.database.close(); }
+      catch (cleanup) { throw publicationFailure(failure, [cleanup]); }
+      throw publicationFailure(failure);
+    }
     logger.warn(`The run history at ${dir} couldn't be opened (${errorMessage(error)}): it was moved to ${aside}, and a new one started`);
     return replacement;
   }
