@@ -1,3 +1,4 @@
+import { claimNativeVectorOwner } from './vector-owner.ts';
 // One owning scheduler advances persistent value/search generations in short transactions.
 // Primary values remain authoritative; incomplete value indexes fall back, search reports readiness explicitly.
 import { createHash } from 'node:crypto';
@@ -46,6 +47,7 @@ export class SqliteIndexBuilds {
   private pending = false;
   private vectorModels?:SqliteVectorModels;
   private stoppingModels?:Promise<void>;
+  private nativeMaintenanceRelease?:()=>void;
   private preferGC = false;
   private readonly retries = new Set<number>();
   private readonly waiters = new Set<{ completion: 'logical' | 'native'; resolve(): void; reject(error: unknown): void }>();
@@ -82,6 +84,34 @@ export class SqliteIndexBuilds {
     for(const waiter of this.waiters)if(waiter.completion==='native'){waiter.reject(error);this.waiters.delete(waiter);}
     if(!this.waiters.size){this.timer?.unref();this.retry?.unref();}
   }
+  nativeModelsPaused():void {
+    const error=Object.assign(new Error('Native model maintenance is in progress'),{code:'BACKGROUND_PAUSED'});
+    for(const waiter of this.waiters)if(waiter.completion==='native'){waiter.reject(error);this.waiters.delete(waiter);}
+    if(!this.waiters.size){this.timer?.unref();this.retry?.unref();}
+  }
+  assertNativeModelsAvailable():void {
+    if(this.nativeMaintenanceRelease||this.vectorModels?.isPaused)fail('BACKGROUND_PAUSED','Native model maintenance is in progress');
+  }
+  releaseNativeMaintenance():void {
+    const release=this.nativeMaintenanceRelease;this.nativeMaintenanceRelease=undefined;release?.();
+  }
+  async withNativeModelsPaused<T>(operation:()=>Promise<T>):Promise<T> {
+    this.assertRunning();
+    if(this.vectorModels)return this.vectorModels.withPaused(operation);
+    if(this.nativeMaintenanceRelease)return operation();
+    const release=claimNativeVectorOwner(this.db.path);this.nativeMaintenanceRelease=release;
+    let result:T|undefined,failed=false,problem:unknown;
+    try{result=await operation();}catch(error){failed=true;problem=error;}
+    if(this.db.isOpen&&this.db.sql.inTransaction) {
+      try{this.db.abortFailedOperation(failed?problem:Object.assign(new Error('End the foreground transaction before leaving maintenance'),{code:'UNIT_OPEN'}));}
+      catch(error){failed=true;problem=error;}
+    }
+    try{this.releaseNativeMaintenance();}
+    catch(cleanup){throw Object.assign(new AggregateError(failed?[problem,cleanup]:[cleanup],'Maintenance ownership cleanup failed',{cause:failed?problem:cleanup}),
+      {code:((failed?problem:cleanup) as {code?:unknown})?.code,backgroundRecoveryFailed:true});}
+    if(failed)throw problem;
+    return result as T;
+  }
   /** Bounded owner candidates only; final scores come from current canonical chunks in this snapshot. */
   nativeVectorOwners(generation:number,vector:Uint8Array,scope:SqliteEntityScope|null,exclude?:string):number[]|undefined {
     return this.vectorModels
@@ -103,6 +133,7 @@ export class SqliteIndexBuilds {
       error: row.error === null ? null : String(row.error) };
   }
   private nextGC(): Record<string, any> | undefined {
+    if(this.vectorModels?.isPaused)return;
     // Keep the latest complete vector generation available to an incomplete replacement. Older or partial
     // generations remain collectable; failed replacements do not spin forever on deferred retirement.
     return this.db.get(`SELECT g.* FROM index_gc g WHERE g.kind!='vector' OR g.reusable=0 OR
@@ -205,6 +236,7 @@ export class SqliteIndexBuilds {
       this.checkRevision();
       if (!this.canRun()) fail('UNIT_OPEN', 'Commit or abort the open unit before waiting for indexes');
       if(completion==='native'&&!this.vectorModels)fail('BACKGROUND_OWNER_REQUIRED','Start native model ownership before waiting for models');
+      if(completion==='native'&&this.vectorModels?.isPaused)fail('BACKGROUND_PAUSED','Native model maintenance is in progress');
       const unfinished = this.jobs().filter(job => job.state !== 'ready');
       this.checkRevision();
       const modelFailure=completion==='native'?this.vectorModels?.failure():undefined;if(modelFailure)throw modelFailure;

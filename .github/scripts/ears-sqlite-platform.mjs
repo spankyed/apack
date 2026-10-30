@@ -80,7 +80,7 @@ if (mode === 'verify') {
   assert.equal(result.nativePackageCasesPassed,5,'All ordinary package loading/integrity cases must execute');
   assert.equal(result.nativeGenerationCasesPassed,10,'All native generation lifecycle cases must execute');
   assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
-  assert.equal(result.nativeModelCasesPassed,26,'All durable native model admission cases must execute');
+  assert.equal(result.nativeModelCasesPassed,34,'All durable native model admission cases must execute');
   if(apiStartup){
     assert.equal(apiStartup.numFailedTests,0);assert.equal(apiStartup.numPendingTests,0);
     assert.equal(passedIn(apiStartup,/\/tests\/runtime\/sqlite-profile\.spec\.ts$/),5);

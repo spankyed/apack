@@ -2,6 +2,7 @@
 import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin } from '@apackdev/sdk/services';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { databaseBackupStore, exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
+import { closeDatabases } from '../database/close.ts';
 import { secretsStore } from '../secrets/index.ts';
 import { _getMediaPath } from '@apackdev/sdk/utils';
 import { getAppVersion } from '@apackdev/sdk/env';
@@ -36,29 +37,33 @@ export function createAppData({ database, engine, history, registry, settings, o
     }
   }
 
-  async function replaceData<T>(replace: () => Promise<T>): Promise<T> {
-    let settled = true;
-    try { return await settings.whileReplacingData(replace); }
-    catch (error) {
-      const code = (error as { code?: unknown })?.code;
-      if (code === 'COMMIT_UNKNOWN' || code === 'RECOVERY_REQUIRED') {
-        settled = false;
-        const errors: unknown[] = [error];
-        for (const store of [database, history.database]) {
-          try { store.close(); } catch (cleanup) { errors.push(cleanup); }
-        }
-        if (errors.length > 1) throw Object.assign(new AggregateError(errors, 'Data replacement requires recovery and closing stores also failed', { cause: error }),
-          { code, recoveryPath: (error as { recoveryPath?: unknown }).recoveryPath });
-      }
-      throw error;
-    } finally { if (settled) onReplaced(); }
+  function requiresRecovery(error:unknown):boolean {
+    const code=(error as {code?:unknown})?.code;
+    return code==='COMMIT_UNKNOWN'||code==='RECOVERY_REQUIRED'||(error as {backgroundRecoveryFailed?:boolean})?.backgroundRecoveryFailed===true;
+  }
+  async function failClosed(error:unknown):Promise<never> {
+    const errors:unknown[]=[error];
+    try{await closeDatabases([database,history.database]);}catch(cleanup){errors.push(cleanup);}
+    if(errors.length>1)throw Object.assign(new AggregateError(errors,'Data replacement requires recovery and closing stores also failed',{cause:error}),
+      {code:(error as {code?:unknown})?.code,recoveryPath:(error as {recoveryPath?:unknown})?.recoveryPath,
+        dataInstalled:(error as {dataInstalled?:unknown})?.dataInstalled,backgroundRecoveryFailed:(error as {backgroundRecoveryFailed?:unknown})?.backgroundRecoveryFailed});
+    throw error;
+  }
+  async function replaceData<T>(replace:()=>Promise<T>):Promise<T> {
+    let settled=true,completed=false;
+    try{return await settings.whileReplacingData(async()=>{const result=await replace();completed=true;return result;});}
+    catch(error) {
+      const failure=completed&&!requiresRecovery(error)?Object.assign(new Error('Data replacement completed but settings cleanup failed',{cause:error}),{code:'RECOVERY_REQUIRED'}):error;
+      if(requiresRecovery(failure)){settled=false;return failClosed(failure);}
+      throw failure;
+    } finally {if(settled)onReplaced();}
   }
 
   return {
     // The app as a fresh boot leaves it: the packs stop as when the app exits, the stores empty, then the packs
     // start as a boot starts them (onInit, migrations, content). Their systems keep running.
     async reset() {
-      await exclusive(() => replaceData(async () => {
+      await exclusive(() => replaceData(() => stores.lmdb.withExclusiveWrites(() => stores.runHistory!.withExclusiveWrites(async () => {
         registry.runShutdownHooks();
         // The engine reads the database, so emptying the database empties the engine, in one unit; its schema stays
         engine.admin.clear();
@@ -66,7 +71,7 @@ export function createAppData({ database, engine, history, registry, settings, o
         // Stored API keys go too, with their data keys, after the database is emptied, since the settings system hears of it
         secretsStore.clearAll();
         await startPacks(registry);
-      }));
+      }))));
     },
     exportBackup: (targetPath, name, databases) =>
       exclusive(() => exportDatabase(stores, targetPath, { name, databases, mediaPath: _getMediaPath(), appVersion: getAppVersion() })),
@@ -74,7 +79,7 @@ export function createAppData({ database, engine, history, registry, settings, o
       return exclusive(async () => {
         const entityTypes = registry.getRegisteredEntityTypes();
         const validate = createSettingsBackupValidator(registry.settingsCatalog());
-        return importDatabase(stores, backupPath, _getMediaPath(), {
+        try{return await importDatabase(stores, backupPath, _getMediaPath(), {
           ...options, entityTypes, validate,
           withReplacement: replaceData,
           accept: async () => {
@@ -84,7 +89,7 @@ export function createAppData({ database, engine, history, registry, settings, o
             // Run declared versioned data changes after restore, before notifying consumers.
             if (runAppMigrations(registry)) runPackMigrations(registry.packMigrationTargets('pack'));
           },
-        });
+        });}catch(error){if(requiresRecovery(error))return failClosed(error);throw error;}
       });
     },
     async readBackupSummary(backupPath) {

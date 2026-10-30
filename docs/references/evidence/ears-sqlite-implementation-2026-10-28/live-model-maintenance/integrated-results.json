@@ -1,0 +1,228 @@
+[
+  {
+    "label": "source-stage",
+    "args": [
+      "git",
+      "add",
+      "-A"
+    ],
+    "exitCode": 0,
+    "seconds": 0.3132786490023136
+  },
+  {
+    "label": "source-snapshot",
+    "args": [
+      "git",
+      "-c",
+      "user.name=Live maintenance qualification",
+      "-c",
+      "user.email=qualification@localhost",
+      "commit",
+      "--allow-empty",
+      "-qm",
+      "Pinned source with live native maintenance overlay"
+    ],
+    "exitCode": 0,
+    "seconds": 0.0454290900088381
+  },
+  {
+    "label": "packages",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 32.342317060014466
+  },
+  {
+    "label": "shipped-pack",
+    "args": [
+      "npm",
+      "run",
+      "build:default-setup"
+    ],
+    "exitCode": 0,
+    "seconds": 67.29272191098426
+  },
+  {
+    "label": "all-ears",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@apackdev/ears",
+      "--outputFile=/results/all-ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 57.29243094599224
+  },
+  {
+    "label": "all-host",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@apackdev/host",
+      "--outputFile=/results/all-host.json"
+    ],
+    "exitCode": 0,
+    "seconds": 125.7743044050003
+  },
+  {
+    "label": "all-api",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@app/api",
+      "--outputFile=/results/all-api.json"
+    ],
+    "exitCode": 1,
+    "seconds": 19.785284849000163
+  },
+  {
+    "label": "node-pty-fixture",
+    "args": [
+      "npm",
+      "rebuild",
+      "node-pty"
+    ],
+    "exitCode": 1,
+    "seconds": 3.467109380988404
+  },
+  {
+    "label": "node-pty-fixture",
+    "args": [
+      "npm",
+      "rebuild",
+      "node-pty"
+    ],
+    "exitCode": 0,
+    "seconds": 2.126753970020218
+  },
+  {
+    "label": "all-api",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@app/api",
+      "--outputFile=/results/all-api.json"
+    ],
+    "exitCode": 0,
+    "seconds": 21.250711404980393
+  },
+  {
+    "label": "ears-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.3733963879931252
+  },
+  {
+    "label": "host-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:host"
+    ],
+    "exitCode": 0,
+    "seconds": 5.976875058986479
+  },
+  {
+    "label": "api-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:api"
+    ],
+    "exitCode": 0,
+    "seconds": 11.11212739199982
+  },
+  {
+    "label": "api-update",
+    "args": [
+      "npm",
+      "run",
+      "api:update",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.8008179389871657
+  },
+  {
+    "label": "api-check",
+    "args": [
+      "npm",
+      "run",
+      "api:check",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.4952700089779682
+  },
+  {
+    "label": "boundaries",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.6129397680051625
+  },
+  {
+    "label": "changed-lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/sqlite/database.ts",
+      "packages/apack-ears/src/sqlite/index-builds.ts",
+      "packages/apack-ears/src/sqlite/index.ts",
+      "packages/apack-ears/src/sqlite/vector-index.ts",
+      "packages/apack-ears/src/sqlite/vector-models.ts",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "packages/apack-host/src/backup/index.ts",
+      "packages/apack-host/src/database/storage.ts",
+      "packages/apack-host/src/services/app-data.ts",
+      "packages/apack-host/tests/backup/import-transaction.spec.ts",
+      "packages/apack-host/tests/backup/storage.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.07799475401407108
+  }
+]

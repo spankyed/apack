@@ -41,11 +41,12 @@ export async function startVectorModels(database: EarsDatabase): Promise<void> {
   if (!(database instanceof SqliteDatabase)) throw Object.assign(new Error('Native models require a SQLite owner'), { code: 'UNSUPPORTED' });
   if (database.readOnly) throw Object.assign(new Error('Read-only connections cannot own native model work'), { code: 'READ_ONLY' });
   await database.withExclusiveWrites(async () => {
+    database.assertNativeMaintenance();
     const models = new SqliteVectorModels(database, database.nativeVectorExtension ?? resolveNativeVectorExtension());
     try {
       database.indexBuilds.assertRunning();
       database.sql.exec('BEGIN IMMEDIATE');
-      models.recover(); database.commitWrite();
+      database.assertNativeMaintenance();models.recover(); database.commitWrite();
     } catch (error) {
       const failures: unknown[] = [error];
       if (database.sql.inTransaction) try { database.sql.exec('ROLLBACK'); } catch (rollback) { failures.push(rollback); }
@@ -54,6 +55,15 @@ export async function startVectorModels(database: EarsDatabase): Promise<void> {
       throw error;
     }
   });
+}
+
+/** Drain asynchronous native work through maintenance while retaining the service claim.
+ * Logical indexing remains available; only a previously running service resumes afterward.
+ */
+export async function withNativeModelsPaused<T>(database:EarsDatabase,operation:()=>Promise<T>):Promise<T> {
+  if(!(database instanceof SqliteDatabase))throw Object.assign(new Error('Native model suspension requires a SQLite owner'),{code:'UNSUPPORTED'});
+  if(database.readOnly)throw Object.assign(new Error('Read-only connections cannot own native maintenance'),{code:'READ_ONLY'});
+  return database.withExclusiveWrites(()=>{database.assertNativeMaintenance();return database.indexBuilds.withNativeModelsPaused(operation);});
 }
 
 /** Queue background physical model refresh without changing logical generations or blocking ordinary writes.

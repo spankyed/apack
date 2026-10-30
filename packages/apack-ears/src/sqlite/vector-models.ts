@@ -22,10 +22,14 @@ export class SqliteVectorModels {
   private outcome?:SqliteModelOutcome;
   private orphanSweep=false;
   private stopped=false;
+  private pauseDepth=0;
+  private pausing?:Promise<void>;
+  get isPaused():boolean{return this.pauseDepth>0;}
   private stopping?:Promise<void>;
   lastError?:unknown;
   constructor(db:SqliteDatabase,extension:string) {
     if(db.sql.inTransaction)fail('UNIT_OPEN','Construct the native model owner outside a foreground transaction');
+    db.indexBuilds.assertNativeModelsAvailable();
     this.db=db;const releaseHandle=db.claimVectorTrainingOwner();
     let releaseFile:(()=>void)|undefined;
     try {
@@ -49,9 +53,12 @@ export class SqliteVectorModels {
     }
   }
   invalidateAdmission(dependencies:ReadonlyMap<string,ReadonlySet<number>>):void { this.admission.invalidate(dependencies); }
-  committed(changes:ReadonlySet<string>):void { this.admission.committed(changes); }
+  committed(changes:ReadonlySet<string>):void {
+    if(changes.has('all'))this.admission.invalidate(this.db.indexBuilds.nativeAdmissionDependencies);
+    else this.admission.committed(changes);
+  }
   hasWork():boolean {
-    if(this.stopped||!this.db.isOpen)return false;
+    if(this.stopped||this.isPaused||!this.db.isOpen)return false;
     return this.admission.hasWork()||this.index.retirementPending()||this.orphanSweep||!!this.outcome||!!this.running||!!this.db.get("SELECT 1 FROM vector_training WHERE state IN ('pending','training','trained','projecting') LIMIT 1");
   }
   failure():Error|undefined {
@@ -83,6 +90,7 @@ export class SqliteVectorModels {
     return this.db.indexBuilds.index(String(row.type),'vector',String(row.name));
   }
   enqueue(job:SqliteIndexJob):void {
+    if(this.isPaused)fail('BACKGROUND_PAUSED','Native model maintenance is in progress');
     this.writer();const current=this.job(job.generation);
     if(JSON.stringify(current.definition)!==JSON.stringify(job.definition))fail('SCHEMA_CHANGED','Native model definition changed');
     this.db.run("INSERT INTO vector_training(generation,definition,state) VALUES (?,?,'pending') ON CONFLICT(generation) DO NOTHING",
@@ -90,6 +98,7 @@ export class SqliteVectorModels {
   }
   /** Queue a replacement for an existing physical model; preserve its current pointer and logical data. */
   refresh(generation:number):void {
+    if(this.isPaused)fail('BACKGROUND_PAUSED','Native model maintenance is in progress');
     this.writer();this.job(generation);
     if(!this.index.ready(generation))fail('INDEX_BUILDING','A ready incumbent is required for physical refresh');
     if(this.db.get("SELECT 1 FROM vector_indexes WHERE generation=? AND state!='ready'",[generation]))
@@ -104,10 +113,12 @@ export class SqliteVectorModels {
     this.db.run("UPDATE vector_training SET state='pending',attempt=NULL,error=NULL WHERE state='training'");
   }
   retry(generation:number):void {
+    if(this.isPaused)fail('BACKGROUND_PAUSED','Native model maintenance is in progress');
     this.writer();this.db.run("UPDATE vector_training SET state='pending',attempt=NULL,error=NULL WHERE generation=? AND state='failed'",[generation]);
   }
   /** Claim durably before launching the read-only worker, always outside the scheduler's transaction. */
   start():boolean {
+    if(this.isPaused)return false;
     if(this.stopped||!this.db.isOpen)fail('CLOSED','Native model owner is closed');
     if(this.db.sql.inTransaction)fail('UNIT_OPEN','Release the foreground transaction before launching training');
     if(this.running||this.outcome)return false;
@@ -122,7 +133,7 @@ export class SqliteVectorModels {
     }catch(error){if(this.db.sql.inTransaction)this.db.sql.exec('ROLLBACK');throw error;}
     const receive=(outcome:SqliteModelOutcome)=>{
       this.running=undefined;
-      if(this.stopped||!this.db.isOpen)return;
+      if(this.stopped||this.isPaused||!this.db.isOpen)return;
       this.outcome=outcome;
       try{this.db.indexBuilds.wake();}catch(error){this.lastError=error;}
     };
@@ -132,6 +143,7 @@ export class SqliteVectorModels {
   async settled():Promise<void>{await this.running;}
   /** Call accept only after COMMIT. A refusal/rollback must retain the model for a later attempt. */
   step():SqliteModelStep {
+    if(this.isPaused)return {progressed:false,accept:()=>{}};
     this.writer();const received=this.outcome;
     if(received) {
       const row=this.db.get('SELECT state,attempt FROM vector_training WHERE generation=?',[received.generation]);
@@ -174,6 +186,39 @@ export class SqliteVectorModels {
     const ready=this.index.step(generation,128);
     if(ready)this.db.run("UPDATE vector_training SET state='ready' WHERE generation=?",[generation]);
     return {progressed:true,...(ready?{changedType:job.type}:{}),accept:()=>{}};
+  }
+  /** Drain actual worker exit without releasing the cross-process claim or stopping logical indexing. */
+  async withPaused<T>(operation:()=>Promise<T>):Promise<T> {
+    if(this.stopped||!this.db.isOpen)fail('CLOSED','Native model owner is closed');
+    if(this.pauseDepth++===0) {
+      this.db.indexBuilds.nativeModelsPaused();
+      this.pausing=(async()=>{await this.trainer.stop();await this.running;this.outcome=undefined;})();
+    }
+    let result:T|undefined,failed=false,problem:unknown;
+    try{await this.pausing;result=await operation();}catch(error){failed=true;problem=error;}
+    let resumeFailure:unknown,resumeFailed=false;
+    if(this.pauseDepth>1)this.pauseDepth--;
+    else {
+      try {
+        if(!this.stopped&&this.db.isOpen) {
+          if(this.db.sql.inTransaction)this.db.abortFailedOperation(Object.assign(new Error('End the foreground transaction before resuming native models'),{code:'UNIT_OPEN'}));
+          this.db.assertNativeMaintenance();
+          this.db.sql.exec('BEGIN IMMEDIATE');
+          try{this.db.assertNativeMaintenance();this.recover();this.db.commitWrite();}
+          catch(error){this.db.abortFailedOperation(error);}
+        }
+        this.pauseDepth=0;this.pausing=undefined;this.db.indexBuilds.wake();
+      } catch(error) {
+        resumeFailure=error;resumeFailed=true;
+        try{await this.stop();}catch(cleanup){resumeFailure=new AggregateError([error,cleanup],'Resuming native work and stopping its service failed',{cause:error});}
+        this.pauseDepth=0;this.pausing=undefined;
+      }
+    }
+    if(resumeFailed)throw Object.assign(new AggregateError(failed?[problem,resumeFailure]:[resumeFailure],
+      failed?'Maintenance and native background recovery failed':'Maintenance completed but native background recovery failed',
+      {cause:failed?problem:resumeFailure}),{code:((failed?problem:resumeFailure) as {code?:unknown})?.code,backgroundRecoveryFailed:true});
+    if(failed)throw problem;
+    return result as T;
   }
   stop():Promise<void> {
     if(this.stopping)return this.stopping;

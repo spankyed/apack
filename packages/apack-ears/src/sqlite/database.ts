@@ -1200,6 +1200,7 @@ export class SqliteDatabase implements EarsDatabase {
       this.indexBuilds.wake();
     }
   }
+  assertNativeMaintenance():void {this.writable();this.checkRevision();}
   assertWriteAuthority() { this.writeLease.assertWritable(); }
   invalidateLayouts() { this.layouts.clear(); }
   private indexSpecs(schema: Data): SqliteIndexSpec[] {
@@ -1313,9 +1314,17 @@ export class SqliteDatabase implements EarsDatabase {
       for (const type of new Set(jobs.map(job => job.type))) this.indexesChanged(type);
     } catch (error) { this.abortFailedOperation(error); }
   }
+  private invalidateNativeModels():void {
+    if(!this.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='vector_indexes'"))return;
+    if(!this.nativeExtension)fail('NATIVE_MISSING','Load the trusted extension before replacing native model data');
+    this.nativeReader ??= new SqliteVectorIndex(this,this.nativeExtension!);
+    this.nativeReader.invalidate();
+    if(this.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='vector_training'"))this.sql.exec('DELETE FROM vector_training');
+  }
   reset() {
     const unit = this.begin();
     try {
+      this.invalidateNativeModels();
       this.search.clear();
       this.values.clear();
       this.sql.exec(
@@ -1429,6 +1438,7 @@ export class SqliteDatabase implements EarsDatabase {
       incoming.sql.exec('BEGIN');
       const unit = this.begin();
       try {
+        this.invalidateNativeModels();
         this.search.clear(); this.values.clear();
         this.sql.exec("DELETE FROM field_index; DELETE FROM relations; DELETE FROM entities;");
         this.sql.exec("DELETE FROM meta WHERE key NOT IN ('schema','commit','schemaRevision')");
@@ -1477,7 +1487,8 @@ export class SqliteDatabase implements EarsDatabase {
   }
 
   withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T> {
-    this.assertOpen();
+    // A poisoned handle still needs a lease for drain/close. Data operations retain their fault guard.
+    if(!this.opened)fail('CLOSED','The database is closed');
     if (this.active) return Promise.reject(Object.assign(new Error('Commit or abort the open unit before maintenance'), { code: 'UNIT_OPEN' }));
     return this.writeLease.run(operation);
   }
@@ -1499,6 +1510,7 @@ export class SqliteDatabase implements EarsDatabase {
     this.writeLease.assertWritable();
     this.indexBuilds.stop();
     if (this.active) this.active.abort();
+    this.indexBuilds.releaseNativeMaintenance();
     this.closeController.abort();
     this.sql.close();
     this.opened = false;

@@ -10,7 +10,7 @@ import { SqliteVectorIndex } from '../../src/sqlite/vector-index.ts';
 import { SqliteVectorTraining } from '../../src/sqlite/vector-training.ts';
 import { exportLogicalSnapshot } from '../../src/sqlite/logical-export.ts';
 import { auditSqliteDatabase } from '../../src/sqlite/audit.ts';
-import { startVectorModels, waitForNativeModels, refreshNativeModels } from '../../src/sqlite/index.ts';
+import { startVectorModels, waitForNativeModels, refreshNativeModels, withNativeModelsPaused } from '../../src/sqlite/index.ts';
 
 const held:Array<{db:SqliteDatabase;models:SqliteVectorModels;path:string}>=[];
 afterEach(async()=>{
@@ -361,6 +361,134 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(()=>e.create('Row',{title:'write during refresh'})).not.toThrow();
     await waitForNativeModels(db);expect(models.index.ready(job.generation)!.id).not.toBe(incumbent);
     await models.stop();await expect(refreshNativeModels(db)).rejects.toMatchObject({code:'BACKGROUND_OWNER_REQUIRED'});
+  });
+
+  it('drains the real worker while retaining the service claim and logical readiness through nested maintenance',async()=>{
+    const {db,e,models,job,write}=fixture();write(()=>models.enqueue(job));expect(models.start()).toBe(true);
+    const waiting=db.nativeModelsReady(),cancelled=expect(waiting).rejects.toMatchObject({code:'BACKGROUND_PAUSED'});
+    let release!:()=>void,drained=false,entered=false;const gate=new Promise<void>(resolve=>{release=resolve;});
+    const stop=SqliteVectorTraining.prototype.stop;
+    vi.spyOn(SqliteVectorTraining.prototype,'stop').mockImplementationOnce(async function(this:SqliteVectorTraining){await stop.call(this);drained=true;await gate;});
+    const maintenance=withNativeModelsPaused(db,async()=>{
+      entered=true;expect(models.isPaused).toBe(true);expect(models.start()).toBe(false);
+      await expect(db.nativeModelsReady()).rejects.toMatchObject({code:'BACKGROUND_PAUSED'});
+      await withNativeModelsPaused(db,async()=>{expect(models.isPaused).toBe(true);});
+      expect(models.isPaused).toBe(true);
+      e.admin.declare({types:{Later:{required:[]}},relations:{},roles:[]});
+      e.transact(()=>{for(let i=0;i<150;i++)e.create('Later',{title:'maintenance marker'});});
+      e.admin.declare({types:{Later:{required:[],substrings:['title']}},relations:{},roles:[]});
+      await db.indexesReady();expect(e.query('Later').matching('marker').count()).toBe(150);
+      return 42;
+    });
+    await vi.waitFor(()=>expect(drained).toBe(true),{timeout:5000});expect(entered).toBe(false);
+    const peer=new SqliteDatabase({path:db.path,syncs:false,nativeVectorExtension:process.env.EARS_VEC1_EXTENSION!});
+    try {
+      expect(()=>new SqliteVectorModels(peer,process.env.EARS_VEC1_EXTENSION!)).toThrow(expect.objectContaining({code:'BACKGROUND_OWNER_EXISTS'}));
+      expect(()=>e.create('Row',{title:'outside maintenance'})).toThrow(expect.objectContaining({code:'WRITE_PAUSED'}));
+    }finally{peer.close();release();}
+    await expect(maintenance).resolves.toBe(42);await cancelled;
+    expect(models.isPaused).toBe(false);await db.nativeModelsReady();
+    expect(db.get('SELECT state FROM vector_training WHERE generation=?',[job.generation])!.state).toBe('ready');
+  });
+
+  it('rolls back a refused corpus epoch and invalidates the old model on successful same-schema replacement',async()=>{
+    const {db,e,models,job,write}=fixture();write(()=>models.enqueue(job));await db.nativeModelsReady();
+    const incumbent=models.index.ready(job.generation)!.id,sequence=db.sequence,source=fixture();
+    source.e.write('Row-000000').set('title','imported corpus');
+    const exec=db.sql.exec.bind(db.sql),failure=Object.assign(Error('replacement commit refused'),{code:'SQLITE_BUSY'});let refused=false;
+    const commit=vi.spyOn(db.sql,'exec').mockImplementation(sql=>{if(sql==='COMMIT'&&!refused){refused=true;throw failure;}return exec(sql);});
+    await expect(withNativeModelsPaused(db,async()=>{db.replaceWith(source.db.path);})).rejects.toBe(failure);commit.mockRestore();
+    expect(models.index.ready(job.generation)!.id).toBe(incumbent);expect(db.sequence).toBe(sequence);
+    expect(e.getRow('Row-000000')?.title).toBe('0');
+    await withNativeModelsPaused(db,async()=>{
+      db.replaceWith(source.db.path);await db.indexesReady();
+      expect(e.getRow('Row-000000')?.title).toBe('imported corpus');
+      expect(models.index.ready(job.generation)).toBeUndefined();
+      expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+      expect(db.get('SELECT state FROM vector_indexes WHERE id=?',[incumbent])!.state).toBe('retiring');
+    });
+    await db.nativeModelsReady();expect(models.index.ready(job.generation)).toBeUndefined();
+    expect(db.get('SELECT 1 FROM vector_indexes')).toBeUndefined();expect(db.sequence).toBe(sequence+1);
+  });
+
+  it('keeps cleared data usable and permits physical cleanup only after the paused worker has exited',async()=>{
+    const {db,e,models,job,write}=fixture();write(()=>models.enqueue(job));expect(models.start()).toBe(true);
+    await withNativeModelsPaused(db,async()=>{
+      e.admin.clear();e.create('Row',{id:'Row-reset',title:'new corpus'});await db.indexesReady();
+      expect(e.query('Row').ids()).toEqual(['Row-reset']);expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    });
+    await db.nativeModelsReady();expect(e.query('Row').ids()).toEqual(['Row-reset']);
+    await withNativeModelsPaused(db,async()=>{db.close();rmSync(db.path,{recursive:true,force:true});});
+    expect(db.isOpen).toBe(false);expect(models.isPaused).toBe(false);
+  });
+
+  it('retains both maintenance and resume failures and releases a failed service for explicit restart',async()=>{
+    const {db}=fixture(0),original=Object.assign(Error('maintenance refused'),{code:'MAINTENANCE_REFUSED'});
+    const recovery=Object.assign(Error('native recovery refused'),{code:'SQLITE_IOERR'});
+    vi.spyOn(SqliteVectorModels.prototype,'recover').mockImplementationOnce(()=>{throw recovery;});
+    let failure:unknown;try{await withNativeModelsPaused(db,async()=>{throw original;});}catch(error){failure=error;}
+    expect(failure).toMatchObject({code:'MAINTENANCE_REFUSED',backgroundRecoveryFailed:true,cause:original});
+    expect((failure as AggregateError).errors).toEqual([original,recovery]);
+    await startVectorModels(db);await waitForNativeModels(db);await db.drainBackground();
+  });
+
+  it('excludes another service during offline maintenance without starting a trainer',async()=>{
+    const {db,models}=fixture();await models.stop();
+    const peer=new SqliteDatabase({path:db.path,syncs:false,nativeVectorExtension:process.env.EARS_VEC1_EXTENSION!});
+    let owner:SqliteVectorModels|undefined;
+    try {
+      await withNativeModelsPaused(db,async()=>{
+        await expect(waitForNativeModels(db)).rejects.toMatchObject({code:'BACKGROUND_OWNER_REQUIRED'});
+        await expect(startVectorModels(db)).rejects.toMatchObject({code:'BACKGROUND_PAUSED'});
+        await withNativeModelsPaused(db,async()=>{});
+        expect(()=>new SqliteVectorModels(peer,process.env.EARS_VEC1_EXTENSION!)).toThrow(expect.objectContaining({code:'BACKGROUND_OWNER_EXISTS'}));
+      });
+      await expect(waitForNativeModels(db)).rejects.toMatchObject({code:'BACKGROUND_OWNER_REQUIRED'});
+      owner=new SqliteVectorModels(peer,process.env.EARS_VEC1_EXTENSION!);
+      let entered=false;await expect(withNativeModelsPaused(db,async()=>{entered=true;})).rejects.toMatchObject({code:'BACKGROUND_OWNER_EXISTS'});
+      expect(entered).toBe(false);await owner.stop();
+    }finally{await owner?.stop();peer.close();}
+    await withNativeModelsPaused(db,async()=>{db.close();rmSync(db.path,{recursive:true,force:true});});
+    expect(db.isOpen).toBe(false);
+  });
+
+  it('aborts a unit left open by maintenance before releasing write exclusion',async()=>{
+    const {db,e}=fixture(0);const units:Array<ReturnType<SqliteDatabase['begin']>>=[];
+    await expect(withNativeModelsPaused(db,async()=>{units.push(db.begin());})).rejects.toMatchObject({code:'UNIT_OPEN',backgroundRecoveryFailed:true});
+    expect(units[0]!.isOpen).toBe(false);expect(db.sql.inTransaction).toBe(false);
+    expect(()=>e.create('Row',{title:'after refused maintenance'})).not.toThrow();
+    await expect(withNativeModelsPaused(db,async()=>{units.push(db.begin());})).rejects.toMatchObject({code:'UNIT_OPEN'});
+    expect(units).toHaveLength(2);expect(units.every(unit=>!unit.isOpen)).toBe(true);
+    await startVectorModels(db);await waitForNativeModels(db);await db.drainBackground();
+  });
+
+  it('refuses stale handles before maintenance and before resuming a paused service',async()=>{
+    for(const point of ['entry','resume']) {
+      const {db,models}=fixture(0),peer=new SqliteDatabase({path:db.path,syncs:false,nativeVectorExtension:process.env.EARS_VEC1_EXTENSION!});
+      const change=()=>peer.setSchema(toElmdbSchema({types:{Row:{required:[],embed:{from:['title'],model:'replacement',dims:128}}},relations:{},roles:[]}));
+      let entered=false;
+      try {
+        if(point==='entry')change();
+        await expect(withNativeModelsPaused(db,async()=>{entered=true;if(point==='resume')change();})).rejects.toMatchObject({code:'SCHEMA_CHANGED'});
+        expect(entered).toBe(point==='resume');expect(models.isPaused).toBe(false);
+      }finally{peer.close();}
+    }
+  });
+
+  it('drains and closes a quarantined unknown-commit handle while preserving its committed data for inspection',async()=>{
+    const {db,e,models,job,write}=fixture();write(()=>models.enqueue(job));expect(models.start()).toBe(true);
+    const exec=db.sql.exec.bind(db.sql),cause=Object.assign(Error('commit acknowledgement lost'),{code:'SQLITE_IOERR'});let injected=false;
+    const fault=vi.spyOn(db.sql,'exec').mockImplementation(sql=>{const result=exec(sql);if(sql==='COMMIT'&&!injected){injected=true;throw cause;}return result;});
+    expect(()=>e.create('Row',{id:'Row-unknown-commit',title:'inspect after reopen'})).toThrow(expect.objectContaining({code:'COMMIT_UNKNOWN'}));fault.mockRestore();
+    await db.withExclusiveWrites(async()=>{
+      expect(()=>e.query('Row').count()).toThrow(expect.objectContaining({code:'COMMIT_UNKNOWN'}));
+      expect(()=>e.create('Row',{title:'must refuse'})).toThrow(expect.objectContaining({code:'COMMIT_UNKNOWN'}));
+      await db.drainBackground();db.close();
+    });
+    expect(db.isOpen).toBe(false);await models.stop();
+    const reopened=own(db.path);reopened.write(()=>reopened.models.recover());
+    expect(reopened.e.getRow('Row-unknown-commit')?.title).toBe('inspect after reopen');
+    await reopened.db.nativeModelsReady();
   });
 
   it('retains a completed model when its result transaction rolls back before acknowledgement',async()=>{

@@ -134,6 +134,14 @@ export class SqliteVectorIndex {
     }
     return Number(this.db.run(`DELETE FROM ${name} WHERE rowid IN (SELECT rowid FROM ${name} LIMIT ?)`,[limit]).changes)<limit;
   }
+  /** Retire the entire old corpus epoch atomically; row deletion remains bounded background work. */
+  invalidate():void {
+    this.writer();
+    for(const row of this.db.all("SELECT id FROM vector_indexes WHERE state!='retiring' ORDER BY id")) {
+      this.dropTriggers(Number(row.id));
+      this.db.run("UPDATE vector_indexes SET state='retiring' WHERE id=?",[row.id]);
+    }
+  }
   /** Collect one physical group for a logically retired generation. */
   collect(generation:number,limit:number):boolean {
     this.writer();

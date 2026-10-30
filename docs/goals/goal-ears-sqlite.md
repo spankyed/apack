@@ -420,14 +420,22 @@ managed startup on all three platform hosts. Signed installed startup and full p
 now preserves a ready incumbent while training and projecting a separate physical model. Publication and
 trigger retirement are atomic; cleanup is bounded, and interrupted projection resumes without removing the
 incumbent. The current-pin Linux overlay passes 657 EARS cases, 18 host cases, 7 API cases, types and static
-checks, plus five focused cases and three negative controls. Later platform/full strict and performance
-qualification remain required. Live replacement must still suspend native services and invalidate the old
-model epoch atomically; terminal shutdown drain cannot be reused for that operation.
+checks, plus five focused cases and three negative controls. The subsequent exact-source [full strict and all-platform run 41040846758](../references/evidence/ears-sqlite-implementation-2026-10-28/physical-model-refresh/platform-41040846758/README.md)
+passes at `95515e6463`; installed/performance qualification remains open.
+
+[Live native maintenance](../references/evidence/ears-sqlite-implementation-2026-10-28/live-model-maintenance/README.md)
+now drains workers while retaining kernel ownership across live reset/import, acceptance and restoration.
+Logical backfill remains usable; offline scopes claim without starting services. Canonical reset/replacement
+invalidates physical models atomically and rollback restores the incumbent. Native recovery finishes before
+success announcements; recovery/settings cleanup failures retain prepared copies and close both stores.
+Quarantined handles allow cleanup ownership without enabling data access. Private Linux passes all 665 EARS,
+1898 host (one existing Windows-only skip) and 141 API cases, all affected types/static/API checks, plus four
+negative controls. Final integrated/platform/installed and performance qualification remain required.
 
 Still required, without narrowing phases 3–7:
 
-- Qualify physical refresh and remaining model freshness/retirement cases on the final integrated candidate; suspend/drain native work before live replacement/
-  deletion, complete native audit/rebuild/restore/retirement ownership, normal native loading/distribution/signing.
+- Qualify remaining model freshness/retirement and live-maintenance cases on the final integrated candidate;
+  complete native audit/rebuild/restore/retirement and physical deletion/publication ownership, installed loading/signing.
 - Final candidate/trash filtering before K, multi-chunk scoring, ties, large-K/exact fallbacks, own-unit/savepoint
   reads, model/generation/hash freshness, readiness/watch delivery and representative recall/update qualification.
 - Admission/cleanup and vector responsiveness; FULL writes, streaming/watch load, large fields, growth, peak

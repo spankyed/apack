@@ -711,3 +711,24 @@ refuses; a new-container retry reclaims the dead source owner while preserving t
 Linux five-case proof is retained, and platform CI now requires all five cases. This is process-kill qualification,
 not proof against power loss, resource exhaustion or arbitrary filesystem behavior; no automatic resume/cleanup
 of a killed operation's private scratch is introduced.
+
+### Live model maintenance
+
+`withNativeModelsPaused(database, operation)` acquires write exclusion and drains the actual worker,
+retaining the service's kernel claim across the callback and nested scopes. Without a service it takes an
+offline claim without starting training. Logical backfill and `indexesReady()` remain usable; explicit native
+waits/admission refuse with `BACKGROUND_PAUSED`. Only a previously running service resumes. Stale schema
+handles refuse at entry and again before recovery. Leaked foreground units are aborted before write
+exclusion is released. Closing in the callback releases ownership and prevents resumption.
+
+Reset and same-schema replacement retire every physical model and remove attempts in the canonical
+transaction; rollback restores the old epoch. Canonical embedding bytes remain authoritative. Model
+admission observes the new corpus after commit. This avoids using an incumbent trained for replaced data.
+
+Host import keeps native suspension around acceptance and restoration and settings replacement outside
+suspension. Native recovery completes before success/notifications. Recovery failure or settings cleanup
+failure after installation retains the prepared incumbent and reports `RECOVERY_REQUIRED` with
+`recoveryPath` and `dataInstalled` (preserving `COMMIT_UNKNOWN`). Both managed stores drain/close and
+replacement announcements are suppressed. Quarantined handles permit ownership leases for cleanup;
+all data reads/writes still refuse. Arbitrary directory publication, noncooperating writers and signed
+installed lifecycle remain separate acceptance work.

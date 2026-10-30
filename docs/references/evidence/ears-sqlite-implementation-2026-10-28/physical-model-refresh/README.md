@@ -31,8 +31,8 @@ ordinary matching package production resolved that guard (`package-prerequisite/
 Original failures are retained and do not count as successful checks. The three orchestration scripts
 preserve the command sequence; native acquisition used networking, resumed validation did not.
 
-This is current-pin Linux qualification, not all-platform/installed refresh qualification, a full strict
-result, or performance acceptance. FULL commits and cleanup DROP still need responsiveness/WAL/resource
+The subsequent [exact-source platform and full strict run](platform-41040846758/README.md)
+qualifies physical refresh on all three CI hosts. Installed refresh and performance acceptance remain open. FULL commits and cleanup DROP still need responsiveness/WAL/resource
 measurements. Live replacement suspension/epoch invalidation and complete native audit/rebuild/restore
 ownership remain required. Pre-release format-one derived catalogs change in place: recreate developer
 SQLite profiles instead of adding compatibility migration. Production remains elmdb.

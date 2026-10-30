@@ -91,6 +91,9 @@ export interface TemporaryDatabases {
 // @public
 export function waitForNativeModels(database: EarsDatabase): Promise<void>;
 
+// @public
+export function withNativeModelsPaused<T>(database: EarsDatabase, operation: () => Promise<T>): Promise<T>;
+
 // (No @packageDocumentation comment for this package)
 
 ```

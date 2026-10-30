@@ -1,5 +1,6 @@
 // Real host constructors and backup coordination over both stores. No backend module aliases.
 import * as fs from 'node:fs';
+import fsExtra from 'fs-extra';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,20 +12,23 @@ import { schemaContext, schemaWith } from '../database/fixtures.ts';
 import { testRootEvents } from '@apackdev/sdk/testing';
 import { createHostRuntime } from '../../src/services/index.ts';
 import { createNativePackTestRegistry } from '../../src/testing/pack-registry.ts';
+import type { SettingsAdmin } from '@apackdev/sdk/services';
+import { createAppData } from '../../src/services/app-data.ts';
 import type { EarsDatabase, EARS } from '@apackdev/ears';
 import { DATABASE_FORMAT as ELMDB } from '@apackdev/ears/lmdb';
-import { DATABASE_FORMAT as SQLITE } from '@apackdev/ears/sqlite';
+import { DATABASE_FORMAT as SQLITE, startVectorModels, waitForNativeModels } from '@apackdev/ears/sqlite';
 import { databaseBackupStore, exportDatabase, importDatabase, readBackup } from '../../src/backup/index.ts';
 import { openDatabaseStore, openRunHistory } from '../../src/database/open.ts';
-import { databaseStorage } from '../../src/database/storage.ts';
+import { databaseStorage, startDatabaseBackground } from '../../src/database/storage.ts';
+import { closeDatabases } from '../../src/database/close.ts';
 import { createRunHistory } from '../../src/services/run-history.ts';
 
 const roots: string[] = [], opened: EarsDatabase[] = [];
-afterEach(() => {
+afterEach(async () => {
   unbindHost();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  for (const db of opened.splice(0)) db.close();
+  await closeDatabases(opened.splice(0));
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 const log = { info() {}, warn() {} };
@@ -147,6 +151,7 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
   it('imports through the actual appData service and refreshes the accepted settings', async () => {
     const f = await fixture(format, { app: { personal: { name: 'Candidate' } } });
     vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_USER_DATA_DIR', path.join(f.dir, 'live'));
+    if(format===SQLITE)await Promise.all([startDatabaseBackground(f.live.database),startDatabaseBackground(f.live.history.database)]);
     const runtime = createHostRuntime({ database: f.live.database, engine: f.live.engine, runHistory: f.live.history,
       packs: createNativePackTestRegistry(), appVersion: '1.0.0', transport: { rootEvents: testRootEvents } });
     bindHost(runtime);
@@ -160,6 +165,7 @@ describe.each([ELMDB, SQLITE])('Host backup storage %s', format => {
   it('refuses invalid settings through appData before replacing either live store', async () => {
     const f = await fixture(format, { app: { projects: 'invalid' } });
     vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_USER_DATA_DIR', path.join(f.dir, 'live'));
+    if(format===SQLITE)await Promise.all([startDatabaseBackground(f.live.database),startDatabaseBackground(f.live.history.database)]);
     const runtime = createHostRuntime({ database: f.live.database, engine: f.live.engine, runHistory: f.live.history,
       packs: createNativePackTestRegistry(), appVersion: '1.0.0', transport: { rootEvents: testRootEvents } });
     bindHost(runtime);
@@ -191,4 +197,70 @@ it.each([ELMDB, SQLITE])('does not move a %s run history aside when the other ba
     .toThrow(expect.objectContaining({ code: 'STORAGE_MISMATCH' }));
   expect(fs.readdirSync(dir)).toEqual(['runs']);
   expect(fs.existsSync(path.join(history.database.path, databaseStorage(other).dataFile))).toBe(false);
+});
+
+
+function embedRows(store:ReturnType<typeof storesAt>,prefix:string,count:number):void {
+  store.engine.admin.declare({types:{NativeRow:{required:[],embed:{from:['title'],model:'host-fixture',dims:128,chunk:'paragraph'}}},relations:{},roles:[]});
+  store.engine.transact(()=>{for(let i=0;i<count;i++)store.engine.create('NativeRow',{id:id(`NativeRow-${prefix}-${i}`),title:`${prefix} ${i}`});});
+  let offset=0;
+  for(;;){
+    const pending=store.engine.pendingEmbeddings('NativeRow',{limit:1000});if(!pending.chunks.length)break;
+    store.engine.embed(pending.chunks.map((chunk,i)=>({...chunk,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((offset+i+1)*(j+1)*1.71))})));
+    offset+=pending.chunks.length;
+  }
+}
+
+it.each(['success','acceptance','media'] as const)('coordinates real native services through populated SQLite import and %s',async outcome=>{
+  const f=await fixture(SQLITE);embedRows(f.live,'incumbent',4097);embedRows(f.source,'candidate',1);
+  fs.rmSync(path.join(f.backup,'lmdb'),{recursive:true,force:true});f.source.database.backup(path.join(f.backup,'lmdb'));
+  await Promise.all([startDatabaseBackground(f.live.database),startDatabaseBackground(f.live.history.database)]);
+  await waitForNativeModels(f.live.database);
+  const failure=Object.assign(Error(`injected ${outcome} refusal`),{code:'EIO'});
+  if(outcome==='media') {
+    const copy=fsExtra.copy as (source:string,target:string)=>Promise<void>;let refused=false;
+    vi.spyOn(fsExtra as {copy:typeof copy},'copy').mockImplementation(async(source,target)=>{
+      if(target===f.liveMedia&&!refused){refused=true;throw failure;}
+      return copy(source,target);
+    });
+  }
+  const checkOwnership=async()=>{
+    const peer=databaseStorage(SQLITE).open({path:f.live.database.path});
+    try{await expect(startVectorModels(peer)).rejects.toMatchObject({code:'BACKGROUND_OWNER_EXISTS'});}
+    finally{peer.close();}
+  };
+  const accept=vi.fn(async()=>{
+    await Promise.all([f.live.database.indexesReady(),f.live.history.database.indexesReady()]);
+    expect(f.live.engine.query('NativeRow').ids()).toEqual(['NativeRow-candidate-0']);
+    await checkOwnership();if(outcome==='acceptance')throw failure;
+  });
+  const importing=importDatabase(f.live.stores,f.backup,f.liveMedia,{log,accept,restored:async()=>{
+    await f.live.database.indexesReady();await checkOwnership();assertIncumbent(f);
+  }});
+  if(outcome==='success')await importing;else await expect(importing).rejects.toBe(failure);
+  await Promise.all([waitForNativeModels(f.live.database),waitForNativeModels(f.live.history.database)]);
+  if(outcome==='success') {
+    expect(f.live.engine.query('Note').ids()).toEqual(['Note-candidate']);
+    expect(f.live.engine.query('NativeRow').ids()).toEqual(['NativeRow-candidate-0']);
+    expect(fs.readFileSync(path.join(f.liveMedia,'asset'),'utf8')).toBe('candidate');
+  } else {assertIncumbent(f);expect(f.live.engine.query('NativeRow').count()).toBe(4097);}
+  expect(accept).toHaveBeenCalledTimes(outcome==='media'?0:1);
+  expect(fs.readdirSync(path.dirname(f.live.database.path)).some(name=>name.startsWith('.apack-import-'))).toBe(false);
+  expect(()=>f.live.engine.create('Note',{title:'after import maintenance'})).not.toThrow();
+});
+
+
+it('closes managed app stores without announcing success when settings cleanup fails after import',async()=>{
+  const f=await fixture(SQLITE);vi.stubEnv('APACK_ENV','test');vi.stubEnv('APACK_USER_DATA_DIR',path.join(f.dir,'live'));
+  await Promise.all([startDatabaseBackground(f.live.database),startDatabaseBackground(f.live.history.database)]);
+  const registry=createNativePackTestRegistry();
+  bindHost(createHostRuntime({database:f.live.database,engine:f.live.engine,runHistory:f.live.history,packs:registry,appVersion:'1.0.0',transport:{rootEvents:testRootEvents}}));
+  const cleanup=Error('settings cleanup refused'),announced=vi.fn();
+  const settings={async whileReplacingData<T>(operation:()=>Promise<T>):Promise<T>{await operation();throw cleanup;}} as SettingsAdmin;
+  const service=createAppData({database:f.live.database,engine:f.live.engine,history:{database:f.live.history.database,service:createRunHistory(f.live.history.engine)},
+    registry,settings,onReplaced:announced});
+  let failure:unknown;try{await service.importBackup(f.backup);}catch(error){failure=error;}
+  expect(failure).toMatchObject({code:'RECOVERY_REQUIRED',dataInstalled:true});
+  expect(f.live.database.isOpen).toBe(false);expect(f.live.history.database.isOpen).toBe(false);expect(announced).not.toHaveBeenCalled();
+  expect(fs.existsSync(path.join((failure as {recoveryPath:string}).recoveryPath,'lmdb/data.sqlite3'))).toBe(true);
 });

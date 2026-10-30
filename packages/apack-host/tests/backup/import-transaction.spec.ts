@@ -136,3 +136,48 @@ it.skipIf(process.platform === 'win32').each(['copy', 'parent'])('refuses before
   expect(() => assertNoImportRecovery(primary)).not.toThrow();
   expect(fs.readdirSync(root).some(name => name.startsWith('.apack-import-'))).toBe(false);
 });
+
+
+it('retains prepared incumbent recovery when background restart fails after accepted import',async()=>{
+  const {root,primary,backup,media,store}=fixture();
+  const restart=Object.assign(Error('background restart refused'),{code:'SQLITE_IOERR',backgroundRecoveryFailed:true});
+  const managed:BackupStore={...store,async withExclusiveWrites(operation){await operation();throw restart;}};
+  let failure:unknown;try{await importDatabase({lmdb:managed},backup,media,{log});}catch(error){failure=error;}
+  expect(failure).toMatchObject({code:'RECOVERY_REQUIRED',dataInstalled:true,cause:restart});
+  const recovery=(failure as {recoveryPath:string}).recoveryPath;
+  expect(fs.readFileSync(path.join(recovery,'lmdb/data.mdb'),'utf8')).toBe('incumbent');
+  expect(fs.readFileSync(path.join(primary,'data.mdb'),'utf8')).toBe('candidate');
+  expect(()=>assertNoImportRecovery(primary)).toThrow(expect.objectContaining({code:'RECOVERY_REQUIRED',recoveryPath:recovery}));
+  expect(path.dirname(path.dirname(recovery))).toBe(root);
+});
+
+it('retains the original refusal and restored incumbent when background restart also fails',async()=>{
+  const {primary,backup,media,store}=fixture();
+  const refused=Error('acceptance refused'),restart=Error('background restart refused');
+  const managed:BackupStore={...store,async withExclusiveWrites(operation){
+    try{return await operation();}catch(error){throw Object.assign(new AggregateError([error,restart],'Maintenance and restart failed',{cause:error}),{backgroundRecoveryFailed:true});}
+  }};
+  let failure:unknown;try{await importDatabase({lmdb:managed},backup,media,{log,accept:async()=>{throw refused;}});}catch(error){failure=error;}
+  expect(failure).toMatchObject({code:'RECOVERY_REQUIRED',dataInstalled:false});
+  const inner=(failure as AggregateError).cause as AggregateError;expect(inner.errors).toEqual([refused,restart]);
+  expect(fs.readFileSync(path.join(primary,'data.mdb'),'utf8')).toBe('incumbent');
+  expect(fs.readFileSync(path.join((failure as {recoveryPath:string}).recoveryPath,'lmdb/data.mdb'),'utf8')).toBe('incumbent');
+});
+
+
+it('finishes background recovery before the outer replacement lifecycle announces completion',async()=>{
+  const {backup,media,store}=fixture();let paused=false,announced=false;
+  const managed:BackupStore={...store,async withExclusiveWrites(operation){paused=true;try{return await operation();}finally{paused=false;}}};
+  await importDatabase({lmdb:managed},backup,media,{log,accept:async()=>{expect(paused).toBe(true);},withReplacement:async perform=>{
+    const result=await perform();expect(paused).toBe(false);announced=true;return result;
+  }});
+  expect(announced).toBe(true);
+});
+
+it('retains a prepared incumbent when outer acceptance cleanup refuses after installation',async()=>{
+  const {primary,backup,media,store}=fixture(),cleanup=Error('settings cleanup refused');
+  let failure:unknown;try{await importDatabase({lmdb:store},backup,media,{log,withReplacement:async perform=>{await perform();throw cleanup;}});}catch(error){failure=error;}
+  expect(failure).toMatchObject({code:'RECOVERY_REQUIRED',dataInstalled:true,cause:cleanup});
+  expect(fs.readFileSync(path.join((failure as {recoveryPath:string}).recoveryPath,'lmdb/data.mdb'),'utf8')).toBe('incumbent');
+  expect(fs.readFileSync(path.join(primary,'data.mdb'),'utf8')).toBe('candidate');
+});

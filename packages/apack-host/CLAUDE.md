@@ -11,6 +11,13 @@ as `STORAGE_MISMATCH`, outside run-history corruption salvage. Real host/API/CLI
 implementations. Live startup awaits registry index readiness; full renderer lifecycle, physical recovery and
 platform qualification remain in the SQLite goal.
 
+SQLite backup stores suspend native model work while holding write exclusion through replacement,
+acceptance or restoration, retaining their cross-process claims. Settings replacement encloses that whole
+scope, so completion is announced only after native work can resume. Background recovery or outer settings
+cleanup failure preserves the prepared incumbent with truthful `dataInstalled`/`recoveryPath`, suppresses
+replacement announcements and drains/closes both app stores. A clean refusal still restores and announces
+the incumbent. These cooperating claims do not authorize arbitrary external directory deletion or rename.
+
 ## Package basics
 
 - The package is private and has no build step. Every `exports` entry in `package.json` points at `src/*.ts`, so consumers compile or bundle it: the API's tsup build, and `scripts/bundle-package.ts` for the CLI and `@apackdev/testing`. `bundle-package.ts` inlines `@apackdev/host` and removes it from the published dependencies.

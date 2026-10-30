@@ -48,7 +48,10 @@ export function databaseBackupStore(database: EarsDatabase, engine?: EarsEngine)
     format: database.format,
     copyTo: async (targetDir) => database.backup(targetDir),
     replaceWith: (dir) => (engine ? engine.admin.replaceWith(dir) : database.replaceWith(dir)),
-    withExclusiveWrites: operation => database.withExclusiveWrites(operation),
+    withExclusiveWrites: operation => database.withExclusiveWrites(() => {
+      const storage=databaseStorage(database.format);
+      return storage.withBackgroundPaused?storage.withBackgroundPaused(database,operation):operation();
+    }),
   };
 }
 
@@ -166,6 +169,7 @@ async function importBackup(stores: BackupStores, backupPath: string, mediaPath:
   const candidate = path.join(temporary, 'candidate');
   const rollback = path.join(temporary, 'rollback');
   let preserveRollback = false;
+  let recoveryReady=false,installed=false;
   try {
     await fs.copy(backupPath, candidate);
     let contents: BackupContents;
@@ -190,12 +194,13 @@ async function importBackup(stores: BackupStores, backupPath: string, mediaPath:
       const store = stores[name];
       return store ? [{ name, store }] : [];
     });
-    const replace = () => withReplacement(async () => {
+    const replace = async () => {
       for (const { name, store } of restoring) await store.copyTo(path.join(rollback, name));
       const candidateMedia = path.join(candidate, 'media');
       const hasMedia = await fs.pathExists(candidateMedia);
       if (hasMedia && await fs.pathExists(mediaPath)) await fs.copy(mediaPath, path.join(rollback, 'media'));
       prepareImportRecovery(temporary, restoring.map(({ name, store }) => ({ name, path: store.path, format: store.format })), hasMedia ? mediaPath : undefined);
+      recoveryReady=true;
       try {
         // Each store takes the backup's contents in one unit, open all the while: a reader sees the old or the new
         for (const { name, store } of restoring) {
@@ -209,6 +214,7 @@ async function importBackup(stores: BackupStores, backupPath: string, mediaPath:
         }
         const result = { databases, missingDatabases, unknownEntityTypes };
         await accept?.(result);
+        installed=true;
         log.info('Import completed');
         return result;
       } catch (error) {
@@ -224,7 +230,7 @@ async function importBackup(stores: BackupStores, backupPath: string, mediaPath:
             const previousMedia = path.join(rollback, 'media');
             if (await fs.pathExists(previousMedia)) await fs.copy(previousMedia, mediaPath);
           }
-          await restored?.();
+          await restored?.();installed=false;
         } catch (restoreError) {
           preserveRollback = true;
           throw Object.assign(new AggregateError([error, restoreError], `Import and rollback failed; previous data is retained at ${rollback}`, { cause: error }),
@@ -232,9 +238,27 @@ async function importBackup(stores: BackupStores, backupPath: string, mediaPath:
         }
         throw error;
       }
-    });
+    };
     const paused = restoring.reduceRight<() => Promise<DatabaseImportResult>>((operation, { store }) => () => store.withExclusiveWrites(operation), replace);
-    return await paused();
+    try{return await withReplacement(async()=>{
+      try{return await paused();}
+      catch(error) {
+        if(recoveryReady&&(error as {backgroundRecoveryFailed?:boolean})?.backgroundRecoveryFailed) {
+          preserveRollback=true;
+          throw Object.assign(new AggregateError([error],`Background recovery failed after import maintenance; previous data is retained at ${rollback}`,{cause:error}),
+            {code:(error as {code?:unknown})?.code==='COMMIT_UNKNOWN'?'COMMIT_UNKNOWN':'RECOVERY_REQUIRED',recoveryPath:rollback,dataInstalled:installed});
+        }
+        throw error;
+      }
+    });}
+    catch(error) {
+      if(recoveryReady&&installed&&!preserveRollback) {
+        preserveRollback=true;
+        throw Object.assign(new AggregateError([error],`Acceptance cleanup failed after import; previous data is retained at ${rollback}`,{cause:error}),
+          {code:(error as {code?:unknown})?.code==='COMMIT_UNKNOWN'?'COMMIT_UNKNOWN':'RECOVERY_REQUIRED',recoveryPath:rollback,dataInstalled:installed});
+      }
+      throw error;
+    }
   } finally {
     if (!preserveRollback) await fs.remove(temporary);
   }
