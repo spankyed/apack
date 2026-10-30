@@ -1,5 +1,5 @@
 <template>
-  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded }]" aria-label="Claude native interface">
+  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment }]" aria-label="Claude native interface">
     <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
     <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" @operate="operateBackground" @open="openBackground" />
     <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
@@ -289,6 +289,10 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 .native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .native-session { --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
 .native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
+/* Native consent and question screens need more rows than the compact split allows. */
+@media (max-height: 700px), (max-width: 720px) {
+  .native-session--child { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
+}
 .native-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 20px; padding: 4px 4px 18px; }
 .native-identity { display: flex; align-items: center; min-width: 0; gap: 12px; }
 .native-mark { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border: 1px solid #b68e7333; border-radius: 11px; background: #b68e7310; color: #d3aa8e; font: 600 21px ui-monospace, monospace; }
@@ -329,7 +333,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 .native-problem { grid-column: 1 / -1; margin: 0; color: #e9a3a0; font-size: 11px; overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .native-session { padding: 12px; }
-  .native-session--expanded { left: 0; }
+  .native-session--expanded, .native-session--child { left: 0; }
   .native-header { flex-wrap: wrap; gap: 12px; padding-bottom: 12px; }
   .native-identity { flex: 1; }
   .native-controls { margin-left: auto; gap: 4px; }

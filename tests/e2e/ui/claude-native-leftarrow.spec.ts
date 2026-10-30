@@ -1,3 +1,4 @@
+import {stripVTControlCharacters} from 'node:util'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { readFile, writeFile, readdir } from 'node:fs/promises'
@@ -12,7 +13,8 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   expect(process.env.HOME).toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
-  const attachChild = process.env.CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP === '1'
+  const childInteraction = process.env.CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP === '1'
+  const attachChild = childInteraction || process.env.CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP === '1'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
@@ -178,6 +180,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       }
     }
     if (attachChild) {
+      const normalizeScreen = (value:string) => stripVTControlCharacters(value).replace(/\s+/g,'')
       const attachment = () => appPage.evaluate(() => {
         const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context
         return (Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id && view.attachment) as any)?.attachment
@@ -185,10 +188,10 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       const attached = appPage.getByRole('region', {name: 'Background Claude terminal', exact:true})
       const parentBefore = await context()
       const workerBefore = await childProcessState()
-      async function openChild() {
+      async function openChild(expected = childInteraction?'Thereleasereviewisready.':'ParentSubagentFixtureComplete') {
         await widget.getByRole('button', {name:'Open session',exact:true}).click()
         await expect(attached).toBeVisible()
-        await expect.poll(async () => (await attachment())?.state?.output.map((chunk:any)=>chunk.text).join(''), {timeout:20000}).toContain('ParentSubagentFixtureComplete')
+        await expect.poll(async () => normalizeScreen((await attachment())?.state?.output.map((chunk:any)=>chunk.text).join('')??''), {timeout:20000}).toContain(expected)
         const current = await attachment()
         expect(current.status).toBe('ready')
         expect(current.state.sessionId).toBe(job.sessionId)
@@ -199,12 +202,34 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         return current
       }
       const first = await openChild()
-      const childText = 'Confirm this attached background session received my review.'
+      const childText = childInteraction?'Read the release checklist before proposing changes.':'Confirm this attached background session received my review.'
       await attached.locator('textarea.xterm-helper-textarea').fill(childText)
       await attached.locator('textarea.xterm-helper-textarea').press('Enter')
       const projects = join(workspace!, '.claude', 'projects')
       const childJournal = async () => (await Promise.all((await readdir(projects,{withFileTypes:true})).filter(entry=>entry.isDirectory()).map(entry=>readFile(join(projects,entry.name,job.sessionId+'.jsonl'),'utf8').catch(()=>'')))).join('\n')
       await expect.poll(childJournal,{timeout:15000}).toContain(childText)
+      if (childInteraction) {
+        const terminalInput = attached.locator('textarea.xterm-helper-textarea')
+        const screen = async () => normalizeScreen((await attachment())?.state?.output.map((chunk:any)=>chunk.text).join('') ?? '')
+        await expect.poll(screen,{timeout:15000}).toMatch(/Doyouwant|Allow|Readfile/)
+        observations.childReadReview = {attachment:await attachment(),nativeJobs:await list()}
+        for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
+          await appPage.setViewportSize(size);await capture('apack-native-child-read-review-'+name+'.png')
+        }
+        await terminalInput.press('Enter')
+        await expect.poll(screen,{timeout:15000}).toContain('Thereleasechecklistisavailable.')
+        const questionText='Ask me which release audience to target.'
+        await terminalInput.fill(questionText);await terminalInput.press('Enter')
+        await expect.poll(screen,{timeout:15000}).toContain('Whoshouldthereleasesummaryaddress?')
+        observations.childQuestionReview = {attachment:await attachment(),nativeJobs:await list()}
+        for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
+          await appPage.setViewportSize(size);await expect.poll(()=>attached.locator('.child-terminal__viewport').evaluate(element=>element.clientHeight)).toBeGreaterThan(300);await capture('apack-native-child-question-'+name+'.png')
+        }
+        await terminalInput.press('Enter')
+        await expect.poll(screen,{timeout:15000}).toContain('Iwillwritethereleasesummaryfordevelopers.')
+        observations.childInteraction = {read:true,question:true,questionText,childJournal:await childJournal()}
+      }
+
       for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
         await appPage.setViewportSize(size)
         await expect(attached.getByRole('button',{name:'Close connection',exact:true})).toBeInViewport({ratio:1})
@@ -216,7 +241,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await expect(composer).toHaveText(retainedDraft)
       expect((await childProcessState())?.start).toBe(workerBefore?.start)
       await expect.poll(async()=>readFile('/proc/'+first.state.clientPid+'/stat','utf8').then(value=>value.slice(value.lastIndexOf(')')+2).split(' ')[0]).catch(error=>error.code==='ENOENT'?'gone':Promise.reject(error))).toMatch(/^(gone|Z)$/)
-      const second = await openChild()
+      const second = await openChild(childInteraction?'Iwillwritethereleasesummaryfordevelopers.':undefined)
       expect(second.state.id).not.toBe(first.state.id)
       await attached.getByRole('button',{name:'Close connection',exact:true}).click()
       await expect(attached).toHaveCount(0)
@@ -263,8 +288,9 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild?{nativeBackgroundAttachment:true}:{}), appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), appHandoffAccepted: false }))
   } finally {
+    if (childInteraction && !observations.childInteraction) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
     if (job) {
       observations.after = await list()
