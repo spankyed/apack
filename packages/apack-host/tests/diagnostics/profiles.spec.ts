@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createPerformanceProfiles, PROFILE_BYTES, PROFILE_WINDOW_MS } from '../../src/diagnostics/profiles.ts';
 import * as controllers from '../../src/diagnostics/controller.ts';
 import * as nodeProfiles from '../../src/diagnostics/node-profiles.ts';
-import type { PerformanceProfiles } from '../../src/diagnostics/profiles.ts';
+import type { _PerformanceProfiles } from '@apackdev/sdk/runtime';
 import { createNodePerformanceController } from '../../src/diagnostics/node.ts';
 
 const transport = () => ({ post: vi.fn(async (_method: string, _parameters?: object): Promise<unknown> => ({ profile: { nodes: [], head: {} } })), close: vi.fn() });
@@ -77,8 +77,8 @@ it('finishes profiler cleanup before propagating an original trace-export failur
     const resource = original(manager);
     return { ...resource, stop: async () => { await resource.stop(); throw failure; } };
   });
-  let release!: (report: PerformanceProfiles) => void;
-  const profile = { ready: Promise.resolve(), stop: vi.fn(() => new Promise<PerformanceProfiles>(resolve => { release = resolve; })) };
+  let release!: (report: _PerformanceProfiles) => void;
+  const profile = { ready: Promise.resolve(), stop: vi.fn(() => new Promise<_PerformanceProfiles>(resolve => { release = resolve; })) };
   const profiler = vi.spyOn(nodeProfiles, 'createNodeProfiles').mockReturnValue(profile);
   const ended = { sampling: { cpuIntervalMicros: 1000, allocationIntervalBytes: 512 * 1024, allocationStackDepth: 32, includeCollectedAllocations: true },
     bytes: 0, failures: 1, complete: false, windowLimitMs: PROFILE_WINDOW_MS, durationMs: 0, stoppedBy: 'owner' as const };

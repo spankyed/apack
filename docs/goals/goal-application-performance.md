@@ -102,7 +102,8 @@ No final broad-gate claim is made for the current tip.
 `session/application-performance-qualification` continues from frozen capability checkpoint
 `e68e178f8c`. Strict CI for that checkpoint is run `41127756000`: producers, both integrations and both native
 shards passed. App-and-rest failed one repository guard (6,016 tests passed): the guard rejects a
-legitimate `testMatch` helper argument. That integration defect is being corrected before final gates.
+legitimate `testMatch` helper argument. That integration defect is fixed in base commit `da0600e4b0`; twelve focused guard tests and its
+typecheck pass. A final full gate is still required.
 
 Detailed Node capture now uses an owned local Inspector session, with no debug listener. It records
 V8 CPU and sampled allocation formats, including discarded allocations, sampling parameters and its
@@ -114,8 +115,13 @@ Twenty-five focused host tests, eight API tests and ten portable-report tests pa
 profiles, timeout/expiry/oversize faults and original-error preservation. Host/API/renderer types pass.
 Built-app detailed-mode verification is still pending.
 
-Renderer collection must start before its application actor for startup coverage. Its next integration
-uses the existing main/preload bridge and window ownership, with the same profiler protocol collector.
+Renderer collection is now wired before application actor startup through the SDK's host-only
+main/preload bridge. Main owns each debugger with a per-window lease, rejects production/subframes,
+and releases on stop/navigation/destruction. A replaced debugger is never queried or detached by its
+former owner. It collects named CDP task/layout/heap metrics and the shared detailed profile formats;
+frontend long-task aggregates retain no DOM/attribution data. Loss survives in process report fields.
+Four focused main tests and nine renderer tests pass, including stale leases, foreign ownership and
+observation faults. Public SDK/testing reports are regenerated; built-app verification remains pending.
 The existing EARS `query.explain()` API provides actual native stages/indexes/visited counts; the
 maintained detailed workflow must make that capability explicit without silently rerunning business reads.
 

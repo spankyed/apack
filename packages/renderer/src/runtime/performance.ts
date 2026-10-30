@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import type { _HostBridge } from '@apackdev/sdk/fe';
+import type { _RendererPerformanceResources } from '@apackdev/sdk/runtime';
+import { observeRendererLongTasks } from './renderer-observations.ts';
 import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
 import { nextTick } from 'vue';
 import type { ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
@@ -11,6 +14,10 @@ let startupAction: ReturnType<Controller['begin']>;
 let starting = false;
 let stopping = false;
 let failedListeners = 0;
+let rendererLease: string | undefined;
+let rendererResourceFailed = false;
+let longTasks: ReturnType<typeof observeRendererLongTasks> | undefined;
+const rendererBridge = () => (window.electronAPI as _HostBridge | undefined)?.performance;
 export interface PerformanceViewDelivery { request: ViewRequest; update: ViewUpdate; generation: number; delivery: number }
 interface StartupViewReceipt { entityId?: string; commit: number; subscription?: string; delivery?: number; ok: boolean }
 const startupViews = new Map<string, StartupViewReceipt>();
@@ -42,6 +49,15 @@ export const windowPerformance = {
     try {
       await trpc.performance.start.mutate({ mode, ...(options?.startup && { startup: true }) });
       admitted = true;
+      rendererResourceFailed = false;
+      if (mode !== 'disabled') {
+        try {
+          const bridge = rendererBridge();
+          if (!bridge) throw Error('Renderer diagnostics unavailable');
+          rendererLease = (await bridge.start(mode)).id;
+        } catch { rendererResourceFailed = true; }
+        longTasks = observeRendererLongTasks();
+      }
       const { createPerformanceController, BrowserRecordingContext } = await import('@apackdev/host/diagnostics');
       const resource = createPerformanceController(() => new BrowserRecordingContext());
       resource.start(mode);
@@ -50,6 +66,8 @@ export const windowPerformance = {
       controller = resource;
       if (options?.startup) startupAction = resource.execution.withCarrier(options.carrier, () => resource.begin('app.startup', { 'app.process': 'renderer' }));
     } catch (error) {
+      if (rendererLease) await rendererBridge()?.stop(rendererLease).catch(() => {});
+      rendererLease = undefined; longTasks?.stop(); longTasks = undefined;
       if (admitted) await trpc.performance.stop.mutate().catch(() => {});
       throw error;
     } finally { starting = false; }
@@ -80,13 +98,28 @@ export const windowPerformance = {
     startupViews.clear();
     // Both owners are stopped even if the socket was lost. A failed report remains a failed trial.
     try {
-      const [renderer, backend] = await Promise.allSettled([resource.stop(), trpc.performance.stop.mutate()]);
+      const lease = rendererLease; rendererLease = undefined;
+      const [renderer, backend, resources] = await Promise.allSettled([resource.stop(), trpc.performance.stop.mutate(),
+        lease ? Promise.resolve().then(() => {
+          const bridge = rendererBridge();
+          if (!bridge) throw Error('Renderer diagnostic bridge was lost');
+          return bridge.stop(lease);
+        }) : Promise.resolve(undefined)]);
+      const stalls = longTasks?.stop(); longTasks = undefined;
+      const captured: _RendererPerformanceResources | undefined = resources.status === 'fulfilled' ? resources.value : undefined;
+      if (renderer.status === 'fulfilled') {
+        if (captured) Object.assign(renderer.value, { rendererStatistics: captured.statistics, profiles: captured.profiles, profileFailures: captured.profileFailures });
+        if (stalls) renderer.value.rendererLongTasks = stalls;
+        if (rendererResourceFailed || resources.status === 'rejected') renderer.value.rendererResourceFailures = 1;
+        if (failedListeners) renderer.value.rendererListenerFailures = failedListeners;
+        renderer.value.complete &&= !rendererResourceFailed && resources.status === 'fulfilled' && (!captured || captured.complete) && (!stalls || stalls.failures === 0) && failedListeners === 0;
+      }
       return {
         renderer: renderer.status === 'fulfilled' ? renderer.value : undefined,
         backend: backend.status === 'fulfilled' ? backend.value : undefined,
         complete: renderer.status === 'fulfilled' && backend.status === 'fulfilled' && renderer.value.complete && backend.value.complete && failedListeners === 0,
         failedListeners,
-        failures: [renderer.status === 'rejected' && 'renderer-stop', backend.status === 'rejected' && 'backend-stop'].filter(Boolean),
+        failures: [renderer.status === 'rejected' && 'renderer-stop', backend.status === 'rejected' && 'backend-stop', resources.status === 'rejected' && 'renderer-resource-stop', rendererResourceFailed && 'renderer-resource-start'].filter(Boolean),
       };
     } finally { stopping = false; }
   },

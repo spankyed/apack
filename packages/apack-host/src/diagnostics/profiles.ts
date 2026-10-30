@@ -1,15 +1,5 @@
 /** Standard V8 profiles; values/heap snapshots are never requested. */
-export interface PerformanceProfiles {
-  sampling: { cpuIntervalMicros: number; allocationIntervalBytes: number; allocationStackDepth: number; includeCollectedAllocations: boolean };
-  cpu?: string;
-  allocation?: string;
-  bytes: number;
-  failures: number;
-  complete: boolean;
-  windowLimitMs: number;
-  durationMs: number;
-  stoppedBy: 'owner' | 'limit';
-}
+import type { _PerformanceProfiles } from '@apackdev/sdk/runtime';
 
 /** Node Inspector and Electron renderer debug sessions implement the same protocol. */
 export interface PerformanceProfileTransport {
@@ -38,8 +28,8 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
   let cpuStarted = false;
   let heapStarted = false;
   let failures = 0;
-  let stoppedBy: PerformanceProfiles['stoppedBy'] = 'owner';
-  let stopping: Promise<PerformanceProfiles> | undefined;
+  let stoppedBy: _PerformanceProfiles['stoppedBy'] = 'owner';
+  let stopping: Promise<_PerformanceProfiles> | undefined;
   const ready = (async () => {
     try {
       await post('Profiler.enable');
@@ -56,12 +46,12 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
   })();
   const timer = setTimeout(() => { stoppedBy = 'limit'; void stop(); }, PROFILE_WINDOW_MS);
   timer.unref?.();
-  function stop(): Promise<PerformanceProfiles> {
+  function stop(): Promise<_PerformanceProfiles> {
     if (stopping) return stopping;
     clearTimeout(timer);
     stopping = (async () => {
       await ready;
-      const output: Pick<PerformanceProfiles, 'cpu' | 'allocation'> = {};
+      const output: Pick<_PerformanceProfiles, 'cpu' | 'allocation'> = {};
       let bytes = 0;
       const raw: Partial<Record<keyof typeof output, unknown>> = {};
       async function end(method: string, kind: keyof typeof output, enabled: boolean) {

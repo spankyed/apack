@@ -1,7 +1,10 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const rpc = vi.hoisted(() => ({ start: vi.fn(async () => {}), stop: vi.fn(async () => ({ complete: true })) }));
 vi.mock('@/transport', () => ({ trpc: { performance: { start: { mutate: rpc.start }, stop: { mutate: rpc.stop } } } }));
 const { windowPerformance, notifyPerformanceView } = await import('@/runtime/performance');
+const bridge = { start: vi.fn(async () => ({ id: 'lease' })), stop: vi.fn(async () => ({ complete: true, profileFailures: 0,
+  statistics: { source: 'chromium-cdp', pid: 42, metrics: [], unavailable: [], failures: 0 } })) };
+beforeEach(() => { Object.assign(window, { electronAPI: { performance: bridge } }); });
 afterEach(async () => {
   if (windowPerformance.execution) await windowPerformance.stop();
   vi.clearAllMocks();
@@ -84,4 +87,14 @@ it('retains only bounded metadata for startup views and clears it on stop', asyn
   expect(windowPerformance.lastStartupView('pack/feature', 'chat')).toMatchObject({ entityId: 'Thread-two', commit: 10 });
   expect(JSON.stringify(await windowPerformance.stop())).not.toContain('private payload');
   expect(windowPerformance.lastStartupView('pack/feature', 'list')).toBeUndefined();
+});
+
+it('keeps application spans usable when the renderer debugger refuses capture', async () => {
+  bridge.start.mockRejectedValueOnce(Error('debugger already attached'));
+  await windowPerformance.start('lightweight');
+  windowPerformance.begin('app.dispatch').end();
+  const report = await windowPerformance.stop();
+  expect(report.complete).toBe(false);
+  expect(report.failures).toContain('renderer-resource-start');
+  expect(report.renderer?.observations.length).toBe(1);
 });

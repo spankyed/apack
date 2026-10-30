@@ -192,6 +192,64 @@ export interface PerformanceExecution {
 // @internal
 export function _performanceExecution(): PerformanceExecution | undefined;
 
+// @internal
+export interface _PerformanceProfiles {
+    // (undocumented)
+    allocation?: string;
+    // (undocumented)
+    bytes: number;
+    // (undocumented)
+    complete: boolean;
+    // (undocumented)
+    cpu?: string;
+    // (undocumented)
+    durationMs: number;
+    // (undocumented)
+    failures: number;
+    // (undocumented)
+    sampling: {
+        cpuIntervalMicros: number;
+        allocationIntervalBytes: number;
+        allocationStackDepth: number;
+        includeCollectedAllocations: boolean;
+    };
+    // (undocumented)
+    stoppedBy: 'owner' | 'limit';
+    // (undocumented)
+    windowLimitMs: number;
+}
+
+// @internal
+export interface _RendererPerformanceResources {
+    // (undocumented)
+    complete: boolean;
+    // (undocumented)
+    profileFailures: number;
+    // (undocumented)
+    profiles?: _PerformanceProfiles;
+    // (undocumented)
+    statistics: _RendererPerformanceStatistics;
+}
+
+// @internal
+export interface _RendererPerformanceStatistics {
+    // (undocumented)
+    failures: number;
+    // (undocumented)
+    metrics: Array<{
+        name: string;
+        unit: 'seconds' | 'bytes' | 'count';
+        before: number;
+        after: number;
+    }>;
+    // (undocumented)
+    pid: number;
+    // (undocumented)
+    source: 'chromium-cdp';
+    // (undocumented)
+    unavailable: string[];
+}
+
 // @public
 export interface RootEvents {
     emitIncoming(message: Message): void;
