@@ -1,3 +1,4 @@
+import {verifyBackgroundApiRestart} from '../../fixtures/claude-research/background-api-restart.mjs'
 import {verifyChildFormatterPolicy} from '../../fixtures/claude-research/background-formatter-policy.mjs'
 import {verifyChildFormatterLifecycle} from '../../fixtures/claude-research/background-formatter-lifecycle.mjs'
 import {createHash} from 'node:crypto'
@@ -18,11 +19,13 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
   const parentOwnerLoss = process.env.CLAUDE_RESEARCH_BACKGROUND_OWNER_LOSS_APP === '1'
+  const childApiRestart = process.env.CLAUDE_RESEARCH_BACKGROUND_API_RESTART_APP === '1'
   const childFormatterPolicy = process.env.CLAUDE_RESEARCH_BACKGROUND_FORMATTER_POLICY_APP === '1'
   const childFormatterLifecycle = process.env.CLAUDE_RESEARCH_BACKGROUND_FORMATTER_LIFECYCLE_APP === '1'
   const childFormatter = process.env.CLAUDE_RESEARCH_BACKGROUND_FORMATTER_APP === '1'
   const childStatusLifecycle = process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_LIFECYCLE_APP === '1'
   const childStatus = childFormatter || childStatusLifecycle || process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_APP === '1'
+  if(childApiRestart){expect(process.platform).toBe('linux');expect(parentOwnerLoss).toBe(true);expect(childFormatter).toBe(true)}
   const childReply = parentOwnerLoss || childStatus || process.env.CLAUDE_RESEARCH_BACKGROUND_REPLY_APP === '1'
   const childResume = process.env.CLAUDE_RESEARCH_BACKGROUND_RESUME_APP === '1'
   const childInteraction = process.env.CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP === '1'
@@ -337,6 +340,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       }
 
       const retainedReply = 'Keep this separate follow-up through navigation.'
+      if(childApiRestart)observations.childApiRestart=await verifyBackgroundApiRestart({workspace:workspace!,job,widget,composer,input,retainedReply,app,appPage,electronApp,context,readInfo,childProcessState,capture,expect})
       await input.fill(retainedReply)
       await app.navigate('host/settings');await app.navigate('default-setup/threads')
       await expect(input).toHaveValue(retainedReply)
@@ -601,7 +605,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(parentOwnerLoss?{nativeBackgroundParentOwnerLoss:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childFormatter?{nativeBackgroundFormatter:true}:{}), ...(childFormatterLifecycle?{nativeBackgroundFormatterLifecycle:true}:{}), ...(childFormatterPolicy?{nativeBackgroundFormatterPolicy:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(parentOwnerLoss?{nativeBackgroundParentOwnerLoss:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childFormatter?{nativeBackgroundFormatter:true}:{}), ...(childFormatterLifecycle?{nativeBackgroundFormatterLifecycle:true}:{}), ...(childFormatterPolicy?{nativeBackgroundFormatterPolicy:true}:{}), ...(childApiRestart?{nativeBackgroundApiRestart:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
   } finally {
     if ((childInteraction && !observations.childInteraction) || (childResume && !observations.childResume?.workerRetired)) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
