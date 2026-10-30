@@ -205,6 +205,11 @@ export interface _PerformanceProfiles {
     // (undocumented)
     durationMs: number;
     // (undocumented)
+    encodedBytes?: {
+        cpu?: number;
+        allocation?: number;
+    };
+    // (undocumented)
     failures: number;
     // (undocumented)
     failureStages?: string[];

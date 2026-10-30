@@ -10,12 +10,14 @@ export interface PerformanceProfileTransport {
 export const PROFILE_BYTES = 4 * 1024 * 1024;
 export const PROFILE_WINDOW_MS = 30_000;
 
+class ProfileProtocolTimeout extends Error {}
+
 /** A finite diagnostic window, owned transport and capped serialized output, separate from span retention. */
 export function createPerformanceProfiles(transport: PerformanceProfileTransport) {
   const sampling = { cpuIntervalMicros: 1000, allocationIntervalBytes: 512 * 1024, allocationStackDepth: 32, includeCollectedAllocations: true };
   function bounded<T>(operation: () => T | Promise<T>): Promise<T> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(Error('Profile protocol timeout')), 5000);
+      const timeout = setTimeout(() => reject(new ProfileProtocolTimeout()), 5000);
       timeout.unref?.();
       Promise.resolve().then(operation).then(
         value => { clearTimeout(timeout); resolve(value); },
@@ -55,6 +57,7 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
       await ready;
       const output: Pick<_PerformanceProfiles, 'cpu' | 'allocation'> = {};
       let bytes = 0;
+      const encodedBytes: { cpu?: number; allocation?: number } = {};
       const raw: Partial<Record<keyof typeof output, unknown>> = {};
       async function end(method: string, kind: keyof typeof output, enabled: boolean) {
         if (!enabled) { failed(`${kind}-unavailable`); return; }
@@ -64,7 +67,7 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
           const shape = response.profile as { nodes?: unknown; head?: unknown };
           if (kind === 'cpu' ? !Array.isArray(shape.nodes) : !shape.head || typeof shape.head !== 'object') throw Error('Invalid profile');
           raw[kind] = response.profile;
-        } catch { failed(`${kind}-protocol`); }
+        } catch (error) { failed(`${kind}-${error instanceof ProfileProtocolTimeout ? 'timeout' : 'protocol'}`); }
       }
       try {
         // Stop allocation sampling before creating/encoding the CPU export, then stop CPU sampling.
@@ -80,12 +83,13 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
           const encoded = JSON.stringify(raw[kind]);
           if (typeof encoded !== 'string') throw Error('Invalid profile encoding');
           const size = new TextEncoder().encode(encoded).byteLength;
+          encodedBytes[kind] = size;
           if (size > PROFILE_BYTES / 2) { failed(`${kind}-size`); continue; }
           output[kind] = encoded;
           bytes += size;
         } catch { failed(`${kind}-encoding`); }
       }
-      return { ...output, sampling: { ...sampling }, bytes, failures, failureStages, complete: failures === 0,
+      return { ...output, sampling: { ...sampling }, bytes, failures, failureStages, encodedBytes, complete: failures === 0,
         windowLimitMs: PROFILE_WINDOW_MS, durationMs: performance.now() - started, stoppedBy };
     })();
     return stopping;
