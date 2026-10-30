@@ -39,9 +39,8 @@ scope even though thread opening is the first vertical implementation slice.
 - W3C context travels on message/view envelopes, never in persisted business events or view keys.
   Incoming, replies, broadcasts and local surface delivery carry it; handlers can restore queued
   event context. View delivery includes subscription identity and ordinal; stale callbacks from a
-  stopped/reloaded generation are ignored. Full raw-XState actor queue coverage is still outstanding.
-- Initial view reads/deliveries have spans and EARS ancestry. Coalesced re-reads deliberately have no
-  action parent until contributing commit links are implemented. Trace `complete` describes capture
+  stopped/reloaded generation are ignored. Root backend and surface actor logic restore explicitly carried queued events through a public ActorLogic adapter; internal untagged events are not claimed as covered.
+- Initial view reads/deliveries have spans and EARS ancestry. Coalesced re-reads are parentless and link their affected commit contexts (up to 32); unknown and dropped causes remain explicit. Trace `complete` describes capture
   integrity, not completeness of instrumentation coverage.
 - The manual suite is `tests/performance/`, using `definePerformanceConfig` from the shared test
   toolkit. Reusable schemas, identity, summaries, comparison-order/compatibility and Chrome Trace
@@ -139,10 +138,32 @@ scope even though thread opening is the first vertical implementation slice.
 - Strict CI `41109512527` has passed its producers job; downstream jobs were still running at the
   last authoritative check. It checks the earlier `c72035b90f` checkpoint, not this new source.
 
+## Integrated qualification checkpoint
+
+- Strict CI run `41109512527` completed successfully for `c72035b90f`. It does not validate later commits.
+- `e65d84bb98` adds affected-commit links to coalesced view reads, including explicit unknown/lost
+  causes. Fifty Linux tests passed, including a real native view linked to two distinct write traces.
+- `876b7b6cac` restores queued root-actor context using the public ActorLogic protocol. A controlled
+  overlapping-event test and 104 Linux host bus/shell/actor tests passed.
+- The thread full-read counterfactual failed as required: `thread-open-lightweight-1793389512933`
+  displayed the correct fifty rows but returned 533,752 read bytes against the declared 164,809-byte
+  action-window budget. This is aggregate window work, not precise causal attribution.
+- Startup's original 25-trial run passed, but review found its visible-title predicate could accept a
+  recent-thread shortcut. The stronger main-list predicate correctly exposed incomplete seed
+  onboarding. Inspection established that chatStart restores a recent chat and openThread deliberately selects
+  the dashboard, regardless of a saved list preference. Preparation completes onboarding and opens
+  a declared fixture chat; acceptance now requires its exact fifty full message bodies laid out, plus
+  the corpus view and matching chat revision. This tests the real initial usable view; verification is
+  ongoing. The weaker run is not startup acceptance evidence.
+- Linux qualification now freezes native source at the unchanged `vendor/elmdb.rev`
+  (`95615ed8d493f9a7c2789eaf1f4c847ae375eb32`) in
+  `/private/tmp/apack-performance-elmdb-pinned`, selected with `APACK_LINUX_ELMDB_ROOT`. This avoids
+  concurrent edits in the live native checkout. All four scenarios need an integrated run on this pin.
+
 ## Required remaining work
 
-Thread-open counterfactuals/overhead and independent late-search fault injection; raw actor queue context and coalesced-watch causal
-links; streaming/populated-startup scenarios; cross-revision orchestration and full manifest/
+Remaining application counterfactuals/overhead and independent late-search fault injection; strong
+populated-startup verification and integrated four-scenario qualification; cross-revision orchestration and full manifest/
 trial consistency checks; detailed profiles/process statistics, streaming backlog and overhead qualification;
 full repository and strict acceptance; dependent reviewable PRs.
 Keep PR #293 a draft until its slice is qualified. Do not treat the recorder, authored scenarios,

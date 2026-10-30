@@ -12,18 +12,20 @@ let starting = false;
 let stopping = false;
 let failedListeners = 0;
 export interface PerformanceViewDelivery { request: ViewRequest; update: ViewUpdate; generation: number; delivery: number }
-interface StartupViewReceipt { commit: number; subscription?: string; delivery?: number; ok: boolean }
+interface StartupViewReceipt { entityId?: string; commit: number; subscription?: string; delivery?: number; ok: boolean }
 const startupViews = new Map<string, StartupViewReceipt>();
 const listeners = new Set<(delivery: PerformanceViewDelivery) => void>();
 
 /** Ephemeral developer callbacks; no request arguments or results enter the span recorder. */
 export function notifyPerformanceView(delivery: PerformanceViewDelivery) {
   if (!controller) return;
-  if (startupAction && delivery.request.args === undefined) {
+  const chatId = delivery.request.view === 'chat' && typeof delivery.request.args === 'object' && delivery.request.args !== null
+    ? (delivery.request.args as { id?: unknown }).id : undefined;
+  if (startupAction && (delivery.request.args === undefined || typeof chatId === 'string' && chatId.length <= 128)) {
     const { ref, view } = delivery.request;
     const key = `${ref}\0${view}`;
     if (ref.length > 128 || view.length > 128 || !startupViews.has(key) && startupViews.size >= 32) failedListeners++;
-    else startupViews.set(key, { ok: delivery.update.ok, commit: delivery.update.commit,
+    else startupViews.set(key, { ...(typeof chatId === 'string' && { entityId: chatId }), ok: delivery.update.ok, commit: delivery.update.commit,
       subscription: delivery.update.diagnostics?.subscription, delivery: delivery.update.diagnostics?.delivery });
   }
   for (const listener of listeners) { try { listener(delivery); } catch { failedListeners++; } }

@@ -47,7 +47,21 @@ Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
   cross-process epoch placement is approximate. Parent ids/links live in event arguments.
 
 Capture integrity (`complete`) does not certify instrumentation coverage. Coalesced watch re-reads
-currently have no action parent; contributing commit links and raw actor queue coverage remain open.
+have no action parent and link affected commits, with explicit unknown/dropped causes. Root actor queues restore explicitly carried event context; untagged internal events are not covered.
 Detailed mode currently uses the same bounded tracing foundation; CPU/allocation profiles and process
 statistics remain to be implemented. No overhead or performance improvement is established yet.
 Populated startup, cross-revision orchestration and qualification remain in the goal.
+
+Populated startup uses a separate controller, `node scripts/with-source.mjs tsx tests/performance/startup-run.ts`.
+It owns profile paths, finishes real onboarding, imports the fixture and opens its declared chat outside
+measurement. It closes the seed process, copies the profile, then launches and closes a fresh process
+for each warmup/trial. The measured boundary is parent-process launch through the actual initial
+usable restored chat (correct fifty full message bodies, corpus and matching chat revision), including backend admission. This is a warm-filesystem experiment, not cold disk.
+
+Before comparing reports, run `node scripts/with-source.mjs tsx tests/performance/verify-run.ts RUN`
+(or `RUN_A RUN_B` for compatibility and median/range comparison). The default requires all five
+warmups and twenty measured trials; a comparison does not itself certify balanced order or quiet
+resources. The command rejects missing/unsuccessful/inconsistent trials and oversized input reports.
+Startup additionally requires successful process invocations and matching per-launch manifests/results.
+For native isolation, set `APACK_LINUX_ELMDB_ROOT` to a clean frozen checkout at `vendor/elmdb.rev`;
+never qualify timings against another agent's changing native tree.

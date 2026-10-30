@@ -4,6 +4,7 @@ import { test as base, expect, applicationLaunchStartedAt } from '@apackdev/test
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
 import { chromeTrace, manifestSchema, performanceIdentity, summarize, trialSchema } from '@apackdev/testing/performance';
+import { searchFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
 const mode = (process.env.APACK_PERFORMANCE_MODE ?? 'lightweight') as RecordingMode;
@@ -56,13 +57,26 @@ test('start a populated profile through admission to its initial usable thread v
       return receipt?.ok && Array.from({ length: expected }, (_, index) => index).every(index =>
         context.threadIds.includes(`Thread-search-${index}`) && context.lists.list.some(row => row.id === `Thread-search-${index}` && row.topic === `Search fixture ${index}`));
     }, fixture.distribution.threads);
-    phase = 'main-list-row';
-    await expect(appPage.locator('.thread-row').filter({ has: appPage.getByText('Search fixture 11', { exact: true }) }).first()).toBeVisible();
+    phase = 'restored-chat';
+    const expected = searchFixture().data.threads[11]!.messages.slice(-50).map(message => message.text);
+    await appPage.waitForFunction(expected => {
+      const win = window as unknown as PerformanceWindow;
+      const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
+      const receipt = win.__performance.lastStartupView('default-setup/threads', 'chat');
+      return receipt?.ok && receipt.entityId === 'Thread-search-11' && context.currentThread?.id === receipt.entityId
+        && context.chatLimit === 50 && context.chatMessageIds.length === expected.length
+        && context.chatMessageIds.every((id, index) => {
+          const element = document.querySelector(`[data-message-id="${id}"]`);
+          return context.messageContents[id]?.text === expected[index] && element?.getClientRects().length
+            && element.textContent?.includes(expected[index]!);
+        });
+    }, expected);
+    work.observedMessages = expected.length;
     phase = 'view-revision';
     const receipt = await appPage.evaluate(async () => {
       const recording = (window as unknown as PerformanceWindow).__performance;
       await recording.flushView();
-      const receipt = recording.lastStartupView('default-setup/threads', 'list');
+      const receipt = recording.lastStartupView('default-setup/threads', 'chat');
       if (!receipt?.ok) throw Error('Missing initial thread view revision');
       recording.withinStartup(() => recording.begin('app.view.ready', {
         'app.commit': receipt.commit, 'app.generation': receipt.subscription ?? 'disabled', 'app.delivery': receipt.delivery ?? 0,
