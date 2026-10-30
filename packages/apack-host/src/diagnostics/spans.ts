@@ -49,6 +49,7 @@ export function createSpanRecording(options: {
   };
   return {
     processor,
+    dropMetadata(count: number) { droppedMetadata += count; },
     snapshot() {
       const report = buffer.snapshot();
       return { ...report, rejected, droppedMetadata, complete: !report.truncated && rejected === 0 && droppedMetadata === 0 };

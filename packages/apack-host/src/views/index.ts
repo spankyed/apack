@@ -13,7 +13,7 @@ import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
 //
 // Who subscribes is the caller's: the API holds one subscription per tRPC subscription, so a window closing its
 // socket ends its own, and the test harness one per watch a spec opens.
-import type { Ears } from '@apackdev/ears';
+import type { Ears, WatchReadContext } from '@apackdev/ears';
 import { viewKey, type PackRegistration, type ViewRead, type ViewRequest, type ViewUpdate } from '@apackdev/sdk/framework';
 import { splitRef } from '@apackdev/sdk/ids';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
@@ -22,7 +22,7 @@ type ViewObserver = (update: ViewUpdate) => void;
 
 /** What the views read: the engine, and the packs that declare them */
 export interface ViewHostOptions {
-  performance?: Pick<ReturnType<typeof createPerformanceController>, 'begin' | 'execution'>;
+  performance?: Pick<ReturnType<typeof createPerformanceController>, 'begin' | 'execution' | 'isRecording'>;
   /** The engine views run on, asked for at each start, so a test's replaced engine is the one a new watch reads */
   ears: () => Ears;
   packs: {
@@ -89,8 +89,8 @@ export function createViewHost({ ears, packs, performance }: ViewHostOptions): V
     const args = shared.request.args;
     let first = true;
     let readCarrier: PerformanceCarrier | undefined;
-    const runRead = () => {
-      const span = performance?.begin('app.view.read');
+    const runRead = (causes?: WatchReadContext) => {
+      const span = performance?.begin('app.view.read', {}, causes && { database: 'app', ...causes });
       readCarrier = span?.carrier();
       const run = () => (read as (args: unknown) => unknown)(args);
       try {
@@ -107,16 +107,15 @@ export function createViewHost({ ears, packs, performance }: ViewHostOptions): V
       };
       if (performance) performance.execution.withCarrier(readCarrier, run); else run();
     };
-    const watching = ears().watch(() => {
+    const watching = ears().watch((causes) => {
       const initial = first;
       first = false;
-      // A delayed re-read may combine several commits. It has no single action parent until the scheduler
-      // supplies the contributing causes; never inherit whichever async callback happened to flush it.
-      return !initial && performance ? performance.execution.withCarrier(undefined, runRead) : runRead();
+      // Coalesced commits are links, not whichever action happened to own the scheduler callback.
+      return !initial && performance ? performance.execution.withCarrier(undefined, () => runRead(causes)) : runRead(causes);
     }, {
       next: (value, commit) => deliverRead({ ok: true, value, commit }),
       error: (error, commit) => deliverRead({ ok: false, error: errorMessage(error), commit }),
-    }, { label: `${shared.request.ref} · ${shared.request.view}` });
+    }, { label: `${shared.request.ref} · ${shared.request.view}`, recordCauses: performance?.isRecording });
     shared.stop = () => watching.stop();
   };
 

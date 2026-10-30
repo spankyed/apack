@@ -1,5 +1,5 @@
-import type { EarsAdmin } from '@apackdev/ears';
-import { ROOT_CONTEXT, SpanStatusCode, trace, type Context, type ContextManager, type Span, type Attributes } from '@opentelemetry/api';
+import type { EarsAdmin, WatchReadContext } from '@apackdev/ears';
+import { ROOT_CONTEXT, SpanStatusCode, trace, type Context, type ContextManager, type Span, type SpanContext, type Attributes } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { SamplingDecision, TracerProvider, type SpanProcessor } from '@opentelemetry/sdk-trace';
 import { createSpanRecording } from './spans.ts';
@@ -44,6 +44,7 @@ export function createTraceSession(options: {
   const attributes = new Set([...options.attributes, ...EARS_SPAN_ATTRIBUTES, 'diagnostics.outcome']);
   const recording = createSpanRecording({ names, attributes, limits });
   const active = new Map<string, Span>();
+  const commits = new Map<string, SpanContext>();
   let stopped = false;
   let unfinished = 0;
   let droppedStarts = 0;
@@ -138,7 +139,12 @@ export function createTraceSession(options: {
     attach(engine: { admin: Pick<EarsAdmin, 'observe'> }, database: 'app' | 'runHistory') {
       if (!tracer || stopped) return () => {};
       attachments.get(database)?.();
-      const unobserve = engine.admin.observe(createEarsOperationObserver(tracer, current, database));
+      for (const key of commits.keys()) if (key.startsWith(`${database}:`)) commits.delete(key);
+      const unobserve = engine.admin.observe(createEarsOperationObserver(tracer, current, database, (sequence, context) => {
+        const key = `${database}:${sequence}`;
+        if (!commits.has(key) && commits.size >= limits.observations) { recording.dropMetadata(1); return; }
+        commits.set(key, { ...context });
+      }));
       let attached = true;
       const detach = () => {
         if (!attached) return;
@@ -164,7 +170,8 @@ export function createTraceSession(options: {
       if (!manager || stopped) return fn();
       return runContext(extract(carrier), fn);
     },
-    begin(name: string, supplied: Attributes = {}) {
+    isRecording: () => !stopped && tracer !== undefined,
+    begin(name: string, supplied: Attributes = {}, causes?: WatchReadContext & { database: 'app' | 'runHistory' }) {
       const selected: Attributes = {};
       if (tracer && !stopped) {
         for (const key of attributes) {
@@ -178,7 +185,21 @@ export function createTraceSession(options: {
         }
         if (!names.has(name)) rejectedStarts++;
       }
-      const span = stopped || !names.has(name) ? undefined : tracer?.startSpan(name, { attributes: selected }, current());
+      const links: Array<{ context: SpanContext }> = [];
+      if (tracer && !stopped && causes) {
+        const retained = causes.sequences.slice(0, 32);
+        const dropped = causes.dropped + Math.max(0, causes.sequences.length - retained.length);
+        let unattributed = 0;
+        for (const sequence of retained) {
+          const context = commits.get(`${causes.database}:${sequence}`);
+          if (context) links.push({ context }); else unattributed++;
+        }
+        selected['app.coalesced_commits'] = causes.sequences.length + causes.dropped;
+        selected['app.unattributed_commits'] = unattributed;
+        selected['app.dropped_causes'] = dropped;
+        recording.dropMetadata(dropped);
+      }
+      const span = stopped || !names.has(name) ? undefined : tracer?.startSpan(name, { attributes: selected, links }, current());
       const context = span ? trace.setSpan(current(), span) : ROOT_CONTEXT;
       let ended = false;
       return {
@@ -201,6 +222,7 @@ export function createTraceSession(options: {
         unfinished = active.size;
         for (const span of active.values()) { span.setAttribute('diagnostics.outcome', 'incomplete'); span.setStatus({ code: SpanStatusCode.ERROR }); span.end(); }
         events = new WeakMap();
+        commits.clear();
         manager?.disable();
         await provider?.shutdown();
       }

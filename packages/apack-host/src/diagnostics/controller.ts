@@ -9,7 +9,7 @@ export const APPLICATION_SPAN_NAMES = new Set([
 ]);
 export const APPLICATION_SPAN_ATTRIBUTES = new Set([
   'app.scenario', 'app.fixture', 'app.generation', 'app.delivery', 'app.commit',
-  'app.result_count', 'app.chunk', 'app.process',
+  'app.result_count', 'app.chunk', 'app.process', 'app.coalesced_commits', 'app.unattributed_commits', 'app.dropped_causes',
 ]);
 
 type Session = ReturnType<typeof createTraceSession>;
@@ -43,7 +43,8 @@ export function createPerformanceController(contextManager: () => ContextManager
       }
       recording = session;
     },
-    begin: (name: string, attributes?: Parameters<Session['begin']>[1]) => recording?.begin(name, attributes),
+    isRecording: () => recording?.isRecording() ?? false,
+    begin: (name: string, attributes?: Parameters<Session['begin']>[1], causes?: Parameters<Session['begin']>[2]) => recording?.begin(name, attributes, causes),
     snapshot: () => recording?.snapshot(),
     stop() {
       if (stopping) return stopping;
