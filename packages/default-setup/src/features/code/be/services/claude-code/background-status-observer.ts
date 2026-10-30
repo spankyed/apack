@@ -1,7 +1,8 @@
+import {claimClaudeBackgroundCheckpoint, type ClaudeBackgroundCheckpoint} from './background-observer-checkpoint.ts'
 import {createClaudeBackgroundFormatter, installClaudeBackgroundFormatterLauncher} from './background-formatter.ts'
 import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, lstat, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createClaudeBackgroundStatus } from './terminal-background-status.ts'
@@ -10,12 +11,17 @@ import type { createClaudeBackgroundStatusAuthority } from './background-status-
 /** The linked child owns this transport and plugin directory after the parent writer exits. */
 export async function createClaudeBackgroundStatusObserver(options: {
   parentSessionId: string
+  profile?: string
+  checkpoint?: ClaudeBackgroundCheckpoint
   target(): { sessionId: string; cwd: string } | undefined
   authority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>
   changed(): void
 }) {
-  const directory = await mkdtemp(join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'cc-child-'))
-  const socketPath = join(directory, 'status.sock'), token = randomBytes(32).toString('hex')
+  const directory = options.checkpoint?.directory ?? await mkdtemp(join(process.platform === 'darwin' ? '/private/tmp' : tmpdir(), 'cc-child-'))
+  const socketPath = join(directory, 'status.sock'), token = options.checkpoint?.token ?? randomBytes(32).toString('hex')
+  let checkpoint = options.checkpoint
+  try { if (!checkpoint && options.profile) checkpoint = await claimClaudeBackgroundCheckpoint({profile:options.profile,parentSessionId:options.parentSessionId,endpoint:{directory,token}}) }
+  catch (error) { await rm(directory,{recursive:true,force:true});throw error }
   const listeners = new Set<() => void>()
   let target = options.target, parentChanged = options.changed
   let parentSessionId = options.parentSessionId
@@ -78,7 +84,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
   const close = () => closing ??= (async () => {
     closed = true; if (releaseTimer) clearTimeout(releaseTimer); if (monitor) clearInterval(monitor)
     status.close(); formatter?.reset(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
-    await authority.close(); await rm(directory, { recursive: true, force: true }); changed(); listeners.clear()
+    await authority.close(); await checkpoint?.retire(); await rm(directory, { recursive: true, force: true }); changed(); listeners.clear()
   })()
   async function checkReleasedChild() {
     const identity = status.identity, registration = status.registration
@@ -95,7 +101,13 @@ export async function createClaudeBackgroundStatusObserver(options: {
       }
     } finally { checking = false }
   }
-  try { await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve) }) }
+  try {
+    if (options.checkpoint) {
+      const prior = await lstat(socketPath).catch(error => { if (error.code !== 'ENOENT') throw error })
+      if (prior) { if (!prior.isSocket() || prior.uid !== process.getuid?.()) throw Error('Background checkpoint socket is not owned'); await unlink(socketPath) }
+    }
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve) })
+  }
   catch (error) { await close(); throw error }
   return {
     directory, socketPath, token,
@@ -104,6 +116,8 @@ export async function createClaudeBackgroundStatusObserver(options: {
     get available() { return !closed },
     async resetParent(sessionId: string) {
       if (closed || sessionId === parentSessionId) return
+      await checkpoint?.retire()
+      checkpoint = options.profile ? await claimClaudeBackgroundCheckpoint({profile:options.profile,parentSessionId:sessionId,endpoint:{directory,token}}) : undefined
       parentSessionId = sessionId; status.reset(); formatter?.reset()
       const retiring = authority.close(); authority = options.authority(parentSessionId); await retiring
     },

@@ -29,6 +29,7 @@ const command = (value: unknown): string | undefined => { const entry = object(v
 export async function createClaudeTerminalBridge(options: {
   sessionId: string
   backgroundTarget?(): { parentSessionId: string; sessionId: string; cwd: string } | undefined
+  backgroundProfile?: string
   backgroundObserver?: ClaudeBackgroundStatusObserver
   backgroundAuthority(parentSessionId: string): ReturnType<typeof createClaudeBackgroundStatusAuthority>
   restorePlan?: { sessionId: string; mode: import('./types.ts').PermissionMode }
@@ -336,7 +337,7 @@ export async function createClaudeTerminalBridge(options: {
       if (options.backgroundObserver.parentSessionId !== options.sessionId) throw new Error('Background observer belongs to another parent')
       backgroundObserver = options.backgroundObserver
       backgroundObserver.adoptParent(linkedBackground, options.changed)
-    } else backgroundObserver = await createClaudeBackgroundStatusObserver({ parentSessionId: options.sessionId, target: linkedBackground, authority: options.backgroundAuthority, changed: options.changed })
+    } else backgroundObserver = await createClaudeBackgroundStatusObserver({ parentSessionId: options.sessionId, profile: options.backgroundProfile, target: linkedBackground, authority: options.backgroundAuthority, changed: options.changed })
     const runtime = join(directory, 'status.mjs'), observerConfig = join(directory, 'observer.json')
     await writeFile(runtime, claudeTerminalStatusRuntime, { mode: 0o600 })
     await writeFile(join(directory, 'ui.mjs'), claudeTerminalUiRuntime, { mode: 0o600 })

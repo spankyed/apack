@@ -40,6 +40,9 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
   await expect.poll(async()=>(await readInfo())?.observedAt??0,{timeout:10000}).toBeGreaterThan(observation.reconnectedAt);
   observation.infoAfter=await readInfo();expect(observation.infoAfter.sessionId).toBe(job.sessionId);expect(observation.infoAfter.pid).toBe(job.pid);
   await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toContainText('AppNativeMain '+job.sessionId);
+  const starts=(await readFile(join(workspace,'native-children.jsonl'),'utf8')).trim().split('\n').map(JSON.parse).filter(row=>JSON.stringify(row.args)===JSON.stringify(['--version']));
+  const active=[];for(const start of starts){const state=await childProcessState(start.pid);if(state&&state.state!=='Z')active.push({...start,process:state});}
+  expect(active).toHaveLength(1);observation.authorityAfter=active[0];
   await pictures('recovered');observation.phase='recovered';await save();
   return observation;
  }catch(error){observation.phase='failed-'+observation.phase;observation.problem=String(error);observation.lastContext=await context().catch(()=>null);observation.lastInfo=await readInfo().catch(()=>null);observation.workerAtFailure=await childProcessState().catch(()=>null);await save();for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]){await appPage.setViewportSize(size);await capture('apack-native-background-api-failed-'+name+'.png').catch(()=>{});}throw error;}

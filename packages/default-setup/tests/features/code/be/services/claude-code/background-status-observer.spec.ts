@@ -1,3 +1,9 @@
+import {spawn} from 'node:child_process'
+import {once} from 'node:events'
+import {rm} from 'node:fs/promises'
+import {randomUUID,createHash} from 'node:crypto'
+import {tmpdir} from 'node:os'
+import {claimClaudeBackgroundCheckpoint} from '#features/code/be/services/claude-code/background-observer-checkpoint.ts'
 import { request } from 'node:http'
 import { writeFile, access } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -85,4 +91,36 @@ it('keeps formatter output independent of the parent and refuses retired policy/
   const next=fresh.value.shellPrefix,current=JSON.parse(Buffer.from(next.slice(next.lastIndexOf(' -')+2),'base64url').toString())
   f.replace();expect((await f.post('/background-formatter',{...current,startedAt:'30',stdout:'wrong worker'})).code).toBe(409)
  }finally{await f.observer.close()}
+})
+
+it.skipIf(process.platform==='win32')('recovers the same private endpoint after its actual API owner dies without admitting cached status or old formatter output',async()=>{
+ const profile='/owned-recovery-test/'+randomUUID(),module=new URL('../../../../../../src/features/code/be/services/claude-code/background-status-observer.ts',import.meta.url).href
+ const script='const {createClaudeBackgroundStatusObserver}=await import('+JSON.stringify(module)+');const observer=await createClaudeBackgroundStatusObserver({parentSessionId:'+JSON.stringify(parent)+',profile:'+JSON.stringify(profile)+',target:()=>('+JSON.stringify({sessionId:child,cwd:'/owned'})+'),changed(){},authority:()=>({identify:async()=>('+JSON.stringify(original)+'),close:async()=>{}})});console.log(JSON.stringify({directory:observer.directory,socketPath:observer.socketPath,token:observer.token}));'
+ const processOwner=spawn(process.execPath,['--experimental-strip-types','--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']})
+ let recovered:Awaited<ReturnType<typeof createClaudeBackgroundStatusObserver>>|undefined,endpoint:any
+ const index=join(process.platform==='darwin'?'/private/tmp':tmpdir(),'apack-claude-background-'+process.getuid?.(),createHash('sha256').update(JSON.stringify([profile,parent])).digest('hex'))
+ try{
+  endpoint=await new Promise((resolve,reject)=>{let text='';processOwner.stdout.setEncoding('utf8');processOwner.stdout.on('data',chunk=>{text+=chunk;if(text.includes('\n'))resolve(JSON.parse(text.split('\n')[0]))});processOwner.once('error',reject);processOwner.once('exit',()=>reject(Error('Fixture API exited before readiness')))})
+  const post=(path:string,value:unknown)=>new Promise<{code:number;value:any}>((resolve,reject)=>{const req=request({socketPath:endpoint.socketPath,path,method:'POST',headers:{'x-apack-native-token':endpoint.token,'content-type':'application/json'}},response=>{let text='';response.setEncoding('utf8');response.on('data',chunk=>text+=chunk);response.on('end',()=>resolve({code:response.statusCode!,value:JSON.parse(text)}))});req.on('error',reject);req.end(JSON.stringify(value))})
+  const registered=(await post('/background-register',{sessionId:child,pid:119})).value
+  const message=(token:string)=>({sessionId:child,pid:119,token,sequence:1,metadata:{model:'sonnet',turns:2},usage:{startedAt:1},formatter:{command:'printf native',shellPrefix:null,policy:'{}'}})
+  const first=await post('/background-status',message(registered.token));expect(first.code).toBe(200)
+  const oldConfig=JSON.parse(Buffer.from(first.value.shellPrefix.split(' -').at(-1),'base64url').toString())
+  const captured={...oldConfig,stdout:'old native output',startedAt:'1'}
+  expect((await post('/background-formatter',captured)).code).toBe(200)
+  const plugin=join(endpoint.directory,'original-module');await writeFile(plugin,'retained original plugin')
+  const exited=once(processOwner,'exit');processOwner.kill('SIGKILL');await exited
+  const checkpoint=await claimClaudeBackgroundCheckpoint({profile,parentSessionId:parent});expect(checkpoint).toBeDefined()
+  recovered=await createClaudeBackgroundStatusObserver({parentSessionId:parent,profile,checkpoint,target:()=>({sessionId:child,cwd:'/owned'}),changed(){},authority:()=>({identify:async()=>({...original}),close:async()=>{}})})
+  expect(recovered.socketPath).toBe(endpoint.socketPath);expect(recovered.value).toBeUndefined();await access(plugin)
+  expect((await post('/background-status',message(registered.token))).code).toBe(409)
+  expect((await post('/background-formatter',{...captured,startedAt:'2'})).code).toBe(409)
+  const fresh=(await post('/background-register',{sessionId:child,pid:119})).value;expect(fresh.token).not.toBe(registered.token)
+  expect((await post('/background-status',message(fresh.token))).code).toBe(200)
+  expect((await post('/background-formatter',{...captured,startedAt:'3'})).code).toBe(409)
+  expect(recovered.value).toMatchObject({sessionId:child,pid:119,model:'sonnet'});expect(recovered.value?.statusLine).toBeUndefined()
+ }finally{
+  if(processOwner.exitCode===null&&processOwner.signalCode===null){const exited=once(processOwner,'exit');processOwner.kill('SIGKILL');await exited}
+  await recovered?.close();if(endpoint)await rm(endpoint.directory,{recursive:true,force:true});await rm(index,{recursive:true,force:true})
+ }
 })

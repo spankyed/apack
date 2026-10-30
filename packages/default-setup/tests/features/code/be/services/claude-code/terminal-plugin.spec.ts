@@ -23,3 +23,23 @@ it('registers and publishes child status before parent-only transcript reporting
  expect(requests.find(x=>x.path==='/background-status')?.body).toMatchObject({sessionId:child,pid:119,token:'child-lease',sequence:1,metadata:{model:'sonnet',turns:2}})
  await hooks.get('ui.render')!(api,{},next);expect(api.clock.every).toHaveBeenCalledOnce()
 })
+
+it('renews the original child lease after broker replacement, restores the user prefix and never reuses the old token',async()=>{
+ const child='05ff1d31-597d-4537-8737-4407191add6e',hooks=new Map<string,(...args:any[])=>Promise<any>>()
+ let tick!:()=>void,online=true,lease=0,prefix='user-prefix',now=1000
+ const cancel=vi.fn(),requests:{path:string;body:any}[]=[]
+ const clock=vi.spyOn(Date,'now').mockImplementation(()=>now)
+ const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=> 'sonnet',turns:async()=>2,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:async()=>({})},env:{get:async()=>prefix,set:vi.fn(async(_name:string,value:string)=>{prefix=value;return {}})},clock:{every:vi.fn((_ms:number,callback:()=>void)=>{tick=callback;return{cancel}})},process:{run:vi.fn(async()=>({exitCode:0,stdout:'119'}))},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname,body=JSON.parse(init.body);requests.push({path,body});if(!online&&path.startsWith('/background-'))throw Error('connection lost');if(path==='/background-register')return{ok:true,text:JSON.stringify({token:'lease-'+(++lease)})};return{ok:true,text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-status'?{originalPrefix:'user-prefix',shellPrefix:'owned-'+lease}:{})}})}}
+ const register=new Function(createClaudeTerminalPlugin('/parent.sock','parent-token',{parentSessionId:'11111111-1111-4111-8111-111111111111',socketPath:'/child.sock',token:'child-token'}).replace('export function register','function register')+';return register')()
+ const flush=()=>new Promise(resolve=>setImmediate(resolve))
+ try{
+  register((event:string,...args:any[])=>hooks.set(event,args.at(-1)));await hooks.get('session.start')!(api,{},async()=>({}))
+  tick();await flush();tick();await flush();expect(prefix).toBe('owned-1')
+  online=false;for(let n=0;n<4;n++){tick();await flush()}
+  expect(prefix).toBe('user-prefix');expect(cancel).not.toHaveBeenCalled()
+  const count=requests.length;tick();await flush();expect(requests).toHaveLength(count)
+  online=true;now+=1000;tick();await flush();tick();await flush()
+  expect(lease).toBe(2);expect(prefix).toBe('owned-2');expect(api.process.run).toHaveBeenCalledOnce()
+  expect(requests.filter(row=>row.path==='/background-status').at(-1)?.body).toMatchObject({pid:119,token:'lease-2',sequence:1});expect(cancel).not.toHaveBeenCalled()
+ }finally{clock.mockRestore()}
+})

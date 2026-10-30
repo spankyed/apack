@@ -513,6 +513,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       const authority=observations.independentStatusAuthority.beforeParentStop
       await expect.poll(async()=>{const current=await childProcessState(authority.pid);return !current||current.state==='Z'||current.start!==authority.process.start},{timeout:10000}).toBe(true)
       observations.independentStatusAuthority.retiredAfterChildStop=true
+      if(childApiRestart){const recoveredAuthority=observations.childApiRestart.authorityAfter;await expect.poll(async()=>{const current=await childProcessState(recoveredAuthority.pid);return !current||current.state==='Z'||current.start!==recoveredAuthority.process.start},{timeout:10000}).toBe(true);observations.childApiRestart.authorityRetiredAfterChildStop=true;}
     }
     observations.uiStop = true
     if (process.platform === 'linux') {
@@ -523,7 +524,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
 
     observations.stopped = await context()
     expect(observations.stopped.claude.sessionError).toBeUndefined()
-    expect(observations.stopped.native.state.sessionId).toBe(sessionId)
+    if(childApiRestart){expect(observations.stopped.sessionId).toBe(sessionId);expect(observations.stopped.claude.nativeContinuation.continuedInSessionId).toBe(job.sessionId)}else expect(observations.stopped.native.state.sessionId).toBe(sessionId)
     for (const [name, size] of [['normal', { width: 1100, height: 900 }], ['compact', { width: 680, height: 600 }]] as const) {
       await appPage.setViewportSize(size)
       await capture('apack-native-background-stopped-' + name + '.png')
