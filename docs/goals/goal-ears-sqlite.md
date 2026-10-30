@@ -238,21 +238,26 @@ The [backup cleanup correction](../references/evidence/ears-sqlite-implementatio
 preserves the original publication outcome alongside staging/lock cleanup errors, still attempts lock release,
 and reports a retained `publishedPath` after successful publication. Three exact-source baseline failures
 become passing cases; all 32 platform CLI cases, lint, syntax and twenty required-witness controls pass on
-Linux. Final integrated qualification remains pending; latest local types/builds are recorded below. Platform run 41130505526 qualifies the preceding exclusive-move checkpoint `58ae8a7b0e`; it does not qualify
-the later cleanup changes.
+Linux. The final strict result below qualifies these later cleanup inputs; run 41130505526 alone
+qualifies only the preceding exclusive-move checkpoint `58ae8a7b0e`.
 The [CLI close-wrapper correction](../references/evidence/ears-sqlite-implementation-2026-10-28/cli-close-outcomes/README.md)
 refuses thrown `undefined`, retains both command/close failures and preserves machine-readable commit/recovery
 outcomes. Five reproduced failures pass after correction; all 41 expanded platform CLI cases pass on Linux,
 along with lint, syntax, fourteen command-outcome controls and the preceding twenty backup controls.
 The platform workflow now includes the wrapper cases. [Full strict run 41132219406](https://github.com/spankyed/apack/actions/runs/41132219406)
-at `a8e12b1cd1` fails its producer at CLI TS2698; its independent platform jobs must finish through the same
-handle. Consumers cannot qualify when their producer fails. The [diagnostics/type correction](../references/evidence/ears-sqlite-implementation-2026-10-28/backup-cli-diagnostics/README.md)
+at `a8e12b1cd1` is terminal failure at producer CLI TS2698; all three independent platform jobs pass.
+Producer-dependent consumers cannot qualify from that run. The [diagnostics/type correction](../references/evidence/ears-sqlite-implementation-2026-10-28/backup-cli-diagnostics/README.md)
 at `dd0ddfeb86` uses an explicit object ternary for callback-assigned publication state. Backup error messages
 now print all failures and the destination/retained published path, matching the CLI's actual message-only
 reporter. Three baseline message failures become passing cases. CLI/testing types with incremental cache
 disabled, all five normal package builds, lint and all 41 platform CLI cases pass in one properly capped
 2-CPU/6-GiB/no-swap container with an explicit 4096-MiB Node heap. Original resource/type failures remain.
-Final exact-source strict/platform/installed qualification is still required; do not mislabel the earlier run green.
+[Full strict run 41135036125](https://github.com/spankyed/apack/actions/runs/41135036125) at `1eb47d88e1`
+is terminal success: producers, all three SQLite platforms, both integration shards, both native shards and
+app-and-rest pass. [Retained metadata](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-1eb/README.md)
+distinguishes those nine successful jobs from six skipped alternate workflow jobs. This closes the current
+strict/platform gap, not final installed/signed source or the remaining app/operational/performance gates.
+Repeat affected integrated gates after future production changes; documentation alone does not require a rerun.
 The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
 The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
 remains unexplained. The older editor intermittent also remains unexplained despite ten unchanged repeats.
@@ -260,10 +265,13 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: finish inspecting strict 41132219406 and qualify the diagnosed producer fix on exact inputs;
-then attribute scoped
-vector queries and deferred COMMIT work using phase timestamps and uninterrupted disposable measurement.
-The existing fixed-model study below does not justify a production setting change. Continue all app/operational requirements.
+Next checkpoint: measure supported larger native block sizing on a controlled fixed-model copy, before
+adding another native membership fast path. Dependencies: preserve the closed baseline snapshot/model and
+canonical bytes, bound disposable disk use, retain FULL/default checkpoints and the original query/recall gates.
+Closing checks include admission/COMMIT timing, native block/counter attribution, the complete query/update
+matrix, exact canonical-byte verification and resource/pause windows. A diagnostic cannot substitute for live
+app-owned admission or the remaining app/operational requirements. The SQL/native evidence below narrows the
+query cost; it does not resolve the separate durable-COMMIT responsiveness miss.
 No evidence here certifies arbitrary filesystems or completes the goal.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:
@@ -290,8 +298,18 @@ Next deliverables and their closing checks, without narrowing phases 3–7:
   completes both 16-KiB and 4-KiB variants: all canonical rows verify, all 7,200 paired query answers match and
   minimum cohort mean recall is 0.971. Both fail frozen query gates; recorded admission heartbeat p99 is 31.42/
   64.50 ms. Resource-driven pauses contaminate some timings, so this is not timing certification or a causal
-  layout comparison. No production setting changes. Next attribute repeated scope eligibility/native/rerank
-  SQL and COMMIT, adding wall-clock phase markers for uninterrupted disposable qualification. In a later
+  layout comparison. No production setting changes. The [SQL trace](../references/evidence/ears-sqlite-implementation-2026-10-28/query-attribution/README.md)
+  completes all 18 initial/updated cohorts x four passes x100 queries, verifies all canonical rows and reaches
+  minimum mean recall 0.973. In the warmed updated 10k scope, independent median stages are 8.87 ms eligibility,
+  34.28 ms native candidates and 8.02 ms rerank; preparation averages about 0.015 ms/query. Actual-owner admission
+  still misses responsiveness (45.81 s, heartbeat p99 181.71 ms); different storage/model/instrumentation prevents
+  a causal comparison with prior runs. A [fixed-snapshot policy diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/query-policy/README.md)
+  rejects cheaper target/nprobe settings: minimum mean recall 0.948, 0.915 and 0.893, below 0.95. Timing pauses
+  are retained; this updated-only comparison is not full acceptance. [Existing native counters](../references/evidence/ears-sqlite-implementation-2026-10-28/native-query-profile/README.md)
+  attribute about 51–54% of filtered native timer ticks to metadata scans, with about 665 metadata blocks/query.
+  Whole-list conversion per block remains despite binary-search membership. No cheaper ANN policy or native
+  prototype is adopted. Supported larger block sizing is the next controlled diagnostic, with possible COMMIT
+  write amplification an explicit measured risk. In a later
   0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;
   bounded native deletion still needs latency/WAL/resource qualification. FULL writes, canonical bytes,
   default checkpoints and original budgets remain unchanged. Do not relax gates around these results.

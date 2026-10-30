@@ -911,9 +911,25 @@ agents started work, contaminating some timing samples; single fixed-order obser
 or peak-resource qualification. The production default stays unchanged. The first harness's REAL/integer
 parameter refusal and corrected BigInt preflight are retained alongside the complete report.
 
-Next attribute scoped-vector eligibility, native candidates and reranking with actual SQL plans and timing,
-and deferred COMMIT independently. Add wall-clock phase markers and obtain uninterrupted disposable timing;
-do not discard paused/outlier samples or relax the original gates. Supported allocation controls alone have
+The [SQL attribution matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/query-attribution/README.md)
+now completes all 18 initial/updated cohorts with phase/query wall markers, canonical-byte verification and
+minimum mean recall 0.973. In the warmed updated 10k scope, independent stage medians are 8.87 ms eligibility,
+34.28 ms native candidates and 8.02 ms reranking; preparation averages about 0.015 ms/query. Driver execution
+and materialization remain combined, so this does not isolate decoding. The live owner still fails admission
+responsiveness; differences in model, instrumentation and storage prevent causal comparison with earlier runs.
+
+[Cheaper supported query policies](../references/evidence/ears-sqlite-implementation-2026-10-28/query-policy/README.md)
+fail the existing recall gate on the same immutable updated snapshot: 128/32 reaches 0.948, 256/16 reaches
+0.915 and 128/16 reaches 0.893, versus 0.974 for default 256/32. No settings or thresholds change. This
+updated-only diagnostic retains pause windows and does not replace the full acceptance matrix.
+[Upstream native counters](../references/evidence/ears-sqlite-implementation-2026-10-28/native-query-profile/README.md)
+then identify metadata scanning as about 51–54% of filtered native timer ticks versus 0.14% unfiltered.
+About 665 metadata blocks/query each repeat RHS conversion/allocation. These timer ratios are not CPU time
+or complete EARS call attribution. Before maintaining another native fast path, measure supported larger
+block sizing on a controlled fixed-model copy: fewer blocks might reduce filtering/read overhead, while
+larger rewrites might worsen COMMIT and disk costs. Require unchanged canonical bytes and full scoped
+query/update/recall/resource checks. Deferred COMMIT remains a separate responsiveness requirement.
+Do not discard paused/outlier samples or relax original gates. Supported allocation controls alone have
 not established a solution. Compare write volume, all query scopes/updates/recall, memory and disk before
 adopting any layout. A background worker
 alternative must coordinate its SQLite writer with synchronous foreground units and qualify worker death,
