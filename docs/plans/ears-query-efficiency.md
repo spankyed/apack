@@ -98,7 +98,8 @@ Done, 2026-10-29: [the readings](../references/evidence/ears-query-efficiency.md
 - Admitted: the chat page (thread open), the thread list (a view that refreshes repeatedly) and notes search, with
   message search's short page fixed beside them.
 - The chat page took one elmdb change (its `docs/roadmap/query-work-efficiency.md`); the rest were caller-only.
-- The list's re-runs on fields it doesn't show remain, owned by its surface's published contract.
-- The library's reads per row are recorded with a reopening trigger.
+- The list's re-runs were found to be needed: every field it reads is shown or sorted on.
+- Follow-ups: `addMessage` finds queued messages by an index on `status`, and the library's folder contents and
+  document reads take one read per relation kind.
 
 The application-performance plan remains a separate, unimplemented deliverable.

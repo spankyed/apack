@@ -100,10 +100,10 @@ Each disposition against its target:
 - **A, kept.** The page's work no longer depends on thread length. An earlier message's status change no longer runs
   the page again, since the page reads none of it. Answers are unchanged: the threads specs, an empty thread, a short
   one, and a queued message after a bulk add longer than the window.
-- **B, kept in part.** Crossings met their target. Re-runs on a field the list doesn't show did not: the list's rows
-  are its surface's published `ThreadEntity`s (`fe/contract.ts`, `lists.list`), so narrowing them changes a contract
-  other features read. That is not this plan's to change. Reopen with a contract that names the fields the list and
-  board show.
+- **B, kept.** Crossings met their target. The re-runs on a field the list doesn't show turned out not to exist: the
+  surface merges the list's rows into its thread map, the sidebar sorts every thread in it by `lastVisitedTimestamp`
+  and `lastMessageTimestamp`, and the board shows `updatedAt`, which every attribute write stamps. A visit or a new
+  message changes what the window shows, so the list running again is right.
 - **C, kept, its target missed by one crossing.** It answers 20 whenever 20 non-marker messages match, where it
   answered 15. When the first 20 matches hold markers, it asks again with a doubled limit: 4 crossings, not 3, and the
   bigger search costs about 0.2 to 0.4 ms.
@@ -119,11 +119,19 @@ Guards (`query-work.spec.ts`), each shown failing with its fix reverted (the fil
 
 `npm run spec` passed 974 tests.
 
-## Not admitted
+## Follow-ups, done the same day
 
-- **The library's `findDocument` and `engineFolderContents`.** They do reads per row of the same kind, but neither is
-  one of the three scenarios. Reopen on a library measurement of its own.
-- **`addMessage`'s sibling scan.** It reads every message's status on each message it adds, to move queued ones last:
-  O(M) on the write path. Reopen once the bounded backward walk lands, which it could use.
+- **`addMessage`'s sibling scan.** It read every message's status on each message added, to move queued ones last.
+  Message `status` is indexed now (`apack.json`), so the thread's queued messages are found from the index, and the
+  thread is read back from its last message only as far as the earliest of them; a thread with none queued reads no
+  message. `query-work.spec.ts` holds the order: after each add and a marker, a thread's queued messages last in
+  their order, one left far back found, another thread's untouched.
+- **The library's `findDocument` and `engineFolderContents`.** `findDocument` walked every collection's documents to
+  find the one holding it; it reads its collection by the edge in. A folder's contents read each child folder's
+  children in two reads per folder, and the root read every document whole to find those in no folder; both read in
+  one read per relation kind now, and the root reads whole only the documents it lists. A randomized differential
+  check, the old code against the new over eight trees with folders and documents trashed and deleted, answered the
+  same for every folder's contents and every document. Reads on one of them: the root's contents 87 → 7, a document
+  20 → 2.
 
-Stopping rule: these three and C's defect; anything else is new scope.
+Stopping rule: these three, C's defect and the follow-ups above; anything else is new scope.
