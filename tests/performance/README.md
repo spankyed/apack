@@ -26,7 +26,7 @@ The display/driver, fixed fixture, and completion checks are common to all recor
 
 Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 
-- `manifest.json` identifies source/dirty state, actual build/native output hashes, fixture, runtimes,
+- `manifest.json` identifies source/dirty state, actual build/native output hashes and checkout identity, fixture distributions, runtimes,
   machine, recording mode, cache policy and warmups.
 - `results.json` retains warmups, failures/incomplete trials, raw process records and median/range/count.
 - `trace.json` is Chrome Trace Event JSON for Perfetto. Durations are local monotonic measurements;

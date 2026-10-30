@@ -6,7 +6,7 @@ const scalar = z.union([z.string().max(128), z.number().finite(), z.boolean()]);
 export const spanSchema = z.object({
   name: z.string().max(128), traceId: z.string().regex(/^[a-f0-9]{32}$/), spanId: z.string().regex(/^[a-f0-9]{16}$/),
   parentSpanId: z.string().regex(/^[a-f0-9]{16}$/).optional(), startTime: hrTime, duration: hrTime,
-  status: count, attributes: z.record(z.string().max(128), scalar),
+  status: count.max(2), attributes: z.record(z.string().max(128), scalar),
   links: z.array(z.object({ traceId: z.string(), spanId: z.string() })).max(32), droppedLinks: count,
 });
 export const processReportSchema = z.object({
@@ -29,7 +29,8 @@ export const processReportSchema = z.object({
 export const manifestSchema = z.object({
   format: z.literal(1), source: z.object({ revision: z.string(), dirty: z.boolean(), diffSha256: z.string() }),
   builds: z.array(z.object({ path: z.string(), sha256: z.string() })).min(1),
-  fixture: z.object({ generator: z.string(), seed: count, sha256: z.string() }),
+  fixture: z.object({ generator: z.string(), seed: count, sha256: z.string(), distribution: z.record(z.string(), count) }),
+  native: z.object({ pin: z.string(), checkoutRevision: z.string(), dirty: z.boolean() }),
   runtime: z.record(z.string(), z.string()), machine: z.object({ platform: z.string(), arch: z.string(), cpus: count, memoryBytes: count, identity: z.string() }),
   mode: z.enum(['disabled', 'lightweight', 'detailed']),
   cache: z.enum(['warm-process', 'fresh-process-warm-filesystem']), warmups: count,
@@ -57,7 +58,7 @@ export function summarize(input: readonly PerformanceTrial[]) {
   const middle = Math.floor(values.length / 2);
   return { measured: measured.length, passed: values.length, unsuccessful: measured.length - values.length,
     medianMs: values.length === 0 ? null : values.length % 2 ? values[middle]! : (values[middle - 1]! + values[middle]!) / 2,
-    minMs: values[0] ?? null, maxMs: values.at(-1) ?? null };
+    minMs: values.length ? values[0]! : null, maxMs: values.at(-1) ?? null };
 }
 
 /** Twenty trials per revision by default, balanced within each four-run block. Warmups precede this order. */
@@ -69,11 +70,13 @@ export function comparisonOrder(perRevision = 20): Array<'A' | 'B'> {
 /** Source/build identities describe each revision; execution conditions must match before comparing them. */
 export function assertComparable(leftInput: unknown, rightInput: unknown) {
   const left = manifestSchema.parse(leftInput); const right = manifestSchema.parse(rightInput);
-  if (left.source.dirty || right.source.dirty) throw new Error('Comparison requires clean source revisions');
-  for (const field of ['fixture', 'runtime', 'machine', 'mode', 'cache', 'warmups'] as const) {
+  if (left.source.dirty || right.source.dirty || left.native.dirty || right.native.dirty) throw new Error('Comparison requires clean source revisions');
+  for (const field of ['fixture', 'native', 'runtime', 'machine', 'mode', 'cache', 'warmups'] as const) {
     const canonical = (value: unknown): string => JSON.stringify(value, (_key, entry: unknown) => entry !== null && typeof entry === 'object' && !Array.isArray(entry) ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b))) : entry);
     if (canonical(left[field]) !== canonical(right[field])) throw new Error(`Incompatible comparison: ${field}`);
   }
+  const nativeOutputs = (manifest: PerformanceManifest) => manifest.builds.filter(build => build.path.startsWith('vendor/elmdb/')).sort((a, b) => a.path.localeCompare(b.path));
+  if (JSON.stringify(nativeOutputs(left)) !== JSON.stringify(nativeOutputs(right))) throw new Error('Incompatible comparison: native outputs');
 }
 
 /** Chrome Trace events, readable by Perfetto. Parent ids/links preserve causality without summing durations. */

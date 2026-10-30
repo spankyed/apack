@@ -1,4 +1,4 @@
-// A pack's Playwright configs: its E2E suite, its driving scripts, and the engine serving one of them.
+// Playwright configurations for E2E suites, driving and manual application-performance qualification.
 //
 //   import { definePackE2EConfig } from '@apackdev/testing/playwright';
 //   export default definePackE2EConfig();
@@ -78,4 +78,15 @@ export function defineDriveConfig(options: DriveConfigOptions = {}): PlaywrightT
 function ignored(testIgnore: PlaywrightTestConfig['testIgnore']): (string | RegExp)[] {
   if (testIgnore === undefined) return [];
   return Array.isArray(testIgnore) ? [...testIgnore] : [testIgnore];
+}
+
+
+/** Manual application qualification in tests/performance: one owned app, explicit trials, no automatic diagnostic overhead. */
+export function definePerformanceConfig(options: PlaywrightTestConfig = {}): PlaywrightTestConfig {
+  return defineConfig({
+    testDir: '.', testMatch: '*.spec.ts', workers: 1, retries: 0,
+    timeout: 120_000, outputDir: '../../.apack/performance/playwright',
+    use: { viewport: { width: 1400, height: 900 }, trace: 'off', screenshot: 'off' },
+    ...options,
+  });
 }

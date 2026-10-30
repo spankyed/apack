@@ -18,6 +18,6 @@ export function threadFixture() {
   return { data, identity: {
     generator: 'populated-threads-v1', seed: 0,
     sha256: createHash('sha256').update(JSON.stringify(data)).digest('hex'),
-    threads: 2, messagesPerThread: 100, requestedPage: 50,
+    distribution: { threads: 2, messagesPerThread: 100, requestedPage: 50, bodyRepetitions: 50 },
   } };
 }

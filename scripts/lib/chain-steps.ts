@@ -457,7 +457,7 @@ const EVERY_WORKSPACE = PACKAGES.flatMap(workspace);
  *
  * Build output is not in here, because a guard's subject is source. `typecheck` adds its own.
  */
-const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/packs', 'tests/scripts',
+const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSPACE, 'scripts', '.github/scripts', 'tests/e2e', 'tests/performance', 'tests/packs', 'tests/scripts',
   'tests/tsconfig.json', 'playwright.config.ts', 'types', 'electron-builder.mjs', 'build/build-metadata.ts', 'package.json',
   // The drive layer's one tracked file. The driving scripts beside it are gitignored and ad-hoc, so naming
   // the directory would re-run a typecheck every time someone poked at the app
