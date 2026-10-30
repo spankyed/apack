@@ -1,3 +1,4 @@
+import { CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { claudeTerminalBackgroundStatusRuntime } from './terminal-background-status-runtime.ts'
 import { claudeTerminalBackgroundReplyRuntime } from './terminal-background-reply-runtime.ts'
 import { claudeTerminalLeftArrowRuntime } from './terminal-leftarrow-runtime.ts'
@@ -43,6 +44,7 @@ export const claudeTerminalUiRuntime = withClaudeNativePlatformRuntime(String.ra
 import {stripVTControlCharacters} from 'node:util';
 import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
+const nativeUiTextMessageMaxBytes=${CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES};
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
 let helperPolicyReader;
 export function readNativeHelperPolicy(){return helperPolicyReader?.()}
@@ -384,7 +386,7 @@ async function askHost(subtype,args){
  const current=JSON.parse(readFileSync(configUrl,'utf8')),id=randomUUID();
  return new Promise(resolve=>{
   const request=http.request({socketPath:config.socketPath,path:'/ui-host',method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:4500},response=>{
-   let bytes=0;const chunks=[];response.on('data',chunk=>{bytes+=chunk.length;if(bytes>2*1048576)response.destroy();else chunks.push(chunk);});
+   let bytes=0;const chunks=[];response.on('data',chunk=>{bytes+=chunk.length;if(bytes>nativeUiTextMessageMaxBytes)response.destroy();else chunks.push(chunk);});
    response.on('error',()=>resolve(undefined));response.on('end',()=>{try{const value=JSON.parse(Buffer.concat(chunks).toString());resolve(response.statusCode===200&&value.request_id===id&&value.pid===process.pid&&value.sessionId===current.sessionId?value.result:undefined);}catch{resolve(undefined);}});
   });request.on('error',()=>resolve(undefined));request.on('timeout',()=>request.destroy());
   request.end(JSON.stringify({sessionId:current.sessionId,pid:process.pid,request_id:id,sequence:++hostSequence,request:{subtype,surface:'desktop',client_id:args.clientId,...(args.text!==undefined?{text:args.text}:{}),...(args.mode!==undefined?{mode:args.mode}:{}),...(args.ifEmpty===true?{ifEmpty:true}:{}),...(args.focus===true?{focus:true}:{}),...(args.decorations!==undefined?{decorations:args.decorations}:{})}}));

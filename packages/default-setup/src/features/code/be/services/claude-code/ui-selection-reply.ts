@@ -1,8 +1,9 @@
+import { CLAUDE_UI_TEXT_MAX_LENGTH, CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES } from './ui-text-limits.ts'
 import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 
-const selection = z.object({ text: z.string().max(1000000).optional(), instance_id: z.string().min(1).max(256).optional() }).strict()
+const selection = z.object({ text: z.string().max(CLAUDE_UI_TEXT_MAX_LENGTH).optional(), instance_id: z.string().min(1).max(256).optional() }).strict()
 export type ClaudeUiSelection = z.infer<typeof selection>
 
 /** Selection text bypasses the logged event bus. A mounted view receives only this one-use address. */
@@ -33,7 +34,7 @@ export async function createClaudeSelectionReply(signal: AbortSignal, expiresAt:
       let bytes = 0
       for await (const chunk of request) {
         bytes += chunk.length
-        if (bytes > 4 * 1048576) { response.writeHead(413); response.end(); finish(); return }
+        if (bytes > CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES) { response.writeHead(413); response.end(); finish(); return }
         chunks.push(Buffer.from(chunk))
       }
       const parsed = selection.safeParse(JSON.parse(Buffer.concat(chunks).toString('utf8')))
