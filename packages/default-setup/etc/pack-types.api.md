@@ -526,6 +526,8 @@ interface ClaudeBackgroundAttachmentView {
     problem?: string;
 }
 
+type ClaudeBackgroundCheckpoint = NonNullable<Awaited<ReturnType<typeof claimClaudeBackgroundCheckpoint>>>;
+
 /** Native next-turn reply; an acknowledgement means queued, not a stored transcript receipt. */
 interface ClaudeBackgroundReplyRequest {
     operation: 'reply';
@@ -3706,12 +3708,17 @@ type EdgeEntity = FlowEdge;
 type Effort = z.infer<typeof EffortSchema>;
 
 declare const EffortSchema: z.ZodEnum<{
-    max: "max";
     low: "low";
     medium: "medium";
     high: "high";
     xhigh: "xhigh";
+    max: "max";
 }>;
+
+type Endpoint = {
+    directory: string;
+    token: string;
+};
 
 type EntityId = EARS$2.EntityId;
 
@@ -8223,6 +8230,21 @@ declare const chatQueries: {
     readonly messageById: (messageId: EARS.EntityId) => MessageEntity | null;
 };
 
+/**
+ * An immutable generation grants its successor with one exclusive hard link. No stale lock is
+ * unlinked: concurrent claimants follow the winner, including when it dies during socket recovery.
+ * The registry contains only a private endpoint capability, never Claude credentials or settings.
+ */
+declare function claimClaudeBackgroundCheckpoint(options: {
+    profile: string;
+    parentSessionId: string;
+    endpoint?: Endpoint;
+}): Promise<{
+    directory: string;
+    token: string;
+    retire(): Promise<void>;
+} | undefined>;
+
 declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
     kind: z.ZodLiteral<"helpTab">;
     revision: z.ZodString;
@@ -8629,6 +8651,8 @@ declare function createClaudeBackgroundStatusAuthority(parentSessionId: string, 
 /** The linked child owns this transport and plugin directory after the parent writer exits. */
 declare function createClaudeBackgroundStatusObserver(options: {
     parentSessionId: string;
+    profile?: string;
+    checkpoint?: ClaudeBackgroundCheckpoint;
     target(): {
         sessionId: string;
         cwd: string;
