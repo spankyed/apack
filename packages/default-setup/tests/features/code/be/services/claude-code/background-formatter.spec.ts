@@ -20,9 +20,9 @@ async function fixture() {
  cleanups.push(close)
  const launcher=await installClaudeBackgroundFormatterLauncher()
  const formatter=createClaudeBackgroundFormatter({launcher,socketPath,brokerToken:'broker-token',changed:vi.fn()})
- async function run(prefix: string, command: string, stdin=input) {
+ async function run(prefix: string, command: string, stdin=input, environment: NodeJS.ProcessEnv = {...process.env,CLAUDE_CODE_SHELL_PREFIX:prefix}) {
   const cfg=config(prefix),encoded='-'+Buffer.from(JSON.stringify(cfg)).toString('base64url')
-  const process=spawn(launcher,[encoded,command],{stdio:'pipe'}),stdout:Buffer[]=[],stderr:Buffer[]=[]
+  const process=spawn(launcher,[encoded,command],{stdio:'pipe',env:environment}),stdout:Buffer[]=[],stderr:Buffer[]=[]
   process.stdout.on('data',part=>stdout.push(part));process.stderr.on('data',part=>stderr.push(part));process.stdin.on('error',()=>{});process.stdin.end(stdin)
   const result=await new Promise<{code:number|null;signal:NodeJS.Signals|null}>((resolve,reject)=>{process.once('error',reject);process.once('close',(code,signal)=>resolve({code,signal}))})
   return {...result,stdout:Buffer.concat(stdout),stderr:Buffer.concat(stderr).toString()}
@@ -99,4 +99,12 @@ it('matches original native line normalization and withdraws an empty successful
  const producer=config(f.configure(message())!.shellPrefix!)
  f.accept({...producer,startedAt:'1',stdout:'  first  \n \n second \n'});expect(f.value).toBe('first\nsecond')
  f.accept({...producer,startedAt:'2',stdout:' \n '});expect(f.value).toBeUndefined()
+})
+
+it('hides the internal prefix and restores the original Electron-mode environment before delegation',async()=>{
+ const f=await fixture(),command='printf "%s" "${CLAUDE_CODE_SHELL_PREFIX-unset}:${ELECTRON_RUN_AS_NODE-unset}"'
+ const prefix=f.formatter.configure(message(command))!.shellPrefix!
+ const environment={...process.env,CLAUDE_CODE_SHELL_PREFIX:prefix,ELECTRON_RUN_AS_NODE:'original-value'}
+ const result=await f.run(prefix,command,input,environment)
+ expect(result.code).toBe(0);expect(result.stdout.toString()).toBe('unset:original-value')
 })

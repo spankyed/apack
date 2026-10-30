@@ -1086,7 +1086,7 @@ useNativeTranscriptViewport({
 
 <style scoped>
 .native-chat-shell { min-height: var(--native-chat-min-height, auto); }
-.chat-composer-area--background { min-height: min(14rem, 55%); }
+.chat-composer-area--background { flex-basis: 0; min-height: min(14rem, 55%); }
 .native-chat-shell:has([data-native-notice="refusal_fallback_prompt"]) { --composer-notice-history-reserve: 10rem; }
 /* Keep pending native decisions beside useful conversation space in short windows. */
 @media (max-height: 720px) {

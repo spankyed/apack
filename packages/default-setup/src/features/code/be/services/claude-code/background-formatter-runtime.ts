@@ -5,6 +5,7 @@ const [electronState,encoded,command,...extra]=process.argv.slice(1);
 if(extra.length||!encoded?.startsWith('-')||typeof command!=='string'){process.exit(64);}
 if(electronState.startsWith('x:'))process.env.ELECTRON_RUN_AS_NODE=electronState.slice(2);else delete process.env.ELECTRON_RUN_AS_NODE;
 const config=JSON.parse(Buffer.from(encoded.slice(1),'base64url').toString());
+if(config.originalPrefix===null)delete process.env.CLAUDE_CODE_SHELL_PREFIX;else process.env.CLAUDE_CODE_SHELL_PREFIX=config.originalPrefix;
 const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
 let originalCommand=command;
 if(config.originalPrefix){const split=config.originalPrefix.lastIndexOf(' -');originalCommand=split>0?quote(config.originalPrefix.slice(0,split))+' '+config.originalPrefix.slice(split+1)+' '+quote(command):quote(config.originalPrefix)+' '+quote(command);}
