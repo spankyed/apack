@@ -1,0 +1,1 @@
+The same full-host process was paused for the other agent, then resumed. Its unchanged 600-second harness deadline expired during the pause. This partial run is not qualification. Final validation uses the later source including physical directory identity and stale-publication refusal.

@@ -250,26 +250,46 @@ pack build's correctly ordered generation. Ten unchanged editor repetitions pass
 [41067062738](https://github.com/spankyed/apack/actions/runs/41067062738). The actual job log confirms ten cases;
 artifact download hit an external egress limit. This does not establish the original intermittent failure's cause.
 
-The current [native signing checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
-finalizes binary hashes after inner signing and before outer app sealing. It preserves signing options/retries
-and refuses skipped libraries, mismatched unsigned provenance, concurrent manifest changes and escaping paths.
-Twelve isolated signing/Preview tests, tooling types, lint, workflow/shell syntax and three assertion-verified
-mutation controls pass. Published `2558de0d9d` is running signed installed [41069328528](https://github.com/spankyed/apack/actions/runs/41069328528)
-and full strict [41069599413](https://github.com/spankyed/apack/actions/runs/41069599413). Preserve those handles.
-The [routing follow-up](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/routing/README.md)
-moves the unchanged helper into `scripts/lib`, so normal tooling checks reach it. All 15 signing/Preview/boundary
-cases, tooling types, lint and workflow checks pass on that moved source; the old placement fails the boundary
-assertion. Publish and qualify this final routing source after the existing strict pending slot has started. Linux doubles do not establish signing validity.
-Final exact-source strict, required architectures, responsiveness and all remaining acceptance stay required.
+The [native signing checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
+now has real macOS ARM64 qualification: signed installed [41069328528](https://github.com/spankyed/apack/actions/runs/41069328528)
+passes at `2558de0d9d`, including a cold unsigned Preview build, unsigned native smoke, Developer ID signing,
+strict bundle verification, signed native smoke and all six actual executable app tests. This proves that
+checkpoint, not subsequent host changes or other installed architectures. The typed helper at current source
+also passes the exact scripts/repo/publish/E2E typecheck chain and 16 signing/Preview/boundary cases.
+
+Strict [41069599413](https://github.com/spankyed/apack/actions/runs/41069599413) at `2558de0d9d` exposes the old
+helper placement; [41070518650](https://github.com/spankyed/apack/actions/runs/41070518650) at `098d479157` is
+terminal failure in producers/Linux because moving the helper into checked scripts requires JSDoc types.
+That source issue is fixed and the exact failed command now passes. No failure was converted into a skip.
+
+The current [managed publication checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/managed-publication/README.md)
+protects writable handles as well as readers, scopes history quarantine by physical directory identity,
+refuses managed directory-leaf aliases and stale publication, preserves failed-open claims when a connection
+could not close, and classifies unreadable files through the selected backend. Seven independently reverted
+safeguards produce the intended failed assertions. The platform verifier requires all 27 new publication
+witnesses and rejects missing/skipped cases. Normal production composition stays elmdb.
+
+Local caps remain two CPU/six GiB/no swap with dropped capabilities. Full source contracts pass with 1,927
+host cases (one existing Windows-only case skipped), all 691 native-enabled EARS cases with zero skips,
+129 cases across focused storage/recovery/history files, 78 source-coverage/repro cases, affected types/lint, and EARS API reports after
+normal matching-package rebuild. A copied-fixture generation omission and unbuilt-package refusal are recorded;
+no guard or assertion was weakened. Retain exact-input receipts and current CI handles. Qualify the published
+checkpoint in full strict and real signed installed CI before treating these host changes as platform complete.
 
 Next deliverables and their closing checks, without narrowing phases 3–7:
 
 - Qualify native repair faults on the final platforms, complete physical publication/deletion authority and
   physical-file recovery, and verify interruption/reopen outcomes under cooperating ownership.
   Claims inside a database directory do not authorize arbitrary rename/delete or noncooperating writers.
-- Finalize native provenance after inner-library signing and before app sealing; qualify installed
+- Qualify final native provenance after inner-library signing and before app sealing; qualify installed
   Electron/renderer/CLI, executable-pack/SDK flows and required OS/architectures. `asar:false` already keeps
   the native files on disk. Ordinary source/unsigned package builds do not prove installed/signing behavior.
+- Close remaining filesystem/format ownership work: enforce ordinary unaliased data files, qualify foreign
+  valid SQLite refusal and positive persisted format identity before initialization, and synchronize/qualify
+  history-quarantine parent publication. Acquire store-scoped exclusion before `db reset` deletes history,
+  before clearing primary data, and test held handles/refusal/interruption. Test active worker shutdown and namespace operations through the
+  supported managed lifecycle. Raw constructors, hard-linked files and arbitrary mount aliases are not
+  excluded by a managed profile's directory claims. These remain phases 2/5/6, not completed requirements.
 - Resolve the existing failed responsiveness gate. Latest recorded 99,900-vector admission takes 20.77 s
   with heartbeat p99 48.14 ms against 16 ms. Projection batching improves throughput but does not prove a
   heartbeat win. In a later 0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;

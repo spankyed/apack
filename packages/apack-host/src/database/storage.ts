@@ -9,6 +9,8 @@ import type { EarsDatabase } from '@apackdev/ears';
 export interface DatabaseStorage {
   readonly format: string;
   readonly dataFile: string;
+  /** Only diagnosed file corruption permits run-history quarantine; resource and derived failures refuse. */
+  isUnreadableOpenError(error: unknown): boolean;
   open(options: DatabaseOptions): EarsDatabase;
   /** Starts claimed optional model work on a managed writable app store. */
   startBackground?(database: EarsDatabase): Promise<void>;
@@ -30,11 +32,14 @@ function refuseForeignFile(dir: string, name: string): void {
   // A selected backend mismatch is not corruption. In particular run-history boot must not move it aside.
   throw Object.assign(new Error(`${dir} holds ${name}; select its storage format explicitly`), { code: 'STORAGE_MISMATCH' });
 }
-const elmdb: DatabaseStorage = { format: ELMDB_FORMAT, dataFile: 'data.mdb', open(options) {
+const unreadableOpen = (...codes: string[]) => (error: unknown): boolean =>
+  !(error instanceof AggregateError) && !(error as { databaseConnectionUnclosed?: boolean })?.databaseConnectionUnclosed && codes.includes((error as { code?: string })?.code ?? '');
+
+const elmdb: DatabaseStorage = { isUnreadableOpenError: unreadableOpen('NOT_A_DATABASE', 'WRONG_FORMAT', 'CORRUPTED'), format: ELMDB_FORMAT, dataFile: 'data.mdb', open(options) {
   refuseForeignFile(options.path, 'data.sqlite3');
   return openElmdb(options);
 } };
-const sqlite: DatabaseStorage = { withBackgroundPaused: withNativeModelsPaused, startBackground: startVectorModels, format: SQLITE_FORMAT, dataFile: 'data.sqlite3', rebuildIndexes: rebuildSqliteIndexes, audit: auditSqliteDatabase, exportLogicalSnapshot: exportSqliteSnapshot, stageLogicalSnapshot: stageSqliteSnapshot, open(options) {
+const sqlite: DatabaseStorage = { isUnreadableOpenError: unreadableOpen('SQLITE_NOTADB', 'SQLITE_CORRUPT'), withBackgroundPaused: withNativeModelsPaused, startBackground: startVectorModels, format: SQLITE_FORMAT, dataFile: 'data.sqlite3', rebuildIndexes: rebuildSqliteIndexes, audit: auditSqliteDatabase, exportLogicalSnapshot: exportSqliteSnapshot, stageLogicalSnapshot: stageSqliteSnapshot, open(options) {
   refuseForeignFile(options.path, 'data.mdb');
   return openSqlite(options);
 } };

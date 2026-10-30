@@ -70,13 +70,28 @@ quarantine interrupted live directories, publish verified stages and rename the 
 settles. Recovery matches the selected profile by physical parent and fixed destination leaf, allowing ancestor
 aliases while refusing foreign profiles and database-leaf symlinks. Publication uses the selected profile paths.
 The CLI exposes it as `db recover`; completed sessions are never replayed. Full crash/filesystem
-qualification remains in the SQLite goal; never delete a preparation simply to bypass that refusal. These leases do not exclude a separate process or promise a single
-cross-store read snapshot. Managed read-only store opens register private metadata claims via
-`database/recovery-lock.ts` until close. Recovery publishes its exclusion before checking claims; readers publish
-claims before checking the exclusion, so neither can pass the other unnoticed. Dead claims use the existing
-host/PID liveness policy; unreadable/foreign-host claims refuse. Profile metadata must be writable for managed
-read-only access. Direct backend snapshot opens remain lower-level construction tools and must not be used to
-bypass a live profile’s ownership protocol.
+qualification remains in the SQLite goal; never delete a preparation simply to bypass that refusal.
+In-process write leases serialize a handle's logical mutations. A coordinated cross-store snapshot requires
+its own protocol.
+
+Every managed writable or read-only open registers a private directory-lifetime claim through
+`database/recovery-lock.ts`. Recovery publishes exclusion before checking claims; opens publish claims
+before checking exclusion. Claims remain until synchronous close succeeds; a failed constructor whose
+connection could not close retains its claim until process exit. Managed background owners use
+`closeDatabases` to drain workers before closing. Dead claims use existing host/PID liveness; unreadable,
+foreign-host or unresolved identity claims refuse. Profile metadata must be writable for every managed open.
+
+Full-profile recovery excludes every managed handle. Corrupt-history quarantine excludes that store,
+allowing an unrelated primary handle to stay open. Scoped checks compare directory device/inode identity
+and leaf name, so another spelling cannot hide the same physical directory. Unavailable identities refuse
+conservatively. Managed database-leaf symlinks refuse; ancestor aliases retain their supported behavior.
+A quarantine diagnosis cannot replace a newer directory installed before exclusion was acquired.
+
+`database/storage.ts` owns unreadable-open classification. SQLite permits quarantine for `SQLITE_NOTADB`
+and generic `SQLITE_CORRUPT`; known derived-index, I/O, permission, busy, full-disk and native-library errors
+refuse. Aggregate or unclosed-connection errors also refuse. Direct backend opens are lower-level tools;
+the caller owns namespace coordination. Arbitrary external rename/delete and aliased data files remain
+outside this protocol's qualification. The profile parent namespace must remain stable.
 
 ## Module map (`src/`)
 

@@ -195,7 +195,8 @@ it.each([ELMDB, SQLITE])('does not move a %s run history aside when the other ba
   const other = format === SQLITE ? ELMDB : SQLITE;
   expect(() => openRunHistory(history.database.path, { storageFormat: other }))
     .toThrow(expect.objectContaining({ code: 'STORAGE_MISMATCH' }));
-  expect(fs.readdirSync(dir)).toEqual(['runs']);
+  expect(fs.readdirSync(dir).sort()).toEqual(['db-readers', 'runs']);
+  expect(fs.readdirSync(path.join(dir, 'db-readers'))).toHaveLength(1);
   expect(fs.existsSync(path.join(history.database.path, databaseStorage(other).dataFile))).toBe(false);
 });
 

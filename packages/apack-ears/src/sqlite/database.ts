@@ -242,7 +242,7 @@ export class SqliteDatabase implements EarsDatabase {
       try { this.sql.close(); }
       catch (cleanup) {
         throw Object.assign(new AggregateError([error, cleanup], 'Opening SQLite failed and closing its connection also failed',
-          { cause: error }), { code: (error as { code?: unknown })?.code });
+          { cause: error }), { code: (error as { code?: unknown })?.code, databaseConnectionUnclosed: true });
       }
       throw error;
     }

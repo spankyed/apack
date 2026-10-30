@@ -57,6 +57,16 @@ describe('native manifest signing before outer app sealing', () => {
     expect(mocks.sign).toHaveBeenCalledTimes(1);
   });
 
+  it('retains signer defaults when no per-file callback was supplied', async () => {
+    mocks.sign.mockImplementation(async options => {
+      expect(options.optionsForFile(library)).toEqual({});
+      fs.appendFileSync(library, ' signed');
+      expect(options.optionsForFile(app)).toEqual({});
+    });
+    await signMacApplication({ app });
+    expect(manifest().extensionSha256).toBe(hash(library));
+  });
+
   it('refuses mismatched unsigned input before invoking the signer', async () => {
     fs.appendFileSync(library, ' changed');
     await expect(signMacApplication({ app })).rejects.toThrow(/mismatched build provenance/);

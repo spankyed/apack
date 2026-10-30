@@ -56,8 +56,16 @@ if(action==='import'){
  await importDatabase({lmdb:databaseBackupStore(primary),runHistory:databaseBackupStore(history)},candidate,paths.media,{log:{info(){},warn(){}}});
  throw new Error('import kill boundary not reached');
 }else if(action==='inspect')console.log(JSON.stringify(inspect()));
-else if(action==='reader'){
- const reader=openRunHistory(paths.runHistory,{readOnly:true,storageFormat:format}),parent=process.ppid;
+else if(action==='reader'||action==='writer'){
+ // Publish a preparation after a real writable handle opens, matching a handle that predates recovery.
+ const pending=action==='writer'?listImportRecoveries(root).find(item=>item.status!=='recovered'):undefined;
+ const marker=pending?path.join(path.dirname(pending.recoveryPath),'recovery.json'):undefined;
+ const record=marker?fs.readFileSync(marker):undefined;
+ if(marker)fs.unlinkSync(marker);
+ let reader;
+ try{reader=openRunHistory(paths.runHistory,{readOnly:action==='reader',storageFormat:format})}
+ finally{if(marker)fs.writeFileSync(marker,record,{mode:0o600})}
+ const parent=process.ppid;
  console.log('ready');setInterval(()=>{if(process.ppid!==parent){reader.database.close();process.exit(1)}},100);
 }
 else{
@@ -110,16 +118,16 @@ it.skipIf(process.platform === 'win32').each(
   expect(await run('recover', alias ? fs.realpathSync(physical) : root, format!, boundary!)).toMatchObject({ primary: ['Row-before'], history: ['RunNode-before'], media: 'incumbent', primaryOpen: null, historyOpen: null, result: { status: 'recovered' }, interrupted: ['Row-candidate'], retained: ['Row-before'], writer: null });
 });
 
-it.skipIf(process.platform === 'win32')('refuses a separate live reader and reclaims its claim after SIGKILL', async () => {
+it.skipIf(process.platform === 'win32').each(['reader', 'writer'])('refuses a separate live %s and reclaims its claim after SIGKILL', async action => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-reader-recovery-')); roots.push(root);
   await run('import', root, 'sqlite/1', 'move', true);
   const reader = spawn(process.execPath, ['--input-type=module', '--eval', child], {
-    stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NODE_OPTIONS: withoutSourceCondition(process.env.NODE_OPTIONS), APACK_STORAGE_FORMAT: 'sqlite/1', APACK_USER_DATA_DIR: root, EARS_RECOVERY_PROBE: JSON.stringify(['reader', root, 'sqlite/1', 'move']) },
+    stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NODE_OPTIONS: withoutSourceCondition(process.env.NODE_OPTIONS), APACK_STORAGE_FORMAT: 'sqlite/1', APACK_USER_DATA_DIR: root, EARS_RECOVERY_PROBE: JSON.stringify([action, root, 'sqlite/1', 'move']) },
   });
   readers.push(reader);
   const ready = await Promise.race([once(reader.stdout!, 'data'), once(reader, 'exit').then(() => { throw new Error('Reader exited before opening'); })]);
   expect(String(ready[0]).trim()).toBe('ready');
-  expect(await run('recover-blocked', root, 'sqlite/1', 'move')).toMatchObject({ refused: expect.stringContaining('Close tools reading this profile') });
+  expect(await run('recover-blocked', root, 'sqlite/1', 'move')).toMatchObject({ refused: expect.stringContaining('Close apps and tools using this profile') });
   reader.kill('SIGKILL'); await once(reader, 'exit');
   expect(await run('recover', root, 'sqlite/1', 'move')).toMatchObject({ primary: ['Row-before'], history: ['RunNode-before'], result: { status: 'recovered' }, writer: null });
 });

@@ -26,6 +26,8 @@ if (mode === 'verify') {
   const apiStartup=platform()==='linux'?report('api-startup.json'):null;
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
+  const publication = host.testResults.flatMap(test => /\/tests\/(backup\/recovery|database\/storage)\.spec\.ts$/.test(test.name.replaceAll('\\', '/')) ? test.assertionResults : [])
+    .filter(test => /excludes writable|refuses a new writable|store-only publication|quarantines corrupt|history quarantine|never treats|failed SQLite constructor|managed database-leaf aliases|excludes physical directory identity|refuses stale/.test(test.fullName));
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
@@ -51,6 +53,7 @@ if (mode === 'verify') {
     logicalSnapshotCasesPassed: passedIn(ears, /\/tests\/sqlite\/logical-snapshot\.spec\.ts$/),
     logicalHostCasesPassed: logical.filter(test => test.status === 'passed').length,
     logicalHostSkipped: logicalSkipped.map(test => ({ name: test.fullName, status: test.status })),
+    managedPublicationCasesPassed: publication.filter(test => test.status === 'passed').length,
     hostPassed: host.numPassedTests, recoveryCasesPassed: passedIn(host, /\/backup\/recovery\.spec\.ts$/) };
   save('verification.json', result);
   assert.equal(result.sdkBackendCasesPassed,2,'Both SDK fixture stores must use SQLite');
@@ -125,6 +128,8 @@ if (mode === 'verify') {
   assert(logicalSkipped.every(test => platform() === 'win32' && ['pending', 'skipped'].includes(test.status) &&
     test.fullName === 'reports a published but unsynchronized directory truthfully and retains its complete archive'),
     'Only Windows directory-sync qualification may be skipped in the logical archive cases');
+  assert.equal(publication.length, 27, 'All managed publication and corruption-classification cases must execute');
+  assert(publication.every(test => test.status === 'passed'), 'Managed writers, readers and failed-open connections must exclude physical replacement');
   assert(selected.length > 0 && selected.every(test => test.status === 'passed') && result.recoveryCasesPassed > 0,
     'SQLite-selected text cases and recovery must execute and pass; native fallback is insufficient');
 } else {

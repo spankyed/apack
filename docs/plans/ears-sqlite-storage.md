@@ -807,3 +807,25 @@ certificate on a disposable Preview, verifies strict bundle integrity, then runs
 SQLite app lifecycle. No release or notarization occurs. [Ordering/fault evidence and cold-build fix](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
 record the 12 passing isolated tests and three safeguard controls; actual macOS CI execution remains required.
 Preview and production now let the ordinary pack build generate entries after preparing SDK dependencies.
+
+
+### Managed directory lifetime and quarantine authority
+
+All managed host opens claim directory lifetime before entering either backend. Writable handles participate
+alongside readers. Physical recovery excludes the entire profile; history quarantine uses store-scoped
+exclusion so a primary handle does not prevent legitimate corrupt-history replacement. Claims carry the
+physical directory identity and leaf name. Unresolved identity stays excluded, managed leaf symlinks refuse,
+and quarantine verifies the original directory still occupies the destination after taking exclusion.
+
+A constructor that cannot close its native connection reports `databaseConnectionUnclosed`; its host claim
+survives until process exit. Aggregate/uncertain errors never authorize quarantine. Backend-owned classification
+recognizes SQLite's own corruption codes without treating I/O, permission, full-disk, busy or known derived-index
+failures as evidence that a whole history directory may be moved. Ordinary background owners continue to drain
+through `closeDatabases` before close or filesystem changes.
+
+[Managed publication evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/managed-publication/README.md)
+retains both-format tests, live-writer process death, stale-publication and close-fault proofs, exact input hashes
+and seven reverted-safeguard controls. All three platform jobs require 27 specific publication witnesses with
+no skips. Local functional evidence does not certify final platform, alias/unmanaged-writer, directory durability
+or performance behavior. Data-file alias enforcement, positive SQLite format identity and quarantine-parent
+synchronization remain existing-phase work before adoption.

@@ -1,4 +1,4 @@
-import { openProfileDatabase } from './recovery-lock.ts';
+import { directoryIdentity, holdRecoveryExclusion, openProfileDatabase } from './recovery-lock.ts';
 import { assertNoImportRecovery } from '../backup/recovery.ts';
 // Opening an app's database: the one composition of the elmdb database and the engine, which the API's boot and tools
 // (apack db) share, so both open a data dir the same way
@@ -56,9 +56,6 @@ export interface RunsDatabase {
   engine: EarsEngine;
 }
 
-/** elmdb's codes for files no open of them will read: not elmdb's, in another format, or damaged */
-const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 'CORRUPTED'];
-
 /**
  * The run history's database at `dir` (`runs`), held to the run history's schema. Opened to write, files that can't be
  * read — another format, a record store's from before, damaged — are moved aside, to `<dir>.unreadable-<time>`, and a
@@ -69,6 +66,7 @@ const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 
  */
 export function openRunHistory(dir: string, { readOnly, storageFormat = configuredDatabaseFormat(), replaceUnreadable = true }: { readOnly?: boolean; storageFormat?: string; replaceUnreadable?: boolean } = {}): RunsDatabase {
   if (!readOnly) assertNoImportRecovery(dir);
+  const incumbent = directoryIdentity(dir);
   const open = (): RunsDatabase => {
     const database = openProfileDatabase(dir, readOnly, () => databaseStorage(storageFormat).open({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) }));
     return { database, engine: createEarsEngine({ database }) };
@@ -76,11 +74,19 @@ export function openRunHistory(dir: string, { readOnly, storageFormat = configur
   try {
     return open();
   } catch (error) {
-    if (readOnly || !replaceUnreadable || !fs.existsSync(dir) || !UNREADABLE_CODES.includes((error as { code?: unknown })?.code)) throw error;
+    if (readOnly || !replaceUnreadable || !fs.existsSync(dir) || !databaseStorage(storageFormat).isUnreadableOpenError(error)) throw error;
     const aside = `${dir}.unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-    fs.renameSync(dir, aside);
+    const exclusion = holdRecoveryExclusion(dir, 'store');
+    try {
+      if (!incumbent || directoryIdentity(dir) !== incumbent) throw Object.assign(
+        new Error(`Run-history directory identity cannot be confirmed; retry or inspect ${dir} before replacing it`),
+        { code: 'PUBLICATION_REFUSED' });
+      fs.renameSync(dir, aside);
+    }
+    finally { exclusion.release(); }
+    const replacement = open();
     logger.warn(`The run history at ${dir} couldn't be opened (${errorMessage(error)}): it was moved to ${aside}, and a new one started`);
-    return open();
+    return replacement;
   }
 }
 

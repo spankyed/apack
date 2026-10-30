@@ -1,0 +1,91 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+ ↓ tests/backup/recovery.spec.ts (44 tests | 44 skipped)
+stderr | tests/database/storage.spec.ts > refuses sqlite/1 history quarantine while a managed reader still holds the directory
+[run-history] The run history at /tmp/apack-sqlite-profile-6JPerc/runs couldn't be opened (Injected corrupt-open diagnosis): it was moved to /tmp/apack-sqlite-profile-6JPerc/runs.unreadable-2026-10-30T15-18-26-255Z, and a new one started
+
+ ❯ tests/database/storage.spec.ts (36 tests | 2 failed | 34 skipped) 497ms
+   ↓ keeps elmdb as the normal default
+   ↓ refuses unknown boot formats
+   ↓ requires explicit absolute candidate storage (undefined)
+   ↓ requires explicit absolute candidate storage (relative/profile)
+   ↓ refuses the default production profile without opening it
+   ↓ refuses the default beta profile without opening it
+   ↓ refuses the default preview profile without opening it
+   ↓ refuses the default development profile without opening it
+   ↓ refuses the default test profile without opening it
+   ↓ selects both real stores and preserves the profile when selection is omitted on reopen
+   ↓ uses the explicitly supplied CLI profile for the isolation check
+   ↓ refuses children of a default profile and symlink aliases without creating their targets
+   ↓ blocks writable recovery opens without salvaging either elmdb/1 store
+   ↓ blocks writable recovery opens without salvaging either sqlite/1 store
+   ↓ routes explicit SQLite rebuild through maintenance ownership and waits for readiness
+   ↓ refuses unreadable run history without replacement when maintenance disables salvage
+   ↓ starts optional models on managed SQLite stores and releases both owners on shutdown
+   ↓ does not start native services for forensic SQLite readers or the normal elmdb backend
+   ↓ quarantines corrupt elmdb/1 history while an unrelated primary handle stays open
+   ↓ quarantines corrupt sqlite/1 history while an unrelated primary handle stays open
+   × refuses elmdb/1 history quarantine while a managed reader still holds the directory 72ms
+     → expected [Function] to throw error including 'Close apps and tools using this profi…' but got 'The database at /tmp/apack-sqlite-pro…'
+   × refuses sqlite/1 history quarantine while a managed reader still holds the directory 424ms
+     → expected [Function] to throw an error
+   ↓ never treats SQLITE_IOERR_READ as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_IOERR_FSYNC as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CANTOPEN as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_PERM as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_FULL as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_BUSY as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CORRUPT_INDEX as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CORRUPT_VTAB as permission to replace a SQLite history directory
+   ↓ never treats CORRUPT as permission to replace a SQLite history directory
+   ↓ never treats NATIVE_CHANGED as permission to replace a SQLite history directory
+   ↓ retains the directory claim when a failed SQLite constructor could not close its connection
+   ↓ preserves failed SQLite constructor authority without an AggregateError prototype
+   ↓ refuses stale elmdb/1 history publication after another directory was installed
+   ↓ refuses stale sqlite/1 history publication after another directory was installed
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/database/storage.spec.ts > refuses elmdb/1 history quarantine while a managed reader still holds the directory
+AssertionError: expected [Function] to throw error including 'Close apps and tools using this profi…' but got 'The database at /tmp/apack-sqlite-pro…'
+
+Expected: [32m"[7mClose apps and tools us[27min[7mg[27m this pro[7mfil[27me"[39m
+Received: [31m"[7mThe database at /tmp/apack-sqlite-profile-irQFzJ/runs is already open [27min this pro[7mcess; use the open on[27me"[39m
+
+ ❯ tests/database/storage.spec.ts:148:64
+    146|   const spy = vi.spyOn(databaseStorage(storageFormat), 'open').mockImp…
+    147|   try {
+    148|     expect(() => openRunHistory(directory, { storageFormat })).toThrow…
+       |                                                                ^
+    149|     expect(fs.readdirSync(parent).some(name => name.startsWith('runs.u…
+    150|     expect(fs.readFileSync(file)).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/database/storage.spec.ts > refuses sqlite/1 history quarantine while a managed reader still holds the directory
+AssertionError: expected [Function] to throw an error
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+undefined
+
+ ❯ tests/database/storage.spec.ts:148:64
+    146|   const spy = vi.spyOn(databaseStorage(storageFormat), 'open').mockImp…
+    147|   try {
+    148|     expect(() => openRunHistory(directory, { storageFormat })).toThrow…
+       |                                                                ^
+    149|     expect(fs.readdirSync(parent).some(name => name.startsWith('runs.u…
+    150|     expect(fs.readFileSync(file)).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 skipped (2)
+      Tests  2 failed | 78 skipped (80)
+   Start at  15:18:23
+   Duration  3.00s (transform 900ms, setup 14ms, collect 2.24s, tests 497ms, environment 0ms, prepare 81ms)
+
+JSON report written to /results/quarantine-without-exclusion.json

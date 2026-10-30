@@ -1,12 +1,14 @@
-import * as fs from 'node:fs';
+import fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
 import { afterEach, expect, it, vi } from 'vitest';
 import { APP_ENVS, appDataDirFor } from '@apackdev/sdk/env';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { DATABASE_FORMAT as ELMDB } from '@apackdev/ears/lmdb';
 import { DATABASE_FORMAT as SQLITE, openDatabase as openSqlite, waitForNativeModels } from '@apackdev/ears/sqlite';
 import { createEarsEngine, type EarsDatabase } from '@apackdev/ears';
+import { holdRecoveryExclusion } from '../../src/database/recovery-lock.ts';
 import { prepareImportRecovery } from '../../src/backup/recovery.ts';
 import { configuredDatabaseFormat, databaseStorage, openDatabaseStore, openRunHistory, startDatabaseBackground, closeDatabases } from '../../src/database/index.ts';
 
@@ -92,7 +94,8 @@ it('refuses unreadable run history without replacement when maintenance disables
   const bytes = Buffer.from('not an LMDB database');
   fs.writeFileSync(path.join(directory, 'data.mdb'), bytes);
   expect(() => openRunHistory(directory, { storageFormat: ELMDB, replaceUnreadable: false })).toThrow();
-  expect(fs.readdirSync(parent)).toEqual(['runs']);
+  expect(fs.readdirSync(parent).sort()).toEqual(['db-readers', 'runs']);
+  expect(fs.readdirSync(path.join(parent, 'db-readers'))).toEqual([]);
   expect(fs.readFileSync(path.join(directory, 'data.mdb'))).toEqual(bytes);
 });
 
@@ -118,4 +121,116 @@ it('does not start native services for forensic SQLite readers or the normal elm
   await expect(waitForNativeModels(reader)).rejects.toMatchObject({ code: 'BACKGROUND_OWNER_REQUIRED' });
   const native = databaseStorage(ELMDB).open({ path: root() }); opened.push(native);
   await expect(startDatabaseBackground(native)).resolves.toBeUndefined();
+});
+
+
+it.each([ELMDB, SQLITE])('quarantines corrupt %s history while an unrelated primary handle stays open', storageFormat => {
+  const parent = root(), primary = openDatabaseStore({ path: path.join(parent, 'db'), schema, storageFormat });
+  opened.push(primary.database);
+  const directory = path.join(parent, 'runs'); fs.mkdirSync(directory);
+  fs.writeFileSync(path.join(directory, databaseStorage(storageFormat).dataFile), Buffer.alloc(16384, 7));
+  const history = openRunHistory(directory, { storageFormat }); opened.push(history.database);
+  expect(history.database.isOpen).toBe(true);
+  expect(primary.engine.query('Probe').count()).toBe(0);
+  const aside = fs.readdirSync(parent).filter(name => name.startsWith('runs.unreadable-'));
+  expect(aside).toHaveLength(1);
+  expect(fs.readFileSync(path.join(parent, aside[0], databaseStorage(storageFormat).dataFile))).toEqual(Buffer.alloc(16384, 7));
+});
+
+it.each([ELMDB, SQLITE])('refuses %s history quarantine while a managed reader still holds the directory', storageFormat => {
+  const parent = root(), directory = path.join(parent, 'runs');
+  const seed = openRunHistory(directory, { storageFormat }); seed.database.close();
+  const reader = openRunHistory(directory, { storageFormat, readOnly: true }); opened.push(reader.database);
+  const file = path.join(directory, databaseStorage(storageFormat).dataFile), before = fs.readFileSync(file);
+  const failure = Object.assign(new Error('Injected corrupt-open diagnosis'), { code: storageFormat === SQLITE ? 'SQLITE_CORRUPT' : 'CORRUPTED' });
+  const spy = vi.spyOn(databaseStorage(storageFormat), 'open').mockImplementationOnce(() => { throw failure; });
+  try {
+    expect(() => openRunHistory(directory, { storageFormat })).toThrow('Close apps and tools using this profile');
+    expect(fs.readdirSync(parent).some(name => name.startsWith('runs.unreadable-'))).toBe(false);
+    expect(fs.readFileSync(file)).toEqual(before);
+    expect(reader.database.isOpen).toBe(true);
+  } finally { spy.mockRestore(); }
+});
+
+
+it.each(['SQLITE_IOERR_READ', 'SQLITE_IOERR_FSYNC', 'SQLITE_CANTOPEN', 'SQLITE_PERM', 'SQLITE_FULL',
+  'SQLITE_BUSY', 'SQLITE_CORRUPT_INDEX', 'SQLITE_CORRUPT_VTAB', 'CORRUPT', 'NATIVE_CHANGED'])
+('never treats %s as permission to replace a SQLite history directory', code => {
+  const parent = root(), directory = path.join(parent, 'runs'); fs.mkdirSync(directory);
+  const file = path.join(directory, 'data.sqlite3'), before = Buffer.alloc(16384, 7); fs.writeFileSync(file, before);
+  const failure = Object.assign(new Error('Injected non-primary open failure'), { code });
+  const spy = vi.spyOn(databaseStorage(SQLITE), 'open').mockImplementationOnce(() => { throw failure; });
+  try {
+    expect(() => openRunHistory(directory, { storageFormat: SQLITE })).toThrow(failure);
+    expect(fs.readdirSync(parent).some(name => name.startsWith('runs.unreadable-'))).toBe(false);
+    expect(fs.readFileSync(file)).toEqual(before);
+  } finally { spy.mockRestore(); }
+});
+
+it('retains the directory claim when a failed SQLite constructor could not close its connection', () => {
+  const parent = root(), directory = path.join(parent, 'runs');
+  const seed = openRunHistory(directory, { storageFormat: SQLITE });
+  const prototype = Object.getPrototypeOf((seed.database as unknown as { sql: object }).sql);
+  seed.database.close();
+  const file = path.join(directory, 'data.sqlite3'), before = Buffer.alloc(16384, 7); fs.writeFileSync(file, before);
+  const closeFailure = new Error('Injected constructor cleanup failure');
+  const originalClose = prototype.close as (this: { close(): unknown }) => unknown;
+  let closeLeaked: (() => unknown) | undefined, failure: unknown;
+  const spy = vi.spyOn(prototype, 'close').mockImplementationOnce(function (this: { close(): unknown }) {
+    closeLeaked = originalClose.bind(this); throw closeFailure;
+  });
+  try {
+    try { openRunHistory(directory, { storageFormat: SQLITE }); } catch (error) { failure = error; }
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(failure).toMatchObject({ code: 'SQLITE_NOTADB', databaseConnectionUnclosed: true });
+    expect((failure as AggregateError).errors).toContain(closeFailure);
+    expect(() => holdRecoveryExclusion(directory)).toThrow('Close apps and tools using this profile');
+    expect(fs.readdirSync(path.join(parent, 'db-readers'))).toHaveLength(1);
+    expect(fs.readFileSync(file)).toEqual(before);
+    expect(fs.readdirSync(parent).some(name => name.startsWith('runs.unreadable-'))).toBe(false);
+  } finally {
+    spy.mockRestore(); closeLeaked?.();
+    // The fixture closes the captured native connection; production retains this claim until process exit.
+  }
+});
+
+
+it('preserves failed SQLite constructor authority without an AggregateError prototype', () => {
+  const parent = root(), directory = path.join(parent, 'runs'); fs.mkdirSync(directory);
+  const file = path.join(directory, 'data.sqlite3'), before = Buffer.alloc(16384, 7); fs.writeFileSync(file, before);
+  const failure = Object.assign(new Error('Unclosed constructor connection'), { code: 'SQLITE_NOTADB', databaseConnectionUnclosed: true });
+  const spy = vi.spyOn(databaseStorage(SQLITE), 'open').mockImplementationOnce(() => { throw failure; });
+  try {
+    expect(() => openRunHistory(directory, { storageFormat: SQLITE })).toThrow(failure);
+    expect(fs.readFileSync(file)).toEqual(before);
+    expect(fs.readdirSync(path.join(parent, 'db-readers'))).toHaveLength(1);
+    expect(fs.readdirSync(parent).some(name => name.startsWith('runs.unreadable-'))).toBe(false);
+  } finally { spy.mockRestore(); }
+});
+
+
+it.each([ELMDB, SQLITE])('refuses stale %s history publication after another directory was installed', storageFormat => {
+  const parent = root(), directory = path.join(parent, 'runs'), previous = path.join(parent, 'previous');
+  fs.mkdirSync(directory); fs.writeFileSync(path.join(directory, databaseStorage(storageFormat).dataFile), Buffer.alloc(16384, 7));
+  const originalOpen = fs.openSync;
+  let installed = false;
+  const spy = vi.spyOn(fs, 'openSync').mockImplementation((...args: Parameters<typeof fs.openSync>) => {
+    if (!installed && String(args[0]) === path.join(parent, 'db-recovery.lock') && args[1] === 'wx') {
+      installed = true;
+      // A cooperating publisher can win after the failed open releases its claim and before this lock.
+      fs.renameSync(directory, previous);
+      const replacement = openRunHistory(directory, { storageFormat }); replacement.database.close();
+      fs.writeFileSync(path.join(directory, 'new-publication'), 'must survive');
+    }
+    return originalOpen(...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    expect(() => openRunHistory(directory, { storageFormat })).toThrow(expect.objectContaining({ code: 'PUBLICATION_REFUSED' }));
+    expect(installed).toBe(true);
+    expect(fs.readFileSync(path.join(directory, 'new-publication'), 'utf8')).toBe('must survive');
+    expect(fs.readdirSync(parent).some(name => name.startsWith('runs.unreadable-'))).toBe(false);
+  } finally { spy.mockRestore(); syncBuiltinESMExports(); }
+  const retry = openRunHistory(directory, { storageFormat }); opened.push(retry.database);
+  expect(retry.database.isOpen).toBe(true);
 });

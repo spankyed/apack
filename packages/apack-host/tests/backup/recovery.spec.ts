@@ -116,7 +116,7 @@ it.each(['elmdb/1', 'sqlite/1'].flatMap(format => [false, true].flatMap(recordAl
 it.each(['elmdb/1', 'sqlite/1'])('parent aliases preserve managed reader exclusion for %s', format => {
   const f = aliasedFixture(format, false);
   const reader = openRunHistory(_appDataPaths(f.originalTarget.userDataDir).runHistory, { readOnly: true, storageFormat: format });
-  try { expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile'); }
+  try { expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close apps and tools using this profile'); }
   finally { reader.database.close(); }
   expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
 });
@@ -202,7 +202,7 @@ it.each(['lmdb', 'runHistory'] as const)('excludes an open managed %s reader unt
       getRegisteredEntityTypes: () => new Set(['Row']), getRegisteredRelationKinds: () => new Set<string>(), getRegisteredRoles: () => new Set<string>(),
     } });
   try {
-    expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile');
+    expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close apps and tools using this profile');
     expect(fs.existsSync(path.join(f.dir, 'restore-stage'))).toBe(false);
   } finally { reader.database.close(); }
   expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
@@ -228,14 +228,15 @@ it.skipIf(process.platform === 'win32')('refuses a managed open without writable
   expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
 });
 
-it('retains a managed reader claim when its backend fails to close', () => {
-  const f = fixture('sqlite/1'), reader = openRunHistory(f.paths.runHistory, { readOnly: true, storageFormat: f.format });
+it.each([true, false])('retains a managed handle claim when close fails (readOnly=%s)', readOnly => {
+  const f = fixture('sqlite/1'), reader = { database: openProfileDatabase(f.paths.runHistory, readOnly,
+    () => databaseStorage(f.format).open({ path: f.paths.runHistory, readOnly })) };
   const sql = (reader.database as unknown as { sql: { close(): void } }).sql;
   const failure = new Error('database close failed');
   const spy = vi.spyOn(sql, 'close').mockImplementationOnce(() => { throw failure; });
   try {
     expect(() => reader.database.close()).toThrow(failure);
-    expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile');
+    expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close apps and tools using this profile');
   } finally { spy.mockRestore(); reader.database.close(); }
   expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
 });
@@ -243,9 +244,88 @@ it('retains a managed reader claim when its backend fails to close', () => {
 it.each(['invalid record', JSON.stringify({ pid: process.pid, machine: 'another-host', what: 'reader', since: 'now' })])('refuses unresolved reader ownership (%s)', record => {
   const f = fixture('sqlite/1'), dir = path.join(path.dirname(f.paths.lmdb), 'db-readers'), file = path.join(dir, 'unresolved.json');
   fs.mkdirSync(dir); fs.writeFileSync(file, record);
-  expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile');
+  expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close apps and tools using this profile');
   expect(fs.existsSync(path.join(f.dir, 'restore-stage'))).toBe(false);
   expect(findDatabaseWriter(f.target.userDataDir)).toBeNull();
   fs.unlinkSync(file);
   expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+});
+
+
+it.each(['elmdb/1', 'sqlite/1'])('excludes writable %s handles from physical recovery until close', format => {
+  const f = fixture(format);
+  for (const [name, type] of [['lmdb', 'Row'], ['runHistory', 'RunNode']] as const) {
+    // This handle predates the recovery attempt; use the real managed-open protocol and real backend.
+    const database = openProfileDatabase(f.paths[name], false, () => databaseStorage(format).open({ path: f.paths[name] }));
+    const engine = createEarsEngine({ database });
+    try {
+      engine.create(type, { id: `${type}-held` });
+      expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close apps and tools using this profile');
+      expect(fs.existsSync(path.join(f.dir, 'restore-stage'))).toBe(false);
+      expect(engine.query(type).ids()).toContain(`${type}-held`);
+      engine.create(type, { id: `${type}-still-writable` });
+    } finally { database.close(); }
+  }
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+  expect(ids(f.paths.lmdb, format)).toEqual(['Row-before']);
+});
+
+it.each([false, undefined])('refuses a new writable open during publication (readOnly=%s)', readOnly => {
+  const f = fixture('sqlite/1'), exclusion = holdRecoveryExclusion(f.paths.lmdb);
+  let database: ReturnType<typeof openProfileDatabase> | undefined, entered = false;
+  try {
+    expect(() => openProfileDatabase(f.paths.runHistory, readOnly, () => {
+      entered = true; database = databaseStorage(f.format).open({ path: f.paths.runHistory }); return database;
+    })).toThrow('Wait for import recovery');
+    expect(entered).toBe(false);
+  } finally { database?.close(); exclusion.release(); }
+  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
+});
+
+it('a store-only publication excludes that store but permits an unrelated sibling handle', () => {
+  const f = fixture('sqlite/1');
+  const primary = openProfileDatabase(f.paths.lmdb, false, () => databaseStorage(f.format).open({ path: f.paths.lmdb }));
+  try {
+    const exclusion = holdRecoveryExclusion(f.paths.runHistory, 'store');
+    try { expect(() => holdRecoveryExclusion(f.paths.lmdb, 'store')).toThrow('recovery is already active'); }
+    finally { exclusion.release(); }
+    expect(() => holdRecoveryExclusion(f.paths.lmdb, 'store')).toThrow('Close apps and tools using this profile');
+  } finally { primary.close(); }
+  const exclusion = holdRecoveryExclusion(f.paths.lmdb, 'store'); exclusion.release();
+});
+
+it('a store-only publication refuses claims whose database identity is unresolved', () => {
+  const f = fixture('sqlite/1'), registry = path.join(path.dirname(f.paths.lmdb), 'db-readers');
+  fs.mkdirSync(registry);
+  fs.writeFileSync(path.join(registry, 'unknown.json'), JSON.stringify({ pid: process.pid, machine: os.hostname(), what: 'unknown tool' }));
+  expect(() => holdRecoveryExclusion(f.paths.runHistory, 'store')).toThrow('Close apps and tools using this profile');
+});
+
+
+it.each([true, false])('refuses managed database-leaf aliases before opening (readOnly=%s)', readOnly => {
+  const f = fixture('sqlite/1'), alias = path.join(path.dirname(f.paths.runHistory), 'history-alias');
+  fs.symlinkSync(f.paths.runHistory, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  let entered = false;
+  expect(() => openProfileDatabase(alias, readOnly, () => {
+    entered = true; return databaseStorage(f.format).open({ path: alias, readOnly });
+  })).toThrow('ordinary database directory');
+  expect(entered).toBe(false);
+  expect(fs.existsSync(path.join(path.dirname(f.paths.runHistory), 'db-readers'))).toBe(false);
+  // An explicit unmanaged forensic snapshot may still inspect the target through its alias.
+  expect(ids(alias, f.format, 'RunNode')).toEqual(['RunNode-before', 'RunNode-interrupted']);
+});
+
+
+it('excludes physical directory identity even when its claim uses another leaf spelling', () => {
+  const f = fixture('sqlite/1');
+  const database = openProfileDatabase(f.paths.runHistory, false, () => databaseStorage(f.format).open({ path: f.paths.runHistory }));
+  const registry = path.join(path.dirname(f.paths.runHistory), 'db-readers'), files = fs.readdirSync(registry);
+  expect(files).toHaveLength(1);
+  const file = path.join(registry, files[0]), record = JSON.parse(fs.readFileSync(file, 'utf8'));
+  expect(record.directory).toMatch(/^\d+:[1-9]\d*$/);
+  fs.writeFileSync(file, JSON.stringify({ ...record, database: 'another-leaf-spelling' }));
+  let unexpected: ReturnType<typeof holdRecoveryExclusion> | undefined;
+  try {
+    expect(() => { unexpected = holdRecoveryExclusion(f.paths.runHistory, 'store'); }).toThrow('Close apps and tools using this profile');
+  } finally { unexpected?.release(); database.close(); }
 });

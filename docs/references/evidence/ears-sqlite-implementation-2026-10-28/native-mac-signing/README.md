@@ -53,3 +53,5 @@ Apple signing validity. Final exact-source strict CI, actual installed/platform 
 all remaining goal requirements stay open.
 
 Retained text logs normalize trailing whitespace for Git; [receipts](log-receipts.json) preserve original hashes. JSON reports are unchanged.
+
+[Actual signed installed macOS qualification at this checkpoint](installed-41069328528/README.md) now passes. Later host changes retain their own qualification.

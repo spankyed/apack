@@ -7,7 +7,12 @@ import { execFileSync } from 'node:child_process';
 import { setTimeout } from 'node:timers/promises';
 import { signAsync } from '@electron/osx-sign';
 
+/** @param {string} file */
 const sha = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+/**
+ * @param {string} root
+ * @param {string} file
+ */
 function contained(root, file) {
   const real = fs.realpathSync(file), relative = path.relative(root, real);
   if (relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
@@ -16,7 +21,9 @@ function contained(root, file) {
   return real;
 }
 
-/** electron-builder supplies the resolved identity, keychain, entitlements and ignore policy. */
+/** electron-builder supplies the resolved identity, keychain, entitlements and ignore policy.
+ * @param {import('@electron/osx-sign').SignOptions} options
+ */
 export async function signMacApplication(options) {
   const app = fs.realpathSync(options.app);
   const resources = contained(app, path.join(app, 'Contents/Resources/app'));
@@ -58,7 +65,7 @@ export async function signMacApplication(options) {
             file: path.relative(app, library), unsignedSha256: unsignedHash, signedSha256: signedHash,
           }));
         }
-        return perFile;
+        return perFile ?? {};
       } });
       if (!finalized) throw new Error('Signer did not finalize native provenance before sealing the app');
       return;
