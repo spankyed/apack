@@ -149,6 +149,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
+import { createScrollPositioning } from './scroll-positioning.ts'
 
 const quotes = [
   '"If a chatbot speaks in a forest and no one reads the output, does it still hallucinate?"',
@@ -229,6 +230,9 @@ function isTailMessage(msg: MessageEntity): boolean {
 }
 
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
+const scrollPositioning = createScrollPositioning(callback => requestAnimationFrame(callback), id => cancelAnimationFrame(id))
+watch(() => currentThread.value?.id, () => scrollPositioning.reset(), { flush: 'sync' })
+onUnmounted(() => scrollPositioning.reset())
 const recentThreadIds = useSelector(actor, (state) => state.context.recentThreadIds)
 const threadMap = useSelector(actor, (state) => state.context.threadMap)
 const recentThreads = computed(() => threadsFromStore(threadMap.value, recentThreadIds.value) as ThreadEntity[])
@@ -321,11 +325,7 @@ function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
 
 /** Instant scroll + double rAF to catch async content (Tiptap, images). */
 function forceScrollToBottom() {
-  scrollToBottom('instant')
-  requestAnimationFrame(() => {
-    scrollToBottom('instant')
-    requestAnimationFrame(() => scrollToBottom('instant'))
-  })
+  scrollPositioning.position(() => scrollToBottom('instant'))
 }
 
 function handleStatuslineClick() {
@@ -363,7 +363,7 @@ function onScroll() {
   isNearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
 
   // Trigger load-more when scrolled near the top
-  if (el.scrollTop < 100 && messagePagination.value.hasMore && !isPrependPending.value) {
+  if (scrollPositioning.ready() && el.scrollTop < 100 && messagePagination.value.hasMore && !isPrependPending.value) {
     requestLoadMore()
   }
 }
@@ -591,7 +591,10 @@ watch(allMessages, async (newMsgs, oldMsgs) => {
   }
 
   // A message opened from the panel's search is brought into view in place of a load's scroll
-  if (showFocusedMessage(newMsgs)) return
+  if (showFocusedMessage(newMsgs)) {
+    scrollPositioning.position(() => {})
+    return
+  }
 
   const isThreadLoad = threadChanged || !oldMsgs?.length || Math.abs(newMsgs.length - oldMsgs.length) > 1
   if (isThreadLoad || pendingScrollOnSend.value) {
