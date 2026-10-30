@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "90e014af6a006ff01dabfa38f8d4bf8e0807a7bb",
+  "researchCommit": "30ae128f2ae57463332a107708388066c6469ff5",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -98,7 +98,7 @@
     "src/integration/apack-terminal-bash-contract.mjs": "b76f48f8cb0e4f5dc721723fba39395d0db59a030675adcd25ff98d7b6441cf5",
     "src/integration/apack-terminal-file-contract.mjs": "e6ced7e9a078ba867f67d7b4a0029469b9eaebabfebd1cc1369b00bebeb0185b",
     "src/integration/apack-terminal-live-main.mjs": "731e296268b6e6bc51003179d4b36e0e55d6a36d864c712306aec886ba3e0f42",
-    "src/integration/apack-terminal-owner-app.mjs": "e8ff733c25ccd41ab7c142fc53b8a86485b96fb47b64c82018ddf85a8ed71643",
+    "src/integration/apack-terminal-owner-app.mjs": "ff462c4f98cff8c99a3829894106f60ea376e19d0718f6f18e7e8d5aea6be592",
     "src/integration/apack-terminal-owner.mjs": "dd41b441507c100edd911f56045acab1efcb406f73f5df49678509eb0700a2c5",
     "src/integration/apack-terminal-plan-contract.mjs": "0766a25a21670ea53b544725adbf783af265855aba1a7e1f75e3c8a0d3d0c06d",
     "src/integration/apack-terminal-question-contract.mjs": "d9e62ebd69980ca3b33b21bfa0965ca1f19330162aeed01e44f5b8e41067d701",
@@ -132,7 +132,7 @@
     "src/integration/native-background-confirmation.mjs": "aac77c4ed3100739405dbfbbbdfc40c0c9e91695e47d60e08f59c8eb88816bd0",
     "src/integration/native-background-dispatch-audit.mjs": "66d91754757b76fbfe375d9e89c71edcba39e62a909621560f7ca5dd67589c3b",
     "src/integration/native-background-handoff.mjs": "2bdb8648d8bd98146832eb3d9b458970e5e076d249cf214dcae9f214c148ab1e",
-    "src/integration/native-background-independent-reply.mjs": "5419f16f5e9bb6605b62157fe0f041382291f045272e9b8e892b7f8942d0b94b",
+    "src/integration/native-background-independent-reply.mjs": "1c4374c7fcdedee627fce0a603001177f26b4002feb737d2278837d1e5cf740b",
     "src/integration/native-background-reply-audit.mjs": "787d283016e5dd60259c9e079cf7ef5c2d96e1e5dad84cbe827e07890f3e8987",
     "src/integration/native-background-session.mjs": "ef5bdd2a9d9d56e8322673d74ca5f0c4c30df1c74a5fcfd4a6c73bfaf4001961",
     "src/integration/native-credit-admission.mjs": "63659e6970b5dede4d832c79ee448be5349fc4caa0f4b8e8ac10f9fb74599ae2",
@@ -163,7 +163,7 @@
     "src/integration/sync-native-kitty-vendor.mjs": "731ea9e87b9aff99cbbe170f84a755725a8f5df2f113fe9ddd6745c1e8dd9fa4",
     "src/integration/task-list-app-driver.mjs": "0f45af319d50854c50f5f5e1e1529f96230399a9fd8442be1a59031e87bb9b29",
     "src/integration/task-list-app.mjs": "e4784bf1817ec2f25c043ddff3234e199e3a4fcb473cb77a9999850586ee075d",
-    "src/integration/verify-background-reply.py": "858924d1db55859bd42fe9681521312b1a725067b9a9697d04e63ef86ae965e9",
+    "src/integration/verify-background-reply.py": "79b376455f356220628025802fd5c4aa93ed116b63535b32e31a7fed9ce73f09",
     "src/integration/verify-background-resume.py": "2f8d85b8cfc64b546f94d36b8269e0a3920bc9dd0f25b0a601cbe94a063fa56e",
     "src/integration/verify-background-status-lifecycle.py": "0acfa51f46d59122806704d093e63f46756369057b77bad9fc8a40c2f9ac8fe2",
     "src/integration/verify-background-status.py": "e8f3b42b8a193415839f5713c657c98f81e23d3679bce4849e00395772a7adfb",
@@ -377,5 +377,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "82b5b0c8fc1d656265968ad33c520c666bb51d2be9662bbfa35e3170155592c0"
+  "archiveSha256": "73b5df831bf51e4b75c8e6710dae503025faa070aa6881367bbe96f766ab9a24"
 }
