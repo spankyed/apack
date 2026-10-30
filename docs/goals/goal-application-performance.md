@@ -181,13 +181,18 @@ scope even though thread opening is the first vertical implementation slice.
   epoch timestamps only). It computes pending UTF-16 code units at database-backed view receipt in
   linear time, records clock-order mismatches and preserves both raw timelines. It explicitly does not
   claim database commit latency. Missing/incomplete/bounded-out capture fails the scenario; fixture
-  script changes enter its identity. Focused tests/types/API reports pass; built-app proof is pending.
+  script changes enter its identity. Focused tests/types/API reports pass. On `8ee2623066`, all six built-app streaming trials
+  passed with 24 production and nine receipt points each, no clock-order mismatches and complete
+  recordings (`streaming-lightweight-1793393452599`). A subsequent CLI invocation exposed trial-number
+  log overwrites; exclusive per-process logs now preserve the unique completed production, with
+  missing/ambiguous capture refused. The tracked full-read counterfactual also reproduced correctly
+  (`thread-open-lightweight-1793393476165`): fifty correct rows, 533,750 returned bytes against 164,809.
 
 ## Required remaining work
 
 Remaining application counterfactuals/overhead and independent late-search fault injection; strong
 populated-startup verification and integrated four-scenario qualification; cross-revision orchestration and full manifest/
-trial consistency checks; detailed profiles/renderer resource observations, streaming backlog and overhead qualification;
+trial consistency checks; detailed profiles/renderer resource observations and overhead qualification;
 full repository and strict acceptance; dependent reviewable PRs.
 Keep PR #293 a draft until its slice is qualified. Do not treat the recorder, authored scenarios,
 passing unit tests, or capture-integrity flags as completion of the approved goal.
