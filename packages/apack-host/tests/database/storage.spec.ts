@@ -5,10 +5,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { APP_ENVS, appDataDirFor } from '@apackdev/sdk/env';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { DATABASE_FORMAT as ELMDB } from '@apackdev/ears/lmdb';
-import { DATABASE_FORMAT as SQLITE, openDatabase as openSqlite } from '@apackdev/ears/sqlite';
+import { DATABASE_FORMAT as SQLITE, openDatabase as openSqlite, waitForNativeModels } from '@apackdev/ears/sqlite';
 import { createEarsEngine, type EarsDatabase } from '@apackdev/ears';
 import { prepareImportRecovery } from '../../src/backup/recovery.ts';
-import { configuredDatabaseFormat, databaseStorage, openDatabaseStore, openRunHistory } from '../../src/database/index.ts';
+import { configuredDatabaseFormat, databaseStorage, openDatabaseStore, openRunHistory, startDatabaseBackground, closeDatabases } from '../../src/database/index.ts';
 
 const roots: string[] = [], opened: EarsDatabase[] = [];
 afterEach(() => { for (const db of opened.splice(0)) db.close(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); vi.unstubAllEnvs(); });
@@ -94,4 +94,28 @@ it('refuses unreadable run history without replacement when maintenance disables
   expect(() => openRunHistory(directory, { storageFormat: ELMDB, replaceUnreadable: false })).toThrow();
   expect(fs.readdirSync(parent)).toEqual(['runs']);
   expect(fs.readFileSync(path.join(directory, 'data.mdb'))).toEqual(bytes);
+});
+
+
+it('starts optional models on managed SQLite stores and releases both owners on shutdown', async () => {
+  const dir = root(), paths = _appDataPaths(dir);
+  vi.stubEnv('APACK_STORAGE_FORMAT', SQLITE); vi.stubEnv('APACK_USER_DATA_DIR', dir);
+  const primary = openDatabaseStore({ path: paths.lmdb, schema }), runs = openRunHistory(paths.runHistory);
+  opened.push(primary.database, runs.database);
+  await Promise.all([startDatabaseBackground(primary.database), startDatabaseBackground(runs.database)]);
+  await Promise.all([waitForNativeModels(primary.database), waitForNativeModels(runs.database)]);
+  const peer = openSqlite({ path: paths.lmdb }); opened.push(peer);
+  await expect(startDatabaseBackground(peer)).rejects.toMatchObject({ code: 'BACKGROUND_OWNER_EXISTS' });
+  await closeDatabases([primary.database, runs.database]);
+  expect(primary.database.isOpen).toBe(false); expect(runs.database.isOpen).toBe(false);
+  await startDatabaseBackground(peer); await waitForNativeModels(peer); await closeDatabases([peer]);
+});
+
+it('does not start native services for forensic SQLite readers or the normal elmdb backend', async () => {
+  const dir = root(), writer = openSqlite({ path: dir }); writer.close();
+  const reader = openSqlite({ path: dir, readOnly: true }); opened.push(reader);
+  await startDatabaseBackground(reader);
+  await expect(waitForNativeModels(reader)).rejects.toMatchObject({ code: 'BACKGROUND_OWNER_REQUIRED' });
+  const native = databaseStorage(ELMDB).open({ path: root() }); opened.push(native);
+  await expect(startDatabaseBackground(native)).resolves.toBeUndefined();
 });

@@ -9,6 +9,7 @@ import { SqliteVectorModels } from '../../src/sqlite/vector-models.ts';
 import { SqliteVectorIndex } from '../../src/sqlite/vector-index.ts';
 import { exportLogicalSnapshot } from '../../src/sqlite/logical-export.ts';
 import { auditSqliteDatabase } from '../../src/sqlite/audit.ts';
+import { startVectorModels, waitForNativeModels } from '../../src/sqlite/index.ts';
 
 const held:Array<{db:SqliteDatabase;models:SqliteVectorModels;path:string}>=[];
 afterEach(async()=>{
@@ -40,24 +41,24 @@ function fixture(count=512) {const f=own(mkdtempSync(join(tmpdir(),'ears-vector-
 describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EARS_VEC1_EXTENSION)('durable native model admission',()=>{
   it('automatically admits an eligible committed generation, while small scopes and rolled-back growth stay exact',async()=>{
     const {db,e,models,job,seed}=fixture(4096);
-    await db.indexesReady();expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
+    await db.nativeModelsReady();expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
     e.admin.setSchema({types:{Row:{required:[],embed:{from:['title'],model:'fixture',dims:128,chunk:'paragraph'}},
       Other:{required:[],embed:{from:['title'],model:'other',dims:128}}},relations:{},roles:[]});
     e.create('Other',{title:'other'});const other=e.pendingEmbeddings('Other');
     e.embed(other.chunks.map(c=>({...c,model:other.model,vector:Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71))})));
-    await db.indexesReady();
+    await db.nativeModelsReady();
     const all=db.all.bind(db),pages=vi.spyOn(db,'all').mockImplementation((sql,parameters=[])=>all(sql,parameters));
-    e.write('Row-000000').set('unrelated','changed');await db.indexesReady();
+    e.write('Row-000000').set('unrelated','changed');await db.nativeModelsReady();
     expect(pages.mock.calls.some(([sql])=>sql.startsWith('WITH admission_page AS MATERIALIZED'))).toBe(false);
     const sequence=db.sequence;
     expect(()=>e.transact(()=>{seed(1);throw Error('rollback growth');})).toThrow('rollback growth');
-    await db.indexesReady();expect(db.sequence).toBe(sequence);
+    await db.nativeModelsReady();expect(db.sequence).toBe(sequence);
     expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
-    e.create('Row',{id:'Row-004096',title:'new'});await db.indexesReady();
+    e.create('Row',{id:'Row-004096',title:'new'});await db.nativeModelsReady();
     expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
     const pending=e.pendingEmbeddings('Row');expect(pending.chunks).toHaveLength(1);
     e.embed(pending.chunks.map(c=>({...c,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71))})));
-    const committed=db.sequence;await db.indexesReady();
+    const committed=db.sequence;await db.nativeModelsReady();
     expect(db.get('SELECT state,samples FROM vector_training WHERE generation=?',[job.generation]))
       .toEqual({state:'ready',samples:4097});
     expect(db.sequence).toBe(committed);
@@ -69,7 +70,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const original=db.get('SELECT * FROM chunks WHERE entity_id=?',['Row-000000'])!;
     e.embed([{id:'Row-000000',chunk:original.chunk,hash:original.hash,model:original.model,
       vector:Array.from({length:128},(_,j)=>Math.cos((j+1)*1.71))}]);
-    await db.indexesReady();
+    await db.nativeModelsReady();
     expect(pages.mock.calls.some(([sql])=>sql.startsWith('WITH admission_page AS MATERIALIZED'))).toBe(false);
     pages.mockRestore();
     const candidates=vi.spyOn(models.index,'candidates');
@@ -79,19 +80,19 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
   });
 
   it('admits canonical embeddings imported after an initially ineligible generation',async()=>{
-    const {db,e}=fixture(4096);await db.indexesReady();
-    const id=e.create('Row',{title:'imported'}).id();await db.indexesReady();
+    const {db,e}=fixture(4096);await db.nativeModelsReady();
+    const id=e.create('Row',{title:'imported'}).id();await db.nativeModelsReady();
     expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
     const chunk=db.get('SELECT * FROM chunks WHERE entity_id=?',[id])!;
     db.bulkLoad([{load:'embedding',id,index:chunk.index_name,chunk:chunk.chunk,hash:chunk.hash,model:chunk.model,
       vector:Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71))}]);
-    const sequence=db.sequence;await db.indexesReady();
+    const sequence=db.sequence;await db.nativeModelsReady();
     expect(db.get('SELECT state,samples FROM vector_training')).toEqual({state:'ready',samples:4097});
     expect(db.sequence).toBe(sequence);
   });
 
   it("discovers another connection's committed embeddings when readiness is polled",async()=>{
-    const {db}=fixture(4096);await db.indexesReady();
+    const {db}=fixture(4096);await db.nativeModelsReady();
     expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
     const peer=new SqliteDatabase({path:db.path,syncs:false});
     try {
@@ -99,7 +100,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
       const pending=other.pendingEmbeddings('Row');expect(pending.chunks).toHaveLength(1);
       other.embed(pending.chunks.map(c=>({...c,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71))})));
     }finally{peer.close();}
-    const sequence=db.sequence;await db.indexesReady();
+    const sequence=db.sequence;await db.nativeModelsReady();
     expect(db.get('SELECT state,samples FROM vector_training')).toEqual({state:'ready',samples:4097});
     expect(db.sequence).toBe(sequence);
   });
@@ -107,14 +108,14 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
   it('requires enough live distinct owners and rechecks eligibility after restoring trashed chunks',async()=>{
     const {db,e,seed}=fixture(0);
     const first=e.create('Row',{title:Array.from({length:4100},(_,i)=>`part ${i}`).join('\n\n')}).id();
-    seed(0);await db.indexesReady();
+    seed(0);await db.nativeModelsReady();
     expect(db.get('SELECT count(*) n FROM chunks WHERE embedding_id IS NOT NULL')!.n).toBe(4100);
     expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
-    seed(254);await db.indexesReady();
+    seed(254);await db.nativeModelsReady();
     expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
-    e.write(first).trash();seed(1);await db.indexesReady();
+    e.write(first).trash();seed(1);await db.nativeModelsReady();
     expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();
-    e.write(first).restore();const sequence=db.sequence;await db.indexesReady();
+    e.write(first).restore();const sequence=db.sequence;await db.nativeModelsReady();
     expect(db.get('SELECT state,samples FROM vector_training')).toEqual({state:'ready',samples:4355});
     expect(db.sequence).toBe(sequence);
   });
@@ -146,15 +147,15 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     }
     expect(refused).toBe(true);expect(outcome).toBe('busy');
     expect(db.get('SELECT 1 FROM vector_training')).toBeUndefined();expect(db.sequence).toBe(sequence);
-    commit.mockRestore();await db.indexesReady();
+    commit.mockRestore();await db.nativeModelsReady();
     expect(db.get('SELECT state FROM vector_training WHERE generation=?',[job.generation])!.state).toBe('ready');
     expect(pages.length).toBeGreaterThan(32);expect(Math.max(...pages)).toBeLessThanOrEqual(128);
     expect(plan.some(row=>String(row.detail).includes('chunk_native_admission')&&String(row.detail).includes('embedding_id>?'))).toBe(true);
   });
 
   it('discovers rebuilt generations without a logical commit and skips unsupported training dimensions',async()=>{
-    const {db,e,job}=fixture(4097);await db.indexesReady();const sequence=db.sequence;
-    db.rebuildIndexes();await db.indexesReady();
+    const {db,e,job}=fixture(4097);await db.nativeModelsReady();const sequence=db.sequence;
+    db.rebuildIndexes();await db.nativeModelsReady();
     const rebuilt=db.indexBuilds.jobs().find(j=>j.kind==='vector')!;
     expect(rebuilt.generation).not.toBe(job.generation);expect(db.sequence).toBe(sequence);
     expect(db.get('SELECT state,samples FROM vector_training WHERE generation=?',[rebuilt.generation]))
@@ -163,19 +164,19 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
       Other:{required:[],embed:{from:['title'],model:'small',dims:8}}},relations:{},roles:[]});
     e.create('Other',{title:'small'});const pending=e.pendingEmbeddings('Other');
     e.embed(pending.chunks.map(c=>({...c,model:pending.model,vector:[1,0,0,0,0,0,0,0]})));
-    await db.indexesReady();const small=db.indexBuilds.jobs().find(j=>j.kind==='vector'&&j.type==='Other')!;
+    await db.nativeModelsReady();const small=db.indexBuilds.jobs().find(j=>j.kind==='vector'&&j.type==='Other')!;
     expect(db.get('SELECT 1 FROM vector_training WHERE generation=?',[small.generation])).toBeUndefined();
     expect(e.query('Other').near([1,0,0,0,0,0,0,0],{k:1}).ids()).toHaveLength(1);
   });
 
   it('does not enqueue or keep polling a failed logical generation with a large partial projection',async()=>{
-    const {db,e,models}=fixture(4608);await db.indexesReady();
+    const {db,e,models}=fixture(4608);await db.nativeModelsReady();
     const refile=db.search.refileIndex.bind(db.search);let rows=0;
     const failure=vi.spyOn(db.search,'refileIndex').mockImplementation((row,seq,job)=>{
       if(job.kind==='vector'&&++rows>4200)throw Error('fixture projection failure');
       return refile(row,seq,job);
     });
-    db.rebuildIndexes();await expect(db.indexesReady()).rejects.toMatchObject({code:'INDEX_FAILED'});
+    db.rebuildIndexes();await expect(db.nativeModelsReady()).rejects.toMatchObject({code:'INDEX_FAILED'});
     failure.mockRestore();
     const failed=db.indexBuilds.jobs().find(job=>job.kind==='vector'&&job.state==='failed')!;
     expect(failed).toBeDefined();
@@ -191,14 +192,14 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const {db,e,models,job,write}=fixture(),sequence=db.sequence,events:number[]=[];
     const off=db.onIndexesChanged(changes=>events.push(changes.sequence));
     try {
-      write(()=>models.enqueue(job));await db.indexesReady();
+      write(()=>models.enqueue(job));await db.nativeModelsReady();
       const state=db.get('SELECT * FROM vector_training WHERE generation=?',[job.generation])!;
       expect(state.state).toBe('ready');expect(state.model).toBeNull();expect(state.samples).toBe(512);
       expect(state.extension_sha256).toMatch(/^[a-f0-9]{64}$/);expect(db.sequence).toBe(sequence);
       expect(events).toEqual([sequence]);
       expect(models.index.candidates(job.generation,Buffer.from(Float32Array.from(Array(128).fill(1)).buffer),100)).toHaveLength(100);
       e.admin.setSchema({types:{Row:{required:[],embed:{from:['title'],model:'replacement',dims:128}}},relations:{},roles:[]});
-      await db.indexesReady();
+      await db.nativeModelsReady();
       for(let i=0;i<1000&&db.get('SELECT 1 FROM index_gc WHERE generation=?',[job.generation]);i++)db.indexBuilds.step();
       expect(db.get('SELECT 1 FROM vector_indexes WHERE generation=?',[job.generation])).toBeUndefined();
       expect(db.get(`SELECT 1 FROM sqlite_schema WHERE name='ann_${job.generation}'`)).toBeUndefined();
@@ -212,7 +213,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const vector=Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71));
     const native=vi.spyOn(models.index,'candidates');
     const original=e.query('Row').near(vector,{k:1}).ids();expect(native).not.toHaveBeenCalled();
-    write(()=>models.enqueue(job));await db.indexesReady();
+    write(()=>models.enqueue(job));await db.nativeModelsReady();
     const hits=e.query('Row').near(vector,{k:20}).hits();
     expect(native).toHaveBeenCalled();expect(hits).toHaveLength(20);expect(hits[0]!.id).toBe(original[0]);
     expect(hits[0]!.score).toBeCloseTo(1);
@@ -229,7 +230,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
   });
 
   it('loads trusted native candidates on independent readers and writers without creating training owners',async()=>{
-    const {db,e,models}=fixture(4608);await db.indexesReady();
+    const {db,e,models}=fixture(4608);await db.nativeModelsReady();
     const vector=Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71));
     const expected=e.query('Row').near(vector,{k:20}).ids();
     const training=db.all('SELECT generation,state,attempt,model_sha256 FROM vector_training');
@@ -259,7 +260,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
   });
 
   it('retains the trusted connection loader in native-bearing export and private audit copies',async()=>{
-    const {db}=fixture(4608);await db.indexesReady();
+    const {db}=fixture(4608);await db.nativeModelsReady();
     const load=vi.spyOn(SqliteDatabase.prototype,'loadNativeVectors');
     let bytes=0;for await(const chunk of exportLogicalSnapshot(db))bytes+=chunk.byteLength;
     expect(bytes).toBeGreaterThan(0);expect(load).toHaveBeenCalledWith(db.nativeVectorExtension);
@@ -272,7 +273,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const {db,e,models,job,write}=fixture(4608);
     const vector=Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71));
     const first=e.query('Row').near(vector,{k:1}).ids()[0]!;
-    write(()=>models.enqueue(job));await db.indexesReady();
+    write(()=>models.enqueue(job));await db.nativeModelsReady();
     const repeated=e.create('Row',{title:Array.from({length:300},(_,i)=>`paragraph ${i}`).join('\n\n')}).id();
     const tied=e.create('Row',{title:'tie'}).id();
     const pending=e.pendingEmbeddings('Row',{limit:1000});expect(pending.chunks).toHaveLength(301);
@@ -317,7 +318,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(db.indexBuilds.step()).toBe('busy');expect(refused).toBe(true);
     expect(db.get('SELECT state FROM vector_training')!.state).toBe('training');
     db.sql.exec('BEGIN IMMEDIATE');const retained=models.step();expect(retained.progressed).toBe(true);db.sql.exec('ROLLBACK');
-    await db.indexesReady();expect(db.get('SELECT state FROM vector_training')!.state).toBe('ready');
+    await db.nativeModelsReady();expect(db.get('SELECT state FROM vector_training')!.state).toBe('ready');
   });
 
   it('recovers abandoned attempts and resumes committed model work after reopening',async()=>{
@@ -337,18 +338,86 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const hash=next.db.get('SELECT model_sha256 FROM vector_training')!.model_sha256;
     expect(next.db.get('SELECT state FROM vector_training')!.state).toBe('trained');
     await next.models.stop();next.db.close();
-    const resumed=own(path);resumed.write(()=>resumed.models.recover());await resumed.db.indexesReady();
+    const resumed=own(path);resumed.write(()=>resumed.models.recover());await resumed.db.nativeModelsReady();
     expect(resumed.db.get('SELECT state,model_sha256 FROM vector_training')).toEqual({state:'ready',model_sha256:hash});
     expect(resumed.db.sequence).toBe(sequence);
   });
 
   it('persists failure and supports explicit retry after additional primary embeddings',async()=>{
     const {db,e,models,job,write,seed}=fixture(8);write(()=>models.enqueue(job));
-    await expect(db.indexesReady()).rejects.toMatchObject({code:'INDEX_FAILED'});
+    await expect(db.nativeModelsReady()).rejects.toMatchObject({code:'INDEX_FAILED'});
     expect(JSON.parse(db.get('SELECT error FROM vector_training')!.error).code).toBe('TRAINING_DATA');
-    expect(e.query('Row').count()).toBe(8);seed(512);write(()=>models.retry(job.generation));await db.indexesReady();
+    expect(e.query('Row').count()).toBe(8);seed(512);write(()=>models.retry(job.generation));await db.nativeModelsReady();
     expect(db.get('SELECT state FROM vector_training')!.state).toBe('ready');
     expect(e.query('Row').count()).toBe(520);
+  });
+
+  it('recovers abandoned attempts only after claiming managed model ownership',async()=>{
+    const {db,models,job,write}=fixture();
+    write(()=>{models.enqueue(job);db.run("UPDATE vector_training SET state='training',attempt='abandoned'");});
+    await models.stop();
+    await expect(waitForNativeModels(db)).rejects.toMatchObject({code:'BACKGROUND_OWNER_REQUIRED'});
+    await startVectorModels(db);
+    expect(db.get('SELECT state,attempt FROM vector_training')).toEqual({state:'pending',attempt:null});
+    const peer=new SqliteDatabase({path:db.path,syncs:false,nativeVectorExtension:process.env.EARS_VEC1_EXTENSION!});
+    try {
+      await expect(startVectorModels(peer)).rejects.toMatchObject({code:'BACKGROUND_OWNER_EXISTS'});
+      expect(db.get('SELECT state,attempt FROM vector_training')).toEqual({state:'pending',attempt:null});
+    } finally {peer.close();}
+    await waitForNativeModels(db);
+    expect(db.get('SELECT state FROM vector_training')!.state).toBe('ready');
+    await db.drainBackground();
+  });
+
+  it('releases a failed managed startup claim and preserves its original recovery error',async()=>{
+    const {db,models}=fixture();await models.stop();
+    const failure=Object.assign(new Error('fixture recovery refusal'),{code:'SQLITE_IOERR'});
+    const recover=vi.spyOn(SqliteVectorModels.prototype,'recover').mockImplementationOnce(()=>{throw failure;});
+    await expect(startVectorModels(db)).rejects.toBe(failure);
+    expect(db.sql.inTransaction).toBe(false);recover.mockRestore();
+    await startVectorModels(db);await waitForNativeModels(db);await db.drainBackground();
+  });
+
+  it('refuses native ownership on a read-only connection without creating a service',async()=>{
+    const {db,models}=fixture();await models.stop();
+    const reader=new SqliteDatabase({path:db.path,readOnly:true,nativeVectorExtension:process.env.EARS_VEC1_EXTENSION!});
+    try {
+      await expect(startVectorModels(reader)).rejects.toMatchObject({code:'READ_ONLY'});
+      await expect(waitForNativeModels(reader)).rejects.toMatchObject({code:'BACKGROUND_OWNER_REQUIRED'});
+      await expect(reader.indexesReady()).resolves.toBeUndefined();
+    } finally {reader.close();}
+  });
+
+  it('keeps logical readiness usable while optional native work is pending or failed',async()=>{
+    const {db,e,models,job,write}=fixture();
+    vi.spyOn(models,'start').mockReturnValue(false);write(()=>models.enqueue(job));
+    await db.indexesReady();let complete=false;
+    const native=db.nativeModelsReady().then(()=>{complete=true;});
+    const failed=expect(native).rejects.toMatchObject({code:'INDEX_FAILED'});
+    await new Promise<void>(resolve=>setImmediate(resolve));
+    expect(complete).toBe(false);expect(e.query('Row').count()).toBe(512);
+    write(()=>db.run("UPDATE vector_training SET state='failed',error=?",[JSON.stringify({code:'TRAINING_FAILED',message:'fixture'})]));
+    db.indexBuilds.wake();await failed;
+    await expect(db.indexesReady()).resolves.toBeUndefined();
+    await expect(db.nativeModelsReady()).rejects.toMatchObject({code:'INDEX_FAILED'});
+  });
+
+  it('settles logical backfill independently when a native waiter is cancelled by stopping its owner',async()=>{
+    const {db,e,models}=fixture();db.rebuildIndexes();
+    const logical=db.indexesReady(),native=db.nativeModelsReady();
+    const cancelled=expect(native).rejects.toMatchObject({code:'CANCELLED'});
+    await models.stop();await cancelled;await logical;
+    expect(e.query('Row').count()).toBe(512);
+    await expect(db.nativeModelsReady()).rejects.toMatchObject({code:'BACKGROUND_OWNER_REQUIRED'});
+  });
+
+  it('does not misreport a committed primary write when a background readiness probe fails',()=>{
+    const {db,e,models}=fixture(),sequence=db.sequence;
+    const failure=Object.assign(new Error('fixture model metadata read failure'),{code:'SQLITE_IOERR'});
+    vi.spyOn(models,'hasWork').mockImplementation(()=>{throw failure;});
+    expect(()=>e.create('Row',{id:'Row-committed-after-probe',title:'retained'})).not.toThrow();
+    expect(db.sequence).toBe(sequence+1);expect(e.getRow('Row-committed-after-probe')?.title).toBe('retained');
+    expect(db.indexBuilds.lastError).toBe(failure);
   });
 
   it('excludes independent connections until the owning native worker actually drains',async()=>{
@@ -375,6 +444,6 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(()=>e.create('Row',{title:'after drain'})).toThrow(expect.objectContaining({code:'WRITE_PAUSED'}));
     await models.stop();await models.stop();db.close();
     const path=db.path,reopened=own(path);reopened.write(()=>reopened.models.recover());
-    await reopened.db.indexesReady();expect(reopened.db.get('SELECT state FROM vector_training')!.state).toBe('ready');
+    await reopened.db.nativeModelsReady();expect(reopened.db.get('SELECT state FROM vector_training')!.state).toBe('ready');
   });
 });

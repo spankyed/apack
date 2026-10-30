@@ -8,11 +8,12 @@ import { DATABASE_FORMAT as ELMDB } from '@apackdev/ears/lmdb';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { boundHost, unbindHost } from '@apackdev/sdk/runtime/internals';
 import { untypedCreate, untypedQuery } from '@apackdev/sdk/ears';
-import { databaseStorage, openAppDatabase, openRunHistory } from '@apackdev/host/database';
-import { openAppStore } from '../../src/runtime/index.ts';
+import { databaseStorage, openAppDatabase, openRunHistory, startDatabaseBackground, closeDatabases } from '@apackdev/host/database';
+import { openAppStore, setupBackend } from '../../src/runtime/index.ts';
+import { restoreConsole } from '../../src/adapters/logging.ts';
 
 const roots: string[] = [], opened: EarsDatabase[] = [];
-afterEach(() => { unbindHost(); vi.restoreAllMocks(); for (const db of opened.splice(0)) db.close(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); vi.unstubAllEnvs(); });
+afterEach(() => { restoreConsole(); unbindHost(); vi.restoreAllMocks(); for (const db of opened.splice(0)) db.close(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); vi.unstubAllEnvs(); });
 function profile() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-sqlite-profile-')); roots.push(dir);
   vi.stubEnv('APACK_ENV', 'test'); vi.stubEnv('APACK_USER_DATA_DIR', dir); vi.stubEnv('APACK_STORAGE_FORMAT', SQLITE);
@@ -60,4 +61,21 @@ it('waits for real populated search admission through the live registry readines
   expect(() => app.engine.query('AdmissionRow').matching('marker').count()).toThrow(expect.objectContaining({ code: 'INDEX_BUILDING' }));
   await app.packs.indexesReady();
   expect(app.engine.query('AdmissionRow').matching('marker').count()).toBe(150);
+});
+
+
+it('drains an acquired model owner when the other store refuses normal API startup', async () => {
+  const dir = profile(), paths = _appDataPaths(dir), storage = databaseStorage(SQLITE);
+  const start = storage.startBackground!, acquired: EarsDatabase[] = [];
+  const failure = Object.assign(new Error('fixture history model startup refusal'), { code: 'BACKGROUND_OWNER_EXISTS' });
+  vi.spyOn(storage as { startBackground: typeof start }, 'startBackground').mockImplementation(async database => {
+    acquired.push(database); opened.push(database);
+    if (database.path === paths.runHistory) throw failure;
+    await start(database);
+  });
+  await expect(setupBackend()).rejects.toBe(failure);
+  expect(acquired).toHaveLength(2); expect(acquired.every(database => !database.isOpen)).toBe(true);
+  vi.restoreAllMocks();
+  const peer = storage.open({ path: paths.lmdb }); opened.push(peer);
+  await startDatabaseBackground(peer); await peer.indexesReady(); await closeDatabases([peer]);
 });

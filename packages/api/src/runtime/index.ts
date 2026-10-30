@@ -3,7 +3,7 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
-import { assertNoDatabaseWriter, databaseStorage, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
+import { assertNoDatabaseWriter, databaseStorage, startDatabaseBackground, closeDatabases, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
@@ -150,7 +150,17 @@ export async function setupBackend(): Promise<void> {
 
   // The app's data: the engine reads and writes it from here on
   const { database, runHistory, engine, packs } = openAppStore();
-  await Promise.all([database.indexesReady(), runHistory.database.indexesReady()]);
+  try {
+    const startup=await Promise.allSettled([startDatabaseBackground(database),startDatabaseBackground(runHistory.database)]);
+    const failures=startup.flatMap(result=>result.status==='rejected'?[result.reason]:[]);
+    if(failures.length===1)throw failures[0];
+    if(failures.length>1)throw new AggregateError(failures,'Starting database background services failed',{cause:failures[0]});
+    await Promise.all([database.indexesReady(),runHistory.database.indexesReady()]);
+  } catch(error) {
+    try{await closeDatabases([database,runHistory.database]);}
+    catch(cleanup){throw new AggregateError([error,cleanup],'Database startup and cleanup failed',{cause:error});}
+    throw error;
+  }
 
   // Packs require workspace @apackdev/* packages at runtime: from a checkout they must get source,
   // not a stale dist (main starts the API with the condition; manual boots must pass it). The

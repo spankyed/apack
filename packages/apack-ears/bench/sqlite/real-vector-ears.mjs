@@ -107,7 +107,7 @@ try {
       observer.observe({entryTypes:['gc']});
     }
     db.sql.exec('BEGIN IMMEDIATE');try{models.enqueue(job);db.commitWrite();}catch(error){if(db.sql.inTransaction)db.sql.exec('ROLLBACK');throw error;}
-    try{await db.indexesReady();}finally{finished=performance.now();pulse.stop();}
+    try{await db.nativeModelsReady();}finally{finished=performance.now();pulse.stop();}
     if(observer){await pause(0);observer.disconnect();for(const reset of restore)reset();}
     assert.equal(db.sequence,sequence);
     report.modelAdmission={ms:finished-admissionAt,...(diagnostic?{trace,gc}:{}),heartbeatMs:summary(pulse.delaysMs),heartbeatSamples:pulse.delaysMs,

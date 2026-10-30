@@ -71,6 +71,9 @@ export interface SqliteStagedSnapshot {
 // @public
 export function stageLogicalSnapshot(chunks: AsyncIterable<Uint8Array>, directory: string, options?: SqliteLogicalSnapshotOptions): Promise<SqliteStagedSnapshot>;
 
+// @public
+export function startVectorModels(database: EarsDatabase): Promise<void>;
+
 // @public (undocumented)
 export interface TemporaryDatabases {
     // (undocumented)
@@ -81,6 +84,9 @@ export interface TemporaryDatabases {
         dispose(): void;
     };
 }
+
+// @public
+export function waitForNativeModels(database: EarsDatabase): Promise<void>;
 
 // (No @packageDocumentation comment for this package)
 

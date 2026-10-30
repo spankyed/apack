@@ -48,7 +48,7 @@ export class SqliteIndexBuilds {
   private stoppingModels?:Promise<void>;
   private preferGC = false;
   private readonly retries = new Set<number>();
-  private readonly waiters = new Set<{ resolve(): void; reject(error: unknown): void }>();
+  private readonly waiters = new Set<{ completion: 'logical' | 'native'; resolve(): void; reject(error: unknown): void }>();
   lastError?: unknown;
   readonly batchRows = 32;
   readonly sliceMs = 4;
@@ -79,8 +79,8 @@ export class SqliteIndexBuilds {
     this.vectorModels=undefined;this.stoppingModels=stopping;
     void stopping.catch(error=>{this.lastError??=error;});
     const error=Object.assign(new Error('Native model owner stopped'),{code:'CANCELLED'});
-    for(const waiter of this.waiters)waiter.reject(error);
-    this.waiters.clear();this.timer?.unref();this.retry?.unref();
+    for(const waiter of this.waiters)if(waiter.completion==='native'){waiter.reject(error);this.waiters.delete(waiter);}
+    if(!this.waiters.size){this.timer?.unref();this.retry?.unref();}
   }
   /** Bounded owner candidates only; final scores come from current canonical chunks in this snapshot. */
   nativeVectorOwners(generation:number,vector:Uint8Array,scope:SqliteEntityScope|null,exclude?:string):number[]|undefined {
@@ -199,21 +199,22 @@ export class SqliteIndexBuilds {
     this.reload(); this.wake();
   }
   /** Wait only for active generations, not retirement. An explicit wait keeps the owning timer alive. */
-  indexesReady(): Promise<void> {
+  indexesReady(completion: 'logical' | 'native' = 'logical'): Promise<void> {
     try {
       if (!this.db.isOpen) fail('CLOSED', 'The database is closed');
       this.checkRevision();
       if (!this.canRun()) fail('UNIT_OPEN', 'Commit or abort the open unit before waiting for indexes');
+      if(completion==='native'&&!this.vectorModels)fail('BACKGROUND_OWNER_REQUIRED','Start native model ownership before waiting for models');
       const unfinished = this.jobs().filter(job => job.state !== 'ready');
       this.checkRevision();
-      const modelFailure=this.vectorModels?.failure();if(modelFailure)throw modelFailure;
-      if (!unfinished.length&&!this.vectorModels?.hasWork()) return Promise.resolve();
+      const modelFailure=completion==='native'?this.vectorModels?.failure():undefined;if(modelFailure)throw modelFailure;
+      if (!unfinished.length&&(completion==='logical'||!this.vectorModels?.hasWork())) return Promise.resolve();
       if (this.stopped) throw this.lastError ?? Object.assign(new Error('Index scheduler is stopped'), { code: 'CLOSED' });
       const failed = unfinished.find(job => job.state === 'failed' && !this.retries.has(job.generation));
       if (failed) fail('INDEX_FAILED', String(failed.error));
       if (this.db.readOnly) fail('INDEX_BUILDING', 'A writable owner must finish indexing');
       this.pending = true;
-      return new Promise<void>((resolve, reject) => { this.waiters.add({ resolve, reject }); this.wake(); if (this.waiters.size) { this.timer?.ref(); this.retry?.ref(); } });
+      return new Promise<void>((resolve, reject) => { this.waiters.add({ completion, resolve, reject }); this.wake(); if (this.waiters.size) { this.timer?.ref(); this.retry?.ref(); } });
     } catch (error) { return Promise.reject(error); }
   }
   private settle(): void {
@@ -221,14 +222,23 @@ export class SqliteIndexBuilds {
     try {
       const unfinished = this.jobs().filter(job => job.state !== 'ready');
       const failed = unfinished.find(job => job.state === 'failed' && !this.retries.has(job.generation));
-      const modelFailure=this.vectorModels?.failure();
-      if (!failed && !modelFailure && (unfinished.length||this.vectorModels?.hasWork())) return;
-      for (const waiter of this.waiters) failed ? waiter.reject(Object.assign(new Error(String(failed.error)), { code: 'INDEX_FAILED' })) : modelFailure?waiter.reject(modelFailure):waiter.resolve();
-      this.waiters.clear(); this.timer?.unref(); this.retry?.unref();
+      const needsNative=[...this.waiters].some(waiter=>waiter.completion==='native');
+      const modelFailure=needsNative?this.vectorModels?.failure():undefined;
+      const nativePending=needsNative&&this.vectorModels?.hasWork();
+      for(const waiter of this.waiters) {
+        const problem=failed?Object.assign(new Error(String(failed.error)),{code:'INDEX_FAILED'}):waiter.completion==='native'?modelFailure:undefined;
+        if(problem)waiter.reject(problem);
+        else if(unfinished.length||(waiter.completion==='native'&&nativePending))continue;
+        else waiter.resolve();
+        this.waiters.delete(waiter);
+      }
+      if(!this.waiters.size){this.timer?.unref();this.retry?.unref();}
     } catch (error) { this.lastError = error; this.pending = false; this.stop(); }
   }
   wake(): void {
-    if(!this.stopped&&this.db.isOpen&&this.vectorModels?.hasWork())this.pending=true;
+    // Waking after a successful primary COMMIT cannot turn it into a reported refusal.
+    try{if(!this.stopped&&this.db.isOpen&&this.vectorModels?.hasWork())this.pending=true;}
+    catch(error){this.pending=false;this.stop(error);return;}
     this.settle();
     if (!this.pending || this.stopped || this.db.readOnly || !this.db.isOpen || this.timer || this.retry || !this.canRun()) return;
     this.timer = setImmediate(() => {

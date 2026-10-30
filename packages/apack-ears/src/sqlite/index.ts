@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import type { EarsDatabase } from '../database.ts';
 import { toElmdbSchema, type EngineSchema } from '../schema.ts';
 import { SqliteDatabase } from './database.ts';
+import { SqliteVectorModels } from './vector-models.ts';
 import { resolveNativeVectorExtension } from './native-extension.ts';
 import { auditSqliteDatabase, type SqliteAuditReport } from './audit.ts';
 export type { SqliteAuditReport } from './audit.ts';
@@ -31,6 +32,34 @@ export interface DatabaseOptions {
 
 export function openDatabase({ schema, ...options }: DatabaseOptions): EarsDatabase {
   return new SqliteDatabase({ ...options, nativeVectorExtension: options.nativeVectorExtension ?? resolveNativeVectorExtension(), ...(schema ? { schema: toElmdbSchema(schema) } : {}) });
+}
+
+/** Claim this store's native model service and recover abandoned attempts before background work starts.
+ * Read-only connections never own training. The database's drain/close lifecycle owns the resulting service.
+ */
+export async function startVectorModels(database: EarsDatabase): Promise<void> {
+  if (!(database instanceof SqliteDatabase)) throw Object.assign(new Error('Native models require a SQLite owner'), { code: 'UNSUPPORTED' });
+  if (database.readOnly) throw Object.assign(new Error('Read-only connections cannot own native model work'), { code: 'READ_ONLY' });
+  await database.withExclusiveWrites(async () => {
+    const models = new SqliteVectorModels(database, database.nativeVectorExtension ?? resolveNativeVectorExtension());
+    try {
+      database.indexBuilds.assertRunning();
+      database.sql.exec('BEGIN IMMEDIATE');
+      models.recover(); database.commitWrite();
+    } catch (error) {
+      const failures: unknown[] = [error];
+      if (database.sql.inTransaction) try { database.sql.exec('ROLLBACK'); } catch (rollback) { failures.push(rollback); }
+      try { await models.stop(); } catch (cleanup) { failures.push(cleanup); }
+      if (failures.length > 1) throw Object.assign(new AggregateError(failures, 'Native model startup and cleanup failed', { cause: error }), { code: (error as {code?: unknown})?.code });
+      throw error;
+    }
+  });
+}
+
+/** Wait for optional native work as well as declared logical indexes; requires a live service on this handle. */
+export function waitForNativeModels(database: EarsDatabase): Promise<void> {
+  if (!(database instanceof SqliteDatabase)) return Promise.reject(Object.assign(new Error('Native model readiness requires a SQLite owner'), { code: 'UNSUPPORTED' }));
+  return database.nativeModelsReady();
 }
 
 /** Rebuild derived indexes from primary data, excluding other writes until current generations are ready. */

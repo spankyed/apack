@@ -79,7 +79,7 @@ if (mode === 'verify') {
   assert.equal(result.nativePackageCasesPassed,5,'All ordinary package loading/integrity cases must execute');
   assert.equal(result.nativeGenerationCasesPassed,8,'All native generation lifecycle cases must execute');
   assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
-  assert.equal(result.nativeModelCasesPassed,17,'All durable native model admission cases must execute');
+  assert.equal(result.nativeModelCasesPassed,23,'All durable native model admission cases must execute');
 
   assert(result.maintenanceCasesPassed >= 9 && cli.numFailedTests === 0,
     'All nine actual offline maintenance command cases must execute and pass');

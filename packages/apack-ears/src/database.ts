@@ -85,7 +85,7 @@ export interface EarsDatabase {
   withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T>;
   /** Observers must not inherit a maintenance caller's authority to mutate a database. */
   withoutWriteAuthority<T>(operation: () => T): T;
-  /** Resolves when all current index generations are ready. Call outside write units; rejects if indexing cannot complete. */
+  /** Resolves when declared logical index generations are ready; optional model training has its own wait. Call outside write units; rejects if indexing cannot complete. */
   indexesReady(): Promise<void>;
   /** Backend visibility changes after a derived generation commits; no new logical commit is invented. */
   onIndexesChanged?(listener: (changes: Changes) => void): () => void;

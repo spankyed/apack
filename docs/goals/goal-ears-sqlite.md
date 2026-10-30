@@ -397,15 +397,19 @@ is now green on all three CI hosts: [retained ownership qualification](../refere
 All three execute the kernel-claim and worker-drain cases with the pinned dependency; this does not
 qualify the subsequent readiness/activation edits or signed installed applications.
 
-Next separate logical index readiness from optional native model completion before activating app owners.
-Current startup/pack registration waits on `indexesReady()`, which includes native work and failure; leaving
-that unchanged would block ordinary ready queries on optional training. Preserve an explicit native wait
-for maintenance/benchmarks, then compose claimed recovery, normal owner creation and shutdown. Physical
-refresh, live replacement suspension and the complete performance/application gates remain required.
+Logical/native readiness separation and managed app activation are now implemented in the working overlay,
+with [six focused cases and two negative controls](../references/evidence/ears-sqlite-implementation-2026-10-28/model-readiness-activation/README.md).
+`indexesReady()` waits for declared logical generations; app-only `waitForNativeModels()` includes native work.
+The managed API starts claimed services on both writable stores, recovers abandoned attempts under that
+claim and drains both stores if startup fails. Forensic/offline opens do not start services. The exact
+prior-base overlay passes 652 EARS cases, 18 host cases, 7 API cases, EARS/host/API types, regenerated API
+reports, boundaries and lint. This includes startup refusal cleanup; it does not qualify later master
+integration, full platform/installed startup or the complete performance/application gates.
+Physical refresh and live replacement suspension remain required.
 
 Still required, without narrowing phases 3–7:
 
-- Normal app owner creation/loading and automatic admission integration, incumbent-preserving physical refresh, host drain before file replacement/
+- Requalify managed app owners/loading and automatic admission against the current integrated baseline; implement incumbent-preserving physical refresh and host drain before file replacement/
   deletion, complete native audit/rebuild/restore/retirement ownership, normal native loading/distribution/signing.
 - Final candidate/trash filtering before K, multi-chunk scoring, ties, large-K/exact fallbacks, own-unit/savepoint
   reads, model/generation/hash freshness, readiness/watch delivery and representative recall/update qualification.
