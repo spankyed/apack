@@ -189,8 +189,9 @@ test('round-trips decorated structured replace append and cursor insertion throu
     for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await composer.fill('Retained after copying.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture('native-clipboard-sent-'+size.width+'.png');}
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/);
     const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click();
-    await composer.fill(recovery);await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');
-    const final=await context();expect(final.sessionId).toBe(sessionId);expect(errors).toEqual([]);
+    await composer.focus();await composer.press('ControlOrMeta+a');await composer.press('Backspace');await expect(composer).toHaveText('');await composer.pressSequentially(recovery);await expect(composer).toHaveText(recovery);
+    await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');
+    const final=await context();expect(final.sessionId).toBe(sessionId);expect(final.messages.filter((message:any)=>message.sender==='user'&&message.text===recovery)).toHaveLength(1);expect(errors).toEqual([]);
     await writeFile(join(workspace!,'native-clipboard-app-proof.json'),JSON.stringify({copyBefore,copyAfter,submitted,recovery,sent,final},null,2));
     await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeClipboard:true,nativeClipboardSameSessionRecovery:true,nativeStructuredPrompt:false,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));
     return;
