@@ -158,7 +158,7 @@ export const processReportSchema: z.ZodObject<{
         sampling: z.ZodObject<{
             cpuIntervalMicros: z.ZodLiteral<1000>;
             allocationIntervalBytes: z.ZodLiteral<number>;
-            allocationStackDepth: z.ZodLiteral<32>;
+            allocationStackDepth: z.ZodLiteral<128>;
             includeCollectedAllocations: z.ZodLiteral<true>;
         }, z.core.$strip>;
         cpu: z.ZodOptional<z.ZodString>;
@@ -360,7 +360,7 @@ export const trialSchema: z.ZodObject<{
             sampling: z.ZodObject<{
                 cpuIntervalMicros: z.ZodLiteral<1000>;
                 allocationIntervalBytes: z.ZodLiteral<number>;
-                allocationStackDepth: z.ZodLiteral<32>;
+                allocationStackDepth: z.ZodLiteral<128>;
                 includeCollectedAllocations: z.ZodLiteral<true>;
             }, z.core.$strip>;
             cpu: z.ZodOptional<z.ZodString>;
@@ -518,7 +518,7 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
                 sampling: {
                     cpuIntervalMicros: 1000;
                     allocationIntervalBytes: number;
-                    allocationStackDepth: 32;
+                    allocationStackDepth: 128;
                     includeCollectedAllocations: true;
                 };
                 bytes: number;

@@ -60,7 +60,7 @@ Enabled Node recordings include aggregate process CPU, sampled RSS/heap maxima, 
 observations. These process totals are not per-action attribution, and sampled maxima are not true peak
 memory. Disabled mode starts no sampler; sample failures invalidate capture. Detailed Node and renderer recordings include V8 CPU and sampled JS allocation profiles. Renderer
 recordings also retain named CDP task/layout/heap metrics and long-task aggregates. Profiles record sampling settings and a requested 30-second window (timers can be delayed
-by synchronous work), cap serialized CPU/allocation output at 2 MiB each, and reserve those bytes within
+by synchronous work), cap serialized CPU/allocation output at 4 MiB each, and reserve those bytes within
 the 16 MiB recording budget. Protocol failures or oversized output invalidate capture. These are V8
 isolate/JS-heap profiles; process totals cover a broader resource scope. No overhead or performance improvement is established yet.
 Cross-revision orchestration and overhead qualification remain in the goal.
@@ -94,3 +94,22 @@ no duration/success marker and complete process captures; source is restored on 
 Profile protocol references: [Node Inspector](https://nodejs.org/download/release/v23.11.1/docs/api/inspector.html)
 and [V8 heap sampling](https://chromedevtools.github.io/devtools-protocol/tot/HeapProfiler/).
 Allocation sampling includes objects discarded by major/minor GC; it does not request heap object values.
+
+`APACK_PERFORMANCE_SCENARIO=query-plans` runs explicit native `explain()` probes against the search
+fixture outside all measured actions. It retains stage/index names, visited/kept counts, durations and
+result counts, with the source/build manifest; it excludes result ids and payloads. The ids terminal
+explains filtering/traversal, not projection/codec work. Native visited counts are not unique-row counts.
+
+Detailed profiles reserve 8 MiB of the existing 16 MiB recording budget, leaving 8 MiB for spans.
+The measured startup CPU/allocation exports were 2.83/3.54 MB, which exceeded the original 2 MiB
+per-profile allocation. Sampling frequency is unchanged. Allocation stacks use the shipped protocol's
+128-frame default; the older runtime ignores an attempted `stackDepth: 32` parameter. Renderer profile
+transport uses a non-flattened CDP session over the existing debugger so deeply nested responses travel
+as strings past Electron's shallow JSON parser, then are decoded in JS. Its response admission is bounded
+at 16 MiB; deadlines and cleanup remain enforced. See the shipped
+[V8 implementation](https://github.com/v8/v8/blob/13.8.258/src/inspector/v8-heap-profiler-agent-impl.cc#L550)
+and [Electron debugger parser](https://github.com/electron/electron/blob/v37.2.4/shell/browser/api/electron_api_debugger.cc#L41).
+
+Before qualification, make runtime output current with the existing chain's `build:runtime` step
+(after its required producers). Recording source and output hashes alone does not certify that an old
+bundle was built from the current source. Keep all captured inputs frozen while producers execute.

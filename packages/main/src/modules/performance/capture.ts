@@ -7,7 +7,7 @@ const METRICS = {
 } as const;
 
 /** One renderer target; profiles release their agents while the outer recording retains metrics ownership. */
-export function createRendererCapture(transport: PerformanceProfileTransport & { pid: number }, mode: 'lightweight' | 'detailed') {
+export function createRendererCapture(transport: PerformanceProfileTransport & { pid: number }, mode: 'lightweight' | 'detailed', profileTransport?: PerformanceProfileTransport) {
   let failures = 0;
   let before = new Map<string, number>();
   let profiles: ReturnType<typeof createPerformanceProfiles> | undefined;
@@ -31,9 +31,12 @@ export function createRendererCapture(transport: PerformanceProfileTransport & {
       await post('Performance.enable');
       before = await metrics();
       if (mode === 'detailed') {
-        profiles = createPerformanceProfiles({ post, close: async () => {
-          const results = await Promise.allSettled([post('Profiler.disable'), post('HeapProfiler.disable')]);
-          if (results.some(result => result.status === 'rejected')) throw Error('Profiler cleanup failed');
+        const profilePost = (method: string, parameters?: object) => profileTransport ? profileTransport.post(method, parameters) : post(method, parameters);
+        profiles = createPerformanceProfiles({ post: profilePost, close: async () => {
+          try {
+            const results = await Promise.allSettled([profilePost('Profiler.disable'), profilePost('HeapProfiler.disable')]);
+            if (results.some(result => result.status === 'rejected')) throw Error('Profiler cleanup failed');
+          } finally { await profileTransport?.close(); }
         } });
         await profiles.ready;
       }
@@ -53,7 +56,10 @@ export function createRendererCapture(transport: PerformanceProfileTransport & {
           captured = await profiles?.stop();
           profileFailures = captured?.failures ?? (mode === 'detailed' ? 1 : 0);
         } catch { profileFailures++; }
-        finally { try { await transport.close(); } catch { failures++; } }
+        finally {
+          try { await profileTransport?.close(); } catch { failures++; }
+          try { await transport.close(); } catch { failures++; }
+        }
         const unavailable: string[] = [];
         const values: _RendererPerformanceResources['statistics']['metrics'] = [];
         for (const [name, unit] of Object.entries(METRICS)) {

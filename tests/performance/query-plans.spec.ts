@@ -53,7 +53,7 @@ test('retains payload-free native stage evidence for the scenario query shapes',
     const manifest = performanceIdentity({ fixture: fixture.identity, mode: 'disabled', cache: 'warm-process', warmups: 0, runtime });
     writeFileSync(path.join(output, 'plans.json'), JSON.stringify({ manifest, evidence,
       scope: 'Explicit native ids-terminal probes outside measured actions; not projection/codec timings',
-      visitedUnit: 'native visited entries; may include index entries, not unique rows' }, null, 2));
+      visitedUnit: 'native stage-defined counters; not exhaustive physical work or unique rows' }, null, 2));
     expect(evidence.plans.map(plan => [plan.name, plan.returned])).toEqual([['thread-page', 54], ['search', 20]]);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

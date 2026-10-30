@@ -4,9 +4,9 @@ const count = z.number().int().nonnegative();
 const hrTime = z.tuple([count, count.max(999_999_999)]);
 const scalar = z.union([z.string().max(128), z.number().finite(), z.boolean()]);
 const profilesSchema = z.object({
-  sampling: z.object({ cpuIntervalMicros: z.literal(1000), allocationIntervalBytes: z.literal(512 * 1024), allocationStackDepth: z.literal(32), includeCollectedAllocations: z.literal(true) }),
-  cpu: z.string().max(2 * 1024 * 1024).optional(), allocation: z.string().max(2 * 1024 * 1024).optional(),
-  bytes: count.max(4 * 1024 * 1024), failures: count, failureStages: z.array(z.string().max(32)).max(8).optional(), encodedBytes: z.object({ cpu: count.optional(), allocation: count.optional() }).optional(), complete: z.boolean(),
+  sampling: z.object({ cpuIntervalMicros: z.literal(1000), allocationIntervalBytes: z.literal(512 * 1024), allocationStackDepth: z.literal(128), includeCollectedAllocations: z.literal(true) }),
+  cpu: z.string().max(4 * 1024 * 1024).optional(), allocation: z.string().max(4 * 1024 * 1024).optional(),
+  bytes: count.max(8 * 1024 * 1024), failures: count, failureStages: z.array(z.string().max(32)).max(8).optional(), encodedBytes: z.object({ cpu: count.optional(), allocation: count.optional() }).optional(), complete: z.boolean(),
   windowLimitMs: z.literal(30_000), durationMs: z.number().finite().nonnegative(), stoppedBy: z.enum(['owner', 'limit']),
 }).superRefine((profiles, ctx) => {
   let bytes = 0;
@@ -16,7 +16,7 @@ const profilesSchema = z.object({
     bytes += size;
     try {
       const value = JSON.parse(encoded) as { nodes?: unknown; head?: unknown };
-      if (size > 2 * 1024 * 1024 || !value || (kind === 'cpu' ? !Array.isArray(value.nodes) : !value.head || typeof value.head !== 'object')) throw Error('Invalid profile');
+      if (size > 4 * 1024 * 1024 || !value || (kind === 'cpu' ? !Array.isArray(value.nodes) : !value.head || typeof value.head !== 'object')) throw Error('Invalid profile');
     } catch { ctx.addIssue({ code: 'custom', message: 'Invalid or oversized V8 profile' }); }
   }
   if (bytes !== profiles.bytes || profiles.complete && (profiles.failures || !profiles.cpu || !profiles.allocation)) {

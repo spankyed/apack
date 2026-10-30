@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { AppModule } from '../../AppModule.ts';
 import { getAppEnvironment } from '../../app-environment.ts';
 import { createRendererCapture } from './capture.ts';
+import { createRendererProfileTransport } from './profile-transport.ts';
 
 /** Main owns the debugger; a lease prevents an old document's stop from closing a new capture. */
 export function createPerformanceModule(): AppModule {
@@ -25,14 +26,20 @@ export function createPerformanceModule(): AppModule {
       let attached = true;
       const detached = () => { attached = false; };
       contents.debugger.on('detach', detached);
+      const post = (method: string, parameters?: object) => attached && contents.debugger.isAttached()
+        ? contents.debugger.sendCommand(method, parameters) : Promise.reject(Error('Renderer debugger ownership was lost'));
+      const profileTransport = mode === 'detailed' ? createRendererProfileTransport({ post, subscribe: listener => {
+        const message = (_event: unknown, method: string, parameters: unknown) => listener(method, parameters);
+        contents.debugger.on('message', message);
+        return () => contents.debugger.removeListener('message', message);
+      } }) : undefined;
       const capture = createRendererCapture({ pid: contents.getOSProcessId(),
-        post: (method, parameters) => attached && contents.debugger.isAttached()
-          ? contents.debugger.sendCommand(method, parameters) : Promise.reject(Error('Renderer debugger ownership was lost')),
+        post,
         close: () => {
           contents.debugger.removeListener('detach', detached);
           if (attached && contents.debugger.isAttached()) contents.debugger.detach();
         },
-      }, mode);
+      }, mode, profileTransport);
       const id = randomUUID();
       const closed = () => { void claim.stop().catch(() => {}); };
       const navigated = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean) => { if (!inPlace && mainFrame) closed(); };
