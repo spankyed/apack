@@ -5,6 +5,7 @@ import { bindClaudePromptEditor } from '#features/threads/fe/chat/native-prompt-
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import { DOMParser as PromptDOMParser } from '@tiptap/pm/model'
+import { AllSelection } from '@tiptap/pm/state'
 import { captureClaudePromptDocument, findClaudePromptPosition, rewriteClaudePromptDocument } from '#features/threads/fe/chat/native-prompt-document.ts'
 
 let editor: Editor
@@ -775,4 +776,52 @@ it.each(['pending', 'offered'] as const)('retires %s completion ownership when c
     expect(bridge.selectCompletion(0, freshOffer)).toBe(true)
     expect(serialize(editor.state.doc)).toBe('#release')
   } finally { bridge.dispose() }
+})
+
+
+it('reads a whole rich-document selection without losing its text or collapsing the range on acknowledgement', () => {
+  editor.commands.setContent('# Release review\n\n```ts\nconst ready = true\n```\n\nReview changes.\n\n- Verify behavior\n- Document migration')
+  editor.commands.selectAll()
+  expect(editor.state.selection).toBeInstanceOf(AllSelection)
+  const doc = editor.state.doc, selection = editor.state.selection, send = vi.fn(), problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, problem)
+  try {
+    const expected = { text: serialize(doc), cursor: serialize(doc).length }
+    expect(bridge.readDraft()).toEqual(expected)
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: expected })
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.eq(selection)).toBe(true)
+    expect(problem).not.toHaveBeenCalledWith(expect.any(String))
+  } finally { bridge.dispose() }
+})
+
+it.each(['start', 'end'])('projects a document %s boundary through structure without crossing a block atom', side => {
+  editor.destroy()
+  const attachment = Node.create({ name: 'attachment', group: 'block', atom: true,
+    renderHTML: () => ['div', 'Attachment'],
+    addStorage: () => ({ markdown: { serialize(state: { write(text: string): void }) { state.write('[attachment]') } } }),
+  })
+  const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Keep the attachment' }] }
+  editor = new Editor({ extensions: [StarterKit, Markdown, attachment], content: { type: 'doc', content: side === 'start' ? [{ type: 'attachment' }, paragraph] : [paragraph, { type: 'attachment' }] } })
+  const doc = editor.state.doc
+  expect(captureClaudePromptDocument(doc, side === 'start' ? 0 : doc.content.size, serialize)).toBeUndefined()
+})
+
+
+it.each(['start', 'end'])('reads an empty paragraph at the document %s without changing serialized text or nodes', side => {
+  const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Keep this draft' }] }
+  editor.commands.setContent({ type: 'doc', content: side === 'start' ? [{ type: 'paragraph' }, paragraph] : [paragraph, { type: 'paragraph' }] })
+  const doc = editor.state.doc, position = side === 'start' ? 1 : doc.content.size - 1, text = serialize(doc)
+  const snapshot = captureClaudePromptDocument(doc, position, serialize)
+  expect(snapshot).toEqual({ text, cursor: side === 'start' ? 0 : text.length, doc, position })
+  expect(editor.state.doc).toBe(doc)
+})
+
+
+it('refuses ambiguous serializer framing inside an empty middle paragraph', () => {
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'before' }] }, { type: 'paragraph' }, { type: 'paragraph', content: [{ type: 'text', text: 'after' }] }] })
+  const doc = editor.state.doc, position = doc.firstChild!.nodeSize + 1
+  expect(captureClaudePromptDocument(doc, position, serialize)).toBeUndefined()
+  expect(editor.state.doc).toBe(doc)
 })

@@ -19,7 +19,7 @@ test('round-trips decorated structured replace append and cursor insertion throu
     await writeFile(testInfo.outputPath(name), Buffer.from(png, 'base64'))
   }
   expect(process.env.HOME).toBe(workspace)
-  const {promptMedia,promptSyntax,uiCopy,uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
+  const {promptMedia,promptSyntax,promptAllSelection,uiCopy,uiSelection}=JSON.parse(await readFile(join(workspace!,'question-preview-fixture.json'),'utf8'))
   const restriction = false
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -223,9 +223,28 @@ test('round-trips decorated structured replace append and cursor insertion throu
     await appPage.setViewportSize({width:1400,height:900});
   }
 
+  if(promptAllSelection){
+    const canonical=(await receipts())[1].after.text;
+    const selectionProof=[];
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){
+      await appPage.setViewportSize(size);await composer.focus();await composer.press('ControlOrMeta+a');
+      const before=await composer.evaluate((element:any)=>({doc:element.editor.state.doc.toJSON(),selection:element.editor.state.selection.toJSON(),range:{from:element.editor.state.selection.from,to:element.editor.state.selection.to,docSize:element.editor.state.doc.content.size}}));
+      await card.getByRole('button',{name:'Read selected draft',exact:true}).click();
+      await expect.poll(async()=>JSON.parse(await readFile(join(workspace!,'native-all-selection-reads.json'),'utf8').catch(()=>'[]')).length).toBe(selectionProof.length+1);
+      const native=JSON.parse(await readFile(join(workspace!,'native-all-selection-reads.json'),'utf8')).at(-1);
+      expect(native).toEqual({text:canonical,cursor:canonical.length});
+      const after=await composer.evaluate((element:any)=>({doc:element.editor.state.doc.toJSON(),selection:element.editor.state.selection.toJSON(),range:{from:element.editor.state.selection.from,to:element.editor.state.selection.to,docSize:element.editor.state.doc.content.size}}));
+      expect(before.range.from).toBeLessThanOrEqual(1);expect(before.range.to).toBeGreaterThanOrEqual(before.range.docSize-1);expect(after).toEqual(before);expect((await context()).native.state.nativePid).toBe(boundNativePid);
+      await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture('native-all-selection-'+size.width+'.png');
+      selectionProof.push({size,before,after,native});
+    }
+    await writeFile(join(workspace!,'native-all-selection-proof.json'),JSON.stringify(selectionProof,null,2));
+    await appPage.setViewportSize({width:1400,height:900});
+  }
+
   await composer.locator('p').filter({hasText:'Review changes.'}).click({position:{x:8,y:8}})
   await expect.poll(()=>composer.evaluate(element=>(element as any).editor.state.selection.$head.parent.textContent)).toBe('Review changes.')
-  await composer.press('Control+a')
+  await composer.press('Home')
   await card.getByRole('button',{name:'Add review note',exact:true}).click()
   await expect.poll(async()=>(await receipts()).length).toBe(3)
   const proof=await receipts();expect(proof[2].result.isFilled).toBe(true)
@@ -258,5 +277,5 @@ test('round-trips decorated structured replace append and cursor insertion throu
   const back=section.getByRole('button',{name:'Back to conversation',exact:true});if(await back.isVisible())await back.click()
   await composer.fill('Continue reviewing the release after the outline.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,nativeClipboard:uiCopy===true,nativeSelection:uiSelection===true,nativeUserBodyPointer:uiSelection===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
+  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'theme',nativeStructuredPrompt:true,nativePromptAllSelection:promptAllSelection===true,nativeStructuredMedia:promptMedia===true,nativeSyntaxDecorations:promptSyntax===true,nativeClipboard:uiCopy===true,nativeSelection:uiSelection===true,nativeUserBodyPointer:uiSelection===true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}))
 })
