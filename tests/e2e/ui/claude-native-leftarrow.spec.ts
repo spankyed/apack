@@ -197,11 +197,12 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       await stopParent.click()
       await expect.poll(async()=>{try{const raw=await readFile('/proc/'+removed.pid+'/stat','utf8');return raw.slice(raw.lastIndexOf(')')+2).split(' ')[0]==='Z'}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}},{timeout:10000}).toBe(true)
       await app.navigate('host/settings');await app.navigate('default-setup/threads')
-      await expect.poll(async()=>(await context()).native?.state?.ownerId).toBeUndefined()
+      await expect.poll(async()=>(await context()).native?.state?.status).toMatch(/^(exited|error)$/)
+      await expect.poll(async()=>(await context()).native?.canReplyBackground).toBe(true)
       await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeEnabled()
       const afterWorker=await childProcessState();expect(afterWorker?.start).toBe(beforeWorker?.start);expect(afterWorker?.state).not.toBe('Z')
       expect((await context()).messages).toEqual(beforeParent.messages);expect((await context()).claude.totalCostUsd).toBe(beforeParent.claude.totalCostUsd)
-      observations.parentOwnerLoss={removed,beforeWorker,afterWorker,closedAt:Date.now(),parentProcessRetired:true,remountedWithoutOwner:true,parentPreserved:true}
+      observations.parentOwnerLoss={removed,beforeWorker,afterWorker,closedAt:Date.now(),retainedParentState:(await context()).native?.state,parentProcessRetired:true,remountedWithoutOwner:true,parentPreserved:true}
       for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await expect(composer).toHaveText(retainedDraft);await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeInViewport({ratio:1});await capture('apack-native-background-parent-disconnected-'+name+'.png')}
     }
     if (childReply) {
