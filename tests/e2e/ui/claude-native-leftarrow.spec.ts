@@ -196,6 +196,8 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       observations.parentOwnerLossRequest=removed
       await stopParent.click()
       await expect.poll(async()=>{try{const raw=await readFile('/proc/'+removed.pid+'/stat','utf8');return raw.slice(raw.lastIndexOf(')')+2).split(' ')[0]==='Z'}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}},{timeout:10000}).toBe(true)
+      await section.getByRole('button',{name:'Back to conversation',exact:true}).click()
+      await expect(composer).toBeVisible()
       await app.navigate('host/settings');await app.navigate('default-setup/threads')
       await expect.poll(async()=>(await context()).native?.state?.status).toMatch(/^(exited|error)$/)
       await expect.poll(async()=>(await context()).native?.canReplyBackground).toBe(true)
