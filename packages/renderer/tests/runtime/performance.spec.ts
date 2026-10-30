@@ -56,3 +56,18 @@ it('does not admit a replacement recording while either process is still stoppin
   await windowPerformance.start('disabled');
   await windowPerformance.stop();
 });
+
+it('adopts startup before creating the renderer recording and retains the startup parent through readiness', async () => {
+  const { startStartupRecording } = await import('@/runtime/performance');
+  await startStartupRecording(null);
+  expect(rpc.start).not.toHaveBeenCalled();
+  await expect(startStartupRecording('{"mode":"invalid"}')).rejects.toThrow();
+  expect(rpc.start).not.toHaveBeenCalled();
+  await startStartupRecording('{"mode":"lightweight"}');
+  expect(rpc.start).toHaveBeenCalledWith({ mode: 'lightweight', startup: true });
+  windowPerformance.withinStartup(() => windowPerformance.begin('app.view.ready').end());
+  const report = await windowPerformance.stop();
+  expect(report.complete).toBe(true);
+  const spans = report.renderer!.observations.map(value => JSON.parse(value) as { name: string; spanId: string; parentSpanId?: string });
+  expect(spans.find(span => span.name === 'app.view.ready')?.parentSpanId).toBe(spans.find(span => span.name === 'app.startup')?.spanId);
+});

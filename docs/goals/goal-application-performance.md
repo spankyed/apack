@@ -78,7 +78,7 @@ scope even though thread opening is the first vertical implementation slice.
   observedMessages=50, both recorders complete. Evidence is preserved in local run
   `thread-open-lightweight-1793384389930`. Initial chat positioning now suppresses automatic paging
   until its animation frames settle and cancels stale frames across thread changes/unmount. Seven
-  focused pack tests and pack typechecking pass; built-app verification remains required. This is a
+  focused pack tests and pack typechecking pass; the built-app verification is recorded below. This is a
   correctness/work-bound fix, with no latency improvement claim.
 - Built-app verification on `1bc6afe750` passed all five warmups plus twenty measured thread opens.
   Every trial requested/displayed fifty messages; renderer/backend capture reports were complete and
@@ -113,11 +113,37 @@ scope even though thread opening is the first vertical implementation slice.
   the previously green full-chain checkpoint precedes it. Strict CI run `41109512527` was dispatched
   for `c72035b90f` and was still queued at the last authoritative check.
 
+## Streaming and startup checkpoint
+
+- Streaming uses the real default-setup Claude Code chat flow and CLI process service. A fixture
+  executable is configured through the existing Settings UI; the existing code navigation event
+  selects its owned working directory. No inference override, new application test API or external
+  provider is used. Each trial starts with a separate twenty-message conversation.
+- On `62828d1f1e`, all five warmups plus twenty measured replies passed with clean application/native
+  source and complete renderer/backend recordings. Each emitted twenty-four deterministic chunks,
+  produced nine visible progress samples, and ended with the complete text and response timestamp in
+  a database-backed message view and its laid-out DOM. Raw local evidence:
+  `streaming-lightweight-1793387765976`. Reports include first-visible and maximum visible-update gap
+  durations; these do not measure provider-to-database backlog or establish measurement overhead.
+- The first attempt correctly failed because raw settings writes lack host-issued access; the
+  scenario now uses the normal UI and verifies the accepted CLI path. That failed report remains
+  local as `streaming-lightweight-1793387340430`.
+- Linux runner now preserves its platform-owned app outputs and uses the existing chain producer
+  checks during setup. The subsequent real run reused pack/app builds: each producer check completed
+  in 0.4 seconds. No new cache protocol was added.
+- Startup lifecycle implementation is underway: a test-only early backend recorder covers admission,
+  the authenticated window adopts it once, and the renderer starts recording before its application
+  actor. The shared fixture exposes its actual parent-process monotonic launch boundary. Six API and
+  five renderer lifecycle tests, affected typechecks and focused lint pass. The populated-profile
+  startup driver and built-app proof are still required; do not claim startup acceptance yet.
+- Strict CI `41109512527` has passed its producers job; downstream jobs were still running at the
+  last authoritative check. It checks the earlier `c72035b90f` checkpoint, not this new source.
+
 ## Required remaining work
 
 Thread-open counterfactuals/overhead and independent late-search fault injection; raw actor queue context and coalesced-watch causal
 links; streaming/populated-startup scenarios; cross-revision orchestration and full manifest/
-trial consistency checks; detailed profiles/process statistics and overhead qualification; one
-supported application optimization; full repository and strict acceptance; dependent reviewable PRs.
+trial consistency checks; detailed profiles/process statistics, streaming backlog and overhead qualification;
+full repository and strict acceptance; dependent reviewable PRs.
 Keep PR #293 a draft until its slice is qualified. Do not treat the recorder, authored scenarios,
 passing unit tests, or capture-integrity flags as completion of the approved goal.

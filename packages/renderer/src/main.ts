@@ -1,4 +1,4 @@
-import { windowPerformance } from './runtime/performance.ts';
+import { windowPerformance, startStartupRecording } from './runtime/performance.ts';
 import { hostDeclaration } from '@apackdev/host/fe';
 import { createApp } from 'vue'
 import { createActor } from 'xstate';
@@ -44,6 +44,7 @@ declare global {
 installGlobalErrorHandling();
 
 const query = new URLSearchParams(window.location.search);
+if (query.has('performanceStartup')) await startStartupRecording(query.get('performanceStartup'));
 const isSurfacePopout = query.get('popout') === 'surface';
 const initialSurfaceId = isSurfacePopout ? query.get('surfaceId') ?? undefined : undefined;
 
@@ -78,7 +79,7 @@ export const applicationState = createActor(createAppShell(), {
 });
 
 createdApplication = applicationState;
-applicationState.start();
+windowPerformance.withinStartup(() => applicationState.start());
 
 window.applicationState = applicationState;
 

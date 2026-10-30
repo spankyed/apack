@@ -1,7 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { createStartupPerformance } from '../../src/runtime/startup-performance.ts';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
-const resource = vi.hoisted(() => ({ current: undefined as ReturnType<typeof createNodePerformanceController> | undefined }));
-vi.mock('../../src/runtime/index.ts', () => ({ get appPerformance() { return resource.current; } }));
+const resource = vi.hoisted(() => ({ startup: undefined as ReturnType<typeof createStartupPerformance>, current: undefined as ReturnType<typeof createNodePerformanceController> | undefined }));
+vi.mock('../../src/runtime/index.ts', () => ({ get appPerformance() { return resource.current; }, get appStartupPerformance() { return resource.startup; } }));
 const { performanceRouter } = await import('../../src/transport/performance.ts');
 const ownerClosed = new AbortController();
 const owner = performanceRouter.createCaller({ client: 'owner', closed: ownerClosed.signal });
@@ -34,4 +35,17 @@ it('detaches and marks outstanding work incomplete when the owner disconnects', 
   const report = await resource.current.stop();
   expect(report).toMatchObject({ complete: false, unfinished: 1 });
   await expect(owner.snapshot()).rejects.toThrow(/does not own/);
+});
+
+it('adopts early startup capture through normal connection ownership without restarting it', async () => {
+  resource.startup = createStartupPerformance('test', JSON.stringify({ mode: 'lightweight' }))!;
+  resource.startup.finish();
+  resource.current = resource.startup.controller;
+  const startupOwner = performanceRouter.createCaller({ client: 'startup-owner', closed: new AbortController().signal });
+  await expect(startupOwner.start({ mode: 'disabled', startup: true })).rejects.toThrow('matching startup');
+  await startupOwner.start({ mode: 'lightweight', startup: true });
+  await expect(stranger.snapshot()).rejects.toThrow('does not own');
+  expect((await startupOwner.stop()).observations.some(value => JSON.parse(value).name === 'app.startup')).toBe(true);
+  await expect(startupOwner.start({ mode: 'lightweight', startup: true })).rejects.toThrow('matching startup');
+  resource.startup = undefined;
 });

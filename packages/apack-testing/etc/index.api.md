@@ -40,6 +40,9 @@ export interface AppDriver {
     waitForSurface: (surfaceId: string, timeout?: number) => Promise<void>;
 }
 
+// @public
+export function applicationLaunchStartedAt(app: ElectronApplication): number;
+
 // @public (undocumented)
 export interface AttachedApp {
     readonly detach: () => Promise<void>;
