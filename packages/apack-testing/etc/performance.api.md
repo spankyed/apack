@@ -121,6 +121,24 @@ export type PerformanceTrial = z.infer<typeof trialSchema>;
 
 // @public (undocumented)
 export const processReportSchema: z.ZodObject<{
+    processStatistics: z.ZodOptional<z.ZodObject<{
+        samplingFailures: z.ZodNumber;
+        durationMs: z.ZodNumber;
+        cpuUserMicros: z.ZodNumber;
+        cpuSystemMicros: z.ZodNumber;
+        rssStartBytes: z.ZodNumber;
+        rssEndBytes: z.ZodNumber;
+        rssSampledMaxBytes: z.ZodNumber;
+        heapStartBytes: z.ZodNumber;
+        heapEndBytes: z.ZodNumber;
+        heapSampledMaxBytes: z.ZodNumber;
+        gcCount: z.ZodNumber;
+        gcDurationMs: z.ZodNumber;
+        eventLoopUtilization: z.ZodNumber;
+        eventLoopHistogramMaxMs: z.ZodNumber;
+        eventLoopLateTickMaxMs: z.ZodNumber;
+    }, z.core.$strip>>;
+    processStatisticsFailures: z.ZodOptional<z.ZodNumber>;
     observations: z.ZodArray<z.ZodString>;
     bytes: z.ZodNumber;
     dropped: z.ZodNumber;
@@ -199,6 +217,24 @@ export const trialSchema: z.ZodObject<{
         maxVisibleGapMs: z.ZodNumber;
     }, z.core.$strip>>;
     processes: z.ZodRecord<z.ZodString, z.ZodObject<{
+        processStatistics: z.ZodOptional<z.ZodObject<{
+            samplingFailures: z.ZodNumber;
+            durationMs: z.ZodNumber;
+            cpuUserMicros: z.ZodNumber;
+            cpuSystemMicros: z.ZodNumber;
+            rssStartBytes: z.ZodNumber;
+            rssEndBytes: z.ZodNumber;
+            rssSampledMaxBytes: z.ZodNumber;
+            heapStartBytes: z.ZodNumber;
+            heapEndBytes: z.ZodNumber;
+            heapSampledMaxBytes: z.ZodNumber;
+            gcCount: z.ZodNumber;
+            gcDurationMs: z.ZodNumber;
+            eventLoopUtilization: z.ZodNumber;
+            eventLoopHistogramMaxMs: z.ZodNumber;
+            eventLoopLateTickMaxMs: z.ZodNumber;
+        }, z.core.$strip>>;
+        processStatisticsFailures: z.ZodOptional<z.ZodNumber>;
         observations: z.ZodArray<z.ZodString>;
         bytes: z.ZodNumber;
         dropped: z.ZodNumber;
@@ -289,6 +325,24 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
             rejectedStarts: number;
             invalidAttributes: number;
             complete: boolean;
+            processStatistics?: {
+                samplingFailures: number;
+                durationMs: number;
+                cpuUserMicros: number;
+                cpuSystemMicros: number;
+                rssStartBytes: number;
+                rssEndBytes: number;
+                rssSampledMaxBytes: number;
+                heapStartBytes: number;
+                heapEndBytes: number;
+                heapSampledMaxBytes: number;
+                gcCount: number;
+                gcDurationMs: number;
+                eventLoopUtilization: number;
+                eventLoopHistogramMaxMs: number;
+                eventLoopLateTickMaxMs: number;
+            } | undefined;
+            processStatisticsFailures?: number | undefined;
         }>;
         durationMs?: number | undefined;
         timings?: {

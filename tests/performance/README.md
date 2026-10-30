@@ -48,8 +48,10 @@ Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 
 Capture integrity (`complete`) does not certify instrumentation coverage. Coalesced watch re-reads
 have no action parent and link affected commits, with explicit unknown/dropped causes. Root actor queues restore explicitly carried event context; untagged internal events are not covered.
-Detailed mode currently uses the same bounded tracing foundation; CPU/allocation profiles and process
-statistics remain to be implemented. No overhead or performance improvement is established yet.
+Enabled Node recordings include aggregate process CPU, sampled RSS/heap maxima, GC and event-loop
+observations. These process totals are not per-action attribution, and sampled maxima are not true peak
+memory. Disabled mode starts no sampler; sample failures invalidate capture. Detailed mode still needs
+CPU/allocation profiles and renderer resource observations. No overhead or performance improvement is established yet.
 Populated startup, cross-revision orchestration and qualification remain in the goal.
 
 Populated startup uses a separate controller, `node scripts/with-source.mjs tsx tests/performance/startup-run.ts`.
