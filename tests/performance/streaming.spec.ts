@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -164,6 +164,9 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
       result.work.receivedProgress = result.viewProgress.length;
       result.work.receivedFinalChars = result.viewProgress.at(-1)?.chars ?? 0;
       if (result.completed) try {
+        const files = readdirSync(directory).filter(file => /^production-[0-9]+\.jsonl$/.test(file));
+        result.work.productionFiles = files.length;
+        if (files[0]) result.work.firstProductionIndex = Number(files[0].match(/[0-9]+/)![0]);
         const productionFile = path.join(directory, `production-${thread}.jsonl`);
         if (statSync(productionFile).size > 16 * 1024 || result.work.droppedProgress) throw Error('Progress capture exceeded its bound');
         const produced = readFileSync(productionFile, 'utf8').trim().split('\n').map(line => JSON.parse(line));
