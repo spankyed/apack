@@ -22,6 +22,8 @@ export interface DatabaseOptions {
   path: string;
   schema?: EngineSchema;
   readOnly?: boolean;
+  /** Trusted application-built extension, loaded on this connection before any schema or data writes. */
+  nativeVectorExtension?: string;
   /** The candidate currently synchronizes each commit when enabled. False is for disposable fixtures only. */
   syncs?: boolean;
 }

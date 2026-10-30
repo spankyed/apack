@@ -16,7 +16,7 @@ export class SqliteVectorIndex {
   private readonly db: SqliteDatabase;
   constructor(db: SqliteDatabase, extension: string) {
     this.db = db;
-    db.sql.loadExtension(extension);
+    db.loadNativeVectors(extension);
     if (!prepareEmptyNativeVectorCursor(db)) {
       if(db.readOnly)fail('CORRUPT','Missing native admission cursor index');
       fail('MAINTENANCE_REQUIRED','Prepare the native admission cursor index offline before enabling it on a populated store');

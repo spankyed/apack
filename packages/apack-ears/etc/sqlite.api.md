@@ -15,6 +15,7 @@ export const DATABASE_FORMAT = "sqlite/1";
 
 // @public (undocumented)
 export interface DatabaseOptions {
+    nativeVectorExtension?: string;
     // (undocumented)
     path: string;
     // (undocumented)

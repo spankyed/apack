@@ -5,7 +5,7 @@ import type { SqliteEntityScope } from './query-scope.ts';
 import type { SqliteIndexJob } from './index-builds.ts';
 import { SqliteVectorIndex } from './vector-index.ts';
 import { SqliteVectorAdmission } from './vector-admission.ts';
-import { NATIVE_VECTOR_OWNER_TARGET } from './vector-policy.ts';
+import { nativeVectorCandidateOwners } from './vector-candidates.ts';
 import { SqliteVectorTraining, type SqliteTrainedVectorModel } from './vector-training.ts';
 
 interface SqliteModelOutcome { generation:number;attempt:string;model?:SqliteTrainedVectorModel;error?:unknown }
@@ -60,18 +60,10 @@ export class SqliteVectorModels {
     this.index.retire(generation);return true;
   }
   candidateOwners(generation:number,vector:Uint8Array,scope:SqliteEntityScope|null,exclude?:string):number[]|undefined {
-    if(this.stopped||this.db.get('SELECT state FROM vector_training WHERE generation=?',[generation])?.state!=='ready')return;
-    // A chunk cap is not an owner cap: expand when one owner has many close chunks.
-    for(let limit=NATIVE_VECTOR_OWNER_TARGET;limit<=4096;limit*=2) {
-      const rows=this.index.candidates(generation,vector,limit,scope,exclude,'owners');
-      const owners=[...new Set(rows.map(row=>Number(row.owner)))];
-      if(owners.some(owner=>!Number.isSafeInteger(owner)||owner<1))fail('CORRUPT','Invalid native candidate owner');
-      if(owners.length>=NATIVE_VECTOR_OWNER_TARGET)return owners;
-      if(rows.length<limit)break;
-    }
-    // Preserve the ordinary owner-level path when the native chunk budget cannot supply enough owners.
-    return;
+    if(this.stopped)return;
+    return nativeVectorCandidateOwners(this.db,this.index,generation,vector,scope,exclude);
   }
+
   private writer():void {
     if(this.stopped||!this.db.isOpen)fail('CLOSED','Native model owner is closed');
     if(!this.db.sql.inTransaction)fail('UNIT_REQUIRED','Native model state requires writer ownership');

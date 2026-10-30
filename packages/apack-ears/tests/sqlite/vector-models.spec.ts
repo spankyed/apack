@@ -6,6 +6,9 @@ import { createEarsEngine } from '../../src/index.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { SqliteVectorModels } from '../../src/sqlite/vector-models.ts';
+import { SqliteVectorIndex } from '../../src/sqlite/vector-index.ts';
+import { exportLogicalSnapshot } from '../../src/sqlite/logical-export.ts';
+import { auditSqliteDatabase } from '../../src/sqlite/audit.ts';
 
 const held:Array<{db:SqliteDatabase;models:SqliteVectorModels;path:string}>=[];
 afterEach(async()=>{
@@ -223,6 +226,46 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     })).toThrow('rollback native query');
     expect(e.query('Row').near(vector,{k:1}).ids()).toEqual(original);
     expect(db.get('SELECT count(*) n FROM embedding_values')!.n).toBe(4608);
+  });
+
+  it('loads trusted native candidates on independent readers and writers without creating training owners',async()=>{
+    const {db,e,models}=fixture(4608);await db.indexesReady();
+    const vector=Array.from({length:128},(_,j)=>Math.sin((j+1)*1.71));
+    const expected=e.query('Row').near(vector,{k:20}).ids();
+    const training=db.all('SELECT generation,state,attempt,model_sha256 FROM vector_training');
+    const extension=process.env.EARS_VEC1_EXTENSION!;
+    const native=vi.spyOn(SqliteVectorIndex.prototype,'candidates');
+    const reader=new SqliteDatabase({path:db.path,readOnly:true,nativeVectorExtension:extension});
+    let peer:SqliteDatabase|undefined;
+    try {
+      const read=createEarsEngine({database:reader});native.mockClear();
+      expect(read.query('Row').near(vector,{k:20}).ids()).toEqual(expected);expect(native).toHaveBeenCalled();
+      expect(()=>read.create('Row',{title:'refused'})).toThrow(expect.objectContaining({code:'READ_ONLY'}));
+      peer=new SqliteDatabase({path:db.path,syncs:false,nativeVectorExtension:extension});
+      const writer=createEarsEngine({database:peer});
+      expect(()=>peer!.loadNativeVectors('untrusted-relative.so')).toThrow(expect.objectContaining({code:'VALUE_INVALID'}));
+      expect(()=>peer!.loadNativeVectors(join(db.path,'other.so'))).toThrow(expect.objectContaining({code:'NATIVE_CHANGED'}));
+      expect(()=>writer.transact(()=>{writer.write(expected[0]!).trash();throw Error('rollback peer');})).toThrow('rollback peer');
+      expect(read.query('Row').near(vector,{k:20}).ids()).toEqual(expected);
+      writer.write(expected[0]!).trash();native.mockClear();
+      expect(read.query('Row').near(vector,{k:20}).ids()).not.toContain(expected[0]);expect(native).toHaveBeenCalled();
+      const row=writer.create('Row',{id:'Row-peer-new',title:'peer new'});
+      const pending=writer.pendingEmbeddings('Row');writer.embed(pending.chunks.map(c=>({...c,model:pending.model,vector})));
+      expect(read.query('Row').near(vector,{k:20}).ids()).toContain(row.id());
+      expect(peer.all('SELECT generation,state,attempt,model_sha256 FROM vector_training')).toEqual(training);
+      expect(models.hasWork()).toBe(true); // Existing owner observes the peer commit; no peer trainer was created.
+      const release=peer.claimVectorTrainingOwner();expect(release).toBeTypeOf('function');release();
+    } finally {peer?.close();reader.close();}
+  });
+
+  it('retains the trusted connection loader in native-bearing export and private audit copies',async()=>{
+    const {db}=fixture(4608);await db.indexesReady();
+    const load=vi.spyOn(SqliteDatabase.prototype,'loadNativeVectors');
+    let bytes=0;for await(const chunk of exportLogicalSnapshot(db))bytes+=chunk.byteLength;
+    expect(bytes).toBeGreaterThan(0);expect(load).toHaveBeenCalledWith(db.nativeVectorExtension);
+    load.mockClear();const report=await auditSqliteDatabase(db);
+    expect(report.ok).toBe(true);expect(load.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(load.mock.calls.every(([path])=>path===db.nativeVectorExtension)).toBe(true);
   });
 
   it('expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions',async()=>{

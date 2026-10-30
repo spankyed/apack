@@ -342,7 +342,7 @@ an actual native EARS query. FULL/default checkpoints and primary bytes are pres
 and heartbeat p99 **48.14 ms**, still failed; this admission-only probe does not establish full query/recall,
 live-training write contention or app budgets. The intermediate host/storage run retains one 15 s child timeout;
 a quiet reproduction and instrumented concurrent 32-case run pass, with no demonstrated cause or fix.
-Next provide trusted loading for normal app/read-only/writer connections and implement incumbent-preserving
+Next resolve trusted packaged artifacts and create normal app owners, then implement incumbent-preserving
 physical refresh plus full maintenance/drain ownership.
 [Empty-store cursor preparation](../references/evidence/ears-sqlite-implementation-2026-10-28/native-cursor-preparation/README.md)
 now runs before ordinary/stage ingestion. Populated native attachment reuses it without cursor DDL, while
@@ -350,6 +350,15 @@ missing populated indexes retain the explicit maintenance refusal. All 635 SQLit
 pass, with a reverted-code control. Those focused SQLite checks use the recorded older native binding,
 so current master/native combined platform/full Strict qualification remains pending.
 Keep the unresolved Strict/heartbeat/physical/application gates; no production composition changes here.
+
+[Trusted connection loading](../references/evidence/ears-sqlite-implementation-2026-10-28/native-connections/README.md)
+now accepts an app-owned absolute extension path before schema/data writes. Independent read-only and writable
+handles share ready native candidate selection without creating trainers; internal export/audit/replacement
+connections inherit the trusted loader from their owner. All 637 SQLite EARS cases, types, boundaries, lint,
+normal package build and generated API checks pass; two reverted-code controls reject missing loader paths.
+Normal host artifact resolution/owner creation, signing, physical refresh and maintenance/drain remain open.
+The new checks do not certify unconfigured writers, exhaustive native integrity, installed app loading, current
+native-pin combined CI or performance acceptance.
 
 Still required, without narrowing phases 3–7:
 

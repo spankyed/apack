@@ -84,7 +84,9 @@ export class SqliteIndexBuilds {
   }
   /** Bounded owner candidates only; final scores come from current canonical chunks in this snapshot. */
   nativeVectorOwners(generation:number,vector:Uint8Array,scope:SqliteEntityScope|null,exclude?:string):number[]|undefined {
-    return this.vectorModels?.candidateOwners(generation,vector,scope,exclude);
+    return this.vectorModels
+      ? this.vectorModels.candidateOwners(generation,vector,scope,exclude)
+      : this.db.nativeVectorOwners(generation,vector,scope,exclude);
   }
   private key(type: string, field: string): string { return JSON.stringify([type, field]); }
   private specKey(index: SqliteIndexSpec): string { return JSON.stringify([index.type, index.kind, index.name]); }

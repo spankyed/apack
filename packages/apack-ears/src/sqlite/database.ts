@@ -3,6 +3,9 @@ import { createWriteLease, withoutWriteAuthority } from '../write-lease.ts';
 // to composite persistence and canonical metadata.
 /// <reference types="node" />
 import { DATABASE_FORMAT } from './format.ts';
+import { SqliteVectorIndex } from './vector-index.ts';
+import { nativeVectorCandidateOwners } from './vector-candidates.ts';
+import type { SqliteEntityScope } from './query-scope.ts';
 import NativeDatabase from "better-sqlite3";
 import { LRUCache } from "lru-cache";
 interface StatementSync {
@@ -24,7 +27,7 @@ interface DatabaseSync {
 }
 import { randomBytes } from "node:crypto";
 import { mkdirSync, existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { Packr, Unpackr } from "msgpackr";
 import type { EarsDatabase, EarsUnit, ReadRequest, WriteRequest, WriteResult, Answer, Changes, OpResult, Load, ReadOp } from "../database.ts";
 import type { QueryPlan, StoredRelation } from "../storage.ts";
@@ -105,6 +108,25 @@ export class SqliteDatabase implements EarsDatabase {
   readonly embeddings: SqliteEmbeddings;
   readonly values: SqliteValues;
   readonly indexBuilds: SqliteIndexBuilds;
+  private nativeExtension?: string;
+  private nativeReader?: SqliteVectorIndex;
+  get nativeVectorExtension(): string | undefined { return this.nativeExtension; }
+  /** Only the application owner supplies executable paths; stored metadata never chooses one. */
+  loadNativeVectors(extension: string): void {
+    if (!isAbsolute(extension)) fail('VALUE_INVALID', 'Native vector extension requires an absolute trusted path');
+    const path = resolve(extension);
+    if (this.nativeExtension && this.nativeExtension !== path) fail('NATIVE_CHANGED', 'This connection already loaded a different native vector extension');
+    if (this.nativeExtension) return;
+    this.sql.loadExtension(path);
+    this.nativeExtension = path;
+  }
+  nativeVectorOwners(generation: number, vector: Uint8Array, scope: SqliteEntityScope | null, exclude?: string): number[] | undefined {
+    if (!this.nativeExtension || !this.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='vector_training'")) return;
+    if (this.get('SELECT state FROM vector_training WHERE generation=?', [generation])?.state !== 'ready') return;
+    this.nativeReader ??= new SqliteVectorIndex(this, this.nativeExtension);
+    return nativeVectorCandidateOwners(this, this.nativeReader, generation, vector, scope, exclude);
+  }
+
   private readonly layouts = new Map<string, SqliteValueLayout>();
   private explaining?: { statements: SqliteStatement[]; count: number };
 
@@ -113,6 +135,7 @@ export class SqliteDatabase implements EarsDatabase {
     schema?: object;
     readOnly?: boolean;
     syncs?: boolean;
+    nativeVectorExtension?: string;
   }) {
     this.path = resolve(options.path);
     this.readOnly = options.readOnly ?? false;
@@ -127,6 +150,7 @@ export class SqliteDatabase implements EarsDatabase {
       fail("NO_DATABASE", `No SQLite database at ${file}`);
     this.sql = new NativeDatabase(file, { readonly: this.readOnly });
     try {
+      if (options.nativeVectorExtension !== undefined) this.loadNativeVectors(options.nativeVectorExtension);
       this.embeddings = new SqliteEmbeddings(this);
       this.embeddings.initialize();
       this.sql.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=0; PRAGMA cache_size=-65536;");
@@ -1388,7 +1412,7 @@ export class SqliteDatabase implements EarsDatabase {
     const sourceFile = join(resolve(source), "data.sqlite3");
     if (!existsSync(sourceFile))
       fail("NO_DATABASE", "Replacement source does not exist");
-    const incoming = new SqliteDatabase({ path: source, readOnly: true });
+    const incoming = new SqliteDatabase({ path: source, readOnly: true, nativeVectorExtension: this.nativeVectorExtension });
     try {
       incoming.sql.exec('BEGIN');
       const unit = this.begin();

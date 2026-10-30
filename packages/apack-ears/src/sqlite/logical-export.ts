@@ -20,7 +20,7 @@ export async function* exportLogicalSnapshot(source: SqliteDatabase, options: Lo
   try {
     const path = join(root, 'snapshot');
     await source.withExclusiveWrites(async () => { source.backup(path); });
-    snapshot = new SqliteDatabase({ path, readOnly: true });
+    snapshot = new SqliteDatabase({ path, readOnly: true, nativeVectorExtension: source.nativeVectorExtension });
     yield* encodeLogicalSnapshot(snapshot.sequence, logicalRecords(snapshot), options);
   } catch (error) { failed = true; failure = error; throw error; }
   finally { cleanup(snapshot, root, failed, failure); }

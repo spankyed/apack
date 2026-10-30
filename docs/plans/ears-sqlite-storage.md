@@ -486,6 +486,12 @@ are skipped. Persisted failed training still requires explicit retry.
 covers 633 EARS cases, all fourteen model cases, five mutation controls and real 1k/100k owner-driven admission
 without explicit benchmark enqueue. The 100k heartbeat p99 still misses 16 ms; neither concurrent training
 WAL/write behavior nor complete query/relevance acceptance follows from this probe.
+App-only `openDatabase` now accepts an owner-supplied absolute `nativeVectorExtension` and loads it
+before connection writes. Ready native candidate selection is shared with separately opened read-only and
+writable handles, without automatically creating a trainer. Private export/audit/replacement-source copies
+inherit the owner's loader, never a path from stored data. [Connection evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-connections/README.md)
+retains 637 passing SQLite cases, generated API/package checks and two negative controls. This is the
+connection contract; normal packaged-artifact resolution and host ownership are still required.
 The remaining integration must create/load normal app owners, preserve incumbents during physical model
 refresh, drain before file replacement/deletion, complete rebuild/restore/audit ownership, and distribute/load
 trusted native artifacts on every writer and read-only candidate connection. Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,

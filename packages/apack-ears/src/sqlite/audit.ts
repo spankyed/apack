@@ -136,7 +136,7 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
     const inspect = async (): Promise<SqliteAuditReport> => {
       const originalPath = join(root, 'incumbent'), rebuiltPath = join(root, 'rebuilt');
       source.backup(originalPath);
-      incumbent = new SqliteDatabase({ path: originalPath, readOnly: true });
+      incumbent = new SqliteDatabase({ path: originalPath, readOnly: true, nativeVectorExtension: source.nativeVectorExtension });
       const report: SqliteAuditReport = { scope: 'primary-values-and-active-derived-indexes', sequence: incumbent.sequence, ok: false, issues: [], issueCount: 0, checkedEntities: 0, checkedRelations: 0, comparedIndexes: 0 };
       const issue = (message: string) => { report.issueCount++; if (report.issues.length < 100) report.issues.push(message); };
       for (const row of incumbent.all('PRAGMA integrity_check(100)')) {
@@ -150,7 +150,7 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
       // FTS5's integrity command uses INSERT syntax, so run it only on the private writable snapshot.
       // rank=1 also compares external-content trigram postings against their documents (SQLite FTS5 §6.7).
       incumbent.close();
-      incumbent = new SqliteDatabase({ path: originalPath, syncs: false });
+      incumbent = new SqliteDatabase({ path: originalPath, syncs: false, nativeVectorExtension: source.nativeVectorExtension });
       incumbent.indexBuilds.stop();
       for (const job of jobs) if (job.kind === 'text' || job.kind === 'trigram') {
         const table = searchTable(job);
@@ -161,7 +161,7 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
         }
       }
       incumbent.backup(rebuiltPath);
-      rebuilt = new SqliteDatabase({ path: rebuiltPath, syncs: false });
+      rebuilt = new SqliteDatabase({ path: rebuiltPath, syncs: false, nativeVectorExtension: source.nativeVectorExtension });
       rebuilt.rebuildIndexes(); await rebuilt.indexesReady();
       await rebuildPrivateMembership(rebuilt);
       const membership = 'SELECT entity_id,field,kind,value FROM value_members ORDER BY entity_id,field,kind,value';
