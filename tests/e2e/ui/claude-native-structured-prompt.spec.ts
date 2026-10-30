@@ -183,8 +183,8 @@ test('round-trips decorated structured replace append and cursor insertion throu
     expect(copyAfter.messages).toEqual(copyBefore.messages);expect(copyAfter.turns).toBe(copyBefore.turns);expect(copyAfter.claude.totalCostUsd).toBe(copyBefore.claude.totalCostUsd);expect(copyAfter.native.state.nativePid).toBe(boundNativePid);
     if(await tools.getAttribute('aria-expanded')==='true')await tools.click();
     await card.getByRole('button',{name:'Send',exact:true}).click();await expect(composer).toHaveText('');
-    await expect.poll(async()=>(await context()).native.state.busy).toBe(false);
     await expect.poll(async()=>(await context()).messages.filter((message:any)=>message.sender==='user'&&message.text===submitted).length).toBe(1);
+    await expect.poll(async()=>(await context()).native.state.busy).toBe(false);
     const sent=await context();expect(sent.sessionId).toBe(sessionId);expect(sent.native.state.nativePid).toBe(boundNativePid);
     for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await composer.fill('Retained after copying.');await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture('native-clipboard-sent-'+size.width+'.png');}
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native?.state.status??'exited').toMatch(/^(exited|error)$/);
