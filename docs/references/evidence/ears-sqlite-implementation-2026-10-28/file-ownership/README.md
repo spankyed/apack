@@ -22,7 +22,13 @@ This enforces admission inside a cooperatively owned namespace. It does not prov
 native open or exclude arbitrary concurrent namespace replacement, bind mounts or noncooperating writers.
 Managed directory claims, exclusion before deletion and supported close/drain remain required.
 
-Broader validation is pending on the retained admission session `30957` (one private container after a
-30-second idle window). Its planned unchanged-deadline CLI reproduction, five package builds, typecheck,
-changed-file lint and full EARS/host suites must be inspected before claiming integrated qualification.
-Platform, final installed, durable publication, reset exclusion and performance gates remain required.
+Broader isolated validation passes EARS typechecking, changed-file lint, all five normal package builds,
+762 full SQLite-selected EARS tests (zero skips) and 1929 host tests
+(1 existing platform skip). The exact formerly timed-out CLI case passes in 28.6 seconds
+in the Linux reproduction under its unchanged 200-second deadline; the other 13 cases in its file are
+intentionally unselected. This does not diagnose the earlier macOS CI timeout or qualify that whole shard.
+The run used two CPUs/six GiB/no swap/dropped capabilities after a 30-second quiet window. Its exact
+commands, input hashes and durations are retained in `qualification.json`.
+
+Final platform and installed acceptance on this source, quarantine-parent durability, reset exclusion and
+all performance/relevance/adoption gates remain required. Production continues to use elmdb.

@@ -1,0 +1,109 @@
+
+ RUN  v3.2.7 /electron
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Output: ../tmp/apack-clear-output-BKUQn2/dist/
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+generate-entries: inputs unchanged, skipping (use --force to regenerate)
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Output: ../tmp/apack-clear-output-BKUQn2/dist/
+
+ ✓ |@apackdev/cli| tests/build/build-output-swap.integration.spec.ts (14 tests | 13 skipped) 28587ms
+   ✓ a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement  28586ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 13 skipped (14)
+   Start at  19:33:00
+   Duration  30.87s (transform 1.09s, setup 16ms, collect 1.94s, tests 28.59s, environment 0ms, prepare 41ms)
+
+JSON report written to /results/cli-timeout-reproduction.json

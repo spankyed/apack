@@ -246,10 +246,12 @@ backups require an empty four-file namespace. Its 42 new ownership and 19 existi
 without skips. The unchanged parent fails 37 of the original 38 ownership cases, including external
 shared-memory target corruption. This is cooperative namespace admission, not atomic native no-follow
 opening or protection against arbitrary concurrent namespace replacement.
-Broader validation is waiting in private exec session `30957`, admission PID `63683`, until the other
-agent's live container yields a 30-second quiet window. Inspect that same handle and its
-`/private/tmp/ears-file-ownership-results` reports; do not restart a created run. It includes the exact
-CLI timeout case under its existing 200-second deadline, normal builds, types/lint and full EARS/host.
+Broader isolated validation passes typechecking, changed-file lint, five normal package builds, 762 full
+SQLite-selected EARS cases (zero skips), and 1929 host cases (1 existing platform skip).
+The exact CLI case passes in 28.6 seconds on Linux under its unchanged 200-second deadline, with the other
+13 cases intentionally unselected. Its earlier macOS CI timeout remains unexplained and final integration
+acceptance is still required. The retained run is terminal success; reports and original/fixed evidence are
+in the linked file-ownership evidence. No assertion or deadline was relaxed.
 The next implementation checkpoint is store-excluded reset and quarantine-parent durability; final
 platform/installed qualification and all performance/relevance requirements remain active.
 No previous result certifies arbitrary filesystems or completes the remaining goal.
