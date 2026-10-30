@@ -6,7 +6,7 @@ import { startApp } from '@apackdev/testing/harness'
 import { testCalls } from '@apackdev/sdk/testing'
 import { repository } from '#generated/repository.ts'
 import { chatService } from '#features/threads/be/services/chat.ts'
-import { query, transact, EARS } from '#generated/ears.ts'
+import { EARS, query, transact, write } from '#generated/ears.ts'
 
 const SIZES = [1, 2] as const
 
@@ -99,6 +99,31 @@ describe('what a view costs as the data grows', () => {
     expect(whole.hasMore).toBe(false)
     expect(repository.chatQueries.chatPage(short, 2), 'the last two others, then the queued one, after the bulk add')
       .toMatchObject({ messageIds: [...whole.messageIds.slice(7, 9), waiting], hasMore: true })
+  })
+
+  it("moves a thread's queued messages after each message added, in their order, wherever they were, and no other thread's", async () => {
+    await startApp({ systems: ['threads'] })
+    const thread = repository.threadCommands.create({ topic: 'Queue', instructions: '' }).id as EARS.EntityId
+    const other = repository.threadCommands.create({ topic: 'Other', instructions: '' }).id as EARS.EntityId
+    const order = (id: EARS.EntityId) => query.ids(id).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).ids()
+    const queue = (id: EARS.EntityId) => repository.chatCommands.updateMessageState({ messageId: id, updates: { status: 'queued' } })
+
+    const early = say(thread, 'early')
+    const rest = Array.from({ length: 30 }, (_, i) => say(thread, `message ${i}`))
+    // Queued in place, as no write of the app leaves one: it is still found, however far back
+    write(early).set('status', 'queued')
+    const [first, second] = [say(thread, 'first'), say(thread, 'second')]
+    queue(first)
+    queue(second)
+    const elsewhere = say(other, 'elsewhere')
+    queue(elsewhere)
+    const otherBefore = order(other)
+    const reply = repository.chatCommands.addMessage({ threadId: thread, text: 'reply', sender: 'assistant' }).id as EARS.EntityId
+    expect(order(thread)).toEqual([...rest, reply, early, first, second])
+    expect(order(other)).toEqual(otherBefore)
+
+    const marker = repository.chatCommands.createMarkerMessage({ threadId: thread, text: 'summary' }).id
+    expect(order(thread).slice(-4)).toEqual([marker, early, first, second])
   })
 
   it('runs the chat page again for a change on the page, not for one to a message before it', async () => {

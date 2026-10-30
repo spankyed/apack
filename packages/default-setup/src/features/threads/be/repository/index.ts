@@ -578,10 +578,17 @@ function relinkMessageToEnd(threadId: EARS.EntityId, messageId: EARS.EntityId): 
   write(messageId).link(EARS.RelKind.CONTAINS, threadId);
 }
 
-/** Moves a thread's queued messages after the rest, in their order: what every write adding a message ends with */
+/**
+ * Moves a thread's queued messages after the rest, in their order: what every write adding a message ends with. The
+ * status index finds them, and the thread is read from its last message back only as far as the earliest of them
+ */
 function relinkQueuedToEnd(threadId: EARS.EntityId, except?: EARS.EntityId): void {
-  const queued = query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).where('status', 'queued').ids();
-  for (const id of queued) if (id !== except) relinkMessageToEnd(threadId, id);
+  const queued = query(EARS.Entity.Message).where('status', 'queued').linkedTo(EARS.RelKind.CONTAINS, threadId).ids()
+    .filter(id => id !== except);
+  if (!queued.length) return;
+  const inOrder = query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
+    .reverse().within(queued).limit(queued.length).ids().reverse();
+  for (const id of inOrder) relinkMessageToEnd(threadId, id);
 }
 
 export const chatCommands = {
