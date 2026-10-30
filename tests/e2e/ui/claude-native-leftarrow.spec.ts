@@ -190,7 +190,15 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         return (Object.values(state.nativeTerminalViews).find((view:any)=>view.threadId===state.currentThread?.id) as any)?.backgroundInfo
       })
       if(childStatus){
-        await expect(widget.getByLabel('Background session usage',{exact:true})).toBeVisible({timeout:15000})
+        try { await expect(widget.getByLabel('Background session usage',{exact:true})).toBeVisible({timeout:15000}) }
+        catch(error){
+          await widget.getByRole('button',{name:'Open session',exact:true}).click()
+          await expect(appPage.getByRole('region',{name:'Background Claude terminal',exact:true})).toBeVisible({timeout:10000})
+          await expect.poll(async()=>appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).some((view:any)=>view.attachment?.state?.output?.length>0)),{timeout:10000}).toBe(true)
+          observations.childStatusFailure=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>({backgroundInfo:view.backgroundInfo,background:view.background,attachment:view.attachment})))
+          await capture('apack-native-background-status-diagnostic.png')
+          throw error
+        }
         const info=await readInfo();expect(info.sessionId).toBe(job.sessionId);expect(info.jobId).toBe(job.id);expect(info.pid).toBe(job.pid);expect(info.model).toBeTruthy();expect(info.turns).toBeGreaterThan(0)
         observations.childStatus={before:info,parentBefore:beforeReply}
       }
