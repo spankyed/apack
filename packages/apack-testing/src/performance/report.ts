@@ -6,7 +6,7 @@ const scalar = z.union([z.string().max(128), z.number().finite(), z.boolean()]);
 const profilesSchema = z.object({
   sampling: z.object({ cpuIntervalMicros: z.literal(1000), allocationIntervalBytes: z.literal(512 * 1024), allocationStackDepth: z.literal(32), includeCollectedAllocations: z.literal(true) }),
   cpu: z.string().max(2 * 1024 * 1024).optional(), allocation: z.string().max(2 * 1024 * 1024).optional(),
-  bytes: count.max(4 * 1024 * 1024), failures: count, complete: z.boolean(),
+  bytes: count.max(4 * 1024 * 1024), failures: count, failureStages: z.array(z.string().max(32)).max(8).optional(), complete: z.boolean(),
   windowLimitMs: z.literal(30_000), durationMs: z.number().finite().nonnegative(), stoppedBy: z.enum(['owner', 'limit']),
 }).superRefine((profiles, ctx) => {
   let bytes = 0;

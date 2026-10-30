@@ -28,6 +28,8 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
   let cpuStarted = false;
   let heapStarted = false;
   let failures = 0;
+  const failureStages: string[] = [];
+  function failed(stage: string) { failures++; if (failureStages.length < 8) failureStages.push(stage); }
   let stoppedBy: _PerformanceProfiles['stoppedBy'] = 'owner';
   let stopping: Promise<_PerformanceProfiles> | undefined;
   const ready = (async () => {
@@ -42,7 +44,7 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
         includeObjectsCollectedByMajorGC: sampling.includeCollectedAllocations, includeObjectsCollectedByMinorGC: sampling.includeCollectedAllocations,
       });
       heapStarted = true;
-    } catch { failures++; }
+    } catch { failed('admission'); }
   })();
   const timer = setTimeout(() => { stoppedBy = 'limit'; void stop(); }, PROFILE_WINDOW_MS);
   timer.unref?.();
@@ -55,14 +57,14 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
       let bytes = 0;
       const raw: Partial<Record<keyof typeof output, unknown>> = {};
       async function end(method: string, kind: keyof typeof output, enabled: boolean) {
-        if (!enabled) { failures++; return; }
+        if (!enabled) { failed(`${kind}-unavailable`); return; }
         try {
           const response = await post(method) as { profile?: unknown };
           if (!response.profile || typeof response.profile !== 'object') throw Error('Missing profile');
           const shape = response.profile as { nodes?: unknown; head?: unknown };
           if (kind === 'cpu' ? !Array.isArray(shape.nodes) : !shape.head || typeof shape.head !== 'object') throw Error('Invalid profile');
           raw[kind] = response.profile;
-        } catch { failures++; }
+        } catch { failed(`${kind}-protocol`); }
       }
       try {
         // Stop allocation sampling before creating/encoding the CPU export, then stop CPU sampling.
@@ -70,7 +72,7 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
         await end('HeapProfiler.stopSampling', 'allocation', heapStarted);
         await end('Profiler.stop', 'cpu', cpuStarted);
       } finally {
-        try { await bounded(() => transport.close()); } catch { failures++; }
+        try { await bounded(() => transport.close()); } catch { failed('close'); }
       }
       for (const kind of ['cpu', 'allocation'] as const) {
         if (raw[kind] === undefined) continue;
@@ -78,12 +80,12 @@ export function createPerformanceProfiles(transport: PerformanceProfileTransport
           const encoded = JSON.stringify(raw[kind]);
           if (typeof encoded !== 'string') throw Error('Invalid profile encoding');
           const size = new TextEncoder().encode(encoded).byteLength;
-          if (size > PROFILE_BYTES / 2) throw Error('Profile output limit');
+          if (size > PROFILE_BYTES / 2) { failed(`${kind}-size`); continue; }
           output[kind] = encoded;
           bytes += size;
-        } catch { failures++; }
+        } catch { failed(`${kind}-encoding`); }
       }
-      return { ...output, sampling: { ...sampling }, bytes, failures, complete: failures === 0,
+      return { ...output, sampling: { ...sampling }, bytes, failures, failureStages, complete: failures === 0,
         windowLimitMs: PROFILE_WINDOW_MS, durationMs: performance.now() - started, stoppedBy };
     })();
     return stopping;

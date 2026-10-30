@@ -27,7 +27,7 @@ it('retains the other profile and closes after one oversized export', async () =
   const capture = createPerformanceProfiles(port);
   await capture.ready;
   const report = await capture.stop();
-  expect(report).toMatchObject({ complete: false, failures: 1, allocation: '{"head":{}}' });
+  expect(report).toMatchObject({ complete: false, failures: 1, failureStages: ['cpu-size'], allocation: '{"head":{}}' });
   expect(report.cpu).toBeUndefined();
   expect(report.bytes).toBe(11);
   expect(port.close).toHaveBeenCalledTimes(1);

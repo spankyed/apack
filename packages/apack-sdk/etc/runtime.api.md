@@ -207,6 +207,8 @@ export interface _PerformanceProfiles {
     // (undocumented)
     failures: number;
     // (undocumented)
+    failureStages?: string[];
+    // (undocumented)
     sampling: {
         cpuIntervalMicros: number;
         allocationIntervalBytes: number;

@@ -26,6 +26,7 @@ export interface _PerformanceProfiles {
   allocation?: string;
   bytes: number;
   failures: number;
+  failureStages?: string[];
   complete: boolean;
   windowLimitMs: number;
   durationMs: number;
