@@ -98,6 +98,15 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await expect(approval).toHaveCount(0)
     await expect.poll(async () => (await context()).native?.state?.activity?.pendingWorkflows ?? 0).toBe(1)
     await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-leftarrow-reviewer-ready.json'), 'utf8').catch(() => '{}')).originalChildRequest, { timeout: 15000 }).toBe(true)
+    if(childApiRestart){
+      await writeFile(join(workspace!, 'native-pending-duration-release'),'settle the original review before testing API recovery')
+      await expect.poll(async()=>(await context()).native?.state?.activity?.pendingWorkflows,{timeout:15000}).toBe(0)
+      await expect.poll(async()=>(await context()).native?.state?.busy,{timeout:15000}).toBe(false)
+      observations.settledParentBeforeHandoff=await context()
+      await expect(composer).toHaveText('')
+      await composer.press('ArrowLeft')
+      await expect(appPage.getByRole('dialog',{name:'Background this session?',exact:true})).toHaveCount(0)
+    }else{
     await composer.fill('Keep these notes while reviewing the background session.')
     const draft = await composer.textContent()
     await composer.press('ArrowLeft')
@@ -143,6 +152,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     dialog = await review()
     }
     await dialog.getByRole('button', { name: 'Background anyway (1 subagent restarts)', exact: true }).click()
+    }
     await expect.poll(async () => (await context()).claude.nativeContinuation).toMatchObject({ sessionId })
     await expect(card).toContainText('This conversation moved to the background.')
     await expect(composer).toHaveAttribute('contenteditable', 'true')
@@ -605,7 +615,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: true, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(parentOwnerLoss?{nativeBackgroundParentOwnerLoss:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childFormatter?{nativeBackgroundFormatter:true}:{}), ...(childFormatterLifecycle?{nativeBackgroundFormatterLifecycle:true}:{}), ...(childFormatterPolicy?{nativeBackgroundFormatterPolicy:true}:{}), ...(childApiRestart?{nativeBackgroundApiRestart:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: !childApiRestart, nativeBackgroundSettledHandoff: childApiRestart, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(parentOwnerLoss?{nativeBackgroundParentOwnerLoss:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childFormatter?{nativeBackgroundFormatter:true}:{}), ...(childFormatterLifecycle?{nativeBackgroundFormatterLifecycle:true}:{}), ...(childFormatterPolicy?{nativeBackgroundFormatterPolicy:true}:{}), ...(childApiRestart?{nativeBackgroundApiRestart:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
   } finally {
     if ((childInteraction && !observations.childInteraction) || (childResume && !observations.childResume?.workerRetired)) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
