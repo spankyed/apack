@@ -18,16 +18,22 @@ export async function verifyChildFormatterPolicy({workspace,job,widget,app,appPa
   await expect.poll(()=>readJson('background-policy-helper-started.json').catch(error=>error.code==='ENOENT'?null:Promise.reject(error)),{timeout:10000}).toEqual(expect.objectContaining({sessionId:job.sessionId}));
   held=await readJson('background-policy-helper-started.json');
   await writeFile(join(control,'request-1.json'),JSON.stringify({sequence:1,mode:'restricted'}));
-  await expect.poll(async()=>JSON.parse((await configs()).at(-1)?.input.formatter.policy??'{}').disableAllHooks,{timeout:10000}).toBe(true);
-  restriction=(await configs()).at(-1);expect(restriction.input.formatter.command).toBe(null);
-  await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toHaveCount(0);
+  await expect.poll(async()=>readFile(join(control,'receipt-1.json'),'utf8').then(JSON.parse).catch(error=>error.code==='ENOENT'?null:Promise.reject(error)),{timeout:5000}).toEqual(expect.objectContaining({mode:'restricted',uid:0,fileMode:420}));
+  // The original managed gate unloads this private plugin, including its clock; it cannot report its own disabled policy.
+  await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toHaveCount(0,{timeout:10000});
+  await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0,{timeout:10000});
+  restriction={receipt:JSON.parse(await readFile(join(control,'receipt-1.json'),'utf8')),lastConfig:(await configs()).at(-1),clearedAt:Date.now()};
+  await writeFile(join(workspace,'background-policy-journey.json'),JSON.stringify({before,held,restriction}));
   await writeFile(join(workspace,'background-policy-helper-release'),'release');
   await expect.poll(()=>readJson('background-policy-helper-finished.json').catch(error=>error.code==='ENOENT'?null:Promise.reject(error)),{timeout:5000}).toEqual(expect.objectContaining({sessionId:job.sessionId,marker:'STALE_BACKGROUND_POLICY_HELPER'}));
   suppressed=await readInfo();expect(suppressed?.statusLine).toBeUndefined();await capturePhase('restricted');
   await writeFile(join(control,'request-2.json'),JSON.stringify({sequence:2,mode:'restored'}));
-  await expect.poll(async()=>JSON.parse((await configs()).at(-1)?.input.formatter.policy??'{}').disableAllHooks,{timeout:10000}).toBe(false);
+  await expect.poll(async()=>readFile(join(control,'receipt-2.json'),'utf8').then(JSON.parse).catch(error=>error.code==='ENOENT'?null:Promise.reject(error)),{timeout:5000}).toEqual(expect.objectContaining({mode:'restored',uid:0,fileMode:420}));
+  const restoredAt=JSON.parse(await readFile(join(control,'receipt-2.json'),'utf8')).at*1000;
+  await expect.poll(async()=>(await configs()).at(-1)?.at??0,{timeout:10000}).toBeGreaterThan(restoredAt);
   await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toContainText('AppNativeMain '+job.sessionId,{timeout:10000});
-  restoration=(await configs()).at(-1);
+  restoration=(await configs()).at(-1);expect(JSON.parse(restoration.input.formatter.policy).disableAllHooks).toBe(false);
+  expect(restoration.input.token).not.toBe(before.input.token);
   await app.navigate('host/settings');await app.navigate('default-setup/threads');
   after=await readInfo();expect(after.sessionId).toBe(job.sessionId);expect(after.pid).toBe(info.pid);expect(after.statusLine).not.toContain('STALE_BACKGROUND_POLICY_HELPER');
   const afterParent=await context();expect(afterParent.messages).toEqual(parent.messages);expect(afterParent.claude.totalCostUsd).toBe(parent.claude.totalCostUsd);await capturePhase('restored');
