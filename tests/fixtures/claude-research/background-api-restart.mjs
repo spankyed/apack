@@ -33,7 +33,9 @@ export async function verifyBackgroundApiRestart({workspace,job,widget,composer,
   observation.phase='api-reconnected';observation.reconnectedAt=Date.now();observation.after=await context();observation.workerAfter=await childProcessState();await save();
   expect(observation.workerAfter?.start).toBe(workerBefore.start);expect(observation.workerAfter?.state).not.toBe('Z');
   await expect(composer).toHaveText(draft);await expect(widget).toBeVisible();await expect(input).toHaveValue(retainedReply);
-  expect(observation.after.sessionId).toBe(before.sessionId);expect(observation.after.messages).toEqual(before.messages);expect(observation.after.claude.totalCostUsd).toBe(before.claude.totalCostUsd);
+  await expect.poll(async()=>(await context()).messages,{timeout:10000}).toEqual(before.messages);
+  observation.after=await context();await save();
+  expect(observation.after.sessionId).toBe(before.sessionId);expect(observation.after.claude.totalCostUsd).toBe(before.claude.totalCostUsd);
   await widget.getByRole('button',{name:'Refresh status',exact:true}).click();await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeEnabled();
   await expect.poll(async()=>(await readInfo())?.observedAt??0,{timeout:10000}).toBeGreaterThan(observation.reconnectedAt);
   observation.infoAfter=await readInfo();expect(observation.infoAfter.sessionId).toBe(job.sessionId);expect(observation.infoAfter.pid).toBe(job.pid);
