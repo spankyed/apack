@@ -13,7 +13,7 @@ npm run test:e2e -- --config tests/performance/playwright.config.ts
 ```
 
 Use the repository's bounded Linux runner for repeated native/runtime qualification. Electron needs
-an available display there (for example Xvfb). Each invocation selects one scenario and owns a fresh process/profile; `APACK_PERFORMANCE_SCENARIO=thread-open` is the default and `search` selects the search corpus. `APACK_PERFORMANCE_MODE` selects `disabled`,
+an available display there (for example Xvfb). Each invocation selects one scenario and owns a fresh process/profile; `APACK_PERFORMANCE_SCENARIO=thread-open` is the default `search` selects the search corpus, and `streaming` selects deterministic CLI replies. `APACK_PERFORMANCE_MODE` selects `disabled`,
 `lightweight` (default), or `detailed`. `APACK_PERFORMANCE_TRIALS=1` is a contract/debug run;
 it cannot establish latency variability or overhead. The default is five warmups followed by twenty
 measured trials in a warmed process. This is not cold disk or fresh-process startup evidence.
@@ -31,6 +31,13 @@ rows and laid-out result snippets for that query. Start is surface-event dispatc
 input control's debounce; it is not keyboard-to-results latency. This scenario does not certify ranking
 of a truncated larger result set or an independent late-response fault injection.
 
+Streaming configures a fixture CLI through normal Settings, then exercises the actual Claude Code
+chat flow, process protocol, throttled writer and message views. A fresh twenty-message conversation
+per trial keeps history size constant. The fixture emits twenty-four chunks at fixed intervals.
+Completion requires visible intermediate progress and the complete reply plus completion timestamp in
+its database-backed view and DOM. Reports retain first-visible and maximum visible-update-gap timings;
+they do not yet establish provider-to-database backlog or overhead. No network/model service is called.
+
 Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 
 - `manifest.json` identifies source/dirty state, actual build/native output hashes and checkout identity, fixture distributions, runtimes,
@@ -43,4 +50,4 @@ Capture integrity (`complete`) does not certify instrumentation coverage. Coales
 currently have no action parent; contributing commit links and raw actor queue coverage remain open.
 Detailed mode currently uses the same bounded tracing foundation; CPU/allocation profiles and process
 statistics remain to be implemented. No overhead or performance improvement is established yet.
-Streaming, populated startup, cross-revision orchestration and qualification remain in the goal.
+Populated startup, cross-revision orchestration and qualification remain in the goal.

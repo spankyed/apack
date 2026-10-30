@@ -1,7 +1,7 @@
 import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { appPerformance } from '../runtime/index.ts';
+import { appPerformance, appStartupPerformance } from '../runtime/index.ts';
 import { procedure, router } from './trpc.ts';
 
 /** The socket is authenticated before tRPC; a recording additionally belongs to the connection that started it. */
@@ -22,11 +22,15 @@ function owned(client: string) {
 }
 
 export const performanceRouter = router({
-  start: procedure.input(z.object({ mode: z.enum(['disabled', 'lightweight', 'detailed']) })).mutation(({ input, ctx }) => {
+  start: procedure.input(z.object({ mode: z.enum(['disabled', 'lightweight', 'detailed']), startup: z.boolean().optional() })).mutation(({ input, ctx }) => {
     const performance = controller();
     if (owner) throw new TRPCError({ code: 'CONFLICT', message: 'A performance recording is already active' });
     if (ctx.closed.aborted) throw new TRPCError({ code: 'BAD_REQUEST', message: 'The connection is closed' });
-    performance.start(input.mode);
+    if (input.startup) {
+      if (!appStartupPerformance || appStartupPerformance.controller !== performance) throw new TRPCError({ code: 'CONFLICT', message: 'No startup recording is available' });
+      try { appStartupPerformance.adopt(input.mode); }
+      catch { throw new TRPCError({ code: 'CONFLICT', message: 'No matching startup recording is available' }); }
+    } else performance.start(input.mode);
     const claim: RecordingOwner = { client: ctx.client, unlisten: () => ctx.closed.removeEventListener('abort', closed) };
     const closed = () => {
       claim.unlisten();

@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
 import { nextTick } from 'vue';
 import type { ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
 import type { createPerformanceController, RecordingMode } from '@apackdev/host/diagnostics';
@@ -5,6 +7,7 @@ import { trpc } from '@/transport';
 
 type Controller = ReturnType<typeof createPerformanceController>;
 let controller: Controller | undefined;
+let startupAction: ReturnType<Controller['begin']>;
 let starting = false;
 let stopping = false;
 let failedListeners = 0;
@@ -21,23 +24,25 @@ export function notifyPerformanceView(delivery: PerformanceViewDelivery) {
 export const windowPerformance = {
   flushView: () => nextTick(),
   get execution() { return controller?.execution; },
-  async start(mode: RecordingMode) {
+  async start(mode: RecordingMode, options?: { startup: true; carrier?: PerformanceCarrier }) {
     if (controller || starting || stopping) throw new Error('A window performance recording is already active, starting or stopping');
     starting = true;
     let admitted = false;
     try {
-      await trpc.performance.start.mutate({ mode });
+      await trpc.performance.start.mutate({ mode, ...(options?.startup && { startup: true }) });
       admitted = true;
       const { createPerformanceController, BrowserRecordingContext } = await import('@apackdev/host/diagnostics');
       const resource = createPerformanceController(() => new BrowserRecordingContext());
       resource.start(mode);
       failedListeners = 0;
       controller = resource;
+      if (options?.startup) startupAction = resource.execution.withCarrier(options.carrier, () => resource.begin('app.startup', { 'app.process': 'renderer' }));
     } catch (error) {
       if (admitted) await trpc.performance.stop.mutate().catch(() => {});
       throw error;
     } finally { starting = false; }
   },
+  withinStartup<T>(fn: () => T): T { return startupAction ? startupAction.within(fn) : fn(); },
   begin(name: string, attributes?: Parameters<Controller['begin']>[1]) {
     if (!controller) throw new Error('No window performance recording is active');
     return controller.begin(name, attributes)!;
@@ -51,6 +56,8 @@ export const windowPerformance = {
   async stop() {
     const resource = controller;
     if (!resource) throw new Error('No window performance recording is active');
+    startupAction?.end();
+    startupAction = undefined;
     controller = undefined;
     stopping = true;
     listeners.clear();
@@ -67,3 +74,13 @@ export const windowPerformance = {
     } finally { stopping = false; }
   },
 };
+
+/** Main supplies this test-only launch configuration before the application actor or views start. */
+export async function startStartupRecording(input: string | null): Promise<void> {
+  if (input === null) return;
+  if (input.length > 2048) throw new Error('Startup recording configuration is too large');
+  const config = z.object({ mode: z.enum(['disabled', 'lightweight', 'detailed']),
+    carrier: z.object({ traceparent: z.string().max(512).optional(), tracestate: z.string().max(512).optional() }).strict().optional(),
+  }).strict().parse(JSON.parse(input));
+  await windowPerformance.start(config.mode, { startup: true, carrier: config.carrier });
+}
