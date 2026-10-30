@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "researchCommit": "d54aa9c23d03e484df44f83621f3dedf9c53baf4",
+  "researchCommit": "ead23c7c66df5a5d0b2cb9f93d16e5e7c97fe0b8",
   "target": {
     "version": "2.1.302",
     "platform": "darwin-arm64",
@@ -146,6 +146,7 @@
     "src/integration/owned-prompt-reply-hold.mjs": "8e1b4c3ea78568b428b87cec31fe6583102292471950f739ac26f4512154c158",
     "src/integration/permission-enforcement-app-driver.mjs": "02ebba021cf32856d0e4088afd7ffe6832862228eb378f34d9309c8f1333bebc",
     "src/integration/permission-enforcement-app.mjs": "2e62678f2edf1500c4309cd99b2325ca46d65f47e5fb9f932147c8247976fe2f",
+    "src/integration/probe-background-process-identity.py": "ae19ec0ceb6c806bd05b0253f455f3ae41f1695f3b71cf34d9518b23d9f9a9bd",
     "src/integration/refusal-result-driver.mjs": "59e875c7267a0901f43879fa7754d609a86c08641259ffc0c1aefe803daf397b",
     "src/integration/refusal-result.mjs": "3b8960ce5d22b689a97b5e7cbc4501c7201d6520368e58d5fa5b08e25865864e",
     "src/integration/retry-driver.mjs": "01970f6269c7dda530aad291413d76a4dceb42e3ec58e72c496c48edf3173a71",
@@ -166,7 +167,7 @@
     "src/integration/verify-background-reply.py": "d69b7bac28ae91c9c61c55144637910ffd3c1cf0cdc0c59befb996e5695bf68c",
     "src/integration/verify-background-resume.py": "2f8d85b8cfc64b546f94d36b8269e0a3920bc9dd0f25b0a601cbe94a063fa56e",
     "src/integration/verify-background-status-lifecycle.py": "0acfa51f46d59122806704d093e63f46756369057b77bad9fc8a40c2f9ac8fe2",
-    "src/integration/verify-background-status.py": "e8f3b42b8a193415839f5713c657c98f81e23d3679bce4849e00395772a7adfb",
+    "src/integration/verify-background-status.py": "754529113a18c5cd38c15463644df189eb8750dca654944b6404c80ffe73870b",
     "src/integration/verify-clipboard.py": "6a8ac7e017c36fc45f71ee14d145c8f47132b02af0f24bd6b9b16fd26b85eb59",
     "src/integration/verify-everyday-rich.py": "725811c0ff0944750c903b76788d5ece67d129c5723cbd568183f553f757d080",
     "src/integration/verify-hover-browser.mjs": "f0c564f97deb7a3ad2fc5aaa6774373d0510b4a2d116ec763f1d994a1381b45c",
@@ -380,5 +381,5 @@
     "src/protocol/workflow.mjs": "4f83642008ff7f2bb435f23fae243d5a63c1a553f3bfac5e9ab46a7b3cf7b401",
     "src/protocol/workspace-trust.mjs": "906d6d0aae7d8f5e7ecb7aeadfcae2e60597401b39d6717c5192ae0c097de58d"
   },
-  "archiveSha256": "6d7c81b6471bdd840d6c65aa15f6b8af32bbc63671303756f3277831e8e0d54c"
+  "archiveSha256": "882f3ac5bb44f3be516d0dae1a89b53209b8d8a0ac335c5ba26622abfa5a4ef4"
 }
