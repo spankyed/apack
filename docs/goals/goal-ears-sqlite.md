@@ -220,8 +220,16 @@ exact scripts/repo/publish/E2E types, changed lint, three reverted safeguards/re
 10 signing cases. The resource-paused failed host run and unchanged-source successful rerun are both retained.
 No assertion or deadline was relaxed. Compiler/full checks stay in private disposable environments capped at
 two CPU/six GiB/no swap with dropped capabilities; focused checks use half a CPU/768 MiB. A quiet admission
-window avoids starting a broad suite between the other agent's builds. New exact-source publication/CI remains
-pending; no prior green result certifies these later changes or arbitrary filesystems.
+window avoids starting a broad suite between the other agent's builds. Published checkpoint `f731a4a549`
+now runs [full strict CI 41106571398](https://github.com/spankyed/apack/actions/runs/41106571398) and
+[signed installed Preview 41106578424](https://github.com/spankyed/apack/actions/runs/41106578424).
+Signed installed acceptance passes on `f731a4a549`, including both persisted-identity assertions. Strict
+runtime steps complete on all three SQLite hosts, but their final case verifier fails; Linux exposes its
+stale 27-case count. Other strict shards remain live at the retained snapshot. The
+[named-inventory fix](../references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/README.md)
+requires all 29 publication and 19 identity cases and passes eight real-report positive/negative controls.
+No passing additional case can mask a missing/skipped invariant. New verifier publication/CI is pending;
+no previous result certifies arbitrary filesystems or completes the remaining goal.
 
 Earlier [full strict 41056724109](https://github.com/spankyed/apack/actions/runs/41056724109) is green at
 `3333361c3c`, including every required shard and all three SQLite hosts. Retained native audit/repair receipts

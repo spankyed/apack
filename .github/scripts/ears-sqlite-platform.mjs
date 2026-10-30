@@ -9,6 +9,66 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadedNativeBindings } from '../../packages/apack-ears/bench/sqlite/load-metrics.ts';
 
+// Require named safety witnesses, so added passing cases cannot mask a missing or skipped invariant.
+function requirePassingCases(cases, required, label) {
+  const named = new Map(cases.map(test => [test.fullName, test]));
+  assert.equal(named.size, cases.length, `${label}: duplicate witness names`);
+  for (const name of required) assert.equal(named.get(name)?.status, 'passed', `${label}: required case must execute: ${name}`);
+  for (const test of cases) assert.equal(test.status, 'passed', `${label}: selected case must pass: ${test.fullName}`);
+}
+const requiredPublicationCases = [
+  "excludes writable elmdb/1 handles from physical recovery until close",
+  "excludes writable sqlite/1 handles from physical recovery until close",
+  "refuses a new writable open during publication (readOnly=false)",
+  "refuses a new writable open during publication (readOnly=undefined)",
+  "a store-only publication excludes that store but permits an unrelated sibling handle",
+  "a store-only publication refuses claims whose database identity is unresolved",
+  "refuses managed database-leaf aliases before opening (readOnly=true)",
+  "refuses managed database-leaf aliases before opening (readOnly=false)",
+  "excludes physical directory identity even when its claim uses another leaf spelling",
+  "quarantines corrupt elmdb/1 history while an unrelated primary handle stays open",
+  "quarantines corrupt sqlite/1 history while an unrelated primary handle stays open",
+  "refuses elmdb/1 history quarantine while a managed reader still holds the directory",
+  "refuses sqlite/1 history quarantine while a managed reader still holds the directory",
+  "never treats SQLITE_IOERR_READ as permission to replace a SQLite history directory",
+  "never treats SQLITE_IOERR_FSYNC as permission to replace a SQLite history directory",
+  "never treats SQLITE_CANTOPEN as permission to replace a SQLite history directory",
+  "never treats SQLITE_PERM as permission to replace a SQLite history directory",
+  "never treats SQLITE_FULL as permission to replace a SQLite history directory",
+  "never treats SQLITE_BUSY as permission to replace a SQLite history directory",
+  "never treats WRONG_FORMAT as permission to replace a SQLite history directory",
+  "never treats SQLITE_CORRUPT_INDEX as permission to replace a SQLite history directory",
+  "never treats SQLITE_CORRUPT_VTAB as permission to replace a SQLite history directory",
+  "never treats CORRUPT as permission to replace a SQLite history directory",
+  "never treats NATIVE_CHANGED as permission to replace a SQLite history directory",
+  "retains the directory claim when a failed SQLite constructor could not close its connection",
+  "preserves failed SQLite constructor authority without an AggregateError prototype",
+  "refuses stale elmdb/1 history publication after another directory was installed",
+  "refuses stale sqlite/1 history publication after another directory was installed",
+  "refuses a foreign valid SQLite history without initialization or quarantine"
+];
+const requiredIdentityCases = [
+  "SQLite database identity persists the application identity and current format before normal reopen",
+  "SQLite database identity refuses a foreign valid SQLite database without initializing or changing it (readOnly=false)",
+  "SQLite database identity refuses a foreign valid SQLite database without initializing or changing it (readOnly=true)",
+  "SQLite database identity refuses an owned-looking database with application_id=0 without repairing its identity",
+  "SQLite database identity refuses an owned-looking database with application_id=305419896 without repairing its identity",
+  "SQLite database identity refuses an owned-looking database with user_version=0 without repairing its identity",
+  "SQLite database identity refuses an owned-looking database with user_version=2 without repairing its identity",
+  "SQLite database identity rolls back identity and every primary initializer together, preserving the original refusal",
+  "SQLite database identity refuses missing authoritative meta without recreating it",
+  "SQLite database identity refuses missing authoritative entities without recreating it",
+  "SQLite database identity refuses missing authoritative relations without recreating it",
+  "SQLite database identity refuses missing authoritative embedding_values without recreating it",
+  "SQLite database identity refuses missing authoritative value_types without recreating it",
+  "SQLite database identity refuses missing authoritative value_fields without recreating it",
+  "SQLite database identity refuses missing authoritative value_overflow without recreating it",
+  "SQLite database identity refuses missing authoritative admitted type values without recreating it",
+  "SQLite database identity refuses an unclaimed empty file on a read-only open without initializing it",
+  "SQLite database identity preserves a foreign committed WAL after its writer dies (readOnly=false)",
+  "SQLite database identity preserves a foreign committed WAL after its writer dies (readOnly=true)"
+];
+
 const evidence = resolve('.temp/sqlite-platform'), mode = process.argv[2];
 mkdirSync(evidence, { recursive: true });
 const save = (file, value) => writeFileSync(join(evidence, file), JSON.stringify(value, null, 2) + '\n');
@@ -27,7 +87,8 @@ if (mode === 'verify') {
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const publication = host.testResults.flatMap(test => /\/tests\/(backup\/recovery|database\/storage)\.spec\.ts$/.test(test.name.replaceAll('\\', '/')) ? test.assertionResults : [])
-    .filter(test => /excludes writable|refuses a new writable|store-only publication|quarantines corrupt|history quarantine|never treats|failed SQLite constructor|managed database-leaf aliases|excludes physical directory identity|refuses stale/.test(test.fullName));
+    .filter(test => /excludes writable|refuses a new writable|store-only publication|quarantines corrupt|history quarantine|never treats|failed SQLite constructor|managed database-leaf aliases|excludes physical directory identity|refuses stale|foreign valid SQLite history/.test(test.fullName));
+  const identity = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/database-identity.spec.ts') ? test.assertionResults : []);
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
@@ -53,6 +114,7 @@ if (mode === 'verify') {
     logicalSnapshotCasesPassed: passedIn(ears, /\/tests\/sqlite\/logical-snapshot\.spec\.ts$/),
     logicalHostCasesPassed: logical.filter(test => test.status === 'passed').length,
     logicalHostSkipped: logicalSkipped.map(test => ({ name: test.fullName, status: test.status })),
+    databaseIdentityCasesPassed: identity.filter(test => test.status === 'passed').length,
     managedPublicationCasesPassed: publication.filter(test => test.status === 'passed').length,
     hostPassed: host.numPassedTests, recoveryCasesPassed: passedIn(host, /\/backup\/recovery\.spec\.ts$/) };
   save('verification.json', result);
@@ -128,8 +190,8 @@ if (mode === 'verify') {
   assert(logicalSkipped.every(test => platform() === 'win32' && ['pending', 'skipped'].includes(test.status) &&
     test.fullName === 'reports a published but unsynchronized directory truthfully and retains its complete archive'),
     'Only Windows directory-sync qualification may be skipped in the logical archive cases');
-  assert.equal(publication.length, 27, 'All managed publication and corruption-classification cases must execute');
-  assert(publication.every(test => test.status === 'passed'), 'Managed writers, readers and failed-open connections must exclude physical replacement');
+  requirePassingCases(publication, requiredPublicationCases, 'Managed publication');
+  requirePassingCases(identity, requiredIdentityCases, 'Database identity');
   assert(selected.length > 0 && selected.every(test => test.status === 'passed') && result.recoveryCasesPassed > 0,
     'SQLite-selected text cases and recovery must execute and pass; native fallback is insufficient');
 } else {
