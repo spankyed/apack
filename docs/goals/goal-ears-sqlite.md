@@ -356,7 +356,10 @@ Still-required acceptance, without narrowing phases 3–7:
   `windows-durability`. [Actual run41184537719](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-directory-api-c707/README.md)
   succeeds on NTFS/build26100 as administrator: write/read-write directory handles flush successfully,
   read/write-attributes handles refuse with5; write-through moves preserve occupied targets. Verify
-  the actual Node/libuv path and ordinary-user rights next. No production fix or durability contract is claimed.
+  the actual Node/libuv path and ordinary-user rights next. The same manual suite now also probes the
+  pinned Node23 standard open/fsync path, requiring an r+ directory descriptor to flush before/after
+  removal, with a normal-file control and version/error records. That extended run is pending.
+  No production Windows fix or durability contract is claimed.
 - Finish required installed Electron/renderer/CLI, executable-pack/SDK and OS/architecture coverage beyond
   the six signed macOS arm64 cases. Requalify provenance after inner-library signing and before app sealing
   when relevant inputs change. `asar:false` already keeps native files on disk; an unsigned/source build is
