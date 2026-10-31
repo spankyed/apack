@@ -31,3 +31,15 @@ export function performanceProcessReport(mode: PerformanceManifest['mode'], role
   }
   return report;
 }
+
+/** Fresh provenance per test; callers override only the condition their assertion exercises. */
+export function performanceManifest(overrides: Partial<PerformanceManifest> = {}): PerformanceManifest {
+  return {
+    format: 1, source: { revision: 'one', dirty: false, excludedUntracked: [], diffSha256: 'clean' },
+    builds: [{ path: 'app', sha256: 'one' }], fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} },
+    native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] },
+    mode: 'lightweight', cache: 'warm-process', warmups: 5, runtime: {},
+    machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' },
+    clock: 'Local monotonic durations; cross-process epoch alignment is approximate', ...overrides,
+  };
+}
