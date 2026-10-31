@@ -29,9 +29,12 @@ test('recovers a linked live child after complete Electron shutdown and relaunch
   report.after=await context();expect(report.after.sessionId).toBe(saved.before.sessionId);expect(report.after.claude.totalCostUsd).toBe(saved.before.claude.totalCostUsd)
   await expect(widget).toBeVisible();await expect(composer).toHaveText(saved.retainedDraft)
   // Collect both independent recovery gaps before the assertions choose the first failure.
-  report.replyVisible=await input.isVisible();report.replyDraft=report.replyVisible?await input.inputValue():null
+  report.initialReplyVisible=await input.isVisible();report.initialReplyDraft=report.initialReplyVisible?await input.inputValue():null
   await widget.getByRole('button',{name:'Refresh status',exact:true}).click()
   try{await expect.poll(async()=>(await context()).native?.backgroundInfo?.observedAt??0,{timeout:10000}).toBeGreaterThan(report.reopenedAt);report.freshStatus=true}catch(error){report.freshStatus=false;report.statusProblem=String(error)}
+  await expect(widget.getByRole('button',{name:'Reply',exact:true})).toBeEnabled()
+  await expect(input).toHaveValue(saved.retainedReply,{timeout:10000})
+  report.replyVisible=await input.isVisible();report.replyDraft=await input.inputValue()
   report.afterRefresh=await context();await save();await pictures('reopened')
   expect(report.replyDraft,'Unsent child reply survives a real window destruction').toBe(saved.retainedReply)
   expect(report.freshStatus,'A fresh native producer reconnects after graceful shutdown').toBe(true)
