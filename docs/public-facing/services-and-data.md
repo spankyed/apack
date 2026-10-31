@@ -462,6 +462,26 @@ and goes only where the query could reach, so a trashed entity ends it unless th
 entity under a new parent, or declare the kind `acyclic` in `data.relations` to have the link refused instead. A path to the root
 is `query.ids(id).ancestors(kind).ids().reverse()`.
 
+### Graph algorithms
+
+Two reads treat a query's entities as a graph: the entities are its nodes, and the edges of the kinds you name
+between two of them are its edges. An edge to an entity the query doesn't reach doesn't count, so a query narrows the
+graph first — a type, a search, a walk:
+
+| Call | Returns |
+|---|---|
+| `query(type).rank(kind, { direction?, seeds? })` | The query's entities by how much they matter from `seeds`, highest first: personalized PageRank, a walker following edges (`out` unless `direction` is `in` or `both`) and jumping back to a seed. With no `seeds`, every entity is one, which ranks what is central overall. End with `hits()` for each score, and `limit(n)` keeps the `n` highest |
+| `query(type).weakComponents(kind)` | The groups the edges join, whichever way each points: each group's ids, the largest first |
+
+```typescript
+// The ten notes most related to the open one, by the links between notes
+const related = query(EARS.Entity.Note).rank(EARS.RelKind.REFERENCES, { direction: 'both', seeds: [noteId] }).limit(11).hits()
+  .filter((hit) => hit.id !== noteId);
+```
+
+A seed the query doesn't reach is ignored, and a query reaching none of them answers nothing. Every edge counts
+once. The answer is the same each time the data is: ties go to the earlier entity in the query.
+
 ### Repository pattern
 
 Each feature can keep its reads and writes in repository objects:
