@@ -28,7 +28,7 @@ it('does not display another child state as the current session', async () => {
   finally { app.unmount(); root.remove() }
 })
 
-it('retains a refused draft through remount and clears only its acknowledged reply', async () => {
+it('retains a refused draft across window-session loss and clears only its acknowledged reply', async () => {
   const state = reactive<ClaudeBackgroundSessionState>({...link,operation:'refresh',status:'done',revision:1,session:{id:'05ff1d31',sessionId:link.continuedInSessionId,cwd:'/owned',pid:119,state:'working',status:'idle'}})
   const operate=vi.fn(),root=document.createElement('div');document.body.append(root)
   let app=createApp(NativeBackgroundSession,{continuation:link,state,onOperate:operate,canReply:true});app.mount(root)
@@ -39,7 +39,7 @@ it('retains a refused draft through remount and clears only its acknowledged rep
     expect(operate).toHaveBeenLastCalledWith(link,{operation:'reply',id:'05ff1d31',pid:119,text:'Keep this follow-up.'})
     state.operation='reply';state.revision=2;state.status='error';state.problem='Original refusal';await nextTick()
     expect(root.querySelector('textarea')!.value).toBe('Keep this follow-up.')
-    app.unmount();app=createApp(NativeBackgroundSession,{continuation:link,state,onOperate:operate,canReply:true});app.mount(root)
+    app.unmount();sessionStorage.clear();app=createApp(NativeBackgroundSession,{continuation:link,state,onOperate:operate,canReply:true});app.mount(root)
     expect(root.querySelector('textarea')!.value).toBe('Keep this follow-up.')
     submit();state.revision=3;state.status='pending';await nextTick();expect(root.querySelector('textarea')!.disabled).toBe(true)
     state.status='done';await nextTick();expect(root.querySelector('textarea')!.value).toBe('');expect(root.textContent).toContain('Message queued')

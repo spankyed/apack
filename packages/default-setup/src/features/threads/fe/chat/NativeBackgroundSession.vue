@@ -28,7 +28,7 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from 'vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
-import { surfaceSessionStorage } from '@apackdev/sdk/fe'
+import { surfaceStorage } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 import { claudeWindowStorageKey } from './native-window-storage.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
@@ -41,11 +41,11 @@ let submitted: {text: string; revision: number} | undefined
 const draftKey = () => claudeWindowStorageKey('background-reply', JSON.stringify([props.continuation.sessionId, props.continuation.continuedInSessionId]))
 watch([() => props.continuation.sessionId, () => props.continuation.continuedInSessionId], () => {
   submitted = undefined; let text = ''
-  try { const key = draftKey(); if (key) text = surfaceSessionStorage(featureRef('threads')).get(key) ?? '' } catch { /* Storage cannot prevent composing. */ }
+  try { const key = draftKey(); if (key) text = surfaceStorage(featureRef('threads')).get(key) ?? '' } catch { /* Storage cannot prevent composing. */ }
   draft.value = text.length <= 32768 ? text : ''; replyOpen.value = !!draft.value
 }, {immediate:true,flush:'sync'})
 watch(draft, text => {
-  try { const key = draftKey(); if (key) { const storage = surfaceSessionStorage(featureRef('threads')); if (text) storage.set(key,text); else storage.remove(key) } } catch { /* Keep the live draft when storage is unavailable. */ }
+  try { const key = draftKey(); if (key) { const storage = surfaceStorage(featureRef('threads')); if (text) storage.set(key,text); else storage.remove(key) } } catch { /* Keep the live draft when storage is unavailable. */ }
 }, {flush:'sync'})
 watch([() => props.state?.revision, () => props.state?.status], () => {
   const state = props.state
