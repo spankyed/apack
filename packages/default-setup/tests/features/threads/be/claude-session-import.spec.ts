@@ -33,6 +33,8 @@ it('loads imported native rows chronologically before pagination regardless of r
  importClaudeSessionMessages({threadId:thread.id,sessionId,transcript:[row('33333333-3333-3333-3333-333333333333','2026-10-19T10:00:01Z','Second'),row('22222222-2222-2222-2222-222222222222','2026-10-19T10:00:00Z','First')]});
  expect(repository.chatQueries.threadData(thread.id)!.messages!.map(m=>m.text)).toEqual(['First','Second']);
  expect(repository.chatQueries.chatPage(thread.id,50)!.messageIds.map(id=>repository.chatQueries.messageById(id)?.text)).toEqual(['First','Second']);
+ const page=repository.chatQueries.chatPage(thread.id,1)!;
+ expect(page.messageIds.map(id=>repository.chatQueries.messageById(id)?.text)).toEqual(['Second']);expect(page.hasMore).toBe(true);
 });
 
 it('restores native-owned history by original time and stable same-session order before pagination',()=>{
@@ -44,4 +46,8 @@ it('restores native-owned history by original time and stable same-session order
  repository.chatCommands.addMessage({threadId:thread.id,text:'Earlier',sender:'assistant',timestamp:500,context:native(99,3)})
  expect(repository.chatQueries.threadData(thread.id)!.messages!.map(row=>row.text)).toEqual(['Earlier','User','Assistant'])
  expect(repository.chatQueries.chatPage(thread.id,50)!.messageIds.map(id=>repository.chatQueries.messageById(id)?.text)).toEqual(['Earlier','User','Assistant'])
+ const queued=repository.chatCommands.addMessage({threadId:thread.id,text:'Queued',sender:'user',timestamp:1}).id
+ repository.chatCommands.updateMessageState({messageId:queued,updates:{status:'queued'}})
+ const page=repository.chatQueries.chatPage(thread.id,1)!;
+ expect(page.messageIds.map(id=>repository.chatQueries.messageById(id)?.text)).toEqual(['Assistant','Queued']);expect(page.hasMore).toBe(true)
 })

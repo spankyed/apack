@@ -564,6 +564,19 @@ export const chatQueries = {
   chatPage: (threadId: EARS.EntityId, limit: number): ChatPage | null => {
     const thread = getThreadFields(threadId);
     if (!thread) return null;
+    // Restored Claude history follows native timestamps/order, not the order its relations were rebuilt in.
+    const session = thread.context?.claudeCode;
+    if (session && (session.nativeLaunch || threadQueries.byId(threadId)?.tags?.includes('imported'))) {
+      const ordered = displayOrder(threadId);
+      const regular = ordered.filter(message => message.status !== 'queued');
+      const page = regular.slice(Math.max(0, regular.length - limit));
+      return {
+        ...thread,
+        id: threadId as ThreadEntity['id'],
+        messageIds: [...page, ...ordered.filter(message => message.status === 'queued')].map(message => message.id),
+        hasMore: regular.length > page.length,
+      };
+    }
     const { page, queued, hasMore } = lastPage(threadId, limit);
     return { ...thread, id: threadId as ThreadEntity['id'], messageIds: [...page, ...queued].map(m => m.id), hasMore };
   },
