@@ -269,39 +269,45 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: test direct compact-integer membership against the existing query-owned sorted RHS,
-before adopting another representation or tuning ANN quality. The [private direct-IN proof](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
-now passes 735 ordinary-SQLite controls per library and 900 paired updated-snapshot EARS answers exactly,
-with minimum mean recall 0.974. The compiled baseline equals the packaged binary byte-for-byte, which stays
-unchanged. No production native patch is selected yet; the complete initial/update matrix and fresh owner/
-platform/package proof below remain required. The [supported-block study](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
+Next checkpoint: integrate the exact allocation-free compact-IN source into the candidate's ordinary native
+build, then qualify package/provenance, complete EARS/fresh-owner and affected platform/installed paths.
+The [private direct-IN proof](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
+passes 735 ordinary-SQLite controls per library and 900 paired updated-snapshot answers. The subsequent
+[full initial/update matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-full-matrix/README.md)
+completes 14,400 queries in separate baseline/prototype Node processes: all 7,200 paired ordered hits/scores
+match, every canonical vector verifies, minimum mean recall is 0.973 and each variant makes 2,400 native calls.
+The identical initial base/model and original snapshot remain unchanged. Responsiveness still fails, including
+timed-only query gates. This closes prototype equivalence, not backend adoption or package/owner qualification.
+The baseline equals the unchanged packaged binary; the exact tested candidate C digest is `04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a`.
+The [supported-block study](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
 completes 16/64/256 KiB with one fixed trained model: all 21,600 initial/updated queries finish, canonical bytes
 verify, both larger variants reproduce all 7,200 baseline answers, and minimum mean recall is 0.973. All
 variants still fail responsiveness, including the timed-only query gates. Pauses are retained and timings do
 not establish causal layout effects; no default changes. Larger blocks reduce metadata blocks/query but do
 not close the gate. Dependencies for the next native diagnostic: exact pinned baseline source, unchanged
 ordinary-SQLite semantics (including compact NULL sentinels, wide integer RHS and mixed/real lists), no new
-allocation/lifetime/format state, and preserved product artifacts. Closing checks: existing membership controls
-plus boundary cases against both baseline/prototype, then fixed-model actual initial/update query/recall/resource
-proof. Adoption still requires complete EARS, fresh actual-owner, platform/packaging/installed and original app
+allocation/lifetime/format state, and preserved product artifacts. The private membership/boundary controls and fixed-model initial/update equivalence above are complete.
+Closing checks now apply to the ordinary candidate package, fresh model owner, complete EARS contracts and
+affected platform/installed inputs; retain every failed performance gate. Adoption still requires complete EARS, fresh actual-owner, platform/packaging/installed and original app
 gates. The earlier untested bitmap prototype is not selected. Scoped SQL work and durable COMMIT remain
 separate responsiveness costs; a prepared private scope-driven eligibility probe is not yet executed.
 No evidence here certifies arbitrary filesystems or completes the goal.
 
-Independent phase 5 checkpoint: run the broader source UI/app suite with explicit `storage_format=sqlite/1`
-through the existing App acceptance workflow (`suite=app`). The production/workflow default remains elmdb.
-The source SQLite witness must inspect both managed stores' physical EARS headers in the real isolated API
-profile, and the settings-recovery fixture must validate its explicit temporary target rather than relying
-on a missing parent-process profile variable. Inspect all actual reports, failures and intentional installed-only
-skips; a green build or six installed smokes cannot substitute for these broader flows. This checkpoint also
-serves phase 3 live-pack/readiness behavior; it does not close performance or all operational requirements.
-[First broad SQLite app run 41146193993](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-delivery/README.md)
-is terminal failure: 32 pass, one intended installed-only skip, and the surface file-read/watch/terminal case
-fails at FILE_CONTENT. The test asks from page evaluation without a surface reply address, and also expects
-an obsolete terminal CREATED payload. Drive the real surface requests and addressed OPENED reply, preserving
-all deadlines/assertions, then qualify the complete SQLite app suite with actual per-case JSON. The original
-reporter gives only aggregate pass counts. Unchanged-source elmdb control 41147691838 is pending; do not infer
-its result or call the failed broad run green.
+The broader phase 5 source-app checkpoint now passes: [run 41148535620](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-qualified/README.md)
+at `f05eda527c`, `suite=app, storage_format=sqlite/1`, records 33 actual passes, zero unexpected/flaky cases/
+retries and one intended installed-only skip. Downloaded per-case JSON verifies the two-store physical EARS
+SQLite identity witness, saved-settings repair/reopen, external file changes/terminal output, API kill/reconnect
+and running-app CLI read/mutation refusal. The skipped packaged case has separate signed installed evidence
+above. This qualifies the existing macOS arm64 source app suite; broader SDK/executable-pack/architecture,
+load/performance and operational requirements remain. Do not rerun this unchanged checkpoint for documentation.
+
+The [original SQLite failure and unchanged-source elmdb control](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-delivery/README.md)
+remain failed at the same FILE_CONTENT predicate and unchanged 15-second deadline. The test asked outside any
+surface delivery/reply address and expected an obsolete terminal CREATED payload. The correction enters the
+real surface handlers and checks the addressed OPENED reply, preserving all file-change/output/title/path
+assertions and deadlines; no database/runtime behavior changes. Current reporting retains individual cases
+rather than inferring named witness execution from aggregate counts. This closes that diagnosed current test
+failure, not unexplained historical compiler/editor failures on different inputs.
 
 
 Next deliverables and their closing checks, without narrowing phases 3–7:

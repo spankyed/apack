@@ -432,11 +432,12 @@ without treating its observed difference as a causal join cost. Dormant-identity
 resource bounds and large restored/replaced stores need measured qualification; this design does not waive
 existing vector latency/recall/resource or recovery gates.
 
-### Inactive trained native generation storage
+### Generation-owned native storage
 
-`sqlite/vector-index.ts` is the first internal storage slice for a trained native index;
-normal app composition does not activate it yet. A trusted owner supplies the extension,
-never a path from stored data. Model installation, table/triggers and catalog admission
+The explicitly selected SQLite host composition starts one managed native model owner per store;
+production's default composition remains elmdb. `sqlite/vector-index.ts` owns the trained native projection.
+The application resolves its trusted packaged extension; stored metadata never selects executable code.
+Read-only and offline opens do not start a model owner. Model installation, table/triggers and catalog admission
 share one writer transaction. The model hash identifies the private generation.
 
 Chunk triggers capture ordinary foreground changes, including writes behind the bounded
@@ -448,7 +449,7 @@ EARS expands its chunk budget from 256 to at most 4096 until at least 256 distin
 are available, then reranks all current canonical chunks for those owners with stable
 entity-sequence ties. Too few native owners retain the ordinary owner-level fallback.
 Small scopes, large K and unsupported dimensions remain exact. This is internal candidate
-routing, not a performance/recall acceptance or automatic activation decision.
+routing; these rules alone establish neither performance/recall acceptance nor product adoption.
 
 The [lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-generation-admission/README.md)
 covers actual EARS mutation/rollback, bounded admission, a read-only compacted backup

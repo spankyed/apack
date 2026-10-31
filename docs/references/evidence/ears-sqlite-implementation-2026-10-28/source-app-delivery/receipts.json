@@ -28,5 +28,17 @@
     "originalBytes": 5929,
     "originalSha256": "97dd1ea0630b17a529446b12a70212683a7694596adf9deeaf32e376eaaf264b",
     "storedSha256": "e2336237b723e3098b09ce9b24c68849abfd8c2832fe372f538ad04c8ea91c6f"
+  },
+  {
+    "file": "elmdb-control-run.json.gz",
+    "originalBytes": 6513,
+    "originalSha256": "fc64d0a5066bc724ae3155926b677cf58092435ca45cb5be4410347d54d03939",
+    "storedSha256": "59c1eb36305f5d37e3205a12b1ae2f5e5011c9566adf1d489fe68d81d9b8fade"
+  },
+  {
+    "file": "elmdb-control-job.log.gz",
+    "originalBytes": 51823,
+    "originalSha256": "2880806a93f11811ade41d7fb70af05160d46362464a57c6fc7aeb8e9b4d5d58",
+    "storedSha256": "0e1c317291852645f035f0061f5c27b9e6dcd56bc32b8e4f43182be9992a4dd8"
   }
 ]

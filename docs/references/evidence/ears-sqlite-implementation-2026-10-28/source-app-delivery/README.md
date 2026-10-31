@@ -21,8 +21,12 @@ reply rule, timeout or database behavior changes. The app workflow also retains 
 so subsequent qualification can prove both the new physical SQLite identity witness and settings recovery.
 
 The unchanged-source elmdb counterfactual [41147691838](https://github.com/spankyed/apack/actions/runs/41147691838)
-selects only the failing case and was dispatched before publishing the correction. Its result is pending;
-static diagnosis is not mislabeled as a completed backend comparison. The corrected complete SQLite app run
-must still execute and pass, with all real reports/skips reviewed. This failure is not erased by earlier
+selects only the failing case and was dispatched before publishing the correction. It is now **terminal
+failure at the identical FILE_CONTENT predicate and unchanged 15-second deadline** on the same source.
+The actual log records `elmdb/1` and one selected case; its original job log/metadata are retained. This
+confirms the original test failure is not SQLite-specific. Corrected full SQLite app run
+[41148535620](../source-app-qualified/README.md) at `f05eda527c` now passes: downloaded per-case JSON verifies
+33 actual passes, no unexpected/flaky cases/retries and one intended installed-only skip. Both original failed
+runs remain preserved; the correction changes the test's request path, not database behavior or deadlines. This failure is not erased by earlier
 strict or six-case installed successes, nor does it complete the goal's remaining app/performance/operational
 requirements. Downloaded screenshots/full logs remain private; no real user profile or dataset is involved.
