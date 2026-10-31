@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { installViewCompletion } from '../../../../tests/performance/view-completion.ts';
 import type { PerformanceViewCompletion, PerformanceViewDelivery, PerformanceWindow } from '../../../../tests/performance/window.ts';
@@ -86,4 +88,25 @@ it('preserves a dispatch rejection even when its thrown value is undefined', asy
   await expect(wait({ dispatch: () => { throw undefined; } })).rejects.toBeUndefined();
   expect(detach).toHaveBeenCalledTimes(1);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it('serializes the helper under the tsx loader without capturing transpiler globals', () => {
+  const script = `
+    import { runInNewContext } from 'node:vm';
+    import { installViewCompletion } from './tests/performance/view-completion.ts';
+    let receive, cleaned = 0;
+    const window = { __performance: {
+      flushView: async () => {}, onView(listener) { receive = listener; return () => { cleaned++; }; },
+    } };
+    runInNewContext('(' + installViewCompletion.toString() + ')()', {
+      window, document: { body: {} }, setTimeout, clearTimeout,
+      MutationObserver: class { observe() {} disconnect() { cleaned++; } },
+    });
+    await window.__waitForPerformanceView({ accept: () => true, check: () => true,
+      dispatch: () => receive({}), errors: [] });
+    if (cleaned !== 2) throw Error('Serialized completion did not release resources');
+  `;
+  expect(() => execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
+    cwd: path.resolve(import.meta.dirname, '../../../..'), timeout: 10_000,
+  })).not.toThrow();
 });

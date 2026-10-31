@@ -8,32 +8,34 @@ export function installViewCompletion() {
     let checking = false;
     let delivered = false;
     let finished = false;
-    const finish = (failure?: { error: unknown }) => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeout);
-      observer.disconnect();
-      detach();
-      if (failure) reject(failure.error); else resolve();
-    };
-    const check = async () => {
-      if (checking || finished || !delivered) return;
-      checking = true;
-      try {
-        await recording.flushView();
-        if (!finished && ready()) finish();
-      } catch (error) {
-        finish({ error: Error(error instanceof Error && errors.includes(error.message) ? error.message : 'view-correctness') });
-      } finally { checking = false; }
+    const completion = {
+      finish(failure?: { error: unknown }) {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timeout);
+        observer.disconnect();
+        detach();
+        if (failure) reject(failure.error); else resolve();
+      },
+      async check() {
+        if (checking || finished || !delivered) return;
+        checking = true;
+        try {
+          await recording.flushView();
+          if (!finished && ready()) completion.finish();
+        } catch (error) {
+          completion.finish({ error: Error(error instanceof Error && errors.includes(error.message) ? error.message : 'view-correctness') });
+        } finally { checking = false; }
+      },
     };
     const detach = recording.onView(delivery => {
       if (!accept(delivery)) return;
       delivered = true;
-      void check();
+      void completion.check();
     });
-    const observer = new MutationObserver(() => { void check(); });
+    const observer = new MutationObserver(() => { void completion.check(); });
     observer.observe(document.body, { subtree: true, childList: true, characterData: true });
-    const timeout = setTimeout(() => finish({ error: Error('missing-view-ready') }), 15_000);
-    try { dispatch(); } catch (error) { finish({ error }); }
+    const timeout = setTimeout(() => completion.finish({ error: Error('missing-view-ready') }), 15_000);
+    try { dispatch(); } catch (error) { completion.finish({ error }); }
   });
 }
