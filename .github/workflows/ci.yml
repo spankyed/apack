@@ -1,253 +1,57 @@
-name: CI
-
-# The push and pull_request triggers are commented out ON PURPOSE. This is not broken, stale, or an
-# oversight, and it does not need reporting as one.
-#
-# This is a single-contributor repo, and the full chain is already run locally before a merge — the root
-# CLAUDE.md makes that a rule ("anything, before you ask for a merge | the full chain, once"). The jobs below
-# run that same chain, so until someone else is committing, enabling them spends runner time to re-derive an
-# answer that is already known.
-#
-# If you are an agent reading this: leave it disabled, do not open a PR to enable it, and do not cite CI as a
-# gate that is failing or missing — there are no runs because there are no triggers. Say that and move on.
-#
-# Turn it on when the repo has other contributors. Uncomment both triggers; the jobs below are current and
-# ready to run as they are. Until then it can still be run by hand from the Actions tab (workflow_dispatch).
-
+name: Performance cleanup contracts
 on:
   workflow_dispatch:
-    inputs:
-      app_acceptance:
-        description: Run the app suites and focused recovery, service and pack dev acceptance on disposable macOS
-        type: boolean
-        default: false
-      app_acceptance_suite:
-        description: App acceptance suite; all also exercises the source CLI
-        type: choice
-        options: [all, app, external, cli, build, integration, packaged]
-        default: all
-      app_acceptance_test:
-        description: Playwright name pattern; integration requires space-separated integration or native spec file paths
-        type: string
-        default: ''
-      strict_chain:
-        description: Run only the full strict chain with two cores on a disposable macOS runner
-        type: boolean
-        default: false
-      compiler_windows:
-        description: Run only the focused Windows compiler checks
-        type: boolean
-        default: false
-      compiler_windows_test:
-        description: Optional compiler test name pattern (skips accepted platform stages)
-        type: string
-        default: ''
-      compiler_macos:
-        description: Run focused compiler and native checks on a disposable macOS runner
-        type: boolean
-        default: false
-      compiler_macos_test:
-        description: Optional compiler test name pattern (skips other compiler checks)
-        type: string
-        default: ''
-      compiler_macos_signing:
-        description: Exercise a private Electron copy with the app's strict signing profile
-        type: boolean
-        default: false
-      compiler_linux:
-        description: Run focused compiler native checks on a disposable Linux runner
-        type: boolean
-        default: false
-      compiler_linux_test:
-        description: Optional shared native integration test name pattern (skips other acceptance stages)
-        type: string
-        default: ''
-  # push:
-  #   branches: [master]
-  # pull_request:
-  #   branches: [master]
-
-concurrency:
-  group: ci-${{ github.ref }}-${{ inputs.app_acceptance && 'app' || '' }}-${{ inputs.strict_chain && 'strict' || '' }}-${{ inputs.compiler_windows && 'windows' || '' }}-${{ inputs.compiler_macos && 'macos' || '' }}-${{ inputs.compiler_linux && 'linux' || '' }}
-  # Native diagnostic results must finish; full CI still supersedes older runs.
-  cancel-in-progress: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
-
+permissions:
+  contents: read
 jobs:
-  check:
-    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
-    runs-on: macos-14
-    timeout-minutes: 25
-
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
         with:
-          node-version: 23
-          cache: npm
-
-      - uses: ./.github/actions/elmdb
-
-      - name: Install dependencies
+          ref: ec19126ce8de47183f1d8398158a8f45891e2e42
+      - name: Fetch the pinned native source
+        shell: bash
+        run: |
+          rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
+          git init -q vendor/elmdb
+          git -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"
+          git -C vendor/elmdb checkout -q FETCH_HEAD
+          git rev-parse HEAD
+          git -C vendor/elmdb rev-parse HEAD
+      - name: Build the maintained Linux image
+        shell: bash
+        run: |
+          toolchain=$(sed -n 's/^channel *= *"\([^"]*\)"/\1/p' vendor/elmdb/rust-toolchain.toml)
+          test -n "$toolchain"
+          docker build --build-arg RUST_TOOLCHAIN="$toolchain" -t apack-performance-contracts -f scripts/linux/Dockerfile scripts/linux
+      - name: Validate application contracts in the bounded container
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: npm ci
-
-      # Includes check:specifiers (relative imports name .ts sources in sdk, host and ui)
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Release beta-before-production rule
-        run: tests/scripts/release-beta-rule.test.sh
-
-      - name: Schema drift check
-        run: npm run schema:check --workspace @apackdev/sdk
-
-      # Compiled content, snapshot, build/ (content compilers, content runtime) and the backend runtime: read by the
-      # content parity, dependent-pack, SDK bridge drift and content runtime tests
-      - name: Build default-setup pack output
-        working-directory: packages/default-setup
-        run: npx apack pack build
-
-      # The facade types dependents compile against match the reviewed report. It bundles the facade itself
-      # rather than reading what the build above wrote, so the order here is convenience and not a dependency
-      - name: Facade types report (default-setup)
-        run: npm run facade:check --workspace @app/default-setup
-
-      - name: Unit tests (api)
-        run: npm test --workspace @app/api -- --reporter=verbose
-
-      - name: Unit tests (default-setup)
-        run: npm test --workspace @app/default-setup -- --reporter=verbose
-
-      - name: Unit tests (sdk)
-        run: npm test --workspace @apackdev/sdk -- --reporter=verbose
-        env:
-          REQUIRE_CONTENT_RUNTIME: '1'
-
-      - name: Unit tests (ears)
-        run: npm test --workspace @apackdev/ears -- --reporter=verbose
-
-      - name: Unit tests (host)
-        run: npm test --workspace @apackdev/host -- --reporter=verbose
-        env:
-          REQUIRE_RUNTIME_ENTRY: '1'
-
-      # The typecheck step already built these through typecheck:pack; this confirms they are current
-      - name: Build publishable packages
-        run: npm run packages:ensure
-
-      # After the build: a package's reports read its dependencies' published declarations
-      - name: API reports
-        run: npm run api:check --workspace @apackdev/ears --workspace @apackdev/sdk --workspace @apackdev/ui
-
-      # publint and arethetypeswrong on every packed package (@apackdev/cli ships no types, so attw skips it)
-      - name: Validate packed packages
-        run: npm run packages:check
-
-      - name: Publish dry run
-        run: npm run packages:publish -- --dry-run
-
-      - name: Unit tests (cli)
-        run: npm test --workspace @apackdev/cli -- --reporter=verbose
-
-      - name: Integration tests (cli)
-        run: npm run test:integration --workspace @apackdev/cli -- --reporter=verbose
-
-      - name: Unit tests (repo checks)
-        run: npm test --workspace @app/repo-checks -- --reporter=verbose
-
-      # Repo-checks' integration half reads the fixture packs' generated frontend entries, which are gitignored
-      - name: Prepare declared external fixture outputs
-        run: npm run test:external-pack:contract
-
-      - name: Integration tests (repo checks)
-        run: npm run test:integration --workspace @app/repo-checks -- --reporter=verbose
-
-      - name: Unit tests (renderer)
-        run: npm run test:unit --workspace @app/renderer -- --run
-
-  # Builds tests/packs/external-pack with the apack CLI and runs its Playwright
-  # suite from the pack dir against the built app — the third-party pack path.
-  external-pack-e2e:
-    if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
-    runs-on: macos-14
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 23
-          cache: npm
-
-      - uses: ./.github/actions/elmdb
-
-      - name: Install dependencies
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: npm ci
-
-      - name: Build app
-        run: npm run build:default-setup && npm run build:runtime
-
-      - name: External pack E2E
-        run: npm run test:external-pack
-
-      # Outside-author end state: packed @apackdev/* tarballs only, in a temp dir outside the repo
-      - name: Packaged pack authoring E2E
-        run: npm run test:packaged-authoring
-
-      - name: Upload test output
-        if: failure()
+        run: |
+          set -o pipefail
+          docker run --rm --init --memory=6g --memory-swap=6g --cpus=2 \
+            -v "$GITHUB_WORKSPACE:/work" -e GITHUB_TOKEN apack-performance-contracts bash -ec '
+              cd /work/vendor/elmdb
+              npm ci --no-audit --no-fund
+              npm run build
+              cd /work
+              npm ci --no-audit --no-fund
+              npm run chain -- --only build:runtime --no-native --cores 1
+              xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario all --mode disabled --compare lightweight --trials 2 --output .apack/performance/cleanup-contract-final
+              bash tests/performance/counterfactuals/thread-open.sh full-read
+              bash tests/performance/counterfactuals/thread-open.sh missing-completion
+            ' 2>&1 | tee "$RUNNER_TEMP/performance-contracts.log"
+      - name: Preserve contract evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: external-pack-e2e
+          name: performance-cleanup-contracts-ec19126ce8
           include-hidden-files: true
+          retention-days: 7
           path: |
-            tests/packs/*/.apack/tests/
-            tests/packs/*/.apack/drive/
-
-  app-acceptance:
-    if: ${{ inputs.app_acceptance }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/app-acceptance.yml
-    with:
-      suite: ${{ inputs.app_acceptance_suite }}
-      test: ${{ inputs.app_acceptance_test }}
-
-  strict-chain:
-    if: ${{ inputs.strict_chain }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/strict-chain.yml
-
-  compiler-windows:
-    if: ${{ inputs.compiler_windows }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/compiler-windows.yml
-    with:
-      test_name: ${{ inputs.compiler_windows_test || '' }}
-
-  compiler-macos:
-    if: ${{ inputs.compiler_macos }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/compiler-macos.yml
-    with:
-      test_name: ${{ inputs.compiler_macos_test || '' }}
-      sign_runtime: ${{ inputs.compiler_macos_signing || false }}
-    secrets:
-      certificate: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
-      certificate_password: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-
-  compiler-linux:
-    if: ${{ inputs.compiler_linux }}
-    permissions:
-      contents: read
-    uses: ./.github/workflows/compiler-linux.yml
-    with:
-      test_name: ${{ inputs.compiler_linux_test || '' }}
+            ${{ runner.temp }}/performance-contracts.log
+            .apack/performance/
+            node_modules/.cache/apack-chain/runs/
