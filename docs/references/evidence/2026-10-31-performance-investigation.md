@@ -32,6 +32,9 @@ already present at the measured pin and are not new work here.
    executable lifetimes could be shared. A local change needs at least 10% less sampled allocation
    and 5% less unprofiled thread-open median in matched runs, with editing, viewer and contribution
    replacement behavior intact. A larger rendering redesign is outside this bounded investigation.
+   First attribute input/paste-rule construction within read-only viewers: Tiptap exposes existing
+   switches, so unused rule creation could be avoided without sharing editor state. Reject it if
+   the attributed opportunity cannot plausibly reach the declared benefit.
 3. **Codec/assembly.** Obtain focused attribution on selected real query shapes if window captures
    cannot distinguish encoding, native crossing and decoding. Accept a localized change only with
    at least 10% less measured per-query time or allocation, unchanged request/result semantics and
