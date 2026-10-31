@@ -31,6 +31,7 @@ export interface PerformanceProcessStatistics {
 
 /** Encoded process observations and capture-integrity counters, portable across the API boundary. */
 export interface PerformanceRecordingReport {
+  processId?: number;
   profiles?: _PerformanceProfiles;
   rendererStatistics?: _RendererPerformanceStatistics;
   rendererLongTasks?: { supported: boolean; count: number; totalMs: number; maxMs: number; failures: number };

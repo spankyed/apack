@@ -5,7 +5,7 @@ import { expect, it } from 'vitest';
 import { assertComparable, comparisonOrder, manifestSchema, processReportSchema, summarize, streamingBacklog, trialSchema, validatePerformanceRun } from '../../src/performance/report.ts';
 const processReport = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
-const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', work: {}, processes: { renderer: processReport, backend: processReport } };
+const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', work: {}, processes: { renderer: { ...processReport, processId: 101 }, backend: { ...processReport, processId: 102 } } };
 it('refuses manufactured success without view readiness, a duration, or complete process reports', () => {
   for (const patch of [{ completion: 'missing' }, { durationMs: undefined }, { correct: false }, { processes: {} }, { processes: { renderer: { ...processReport, unfinished: 1 } } }]) {
     expect(trialSchema.safeParse({ ...trial, ...patch }).success).toBe(false);
@@ -32,6 +32,7 @@ it('refuses pooled results with dirty sources or different fixture and execution
     clock: 'Local monotonic durations; cross-process epoch alignment is approximate' });
   const revision = { ...manifest, source: { ...manifest.source, revision: 'two' }, builds: [{ path: 'app', sha256: 'two' }], runtime: { electron: 'two', node: 'one' } };
   expect(() => assertComparable(manifest, revision)).not.toThrow();
+  expect(() => assertComparable({ ...manifest, native: { ...manifest.native, checkoutRevision: 'other' } }, { ...revision, native: { ...revision.native, checkoutRevision: 'other' } })).toThrow(/pinned/);
   expect(() => assertComparable(manifest, { ...revision, source: { ...revision.source, dirty: true } })).toThrow(/clean/);
   expect(() => assertComparable(manifest, { ...revision, builds: [...revision.builds, { path: 'vendor/elmdb/binding.node', sha256: 'changed' }] })).toThrow(/native outputs/);
   expect(() => assertComparable(manifest, { ...revision, native: { ...revision.native, dirty: true } })).toThrow(/clean/);

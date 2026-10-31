@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { performanceIdentity, createPerformanceScenarioRun, performanceSchedule, trialSchema } from '@apackdev/testing/performance';
+import { performanceIdentity, attachRendererProcessIdentity, createPerformanceScenarioRun, performanceSchedule, performanceExecutionPolicy, waitForPerformanceTrial, finishPerformanceTrial, trialSchema } from '@apackdev/testing/performance';
 import { threadFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -21,7 +21,7 @@ test('open a populated thread through the real transport and render its bounded 
   const output = process.env.APACK_PERFORMANCE_RUN_OUTPUT ? path.resolve(process.env.APACK_PERFORMANCE_RUN_OUTPUT) : path.resolve('.apack/performance', `thread-open-${mode}${comparison ? `-vs-${comparison}` : ''}-${Date.now()}`);
   mkdirSync(output, { recursive: true });
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
-  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime: { ...runtime, performancePolicy: comparison ? 'alternating-modes-v1' : 'single-scenario-v1' } });
+  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime: { ...runtime, performancePolicy: performanceExecutionPolicy(comparison) } });
   const journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
   const save = () => journal.save();
   try {
@@ -37,6 +37,7 @@ test('open a populated thread through the real transport and render its bounded 
     });
     for (const entry of schedule) {
       const { index, mode } = entry;
+      await waitForPerformanceTrial(entry);
       journal.begin(entry);
       const thread = entry.ordinal % 2;
       const result = await appPage.evaluate(async ({ mode, thread, expectedBodies }) => {
@@ -120,12 +121,17 @@ test('open a populated thread through the real transport and render its bounded 
         .reduce((bytes, span) => bytes + Number(span.attributes['ears.response_bytes'] ?? 0), 0);
       const excessReadWork = appResponseBytes !== undefined && appResponseBytes > maxAppResponseBytes;
       const work = { ...result.work, maxAppResponseBytes, ...(appResponseBytes !== undefined && { windowAppResponseBytes: appResponseBytes }) };
+      if (result.reports.renderer) {
+        await attachRendererProcessIdentity(electronApp, appPage, result.reports.renderer);
+        result.reports.complete &&= result.reports.renderer.complete;
+      }
       const trial = trialSchema.parse({ scenario: 'thread-open', index, warmup: index < warmups,
         work, outcome: excessReadWork ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
         correct: result.completed && !excessReadWork, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
         processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: excessReadWork ? 'app-read-work-bound' : result.failure });
       journal.append(entry, trial);
       expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
+      await finishPerformanceTrial(entry, trial.outcome);
     }
   } finally { save(); rmSync(directory, { recursive: true, force: true }); }
 });

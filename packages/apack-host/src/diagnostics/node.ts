@@ -43,7 +43,7 @@ export function createNodePerformanceController() {
         const value = traceResult.value;
         const captured = profileResult.status === 'fulfilled' ? profileResult.value : undefined;
         const profileFailures = (startFailed ? 1 : 0) + (profileResult.status === 'rejected' ? 1 : captured?.failures ?? 0);
-        return { ...value, ...(processStatistics && { processStatistics }), ...(captured && { profiles: captured }),
+        return { ...value, processId: process.pid, ...(processStatistics && { processStatistics }), ...(captured && { profiles: captured }),
           ...(profileFailures && { profileFailures }),
           ...(processStatisticsFailures && { processStatisticsFailures }),
           complete: value.complete && processStatisticsFailures === 0 && profileFailures === 0 && (!captured || captured.complete) };

@@ -30,6 +30,7 @@ export const spanSchema = z.object({
   links: z.array(z.object({ traceId: z.string(), spanId: z.string() })).max(32), droppedLinks: count,
 });
 export const processReportSchema = z.object({
+  processId: count.positive().optional(),
   profiles: profilesSchema.optional(), profileFailures: count.optional(),
   rendererResourceFailures: count.optional(), rendererListenerFailures: count.optional(),
   rendererStatistics: z.object({ source: z.literal('chromium-cdp'), pid: count,
@@ -51,6 +52,7 @@ export const processReportSchema = z.object({
   active: count, unfinished: count, droppedStarts: count, invalidCarriers: count, detachFailures: count,
   droppedEvents: count, contextFailures: count, rejectedStarts: count, invalidAttributes: count, complete: z.boolean(),
 }).superRefine((report, ctx) => {
+  if (report.processId !== undefined && report.rendererStatistics && report.processId !== report.rendererStatistics.pid) ctx.addIssue({ code: 'custom', message: 'Renderer identity differs from observed process' });
   const bytes = report.observations.reduce((sum, value) => sum + Buffer.byteLength(value), 0);
   if (bytes !== report.bytes) ctx.addIssue({ code: 'custom', message: 'Encoded observation byte count differs' });
   if (report.bytes + (report.profiles?.bytes ?? 0) > 16 * 1024 * 1024) ctx.addIssue({ code: 'custom', message: 'Combined recording budget exceeded' });
@@ -137,6 +139,8 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
     if (trial.outcome !== 'passed') throw Error('Unsuccessful trial');
     const required = scenario === 'populated-startup' ? ['driver', 'renderer', 'backend'] : ['renderer', 'backend'];
     if (required.some(process => !trial.processes[process])) throw Error('Missing required process');
+    const ids = required.map(role => trial.processes[role]!.processId);
+    if (ids.some(id => id === undefined) || new Set(ids).size !== ids.length) throw Error('Missing or duplicate process identity');
     if (Object.values(trial.processes).some(process => process.mode !== manifest.mode)) throw Error('Mixed recording modes');
   }
   return { manifest, trials, summary: summarize(trials) };
@@ -165,6 +169,7 @@ export function comparisonOrder(perRevision = 20): Array<'A' | 'B'> {
 export function assertComparable(leftInput: unknown, rightInput: unknown) {
   const left = manifestSchema.parse(leftInput); const right = manifestSchema.parse(rightInput);
   if (left.source.dirty || right.source.dirty || left.native.dirty || right.native.dirty) throw new Error('Comparison requires clean source revisions');
+  if ([left, right].some(manifest => manifest.native.checkoutRevision !== manifest.native.pin)) throw new Error('Comparison requires the pinned native checkout');
   for (const field of ['fixture', 'native', 'runtime', 'machine', 'mode', 'cache', 'warmups'] as const) {
     const canonical = (value: unknown): string => JSON.stringify(value, (_key, entry: unknown) => entry !== null && typeof entry === 'object' && !Array.isArray(entry) ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b))) : entry);
     if (canonical(left[field]) !== canonical(right[field])) throw new Error(`Incompatible comparison: ${field}`);

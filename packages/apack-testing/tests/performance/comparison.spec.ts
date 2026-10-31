@@ -20,7 +20,7 @@ function complete(candidateMs = 104) {
     run.begin(entry);
     const process = { ...report, mode: entry.mode };
     run.append(entry, { scenario: 'thread-open', index: entry.index, warmup: entry.warmup, outcome: 'passed', correct: true,
-      completion: 'view-ready', durationMs: entry.variant === 'A' ? 100 : candidateMs, work: {}, processes: { renderer: process, backend: process } });
+      completion: 'view-ready', durationMs: entry.variant === 'A' ? 100 : candidateMs, work: {}, processes: { renderer: { ...process, processId: 101 }, backend: { ...process, processId: 102 } } });
   }
   writeFileSync(path.join(output, 'invocation.json'), JSON.stringify({ code: 0, timedOut: false, aborted: false }));
   return output;
@@ -68,7 +68,7 @@ it('rejects fabricated ordering, intervals, source/build identity and missing ex
 it('retains a failed raw trial and refuses comparison even if its execution finished', () => {
   const output = directory(); const run = createPerformanceScenarioRun(output, manifest, 2, 'lightweight'); const entry = run.schedule[0]!;
   run.begin(entry); run.append(entry, { scenario: 'thread-open', index: 0, warmup: true, outcome: 'incomplete', correct: false,
-    completion: 'missing', work: {}, processes: { renderer: report, backend: report }, failure: 'missing-view-ready' });
+    completion: 'missing', work: {}, processes: { renderer: { ...report, processId: 101 }, backend: { ...report, processId: 102 } }, failure: 'missing-view-ready' });
   expect(JSON.parse(readFileSync(path.join(output, 'execution.json'), 'utf8')).status).toBe('failed');
   expect(JSON.parse(readFileSync(path.join(output, 'A/trial-0.json'), 'utf8')).failure).toBe('missing-view-ready');
   expect(() => readPerformanceModeComparison(output, 2)).toThrow();
@@ -80,7 +80,7 @@ it('retains independent successful startup lifecycle and per-launch manifests fo
   for (const entry of run.schedule) {
     run.begin(entry); const process = { ...report, mode: entry.mode };
     const trial = { scenario: 'populated-startup', index: entry.index, warmup: entry.warmup, outcome: 'passed', correct: true,
-      completion: 'view-ready', durationMs: 100, work: {}, processes: { driver: process, renderer: process, backend: process } };
+      completion: 'view-ready', durationMs: 100, work: {}, processes: { driver: { ...process, processId: 103 }, renderer: { ...process, processId: 101 }, backend: { ...process, processId: 102 } } };
     const own = path.join(output, entry.variant, `trial-${entry.index}`); mkdirSync(own);
     writeFileSync(path.join(own, 'manifest.json'), readFileSync(path.join(output, entry.variant, 'manifest.json')));
     writeFileSync(path.join(own, 'results.json'), JSON.stringify({ trials: [trial] }));

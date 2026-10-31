@@ -16,11 +16,27 @@ export function performanceQualificationOptions(args: string[], root: string, no
     mode: values.mode!, comparison: values.compare!, measured,
     output: path.resolve(root, values.output ?? `.apack/performance/qualification-${values.mode}-vs-${values.compare}-${now}`) };
 }
-export function performanceQualificationCommand(scenario: string, output: string, options: ReturnType<typeof performanceQualificationOptions>, inherited: NodeJS.ProcessEnv) {
+export function performanceQualificationCommand(scenario: string, output: string, options: { mode: string; measured: number; comparison?: string }, inherited: NodeJS.ProcessEnv) {
   if (inherited.E2E_DATA_DIR) throw Error('Qualification owns disposable profiles; unset E2E_DATA_DIR');
   const env: NodeJS.ProcessEnv = { ...inherited, APACK_PERFORMANCE_SCENARIO: scenario, APACK_PERFORMANCE_MODE: options.mode,
     APACK_PERFORMANCE_COMPARE_MODE: options.comparison, APACK_PERFORMANCE_TRIALS: String(options.measured), APACK_PERFORMANCE_RUN_OUTPUT: output };
-  for (const key of ['APACK_PERFORMANCE_STARTUP', 'APACK_PERFORMANCE_SEED_REPORT', 'APACK_PERFORMANCE_INDEX', 'APACK_PERFORMANCE_OUTPUT']) delete env[key];
+  for (const key of ['APACK_PERFORMANCE_STARTUP', 'APACK_PERFORMANCE_SEED_REPORT', 'APACK_PERFORMANCE_INDEX', 'APACK_PERFORMANCE_OUTPUT', 'APACK_PERFORMANCE_GATE']) delete env[key];
   return { env, args: ['scripts/with-source.mjs', ...(scenario === 'populated-startup'
-    ? ['tsx', 'tests/performance/startup-run.ts'] : ['playwright', 'test', '--config', 'tests/performance/playwright.config.ts'])] };
+    ? ['tsx', 'tests/performance/startup-run.ts'] : ['playwright', 'test', '--config', 'tests/performance/playwright.config.ts', '--output', path.join(output, 'playwright')])] };
+}
+
+/** Revision execution uses two explicit, already installed checkouts, each owning its dependencies/output. */
+export function performanceRevisionOptions(args: string[], root: string, now = Date.now()) {
+  const { values } = parseArgs({ args, options: { baseline: { type: 'string' }, candidate: { type: 'string' },
+    scenario: { type: 'string', default: 'thread-open' }, mode: { type: 'string', default: 'lightweight' },
+    trials: { type: 'string', default: '20' }, output: { type: 'string' } }, strict: true });
+  if (!values.baseline || !values.candidate) throw Error('Give both --baseline and --candidate checkout paths');
+  if (values.scenario !== 'all' && !(SCENARIOS as readonly string[]).includes(values.scenario!)) throw Error('Invalid revision scenario');
+  if (!(MODES as readonly string[]).includes(values.mode!)) throw Error('Invalid revision recording mode');
+  const measured = Number(values.trials);
+  if (!Number.isSafeInteger(measured) || measured < 2 || measured > 100 || measured % 2) throw Error('ABBA trials must be an even number between 2 and 100');
+  return { roots: { A: path.resolve(root, values.baseline), B: path.resolve(root, values.candidate) },
+    scenarios: values.scenario === 'all' ? [...SCENARIOS] : [values.scenario as typeof SCENARIOS[number]],
+    mode: values.mode as typeof MODES[number], measured,
+    output: path.resolve(root, values.output ?? `.apack/performance/revisions-${values.mode}-${now}`) };
 }

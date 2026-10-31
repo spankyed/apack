@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createPerformanceScenarioRun, performanceSchedule, manifestSchema, trialSchema, type PerformanceInvocation, type PerformanceScheduleEntry, type PerformanceVariant } from '@apackdev/testing/performance';
+import { createPerformanceScenarioRun, performanceSchedule, manifestSchema, trialSchema, performanceExecutionPolicy, waitForPerformanceTrial, finishPerformanceTrial, type PerformanceInvocation, type PerformanceScheduleEntry, type PerformanceVariant } from '@apackdev/testing/performance';
 
 // One closed immutable seed; every scheduled mode gets a copied profile and a fresh process.
 const root = path.resolve(import.meta.dirname, '../..');
@@ -29,13 +29,13 @@ async function run(phase: 'seed' | 'populated-startup', profile: string, entry?:
   const variant = entry?.variant ?? 'A';
   const own = comparison && entry ? path.join(output, variant) : output;
   const environment: NodeJS.ProcessEnv = { ...process.env, E2E_DATA_DIR: profile, APACK_PERFORMANCE_SCENARIO: phase,
-    APACK_PERFORMANCE_EXECUTION_POLICY: comparison ? 'alternating-modes-v1' : 'single-scenario-v1',
+    APACK_PERFORMANCE_EXECUTION_POLICY: performanceExecutionPolicy(comparison),
     APACK_PERFORMANCE_MODE: entry?.mode ?? mode, APACK_PERFORMANCE_SEED_REPORT: seedReport,
     APACK_PERFORMANCE_INDEX: String(entry?.index ?? 0), APACK_PERFORMANCE_OUTPUT: path.join(own, `trial-${entry?.index ?? 'seed'}`) };
   delete environment.APACK_PERFORMANCE_STARTUP;
   delete environment.APACK_PERFORMANCE_COMPARE_MODE;
   const result = await new Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-    const child = spawn(process.execPath, ['scripts/with-source.mjs', 'tsx', 'scripts/bounded.ts', 'scenario', 'playwright', 'test', '--config', 'tests/performance/playwright.config.ts'], {
+    const child = spawn(process.execPath, ['scripts/with-source.mjs', 'tsx', 'scripts/bounded.ts', 'scenario', 'playwright', 'test', '--config', 'tests/performance/playwright.config.ts', '--output', path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'playwright')], {
       cwd: root, env: environment, stdio: 'inherit',
     });
     child.once('error', reject);
@@ -70,10 +70,12 @@ try {
   journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
   save();
   for (const entry of schedule) {
+    await waitForPerformanceTrial(entry);
     const profile = path.join(work, `profile-${entry.ordinal}`);
     cpSync(seed, profile, { recursive: true });
     try { journal.begin(entry); await run('populated-startup', profile, entry); }
     finally { rmSync(profile, { recursive: true, force: true }); }
+    await finishPerformanceTrial(entry, 'passed');
   }
 } finally { save(); rmSync(work, { recursive: true, force: true }); }
 console.log(`Startup evidence: ${output}`);
