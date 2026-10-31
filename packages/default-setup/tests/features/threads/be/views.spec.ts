@@ -4,9 +4,9 @@
 // threads, the open tab — hears nothing until the turn ends.
 import { describe, expect, it } from 'vitest'
 import { startApp, type TestApp, type TestView } from '@apackdev/testing/harness'
-import { takeSystemErrors } from '@apackdev/sdk/testing'
+import { takeSystemErrors, testCalls } from '@apackdev/sdk/testing'
 import { repository } from '#generated/repository.ts'
-import { write, type EARS } from '#generated/ears.ts'
+import { transact, write, type EARS } from '#generated/ears.ts'
 import type { ChatPage, ChatStart, MessageEntity, ThreadTabView } from '#generated/types.ts'
 import { chatService } from '#features/threads/be/services/chat.ts'
 import { artifactService } from '#features/threads/be/services/artifact.ts'
@@ -82,11 +82,16 @@ describe('the threads views', () => {
     const detail = app.watchView('threads', 'detail', { id })
     await chat.next(); await tab.next(); await detail.next()
 
+    testCalls().start()
+    thread('Unrelated')
+    transact(() => artifactService.create({ artifactType: 'todo', title: 'Tasks', content: {}, threadId: id }))
+    expect(await tab.next()).toMatchObject({ ok: true, value: { artifacts: [expect.objectContaining({ title: 'Tasks' })] } })
+    const { watches } = testCalls().stop()
+    expect(watches.length).toBeGreaterThan(0)
+    expect(watches.reduce((sum, watch) => sum + watch.skipped, 0), 'the unrelated thread does not queue these views').toBe(0)
+
     const message = say(id, 'Hello')
     expect(await chat.next()).toMatchObject({ ok: true, value: { messageIds: [message] } })
-
-    artifactService.create({ artifactType: 'todo', title: 'Tasks', content: {}, threadId: id })
-    expect(await tab.next()).toMatchObject({ ok: true, value: { artifacts: [expect.objectContaining({ title: 'Tasks' })] } })
 
     await app.send('threads', { type: 'DELETE_THREAD', threadId: id })
     for (const view of [chat, tab, detail]) await untilGone(view as TestView<unknown>)
