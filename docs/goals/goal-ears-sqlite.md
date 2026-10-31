@@ -338,10 +338,22 @@ passes four actual ENOSPC/COMMIT refusal paths on Linux arm64 in an isolated 8-M
 0.5-CPU/768-MiB/no-swap limits, FULL=2 and default checkpoint=1000. Prior rows/sequence survive; watches
 stay silent on refusal, reuse commits once and read-only reopen retains only incumbent/recovered rows.
 The tracked regression script and mandatory Linux platform report checks reject 42 missing/invalid witness
-controls; syntax, focused lint and workflow parse pass. The new owned-mount Ubuntu CI step still requires
-actual platform qualification. This is not device power loss, other I/O fault, Windows durability or a
-replacement for all phase 6 requirements. The dependency-graph focused Linux observation is the next owned
-heavy check after the completed query diagnostic; inspect its existing admission/run handle before new work.
+controls; syntax, focused lint and workflow parse pass. [Platform run 41159890572](../references/evidence/ears-sqlite-implementation-2026-10-28/qualification-5569/README.md)
+at `5569fdd656` now passes all three hosts, including the actual Ubuntu mounted-tmpfs four-case step.
+This is not device power loss, other I/O fault, Windows durability or a replacement for phase 6 requirements.
+The [focused Linux diamond observation](../references/evidence/ears-sqlite-implementation-2026-10-28/diamond-linux-5569/README.md)
+and focused macOS run 41160571827 both pass all five assertions under the original setup deadline. Mac setup
+takes about 103.6 seconds; the full file takes 180.15 seconds. Neither explains the earlier concurrent strict
+shard failure, which remains unresolved rather than relabeled as qualified.
+The [backend activation profile](../references/evidence/ears-sqlite-implementation-2026-10-28/activation-profile-5569/README.md)
+now builds the matching shipped pack/API and measures actual RPC activation in isolated profiles. SQLite
+backend-ready is 3.24 seconds versus elmdb 5.34 seconds in this single ordered Linux observation; differing
+acknowledgment policies, cache/order effects and absent renderer preclude a general performance claim.
+SQLite's 197 commit spans total about 474 ms, its schema call about 104 ms; nested method totals overlap.
+Next deliverable: identify lifecycle/frontend arrival costs behind the unchanged macOS editor deadline and
+the strict shard's concurrent setup delay before selecting a fix. Dependencies are the existing source-bound
+logs/profiles; closing checks must preserve all original assertions, deadlines and durability policies.
+No owned heavy observation remains running at this checkpoint; inspect current processes before admission.
 
 No evidence here certifies arbitrary filesystems or completes the goal.
 
