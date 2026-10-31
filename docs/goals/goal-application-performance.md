@@ -59,8 +59,10 @@ Application changes remain isolated; the main checkout is now on master. The act
   The unchanged three-case sequence passed using bounded 3 GiB RAM scratch within the existing 6 GiB
   memory cap. Immutable compiler copies are now kept on disk to avoid accumulating them in RAM.
 - The maintained scratch policy and native cache inputs passed 179 focused repository checks,
-  scripts/repository typechecks and lint. The maintained Linux three-case regression is in progress;
-  full native acceptance and final strict CI for this new composition remain unproven.
+  scripts/repository and CLI typechecks and lint. The maintained Linux three-case regression passed
+  (worker build 19.465 s; verification 22.661 s). The full cached local chain and
+  [strict CI 41177136449](https://github.com/spankyed/apack/actions/runs/41177136449) are running
+  on code composition `595754a674`; their final outcomes remain unproven.
 - The stale procfs receipt was diagnosed and fixed in both startup and compilation data readers.
   Fresh Linux build/facade replay, focused regressions, mutation checks and strict CI passed.
   The original renderer timeout and the Linux-root/macOS-host unit failures remain retained,
@@ -70,8 +72,8 @@ Application changes remain isolated; the main checkout is now on master. The act
 
 ## Dependency-ordered remaining requirements
 
-1. **Complete local native acceptance.** After the maintained scratch-policy regression passes and the expensive Linux
-   slot is available, resume the supported full host chain with the frozen native checkout
+1. **Complete local native acceptance.** Track the already-running full host chain (run
+   `2026-10-31T06-32-57Z-1997`) and strict CI 41177136449. The local run uses the frozen native checkout
    `/private/tmp/apack-performance-elmdb-pinned`. Keep valid prior results cached; do not repeat
    application qualification or weaken admission/deadlines. The full command is
    `APACK_LINUX_ELMDB_ROOT=/private/tmp/apack-performance-elmdb-pinned npm run chain -- --cores 2`.

@@ -1,7 +1,8 @@
 # Application performance qualification
 
 This is a manual suite against built application output, separate from the ordinary E2E gate. It
-owns a disposable test profile. Never set `E2E_DATA_DIR` to a developer's profile for qualification.
+owns a disposable test profile. [Recording contracts](../../docs/references/application-performance.md)
+describe instrumentation ownership, attribution and limits. Never set `E2E_DATA_DIR` to a developer's profile for qualification.
 All four actions have completed controlled mode comparisons. Source-qualified measurements, retained
 failures and limitations are in [the evidence record](../../docs/references/evidence/2026-10-30-application-performance.md);
 required final validation is tracked in [the active goal](../../docs/goals/goal-application-performance.md).

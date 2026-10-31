@@ -36,6 +36,9 @@ transfer, focused validation, costs, shutdown and recovery; it does not replace 
 For this host's shared external OrbStack data location, safe relocation and verification, see the
 [Docker storage guide](references/guides/docker-storage.md).
 
+For recording contracts and the maintained diagnosis/comparison workflow, see
+[application performance recording](references/application-performance.md).
+
 ## Document lifecycle
 
 Keep current decisions and requirements in place. When a decision changes, reconcile the affected

@@ -231,3 +231,17 @@ checkout `.temp` directory, removed on normal teardown; exclusive source synchro
 interrupted run directories. Both outer and per-project native cache inputs include the policy.
 The composed source passed 179 focused checks, scripts/repository typechecks, CLI typecheck and
 changed-file lint. Maintained-policy native execution and the final broad gate remain pending.
+
+The maintained runner regression then passed all three cases with thirteen unrelated cases excluded:
+repeat build/replay/archive 16.869/17.600/18.950 s; second build 33.182 s; external-input worker build
+19.465 s and verification 22.661 s. Raw source receipts and samples are in
+`.apack/performance/worker-sequence-maintained-scratch-diagnostic`. No original-source or deadline
+changes were introduced. The complete local cached chain is now running as
+`2026-10-31T06-32-57Z-1997`; strict CI 41177136449 tests composition `595754a674`.
+
+Final artifact audit read all nine full compact comparisons: 450 retained samples, five warmups
+and twenty successful measured trials per variant, clean source/native identity, matching repository
+native pin and matched fixture/machine within every pair. This validates the compact evidence;
+raw-report admission and its hash checks remain the maintained runner's separate responsibility.
+The implemented recording contracts now have a maintained reference page, linked from the suite guide
+and documentation index. The plan's trace filename was reconciled with the implemented per-trial export.
