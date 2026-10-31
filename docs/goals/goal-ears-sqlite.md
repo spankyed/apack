@@ -470,3 +470,14 @@ ENOSPC cases and required host types/writer lint. No runtime source has changed 
 Overlap41191053003 at61f is now active; installed-platform41192007255 is dispatched once at125,
 queued behind it. Keep both owners; original deadlines and all remaining acceptance are unchanged.
 Matched SQLite88542 remains live in admission at frozena9, without a completed report or comparison.
+
+
+[Matched post-Seagate matrix88542](../references/evidence/ears-sqlite-implementation-2026-10-28/paired-seagate-matrix/README.md)
+is terminal success as an observation:7200actualqueries, strict canonical99900initial/updated byte checks,
+normal artifact/base/incumbent hashes unchanged. Recall passes(minimum.973);49of72heartbeat passes and
+four latency passes fail, so frozen acceptance remains false. Native counterpart fails35heartbeat/two
+latency passes and its known byte gate. SQLite is slower in15of18pooled timed cohorts, but wins the
+10k/1% cohorts and updated99.9k/10% cohort.999-owner durable updates take22.0s versus269.6s native.
+Physical admission takes1002s:8.5sprojection and990.4scommit, demonstrating the4msslice does not bound
+FULL commit latency on this storage. No fresh-ingestion, OS-cold, universal ratio or total-memory claim.
+Retained copies support the next scoped read-only query/commit attribution before choosing a remedy.
