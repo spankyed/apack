@@ -65,6 +65,7 @@ function insideApp(file) {
 }
 
 async function main() {
+  console.log('Packaged native probe: entered Node runtime');
   const { Database } = load('elmdb');
   const at = path.join(dataDir, 'elmdb');
   let db = Database.open(at);
@@ -158,6 +159,12 @@ try {
   process.stdout.write(stdout);
   console.log(`Packaged native modules: each one loads in ${path.basename(executable)}`);
 } catch (error) {
+  // Preserve completed stage witnesses even when a later load hangs or exits. The final error message
+  // alone can be empty for a terminated Windows GUI-subsystem executable.
+  if (error.stdout) process.stdout.write(error.stdout);
+  console.error('Packaged native process outcome: ' + JSON.stringify({
+    code: error.code, signal: error.signal, killed: error.killed,
+  }));
   console.error(`Packaged native modules failed to load in ${executable}:\n${error.stderr || error.message}`);
   process.exitCode = 1;
 } finally {
