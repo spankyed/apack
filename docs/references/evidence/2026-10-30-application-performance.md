@@ -306,3 +306,40 @@ extracted beneath the host checkout's ignored scratch directory, which the Linux
 The extraction was removed after admission checking; its actual contribution to the VM stall is
 unproven. Future archive extraction belongs outside the synchronized source checkout. No data loss
 or filesystem corruption was established by the interrupted-share alert.
+
+## Reviewed-code CI and repeated VM hang (2026-10-31)
+
+[Strict CI 41179507375](https://github.com/spankyed/apack/actions/runs/41179507375), source
+`44d246444a379d27dc217eac0a950bde6990f80a`, passed all six jobs. Both integration and native
+shards, producers and app/rest passed. The earlier pre-review strict run also passed all six.
+
+The frozen local snapshot `93b7208b44` passed package/type/lint/authoring gates, host/pack units and
+all 60 integration files (1,854.6 s). Before the interruption, these seven native files passed:
+
+- `compiler-native-runtime`: seven cases, six platform skips.
+- `build-worker`: all sixteen cases, including parent-disconnect (3.269 s).
+- `compiler-native-vite`: five cases, three platform skips.
+- `compiler-native-libraries`: six cases, three platform skips.
+- `watch-publication`: both cases.
+- `compiler-elf-libraries`: both cases.
+- `frontend-watch`: all fourteen cases.
+
+Docker then stopped answering. OrbStack's own 04:19–04:20 local log records `sampling stacks due
+to VM hang`, failed disk-stat health checks and Docker-forwarding timeouts. Guest kernel dumps
+show RCU starvation and `virtio_queue_rq` / `btrfs_writepages` writeback stacks. The Docker API
+ping timed out after three seconds. This is positive evidence of a host-VM execution failure, not
+a completed local native gate or proof of a specific application defect, hardware fault or corruption.
+
+Private full logs and their SHA-256 receipts are preserved at
+`/private/tmp/apack-orbstack-hang-20261031-0423/`; they are not uploaded or committed because they
+may include unrelated workloads. Cancellation was requested only for the identified session runner
+PID 81448. No global restart, drive operation or foreign-container termination was performed.
+
+Installed OrbStack is 2.0.5. Its [official release notes](https://docs.orbstack.dev/release-notes) list
+newer fixes for freezes, inaccessible shared files and external data-drive handling. Related vendor
+reports include [RCU/NFS hangs on 2.0.5](https://github.com/orbstack/orbstack/issues/2352) and
+[a whole-VM hang during host file sharing](https://github.com/orbstack/orbstack/issues/2593).
+These are similar failure classes, not proof of the same root cause. Approval is pending for an
+offline-backed-up shared upgrade to current 2.2.5 after other agents stop their Docker workloads.
+Current disk preservation and post-upgrade verification remain necessary; no guarantee that the
+upgrade cures this precise hang is asserted. Full local acceptance and PR readiness remain open.

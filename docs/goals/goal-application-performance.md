@@ -1,7 +1,7 @@
 # Application performance implementation
 
-Status: implementation, controlled qualification, strict CI and local non-native gate passed;
-local native acceptance remains open after an interrupted run; focused review validation passes.
+Status: implementation, qualification and reviewed-code strict CI passed. Full local acceptance
+remains open after a confirmed OrbStack VM hang; a shared tool upgrade awaits user approval.
 The approved scope and acceptance remain [the application-performance plan](../plans/application-performance.md).
 Evidence, commands, raw-report identities, measurements, failures and limitations are in
 [the dated evidence record](../references/evidence/2026-10-30-application-performance.md) and its
@@ -49,49 +49,37 @@ Application changes remain isolated; the main checkout is now on master. The act
 
 ## Final validation checkpoint
 
-- Code tip: `2ede06275df49ec066eae7c7d241fedd014bc306`.
-- [Strict CI 41162244468](https://github.com/spankyed/apack/actions/runs/41162244468): all six jobs
-  passed, including both integration and both native shards.
-- Supported host chain: 6,072 host/tooling tests, 976 pack tests and 788 integration tests passed.
-  Runtime build, external-app, smoke and both packaged-authoring checks passed. The concluding
-  `chain --no-native --cores 2` passed in 347.4 seconds, reusing 25 valid steps.
-- Capacity admission is resolved: OrbStack migrated to the external APFS volume. All 22 Docker
-  volumes, seven image identities and preserved checkpoint hashes verified; original storage is retained.
-- Two subsequent local native runs failed at subprocess deadlines. Focused process sampling observed
-  the content-load subprocess blocked in `write_all_supers` for 34 seconds with negligible CPU work.
-  The unchanged three-case sequence passed using bounded 3 GiB RAM scratch within the existing 6 GiB
-  memory cap. Immutable compiler copies are now kept on disk to avoid accumulating them in RAM.
-- The maintained scratch policy and native cache inputs passed 179 focused repository checks,
-  scripts/repository and CLI typechecks and lint. The maintained Linux three-case regression passed
-  (worker build 19.465 s; verification 22.661 s). The full cached local chain and
-  [strict CI 41177136449](https://github.com/spankyed/apack/actions/runs/41177136449) are running
-  on pre-review code composition `595754a674`; CI remains live. The local run is terminal with a
-  native failure during the OrbStack connection stall. Its 54 changed integration files passed,
-  but documentation-sensitive outer verdicts were not cached because docs changed during execution.
-  The exact worker-disconnect case subsequently passed on recovered Docker with unchanged assertions
-  and deadlines. The next full gate must keep tracked inputs frozen.
-- **Review fixes:** promised captures are now required at run admission, and the revision coordinator
-  refuses a successful worker exit before final release. Thirty-eight focused checks and TypeScript
-  passed both in the isolated copy and on the actual composed branch. All 450 archived raw trials
-  re-admit under the stronger rules. See the dated evidence for fault reproductions and source hashes.
-- The stale procfs receipt was diagnosed and fixed in both startup and compilation data readers.
-  Fresh Linux build/facade replay, focused regressions, mutation checks and strict CI passed.
-  The original renderer timeout and the Linux-root/macOS-host unit failures remain retained,
-  with their separate focused dispositions in the evidence record.
-- Complete raw evidence is preserved in verified compressed archives under the ignored
-  `.apack/performance/` directory; no foreign volumes, images or caches were removed.
+- Reviewed code: `44d246444a379d27dc217eac0a950bde6990f80a`.
+  [Strict CI 41179507375](https://github.com/spankyed/apack/actions/runs/41179507375) passed all six
+  jobs, including both integration and native shards. Pre-review strict CI 41177136449 also passed.
+- Both review fixes passed 38 focused tests, TypeScript and lint on the actual composed branch.
+  All nine archived full comparisons (450 raw trials) pass the stronger capture admission checks.
+- The frozen local run `2026-10-31T07-19-26Z-83547` tests snapshot `93b7208b44` (code unchanged
+  from `44d246444a`). Package builds, typechecks, lint, both external authoring checks, host/pack
+  unit gates and all 60 integration files passed. Integration took 1,854.6 seconds with inputs frozen.
+- Seven native files passed, including all 16 worker cases and the previous parent-disconnect failure.
+  The shared VM then became unresponsive. OrbStack's own log reports a VM hang, disk-stat health
+  timeouts, RCU starvation and Btrfs writeback/virtio stacks. A bounded Docker ping timed out.
+  Full local acceptance remains unproven; CI is not substituted for this result.
+- Cancellation was requested for this session's runner PID 81448 only. Its acknowledgment/terminal
+  state must be confirmed before resuming. No shared VM restart or drive operation was performed.
+  Private logs and hashes are preserved in `/private/tmp/apack-orbstack-hang-20261031-0423/`.
+- Installed OrbStack is 2.0.5. Approval is pending for a backed-up shared upgrade to 2.2.5 once other
+  agents' Docker jobs are stopped. Vendor release notes list relevant freeze/file-sharing/external-disk
+  fixes, but do not prove the exact cause or resolution of this hang.
+- Original storage and checkpoint backups remain intact. Prior failed runs, their focused dispositions,
+  source hashes and raw report archives remain in the dated evidence record.
 
 ## Dependency-ordered remaining requirements
 
-1. **Complete final validation.** Track strict CI 41177136449 (pre-review) and
-   [41179507375](https://github.com/spankyed/apack/actions/runs/41179507375) (reviewed code `44d246444a`);
-   the latter queues behind the former without canceling it. Docker recovered, the original run
-   exited, and the exact failed native case passed. The remaining gap is order-dependent behavior
-   across the worker file and the other native files. Run one supported cached full chain with frozen
-   tracked inputs and frozen native source:
+1. **Restore the execution host and complete local acceptance.** Keep the shared upgrade question
+   pending until the user answers; elapsed time is not approval. If approved and other jobs are quiet,
+   preserve the current image offline, upgrade/verify the signed official app, verify volume/image and
+   checkpoint identities, then reproduce the interrupted native case before broadening. Confirm the
+   old runner is terminal. Do not run another broad native batch on the hung environment or weaken
+   assertions/deadlines. Resume the supported cached chain only after focused validation converges:
    `APACK_LINUX_ELMDB_ROOT=/private/tmp/apack-performance-elmdb-pinned npm run chain -- --cores 2`.
-   Keep assertions/deadlines intact and do not repeat application measurements; all 450 archived raw
-   trials already pass the stronger admission rules. Diagnose a specific failure before broadening again.
+   Reuse valid measurements and completed checks; keep tracked inputs frozen during acceptance.
 2. **Close acceptance and handoff.** Record the actual local native outcome and mark both dependent
    PRs ready after required acceptance is complete. The implementation and measured evidence are
    already committed and reviewable. No further feature work is planned unless validation exposes
