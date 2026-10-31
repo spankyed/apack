@@ -5,7 +5,7 @@
 
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
-The prototype checkpoint is 4a3fe698f8. The current detached integration combines master dc67febcce
+The prototype checkpoint is 4a3fe698f8. The current detached integration combines master e3d1a37d5c
 and its native pin 2441af4658; full combined acceptance remains pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
@@ -188,7 +188,8 @@ platform claims must identify their actual tested scope.
 ## Current handoff
 
 The user confirms the OrbStack move to Seagate is complete and verified and explicitly resumes work.
-No configuration change, reinstall or rebase is needed. Post-move read-only hashes match the preserved
+No configuration change or reinstall is needed. At the user’s subsequent request the candidate is rebased
+onto master e3d1a37d5c. Post-move read-only hashes match the preserved
 committed database snapshot and pinned native binding/CLI. Durable preservation notes and the pre-resume
 source patch remain at `/Users/spankyed/Develop/Projects/apack/ears-migration-preservation-20261031/README.md`.
 The complete goal is active; all original acceptance criteria remain required. [Draft PR #286](https://github.com/spankyed/apack/pull/286) targets
@@ -197,12 +198,13 @@ conversion, new PR or version-only PR is authorized. All phases and original bud
 
 Authoritative source: `/private/tmp/ears-sqlite-query-integration`. The clean detached publisher is
 `monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at older `6cf6c8349e`
-and is not the current source. Latest implemented/test-diagnostic checkpoint is `0126eda005`; later evidence
-changes do not alter runtime. Integrated master is `dc67febcce`; native elmdb pin is
-`2441af4658d961f547c7094cd041c2ac246668c5`. The user now requests rebasing onto current master:
-checkpoint first, then fetch/rebase and qualify the changed integration. The fetch was interrupted and no
-rebase has started. Frozen diagnostic recipes target the pre-rebase source and must be reconciled before
-new qualification. Inspect actual Git/process/workflow state before continuing.
+and is not the current source. Latest runtime checkpoint is `45180293a3`, including the still-untested
+prefix prototype; the last exercised test-diagnostic checkpoint is `0126eda005`. Integrated master is
+`e3d1a37d5c622bfebba7767a09452572284881dc`; native elmdb pin remains
+`2441af4658d961f547c7094cd041c2ac246668c5`. The [completed rebase](../references/evidence/ears-sqlite-implementation-2026-10-28/master-rebase-e3d1/README.md)
+preserves checkpoint `353eb42255` exactly except master's three documentation files. Source packages
+subtree IDs match. Frozen diagnostics retain their original source revisions. Inspect actual Git/process/
+workflow state before continuing.
 
 The candidate implements structured graph/query execution, typed authoritative values, live declarations,
 transaction/watch identity, search/index generations, canonical embedding/model lifecycle, both managed app
@@ -273,7 +275,11 @@ Next deliverables, dependencies and closing checks:
   The threads panel enables prefix search; published SQLite suppresses correction on its last word even
   with fuzzy:true. Four shared judgments are preregistered at 66e8531079; all original judgments remain.
   The checkpoint includes a text.ts/test-expectation prototype that is UNTESTED and not accepted.
-  Its qualification recipe is preserved with the checkpoint; no prefix qualification job has started.
+  Its qualification recipe is preserved with the checkpoint. Session 89359 (admission PID 18299)
+  waits for a quiet Docker window; reports: `/private/tmp/ears-prefix-qualification-results`. It targets
+  45180293a3, verifies the frozen pre-fix source and exact prototype inputs, then preserves native gold
+  and expected SQLite failures before applying the prototype in the owned volume. Inspect the same run;
+  do not launch a duplicate or mutate its mounted inputs.
   No new backend result or accepted semantic fix is claimed. Run both pinned backends, preserve the current candidate
   failures, then implement literal prefix plus bounded exact whole-word alternatives and qualify semantics,
   typing/recovery and prefix-enabled growth/latency without changing the original work limits or budgets.
