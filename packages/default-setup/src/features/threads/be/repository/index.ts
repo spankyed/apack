@@ -398,7 +398,7 @@ function getArchivedThreads(sortOrder: RecentThreadsSortOrder): Partial<ThreadEn
 }
 
 function getThreadArtifacts(threadId: EARS.EntityId): ArtifactItem[] {
-  const artifacts = query.all().linkedWith(threadId).ofType(EARS.Entity.Artifact)
+  const artifacts = query(EARS.Entity.Artifact).linkedWith(threadId)
     .pick(['id', 'title', 'content', 'artifactType', 'createdAt', 'color'] as const);
 
   if (!artifacts || artifacts.length === 0) return [];
