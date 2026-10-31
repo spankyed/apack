@@ -21,10 +21,11 @@ input.on('line', async line => {
   }
   if (message.type !== 'user' || started) return;
   started = true;
-  const index = Number(JSON.stringify(message).match(/Performance trial ([0-9]+)/)?.[1] ?? 0);
-  const suffix = String(index + 1).padStart(12, '0');
+  const trial = process.argv.includes('--no-session-persistence') ? undefined
+    : JSON.stringify(message).match(/Performance trial ([0-9]+)/)?.[1];
+  const suffix = String(Number(trial ?? 0) + 1).padStart(12, '0');
   const session = `00000000-0000-4000-8000-${suffix}`;
-  const progressFile = path.join(path.dirname(fileURLToPath(import.meta.url)), `production-${process.pid}.jsonl`);
+  const progressFile = path.join(path.dirname(fileURLToPath(import.meta.url)), `production-${trial ?? 'background'}-${process.pid}.jsonl`);
   writeFileSync(progressFile, '', { flag: 'wx' });
   let producedChars = 0;
   emit({ type: 'system', subtype: 'init', session_id: session, cwd: process.cwd(), model: 'performance-fixture' });
