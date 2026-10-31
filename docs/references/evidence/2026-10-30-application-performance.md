@@ -71,9 +71,26 @@ and both packaged-authoring checks. Native acceptance was explicitly omitted loc
 source `a075fe1c41`. [Strict CI 41202958789](https://github.com/spankyed/apack/actions/runs/41202958789)
 was dispatched on `0ca8217459`; current status belongs to that run, not this historical result.
 
-Current-source Linux qualification [41203505748](https://github.com/spankyed/apack/actions/runs/41203505748)
-failed before scenario execution: full-app startup encountered failed renderer module requests.
-Sampled files exist and are readable (0644); the open-file limit is 65,536. The retained renderer
-loaded in the minimal bounded Electron probe [41204498413](https://github.com/spankyed/apack/actions/runs/41204498413).
-That probe is not full application acceptance. The full-app loading failure remains unproven and
-must not be represented as passing qualification. Diagnostic workflows are confined to a validation branch.
+## Linux startup resolution
+
+Historical Linux run [41203505748](https://github.com/spankyed/apack/actions/runs/41203505748)
+failed before scenario execution with renderer module requests reporting `net::ERR_FAILED`.
+The failure reproduced on clean source `9a0f431c8f` with native pin `f31222a697` in
+[41218111415](https://github.com/spankyed/apack/actions/runs/41218111415).
+
+[Controlled run 41219107561](https://github.com/spankyed/apack/actions/runs/41219107561) built once
+and changed only Docker's shared-memory capacity: 64 MiB failed application readiness (exit 1);
+256 MiB passed the real thread-open scenario (exit 0). At 256 MiB, populated startup also passed
+all five warmups and one measured trial, with six canonical `trial-N/trial.json` records and
+seven successful invocations (seed plus six fresh workers). The maintained reader admitted the run.
+Both source and native manifests were clean and the checkout matched the native pin.
+A local warm-output 64 MiB control then reproduced the same module failures after successful
+startup, ruling out cold builds/cache warming. The updated maintained runner reported 256 MiB
+and reached application readiness with no failed requests or page errors.
+
+The maintained runner now requests `--shm-size=256m` explicitly. OrbStack's approximately 8 GiB
+default explains why local startup controls, including the retained renderer bytes in the full
+app, succeeded while Ubuntu Docker failed. No application timeout, renderer security setting or
+completion assertion changed. This closes the Linux startup correctness blocker; these small
+functional runs do not qualify timing overhead or establish a universal shared-memory requirement.
+Diagnostic workflows remain outside both PRs.

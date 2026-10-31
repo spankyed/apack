@@ -60,7 +60,8 @@ const WORK_VOLUME = `apack-linux-work-${short(REPO_ROOT)}`;
 const NPM_CACHE_VOLUME = 'apack-linux-npm-cache';
 // Bound the whole process tree, including compiler children and native allocations. Equal memory/swap
 // limits allow no additional swap; exhaustion fails the container rather than consuming host swap.
-const RESOURCE_LIMITS = ['--memory=6g', '--memory-swap=6g', '--cpus=2'];
+// Renderer module loading fails at Docker's default 64 MiB; keep shared-memory capacity explicit across hosts.
+const RESOURCE_LIMITS = ['--memory=6g', '--memory-swap=6g', '--cpus=2', '--shm-size=256m'];
 /**
  * The run lock, at the volume's root. Named once because two places must agree on it: the `flock` below and
  * the rsync filter that keeps `--delete` from removing it while this run holds it.

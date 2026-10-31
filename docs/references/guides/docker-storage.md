@@ -80,3 +80,10 @@ is an assertion of matched conditions: choose a new value when storage or scratc
 The default hostname/CPU identity does not discover the physical disk behind a virtual machine. Existing performance reports retain their original
 machine/storage provenance. Run correctness validation on the new location, and identify the new storage
 in subsequent measurements; do not pool old and new timing samples as matched conditions.
+
+## Linux renderer shared memory
+
+The maintained Linux runner explicitly gives `/dev/shm` 256 MiB, within its existing 6 GiB memory
+limit. Docker's 64 MiB default can prevent Electron renderer modules loading; OrbStack's larger
+default masked this locally. Direct Docker invocations that launch the app must also pass
+`--shm-size=256m`. The [controlled startup evidence](../evidence/2026-10-30-application-performance.md#linux-startup-resolution) records the failed and successful configurations.
