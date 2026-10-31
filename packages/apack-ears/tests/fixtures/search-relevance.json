@@ -233,6 +233,14 @@
       "tags": [
         "syntax"
       ]
+    },
+    {
+      "id": "Document-prefixlookalike",
+      "name": "databaseserver",
+      "body": "An unrelated single token with no camel-case boundary.",
+      "tags": [
+        "boundary"
+      ]
     }
   ],
   "cases": [
@@ -688,6 +696,63 @@
       },
       "required": [
         "English-run"
+      ],
+      "forbidden": []
+    },
+    {
+      "name": "live prefix search retains default whole-word typo correction",
+      "type": "Document",
+      "query": "databse",
+      "options": {
+        "prefix": true
+      },
+      "required": [
+        "Document-database"
+      ],
+      "forbidden": [
+        "Document-prefixlookalike"
+      ]
+    },
+    {
+      "name": "live prefix search honors explicit fuzzy true",
+      "type": "Document",
+      "query": "databse",
+      "options": {
+        "prefix": true,
+        "fuzzy": true
+      },
+      "required": [
+        "Document-database"
+      ],
+      "forbidden": [
+        "Document-prefixlookalike"
+      ]
+    },
+    {
+      "name": "live prefix search preserves explicit fuzzy opt-out",
+      "type": "Document",
+      "query": "databse",
+      "options": {
+        "prefix": true,
+        "fuzzy": false
+      },
+      "required": [],
+      "forbidden": [
+        "Document-database",
+        "Document-prefixlookalike"
+      ]
+    },
+    {
+      "name": "literal prefix still reaches a longer whole token",
+      "type": "Document",
+      "query": "datab",
+      "options": {
+        "prefix": true,
+        "fuzzy": false
+      },
+      "required": [
+        "Document-database",
+        "Document-prefixlookalike"
       ],
       "forbidden": []
     }

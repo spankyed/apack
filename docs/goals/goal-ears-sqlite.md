@@ -257,6 +257,12 @@ Next deliverables, dependencies and closing checks:
   independent canonical verification and original query gates. Poll the same handle; do not restart a live
   process after an observation timeout. Connection reopen is not OS-cold. The 1000-row preflight is terminal
   success, not full-matrix acceptance. Preserve pauses and failures before making timing comparisons.
+- Close the [prefix/typo app-path restriction](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-typo-preregistration/README.md).
+  The threads panel enables prefix search; current SQLite suppresses correction on its last word even with
+  fuzzy:true. Four new shared judgments are preregistered; all original judgments remain. No runtime code
+  changes or new backend results are claimed yet. Run both pinned backends, preserve the current candidate
+  failures, then implement literal prefix plus bounded exact whole-word alternatives and qualify semantics,
+  typing/recovery and prefix-enabled growth/latency without changing the original work limits or budgets.
 - Qualify the actual I/O boundary after the native matrix: private syscall-fault admission **59998**,
   PID **86760**, waits for 30 seconds with no running containers before starting its half-CPU/768-MiB/no-swap
   container. Reports: `/private/tmp/ears-io-fault-results`. No injector case has run yet. Frozen private inputs

@@ -313,6 +313,15 @@ unchanged. Cases were added before implementation for each edit position/kind, m
 known-word neighbors, transposition, two-independent-edit refusal, the 4/5 and 32/33 boundaries, unsupported
 scripts, explicit opt-out, quoted/prefix behavior and field/boolean/candidate restrictions.
 
+The current final-prefix literal restriction loses typo correction in the actual threads-panel search,
+which sets `prefix:true`. [Four new useful-result judgments](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-typo-preregistration/README.md)
+are preregistered before implementation: preserve the native literal prefix branch and allow the same
+bounded **whole-word** typo alternatives alongside it, including default/explicit fuzzy:true. Do not apply
+prefix wildcards to alternatives, expand quoted phrases, reintroduce vocabulary enumeration or override
+fuzzy:false. Current code and its old prefix-specific absence expectation still implement the restriction;
+these new cases are unexecuted and the change is not accepted. Run both pinned backends and actual
+prefix-enabled growth/cost checks before claiming the required app behavior or a performance improvement.
+
 The [bounded typo proof](../references/evidence/ears-sqlite-implementation-2026-10-28/bounded-typos/README.md)
 passes 18 new cases, the unchanged shared corpus, actual native MATCH/growth checks, both removal controls,
 509 SQLite / 289 native cases and affected recovery/build/types/API/lint checks in disposable Linux.
