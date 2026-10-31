@@ -24,8 +24,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 . "$ROOT/tests/scripts/lib/authoring.sh"
 # This run's work dir survives it: the chain caches a step on its declared `outputs` existing, and the app
-# half reads the archive out of here. newWorkDir sweeps dead owners in this checkout only;
-# the chain serializes this producer with its app consumer.
+# half reads the archive out of here. newWorkDir replaces this checkout's one work dir, refusing while
+# another live run owns it; the chain serializes this producer with its app consumer.
 rm -rf "$HANDOFF"
 WORK="$(newWorkDir)"
 echo "Work dir: $WORK"
