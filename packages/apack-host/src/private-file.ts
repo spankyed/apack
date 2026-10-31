@@ -1,5 +1,5 @@
-// Files only the user can read, replaced whole: a crash mid-write leaves the previous file (and a leftover temporary
-// one). The mode has no effect on Windows, where the file relies on the user profile's ACLs.
+// Replace whole files atomically. Prepublication refusal preserves the incumbent; a postpublication sync
+// failure retains the installed file and reports NOT_DURABLE. Windows privacy relies on the profile's ACLs.
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -28,15 +28,14 @@ function rename(from: string, to: string): void {
   }
 }
 
-/** Makes the rename itself durable; Windows can't open a directory to sync it */
+/** Ask the filesystem to persist the rename; Windows directory flushes require a writable handle. */
 function syncDirectory(dir: string): void {
-  if (isWindows()) return;
-  const fd = fs.openSync(dir, 'r');
+  const fd = fs.openSync(dir, isWindows() ? 'r+' : 'r');
   try {
     fs.fsyncSync(fd);
   } catch (error) {
     // File systems that can't sync a directory
-    if (errorCode(error) !== 'EINVAL' && errorCode(error) !== 'ENOTSUP') throw error;
+    if (isWindows() || (errorCode(error) !== 'EINVAL' && errorCode(error) !== 'ENOTSUP')) throw error;
   } finally {
     fs.closeSync(fd);
   }
@@ -50,15 +49,27 @@ export function writePrivateFile(filePath: string, contents: string): void {
   try {
     const fd = fs.openSync(temporary, 'wx', 0o600);
     try {
-      fs.writeSync(fd, contents);
+      const bytes = Buffer.from(contents);
+      let offset = 0;
+      while (offset < bytes.byteLength) {
+        const written = fs.writeSync(fd, bytes, offset, Math.min(65536, bytes.byteLength - offset));
+        if (written < 1) throw Object.assign(new Error('Private file write made no progress'), { code: 'EIO' });
+        offset += written;
+      }
       fs.fsyncSync(fd);
     } finally {
       fs.closeSync(fd);
     }
     rename(temporary, filePath);
   } catch (error) {
-    fs.rmSync(temporary, { force: true });
+    try { fs.rmSync(temporary, { force: true }); }
+    catch (cleanup) { throw new AggregateError([error, cleanup], 'Private file installation and temporary cleanup failed', { cause: error }); }
     throw error;
   }
-  syncDirectory(dir);
+  try { syncDirectory(dir); }
+  catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    throw Object.assign(new Error(`File was installed but its directory sync failed: ${message}`, { cause }),
+      { code: 'NOT_DURABLE', publishedPath: filePath });
+  }
 }

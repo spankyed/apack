@@ -80,7 +80,11 @@ const result = await schedule({
       ...process.env,
       NODE_OPTIONS: [process.env.NODE_OPTIONS, `--max-old-space-size=${leg.heapMb}`].filter(Boolean).join(' '),
     };
-    const outcome = await boundedSpawn(command!, args, TIMEOUT_MS[BUILD_TIMEOUT].ms, { env });
+    // npm.cmd is a shell wrapper on Windows; preserve arguments through npm's JS entry.
+    const npmCli = command === 'npm' ? process.env.npm_execpath : undefined;
+    if (command === 'npm' && !npmCli) throw new Error('Run runtime builds with npm run build:runtime');
+    const outcome = await boundedSpawn(npmCli ? process.execPath : command!, npmCli ? [npmCli, ...args] : args,
+      TIMEOUT_MS[BUILD_TIMEOUT].ms, { env });
     done.set(leg.name, outcome);
     // One line as each finishes, so four concurrent bundlers are not one silence. Completion order, since
     // that is what progress is; the failures below are in declared order, which is what reading wants.
