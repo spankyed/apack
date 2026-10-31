@@ -41,10 +41,13 @@ describe('starts', () => {
       ordered: e.query('Task').orderBy('title'),
       everything: e.query.all(),
     };
+    Object.freeze(held.indexed);
+    const openIds = held.indexed.ids;
+    expect(held.indexed.ids).toBe(openIds);
     // A terminal run before the write doesn't fix what the builder answers after it
-    expect(held.indexed.ids()).toEqual([t.a, t.c, t.d]);
+    expect(openIds()).toEqual([t.a, t.c, t.d]);
     const late = e.create('Task').setMany({ title: 'aardvark', rank: 3, status: 'open' }).grant('focus').id();
-    expect(held.indexed.ids()).toEqual([t.a, t.c, t.d, late]);
+    expect(openIds()).toEqual([t.a, t.c, t.d, late]);
     expect(held.role.ids()).toEqual([t.a, late]);
     expect(held.filtered.count()).toBe(4);
     expect(held.ordered.first()).toBe(late);
@@ -182,11 +185,14 @@ describe('terminals', () => {
     expect([q.count(), q.first(), q.last(), q.exists()]).toEqual([3, t.a, t.d, true]);
     const none = e.query('Task').where('status', 'gone');
     expect([none.count(), none.first(), none.last(), none.exists()]).toEqual([0, undefined, undefined, false]);
+    const readIds = q.ids;
+    q.ids = () => [];
     expect(q.map((id) => id.length > 0)).toEqual([true, true, true]);
     const seen: Id[] = [];
     expect(q.forEach((id) => seen.push(id)).count()).toBe(3);
     expect(seen).toEqual([t.a, t.c, t.d]);
     expect(q.reduce((n, id) => n + (id === t.c ? 1 : 0), 0)).toBe(1);
+    q.ids = readIds;
     const ids = q.ids();
     ids.pop();
     expect(q.count()).toBe(3);
