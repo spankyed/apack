@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# This draft branch qualifies the SQLite candidate through the ordinary SDK/app composition.
+# Native extension-specific coverage additionally runs in ears-sqlite.yml on all supported hosts.
+env:
+  EARS_EVALUATION_BACKEND: sqlite
+  APACK_STORAGE_FORMAT: sqlite/1
+
 concurrency:
   group: strict-chain-${{ github.ref }}
   cancel-in-progress: false
