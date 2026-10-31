@@ -127,7 +127,7 @@ export const PERFORMANCE_RUN_BYTES: number;
 export const PERFORMANCE_TRIAL_BYTES: number;
 
 // @public (undocumented)
-export function performanceExecutionPolicy(comparison?: string): "alternating-modes-v1" | "single-scenario-v1" | "paired-revisions-v1";
+export function performanceExecutionPolicy(comparison?: string): "alternating-modes-v1" | "single-scenario-v1" | "paired-focused-revisions-v1";
 
 // @public (undocumented)
 export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture' | 'mode' | 'cache' | 'warmups'> & {
@@ -794,7 +794,10 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
 };
 
 // @public
-export function waitForPerformanceTrial(entry: PerformanceScheduleEntry): Promise<void>;
+export function waitForPerformanceTrial(entry: PerformanceScheduleEntry, target?: {
+    application: ElectronApplication;
+    page: Page;
+}): Promise<void>;
 
 // (No @packageDocumentation comment for this package)
 

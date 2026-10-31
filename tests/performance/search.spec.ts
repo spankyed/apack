@@ -41,7 +41,7 @@ test('search a populated corpus and apply only the current query results', async
     await expect(appPage.getByTestId('message-search')).toBeVisible();
     for (const entry of schedule) {
       const { index, mode } = entry;
-      await waitForPerformanceTrial(entry);
+      await waitForPerformanceTrial(entry, { application: electronApp, page: appPage });
       journal.begin(entry);
       const thread = entry.ordinal % 2;
       const result = await appPage.evaluate(async ({ mode, thread, expectedTimestamps }) => {

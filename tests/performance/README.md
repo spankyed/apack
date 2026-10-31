@@ -159,12 +159,13 @@ xvfb-run -a node scripts/with-source.mjs tsx scripts/compare-performance-revisio
 
 A same-checkout A/A control can use `--baseline /work --candidate /work --trials 2`; it validates
 execution, not a speedup. The default requires five warmups and twenty measured trials per revision.
-Warm workers remain resident and get individual ABBA permissions. Startup copies/launches/closes each
+Warm workers remain resident, get individual ABBA permissions and bring the active app to the foreground
+before recording/timing, avoiding background-throttling bias. Startup copies/launches/closes each
 profile under its permission. A completion is acknowledged after raw evidence is saved; startup also
 finishes profile cleanup first. The final release barrier keeps an early-finishing worker from tearing
 down during its peer's last measurement. Failed/early-exited workers abort the owned pair through the
 existing process-group reaper, retaining incomplete reports. Each worker has a separate Playwright log
-and output directory. The `paired-revisions-v1` execution policy cannot pool with isolated/mode runs.
+and output directory. The `paired-focused-revisions-v1` execution policy cannot pool with isolated/mode runs.
 
 Admission requires actual, distinct process identities for recorded roles, matching mode/fixture/native
 output/runtime/machine/cache conditions, clean source, and the native checkout equal to its repository

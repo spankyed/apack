@@ -1,3 +1,4 @@
+import type { ElectronApplication, Page } from '@playwright/test';
 import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
@@ -22,13 +23,13 @@ function read(file: string) {
 export function performanceExecutionPolicy(comparison?: string) {
   if (configuration()) {
     if (comparison) throw Error('Revision gates cannot contain mode comparisons');
-    return 'paired-revisions-v1';
+    return 'paired-focused-revisions-v1';
   }
   return comparison ? 'alternating-modes-v1' : 'single-scenario-v1';
 }
 
 /** The coordinator grants one action at a time; waiting occurs before recording or readiness timing. */
-export async function waitForPerformanceTrial(entry: PerformanceScheduleEntry) {
+export async function waitForPerformanceTrial(entry: PerformanceScheduleEntry, target?: { application: ElectronApplication; page: Page }) {
   const gate = configuration();
   if (!gate) return;
   if (entry.mode !== gate.mode || entry.index > gate.lastIndex) throw Error('Revision gate mode differs from its worker');
@@ -40,6 +41,12 @@ export async function waitForPerformanceTrial(entry: PerformanceScheduleEntry) {
   }
   const value = read(permission) as { index?: unknown; mode?: unknown };
   if (value.index !== entry.index || value.mode !== entry.mode || Date.now() >= gate.deadline) throw Error('Invalid or expired revision permission');
+  if (target) {
+    const window = await target.application.browserWindow(target.page);
+    try { await window.evaluate(window => { window.show(); window.focus(); window.webContents.focus(); }); }
+    finally { await window.dispose(); }
+    await target.page.waitForFunction(() => document.hasFocus());
+  }
 }
 
 /** Internal writer acknowledgment, published only after raw data and the execution journal are saved. */
