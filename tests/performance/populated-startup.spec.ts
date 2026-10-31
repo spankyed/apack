@@ -50,18 +50,18 @@ test('start a populated profile through admission to its initial usable thread v
   try {
     await appPage.waitForFunction(expected => {
       const win = window as unknown as PerformanceWindow;
-      const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadIds: string[]; lists: { list: Array<{ id: string; topic: string }> } };
+      const context = win.applicationState.system.get('default-setup/threads')?.getSnapshot().context as unknown as { threadIds: string[]; lists: { list: Array<{ id: string; topic: string }> } };
       const receipt = win.__performance.lastStartupView('default-setup/threads', 'list');
-      return receipt?.ok && Array.from({ length: expected }, (_, index) => index).every(index =>
+      return !!context && receipt?.ok && Array.from({ length: expected }, (_, index) => index).every(index =>
         context.threadIds.includes(`Thread-search-${index}`) && context.lists.list.some(row => row.id === `Thread-search-${index}` && row.topic === `Search fixture ${index}`));
     }, fixture.distribution.threads);
     phase = 'restored-chat';
     const expected = searchFixture().data.threads[11]!.messages.slice(-50).map(message => message.text);
     await appPage.waitForFunction(expected => {
       const win = window as unknown as PerformanceWindow;
-      const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
+      const context = win.applicationState.system.get('default-setup/threads')?.getSnapshot().context;
       const receipt = win.__performance.lastStartupView('default-setup/threads', 'chat');
-      return receipt?.ok && receipt.entityId === 'Thread-search-11' && context.currentThread?.id === receipt.entityId
+      return !!context && receipt?.ok && receipt.entityId === 'Thread-search-11' && context.currentThread?.id === receipt.entityId
         && context.chatLimit === 50 && context.chatMessageIds.length === expected.length
         && context.chatMessageIds.every((id, index) => {
           const element = document.querySelector(`[data-message-id="${id}"]`);
@@ -90,14 +90,14 @@ test('start a populated profile through admission to its initial usable thread v
     const state = await appPage.evaluate(() => {
       const win = window as unknown as PerformanceWindow;
       const snapshot = win.applicationState.getSnapshot();
-      const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
-      return { currentThread: context.currentThread?.id, chatLimit: context.chatLimit, messages: context.chatMessageIds.length,
+      const context = win.applicationState.system.get('default-setup/threads')?.getSnapshot().context;
+      return { currentThread: context?.currentThread?.id, chatLimit: context?.chatLimit, messages: context?.chatMessageIds?.length,
         chatReceipt: win.__performance.lastStartupView('default-setup/threads', 'chat'), applicationState: snapshot.value, panelSizes: snapshot.context.panelSizes, targetView: snapshot.context.targetView,
         mainListRows: document.querySelectorAll('.thread-row').length,
         expectedTitleElements: document.querySelectorAll('[title="Search fixture 11"]').length };
-    });
+    }).catch(() => ({ unavailable: true }));
     writeFileSync(path.join(output, 'readiness-failure.json'), JSON.stringify(state, null, 2));
-    await appPage.screenshot({ path: path.join(output, 'readiness-failure.png') });
+    await appPage.screenshot({ path: path.join(output, 'readiness-failure.png') }).catch(() => {});
   }
   action.end(correct ? 'ok' : 'error');
   const reports = await appPage.evaluate(() => (window as unknown as PerformanceWindow).__performance.stop());
