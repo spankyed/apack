@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged, installed, installed-signed, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       storage_format:
         description: Storage for isolated source app/pack qualification; installed suites select SQLite explicitly
@@ -53,8 +53,11 @@ jobs:
   windows-durability:
     if: ${{ inputs.suite == 'windows-durability' }}
     uses: ./.github/workflows/ears-windows-durability.yml
+  installed-platform:
+    if: ${{ inputs.suite == 'installed-platform' }}
+    uses: ./.github/workflows/ears-installed-platform.yml
   check:
-    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' }}
+    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
     runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45

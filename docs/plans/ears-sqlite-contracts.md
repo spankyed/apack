@@ -1,6 +1,6 @@
 # EARS backend contracts for SQLite
 
-Current integrated app master is `dc67febcce3f3a28e8b2bc75b867f0374d4f4610`; the matching native engine
+Current integrated app master is `e3d1a37d5c622bfebba7767a09452572284881dc`; the matching native engine
 is `2441af4658d961f547c7094cd041c2ac246668c5`. The pinned integration and native direction/protocol adaptation
 are recorded in [native integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-2441-integration/README.md).
 The [SQLite goal](../goals/goal-ears-sqlite.md#current-handoff) owns current candidate source, qualification
@@ -75,3 +75,19 @@ The authoritative-layout integration also pins two value boundaries in the share
 primary entities remain filterable through all/ID starts even if their type is not declared, and undefined object
 properties are omitted while undefined list positions are refused. Native and SQLite both pass these cases.
 SQLite applies the omission per changed value rather than serializing a structured transport envelope.
+
+
+## Packaged platform qualification boundary
+
+The shipping targets in `electron-builder.mjs` are macOS arm64, Windows x64 and Linux x64.
+Local Linux arm64 is a validation environment, not an additional shipping target. The recorded
+master rebase preserves the previous package trees; the current native pin remains2441af4658.
+Three-host Node/backend passes do not prove packaged Electron loading. Existing signed installed
+macOS arm64 evidence predates the latest runtime inputs and needs final requalification.
+
+The new `installed-platform` dispatcher builds the normal unsigned Preview on Windows x64 and
+Linux x64, then calls the existing `build/prod/smoke-native.mjs` against its unpacked resources.
+It requires actual packaged Electron provenance, native ownership,4097-vector worker model admission,
+FTS/regex queries and read-only reopen, plus elmdb/PTY/keyring controls. Its evidence is explicitly
+native/API runtime only: renderer, installer/signature and final app/platform/strict acceptance remain
+separate. Missing/skipped witnesses refuse; pending execution is not qualification.

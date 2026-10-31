@@ -1,0 +1,49 @@
+name: SQLite packaged Windows and Linux runtimes
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Install pinned dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+      - name: Check the platform witness
+        run: node_modules/.bin/oxlint tests/scripts/_support/ears-installed-platform.mjs -D correctness
+      - name: Build the normal unsigned Preview
+        run: |
+          version="$(node -p 'require("./package.json").version.split("-")[0]')"
+          npm run build:preview -- --version "$version"
+      - name: Exercise actual packaged Electron native runtime
+        run: node tests/scripts/_support/ears-installed-platform.mjs .apack/tests/results/ears-installed-platform
+      - name: Preserve packaged runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-installed-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
+          path: .apack/tests/results/ears-installed-platform
+          if-no-files-found: error
+          retention-days: 14

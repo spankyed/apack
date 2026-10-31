@@ -451,3 +451,12 @@ latency. Query and canonical gates remain false. Full scans record four known ze
 no other component changes; incumbent main hash is unchanged. The27900remaining durable embeddings
 and999updates take4551833ms/269581ms; no complete fresh-ingestion or causalupdated-cost claim.
 MatchedSQLite session22187 is now eligible for30-second quiet admission; observe the same owner.
+
+
+The shipping architecture inventory is explicit in the[contract matrix](../plans/ears-sqlite-contracts.md#packaged-platform-qualification-boundary):
+macOSarm64, Windowsx64 and Linuxx64. The new installed-platform dispatcher builds normal unsigned
+Previews on the latter two and requires the existing actual packaged Electron/API native witness,
+including4097-vector worker admission, ownership, FTS/regex and read-only reopen. It is not renderer,
+installer/signature or physical power-loss qualification. Observe its exact run after publication;
+never label pending native-runtime checks as passed installed app acceptance. Dispatch only after the
+already queued overlap41191053003 acquires the branch slot, preserving that run.
