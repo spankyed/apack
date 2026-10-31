@@ -395,3 +395,13 @@ The [expanded previous handoff](../references/evidence/ears-sqlite-implementatio
 [checkpoint history](../references/evidence/ears-sqlite-implementation-2026-10-28/checkpoint-history.md) retain
 historical source boundaries, baseline/harness/resource failures and fixes. They do not override this current
 handoff, redefine the approved scope or waive unfinished acceptance.
+
+
+Checkpoint after b6186cda70: [platform41187209697](../references/evidence/ears-sqlite-implementation-2026-10-28/qualification-f61/README.md)
+is terminal success, with actual six private-file cases on all three hosts and1322 SDK cases on Linux.
+The remaining inherited Windows logical archive barrier-failure skip is removed; the verifier now requires
+all ten archive host cases everywhere. A new affected platform run must qualify this added requirement.
+[Editor41188031941](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-load-d8/README.md)
+passes all three original cases with zero retries/skips/flaky outcomes, plus E2E types/harness lint.
+This supersedes the pending observations above without erasing earlier failures or closing full app/strict acceptance.
+Native98419 remains the same live owner at frozen runtimea9; do not mutate its volume or duplicate it.

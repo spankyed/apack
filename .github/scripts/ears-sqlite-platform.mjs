@@ -253,10 +253,8 @@ if (mode === 'verify') {
   assert.equal(result.nativeDumpCasesPassed, 7, 'All native dump framing and preservation cases must execute');
   assert.equal(result.logicalSnapshotCasesPassed, 5, 'All public snapshot API cases must execute');
   assert.equal(logical.length, 10, 'All host logical publication/preview/replacement cases must be collected');
-  assert.equal(result.logicalHostCasesPassed, platform() === 'win32' ? 9 : 10, 'All platform-applicable logical archive cases must pass');
-  assert(logicalSkipped.every(test => platform() === 'win32' && ['pending', 'skipped'].includes(test.status) &&
-    test.fullName === 'reports a published but unsynchronized directory truthfully and retains its complete archive'),
-    'Only Windows directory-sync qualification may be skipped in the logical archive cases');
+  assert.equal(result.logicalHostCasesPassed, 10, 'All logical archive cases must pass on every platform');
+  assert.equal(logicalSkipped.length, 0, 'Logical archive qualification must not skip publication barrier failures');
   requirePassingCases(publication, requiredPublicationCases, 'Managed publication');
   requirePassingCases(identity, requiredIdentityCases, 'Database identity');
   requirePassingCases(namespace, requiredNamespaceCases, 'Namespace publication');

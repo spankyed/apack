@@ -49,7 +49,7 @@ it('cleans refused publication and leaves no final artifact on an unsupported fi
   expect(fs.existsSync(f.archive)).toBe(false);
   expect(fs.readdirSync(f.parent).filter(name => name.startsWith('.apack-logical-export-'))).toEqual([]);
 });
-it.skipIf(process.platform === 'win32')('reports a published but unsynchronized directory truthfully and retains its complete archive', async () => {
+it('reports a published but unsynchronized directory truthfully and retains its complete archive', async () => {
   const f = fixture(), fsync = fs.fsyncSync;
   const error = Object.assign(new Error('directory sync IO'), { code: 'EIO' });
   const spy = vi.spyOn(fs, 'fsyncSync').mockImplementation(fd => { if (fs.fstatSync(fd).isDirectory()) throw error; return fsync(fd); }); syncBuiltinESMExports();
