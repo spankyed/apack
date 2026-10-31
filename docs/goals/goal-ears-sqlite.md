@@ -261,6 +261,14 @@ Next deliverables, dependencies and closing checks:
   requires forced termination. Child samples show filesystem-related waits but establish no causal fix.
   V8 sampled stack time is not a CPU/wait or syscall decomposition. Do not repeat the broad suite merely
   to obtain green.
+  The next deliverable is backend-only activation attribution on hosted macOS via the manual
+  `ears-activation-profile.yml` workflow and `tests/scripts/profile-ears-activation.py`. Dependencies:
+  pinned native build, normal fresh packages, API and shipped pack. Closing checks require both ordinary
+  SQLite/elmdb RPC activations and completed sampled-stack/SQL reports, or retained original-bound
+  failures. The45-second startup/30-second activation/15-second shutdown bounds are unchanged. This is
+  a diagnostic, not the renderer's five-second acceptance case; ordinary acknowledgment policies differ
+  and SQL spans overlap. Syntax checks pass; actual hosted execution is pending. No production path or
+  storage policy changes are introduced by these diagnostic files.
 - The native baseline matrix is checkpointed and stopped for the migration. Session 88639 ended by
   requested SIGTERM (exit -15), not a product failure. It created 99900 rows and last logged 69632 embeddings;
   canonical initial/update validation and the 7200-query phase were not reached. The pinned native CLI saved

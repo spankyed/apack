@@ -1,0 +1,48 @@
+name: EARS activation attribution
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ears-activation-attribution-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  profile:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Install pinned dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+      - name: Check diagnostic sources
+        run: |
+          node_modules/.bin/oxlint tests/scripts/_support/ears-activation-observer.mjs tests/scripts/_support/ears-activation-client.mjs -D correctness
+          python3 -c "from pathlib import Path; p=Path('tests/scripts/profile-ears-activation.py'); compile(p.read_text(),str(p),'exec')"
+      - name: Build normal packages and shipped pack
+        run: npm run build:default-setup
+      - name: Build normal development API
+        run: npm run build:api:dev
+      - name: Observe isolated backend activation
+        run: python3 tests/scripts/profile-ears-activation.py --output .apack/tests/results/ears-activation-profile
+      - name: Preserve diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-activation-profile-${{ github.run_id }}
+          path: .apack/tests/results/ears-activation-profile
+          if-no-files-found: error
+          retention-days: 14
