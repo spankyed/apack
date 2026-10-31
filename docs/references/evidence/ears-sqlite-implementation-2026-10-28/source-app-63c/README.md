@@ -18,3 +18,10 @@ deadline, draft/selection/update checks and original thrown error. No product fi
 claimed. The earlier source-app pass and older unexplained editor intermittent remain separate evidence.
 The next checkpoint is a focused real-app observation with these diagnostics, then a causal fix and affected
 qualification. All original goal requirements and production elmdb selection remain intact.
+
+The diagnostic source at `e76d83c412` now passes the repository's focused oxlint check (zero warnings/errors)
+and complete `tests` TypeScript check with incremental caching disabled. The current 118 tracked test/config
+files are copied and hash-verified before checking in one two-CPU/6-GiB/no-swap container. The first local
+invocation used ESLint at repository root, which has no ESLint config; it failed before typechecking. That
+invocation error and the corrected oxlint/type results are preserved separately. Neither is a product fix
+or real-app pass. Focused three-case real-app observation is run 41155440320; inspect its actual report.
