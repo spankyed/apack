@@ -1,0 +1,50 @@
+{
+  "source": "897b609e0186f22a9d188ad3f7a64674749b631d",
+  "variants": [
+    {
+      "label": "baseline",
+      "extensionSha256": "b16f6c4fcd84c776c1c3e1d3f2df33a5229dc987a1b8fd3b7d0343683fc10fd0",
+      "exitCode": 0
+    },
+    {
+      "label": "projection",
+      "extensionSha256": "8925c4b72ffaa21c5c3f819e4d77d66cca297508f8927b20612be86d4127867b",
+      "exitCode": 0
+    },
+    {
+      "label": "sql",
+      "extensionSha256": "b16f6c4fcd84c776c1c3e1d3f2df33a5229dc987a1b8fd3b7d0343683fc10fd0",
+      "exitCode": 0
+    }
+  ],
+  "ordinaryComparisonsPerVariant": 735,
+  "groupsPerVariant": 15,
+  "vectorPayloadsPerVariant": 1995,
+  "distanceGroupPairsPerAlternative": 15,
+  "missingBaseRefusalsPerVariant": 10,
+  "models": [
+    {
+      "fixture": "compact",
+      "sha256": "e6aa72166df5ff9c8aeddc927e6c80c2548337e86f2f0f104a052ffb00e24d78"
+    },
+    {
+      "fixture": "sparse32",
+      "sha256": "ebd9f074f8cc3ec5defac5f7eb908776fc3156170e2606ef6d96ca1fee145bb9"
+    },
+    {
+      "fixture": "wide64",
+      "sha256": "0630207fcd9832ec62f35adf4d532426a46426052b216f063ae94f70d2c7f08f"
+    },
+    {
+      "fixture": "mixed",
+      "sha256": "0c308f1498eccc9e5287fec45fb2527d90daccbfc72fd9ff390fc8c3e60e05eb"
+    },
+    {
+      "fixture": "real",
+      "sha256": "5020198c319f478513257073f75598c026eb6718d43f27984eff3569b6069853"
+    }
+  ],
+  "initialRun": "735 per library and individual vector/corruption checks pass; cross-library distance comparison fails with independently trained IVF models",
+  "promoted": false,
+  "wholeGoalAcceptance": false
+}

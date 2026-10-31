@@ -1,0 +1,27 @@
+[
+  {
+    "file": "job.log.gz",
+    "sha256": "9200a19f95ed5b308a3a36606a0ba684106e628a9be5b32cafac0abcf6abf031",
+    "storedSha256": "37d34c00f9ffae33c325c4e539fc46494ecb5fb9b6bef7f096345f96c87602b1"
+  },
+  {
+    "file": "_temp/strict-chain.log.gz",
+    "sha256": "f2d6eaef1ba51065f71178f6ba04e2c6fe0dd239eb7aed60722b8dd7264c13ab",
+    "storedSha256": "9c55f1cc90a0a45a8d270fa2915f844026dca1858fa20965e634861d1be85a7f"
+  },
+  {
+    "file": "_temp/strict-spec-progress.9289.jsonl.gz",
+    "sha256": "eb419470452b5cb488c593fe9e72c29430e2a2d6d74e347bc64ef9b48951dbc7",
+    "storedSha256": "736e07d68dc9042d7ddb59a0792253200e75360da74d5dd8db7296d14956898b"
+  },
+  {
+    "file": "apack/apack/node_modules/.cache/apack-chain/runs/2026-10-31T01-25-50Z-9122/test-integration.log.gz",
+    "sha256": "bb6541390738236d063ed880e2050a60aba78d98228ecc1e62669e571925d903",
+    "storedSha256": "0288c286f304f37c4479089bf4868bf15e598dfe571c137e7d083b8cca7af67d"
+  },
+  {
+    "file": "diagnostic-lint.log.gz",
+    "sha256": "8192d350a8c93cb07a011dcc021c110feba4d94473d7ba8f00bf2a62fb4dbe41",
+    "storedSha256": "faab4befae312fa0837cfb2ca8e93dd3754ddf15f97f60820ffcbb5c47c205ed"
+  }
+]

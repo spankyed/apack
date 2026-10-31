@@ -58,18 +58,27 @@ const on = (...ids: string[]) => Object.fromEntries(ids.map((id) => [id, '*']));
 let parent: string;
 let built: { code: number; output: string } | undefined;
 
+// callCli captures console output while a build runs. Keep phase boundaries visible even if the
+// shared hook deadline fires before it returns, without changing that deadline or skipping a build.
+async function buildPhase<T>(name: string, run: () => Promise<T>): Promise<T> {
+  const started = performance.now();
+  process.stdout.write(`[dependency-graph] ${name}: start\n`);
+  try { return await run(); }
+  finally { process.stdout.write(`[dependency-graph] ${name}: ${Math.round(performance.now() - started)}ms\n`); }
+}
+
 beforeAll(async () => {
   if (!PACKAGES_BUILT) return;
   parent = fs.mkdtempSync(path.join(os.tmpdir(), 'dependency-graph-'));
   const modules = path.join(REPO_ROOT, 'node_modules');
   // D, then B and C on D, then A on B and C: four builds, the budget for this spec
-  await buildPack(preparePack(parent, DEEP, { ...pack(DEEP, { Memo: 'Memo' }, {}, NOTIFIER), ...NOTIFIER_SOURCES }, modules), DEEP);
+  await buildPhase(DEEP, () => buildPack(preparePack(parent, DEEP, { ...pack(DEEP, { Memo: 'Memo' }, {}, NOTIFIER), ...NOTIFIER_SOURCES }, modules), DEEP));
   for (const side of ['left-pack', 'right-pack']) {
-    await buildPack(preparePack(parent, side, pack(side, { [`${side === 'left-pack' ? 'Left' : 'Right'}Note`]: side === 'left-pack' ? 'LeftNote' : 'RightNote' }, on(DEEP)), modules), side);
+    await buildPhase(side, () => buildPack(preparePack(parent, side, pack(side, { [`${side === 'left-pack' ? 'Left' : 'Right'}Note`]: side === 'left-pack' ? 'LeftNote' : 'RightNote' }, on(DEEP)), modules), side));
   }
   const appDir = preparePack(parent, 'app-pack', pack('app-pack', { App: 'App' }, on('left-pack', 'right-pack')), modules);
   // produces: the app-pack build whose snapshot the tests read (its output is also checked for conflicts)
-  built = await callCli(appDir, 'build');
+  built = await buildPhase('app-pack', () => callCli(appDir, 'build'));
 }, 4 * 60_000);
 
 afterAll(() => {
