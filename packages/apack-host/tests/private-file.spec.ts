@@ -119,6 +119,15 @@ describe('writePrivateFile', () => {
     expect(() => syncRecoveryDirectory(dir)).toThrow(failure);
   });
 
+  it('opens a writable directory descriptor for the Windows publication barrier', () => {
+    const dir = tempDir(), file = path.join(dir, 'secrets.json');
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    const open = vi.spyOn(fs, 'openSync');
+    writePrivateFile(file, 'installed');
+    expect(open).toHaveBeenCalledWith(dir, 'r+');
+    expect(fs.readFileSync(file, 'utf8')).toBe('installed');
+  });
+
   it('retains a published file and reports its committed outcome when the directory flush fails', () => {
     const file = path.join(tempDir(), 'secrets.json');
     writePrivateFile(file, 'incumbent');

@@ -194,6 +194,10 @@ describe('relation kinds', () => {
       ['both', () => e.query.ids(a).both('blokcs')],
       ['pathTo', () => e.query.ids(a).pathTo(b, 'blokcs')],
       ['degrees', () => e.query.ids(a).degrees('blokcs')],
+      ['rank', () => e.query.ids(a).rank('blokcs')],
+      ['weakComponents', () => e.query.ids(a).weakComponents('blokcs')],
+      ['strongComponents', () => e.query.ids(a).strongComponents('blokcs')],
+      ['communities', () => e.query.ids(a).communities('blokcs')],
       ['wouldCreateCycle', () => e.wouldCreateCycle(a, b, ['blokcs'])],
     ];
     for (const [via, read] of reads) expect(read, via).toThrow(expect.objectContaining({ ...unknown, message: expect.stringContaining(`${via}("blokcs")`) }));
@@ -365,6 +369,74 @@ describe('graph boundary contracts', () => {
       expect(seen.at(-1)).toEqual([[root, mid, leaf], [mid], [[root, 1]]]);
       expect(seen).toHaveLength(3);
     } finally { watch.stop(); }
+  });
+});
+
+describe('graph algorithms', () => {
+  it('rank orders the query by PageRank over its own edges, scores in hits, the highest kept by limit', () => {
+    const [a, b, c, d] = [task('a'), task('b'), task('c'), task('d')];
+    // Every walk ends up at c
+    e.write(a).link('refs', b);
+    e.write(b).link('refs', c);
+    e.write(d).link('refs', c);
+    const ranked = e.query('Task').rank('refs').hits();
+    expect(ranked[0]!.id).toBe(c);
+    expect(ranked.map((h) => h.score).reduce((x, y) => x + y)).toBeCloseTo(1, 9);
+    expect(ranked.every((h, at) => at === 0 || ranked[at - 1]!.score >= h.score)).toBe(true);
+    expect(e.query('Task').rank('refs').limit(1).ids()).toEqual([c]);
+    // From d the walker reaches only c, so a and b hold nothing
+    const fromD = new Map(e.query('Task').rank('refs', { seeds: [d] }).hits().map((h) => [h.id, h.score]));
+    expect([fromD.get(a), fromD.get(b)]).toEqual([0, 0]);
+    // Both ways, from a the walk reaches d through c
+    const both = e.query('Task').rank('refs', { seeds: [a], direction: 'both' }).hits();
+    expect(both.every((h) => h.score > 0)).toBe(true);
+    // A seed outside the query is ignored, and a query holding none answers nothing
+    expect(e.query('Task').rank('refs', { seeds: [d, 'Task-gone' as never] }).ids()).toEqual(e.query('Task').rank('refs', { seeds: [d] }).ids());
+    expect(e.query('Task').rank('refs', { seeds: ['Task-gone' as never] }).ids()).toEqual([]);
+    // Only edges inside the query: without c, b's edge leads nowhere
+    expect(e.query.ids([a, b]).rank('refs').ids()).toEqual([b, a]);
+  });
+
+  it('weakComponents groups the query by the edges between its entities, either way, the largest first', () => {
+    const [a, b, c, d, x] = [task('a'), task('b'), task('c'), task('d'), task('x')];
+    e.write(b).link('refs', a);
+    e.write(c).link('refs', d);
+    e.write(x).link('refs', d);
+    e.write(a).link('blocks', x);
+    expect(e.query('Task').weakComponents('refs')).toEqual([[c, d, x], [a, b]]);
+    expect(e.query('Task').weakComponents(['refs', 'blocks'])).toEqual([[a, b, c, d, x]]);
+    expect(e.query.ids([c, x]).weakComponents('refs')).toEqual([[c], [x]]);
+  });
+
+  it('strongComponents groups the query by the cycles its edges make, following each its way, the largest first', () => {
+    const [a, b, c, d, x] = [task('a'), task('b'), task('c'), task('d'), task('x')];
+    // a → b → c → a, a cycle; c → d, out of it; x alone
+    for (const [s, t] of [[a, b], [b, c], [c, a], [c, d]] as const) e.write(s!).link('refs', t!);
+    expect(e.query('Task').strongComponents('refs')).toEqual([[a, b, c], [d], [x]]);
+    // d → x → d closes a second cycle; and only edges inside the query count, so without c there is none through a
+    e.write(d).link('refs', x);
+    e.write(x).link('refs', d);
+    expect(e.query('Task').strongComponents('refs')).toEqual([[a, b, c], [d, x]]);
+    expect(e.query.ids([a, b]).strongComponents('refs')).toEqual([[a], [b]]);
+  });
+
+  it('communities splits the query where its edges thin, the same each time', () => {
+    // Two triangles, joined by one edge
+    const [a, b, c, x, y, z] = ['a', 'b', 'c', 'x', 'y', 'z'].map(task);
+    for (const [s, t] of [[a, b], [b, c], [c, a], [x, y], [y, z], [z, x], [c, x]] as const) e.write(s!).link('refs', t!);
+    expect(e.query('Task').communities('refs')).toEqual([[a, b, c], [x, y, z]]);
+    expect(e.query('Task').communities('refs', { seed: 3 })).toEqual([[a, b, c], [x, y, z]]);
+    expect(e.query('Task').communities('refs', { resolution: 0 })).toEqual([[a, b, c, x, y, z]]);
+    expect(() => e.query('Task').communities('refs', { resolution: -1 })).toThrow();
+    for (const seed of [-1, 1.5, 2 ** 32]) expect(() => e.query('Task').communities('refs', { seed }), String(seed)).toThrow();
+  });
+
+  it('explain reports the graph a rank built and the rounds it ran', () => {
+    const [a, b] = [task('a'), task('b')];
+    e.write(a).link('refs', b);
+    const { stages } = e.query('Task').rank('refs').explain();
+    expect(stages[1]).toMatchObject({ stage: 'rank', nodes: 2, edges: 1, converged: true });
+    expect(stages[1]!.iterations).toBeGreaterThan(1);
   });
 });
 

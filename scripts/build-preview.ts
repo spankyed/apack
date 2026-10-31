@@ -18,6 +18,7 @@ if (process.argv.includes('--help')) {
   const metadata = readBuildManifest(env.APACK_BUILD_ROOT);
   const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
   const commands: ['npm' | 'npx', string[]][] = [
+    ['npm', ['run', 'generate:entries', '-w', '@app/default-setup']],
     ['npm', ['run', 'build:default-setup']],
     ['npm', ['run', 'build:runtime']],
   ];

@@ -219,11 +219,15 @@ Original performance failures, real text relevance coverage, sustained workload/
 remaining fault cases and later-master graph integration remain required. The production Windows terminal
 natural-exit cleanup concern is unresolved; packaged probe cleanup alone does not fix it.
 
-Integrated master remains `e3d1a37d5c622bfebba7767a09452572284881dc`; native elmdb pin remains
-`2441af4658d961f547c7094cd041c2ac246668c5`. Master has subsequently advanced; this candidate has not
-yet integrated those newer graph changes. The [completed rebase](../references/evidence/ears-sqlite-implementation-2026-10-28/master-rebase-e3d1/README.md)
-preserves checkpoint `353eb42255` except master's three documentation files. Frozen diagnostics retain
-their original source revisions. Inspect actual Git/process/workflow state before continuing.
+Integrated master is now pinned to `8f8433a5b9e88df3c083fb723425466fab86fa97`; native elmdb pin is
+`d33f859` (the exact revision is in `vendor/elmdb.rev`). The merge preserves SQLite explain reporting,
+both graph-boundary and new graph-algorithm tests, both private-file barrier regressions, and Preview's
+`generate:entries` step. Syntax checks pass for the conflicted TypeScript files; this is source integration,
+not a passing candidate checkpoint. The structured storage request types and SQLite query executor still
+need PageRank, weak/strong components and genuine Leiden communities, including deterministic seeds,
+watch dependencies and explain behavior. Do not substitute Louvain for Leiden or silently omit these APIs.
+Existing platform/benchmark evidence retains its original native pin; new-pin baseline and integrated
+candidate qualification remain required. Inspect actual Git/process/workflow state before continuing.
 
 The candidate implements structured graph/query execution, typed authoritative values, live declarations,
 transaction/watch identity, search/index generations, canonical embedding/model lifecycle, both managed app

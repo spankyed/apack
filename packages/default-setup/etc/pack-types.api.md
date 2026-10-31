@@ -1163,8 +1163,6 @@ declare namespace EARS {
         type COMPACTS = typeof COMPACTS;
         const BLOCKS = "blocks";
         type BLOCKS = typeof BLOCKS;
-        const BLOCKED_BY = "blocked_by";
-        type BLOCKED_BY = typeof BLOCKED_BY;
         const DUPLICATES = "duplicates";
         type DUPLICATES = typeof DUPLICATES;
         const CONTAINS = "contains";
@@ -1177,7 +1175,7 @@ declare namespace EARS {
         type PARENT_OF = typeof PARENT_OF;
     }
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
-    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "blocked_by", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
+    const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
     /** Whether a kind that arrived as data (an event's field, a stored row) is one of them */
     const isRelKind: (value: unknown) => value is RelKind;
@@ -4714,7 +4712,11 @@ type ThreadLinkItem = Pick<ThreadEntity, 'id' | 'status' | 'timestamp' | 'topic'
     relation: ThreadLinkRelation;
 };
 
-type ThreadLinkRelation = typeof ThreadRelations[number];
+/**
+ * A link as the link form names it, from the thread it is on: a kind it links out with, or `blocked by`, the other
+ * thread's `blocks` link to it. A block is stored one way only, so a loop of blocks is one walk of one kind
+ */
+type ThreadLinkRelation = ThreadRelation | 'blocked by';
 
 type ThreadLinkedFields = {
     linkedThreads?: ThreadLinkItem[];
@@ -4743,8 +4745,10 @@ interface ThreadReadParams {
     includeTurns?: boolean;
 }
 
-/** The kinds a thread links to another thread with, which the link form offers */
-declare const ThreadRelations: readonly ["parent_of", "blocks", "blocked_by", "duplicates"];
+type ThreadRelation = typeof ThreadRelations[number];
+
+/** The kinds a thread links to another thread with */
+declare const ThreadRelations: readonly ["parent_of", "blocks", "duplicates"];
 
 interface ThreadRollbackParams {
     threadId: string;
@@ -4912,6 +4916,9 @@ interface ThreadsContext {
     freshThreadIds: string[];
     /** This window's thread writes, which hold the views back until they are answered */
     writes: ViewWrites;
+    /** The call the link form's last save went under, until it is answered, and why that save was refused, if it was */
+    linkSave: string | null;
+    linkRefusal: string | null;
 }
 
 interface ThreadsContext$1 {
@@ -6039,6 +6046,11 @@ declare const threadCommands: {
         timestamp: number;
         status: string;
     };
+    /** Adds links to a thread, keeping the ones it has; a link that would close a loop is refused, and none is added */
+    readonly addLinks: (id: EARS.EntityId, linked: ReadonlyArray<{
+        relation: ThreadLinkRelation;
+        id: EARS.EntityId;
+    }>) => void;
     readonly update: (id: EARS.EntityId, updates: {
         topic?: string;
         instructions?: string;
@@ -6079,16 +6091,10 @@ declare const threadQueries: {
             readonly __entity?: "Message" | undefined;
         };
     }, "compacted" | "isCommand" | "sender" | "text" | "timestamp">)[];
-    readonly linkedThreads: (threadId: EARS.EntityId) => {
-        id: `${string}-${string}` & {
-            readonly __entity?: "Thread" | undefined;
-        };
-        topic: string;
-        status: string;
-        shortCode: _apackdev_ears.ShortCode<"THR">;
-        timestamp: number;
-        relation: "blocked_by" | "blocks" | "duplicates" | "parent_of";
-    }[];
+    /** The threads this one links to, by kind, then the threads that block it, as `blocked by` */
+    readonly linkedThreads: (threadId: EARS.EntityId) => Array<{
+        relation: ThreadLinkRelation;
+    } & Pick<ThreadEntity, "id" | "shortCode" | "status" | "timestamp" | "topic">>;
     readonly extendedData: (threadId: EARS.EntityId, include?: keyof ThreadExtendedData | (keyof ThreadExtendedData)[]) => ThreadExtendedData;
     /** The archived threads, in the order the chat's settings sort recent threads */
     readonly archivedThreads: (sortOrder: RecentThreadsSortOrder) => Partial<ThreadEntity>[];

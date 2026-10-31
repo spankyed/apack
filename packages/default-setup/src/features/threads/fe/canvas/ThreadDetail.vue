@@ -150,6 +150,7 @@
               :available-threads="threadsList"
               :available-tags="availableTags"
               :settings="settings"
+              :refusal="isViewMode ? linkRefusal : null"
               @chat-click="(id) => actor.send({ type: 'OPEN_THREAD_CHAT', threadId: id })"
               @select="(id) => actor.send({ type: 'SELECT_THREAD', id })"
               @status-change="(id, status) => actor.send({ type: 'UPDATE_THREAD_STATUS', id, status })"
@@ -209,6 +210,7 @@ const topic = computed(() => contextSlice.value.topic || '');
 const instructions = computed(() => contextSlice.value.instructions || '');
 const tags = computed(() => contextSlice.value.tags || []);
 const linkedThreads = computed(() => contextSlice.value.linkedThreads || []);
+const linkRefusal = useSelector(actor, (state) => state.context.linkRefusal);
 
 // Shared selectors
 const availableTags = useSelector(actor, (state) => state.context.availableTags);

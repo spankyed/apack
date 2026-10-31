@@ -504,6 +504,10 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     both<T extends string>(kinds: D['relKinds'] | readonly D['relKinds'][], type: EntityNameArg<D['names'], T> | readonly EntityNameArg<D['names'], T>[] | undefined): QueryBuilder<T, D>;
     // (undocumented)
     both(kinds: D['relKinds'] | readonly D['relKinds'][], type?: undefined): QueryBuilder<string, D>;
+    communities(kinds: D['relKinds'] | readonly D['relKinds'][], options?: {
+        resolution?: number;
+        seed?: number;
+    }): EARS.EntityId<E>[][];
     containing(text: string, options?: {
         caseInsensitive?: boolean;
     }): QueryBuilder<E, D>;
@@ -588,13 +592,19 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
         id: EARS.EntityId<E>;
     } & Pick<ShapeOf<D['shapes'], E>, A[number]>) | undefined;
     pickOne(): ShapeOf<D['shapes'], E> | undefined;
+    rank(kinds: D['relKinds'] | readonly D['relKinds'][], options?: {
+        direction?: EdgeDirection;
+        seeds?: readonly EARS.EntityId[];
+    }): QueryBuilder<E, D>;
     // (undocumented)
     reduce<T>(fn: (acc: T, id: EARS.EntityId<E>) => T, init: T): T;
     // (undocumented)
     reverse(): QueryBuilder<E, D>;
     search(query: string, options?: SearchOptions<keyof ShapeOf<D['shapes'], E> & string>): QueryBuilder<E, D>;
+    strongComponents(kinds: D['relKinds'] | readonly D['relKinds'][]): EARS.EntityId<E>[][];
     unlinkedFrom(kind: D['relKinds'], other?: EARS.EntityId): QueryBuilder<E, D>;
     unlinkedTo(kind: D['relKinds'], other?: EARS.EntityId): QueryBuilder<E, D>;
+    weakComponents(kinds: D['relKinds'] | readonly D['relKinds'][]): EARS.EntityId<E>[][];
     where<K extends keyof ShapeOf<D['shapes'], E> & string>(k: K, v: WhereValue<D['shapes'], E, K>): QueryBuilder<E, D>;
     within(ids: readonly EARS.EntityId[]): QueryBuilder<E, D>;
     // (undocumented)
@@ -606,9 +616,13 @@ export type QueryExplanation<E extends string = string> = ElmdbExplanation<E> | 
 
 // @public
 export interface QueryStage {
+    converged?: boolean;
+    edges?: number;
     index?: string;
+    iterations?: number;
     kept: number;
     ms: number;
+    nodes?: number;
     stage: string;
     visited: number;
 }

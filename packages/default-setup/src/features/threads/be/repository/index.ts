@@ -1,6 +1,6 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { create, write, query } from '#generated/ears.ts';
+import { create, write, query, transact } from '#generated/ears.ts';
 
 import { EARS } from '#generated/ears.ts';
 import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories';
@@ -11,7 +11,7 @@ import type {
   ThreadCreateData,
   ThreadExtendedData,
   ThreadExtended,
-  AgentThreadData, ArtifactType, ThreadLinkRelation,
+  AgentThreadData, ArtifactType, ThreadLinkRelation, ThreadRelation,
   ChatPage, ChatStart, MessageSearchResult, ThreadDetailView, ThreadTabView,
 } from '../types.ts';
 import { ThreadRelations } from '../types.ts';
@@ -54,14 +54,17 @@ export const threadQueries = {
       .out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
       .pick(["text", "sender", "timestamp", "compacted", "isCommand"] as const),
   
-  // Get linked threads
-  linkedThreads: (threadId: EARS.EntityId) =>
-    query.ids(threadId)
-      .outEdges(ThreadRelations, EARS.Entity.Thread)
-      .flatMap(({ kind, target }) => {
-        const row = query.ids(target).pickOne(["shortCode", "topic", "status", "timestamp"] as const);
-        return row ? [{ relation: kind, ...row }] : [];
-      }),
+  /** The threads this one links to, by kind, then the threads that block it, as `blocked by` */
+  linkedThreads: (threadId: EARS.EntityId): Array<{ relation: ThreadLinkRelation } & Pick<ThreadEntity, 'id' | 'shortCode' | 'topic' | 'status' | 'timestamp'>> => {
+    const out = query.ids(threadId).outEdges(ThreadRelations, EARS.Entity.Thread)
+      .map(({ kind, target }) => ({ relation: kind as ThreadLinkRelation, id: target }));
+    const blockers = query.ids(threadId).inEdges(EARS.RelKind.BLOCKS, EARS.Entity.Thread)
+      .map(({ source }) => ({ relation: 'blocked by' as const, id: source }));
+    return [...out, ...blockers].flatMap(({ relation, id }) => {
+      const row = query.ids(id).pickOne(["shortCode", "topic", "status", "timestamp"] as const);
+      return row ? [{ relation, ...row }] : [];
+    });
+  },
   
   // Get extended data
   extendedData: (
@@ -124,20 +127,50 @@ export const threadQueries = {
 // Commands
 const logger = createLogger('threads-repository');
 
+const codeOf = (id: EARS.EntityId): string => (query.ids(id).ofType(EARS.Entity.Thread).pickOne(['shortCode'] as const)?.shortCode as string | undefined) ?? id;
+
 /**
- * Links a thread to the threads it names, skipping one that no longer exists: the list comes from a form that
- * may have been open while that thread was deleted, and a save shouldn't fail for it.
+ * Refuses a `blocks` or `parent_of` link from `source` to `target` that would close a loop, naming the threads
+ * already leading from `target` back to `source`: "THR-3 already blocks THR-1 through THR-2"
+ */
+function refuseLoop(source: EARS.EntityId, kind: ThreadRelation, target: EARS.EntityId): void {
+  if (source === target) {
+    const verb = kind === EARS.RelKind.BLOCKS ? 'block' : kind === EARS.RelKind.PARENT_OF ? 'be the parent of' : 'duplicate';
+    throw new RepositoryError(`${codeOf(source)} can't ${verb} itself`, RepositoryErrorCode.VALIDATION_ERROR);
+  }
+  if (kind === EARS.RelKind.DUPLICATES || !wouldCreateCycle(source, target, [kind])) return;
+  const path = query.ids(target).pathTo(source, kind).ids() as EARS.EntityId[];
+  const through = path.slice(1, -1).map(codeOf);
+  const via = through.length ? ` through ${through.join(', ')}` : '';
+  const [from, to] = [codeOf(target), codeOf(source)];
+  const message = kind === EARS.RelKind.BLOCKS
+    ? `${from} already blocks ${to}${via}`
+    : `${from} is already ${through.length ? 'an ancestor' : 'the parent'} of ${to}${via}`;
+  throw new RepositoryError(message, RepositoryErrorCode.VALIDATION_ERROR);
+}
+
+/**
+ * Links a thread to the threads it names, `blocked by` as the other thread's `blocks`, refusing a link that would
+ * close a loop and skipping one to a thread that no longer exists: the list comes from a form that may have been open
+ * while that thread was deleted, and a save shouldn't fail for it.
  */
 function linkThreads(id: EARS.EntityId, linked: ReadonlyArray<{ relation: ThreadLinkRelation; id: EARS.EntityId }>): void {
   for (const rel of linked) {
-    if (query.ids(rel.id).exists()) write(id).link(rel.relation, rel.id);
-    else logger.warn('Skipped a link to a thread that no longer exists', { threadId: id, linked: rel.id, relation: rel.relation });
+    if (!query.ids(rel.id).exists()) {
+      logger.warn('Skipped a link to a thread that no longer exists', { threadId: id, linked: rel.id, relation: rel.relation });
+      continue;
+    }
+    const [source, kind, target] = rel.relation === 'blocked by'
+      ? [rel.id, EARS.RelKind.BLOCKS, id] as const
+      : [id, rel.relation, rel.id] as const;
+    refuseLoop(source, kind, target);
+    write(source).link(kind, target);
   }
 }
 
 export const threadCommands = {
   /** `id` and `createdAt` keep an imported thread's own; a new thread gets fresh ones */
-  create: (input: ThreadCreateData & { id?: string; createdAt?: number }): { id: EARS.EntityId; shortCode: string; timestamp: number, status: string } => {
+  create: (input: ThreadCreateData & { id?: string; createdAt?: number }): { id: EARS.EntityId; shortCode: string; timestamp: number, status: string } => transact(() => {
     if (!input.topic?.trim()) {
       throw new RepositoryError('Topic is required', RepositoryErrorCode.VALIDATION_ERROR);
     }
@@ -164,11 +197,15 @@ export const threadCommands = {
       write(id).grant(input.role);
     }
 
-    // Create relationships for linked threads only
+    // Create relationships for linked threads only; a refused one undoes the thread with them
     linkThreads(id, input.linkedThreads ?? []);
 
     return { id, shortCode, timestamp: ts, status };
-  },
+  }),
+
+  /** Adds links to a thread, keeping the ones it has; a link that would close a loop is refused, and none is added */
+  addLinks: (id: EARS.EntityId, linked: ReadonlyArray<{ relation: ThreadLinkRelation; id: EARS.EntityId }>): void =>
+    transact(() => linkThreads(id, linked)),
   
   update: (id: EARS.EntityId, updates: {
     topic?: string;
@@ -199,16 +236,14 @@ export const threadCommands = {
       if (held && Object.prototype.hasOwnProperty.call(held, field)) write(id).delete(field as never);
     }
 
-    // Update linked threads
+    // The links the form lists replace the thread's, the blocks on it included, in one unit: a link refused for
+    // closing a loop leaves every link as it was. Its other fields are written by then, and stay
     if (linkedThreads !== undefined) {
-      // Remove all existing custom relations
-      const existingLinks = query.ids(id).outEdges(ThreadRelations);
-      for (const link of existingLinks) {
-        write(id).unlink(link.kind, link.target);
-      }
-
-      // Add new relations
-      linkThreads(id, linkedThreads);
+      transact(() => {
+        for (const link of query.ids(id).outEdges(ThreadRelations)) write(id).unlink(link.kind, link.target);
+        for (const link of query.ids(id).inEdges(EARS.RelKind.BLOCKS)) write(link.source).unlink(EARS.RelKind.BLOCKS, id);
+        linkThreads(id, linkedThreads);
+      });
     }
   },
 
@@ -274,7 +309,7 @@ export const threadCommands = {
       write(messageId).destroy();
     }
 
-    // 2. Remove all thread relationships (parent_of, blocks, blocked_by, duplicates)
+    // 2. Remove all thread relationships (parent_of, blocks, duplicates)
     // First, unlink this thread from any threads it links to
     const existingLinks = query.ids(id).outEdges(ThreadRelations);
     for (const link of existingLinks) {
