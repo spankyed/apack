@@ -137,15 +137,30 @@ regression tests fail when their respective defects are restored. Manual strict 
 integration-2 and native-2 passed. App-and-rest passed 6,063 tests and failed two catalogue checks because
 `performance-qualification.spec.ts` lacked its required row in `packages/repo-checks/CLAUDE.md`.
 Adding that row passes all 115 focused catalogue/runner checks; six documentation checks also pass.
-Integration-1 subsequently passed; native-1 is still running.
+Both integration shards and both native shards subsequently passed.
 The queued `e0d1a0e3a4` run was cancelled before repeating this diagnosed catalogue omission.
 
-The final local `chain --no-native --cores 2` passed API reports, package checks and API typechecking,
+The local `chain --no-native --cores 2` passed API reports, package checks and API typechecking,
 then hit the renderer compiler's unchanged 60-second deadline without a compiler diagnostic. Its retained
-run is `2026-10-31T01-11-53Z-178`; this is not a passed gate. A focused compiler-progress diagnostic was
-subsequently refused before execution because Docker had 1.5 GiB free against the runner's 8 GiB minimum.
-The same static renderer check on macOS, isolated under the unchanged deadline, completed all three
-compiler projects without errors in 16.75 seconds (about 1.69 GiB reported memory). This does not prove
-the cause of the Linux timeout or replace the local broad gate. No budget or assertion was weakened.
-Final local/integrated validation remains pending; both PRs remain
-drafts until those requirements are satisfied.
+run is `2026-10-31T01-11-53Z-178`; this is not a passed gate. The isolated static renderer check passed
+all three projects on macOS in 16.75 seconds and subsequently on Linux in 20.40 seconds. These results
+do not establish the cause of the original timeout. No budget or assertion was weakened.
+
+Final strict run [41155455025](https://github.com/spankyed/apack/actions/runs/41155455025) completed
+successfully on `d141d8d253`: all six jobs passed. The isolated Linux static renderer check also passed
+all three projects in 20.40 seconds under the unchanged deadline. A subsequent serialized broad local
+chain (`2026-10-31T01-59-09Z-180`) exposed a separate facade-validation failure: a compiler receipt
+retained `/proc/344/exe` after that process exited. Focused diagnosis and local acceptance remain open;
+the strict result does not certify a subsequent uncommitted compiler fix. Complete session-owned
+Linux reports were archived, compared against their originals and only then removed from the Linux
+volume to reclaim duplicate storage. No foreign work or admission minimum was changed.
+
+Focused procfs diagnosis identified `detect-libc` opening `/proc/self/exe` through the compilation
+reader, separately from startup's reader. Both now resolve only self-executable **data** to the captured
+ELF executable when it belongs to the verified compiler installation. Explicit metadata queries and
+other processes retain their original observation contracts; mutable `process.execPath` is not authority.
+Thirteen focused ownership/compilation tests pass (two Windows-only cases skip on macOS), CLI typechecking
+and four-file lint pass, and removing each alias fix fails its regression. A fresh bounded Linux build
+passed in 65.3 seconds (`2026-10-31T02-53-33Z-92`) and the exact facade replay passed in 3.1 seconds
+(`2026-10-31T02-54-47Z-502`). Full local validation including native checks is running; these focused
+results do not substitute for that gate. Application timing/capture code and its qualified results are unchanged.
