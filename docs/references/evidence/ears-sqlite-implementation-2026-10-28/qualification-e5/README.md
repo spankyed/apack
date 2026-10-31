@@ -1,0 +1,5 @@
+# Short-write runtime qualification on all three hosts
+
+Run41190537998 is terminal success at exact runtimee5d94550e3ae13660625444266b3752ff3aab713. Downloaded reports verify all eight private-file cases on Linux x64, macOS arm64 and Windows x64. The named Unicode case performs actual three-byte writes and verifies the complete payload; the zero-progress case refuses with EIO and retains the incumbent. All ten logical archive host cases pass without skips. Host totals are208/208/195. Linux passes1322SDK cases, four actual ENOSPC cases and required host types/focused writer lint. EARS totals remain766/766/761 with the five previously named Windows EARS exclusions; every host passes735native membership controls.
+
+The current later checkpoints change documentation and validation machinery, not this runtime. Raw host/EARS/verification and applicable SDK/filesystem reports are compressed unchanged with original-byte receipts. This qualifies the targeted recovery-file fix, not all app, concurrency, installed runtime, physical failure or performance requirements. The original native signed-zero diagnostic failure and pending matched SQLite matrix are not waived.

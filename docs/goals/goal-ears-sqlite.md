@@ -460,3 +460,13 @@ including4097-vector worker admission, ownership, FTS/regex and read-only reopen
 installer/signature or physical power-loss qualification. Observe its exact run after publication;
 never label pending native-runtime checks as passed installed app acceptance. Dispatch only after the
 already queued overlap41191053003 acquires the branch slot, preserving that run.
+
+
+[Short-write platform41190537998](../references/evidence/ears-sqlite-implementation-2026-10-28/qualification-e5/README.md)
+is terminal success at runtimee5: actual eight private-file cases on every host, including Unicode
+three-byte writes and zero-progress refusal retaining the incumbent. All ten logical archive cases
+pass everywhere without skips; host totals208/208/195. Linux also passes1322SDK cases, four actual
+ENOSPC cases and required host types/writer lint. No runtime source has changed since that input.
+Overlap41191053003 at61f is now active; installed-platform41192007255 is dispatched once at125,
+queued behind it. Keep both owners; original deadlines and all remaining acceptance are unchanged.
+Matched SQLite88542 remains live in admission at frozena9, without a completed report or comparison.
