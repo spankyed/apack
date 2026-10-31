@@ -1,7 +1,7 @@
 # Measuring real application actions
 
 Status: implemented; controlled qualification, strict CI and local non-native validation passed;
-local native acceptance is waiting for execution-host capacity.
+final local native acceptance and strict CI are running after verified storage migration.
 Originally planned on 2026-10-29 from `master` at `98386b36a18d244c19ffb501830b990ed49f7653`.
 Source-qualified measurements and limitations are recorded in the [evidence record](../references/evidence/2026-10-30-application-performance.md).
 
@@ -141,7 +141,7 @@ Each run writes an ignored report directory containing:
 |---|---|
 | `manifest.json` | Schema version, source revision/dirty state, build and native dependency identities, fixture identity, runtime versions, machine/resources, recording mode, cache/warmup policy and trial order |
 | `results.json` | Raw trial samples, correctness outcomes, counters, failures, exclusions and derived summaries |
-| `trace.json` | Bounded process timeline, causal relationships and recording completeness |
+| `trial-N.trace.json` | Bounded Chrome Trace Event process timeline, causal relationships and recording completeness for each raw trial |
 | `playwright-trace.zip` | Optional UI diagnostic capture, labeled with its additional overhead |
 
 Validate report schemas. Keep raw samples and unsuccessful trials; do not silently remove outliers
