@@ -464,7 +464,7 @@ is `query.ids(id).ancestors(kind).ids().reverse()`.
 
 ### Graph algorithms
 
-Two reads treat a query's entities as a graph: the entities are its nodes, and the edges of the kinds you name
+Three reads treat a query's entities as a graph: the entities are its nodes, and the edges of the kinds you name
 between two of them are its edges. An edge to an entity the query doesn't reach doesn't count, so a query narrows the
 graph first — a type, a search, a walk:
 
@@ -472,6 +472,7 @@ graph first — a type, a search, a walk:
 |---|---|
 | `query(type).rank(kind, { direction?, seeds? })` | The query's entities by how much they matter from `seeds`, highest first: personalized PageRank, a walker following edges (`out` unless `direction` is `in` or `both`) and jumping back to a seed. With no `seeds`, every entity is one, which ranks what is central overall. End with `hits()` for each score, and `limit(n)` keeps the `n` highest |
 | `query(type).weakComponents(kind)` | The groups the edges join, whichever way each points: each group's ids, the largest first |
+| `query(type).communities(kind, { resolution?, seed? })` | The communities the edges form: groups more densely linked inside than out (Leiden, by modularity), each connected, the largest first. A higher `resolution` (1 by default) finds smaller ones; `0` keeps each connected group whole. The same data answers the same communities every time |
 
 ```typescript
 // The ten notes most related to the open one, by the links between notes
