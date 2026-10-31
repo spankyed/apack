@@ -416,6 +416,10 @@ query('Memo').rank('|rankKind|');
 query('Memo').weakComponents('|weakComponentsKind|');
 query('Memo').strongComponents('|strongComponentsKind|');
 query('Memo').communities('|communitiesKind|');
+query('Memo').topological('|topologicalKind|');
+query('Memo').similar(memoId, '|similarKind|');
+query('Memo').similar(memoId, 'related', { measure: '|similarMeasure|' });
+query('Memo').topological('related', { direction: '|topologicalDirection|' });
 write(memoId).link('|linkKind|', memoId);
 query('Memo').linkedTo('|linkedToKind|', memoId);
 write(memoId).link('relatd', memoId);
@@ -428,7 +432,7 @@ const FIELD_POSITIONS = ['pick', 'pickOne', 'outPick', 'where', 'has', 'lacks', 
 /** The fields a write may name: the declared ones, without the engine's own (`createdAt`, `updatedAt`, …) */
 const WRITE_POSITIONS = ['set', 'append', 'removeAt'];
 /** Relation kinds: the pack's own, its dependency's and the SDK's */
-const KIND_POSITIONS = ['outKind', 'linkKind', 'linkedToKind', 'ancestorsKind', 'descendantsKind', 'bothKind', 'pathToKind', 'degreesKind', 'rankKind', 'weakComponentsKind', 'strongComponentsKind', 'communitiesKind'];
+const KIND_POSITIONS = ['outKind', 'linkKind', 'linkedToKind', 'ancestorsKind', 'descendantsKind', 'bothKind', 'pathToKind', 'degreesKind', 'rankKind', 'weakComponentsKind', 'strongComponentsKind', 'communitiesKind', 'topologicalKind', 'similarKind'];
 /** Roles: the pack's own, its dependency's and the SDK's */
 const ROLE_POSITIONS = ['grantRole', 'withRole'];
 const NAME_POSITIONS = ['query', 'newId', 'out', 'in', 'ancestors', 'descendants', 'both', 'ofType'];
@@ -573,6 +577,9 @@ afterEach(() => new Promise<void>((resolve) => { setImmediate(resolve); }));
     expect(diagnostics.find((message) => message.includes('"relatd"'))).toMatch(/"related"/);
     expect(missing(ROLE_POSITIONS, ['pinned', 'featured', 'root_flow']), 'positions without role completions').toEqual([]);
     expect(diagnostics.find((message) => message.includes('"pinnned"'))).toMatch(/"pinned"/);
+    // An option naming one of a few modes offers those and no other: a topological order follows each edge one way
+    expect([...at.similarMeasure!].sort(), 'similar measure completions').toEqual(['adamicAdar', 'jaccard']);
+    expect([...at.topologicalDirection!].sort(), 'topological direction completions').toEqual(['in', 'out']);
     // A created row offers the shape's fields and the identity it may bring, and never the engine's other fields
     expect(at.createRow, 'created-row completions').toEqual(expect.arrayContaining(['text', 'pinned', 'note', 'id', 'createdAt']));
     expect(at.createRow, 'created-row completions').not.toContain('entityType');

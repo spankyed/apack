@@ -170,6 +170,12 @@ describe('Type inference — typed EARS helpers', () => {
       // @ts-expect-error and the communities'
       query(EARS.Entity.Note).communities('refrences');
       expectTypeOf(query(EARS.Entity.Note).communities('references', { resolution: 0.5 })).toEqualTypeOf<EARS.EntityId<'Note'>[][]>();
+      // @ts-expect-error a topological order's kinds too
+      query(EARS.Entity.Note).topological('refrences');
+      expectTypeOf(query(EARS.Entity.Note).topological('references').ids()).toEqualTypeOf<EARS.EntityId<'Note'>[]>();
+      // @ts-expect-error a similar's kinds too
+      query(EARS.Entity.Note).similar(noteId, 'refrences');
+      expectTypeOf(query(EARS.Entity.Note).similar(noteId, 'references').ids()).toEqualTypeOf<EARS.EntityId<'Note'>[]>();
       expectTypeOf(query.ids(noteId).both(EARS.RelKind.CONTAINS, EARS.Entity.Message).ids()).toEqualTypeOf<EARS.EntityId<'Message'>[]>();
       expectTypeOf(query.ids(noteId).descendants('contains', EARS.Entity.Note, { depth: 2 }).ids()).toEqualTypeOf<EARS.EntityId<'Note'>[]>();
       expectTypeOf(query.ids(noteId).degrees('references')).toEqualTypeOf<Map<EARS.EntityId<'Note'>, number>>();

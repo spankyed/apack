@@ -578,7 +578,14 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
     // (undocumented)
     reverse(): QueryBuilder<E, D>;
     search(query: string, options?: SearchOptions<keyof ShapeOf<D['shapes'], E> & string>): QueryBuilder<E, D>;
+    similar(to: EARS.EntityId, kinds: D['relKinds'] | readonly D['relKinds'][], options?: {
+        direction?: EdgeDirection;
+        measure?: SimilarityMeasure;
+    }): QueryBuilder<E, D>;
     strongComponents(kinds: D['relKinds'] | readonly D['relKinds'][]): EARS.EntityId<E>[][];
+    topological(kinds: D['relKinds'] | readonly D['relKinds'][], options?: {
+        direction?: 'out' | 'in';
+    }): QueryBuilder<E, D>;
     unlinkedFrom(kind: D['relKinds'], other?: EARS.EntityId): QueryBuilder<E, D>;
     unlinkedTo(kind: D['relKinds'], other?: EARS.EntityId): QueryBuilder<E, D>;
     weakComponents(kinds: D['relKinds'] | readonly D['relKinds'][]): EARS.EntityId<E>[][];
@@ -600,12 +607,15 @@ export interface QueryExplanation<E extends string = string> {
 
 // @public
 export interface QueryStage {
+    candidates?: number;
     converged?: boolean;
+    cycles?: number;
     edges?: number;
     index?: string;
     iterations?: number;
     kept: number;
     ms: number;
+    neighbours?: number;
     nodes?: number;
     stage: string;
     visited: number;
@@ -756,6 +766,9 @@ E
 } : {}) : {
     shortCode?: string;
 };
+
+// @public
+export type SimilarityMeasure = 'jaccard' | 'adamicAdar';
 
 // @public
 export interface TypedCreate<D extends EarsSchema> {
