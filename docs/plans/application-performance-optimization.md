@@ -7,7 +7,9 @@ Status: approved for execution, 2026-10-31. Base: master `78c8f15ea7`; native pi
 Integration checkpoint: upstream master advanced during execution to `05490e387a`, including
 the shared validation fixes and native pin `7b484b0834720d6d7b4fb89270d4ac02a6f42c1d`.
 Keep the completed original-pin baselines labeled; final integration and affected qualification
-use that newer frozen pin. Never switch native inputs beneath an active captured run.
+use that newer frozen pin. Never switch native inputs beneath an active captured run. A subsequent integration checkpoint is
+master `27518626c4`, including weighted relations and native pin
+`1849f6899e3d707ac8e25e7f81fa52b472b2a9a0`; final combined qualification uses it.
 
 ## Outcome
 

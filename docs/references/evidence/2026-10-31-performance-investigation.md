@@ -117,3 +117,46 @@ query implementations and binds only methods a recipe uses, including stable ext
 frozen recipe. Type checks and 26 differential protocol/result cases pass; paired native measurement
 and the full affected suites remain required. Upstream's new native pin is a separate final
 integration checkpoint, not silently substituted into the original captures.
+
+
+## Implementation checkpoints
+
+The artifact query's existing thread-view lifecycle suite passed on `4ecc941488` and
+`ec3e8869d1`; the deliberate original-query counterfactual failed its coalesced-read guard.
+This establishes preserved real view behavior and detection of the unnecessary dependency.
+
+The shared-method prototype passed its predeclared paired criteria twice. Both comparisons used
+one process, the same database and native binding, identical request/answer hashes, forty balanced
+unprofiled samples per shape, and four separate ABBA allocation profiles totaling 50,000 point
+reads per variant. Allocation samples include collected objects; they are not retained heap.
+
+| Candidate / native pin | Baseline → candidate sampled allocation | Reduction | Point batch median | Chained median | Predicate median |
+|---|---|---|---|---|---|
+| `4ecc941488` / `dde229d` | 446.4 → 269.7 MB | 39.6% | 0.839 → 0.819 ms | 0.382 → 0.377 ms | 0.117 → 0.116 ms |
+| `ec3e8869d1` / `7b484b0` | 432.7 → 282.8 MB | 34.6% | 0.826 → 0.835 ms | 0.375 → 0.378 ms | 0.118 → 0.116 ms |
+
+A point sample contains fifty projected reads; the other columns are milliseconds per query.
+All shapes remained within the predeclared 5% median-regression limit. These establish an allocation
+improvement, not a reliable application or query-latency speedup. Full raw samples, profiles, exact
+probe and provenance remain under `query-allocation-<revision>` in owned Linux work volume
+`apack-linux-work-2bd9183070f1`. Both probes have SHA-256
+`ca039e89affa96ec7072b63bb653c6dfa96c671f279c015f267edee55c8a7069`.
+The second native binding hash is
+`6ceddbed7532de768d3ad51e389c387a0f303982d5e87bbd06562546a94a22db`.
+
+Review found an observable regression: callback terminals consulted the overridable public `ids`
+method rather than their recipe. A baseline/candidate differential check failed before the fix;
+terminals now use a private recipe read. The existing callback test covers the override while
+retaining its result-ownership assertion. Vocabulary inspection now includes public prototype
+members, preserving all existing rules and exceptions. On `ec3e8869d1`, focused query/vocabulary
+checks passed all 33 cases, and the real thread-view suite passed. The full Linux EARS suite passed
+245 of 247 cases; both model-based cases exceeded their unchanged 30-second deadlines, with worker
+RPC timeouts also retained in the log. These failures are unresolved, not semantic passes.
+
+Master subsequently merged weighted relations at `27518626c4` and advanced its native pin to
+`1849f6899e3d707ac8e25e7f81fa52b472b2a9a0`. The implementation retains both new weighted
+query options. Twenty-nine differential protocol/result probes, including those options, and EARS
+type checking pass after integration. Final native measurements use this checkpoint, with the
+original query factory compiled against the same current engine. A matched fixed-seed model-test
+control retains the existing 120/40 workloads and deadlines; the normal suite retains randomness.
+Final application recording qualification remains required and does not supersede historical failures.
