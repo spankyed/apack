@@ -164,3 +164,43 @@ and four-file lint pass, and removing each alias fix fails its regression. A fre
 passed in 65.3 seconds (`2026-10-31T02-53-33Z-92`) and the exact facade replay passed in 3.1 seconds
 (`2026-10-31T02-54-47Z-502`). Full local validation including native checks is running; these focused
 results do not substitute for that gate. Application timing/capture code and its qualified results are unchanged.
+
+The attempted full Linux chain (`2026-10-31T02-55-02Z-182`) passed the renderer/API/package/tooling
+checks and 6,027 unit tests, then failed twelve cases across seven suites. Ten rely on permission
+denial that root bypasses; the remaining two assume macOS `open`/bundle metadata. Every affected suite
+passes on the intended non-root macOS host: 229 tests, seven files, 10.30 seconds. No application or
+assertion change was made for these host assumptions. The supported host `chain --cores 2`, which
+routes native execution to bounded Linux, is the remaining local gate. Strict run `41162135573` was
+cancelled after a test-only POSIX admission correction; replacement
+[41162244468](https://github.com/spankyed/apack/actions/runs/41162244468) targets `2ede06275d`.
+
+## Final checkpoint disposition
+
+Code tip `2ede06275df49ec066eae7c7d241fedd014bc306` passed all six strict jobs in
+[41162244468](https://github.com/spankyed/apack/actions/runs/41162244468): producers, app-and-rest,
+both integration shards and both native shards. The procfs regression is scoped to POSIX paths;
+the original early dispatch was cancelled before being superseded, not counted as a passing gate.
+
+The supported local host chain (`2026-10-31T03-09-03Z-53571`) passed 6,072 host/tooling tests
+(eight skipped), 976 pack tests (two skipped) and 788 integration tests (one skipped, sixty files).
+Native admission then refused before any test ran: Docker had 4.1 GiB free against the unchanged
+8 GiB minimum. The concluding `chain --no-native --cores 2` passed in 347.4 seconds
+(`2026-10-31T03-44-30Z-5853`, twenty-five of thirty-one steps cached), completing runtime build,
+external-app acceptance, smoke and packaged-authoring author/app checks. This completes the ordinary
+local gate; it does not claim the compiler change's required local native execution passed.
+
+Subsequent Docker capacity recovered to about 7.5 GiB, still below admission, with another session's
+Linux matrix active. Only session-owned duplicate evidence was reclaimed: the Linux reports were
+archived and compared against their originals, and 4,756 retained host entries were archived and
+verified by file set, SHA-256 contents and symlink targets before originals were removed. Raw reports
+and earlier failures remain in `.apack/performance/linux-evidence-complete.tar.gz` and
+`.apack/performance/linux-evidence-host.tar.gz`; diagnostic/fix and failed Linux-chain logs also have
+separate archives there. No foreign work, image, volume or cache was removed. Archive entries preserve
+the original report paths and can be restored to an owned directory for inspection.
+
+Implementation review is complete. The diagnosed compiler fix preserves explicit procfs metadata and
+foreign-process observations and trusts captured ELF ownership rather than mutable process globals.
+The only remaining acceptance item is the supported local native gate when storage and execution
+ownership permit it. Both PRs remain draft until that result is recorded. No application measurements
+were repeated for compiler bookkeeping or documentation changes; their original source-qualified
+manifests, earlier failures and limitations remain authoritative.
