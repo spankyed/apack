@@ -172,6 +172,15 @@ describe('ordering', () => {
     expect([...e.query('Person').groupBy('value')]).toEqual([[null, [a, b, c, d]]]);
   });
 
+  it('uses scalar value equality and decoded object identity for distinct and grouping', () => {
+    const values = [true, 1, new Date(1), new Date(1), { n: 1 }, { n: 1 }, [1], [1], null];
+    const ids = values.map(value => e.create('Person').set('value', value).id());
+    const missing = [e.create('Person').id(), e.create('Person').id()];
+    expect(e.query('Person').distinct('value').ids()).toEqual(ids);
+    expect([...e.query('Person').groupBy('value')]).toEqual(values.map((value, index) =>
+      [value, value === null ? [ids[index], ...missing] : [ids[index]]]));
+  });
+
   it('distinct and groupBy', () => {
     expect(e.query.ids([t.a, t.a, t.b]).distinct().ids()).toEqual([t.a, t.b]);
     expect(e.query('Task').distinct('title').ids()).toEqual([t.a, t.b, t.c]);

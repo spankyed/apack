@@ -99,16 +99,16 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     expect(read.mock.calls.every(call => call[2]?.length === 1 && call[2][0] === 'bucket')).toBe(true);
   });
 
-  it('groups dates and deep values in encounter order and retains all missing/null members', () => {
+  it('keeps decoded object groups separate and retains all missing/null members', () => {
     const { e } = open();
     const values = [true, 1, new Date(1), new Date(1), { a: 1, b: 2 }, { b: 2, a: 1 }, null];
     values.forEach((bucket, i) => e.create('Row', { id: `Row-${i}`, rank: i, body: '', bucket }));
     e.create('Row', { id: 'Row-missing-a', rank: 8, body: '' });
     e.create('Row', { id: 'Row-missing-b', rank: 9, body: '' });
     const groups = [...e.query('Row').groupBy('bucket')];
-    expect(groups).toEqual([[true, ['Row-0']], [1, ['Row-1']], [new Date(1), ['Row-2', 'Row-3']],
-      [{ a: 1, b: 2 }, ['Row-4', 'Row-5']], [null, ['Row-6', 'Row-missing-a', 'Row-missing-b']]]);
-    expect(e.query('Row').distinct('bucket').ids()).toEqual(['Row-0', 'Row-1', 'Row-2', 'Row-4', 'Row-6', 'Row-missing-a']);
+    expect(groups).toEqual([[true, ['Row-0']], [1, ['Row-1']], [new Date(1), ['Row-2']], [new Date(1), ['Row-3']],
+      [{ a: 1, b: 2 }, ['Row-4']], [{ b: 2, a: 1 }, ['Row-5']], [null, ['Row-6', 'Row-missing-a', 'Row-missing-b']]]);
+    expect(e.query('Row').distinct('bucket').ids()).toEqual(['Row-0', 'Row-1', 'Row-2', 'Row-3', 'Row-4', 'Row-5', 'Row-6']);
   });
 
   it('validates scalar cells outside a pushed sort prefix', () => {
