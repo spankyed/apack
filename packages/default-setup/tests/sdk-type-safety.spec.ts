@@ -164,6 +164,9 @@ describe('Type inference — typed EARS helpers', () => {
       query(EARS.Entity.Note).rank('references', { seeds: [42] });
       expectTypeOf(query(EARS.Entity.Note).rank('references', { seeds: [noteId] }).ids()).toEqualTypeOf<EARS.EntityId<'Note'>[]>();
       expectTypeOf(query(EARS.Entity.Note).weakComponents('references')).toEqualTypeOf<EARS.EntityId<'Note'>[][]>();
+      // @ts-expect-error and the strong components'
+      query(EARS.Entity.Note).strongComponents('refrences');
+      expectTypeOf(query(EARS.Entity.Note).strongComponents('references')).toEqualTypeOf<EARS.EntityId<'Note'>[][]>();
       // @ts-expect-error and the communities'
       query(EARS.Entity.Note).communities('refrences');
       expectTypeOf(query(EARS.Entity.Note).communities('references', { resolution: 0.5 })).toEqualTypeOf<EARS.EntityId<'Note'>[][]>();
