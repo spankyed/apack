@@ -76,7 +76,6 @@
           />
         </div>
 
-        <p v-if="nativeBackgrounded" role="status" class="px-4 py-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Your notes stay here.</p>
         <NativePromptCompletions :editor="tiptapRef?.editor" :rows="nativeCompletions" :disabled="disabled || submitting" @select="(index, id) => promptEditor?.selectCompletion(index, id)" @dismiss="promptEditor?.dismissCompletions()" />
 
         <div v-if="nativeUi?.composer?.length" class="flex min-w-0 items-end gap-2 px-5">
@@ -84,125 +83,128 @@
           <NativeComposerPlacements class="ml-auto min-w-0" :frames="nativeUi.composer" location="mode" @height="nativeModeHeight = $event" @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
         </div>
 
-        <!-- Buttons row -->
-        <div data-composer-toolbar class="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 bg-[#202022] px-3 pb-3 pt-2 text-neutral-500">
-          <!-- Left side buttons -->
-          <div class="flex items-center min-w-0">
-            <!-- Collapsed: ... dropdown menu (narrow) -->
-            <DropdownMenuRoot>
-              <DropdownMenuTrigger as-child>
-                <button
-                  type="button"
-                  class="p-2 transition-colors text-neutral-500 @lg:hidden"
-                  :class="disabled ? 'cursor-not-allowed opacity-50' : 'hover:text-neutral-200'"
-                  aria-label="More actions"
-                  :disabled="disabled"
-                >
-                  <EllipsisVertical :size="20" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuPortal>
-                <DropdownMenuContent
-                  align="start"
-                  :side-offset="8"
-                  class="min-w-[160px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl py-1 z-50"
-                >
-                  <DropdownMenuItem
-                    v-for="btn in leftButtons"
-                    :key="btn.action"
-                    @select="handleButtonClick(btn.action)"
-                    :disabled="(btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && submitting"
-                    class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
-                    :class="btn.class"
+        <!-- Keep the background explanation and actions together above the scrolling draft. -->
+        <div class="sticky bottom-0 z-10 shrink-0 bg-[#202022]">
+          <p v-if="nativeBackgrounded" role="status" data-background-note-hint class="px-4 pt-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Your notes stay here.</p>
+          <div data-composer-toolbar class="flex shrink-0 items-center justify-between gap-3 px-3 pb-3 pt-2 text-neutral-500">
+            <!-- Left side buttons -->
+            <div class="flex items-center min-w-0">
+              <!-- Collapsed: ... dropdown menu (narrow) -->
+              <DropdownMenuRoot>
+                <DropdownMenuTrigger as-child>
+                  <button
+                    type="button"
+                    class="p-2 transition-colors text-neutral-500 @lg:hidden"
+                    :class="disabled ? 'cursor-not-allowed opacity-50' : 'hover:text-neutral-200'"
+                    aria-label="More actions"
+                    :disabled="disabled"
                   >
-                    <component :is="btn.icon" :size="16" />
-                    <span>{{ btn.label }}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenuPortal>
-            </DropdownMenuRoot>
+                    <EllipsisVertical :size="20" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuContent
+                    align="start"
+                    :side-offset="8"
+                    class="min-w-[160px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl py-1 z-50"
+                  >
+                    <DropdownMenuItem
+                      v-for="btn in leftButtons"
+                      :key="btn.action"
+                      @select="handleButtonClick(btn.action)"
+                      :disabled="(btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && submitting"
+                      class="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer text-neutral-200 hover:bg-neutral-800 focus:bg-neutral-800 focus:outline-none"
+                      :class="btn.class"
+                    >
+                      <component :is="btn.icon" :size="16" />
+                      <span>{{ btn.label }}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenuPortal>
+              </DropdownMenuRoot>
 
-            <!-- Expanded: full action buttons (wide) -->
-            <template v-for="btn in leftButtons" :key="btn.action">
+              <!-- Expanded: full action buttons (wide) -->
+              <template v-for="btn in leftButtons" :key="btn.action">
+                <button
+                  v-if="btn.action !== 'quick-message' && btn.action !== 'voice-input'"
+                  type="button"
+                  class="hidden @lg:block p-2 transition-colors text-neutral-500"
+                  :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
+                  :aria-label="btn.label"
+                  :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && submitting)"
+                  :title="btn.label"
+                  @click="handleButtonClick(btn.action)"
+                >
+                  <component :is="btn.icon" :size="20" />
+                </button>
+              </template>
+
+              <!-- Quick Prompts Popover (wide) -->
+              <QuickPromptsPopup
+                v-model:open="popoverOpen"
+                :prompts="quickPrompts || []"
+                :insert-on-number-key="quickPromptNumberKeyInserts ?? true"
+                :disabled="disabled"
+                :virtual-reference="virtualRef"
+
+                @update="(prompts) => emit('update-quick-prompts', prompts)"
+              />
+
+              <!-- Mic button (wide) -->
               <button
-                v-if="btn.action !== 'quick-message' && btn.action !== 'voice-input'"
+                v-if="speechSupported"
                 type="button"
                 class="hidden @lg:block p-2 transition-colors text-neutral-500"
-                :class="[disabled ? 'cursor-not-allowed opacity-50' : (!btn.class && 'hover:text-neutral-200'), btn.class]"
-                :aria-label="btn.label"
-                :disabled="disabled || ((btn.action === 'native-model' || btn.action === 'native-settings' || btn.action === 'native-tasks' || btn.action === 'native-mcp' || btn.action === 'native-background') && submitting)"
-                :title="btn.label"
-                @click="handleButtonClick(btn.action)"
-              >
-                <component :is="btn.icon" :size="20" />
-              </button>
-            </template>
-
-            <!-- Quick Prompts Popover (wide) -->
-            <QuickPromptsPopup
-              v-model:open="popoverOpen"
-              :prompts="quickPrompts || []"
-              :insert-on-number-key="quickPromptNumberKeyInserts ?? true"
-              :disabled="disabled"
-              :virtual-reference="virtualRef"
-
-              @update="(prompts) => emit('update-quick-prompts', prompts)"
-            />
-
-            <!-- Mic button (wide) -->
-            <button
-              v-if="speechSupported"
-              type="button"
-              class="hidden @lg:block p-2 transition-colors text-neutral-500"
-              :class="[disabled ? 'cursor-not-allowed opacity-50' : (!isListening && 'hover:text-neutral-200'), isListening && 'text-red-400 animate-pulse']"
-              :aria-label="isListening ? 'Stop listening' : 'Voice input'"
-              :disabled="disabled"
-              @click="handleButtonClick('voice-input')"
-            >
-              <component :is="isListening ? MicOff : Mic" :size="20" />
-            </button>
-
-            <!-- Mode/Phase Selector -->
-            <div class="min-w-0 overflow-hidden">
-              <ModePhaseSelector
-                :modes="modes"
-                :current-mode="currentMode"
-                :current-phase="currentPhase"
-                :default-mode="defaultMode"
-                :forced-mode="currentThread?.forcedMode"
+                :class="[disabled ? 'cursor-not-allowed opacity-50' : (!isListening && 'hover:text-neutral-200'), isListening && 'text-red-400 animate-pulse']"
+                :aria-label="isListening ? 'Stop listening' : 'Voice input'"
                 :disabled="disabled"
-                @mode-change="handleModeChange"
-                @phase-change="handlePhaseChange"
-                @set-default-mode="emit('set-default-mode', $event)"
-                @set-default-phase="emit('set-default-phase', $event)"
-              />
+                @click="handleButtonClick('voice-input')"
+              >
+                <component :is="isListening ? MicOff : Mic" :size="20" />
+              </button>
+
+              <!-- Mode/Phase Selector -->
+              <div class="min-w-0 overflow-hidden">
+                <ModePhaseSelector
+                  :modes="modes"
+                  :current-mode="currentMode"
+                  :current-phase="currentPhase"
+                  :default-mode="defaultMode"
+                  :forced-mode="currentThread?.forcedMode"
+                  :disabled="disabled"
+                  @mode-change="handleModeChange"
+                  @phase-change="handlePhaseChange"
+                  @set-default-mode="emit('set-default-mode', $event)"
+                  @set-default-phase="emit('set-default-phase', $event)"
+                />
+              </div>
             </div>
-          </div>
 
-          <!-- Right side buttons -->
-          <div class="flex items-center gap-2 flex-shrink-0">
-            <!-- Pause button (only while busy) -->
-            <Button
-              v-if="isBusy"
-              title="Pause agent work"
-              type="button"
-              variant="secondary"
-              class="px-2 @lg:px-4"
-              @click.stop="emit('pause')"
-            >
-              <span class="hidden @lg:inline">Pause</span>
-              <PauseIcon :size="22" />
-            </Button>
-            <Button
-              type="submit"
-              aria-label="Send"
-              :disabled="nativeBackgrounded || submitting || (!hasTextContent && !hasAttachments) || disabled"
-              class="h-8 gap-2 rounded-lg px-3 text-xs font-medium shadow-sm @lg:px-3.5"
-            >
-              <span class="hidden @lg:inline">Send</span>
-              <CornerDownLeft class="-rotate-45" :size="16" />
-            </Button>
+            <!-- Right side buttons -->
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <!-- Pause button (only while busy) -->
+              <Button
+                v-if="isBusy"
+                title="Pause agent work"
+                type="button"
+                variant="secondary"
+                class="px-2 @lg:px-4"
+                @click.stop="emit('pause')"
+              >
+                <span class="hidden @lg:inline">Pause</span>
+                <PauseIcon :size="22" />
+              </Button>
+              <Button
+                type="submit"
+                aria-label="Send"
+                :disabled="nativeBackgrounded || submitting || (!hasTextContent && !hasAttachments) || disabled"
+                class="h-8 gap-2 rounded-lg px-3 text-xs font-medium shadow-sm @lg:px-3.5"
+              >
+                <span class="hidden @lg:inline">Send</span>
+                <CornerDownLeft class="-rotate-45" :size="16" />
+              </Button>
 
+            </div>
           </div>
         </div>
 

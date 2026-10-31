@@ -235,7 +235,10 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         }
         const clippingRects:any[]=[];let ancestor=element.parentElement
         while(ancestor){const style=getComputedStyle(ancestor);if([style.overflowX,style.overflowY].some(value=>['hidden','auto','scroll','clip'].includes(value)))clippingRects.push(box(ancestor));ancestor=ancestor.parentElement}
-        return {text:element.textContent,textRects,clippingRects,editor:box(element.closest('[data-testid="composer-editor-area"]')!),viewport:{width:innerWidth,height:innerHeight}}
+        const hint=element.closest('[data-onboarding-id="agent-chat-input"]')?.querySelector('[data-background-note-hint]')
+        const hintTextRects:any[]=[]
+        if(hint){const range=document.createRange();range.selectNodeContents(hint);for(const r of range.getClientRects())if(r.width>0&&r.height>0)hintTextRects.push({left:r.left,top:r.top,right:r.right,bottom:r.bottom,hit:hint.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))})}
+        return {text:element.textContent,textRects,clippingRects,hintText:hint?.textContent,hintTextRects,editor:box(element.closest('[data-testid="composer-editor-area"]')!),viewport:{width:innerWidth,height:innerHeight}}
       })
       const background=await widget.evaluate(element=>{
         const box=(node:Element)=>{const r=node.getBoundingClientRect();return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}}
@@ -252,7 +255,9 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         for(const clip of [{left:0,top:0,right:metric.viewport.width,bottom:metric.viewport.height},background.panel]){expect(control.left).toBeGreaterThanOrEqual(clip.left-1);expect(control.right).toBeLessThanOrEqual(clip.right+1);expect(control.top).toBeGreaterThanOrEqual(clip.top-1);expect(control.bottom).toBeLessThanOrEqual(clip.bottom+1)}
       }
       expect(metric.text).toBe(retainedDraft);expect(metric.editor.height).toBeGreaterThanOrEqual(39);expect(metric.textRects.length).toBeGreaterThan(0)
-      for(const r of metric.textRects){
+      expect(metric.hintText).toBe('This conversation moved to the background. Your notes stay here.')
+      expect(metric.hintTextRects.length).toBeGreaterThan(0)
+      for(const r of [...metric.textRects,...metric.hintTextRects]){
         expect(r.hit).toBe(true)
         for(const clip of [{left:0,top:0,right:metric.viewport.width,bottom:metric.viewport.height},...metric.clippingRects]){expect(r.left).toBeGreaterThanOrEqual(clip.left-1);expect(r.right).toBeLessThanOrEqual(clip.right+1);expect(r.top).toBeGreaterThanOrEqual(clip.top-1);expect(r.bottom).toBeLessThanOrEqual(clip.bottom+1)}
       }
