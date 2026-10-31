@@ -1,5 +1,6 @@
+import { publishPerformanceMarker } from './markers.ts';
 import type { ElectronApplication, Page } from '@playwright/test';
-import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
 import { z } from 'zod';
@@ -33,7 +34,7 @@ export async function waitForPerformanceTrial(entry: PerformanceScheduleEntry, t
   const gate = configuration();
   if (!gate) return;
   if (entry.mode !== gate.mode || entry.index > gate.lastIndex) throw Error('Revision gate mode differs from its worker');
-  writeFileSync(path.join(gate.directory, `ready-${entry.index}.json`), JSON.stringify({ index: entry.index, mode: entry.mode }), { flag: 'wx' });
+  publishPerformanceMarker(path.join(gate.directory, `ready-${entry.index}.json`), { index: entry.index, mode: entry.mode });
   const permission = path.join(gate.directory, `permit-${entry.index}.json`);
   while (!existsSync(permission)) {
     if (Date.now() >= gate.deadline) throw Error('Revision coordinator deadline expired');
@@ -55,7 +56,7 @@ export async function finishPerformanceTrial(entry: PerformanceScheduleEntry, ou
   if (!gate) return;
   const permission = read(path.join(gate.directory, `permit-${entry.index}.json`)) as { index?: unknown; mode?: unknown };
   if (permission.index !== entry.index || permission.mode !== entry.mode) throw Error('Revision permission differs from completed action');
-  writeFileSync(path.join(gate.directory, `done-${entry.index}.json`), JSON.stringify({ index: entry.index, mode: entry.mode, outcome }), { flag: 'wx' });
+  publishPerformanceMarker(path.join(gate.directory, `done-${entry.index}.json`), { index: entry.index, mode: entry.mode, outcome });
   // Keep the idle worker alive until its peer has finished measuring; teardown is outside both runs.
   if (entry.index === gate.lastIndex) {
     const release = path.join(gate.directory, 'release.json');
