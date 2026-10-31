@@ -1,0 +1,57 @@
+name: Performance cleanup contracts
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ec19126ce8
+      - name: Fetch the pinned native source
+        shell: bash
+        run: |
+          rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
+          git init -q vendor/elmdb
+          git -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"
+          git -C vendor/elmdb checkout -q FETCH_HEAD
+          git rev-parse HEAD
+          git -C vendor/elmdb rev-parse HEAD
+      - name: Build the maintained Linux image
+        shell: bash
+        run: |
+          toolchain=$(sed -n 's/^channel *= *"\([^"]*\)"/\1/p' vendor/elmdb/rust-toolchain.toml)
+          test -n "$toolchain"
+          docker build --build-arg RUST_TOOLCHAIN="$toolchain" -t apack-performance-contracts -f scripts/linux/Dockerfile scripts/linux
+      - name: Validate application contracts in the bounded container
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          docker run --rm --init --memory=6g --memory-swap=6g --cpus=2 \
+            -v "$GITHUB_WORKSPACE:/work" -e GITHUB_TOKEN apack-performance-contracts bash -ec '
+              cd /work/vendor/elmdb
+              npm ci --no-audit --no-fund
+              npm run build
+              cd /work
+              npm ci --no-audit --no-fund
+              npm run chain -- --only build:runtime --no-native --cores 1
+              xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario all --mode disabled --compare lightweight --trials 2 --output .apack/performance/cleanup-contract-final
+              bash tests/performance/counterfactuals/thread-open.sh full-read
+              bash tests/performance/counterfactuals/thread-open.sh missing-completion
+            ' 2>&1 | tee "$RUNNER_TEMP/performance-contracts.log"
+      - name: Preserve contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-cleanup-contracts-ec19126ce8
+          include-hidden-files: true
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/performance-contracts.log
+            .apack/performance/
+            node_modules/.cache/apack-chain/runs/
