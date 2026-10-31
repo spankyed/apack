@@ -7,3 +7,11 @@ The immutable initial99900-row base has main SHA119ad05b98f4d58edccbc876c3bc4be2
 Close/reopen the candidate once before each initial/updated phase, as in the native diagnostic. Execute18 cohorts (1k/10k/99900 ×100/10/1% ×initial/updated), four passes each,100 queries per pass:7200 actual queries. Retain exact answers, scores, eligibility/trash checks, recall, latency and heartbeat samples. The first pass is connection-reopened for the first cohort of each phase; neither backend is OS-cold. Updates retain64-item batches. The original recall>=.95, heartbeat p99<=16ms and10k/100k latency gates remain unchanged; a completed report may fail them. Candidate canonical byte checks remain strict, unlike the native diagnostic's explicitly recorded signed-zero loss.
 
 This is a closed snapshot copy with reused trained model, not fresh ingestion or a physical power-loss test. Old internal-storage timings are not causal comparisons. Native fresh-ingestion completion remains unavailable. Retain the owned candidate for forensics; corpus/model/database files stay outside Git. Only one owned2CPU/6GiB/no-swap heavy container may run, admitted after30 quiet seconds and after native98419 is terminal. Pause only ours when competing work starts. Do not mutate the source volume or these mounted scripts while another run is live. Runner recipes and hashes are retained before admission; launch ownership and final evidence must be recorded separately.
+
+
+Admission correction before the candidate starts: the first waiter referred to the retained native launcher.
+Its native CID guard refused every attempt before container creation. Session22187 was explicitly stopped;
+no candidate CID, container, clone or database writes existed. Version2 calls the candidate launcher and
+only retries an explicit competing-container admission race (exit75); all other pre-admission failures stop
+for inspection. Original recipes remain retained, alongside version2 hashes. This is a launcher correction,
+not a restarted benchmark or a change to corpus, query, model, extension, durability or acceptance settings.

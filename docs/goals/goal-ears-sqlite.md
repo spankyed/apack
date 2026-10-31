@@ -436,3 +436,18 @@ inspect its actual restricted.json and negative controls before claiming non-adm
 Native98419 has finished99900embeddings and3600initialqueries at the latest observation; the full
 initial scan records four signed-zero losses and no other component changes. Updates/remaining3600
 queries are live; original byte gate remains failed. MatchedSQLite22187 still waits for completion.
+
+[Restricted Windows41189779880](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-restricted-9219/README.md)
+is terminal success at9219: actual same-user/non-admin and enabled-privilege controls pass; owner-only
+writable directory flushes before/after deletion, while a read-only directory refuses the writable
+handle with kernelerror5. This qualifies that scoped Win32 mechanism observation on NTFS/build26100,
+not Node under impersonation, installed Electron, arbitrary ACLs/filesystems or physical power loss.
+Short-write platform41190537998 at exact runtimee5 is now active; do not dispatch another run.
+
+[Native diagnostic98419](../references/evidence/ears-sqlite-implementation-2026-10-28/native-zero-sign-matrix-completed/README.md)
+is terminal/completed with7200actualqueries, all18cohorts and canonicalinitial/updated99900checks.
+All mean-recall criteria pass (minimum.986);35of72passes fail heartbeat, with two also failing100k
+latency. Query and canonical gates remain false. Full scans record four known zero-sign losses and
+no other component changes; incumbent main hash is unchanged. The27900remaining durable embeddings
+and999updates take4551833ms/269581ms; no complete fresh-ingestion or causalupdated-cost claim.
+MatchedSQLite session22187 is now eligible for30-second quiet admission; observe the same owner.
