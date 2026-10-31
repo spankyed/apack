@@ -1,6 +1,6 @@
 # Stable facade reports across source and build routes
 
-Status: repair implemented and accepted on master; separately owned Claude branch integration remains a handoff.
+Status: done: the repair is on master and accepted. Integrating `session/claude-code-closeout` is that branch's own work, not this plan's.
 Created: 2026-10-26.
 
 ## Problem and evidence
@@ -21,13 +21,13 @@ in that worktree. Detailed evidence is in the research checkout's
 
 Planning baseline: master `dacf05e33`.
 
-- [facade-report.ts](../../packages/apack-cli/src/build/facade-report.ts) shares report
+- [facade-report.ts](../../../packages/apack-cli/src/build/facade-report.ts) shares report
   generation and comparison between the source and verified-build routes. Its
   `comparableReport` already normalizes property-only type literals with unique names.
   It preserves overloads and duplicate-name members.
-- [declaration-text.ts](../../packages/apack-cli/src/build/declaration-text.ts) already
+- [declaration-text.ts](../../../packages/apack-cli/src/build/declaration-text.ts) already
   sorts all-literal unions. It deliberately leaves other unions alone.
-- [The command](../../packages/apack-cli/src/commands/facade-report.ts) makes
+- [The command](../../../packages/apack-cli/src/commands/facade-report.ts) makes
   `--from-build` read-only and validates current sealed build inputs. It refuses
   combining `--from-build` with `--update` or `--skip-generate`.
 
@@ -85,9 +85,9 @@ master in the main checkout; leave the separately owned Claude Code worktree unt
 
 Focused starting points:
 
-- [Facade report unit cases](../../packages/apack-cli/tests/build/facade-report.spec.ts).
-- [Facade command integration cases](../../packages/apack-cli/tests/commands/facade-report.integration.spec.ts).
-- [Facade gate integration cases](../../packages/apack-cli/tests/build/facade-gate.integration.spec.ts).
+- [Facade report unit cases](../../../packages/apack-cli/tests/build/facade-report.spec.ts).
+- [Facade command integration cases](../../../packages/apack-cli/tests/commands/facade-report.integration.spec.ts).
+- [Facade gate integration cases](../../../packages/apack-cli/tests/build/facade-gate.integration.spec.ts).
 
 Use `npm run spec` during implementation and source-derived `npm run facade:update
 -w @app/default-setup` when a report needs regeneration. Commit the reviewed report.

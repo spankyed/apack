@@ -1,6 +1,6 @@
 # EARS query efficiency: readings
 
-The evidence for [EARS query efficiency](../../plans/ears-query-efficiency.md) and elmdb's companion
+The evidence for [EARS query efficiency](../../archive/plans/ears-query-efficiency.md) and elmdb's companion
 `docs/roadmap/query-work-efficiency.md`. 2026-10-29, on `session/query-efficiency` from `3d2929177d`, against elmdb's
 checkout at `5f65c43` (the binding built from engine source identical to it). Machine: Apple M1 Pro, 10 cores, 32 GiB,
 macOS 26.3.1, Node 23.11.1; load averages 8 to 12 throughout, so times are readings and the counts are the evidence.

@@ -1,6 +1,6 @@
 # EARS query efficiency
 
-Status: done, 2026-10-29: [the readings](../references/evidence/ears-query-efficiency.md).
+Status: done, 2026-10-29: [the readings](../../references/evidence/ears-query-efficiency.md).
 
 ## Outcome and ownership
 
@@ -13,12 +13,12 @@ execution, encoding and the binding. Companion plans in the sibling elmdb reposi
 `docs/roadmap/read-allocation-codec.md` and `docs/roadmap/query-work-efficiency.md`. They own internal
 optimization and planner acceptance; this document owns application query selection and integration.
 Do not require the full application performance suite before a bounded query investigation can start.
-Use its [scenario contracts](../archive/plans/application-performance.md) when available and preserve interim evidence
+Use its [scenario contracts](application-performance.md) when available and preserve interim evidence
 with explicit limits.
 
 ## Existing behavior to retain
 
-[EARS](../../packages/apack-ears/CLAUDE.md) compiles a query to a plan at a terminal; it does not execute
+[EARS](../../../packages/apack-ears/CLAUDE.md) compiles a query to a plan at a terminal; it does not execute
 each builder step separately. elmdb already has indexed leading filters, streaming early termination,
 bounded top-k sorting and field projections. A JavaScript function predicate splits execution at the
 function boundary. These are existing capabilities, not missing features to implement again.
@@ -78,7 +78,7 @@ boundaries, units and watch invalidation where affected. A narrower returned pro
 all fields that determine membership/order, so changes cannot silently stop refreshing the view.
 
 Use deterministic operation/result-size guards in ordinary tests, not noisy timing assertions. Follow
-[bounded validation](../../CLAUDE.md#keep-validation-bounded); document-only work needs no app suites.
+[bounded validation](../../../CLAUDE.md#keep-validation-bounded); document-only work needs no app suites.
 Implementation changes need relevant focused checks and the required converged gates. Preserve failures
 and explain differences; do not rerun until a favorable timing appears.
 
@@ -94,7 +94,7 @@ with a concrete reopening trigger. Broader planner or API work requires its own 
 
 ## Current handoff
 
-Done, 2026-10-29: [the readings](../references/evidence/ears-query-efficiency.md).
+Done, 2026-10-29: [the readings](../../references/evidence/ears-query-efficiency.md).
 - Admitted: the chat page (thread open), the thread list (a view that refreshes repeatedly) and notes search, with
   message search's short page fixed beside them.
 - The chat page took one elmdb change (its `docs/roadmap/query-work-efficiency.md`); the rest were caller-only.
