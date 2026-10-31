@@ -1,4 +1,4 @@
-import { test, expect } from '@apackdev/testing';
+import { expect } from '@apackdev/testing';
 import { searchFixture } from './fixture.ts';
 import { createWarmScenario } from './scenario.ts';
 import type { PerformanceWindow } from './window.ts';

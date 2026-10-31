@@ -167,3 +167,13 @@ it('requires detailed startup driver captures in the canonical child admission p
     else expect(readPerformanceRun(output, 1).summary.passed).toBe(1);
   }
 });
+
+it('refuses successful startup append before publishing an index or duplicate raw record', () => {
+  const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
+  const startup = { ...trial(0), scenario: 'populated-startup', processes: { ...trial(0).processes, driver: performanceProcessReport('lightweight', 'driver') } };
+  expect(() => store.append(startup)).toThrow(/adopt/);
+  expect(JSON.parse(readFileSync(path.join(output, 'results.json'), 'utf8')).records).toEqual([]);
+  expect(() => readFileSync(path.join(output, 'trial-0.json'))).toThrow();
+  store.append({ ...startup, outcome: 'incomplete', correct: false, completion: 'missing', durationMs: undefined });
+  expect(JSON.parse(readFileSync(path.join(output, 'trial-0.json'), 'utf8')).outcome).toBe('incomplete');
+});

@@ -26,6 +26,7 @@ export function createViewObservation(recording: Pick<ReturnType<typeof createPe
       return recording.execution.withCarrier(carrier, () => {
         const span = recording.begin('app.view.deliver', { 'app.commit': commit });
         try { return span ? span.within(run) : run(); }
+        catch (error) { span?.end('error'); throw error; }
         finally { span?.end(); }
       });
     },

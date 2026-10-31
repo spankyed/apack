@@ -27,6 +27,8 @@ it('preserves original read and delivery failures and closes their observation s
   expect(report).toMatchObject({ active: 0, unfinished: 0, complete: true });
   const read = report.observations.map(value => JSON.parse(value)).find(span => span.name === 'app.view.read');
   expect(read.attributes['diagnostics.outcome']).toBe('error');
+  const delivery = report.observations.map(value => JSON.parse(value)).find(span => span.name === 'app.view.deliver');
+  expect(delivery.attributes['diagnostics.outcome']).toBe('error');
 });
 it('runs normally without allocating a recording when the controller is idle', async () => {
   const recording = createNodePerformanceController();

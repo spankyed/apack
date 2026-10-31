@@ -67,6 +67,7 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
     if (trial.index !== records.length || trial.index >= measured + manifest.warmups || trial.warmup !== (trial.index < manifest.warmups)
       || scenario && trial.scenario !== scenario) throw Error('Invalid trial order, scenario or warmup classification');
     if (adopted && adopted.file !== `trial-${trial.index}/trial.json`) throw Error('Invalid child trial path');
+    if (!adopted && trial.scenario === 'populated-startup' && trial.outcome === 'passed') throw Error('Use adopt for successful startup worker records');
     scenario = trial.scenario;
     const processes = Object.keys(trial.processes);
     if (processes.length > 3 || processes.some(name => !['driver', 'backend', 'renderer'].includes(name))) throw Error('Unexpected performance process');
