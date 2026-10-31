@@ -197,18 +197,27 @@ The complete goal is active; all original acceptance criteria remain required. [
 conversion, new PR or version-only PR is authorized. All phases and original budgets above remain required.
 
 Authoritative source: `/private/tmp/ears-sqlite-query-integration`, published to `session/ears-sqlite` and
-[draft PR #286](https://github.com/spankyed/apack/pull/286). Current runtime/test checkpoint is `d57021f70e`:
-Windows API environment assignment is portable, native-owner reranking reuses already-filtered owners,
-and an abrupt owner-process death regression is added. The clean detached publisher is
-`monorepo-worktrees.noindex/integration-3AEBRl`; it may lag and must be inspected before use.
-Canonical `sqlite-evaluation` remains an older checkout and is not the current source.
+[draft PR #286](https://github.com/spankyed/apack/pull/286). Current runtime/test checkpoint is `dcbb289e56`.
+It includes keyed single-type numeric sorting, batched member grouping with native value identity,
+guarded SQL distinct/count aggregation, owner-rerank reuse and abrupt owner-process death recovery.
+The clean detached publisher is `monorepo-worktrees.noindex/integration-3AEBRl`; it may lag and must
+be inspected before use. Canonical `sqlite-evaluation` remains older and is not the current source.
 
-Source-app qualification at `9ec9` completes 33 actual cases with one intentionally installed-only skip;
-signed installed macOS qualification at `3230` completes six actual cases without skips or retries.
-These do not satisfy every app/resource/packaging gate. Two focused Linux regressions at `d570` pass
-using read-only current source/test mounts over frozen `a9` dependencies; exact candidate platform
-qualification remains required. The owner-reuse diagnostic records about 13% lower mean latency in
-the tested updated 99.9k/10% cohort, with all 144 results preserved; original performance failures stay open.
+[Packaged Windows/Linux native runtime](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-platform-dcbb/README.md)
+passes at `dcbb289e56`, including natural Windows process exit after owned PTY cleanup. This is unsigned
+unpacked native/API-module coverage, not renderer/installer/signature qualification. Strict run
+[41206485155](https://github.com/spankyed/apack/actions/runs/41206485155) remains active at this observation;
+its Linux SQLite platform job passes. Inspect its actual terminal state before claiming strict acceptance.
+Source-app `9ec9` has 33 actual passes and one intentionally installed-only skip; signed installed macOS
+`3230` has six actual passes without skips/retries. These older checkpoints require final integration coverage.
+[Scalar policy](../references/evidence/ears-sqlite-implementation-2026-10-28/scalar-policy-025/README.md)
+retains batched member grouping after paired measurement; focused current EARS type and query checks pass.
+[Fixture boundary evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/fixture-boundaries-dcbb/README.md)
+separates SQLite factory selection from explicitly isolated app storage selection; its passing tmpfs logic
+checks do not qualify physical durability or erase the retained persistent-volume timeout failures.
+Original performance failures, real text relevance coverage, sustained workload/resource qualification,
+remaining fault cases and later-master graph integration remain required. The production Windows terminal
+natural-exit cleanup concern is unresolved; packaged probe cleanup alone does not fix it.
 
 Integrated master remains `e3d1a37d5c622bfebba7767a09452572284881dc`; native elmdb pin remains
 `2441af4658d961f547c7094cd041c2ac246668c5`. Master has subsequently advanced; this candidate has not
