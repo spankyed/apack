@@ -212,3 +212,13 @@ passed the unchanged lightweight overhead budget for every action. Required stri
 implementation source: [run 41240214068](https://github.com/spankyed/apack/actions/runs/41240214068),
 which covers all runtime/code changes at that checkpoint. Subsequent changes record evidence only;
 the linked gate is the source of its final outcome.
+
+
+## Final validation
+
+Strict [run 41240214068](https://github.com/spankyed/apack/actions/runs/41240214068) passed all six
+required jobs on `03a572ff0a`: producers, both integration shards, both native shards, and the
+app/check half. The unchanged model-based file passed there in 23.3 seconds. This closes broad
+correctness acceptance while retaining the failed, matched local controls as environment-specific
+evidence. Every later commit changes documentation only; all measured and verified runtime/code
+inputs remain those of `03a572ff0a`. The four PRs are complete and remain unmerged for review.

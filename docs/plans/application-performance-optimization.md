@@ -1,6 +1,6 @@
 # Application performance optimization
 
-Status: implemented and measured, 2026-10-31. Final strict validation: [run 41240214068](https://github.com/spankyed/apack/actions/runs/41240214068),
+Status: complete, 2026-10-31. All six required jobs passed in final strict validation: [run 41240214068](https://github.com/spankyed/apack/actions/runs/41240214068),
 covering code checkpoint `03a572ff0a`; subsequent edits record evidence only. Original base: master `78c8f15ea7`; native pin
 `dde229d90c60665405fdcfc93b054a77fe8d0e1d`. This work follows the completed
 [measurement foundation](../archive/plans/application-performance.md).
