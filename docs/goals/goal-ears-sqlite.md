@@ -282,6 +282,9 @@ Next deliverables, dependencies and closing checks:
   sleep or activation deadline changes. Closing checks are cache-disabled full E2E types/lint and the
   same original three-repeat case. Profile improvement does not close renderer acceptance, the strict
   concurrency failure, vector budgets or the complete goal.
+  Current original-case owner is run41188031941 atd8ed64bcf7, pending behind the existing platform
+  workflow. It includes full E2E types with incremental cache disabled and observer lint. Inspect this
+  same run; do not replace it just because it is queued.
 
 - The native baseline matrix is checkpointed and stopped for the migration. Session 88639 ended by
   requested SIGTERM (exit -15), not a product failure. It created 99900 rows and last logged 69632 embeddings;
@@ -301,8 +304,11 @@ Next deliverables, dependencies and closing checks:
   failed; any nonzero component mismatch still stops. This does not replace strict qualification or
   authorize normalization, a production/native-pin change or a waiver of candidate canonical bytes.
   Diagnostic session98419 (admission PID86351), reports `/private/tmp/ears-native-zero-sign-matrix-results`,
-  waits behind the other agent’s container. It targets runtimea9c9340df7 and reuses only the owned clone
-  after verifying pristine main hashes. Inspect this same handle; do not launch another native owner.
+  is RUNNING in the owned `ears-native-zero-sign-matrix` container at runtimea9c9340df7. It verifies
+  the pristine original/copy hashes and all72000 retained vectors, records the three zero-sign failures,
+  and continues the27900 remaining embeddings in original64-item durable batches. The last observed
+  checkpoint has20480 added, no other component mismatch and no query cohorts yet. Inspect this same
+  handle; do not duplicate it or copy newer worktree SDK/host files into its frozen source volume.
 - Qualify the [prefix/typo implementation](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-rebase-validation/README.md).
   Pinned native passes36 shared judgments; the pre-fix candidate passes34 and fails exactly the two new
   prefix/typo judgments. The implementation passes all153 assertions in seven affected search files,
@@ -328,8 +334,8 @@ Next deliverables, dependencies and closing checks:
   recovery write; both read faults preserve the main-file hash. All observed mutations roll back, so this
   does not qualify an actual surviving commit with lost acknowledgment or physical failing media/power loss.
   Active-worker/host publication and remaining phase-6 conditions are still required. The native checkpoint
-  and pinned binary hashes match after migration. Qualify the prefix prototype against the rebased source,
-  then explicitly resume native ingestion on a copy; old internal-storage timings are not a matched
+  and pinned binary hashes match after migration. Prefix validation and the resumed-copy protocol are
+  retained above; finish the matched native/SQLite query comparison on the new storage boundary; old internal-storage timings are not a matched
   comparison with the new Seagate boundary. No interrupted matrix is relabeled complete.
 - Close the current strict-shard concurrency gap without removing builds/assertions or changing deadlines.
   The phase markers and isolated results above are available; reproduce the relevant overlap before a fix,
@@ -365,6 +371,9 @@ Still-required acceptance, without narrowing phases 3–7:
   Run that affected platform suite before accepting the change. Unsupported barriers refuse; ordinary
   non-administrator/ACL and installed-runtime qualification remain open. No ordering/process-kill/API
   observation certifies physical power-loss durability or arbitrary filesystems.
+  Current affected platform owner is41187209697 atf61c6d7ccc: Linux/macOS jobs have succeeded and
+  Windows remains active at the retained observation. Verify actual final reports and six private-file
+  cases on every host before accepting the implementation; do not dispatch a replacement run.
 - Finish required installed Electron/renderer/CLI, executable-pack/SDK and OS/architecture coverage beyond
   the six signed macOS arm64 cases. Requalify provenance after inner-library signing and before app sealing
   when relevant inputs change. `asar:false` already keeps native files on disk; an unsigned/source build is
