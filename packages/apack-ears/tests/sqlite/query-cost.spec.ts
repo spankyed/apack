@@ -58,6 +58,30 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     expect(e.query('Row').orderBy('rank').limit(7).count()).toBe(7);
   });
 
+  it.each(['inline', 'overflow'] as const)('uses keyed sort-value reads for a single type (%s)', async storage => {
+    const path = mkdtempSync(join(tmpdir(), 'ears-sort-lookups-'));
+    const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema({ types: {
+      Task: { required: [], indexes: ['status'], ...(storage === 'inline' ? { fields: { rank: { type: 'number' as const } } } : {}) },
+    }, relations: {}, roles: [] }) });
+    held.push({ db, path });
+    const e = createEarsEngine({ database: db });
+    e.transact(() => { for (let i = 0; i < 2000; i++) e.create('Task', {
+      id: `Task-${i}`, status: i % 3 ? 'closed' : 'open', rank: 2000 - i,
+    }); });
+    await db.indexesReady();
+    const explained = e.query('Task').where('status', 'open').orderBy('rank').explain();
+    expect(explained.ids).toEqual(Array.from({ length: 667 }, (_, i) => `Task-${1998 - i * 3}`));
+    if (explained.backend !== 'sqlite') throw new Error('Expected SQLite diagnostics');
+    const sorted = explained.statements.find(statement => statement.sql.includes('ORDER BY CASE p._sort_kind'))!;
+    expect(sorted).toBeDefined();
+    expect(sorted.plan.some(row => storage === 'inline'
+      ? row.detail.includes('SEARCH v USING PRIMARY KEY (entity_id=?)')
+      : row.detail.includes('SEARCH o USING') && row.detail.includes('(entity_id=? AND field=?)'))).toBe(true);
+    expect(sorted.plan.some(row => row.detail.includes('SCAN f LEFT-JOIN'))).toBe(false);
+    expect(e.query('Task').where('status', 'open').orderBy('rank').pick(['rank']).map(row => row.rank))
+      .toEqual(Array.from({ length: 667 }, (_, i) => 2 + i * 3));
+  });
+
   it('validates scalar cells outside a pushed sort prefix', () => {
     const { db, e } = open();
     e.create('Row', { id: 'Row-first', rank: 1, body: 'a' });
