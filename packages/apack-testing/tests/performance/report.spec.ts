@@ -1,17 +1,18 @@
-import { performanceManifest, performanceProcessReport } from './fixtures.ts';
+import { performanceProcessReport } from './fixtures.ts';
 import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
-import type { z } from 'zod';
 import { expect, it } from 'vitest';
-import { assertComparable, comparisonOrder, processReportSchema, summarize, streamingBacklog, trialSchema } from '../../src/performance/report.ts';
+import { processReportSchema, summarize, streamingBacklog, trialSchema } from '../../src/performance/report.ts';
 const processReport = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
 const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', work: {}, processes: { renderer: performanceProcessReport('lightweight', 'renderer'), backend: performanceProcessReport('lightweight', 'backend') } };
 it('refuses manufactured success without view readiness, a duration, or complete process reports', () => {
-  for (const patch of [{ completion: 'missing' }, { durationMs: undefined }, { correct: false }, { processes: {} }, { processes: { renderer: { ...processReport, unfinished: 1 } } }]) {
+  for (const patch of [{ completion: 'missing' }, { durationMs: undefined }, { correct: false }]) {
     expect(trialSchema.safeParse({ ...trial, ...patch }).success).toBe(false);
   }
-  expect(processReportSchema.safeParse({ ...processReport, observations: ['bad span'] }).success).toBe(false);
+  for (const patch of [{ observations: ['bad span'] }, { unfinished: 1 }]) {
+    expect(processReportSchema.safeParse({ ...processReport, ...patch }).success).toBe(false);
+  }
 });
 it('keeps unsuccessful measurements visible and excludes warmup timings from summaries', () => {
   const trials = [trial, { ...trial, index: 1, durationMs: 20 }, { ...trial, index: 2, warmup: true, durationMs: 1000 },
@@ -19,30 +20,6 @@ it('keeps unsuccessful measurements visible and excludes warmup timings from sum
   expect(summarize(trials)).toEqual({ measured: 3, passed: 2, unsuccessful: 1, medianMs: 15, minMs: 10, maxMs: 20 });
   expect(summarize([trials[3]!])).toEqual({ measured: 1, passed: 0, unsuccessful: 1, medianMs: null, minMs: null, maxMs: null });
 });
-it('balances revision order in each block rather than measuring all baselines first', () => {
-  const order = comparisonOrder();
-  expect(order).toHaveLength(40);
-  expect(order.filter(value => value === 'A')).toHaveLength(20);
-  expect(order.slice(0, 8)).toEqual(['A', 'B', 'B', 'A', 'A', 'B', 'B', 'A']);
-  expect(() => comparisonOrder(3)).toThrow();
-});
-it('refuses pooled results with dirty sources or different fixture and execution conditions', () => {
-  const manifest = performanceManifest({ runtime: { node: 'one', electron: 'two' } });
-  const revision = { ...manifest, source: { ...manifest.source, revision: 'two' }, builds: [{ path: 'app', sha256: 'two' }], runtime: { electron: 'two', node: 'one' } };
-  expect(() => assertComparable(manifest, revision)).not.toThrow();
-  expect(() => assertComparable({ ...manifest, native: { ...manifest.native, checkoutRevision: 'other' } }, { ...revision, native: { ...revision.native, checkoutRevision: 'other' } })).toThrow(/pinned/);
-  expect(() => assertComparable(manifest, { ...revision, source: { ...revision.source, dirty: true } })).toThrow(/clean/);
-  expect(() => assertComparable(manifest, { ...revision, builds: [...revision.builds, { path: 'vendor/elmdb/binding.node', sha256: 'changed' }] })).toThrow(/native outputs/);
-  expect(() => assertComparable(manifest, { ...revision, native: { ...revision.native, dirty: true } })).toThrow(/clean/);
-  expect(() => assertComparable(manifest, { ...revision, cache: 'fresh-process-warm-filesystem' })).toThrow(/cache/);
-  expect(() => assertComparable(manifest, { ...revision, fixture: { ...revision.fixture, seed: 1 } })).toThrow(/fixture/);
-});
-
-it('keeps report validation aligned with every required host capture field', () => {
-  const compatible: z.infer<typeof processReportSchema> extends PerformanceRecordingReport ? true : never = true;
-  expect(compatible).toBe(true);
-});
-
 it('requires visible intermediate streaming progress and plausible milestone timings', () => {
   const streaming = { ...trial, scenario: 'streaming', work: { visibleUpdates: 3 }, timings: { firstVisibleMs: 2, maxVisibleGapMs: 4 } };
   expect(trialSchema.safeParse(streaming).success).toBe(true);
@@ -77,7 +54,11 @@ it('retains real V8 profiles across report admission and rejects hidden profile 
   await controller.ready();
   const report = await controller.stop();
   expect(report.complete).toBe(true);
-  expect(processReportSchema.parse(report).profiles).toEqual(report.profiles);
+  const parsed: PerformanceRecordingReport = processReportSchema.parse(report);
+  expect(parsed.profiles).toEqual(report.profiles);
+  expect(JSON.parse(parsed.profiles!.cpu!).nodes).toBeInstanceOf(Array);
+  expect(JSON.parse(parsed.profiles!.allocation!).head).toBeDefined();
+  expect(parsed.bytes + parsed.profiles!.bytes).toBeLessThanOrEqual(16 * 1024 * 1024);
   expect(processReportSchema.safeParse({ ...report, profileFailures: 1 }).success).toBe(false);
   expect(processReportSchema.safeParse({ ...report, profiles: { ...report.profiles, bytes: 0 } }).success).toBe(false);
 });

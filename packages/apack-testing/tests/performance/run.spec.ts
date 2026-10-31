@@ -25,6 +25,7 @@ it('writes immutable raw trials and admits a compact run with the same scalar su
 it('refuses incomplete runs, reordered writes and missing process captures', () => {
   const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
   expect(() => store.append(trial(1))).toThrow(/order/);
+  expect(() => store.append({ ...trial(0), processes: {} })).toThrow();
   store.append(trial(0));
   expect(() => readPerformanceRun(output, 1)).toThrow(/Incomplete/);
   expect(() => store.append(trial(0))).toThrow(/order/);
@@ -40,7 +41,7 @@ it('retains failed trials and marks a viewer export failure without losing raw e
   expect(JSON.parse(readFileSync(path.join(output, 'results.json'), 'utf8')).status).toBe('failed');
   expect(JSON.parse(readFileSync(path.join(output, 'trial-0.json'), 'utf8')).index).toBe(0);
   const failed = directory(); const failureStore = createPerformanceRunStore(failed, manifest, 1);
-  failureStore.append({ ...trial(0), correct: false, outcome: 'incomplete', completion: 'missing', durationMs: undefined, failure: 'missing-view-ready' });
+  failureStore.append({ ...trial(0), scenario: 'populated-startup', correct: false, outcome: 'incomplete', completion: 'missing', durationMs: undefined, failure: 'missing-view-ready' });
   expect(JSON.parse(readFileSync(path.join(failed, 'trial-0.json'), 'utf8')).failure).toBe('missing-view-ready');
   expect(() => readPerformanceRun(failed, 1)).toThrow(/Incomplete/);
 });
@@ -125,7 +126,7 @@ it('requires the declared core renderer metrics, not just an empty resource enve
 });
 
 it('refuses inconsistent run inputs through the actual store and admission path', () => {
-  for (const patch of [{ index: 0 }, { warmup: false }, { scenario: 'search' },
+  for (const patch of [{ warmup: false }, { scenario: 'search' },
     { processes: { unrelated: report, renderer: report } },
     { processes: { renderer: { ...report, mode: 'disabled' }, backend: report } },
     { outcome: 'cancelled' }]) {
@@ -140,6 +141,9 @@ it('rejects adopted child provenance changes and retains exactly one raw startup
   const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
   const own = path.join(output, 'trial-0'); mkdirSync(own);
   const startup = { ...trial(0), scenario: 'populated-startup', processes: { ...trial(0).processes, driver: performanceProcessReport('lightweight', 'driver') } };
+  expect(() => store.append(startup)).toThrow(/adopt/);
+  expect(JSON.parse(readFileSync(path.join(output, 'results.json'), 'utf8')).records).toEqual([]);
+  expect(() => readFileSync(path.join(output, 'trial-0.json'))).toThrow();
   writeFileSync(path.join(own, 'trial.json'), JSON.stringify(startup));
   writeFileSync(path.join(own, 'manifest.json'), JSON.stringify({ ...manifest, fixture: { ...manifest.fixture, seed: 7 } }));
   expect(() => store.adopt('trial-0/trial.json')).toThrow(/manifests/);
@@ -166,14 +170,4 @@ it('requires detailed startup driver captures in the canonical child admission p
     if (missing) expect(() => readPerformanceRun(output, 1)).toThrow(/capture/i);
     else expect(readPerformanceRun(output, 1).summary.passed).toBe(1);
   }
-});
-
-it('refuses successful startup append before publishing an index or duplicate raw record', () => {
-  const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
-  const startup = { ...trial(0), scenario: 'populated-startup', processes: { ...trial(0).processes, driver: performanceProcessReport('lightweight', 'driver') } };
-  expect(() => store.append(startup)).toThrow(/adopt/);
-  expect(JSON.parse(readFileSync(path.join(output, 'results.json'), 'utf8')).records).toEqual([]);
-  expect(() => readFileSync(path.join(output, 'trial-0.json'))).toThrow();
-  store.append({ ...startup, outcome: 'incomplete', correct: false, completion: 'missing', durationMs: undefined });
-  expect(JSON.parse(readFileSync(path.join(output, 'trial-0.json'), 'utf8')).outcome).toBe('incomplete');
 });

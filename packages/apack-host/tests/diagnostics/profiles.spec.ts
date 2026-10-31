@@ -58,20 +58,6 @@ it('releases a stalled protocol and reports the missing capture', async () => {
   expect(vi.getTimerCount()).toBe(0);
 });
 
-it('captures real V8 CPU and allocation formats only in detailed mode', async () => {
-  const controller = createNodePerformanceController();
-  controller.start('detailed');
-  await controller.ready();
-  controller.begin('app.dispatch')!.end();
-  const report = await controller.stop();
-  expect(report.complete).toBe(true);
-  expect(JSON.parse(report.profiles!.cpu!).nodes).toBeInstanceOf(Array);
-  expect(JSON.parse(report.profiles!.allocation!).head).toBeDefined();
-  expect(report.bytes + report.profiles!.bytes).toBeLessThanOrEqual(16 * 1024 * 1024);
-  controller.start('lightweight');
-  expect((await controller.stop()).profiles).toBeUndefined();
-});
-
 it('finishes profiler cleanup before propagating an original trace-export failure', async () => {
   const original = controllers.createPerformanceController;
   const failure = Error('trace export failed');

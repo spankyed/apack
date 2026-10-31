@@ -55,11 +55,11 @@ it('refuses an exited worker and a completion that predates its permission', asy
     expect(JSON.parse(readFileSync(path.join(output, 'execution.json'), 'utf8')).status).toBe('failed');
   }
 });
-const manifest = performanceManifest({ runtime: { performancePolicy: 'paired-focused-revisions-v1' } });
+const manifest = performanceManifest({ runtime: { performancePolicy: 'paired-focused-revisions-v1', node: 'one', electron: 'two' } });
 it('admits differing clean revisions and rejects changed fixtures or failed process exits', () => {
   const output = directory(); const coordinator = createPerformanceRevisionJournal(output, 'lightweight', 2);
   const stores = { A: createPerformanceRunStore(path.join(output, 'A'), manifest, 2),
-    B: createPerformanceRunStore(path.join(output, 'B'), { ...manifest, source: { ...manifest.source, revision: 'two' }, builds: [{ path: 'app', sha256: 'two' }] }, 2) };
+    B: createPerformanceRunStore(path.join(output, 'B'), { ...manifest, source: { ...manifest.source, revision: 'two' }, builds: [{ path: 'app', sha256: 'two' }], runtime: { electron: 'two', node: 'one', performancePolicy: 'paired-focused-revisions-v1' } }, 2) };
   for (const step of coordinator.schedule) {
     coordinator.begin(step); stores[step.variant].append({ scenario: 'search', index: step.index, warmup: step.warmup, outcome: 'passed', durationMs: 10, correct: true,
       completion: 'view-ready', work: {}, processes: { backend: performanceProcessReport('lightweight', 'backend'), renderer: performanceProcessReport('lightweight', 'renderer') } }); coordinator.end(step, 'passed');
@@ -69,8 +69,26 @@ it('admits differing clean revisions and rejects changed fixtures or failed proc
   writeFileSync(path.join(output, 'B/invocation.json'), JSON.stringify({ code: 1, timedOut: false, aborted: false }));
   expect(() => readPerformanceRevisionComparison(output, 2)).toThrow();
   writeFileSync(path.join(output, 'B/invocation.json'), JSON.stringify({ code: 0, timedOut: false, aborted: false }));
-  const file = path.join(output, 'B/manifest.json'); const changed = JSON.parse(readFileSync(file, 'utf8')); changed.fixture.seed = 1; writeFileSync(file, JSON.stringify(changed));
-  expect(() => readPerformanceRevisionComparison(output, 2)).toThrow(/fixture/);
+  const file = path.join(output, 'B/manifest.json'); const candidate = JSON.parse(readFileSync(file, 'utf8'));
+  const mismatches = [
+    { source: { ...candidate.source, dirty: true } },
+    { native: { ...candidate.native, dirty: true } },
+    { native: { ...candidate.native, checkoutRevision: 'other' } },
+    { builds: [...candidate.builds, { path: 'vendor/elmdb/binding.node', sha256: 'changed' }] },
+    { cache: 'fresh-process-warm-filesystem' },
+    { fixture: { ...candidate.fixture, seed: 1 } },
+  ];
+  for (const patch of mismatches) {
+    writeFileSync(file, JSON.stringify({ ...candidate, ...patch }));
+    expect(() => readPerformanceRevisionComparison(output, 2)).toThrow();
+  }
+  // Equal native identities still cannot qualify if both workers used an unpinned checkout.
+  for (const variant of ['A', 'B']) {
+    const own = path.join(output, variant, 'manifest.json');
+    const value = JSON.parse(readFileSync(own, 'utf8'));
+    writeFileSync(own, JSON.stringify({ ...value, ...(variant === 'B' ? candidate : {}), native: { ...manifest.native, checkoutRevision: 'other' } }));
+  }
+  expect(() => readPerformanceRevisionComparison(output, 2)).toThrow(/pinned/);
   expect(performanceRevisionSchedule('lightweight', 20).filter(step => !step.warmup)).toHaveLength(40);
 });
 

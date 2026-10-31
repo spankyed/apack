@@ -12,12 +12,10 @@ it('forwards launch configuration only for a test-owned renderer', () => {
     expect(performanceStartupQuery()).toBeUndefined();
   }
   environment.env = 'test';
-  expect(performanceStartupQuery()).toEqual({ performanceStartup: input });
-});
-it('preserves absent and invalid empty configuration for the admission owner to distinguish', () => {
-  environment.env = 'test';
+  for (const value of [input, '']) {
+    vi.stubEnv('APACK_PERFORMANCE_STARTUP', value);
+    expect(performanceStartupQuery()).toEqual({ performanceStartup: value });
+  }
   vi.stubEnv('APACK_PERFORMANCE_STARTUP', undefined);
   expect(performanceStartupQuery()).toBeUndefined();
-  vi.stubEnv('APACK_PERFORMANCE_STARTUP', '');
-  expect(performanceStartupQuery()).toEqual({ performanceStartup: '' });
 });

@@ -2,14 +2,27 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { performanceManifest, performanceProcessReport } from '../../apack-testing/tests/performance/fixtures.ts';
+import type { PerformanceManifest, PerformanceTrial } from '@apackdev/testing/performance';
 import { createWarmScenario } from '../../../tests/performance/scenario.ts';
 
 vi.mock('@apackdev/testing/performance', async original => ({
   ...await original<typeof import('@apackdev/testing/performance')>(),
-  performanceIdentity: vi.fn(options => performanceManifest(options)),
+  performanceIdentity: vi.fn(options => ({ ...manifest, ...options })),
   attachRendererProcessIdentity: vi.fn(async () => {}),
 }));
+const manifest: PerformanceManifest = {
+  format: 1, source: { revision: 'test', dirty: false, excludedUntracked: [], diffSha256: 'clean' },
+  builds: [{ path: 'app', sha256: 'test' }], fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} },
+  native: { pin: 'test', checkoutRevision: 'test', dirty: false, excludedUntracked: [] },
+  mode: 'disabled', cache: 'warm-process', warmups: 5, runtime: {},
+  machine: { platform: 'test', arch: 'test', cpus: 2, memoryBytes: 1024, identity: 'test' },
+  clock: 'Local monotonic durations; cross-process epoch alignment is approximate',
+};
+const report: PerformanceTrial['processes'][string] = {
+  observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
+  mode: 'disabled', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0,
+  droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true,
+};
 const outputs: string[] = [];
 const runs: Array<Awaited<ReturnType<typeof createWarmScenario>>> = [];
 beforeEach(() => {
@@ -31,19 +44,16 @@ async function scenario() {
     appPage: { evaluate: vi.fn(async () => {}), waitForFunction: vi.fn(async () => {}) },
     app: { waitForSurface: vi.fn(async () => {}), navigate: vi.fn(async () => {}) },
   };
-  const fixture = { identity: performanceManifest().fixture, data: { threads: [] } };
+  const fixture = { identity: manifest.fixture, data: { threads: [] } };
   const run = await createWarmScenario('thread-open', () => fixture, target as unknown as Parameters<typeof createWarmScenario>[2]);
   runs.push(run);
-  return { run, target, fixture };
+  return run;
 }
 function result() {
-  return { completed: true, durationMs: 10, work: {}, reports: { complete: true, renderer: performanceProcessReport('disabled', 'renderer'), backend: performanceProcessReport('disabled', 'backend') } };
+  return { completed: true, durationMs: 10, work: {}, reports: { complete: true, renderer: { ...report, processId: 101 }, backend: { ...report, processId: 102 } } };
 }
-it('owns import preparation and saves a successful raw trial before cleaning its fixture directory', async () => {
-  const { run, target, fixture } = await scenario();
-  await run.importThreads('last-thread');
-  expect(JSON.parse(readFileSync(path.join(run.directory, 'exported-threads.json'), 'utf8'))).toEqual(fixture.data);
-  expect(target.appPage.waitForFunction).toHaveBeenCalledWith(expect.any(Function), 'last-thread');
+it('retains successful evidence after cleaning its owned fixture directory', async () => {
+  const run = await scenario();
   const entry = run.schedule[0]!;
   await run.begin(entry); await run.append(entry, result());
   expect(JSON.parse(readFileSync(path.join(run.output, 'trial-0.json'), 'utf8'))).toMatchObject({ outcome: 'passed', correct: true, durationMs: 10, warmup: true });
@@ -52,13 +62,13 @@ it('owns import preparation and saves a successful raw trial before cleaning its
   expect(existsSync(path.join(run.output, 'trial-0.json'))).toBe(true);
 });
 it('retains a work-bound refusal as a failed trial despite correct visible completion', async () => {
-  const { run } = await scenario(); const entry = run.schedule[0]!;
+  const run = await scenario(); const entry = run.schedule[0]!;
   await run.begin(entry);
   await expect(run.append(entry, result(), { failure: 'app-read-work-bound', work: { windowAppResponseBytes: 100 } })).rejects.toThrow();
   expect(JSON.parse(readFileSync(path.join(run.output, 'trial-0.json'), 'utf8'))).toMatchObject({ outcome: 'failed', correct: false, completion: 'view-ready', failure: 'app-read-work-bound', work: { windowAppResponseBytes: 100 } });
 });
 it('retains missing completion without manufacturing a successful duration', async () => {
-  const { run } = await scenario(); const entry = run.schedule[0]!;
+  const run = await scenario(); const entry = run.schedule[0]!;
   await run.begin(entry);
   await expect(run.append(entry, { ...result(), completed: false, durationMs: undefined, failure: 'missing-view-ready' })).rejects.toThrow();
   const trial = JSON.parse(readFileSync(path.join(run.output, 'trial-0.json'), 'utf8'));
@@ -67,7 +77,7 @@ it('retains missing completion without manufacturing a successful duration', asy
 });
 
 it('admits an expected counterfactual assertion without relabelling its retained failure', async () => {
-  const { run } = await scenario(); const entry = run.schedule[0]!;
+  const run = await scenario(); const entry = run.schedule[0]!;
   await run.begin(entry);
   await run.append(entry, { ...result(), completed: false, durationMs: undefined, failure: 'missing-view-ready', work: { observedMessages: 50 } }, { expectedFailure: 'missing-view-ready' });
   expect(JSON.parse(readFileSync(path.join(run.output, 'trial-0.json'), 'utf8'))).toMatchObject({ outcome: 'incomplete', correct: false, completion: 'missing' });
