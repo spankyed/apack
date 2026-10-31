@@ -16,7 +16,8 @@ an adoption decision. Commit usable checkpoints. Do not silently drop requiremen
 ```
 
 Status: active candidate integration and qualification, 2026-10-30.
-Branch: `session/ears-sqlite`. Checkout: `monorepo-worktrees.noindex/sqlite-evaluation`.
+Branch: `session/ears-sqlite`. Authoritative source: `/private/tmp/ears-sqlite-query-integration`;
+`monorepo-worktrees.noindex/sqlite-evaluation` preserves an earlier session checkpoint.
 The original `session/sqlite-evaluation` branch preserves the experiment at `4a3fe698f8`.
 
 ## Scope
@@ -186,268 +187,106 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The full goal remains active; all phases and original acceptance budgets still apply. Deliverable:
-[draft PR #286](https://github.com/spankyed/apack/pull/286), `session/ears-sqlite`. Production stays elmdb.
-No master merge, release, adoption, implicit daily-profile conversion or version-only PR is authorized.
+The complete goal remains active. [Draft PR #286](https://github.com/spankyed/apack/pull/286) targets
+`session/ears-sqlite`; production stays elmdb. No master merge, release, adoption, implicit daily-profile
+conversion, new PR or version-only PR is authorized. All phases and original budgets above remain required.
 
-Source work is `/private/tmp/ears-sqlite-query-integration`; detached publisher:
-`monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains earlier `6cf6c8349e`;
-it does not contain later published work. Current committed master baseline is `dc67febcce` and native pin
-`2441af4658d961f547c7094cd041c2ac246668c5`. Inspect actual Git/workflow state before continuing.
+Authoritative source: `/private/tmp/ears-sqlite-query-integration`. The clean detached publisher is
+`monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at older `6cf6c8349e`
+and is not the current source. Latest implemented/test-diagnostic checkpoint is `0126eda005`; later evidence
+changes do not alter runtime. Integrated master is `dc67febcce`; native elmdb pin is
+`2441af4658d961f547c7094cd041c2ac246668c5`. Inspect actual Git/process/workflow state before continuing.
 
-The candidate includes the structured graph/query port, native query execution, identity/atomic bootstrap and
-foreign-WAL preservation, canonical signing recognition, managed directory claims, file/sidecar admission,
-logical recovery/conversion and model/index lifecycle. [Native integration](../references/evidence/ears-sqlite-implementation-2026-10-28/native-2441-integration/README.md),
-[identity/signing](../references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/README.md) and
-[file ownership](../references/evidence/ears-sqlite-implementation-2026-10-28/file-ownership/README.md) retain their
-source-bound evidence. The EARS ownership checkpoint passes 762 SQLite-selected cases (zero skips).
+The candidate implements structured graph/query execution, typed authoritative values, live declarations,
+transaction/watch identity, search/index generations, canonical embedding/model lifecycle, both managed app
+stores, SDK fixtures, CLI maintenance, backup/import/recovery and explicit copied-profile conversion.
+[The storage design](../plans/ears-sqlite-storage.md) owns implemented contracts;
+[the contract matrix](../plans/ears-sqlite-contracts.md) owns required semantics. Implementation is not final
+app, resource, physical-durability or adoption qualification.
 
-The [reset/quarantine checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/README.md)
-excludes history handles before primary reset, verifies unrelated sibling identities even when history is
-absent, and syncs POSIX quarantine/replacement parent publication. Failed publication preserves the original
-refusal, sync/cleanup errors, forensic path and uncertain directory authority. Tests prove held-handle refusal,
-new-open exclusion, cleanup and actual killed-process reset recovery. Windows directory flushing remains
-unimplemented in the shared helper; passing ordering/fault tests there do not prove physical durability.
-Local host/CLI types, lint, syntax, 106 focused host cases, seven SQLite CLI cases, five package builds,
-shipped-pack build, nine reset integration cases and 1953 full host cases
-(1 existing platform skip) pass. Baseline failures, reverted guard, restored source and
-initial test-development failures are retained. Nine actual-report controls protect the new named platform
-witnesses. The original assertions/deadlines were not relaxed. Broad/compiler work stays in private
-Linux/CI, capped at two CPUs/six GiB/no swap with a quiet admission window; focused checks use half a CPU/768 MiB.
+| Current evidence | What it proves | Remaining boundary |
+| --- | --- | --- |
+| [Platform 41159890572](../references/evidence/ears-sqlite-implementation-2026-10-28/qualification-5569/README.md), source 5569 | Linux x64/Windows x64/macOS arm64 succeed; 735 native membership checks each; EARS Linux/macOS 762 passes, Windows 757 plus five named skips; host/CLI/conversion witnesses; four actual Ubuntu ENOSPC cases | CI hosts are not arbitrary filesystem certification; named skips and remaining physical/resource gates stay open |
+| [Signed installed 41151681981](../references/evidence/ears-sqlite-implementation-2026-10-28/native-63c/README.md), runtime 63c | Six actual macOS arm64 executable cases, zero skips/retries; both stores/model claims; native smoke; refreshed inner-library provenance and Developer ID sealing | Broader installed/UI/CLI/SDK/pack flows and required architectures |
+| [Full strict 41151679157](../references/evidence/ears-sqlite-implementation-2026-10-28/integration2-63c/README.md), runtime 63c | Eight required jobs pass; integration-2 fails its original 240000-ms diamond setup; six alternate jobs skip | **Overall failed.** Diagnose concurrent setup delay, then qualify affected and final exact-input full gates |
+| [Focused diamond](../references/evidence/ears-sqlite-implementation-2026-10-28/diamond-linux-5569/README.md) and [Mac 41160571827](../references/evidence/ears-sqlite-implementation-2026-10-28/qualification-5569/README.md) | Five original assertions pass on each host; Mac setup about 103.6 s, selected file 180.15 s; actual hidden per-case JSON retained | Isolated passes do not explain the concurrent strict failure; no deadline/assertion/build weakened |
+| [Source-app 41152805669](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-63c/README.md) and [SQLite diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-activation-e76/README.md) | Broad source app: 32 passes, one intended installed-only skip, one original five-second editor failure; focused: one failure/two passes, only host frontend bindings at failure | **Unresolved.** Not an established editor replacement rejection or native-query cause |
+| [Elmdb editor control](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-elmdb-control-897/README.md) and [backend activation attribution](../references/evidence/ears-sqlite-implementation-2026-10-28/activation-profile-5569/README.md) | Mac elmdb control three actual passes; separate Linux backend-only profile SQLite 3.24 s/elmdb 5.34 s, SQLite 197 commit spans about 474 ms | Default acknowledgments differ; fixed order/cache effects and no renderer preclude a general speed ranking or causal fix |
+| [Read-only mount](../references/evidence/ears-sqlite-implementation-2026-10-28/readonly-mount-aea/README.md) | Actual Linux kernel EROFS; published backup queries/write refusal; closed WAL without sidecars refuses; unchanged file hashes | Managed opens require writable claim metadata; live-WAL-on-mount, arbitrary filesystems and Windows physical durability remain unqualified |
+| [Current native real-vector preflight](../references/evidence/ears-sqlite-implementation-2026-10-28/native-real-preflight-aea/README.md) | Exact 2441 artifacts, durable units, all 1000 canonical vectors verified twice through independent bounded dump frames; 2400 queries, minimum mean recall 0.999 | Protocol proof only; full 99900-row comparison and actual warm/cold/app resource evidence remain |
 
-[Platform run 41112243866](https://github.com/spankyed/apack/actions/runs/41112243866) passes all three hosts
-at `9fbea37d0d`, before the native/ownership/reset changes. Reset checkpoint `a95039a8c7` passes
-[signed installed Preview 41120611981](https://github.com/spankyed/apack/actions/runs/41120611981), including
-both store identities, and Linux/macOS SQLite qualification in [strict run 41120604961](https://github.com/spankyed/apack/actions/runs/41120604961).
-That strict run is a terminal failure: producers, both native and both integration shards pass; the app/unit
-shard fails only its subprocess inventory (three sites recorded versus four). The
-[inventory correction](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-subprocess-inventory/README.md)
-records the actual killed-reset process with its isolation reason; all 14 detector/control cases pass.
-Windows fails the original CLI backup reservation with EPERM. The first attempted correction at `2a641ce102`
-passes Linux but [platform run 41125212261](https://github.com/spankyed/apack/actions/runs/41125212261) proves
-its direct Windows rename replaces competing files and dangling symlinks. Linux/macOS pass that run;
-Windows fails two preservation assertions. The [exclusive-publication correction](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-backup-exclusive/README.md)
-uses the system Windows Directory.Move operation with paths passed as data and retains all race assertions.
-All 29 platform CLI cases pass on Linux, including twelve focused profile cases and a literal metacharacter
-path. [Run 41130505526](https://github.com/spankyed/apack/actions/runs/41130505526) now passes all three hosts at
-exclusive-move source `58ae8a7b0e`, including the actual Windows races and literal path. That does not qualify
-the later cleanup/close-wrapper inputs or physical directory durability. All five backup invariants are required by name in the
-platform verifier, with fourteen real-report omission/skip/duplicate/path controls passing. Earlier CLI types exhausted the small 512-MiB heap; those failures remain retained. The adequate-budget
-local qualification below passes, without treating the earlier resource failures as passing checks.
-The [backup cleanup correction](../references/evidence/ears-sqlite-implementation-2026-10-28/backup-cleanup/README.md)
-preserves the original publication outcome alongside staging/lock cleanup errors, still attempts lock release,
-and reports a retained `publishedPath` after successful publication. Three exact-source baseline failures
-become passing cases; all 32 platform CLI cases, lint, syntax and twenty required-witness controls pass on
-Linux. The final strict result below qualifies these later cleanup inputs; run 41130505526 alone
-qualifies only the preceding exclusive-move checkpoint `58ae8a7b0e`.
-The [CLI close-wrapper correction](../references/evidence/ears-sqlite-implementation-2026-10-28/cli-close-outcomes/README.md)
-refuses thrown `undefined`, retains both command/close failures and preserves machine-readable commit/recovery
-outcomes. Five reproduced failures pass after correction; all 41 expanded platform CLI cases pass on Linux,
-along with lint, syntax, fourteen command-outcome controls and the preceding twenty backup controls.
-The platform workflow now includes the wrapper cases. [Full strict run 41132219406](https://github.com/spankyed/apack/actions/runs/41132219406)
-at `a8e12b1cd1` is terminal failure at producer CLI TS2698; all three independent platform jobs pass.
-Producer-dependent consumers cannot qualify from that run. The [diagnostics/type correction](../references/evidence/ears-sqlite-implementation-2026-10-28/backup-cli-diagnostics/README.md)
-at `dd0ddfeb86` uses an explicit object ternary for callback-assigned publication state. Backup error messages
-now print all failures and the destination/retained published path, matching the CLI's actual message-only
-reporter. Three baseline message failures become passing cases. CLI/testing types with incremental cache
-disabled, all five normal package builds, lint and all 41 platform CLI cases pass in one properly capped
-2-CPU/6-GiB/no-swap container with an explicit 4096-MiB Node heap. Original resource/type failures remain.
-[Full strict run 41135036125](https://github.com/spankyed/apack/actions/runs/41135036125) at `1eb47d88e1`
-is terminal success: producers, all three SQLite platforms, both integration shards, both native shards and
-app-and-rest pass. [Retained metadata](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-1eb/README.md)
-distinguishes those nine successful jobs from six skipped alternate workflow jobs. This closes the current
-strict/platform gap, not the remaining app/operational/performance gates.
-[Signed installed run 41144824212](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-49d/README.md)
-also passes at `49d6426961` (identical production inputs): six actual macOS arm64 executable cases, zero skips/
-retries, mandatory two-store identity/model-claim witness, pre/post-sign native smoke and strict Developer ID
-sealing. This closes the current six-case macOS installed gap; broader flows and required architectures remain.
-Repeat affected integrated gates after future production changes; documentation alone does not require a rerun.
-The earlier full strict run 41106571398 failed its old verifier and a 200-second CLI integration case.
-The verifier is fixed; that case passes in 28.6 seconds on isolated Linux, but the earlier macOS timeout
-remains unexplained. The older editor intermittent also remains unexplained despite ten unchanged repeats.
-Neither partial/source checks nor six installed smokes complete app/performance acceptance. The
-[prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
-preserves historical sources, CI boundaries and failures.
+The selected native compact-IN implementation is runtime checkpoint `63c8267994`: generated C
+`04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a`, patch
+`d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5`.
+[Full equivalence](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-full-matrix/README.md)
+completes 14400 initial/updated queries, all 7200 paired answers, canonical-vector verification and minimum
+mean recall 0.973. **Original responsiveness still fails**, including timed-only gates. The
+[COMMIT attribution](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-responsiveness/README.md)
+shows projection slices do not bound deferred native COMMIT work. Smaller ANN budgets fail recall;
+[block-size](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md),
+[scope-first](../references/evidence/ears-sqlite-implementation-2026-10-28/scope-driven-eligibility/README.md) and
+[owner-projection](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-projection-query/README.md)
+studies do not close the gates. No later private C/SQL rewrite, bitmap, ANN setting or block-size change is
+selected. Preserve canonical bytes, FULL/default checkpoints and every original acceptance budget.
 
-Next checkpoint: diagnose the [integration-2 hook failure](../references/evidence/ears-sqlite-implementation-2026-10-28/integration2-63c/README.md)
-in terminal exact-source strict run 41151679157, and the
-[source-app failure](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-63c/README.md)
-in run 41152805669. Integration-2 times out at the unchanged 240000-ms four-pack diamond fixture setup;
-its five assertions never run. Added phase markers preserve that deadline and every build/assertion.
-The current strict run cannot qualify overall: eight required jobs pass, one fails and six alternate jobs skip. The actual report has 32 passes, one intended installed-only skip and one unexpected
-failure: the open editor misses its original five-second `referenceSuggestion` predicate after pack activation.
-Backend logs show activation before the deadline but do not prove frontend acceptance or editor replacement.
-The [focused diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-activation-e76/README.md)
-at e76 (run 41155440320) reproduces one failure and two passes without retries. At failure the registry has
-only the host contribution and the shell only host surfaces; an accepted pack/editor replacement is not
-observed. The [same-deadline elmdb control](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-elmdb-control-897/README.md)
-in run 41157076346 passes all three actual cases without skips/retries. Investigate candidate declaration/
-content/activation work and frontend arrival; this does not isolate one statement or prove a fix. These
-app interactions do not match durable-write acknowledgments (elmdb group sync versus SQLite FULL).
-Diagnostic source passes oxlint and complete test types, with original failed invocation retained.
-No causal fix or current broad app pass is claimed.
-The [new native qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/native-63c/README.md)
-verifies the three completed platform jobs and signed installed run 41151681981 at this source: 735 native
-membership comparisons per host, Linux/macOS EARS 762 passes, Windows 757 passes plus five named platform
-skips, and six actual installed passes without skips/retries. Generated C and patch digests agree with
-runtime/build pins, and signing refreshes the changed native library provenance.
-The ordinary Linux arm64 package, 735 controls and fresh public model-owner probe also pass. Its subsequent
-local EARS suite fails with one text-prefix timeout plus a worker RPC error after a protective ~1053.7-second
-pause during the suite; retain that failure and original deadlines. The remaining typecheck/lint steps were
-not reached. Independent platform passes do not relabel the local failure. Earlier strict/app/installed
-results qualify preceding native inputs; exact-source strict is terminal failure at integration-2 despite
-eight successful jobs, and broader/focused source-app failures remain as recorded above. Preserve all failures.
-The [private direct-IN proof](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
-passes 735 ordinary-SQLite controls per library and 900 paired updated-snapshot answers. The subsequent
-[full initial/update matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-full-matrix/README.md)
-completes 14,400 queries in separate baseline/prototype Node processes: all 7,200 paired ordered hits/scores
-match, every canonical vector verifies, minimum mean recall is 0.973 and each variant makes 2,400 native calls.
-The identical initial base/model and original snapshot remain unchanged. Responsiveness still fails, including
-timed-only query gates. This closes prototype equivalence, not backend adoption or package/owner qualification.
-The baseline equals the unchanged packaged binary; the exact tested candidate C digest is `04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a`.
-The [supported-block study](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
-completes 16/64/256 KiB with one fixed trained model: all 21,600 initial/updated queries finish, canonical bytes
-verify, both larger variants reproduce all 7,200 baseline answers, and minimum mean recall is 0.973. All
-variants still fail responsiveness, including the timed-only query gates. Pauses are retained and timings do
-not establish causal layout effects; no default changes. Larger blocks reduce metadata blocks/query but do
-not close the gate. Dependencies for the next native diagnostic: exact pinned baseline source, unchanged
-ordinary-SQLite semantics (including compact NULL sentinels, wide integer RHS and mixed/real lists), no new
-allocation/lifetime/format state, and preserved product artifacts. The private membership/boundary controls and fixed-model initial/update equivalence above are complete.
-Closing checks now apply to the ordinary candidate package, fresh model owner, complete EARS contracts and
-affected platform/installed inputs; retain every failed performance gate. Adoption still requires complete EARS, fresh actual-owner, platform/packaging/installed and original app
-gates. The earlier untested bitmap prototype is not selected. Scoped SQL work and durable COMMIT remain
-separate responsiveness costs. The [scope-driven eligibility comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/scope-driven-eligibility/README.md)
-now completes 7200 updated-only measured queries and 950 paired controls, including duplicate IDs and prior
-order/limit operations. Every paired answer/score matches; 99900 canonical rows verify and the retained
-read-only snapshot stays unchanged. No protective pauses occurred, but fixed order/shared caches remain.
-Both shapes still fail responsiveness; the additional DISTINCT/join rewrite is not promoted. The
-[metadata-only projection controls](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-projection-controls/README.md)
-now pass for the current library, a private C lookup prototype and a SQL-only alternative. Each runs 735
-ordinary metadata comparisons, complete vector bytes, paired distance projections and ten missing-base
-refusals. The initial cross-library distance comparison failed with independently trained IVF models;
-the corrected comparison shares exact frozen models and preserves the failure. Neither alternative is
-selected. The [actual EARS comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-projection-query/README.md)
-now completes 2700 queries in independent baseline/C/SQL processes: all 900 paired ordered answers/scores
-match for each alternative, minimum cohort recall is .974 and the same read-only snapshot/model checksums
-remain intact. No protective pauses occur, but fixed order/system/cache effects remain; this is one updated-
-only pass per cohort. SQL is modestly lower in some observations, C establishes no benefit and all variants
-observe heartbeat misses. Neither alternative is promoted. The original settings/gates remain unchanged.
-Complete initial/update, actual owner/multi-chunk/unit/platform/packaging proof is required before selection.
-The [real filesystem-full checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/filesystem-full/README.md)
-passes four actual ENOSPC/COMMIT refusal paths on Linux arm64 in an isolated 8-MiB tmpfs, with verified
-0.5-CPU/768-MiB/no-swap limits, FULL=2 and default checkpoint=1000. Prior rows/sequence survive; watches
-stay silent on refusal, reuse commits once and read-only reopen retains only incumbent/recovered rows.
-The tracked regression script and mandatory Linux platform report checks reject 42 missing/invalid witness
-controls; syntax, focused lint and workflow parse pass. [Platform run 41159890572](../references/evidence/ears-sqlite-implementation-2026-10-28/qualification-5569/README.md)
-at `5569fdd656` now passes all three hosts, including the actual Ubuntu mounted-tmpfs four-case step.
-This is not device power loss, other I/O fault, Windows durability or a replacement for phase 6 requirements.
-The [focused Linux diamond observation](../references/evidence/ears-sqlite-implementation-2026-10-28/diamond-linux-5569/README.md)
-and focused macOS run 41160571827 both pass all five assertions under the original setup deadline. Mac setup
-takes about 103.6 seconds; the full file takes 180.15 seconds. Neither explains the earlier concurrent strict
-shard failure, which remains unresolved rather than relabeled as qualified.
-The [backend activation profile](../references/evidence/ears-sqlite-implementation-2026-10-28/activation-profile-5569/README.md)
-now builds the matching shipped pack/API and measures actual RPC activation in isolated profiles. SQLite
-backend-ready is 3.24 seconds versus elmdb 5.34 seconds in this single ordered Linux observation; differing
-acknowledgment policies, cache/order effects and absent renderer preclude a general performance claim.
-SQLite's 197 commit spans total about 474 ms, its schema call about 104 ms; nested method totals overlap.
-Next deliverable: identify lifecycle/frontend arrival costs behind the unchanged macOS editor deadline and
-the strict shard's concurrent setup delay before selecting a fix. Dependencies are the existing source-bound
-logs/profiles; closing checks must preserve all original assertions, deadlines and durability policies.
-The [test-only frontend timeline](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-timeline-static/README.md)
-records frontend lifecycle events, pack resource timings and loader state while preserving the five-second
-predicate and all editor assertions. Focused lint and the complete tests TypeScript project pass with cache
-disabled in the capped Linux container. Next closing check: the actual focused macOS editor case, retaining
-success/failure attachments to distinguish delivery, module loading and registration. No causal fix is claimed.
-The private current-elmdb real-vector preflight is now admitted through session 5092 (PID 56205), after static
-validation finished. Poll that existing handle; its reports are `/private/tmp/ears-elmdb-real-preflight-results`. It pins the existing 2441 native
-binding/CLI digests, uses actual durable units, independently verifies canonical embeddings through bounded
-dump frames, and measures the same fresh-truth initial/updated scopes at 1000 rows before scaling. This is a
-protocol preflight, not the required 100k matched comparison or an OS-cold measurement. Its owned controller enforces quiet admission and pauses only its own container if another build starts.
+Next deliverables, dependencies and closing checks:
 
-The [actual Linux read-only mount observation](../references/evidence/ears-sqlite-implementation-2026-10-28/readonly-mount-aea/README.md)
-now verifies published-backup reads and logical write refusal under kernel EROFS, with unchanged file hashes.
-A closed WAL file without its sidecars refuses safely; the storage plan records that SQLite prerequisite.
-This does not qualify managed read-only profiles, live WAL readers or arbitrary filesystems.
+- Diagnose actual frontend arrival under the unchanged editor predicate. Test-only lifecycle/resource/loader
+  [timeline diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-timeline-static/README.md)
+  pass oxlint and complete tests types with cache disabled. Focused macOS run
+  [41163254193](https://github.com/spankyed/apack/actions/runs/41163254193), source 0126, is queued at the latest
+  poll: SQLite, three original repeats. Poll that run; retain actual cases and success/failure attachments.
+  Use PACK_ACTIVATED/LOAD_PACK_FRONTENDS/resource completion/accepted-runtime evidence before choosing a fix.
+- Finish the current native baseline matrix. Owned session **88639**, admission PID **59127**,
+  `/private/tmp/ears-elmdb-real-matrix-results`, is live; latest observation has created 99900 rows and embedded
+  20480. It uses the pinned native binding/CLI, actual durable units, the same fresh truth/exclusions,
+  independent canonical verification and original query gates. Poll the same handle; do not restart a live
+  process after an observation timeout. Connection reopen is not OS-cold. The 1000-row preflight is terminal
+  success, not full-matrix acceptance. Preserve pauses and failures before making timing comparisons.
+- Close the current strict-shard concurrency gap without removing builds/assertions or changing deadlines.
+  The phase markers and isolated results above are available; reproduce the relevant overlap before a fix,
+  then run the affected suite. Do not dispatch another broad run solely to obtain green.
 
-No evidence here certifies arbitrary filesystems or completes the goal.
+Still-required acceptance, without narrowing phases 3–7:
 
-The broader phase 5 source-app checkpoint now passes: [run 41148535620](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-qualified/README.md)
-at `f05eda527c`, `suite=app, storage_format=sqlite/1`, records 33 actual passes, zero unexpected/flaky cases/
-retries and one intended installed-only skip. Downloaded per-case JSON verifies the two-store physical EARS
-SQLite identity witness, saved-settings repair/reopen, external file changes/terminal output, API kill/reconnect
-and running-app CLI read/mutation refusal. The skipped packaged case has separate signed installed evidence
-above. This qualifies the existing macOS arm64 source app suite; broader SDK/executable-pack/architecture,
-load/performance and operational requirements remain. Do not rerun this unchanged checkpoint for documentation.
+- Complete representative search usefulness: identifiers/camelCase, names, accents, typos, phrases, highlights,
+  list/field restrictions, supported languages and mixed relevance/recency. Qualify vector/hybrid recall,
+  multi-chunk owners, candidate/trash filtering before K, ties, large-K/exact fallbacks, unit/savepoint
+  visibility and model/hash/generation freshness with readiness/watch settlement under real load.
+- Resolve failed foreground/heartbeat/admission/COMMIT responsiveness within original budgets, or obtain an
+  explicit approved product disposition. Qualify live admission, active worker shutdown and bounded retirement
+  under load; bounded row counts alone do not prove latency, WAL or resource bounds. Missing native admission
+  cursor indexes on populated stores require explicit offline preparation.
+- Measure matched current-backend warm/cold/reopen app flows, sustained FULL writes/watches/streaming/large
+  fields, corpus growth, peak memory, disk/WAL/checkpoints, long readers and busy writers. Preserve samples,
+  variance, instrumentation/caching limits and acknowledgment policies. Primitive/synthetic ratios are not
+  app acceptance and the synchronous API cannot silently become asynchronous.
+- Finish native repair faults, physical-file/namespace recovery and interrupted admission/backup/import/reset
+  coverage through supported managed ownership, including actual I/O/unknown-commit, corruption, permissions
+  and resource failures. Directory claims do not exclude arbitrary external rename/delete, raw writers or
+  mount aliases. Complete final identity/foreign-file/alias coverage without reopening already proven cases
+  absent changed inputs. Real ENOSPC and the scoped read-only-mount observations do not close all phase 6.
+- Implement/qualify Windows directory publication durability, ACL assumptions and history-quarantine parent
+  synchronization. The shared Windows directory-sync helper currently does no flush. Ordering/race tests and
+  process-kill tests do not prove device power-loss durability or certify arbitrary filesystems.
+- Finish required installed Electron/renderer/CLI, executable-pack/SDK and OS/architecture coverage beyond
+  the six signed macOS arm64 cases. Requalify provenance after inner-library signing and before app sealing
+  when relevant inputs change. `asar:false` already keeps native files on disk; an unsigned/source build is
+  not installed qualification. Optional Codex is absent from baseline API images; boot checks do not prove
+  external inference or all pack capabilities.
+- Pass final exact-input full strict and affected app/platform/packaging gates, complete owned-invariant,
+  architecture/dependency/upgrade/maintenance review, reconcile public/reference docs and API reports, and
+  produce the requirement-by-requirement adoption decision. Adoption requires removing obsolete production
+  elmdb paths and temporary selection as phase 7 specifies; rejection must not leave a permanent second
+  backend obligation. No cutover or daily-profile migration is authorized by this candidate work.
 
-The [original SQLite failure and unchanged-source elmdb control](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-delivery/README.md)
-remain failed at the same FILE_CONTENT predicate and unchanged 15-second deadline. The test asked outside any
-surface delivery/reply address and expected an obsolete terminal CREATED payload. The correction enters the
-real surface handlers and checks the addressed OPENED reply, preserving all file-change/output/title/path
-assertions and deadlines; no database/runtime behavior changes. Current reporting retains individual cases
-rather than inferring named witness execution from aggregate counts. This closes that diagnosed current test
-failure, not unexplained historical compiler/editor failures on different inputs.
+All broad/compiler work stays in disposable Linux/CI with private dependencies, source/artifacts and targets.
+One owned heavy container uses two CPUs/six GiB/no swap, quiet admission and pauses only itself for another
+build. Focused checks may use half a CPU/768 MiB. Never stop another agent's container. Private corpus/model/
+database payloads, dependencies, targets and native binaries remain outside Git.
 
-
-Next deliverables and their closing checks, without narrowing phases 3–7:
-
-- Qualify native repair faults on the final platforms, complete physical publication/deletion authority and
-  physical-file recovery, and verify interruption/reopen outcomes under cooperating ownership.
-  Claims inside a database directory do not authorize arbitrary rename/delete or noncooperating writers.
-- Complete installed Electron/renderer/CLI, executable-pack/SDK flows and required OS/architectures beyond
-  the six-case macOS arm64 signed qualification above. Requalify native provenance after inner-library signing
-  and before app sealing when relevant inputs change. `asar:false` already keeps
-  the native files on disk. Ordinary source/unsigned package builds do not prove installed/signing behavior.
-- Close remaining filesystem/format ownership work: qualify ordinary unaliased data files and foreign
-  valid SQLite refusal/positive persisted identity on final platforms, and synchronize/qualify
-  history-quarantine parent publication, including Windows directory flushing. Reset exclusion before
-  primary mutation and held-handle/interruption cases are implemented; final platform qualification remains.
-  Test active worker shutdown and namespace operations through the supported managed lifecycle. Directory
-  claims cannot exclude noncooperating raw SQLite writers or arbitrary mount aliases; data-file admission is
-  a separate guard. These remain phases 2/5/6, not completed requirements.
-- Resolve the existing failed responsiveness gate. The original representative 99,900-vector admission takes 20.77 s
-  with heartbeat p99 48.14 ms against 16 ms. Projection batching improves throughput but does not prove a
-  heartbeat win. A [current-source attribution run](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-responsiveness/README.md)
-  still fails at p99 31.05 ms: 11.32 seconds of COMMIT wall time includes deferred vec1 work and substantial
-  blocked time, with no cgroup throttling. The projection slice alone does not bound its transaction. This is
-  not a speedup comparison or acceptance. The [fixed-model allocation study](../references/evidence/ears-sqlite-implementation-2026-10-28/fixed-model-allocation/README.md)
-  completes both 16-KiB and 4-KiB variants: all canonical rows verify, all 7,200 paired query answers match and
-  minimum cohort mean recall is 0.971. Both fail frozen query gates; recorded admission heartbeat p99 is 31.42/
-  64.50 ms. Resource-driven pauses contaminate some timings, so this is not timing certification or a causal
-  layout comparison. No production setting changes. The [SQL trace](../references/evidence/ears-sqlite-implementation-2026-10-28/query-attribution/README.md)
-  completes all 18 initial/updated cohorts x four passes x100 queries, verifies all canonical rows and reaches
-  minimum mean recall 0.973. In the warmed updated 10k scope, independent median stages are 8.87 ms eligibility,
-  34.28 ms native candidates and 8.02 ms rerank; preparation averages about 0.015 ms/query. Actual-owner admission
-  still misses responsiveness (45.81 s, heartbeat p99 181.71 ms); different storage/model/instrumentation prevents
-  a causal comparison with prior runs. A [fixed-snapshot policy diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/query-policy/README.md)
-  rejects cheaper target/nprobe settings: minimum mean recall 0.948, 0.915 and 0.893, below 0.95. Timing pauses
-  are retained; this updated-only comparison is not full acceptance. [Existing native counters](../references/evidence/ears-sqlite-implementation-2026-10-28/native-query-profile/README.md)
-  attribute about 51–54% of filtered native timer ticks to metadata scans, with about 665 metadata blocks/query.
-  Whole-list conversion per block remains despite binary-search membership. No cheaper ANN policy or native
-  prototype is adopted. The supported larger-block diagnostic above is now complete and insufficient;
-  next test skipping repeated operand conversion through the already-sorted integer RHS, without a bitmap.
-  COMMIT and unfiltered native scanning remain separately required work. In a later
-  0.5-CPU diagnostic 81 retirement batches removed 2592 rows in five seconds;
-  bounded native deletion still needs latency/WAL/resource qualification. FULL writes, canonical bytes,
-  default checkpoints and original budgets remain unchanged. Do not relax gates around these results.
-- Complete representative search usefulness (language/identifier/typo/phrases/highlights/field restrictions),
-  vector/hybrid recall, multi-chunk owners, candidate/trash filtering before K, ties, large-K/exact fallbacks,
-  unit/savepoint visibility, model/hash/generation freshness and readiness/watch settlement under real load.
-- Qualify representative app warm/cold/reopen flows, sustained FULL writes/watches/streaming/large fields,
-  live admission/cleanup, corpus growth, peak memory, disk/WAL/checkpoints, long readers/busy writers and
-  matched current elmdb/SQLite latency/resource budgets. Primitive/synthetic timings are not app acceptance.
-- Qualify disk-full/I/O/unknown-commit, killed processes, interrupted admission/backup/import, physical/resource
-  faults, corruption, permissions/read-only mounts, Windows ACL/directory durability and filesystem refusals.
-  CI hosts certify their runs, not arbitrary local/network filesystems.
-- Pass final exact-input full strict plus architecture/native dependency/maintenance review, reconcile public
-  docs/API reports, and produce a requirement-by-requirement evidence-based adoption decision. Do not silently
-  migrate daily profiles. If adopted, remove the temporary second-backend obligation as phase 7 requires.
-
-Preserve canonical Float32 bytes and original failures. Synchronous EARS contracts cannot silently become
-asynchronous. Missing native cursor indexes on populated stores require explicit offline preparation.
-Private corpus/model payloads, dependencies, compiler targets and binaries stay outside Git. The optional
-Codex executable is absent in baseline API images, so boot checks do not certify external inference or all
-pack capabilities. All broad/compiler checks remain in disposable Linux/CI with private artifacts.
-
-[Prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-native-audit.md),
-[earlier checkpoint history](../references/evidence/ears-sqlite-implementation-2026-10-28/checkpoint-history.md)
-and the linked evidence preserve historical source boundaries and original failures.
+The [expanded previous handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/native-real-preflight-aea/prior-goal-handoff.md.gz),
+[earlier handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-native-audit.md) and
+[checkpoint history](../references/evidence/ears-sqlite-implementation-2026-10-28/checkpoint-history.md) retain
+historical source boundaries, baseline/harness/resource failures and fixes. They do not override this current
+handoff, redefine the approved scope or waive unfinished acceptance.
