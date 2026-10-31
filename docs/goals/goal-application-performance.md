@@ -1,16 +1,16 @@
 # Application performance implementation
 
 Status: implementation, controlled qualification, strict CI and local non-native gate passed;
-local native acceptance remains open; OrbStack is currently unresponsive after verified migration.
+local native acceptance remains open after an interrupted run; focused review validation passes.
 The approved scope and acceptance remain [the application-performance plan](../plans/application-performance.md).
 Evidence, commands, raw-report identities, measurements, failures and limitations are in
 [the dated evidence record](../references/evidence/2026-10-30-application-performance.md) and its
 [compact canonical reports](../references/evidence/application-performance-2026-10-30/).
 
-Original worktree: `/private/tmp/apack-application-performance` (its Linux runner cancellation is pending).
-Review fixes are committed in `/private/tmp/apack-performance-review`, branch
-`session/application-performance-review`, code checkpoint `c002188e97`; this source is published to
-the qualification PR without moving the checkout still held by Docker. Foundation branch `session/application-performance`,
+Worktree: `/private/tmp/apack-application-performance`, advanced to published review commit
+`44d246444a` after the old Linux invocation exited. The source-only review worktree is
+`/private/tmp/apack-performance-review`, branch `session/application-performance-review`.
+Foundation branch `session/application-performance`,
 [draft PR #293](https://github.com/spankyed/apack/pull/293). Qualification branch
 `session/application-performance-qualification`, [draft PR #294](https://github.com/spankyed/apack/pull/294).
 Application changes remain isolated; the main checkout is now on master. The active native source remains untouched. No release/version/pin changes or automatic CI.
@@ -65,11 +65,14 @@ Application changes remain isolated; the main checkout is now on master. The act
   scripts/repository and CLI typechecks and lint. The maintained Linux three-case regression passed
   (worker build 19.465 s; verification 22.661 s). The full cached local chain and
   [strict CI 41177136449](https://github.com/spankyed/apack/actions/runs/41177136449) are running
-  on pre-review code composition `595754a674`; their final outcomes remain unproven.
-  The local changed integration gate passed 54 files in 1,033 seconds before Docker became unresponsive.
+  on pre-review code composition `595754a674`; CI remains live. The local run is terminal with a
+  native failure during the OrbStack connection stall. Its 54 changed integration files passed,
+  but documentation-sensitive outer verdicts were not cached because docs changed during execution.
+  The exact worker-disconnect case subsequently passed on recovered Docker with unchanged assertions
+  and deadlines. The next full gate must keep tracked inputs frozen.
 - **Review fixes:** promised captures are now required at run admission, and the revision coordinator
   refuses a successful worker exit before final release. Thirty-eight focused checks and TypeScript
-  passed in an isolated copy with byte-identical production fixes. All 450 archived raw trials
+  passed both in the isolated copy and on the actual composed branch. All 450 archived raw trials
   re-admit under the stronger rules. See the dated evidence for fault reproductions and source hashes.
 - The stale procfs receipt was diagnosed and fixed in both startup and compilation data readers.
   Fresh Linux build/facade replay, focused regressions, mutation checks and strict CI passed.
@@ -80,14 +83,15 @@ Application changes remain isolated; the main checkout is now on master. The act
 
 ## Dependency-ordered remaining requirements
 
-1. **Finish review validation and local native acceptance.** Track strict CI 41177136449 to completion;
-   it tests the pre-review composition, so the published review fixes still need final strict CI.
-   Confirm the original local runner has stopped before advancing its checkout. OrbStack's Docker
-   endpoint currently times out; do not start more local containers or restart the shared VM without
-   establishing other sessions' execution state. Once Docker is healthy, compose the review fixes into
-   the original checkout and run the supported cached chain with frozen native source:
+1. **Complete final validation.** Track strict CI 41177136449 (pre-review) and
+   [41179507375](https://github.com/spankyed/apack/actions/runs/41179507375) (reviewed code `44d246444a`);
+   the latter queues behind the former without canceling it. Docker recovered, the original run
+   exited, and the exact failed native case passed. The remaining gap is order-dependent behavior
+   across the worker file and the other native files. Run one supported cached full chain with frozen
+   tracked inputs and frozen native source:
    `APACK_LINUX_ELMDB_ROOT=/private/tmp/apack-performance-elmdb-pinned npm run chain -- --cores 2`.
-   Reuse valid measurements and keep the original acceptance/deadlines intact.
+   Keep assertions/deadlines intact and do not repeat application measurements; all 450 archived raw
+   trials already pass the stronger admission rules. Diagnose a specific failure before broadening again.
 2. **Close acceptance and handoff.** Record the actual local native outcome and mark both dependent
    PRs ready after required acceptance is complete. The implementation and measured evidence are
    already committed and reviewable. No further feature work is planned unless validation exposes

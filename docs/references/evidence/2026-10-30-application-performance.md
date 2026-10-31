@@ -279,3 +279,30 @@ reported an interrupted OrbStack server connection while the external APFS volum
 This does not establish corruption or its cause. Cancellation was requested for this session's
 runner only; its terminal state must be confirmed before resuming. No shared VM restart, drive
 ejection or foreign-container termination was performed. Native acceptance remains open.
+
+The original local run is now terminal (`test:native` failed after 712.1 s; complete chain 1,849.7 s).
+The failing worker-disconnect case surfaced a 2 s cleanup deadline, which can mask its original
+20 s readiness/exit failure; no root cause is asserted. Ten preceding worker cases passed, including
+the earlier external-input case in 20.071 s. Tracked docs changed while the documentation-sensitive
+outer host/integration steps ran, so the chain correctly refused their cache stamps. These are not
+presented as a final passing gate. Subsequent gates must keep tracked inputs frozen.
+
+Docker later answered a bounded ping and the old runner/client PIDs were gone. The original checkout
+was fast-forwarded to reviewed code `44d246444a`. All 38 focused tests then passed on that actual
+branch, together with the testing workspace's TypeScript check and lint. Final strict CI 41179507375
+is queued on this code behind the existing strict run, whose cancellation policy preserves it.
+
+With no other containers active, the exact failed native case was executed with temporary test-only
+spawn/exit/original-error diagnostics, restored afterward. It passed (one case, fifteen excluded),
+with the expected worker SIGKILL. Readiness, cleanup and outer deadlines and assertions were unchanged.
+Raw source receipt, log and process/I/O samples are preserved at
+`.apack/performance/parent-disconnect-diagnostic` in the owned Linux volume. Its unchanged producer
+prelude rebuilt packages in 17.5 s and default-setup in 275.3 s; the latter was active compilation,
+not evidence of an idle worker hang. The next full local run covers the order/suite gap that this
+isolated case cannot prove. No further application code changes were identified in the review.
+
+A possible source of avoidable I/O was identified: about 0.5 GB of archived reports was temporarily
+extracted beneath the host checkout's ignored scratch directory, which the Linux runner syncs.
+The extraction was removed after admission checking; its actual contribution to the VM stall is
+unproven. Future archive extraction belongs outside the synchronized source checkout. No data loss
+or filesystem corruption was established by the interrupted-share alert.
