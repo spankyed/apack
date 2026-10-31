@@ -293,7 +293,8 @@ is replaced with query-derived one-edit alternatives executed by native FTS. The
 candidate supports insertion, deletion, substitution and adjacent transposition for folded ASCII letter/
 digit query tokens of length 5–32. Each token generates at most `73 * length + 35` alternatives
 before duplicate removal (at most 2371 at length 32), independent of database vocabulary size. Query terms
-outside that range or alphabet remain literal; quoted phrases and the final prefix term remain literal.
+outside that range or alphabet remain literal; quoted phrases remain literal. The final prefix term combines
+literal completion with bounded exact whole-word alternatives; generated alternatives never receive a wildcard.
 `fuzzy: false` disables alternatives. Accent folding remains the existing query adaptation and native FTS
 still owns matching, optional English stemming, ranking and highlights. No dictionary, extra posting
 structure, native extension or request/result codec is added. The unused vocabulary virtual table is
@@ -313,14 +314,19 @@ unchanged. Cases were added before implementation for each edit position/kind, m
 known-word neighbors, transposition, two-independent-edit refusal, the 4/5 and 32/33 boundaries, unsupported
 scripts, explicit opt-out, quoted/prefix behavior and field/boolean/candidate restrictions.
 
-The current final-prefix literal restriction loses typo correction in the actual threads-panel search,
-which sets `prefix:true`. [Four new useful-result judgments](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-typo-preregistration/README.md)
-are preregistered before implementation: preserve the native literal prefix branch and allow the same
-bounded **whole-word** typo alternatives alongside it, including default/explicit fuzzy:true. Do not apply
-prefix wildcards to alternatives, expand quoted phrases, reintroduce vocabulary enumeration or override
-fuzzy:false. Current code and its old prefix-specific absence expectation still implement the restriction;
-these new cases are unexecuted and the change is not accepted. Run both pinned backends and actual
-prefix-enabled growth/cost checks before claiming the required app behavior or a performance improvement.
+The threads panel sets `prefix:true`; the candidate now preserves its literal completion branch and
+allows the same bounded **whole-word** typo alternatives alongside it, with default/explicit fuzzy:true.
+It never applies prefix wildcards to alternatives, expands quoted phrases, enumerates vocabulary or
+overrides fuzzy:false. [Four useful-result judgments](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-typo-preregistration/README.md)
+were preregistered before implementation. [Post-rebase validation](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-rebase-validation/README.md)
+records native36/36, pre-fix SQLite34/36 with exactly the two intended failures, and all153 assertions in
+seven affected search files passing after the change. Types, lint and all five package builds pass.
+The full local run still has seven original-deadline timeouts. Its75 native skips from a private harness
+omission are covered by a [corrected focused run](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-followup/README.md):75pass/0skip.
+All14 cost paths pass answer checks at1k/10k/100k. At100k, prefix typo warm p50 is3.719ms and the
+32-character typo11.193ms. Broad common-word queries still reach197ms warm and the full diagnostic
+sequence reaches329ms heartbeat delay. These observations do not claim a speedup, pass the16ms
+responsiveness criterion or complete app/search/goal acceptance.
 
 The [bounded typo proof](../references/evidence/ears-sqlite-implementation-2026-10-28/bounded-typos/README.md)
 passes 18 new cases, the unchanged shared corpus, actual native MATCH/growth checks, both removal controls,

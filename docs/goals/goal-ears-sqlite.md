@@ -198,8 +198,7 @@ conversion, new PR or version-only PR is authorized. All phases and original bud
 
 Authoritative source: `/private/tmp/ears-sqlite-query-integration`. The clean detached publisher is
 `monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at older `6cf6c8349e`
-and is not the current source. Latest runtime checkpoint is `45180293a3`, including the still-untested
-prefix prototype; the last exercised test-diagnostic checkpoint is `0126eda005`. Integrated master is
+and is not the current source. Latest runtime checkpoint is `45180293a3`, including the prefix implementation with partial local qualification; the last exercised test-diagnostic checkpoint is `0126eda005`. Integrated master is
 `e3d1a37d5c622bfebba7767a09452572284881dc`; native elmdb pin remains
 `2441af4658d961f547c7094cd041c2ac246668c5`. The [completed rebase](../references/evidence/ears-sqlite-implementation-2026-10-28/master-rebase-e3d1/README.md)
 preserves checkpoint `353eb42255` exactly except master's three documentation files. Source packages
@@ -271,18 +270,20 @@ Next deliverables, dependencies and closing checks:
   `0fe282f82d18121c62f2828867099dedac26be67d30327b65f30b851ab5a1d00`.
   Verify bytes before opening after migration; lock.mdb can change on open. Preserve the incumbent and
   resume only with an explicit copy/protocol; the original fresh-run script is not automatically resumable.
-- Close the [prefix/typo app-path restriction](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-typo-preregistration/README.md).
-  The threads panel enables prefix search; published SQLite suppresses correction on its last word even
-  with fuzzy:true. Four shared judgments are preregistered at 66e8531079; all original judgments remain.
-  The checkpoint includes a text.ts/test-expectation prototype that is UNTESTED and not accepted.
-  Its qualification recipe is preserved with the checkpoint. Session 89359 (admission PID 18299)
-  waits for a quiet Docker window; reports: `/private/tmp/ears-prefix-qualification-results`. It targets
-  45180293a3, verifies the frozen pre-fix source and exact prototype inputs, then preserves native gold
-  and expected SQLite failures before applying the prototype in the owned volume. Inspect the same run;
-  do not launch a duplicate or mutate its mounted inputs.
-  No new backend result or accepted semantic fix is claimed. Run both pinned backends, preserve the current candidate
-  failures, then implement literal prefix plus bounded exact whole-word alternatives and qualify semantics,
-  typing/recovery and prefix-enabled growth/latency without changing the original work limits or budgets.
+- Qualify the [prefix/typo implementation](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-rebase-validation/README.md).
+  Pinned native passes36 shared judgments; the pre-fix candidate passes34 and fails exactly the two new
+  prefix/typo judgments. The implementation passes all153 assertions in seven affected search files,
+  EARS types/lint and all five package builds at runtime45180293a3. The full local run remains failure:
+  684pass/7original30-second timeouts/75native skips. The private runner omitted EARS_VEC1_EXTENSION;
+  skips are not coverage. The model-based file directly uses elmdb. Retained resource samples show noOOM
+  and filesystem-related kernel waits, without a causal attribution. [Corrective run88910](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-followup/README.md)
+  is terminal success: all75 native cases pass with zero skips using the verified normal artifact,
+  and all14 query-cost paths pass at1k/10k/100k. At100k, prefix typo warm p50 is3.719ms,32-character
+  typo11.193ms. The broad common-word path still reaches197ms warm and whole-sequence heartbeat329ms;
+  this does not pass the16ms responsiveness criterion. The seven full-run timeouts remain unresolved;
+  do not repeat the full run merely to obtain green.
+  [Three-platform CI41181673785](https://github.com/spankyed/apack/actions/runs/41181673785) targets487011c484;
+  inspect its terminal result. No new performance claim or complete qualification is established.
 - The original private syscall-fault admission 59998 was cancelled before container creation. After user
   migration verification/resume, [actual syscall-fault validation](../references/evidence/ears-sqlite-implementation-2026-10-28/real-io-after-migration/README.md)
   is terminal success: eighteen actual EIO cases plus a disabled-injector refusal control, at frozen runtime

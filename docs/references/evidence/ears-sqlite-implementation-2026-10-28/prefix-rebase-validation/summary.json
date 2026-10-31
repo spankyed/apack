@@ -1,0 +1,42 @@
+{
+  "source": "45180293a3248ea7ec364672fb294ed1f322fc9c",
+  "baselineRuntimeSource": "1d7a3de090d74028ca36eba574686da8c794609a",
+  "fullSuite": {
+    "numPassedTests": 684,
+    "numFailedTests": 7,
+    "numPendingTests": 75,
+    "numTotalTests": 766
+  },
+  "affectedSearchFiles": [
+    {
+      "file": "tests/engine/search-relevance.spec.ts",
+      "passed": 36
+    },
+    {
+      "file": "tests/engine/search.spec.ts",
+      "passed": 11
+    },
+    {
+      "file": "tests/sqlite/search-builds.spec.ts",
+      "passed": 20
+    },
+    {
+      "file": "tests/sqlite/search-recovery.spec.ts",
+      "passed": 40
+    },
+    {
+      "file": "tests/sqlite/text-documents.spec.ts",
+      "passed": 10
+    },
+    {
+      "file": "tests/sqlite/text-limits.spec.ts",
+      "passed": 16
+    },
+    {
+      "file": "tests/sqlite/text-typos.spec.ts",
+      "passed": 20
+    }
+  ],
+  "affectedSearchPassed": 153,
+  "scope": "Partial local qualification, not a passing full suite. Seven original timeout failures retained.75nativecases skipped because private runner omitted EARS_VEC1_EXTENSION. Corrective run88910 separately supplies verified normal packaged artifact and growth; no full rerun."
+}
