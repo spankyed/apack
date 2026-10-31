@@ -378,3 +378,42 @@ the review changes enforce admission/lifecycle and do not alter valid collection
 OrbStack recovered without a shared restart or upgrade. Optional shared VM maintenance still awaits
 user approval; it is no longer an application acceptance dependency. Its hang's cause remains
 unproven. Original disk preservation and other agents' data remain untouched.
+
+
+## Runtime separation review — 2026-10-31
+
+Cleanup checkpoint `0ca8217459` separates runtime execution from observation across the combined
+#293/#294 tree. The [ownership table](../application-performance.md#runtime-integration-boundaries)
+names the adapters. View resolution/sharing, transaction execution, invalidation, routing,
+authorization and reconnect lifetimes remain with their runtime owners. Diagnostic policy owns
+context restoration, spans, receipt sequences, startup receipts and bounded commit causes. The
+six SDK boundary helpers are internal exports; generated API reports were regenerated normally.
+
+The normal local gate, `npm run chain -- --no-native --cores 2`, passed in 2032.5 seconds:
+31 steps, nine valid cache hits, run `2026-10-31T12-40-32Z-43939`. Host units passed 541 files /
+6,124 tests (eight skipped), pack units passed 148 files / 988 tests (two skipped), and integration
+passed 60 files / 788 tests (one skipped). Runtime builds, external-pack contract/fork/application
+acceptance, smoke and both packaged-authoring checks passed. Native acceptance was explicitly
+omitted from this local command. The local engine checkout was `214517addf`, whose only differences
+from inherited pin `d33f859b0f` are two roadmap documents; this is not a pin-exact timing trial.
+Focused regressions also cover original application errors, independent watch contexts, fresh
+reconnect causes, disabled startup completion receipts and visible receipt overflow.
+
+[Strict run 41197944979](https://github.com/spankyed/apack/actions/runs/41197944979) passed all six
+jobs on earlier source `a075fe1c41`. [Strict run 41202958789](https://github.com/spankyed/apack/actions/runs/41202958789)
+was dispatched for exact cleanup source `0ca8217459` and remains pending at this documentation
+checkpoint. Strict concurrency disables cancellation; the earlier run was allowed to finish.
+The later documentation commit does not change the tested runtime implementation.
+
+Current-code Linux application qualification remains open. [Run 41203505748](https://github.com/spankyed/apack/actions/runs/41203505748)
+failed before scenario execution because the renderer never exposed `applicationState`. A focused
+probe found JavaScript asset requests failing with `net::ERR_FAILED`; sampled files exist, are
+readable with mode 0644, and Electron's open-file limit is 65,536. The renderer build is retained.
+[Probe 41204498413](https://github.com/spankyed/apack/actions/runs/41204498413) loaded those retained
+bytes with the same Electron version in a minimal bounded Linux harness and reported no failed
+requests. That probe does not exercise full application startup and is not passing application
+qualification. The full-app-only loading failure's cause is unproven; the next diagnostic should
+compare full-app launch/session/protocol setup against that minimal harness using retained outputs.
+No deadlines, assertions or resource bounds were weakened, and no application startup refusal is
+presented as a passing trial. The diagnostic workflows exist only on the isolated validation branch.
+Historic measurements above remain source-qualified and are not claims about this cleanup's overhead.
