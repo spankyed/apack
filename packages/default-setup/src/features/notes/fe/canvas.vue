@@ -266,7 +266,6 @@
               @keydown.right="handleTitleRight"
             />
           </div>
-          <RelatedNotes :notes="related.data ?? []" @open="(noteId: string) => actor.send({ type: 'NOTE.OPEN', noteId })" />
           <TiptapEditor
             ref="editorRef"
             :key="editingNote.id"
@@ -308,7 +307,6 @@ import { useNoteFocus } from './composables/useNoteFocus.ts'
 import { useNoteScroll } from './composables/useNoteScroll.ts'
 import { useSubDocumentInsert } from './composables/useSubDocumentInsert.ts'
 import TaskListPanel from './components/TaskListPanel.vue'
-import RelatedNotes from './components/RelatedNotes.vue'
 import ImageLightbox from '@apackdev/ui/design/ImageLightbox'
 import TiptapSearchBar from '@apackdev/ui/components/tiptap/TiptapSearchBar'
 
@@ -331,8 +329,6 @@ const editingContent = computed(() => (editingNote.value ? contents.value[editin
 const tree = useView('notes', 'tree')
 const openNote = useView('notes', 'note', () => (currentNoteId.value ? { id: currentNoteId.value as never } : null))
 const openTask = useView('notes', 'note', () => (selectedTaskId.value ? { id: selectedTaskId.value as never } : null))
-// The notes most related to the one being edited, which follow the links as they change
-const related = useView('notes', 'related', () => (editingNote.value ? { id: editingNote.value.id as never, limit: 6 } : null), { keepPrevious: true })
 watch(() => tree.data, (notes) => { if (notes) actor.send({ type: 'NOTES.READ', notes }) }, { immediate: true })
 for (const [view, id] of [[openNote, currentNoteId], [openTask, selectedTaskId]] as const) {
   watch(() => [view.status, view.data] as const, ([status, note]) => {

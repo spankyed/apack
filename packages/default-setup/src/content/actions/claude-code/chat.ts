@@ -328,7 +328,7 @@ export async function action(
   try {
     // Resolve references inside try/catch so a failure doesn't permanently
     // lock the thread in isRunning=true.
-    const resolved = await services.chat.resolveReferences(references, text);
+    const resolved = await services.chat.resolveReferences(references);
     const fullText = resolved.textPrefix ? `${resolved.textPrefix}\n\n${text}` : text;
     const promptText = !resumeSessionId && !forkFrom && !revertTo
       ? buildSessionBootstrapPrompt(services, {

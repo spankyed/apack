@@ -315,14 +315,12 @@ export function visitThread(threadId: EARS.EntityId, options: { restore?: boolea
  * library docs/folders) into prompt-ready content for the Claude Code CLI.
  *
  * Returns:
- * - `textPrefix`  — formatted text for non-image references, prepended to the user message; with `message`, the text
- *   the user wrote, it ends with the notes most related to the ones mentioned (`resolveRelatedNotes`)
+ * - `textPrefix`  — formatted text for non-image references, prepended to the user message
  * - `imageBlocks` — Anthropic image content blocks (base64-encoded), with text labels
  * - `addDirs`     — directories for `--add-dir` (attached file auto-reads)
  */
 export async function resolveReferences(
   references: MessageReferences | undefined,
-  message = '',
 ): Promise<{ textPrefix: string; imageBlocks: any[]; addDirs: string[] }> {
   if (!references) return { textPrefix: '', imageBlocks: [], addDirs: [] };
 
@@ -348,8 +346,6 @@ export async function resolveReferences(
       const resolved = await resolveContextRef(ref);
       if (resolved) parts.push(resolved);
     }
-    const related = resolveRelatedNotes(references.context, message);
-    if (related) parts.push(related);
   }
 
   // ─── Images → labeled base64 content blocks ─────────────────────────
@@ -394,28 +390,6 @@ async function resolveContextRef(
       return undefined;
   }
 }
-
-/** The most related notes beside those a message mentions: at most this many, each at most this many characters */
-const RELATED_NOTES = 3;
-const RELATED_NOTE_CHARS = 2000;
-
-/**
- * The notes worth adding beside the ones the message mentions, by the links between notes and by the message's words
- * (`noteQueries.relatedToAll`), each labelled as related rather than mentioned and cut to a length; nothing when the
- * message mentions no note
- */
-function resolveRelatedNotes(context: NonNullable<MessageReferences['context']>, message: string): string | undefined {
-  const mentioned = context.filter((ref) => NOTE_REF_TYPES.has(ref.refType)).map((ref) => ref.refId as EARS.EntityId);
-  if (!mentioned.length) return undefined;
-  const notes = repository.noteQueries.relatedToAll(mentioned, message, RELATED_NOTES)
-    .map((id) => repository.noteQueries.byIdDTO(id))
-    .filter((note) => note !== undefined);
-  if (!notes.length) return undefined;
-  const cut = (content: string) => (content.length > RELATED_NOTE_CHARS ? `${content.slice(0, RELATED_NOTE_CHARS)}…` : content);
-  return notes.map((note) => `--- Related note: ${note.title} ---\n${cut(note.content)}\n---`).join('\n\n');
-}
-
-const NOTE_REF_TYPES: ReadonlySet<string> = new Set(['note', 'task', 'tasklist']);
 
 function resolveNote(ref: { refId: string; label: string }): string {
   const note = repository.noteQueries.byIdDTO(ref.refId as EARS.EntityId);
