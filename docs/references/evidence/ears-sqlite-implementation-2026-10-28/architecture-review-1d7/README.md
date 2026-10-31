@@ -154,3 +154,31 @@ or retaining a second production backend. The structured vocabulary itself is al
    Production stays elmdb until that decision; an unfinished benchmark or green narrow suite is insufficient.
 
 This review does not close the full phase-7 requirement or waive any phase 3–6 acceptance condition.
+
+
+## Later dependency review: Vectorlite is not a transactional substitute
+
+At upstream[e68e41f435e777c5542c852d7d85af90186158b5](https://github.com/1yefuwang1/vectorlite/blob/e68e41f435e777c5542c852d7d85af90186158b5/README.md),
+Vectorlite documents no transaction support, an in-memory index and explicit persistence/load operations.
+Its published platform set also excludes this local Linux arm64 validation host. These are upstream
+contracts, independently checked at that exact revision; no speed/recall measurement was performed.
+
+Engineering inference: adopting it would require an explicitly rebuildable process cache with
+transaction/unit visibility, rollback, cross-handle freshness, startup/recovery and memory ownership.
+A faster HNSW benchmark alone would not satisfy those requirements. It remains a possible separate
+architecture investigation, not a drop-in replacement or a selected dependency. Keep the current
+candidate and failed responsiveness gates intact until the matched post-Seagate evidence is complete.
+This focused review does not settle the final ANN choice or the maintenance/adoption audit.
+
+
+## Pinned baseline algorithm and commit boundary
+
+The exact native pin2441af4658d961f547c7094cd041c2ac246668c5 declares hannoy0.3.0,
+not Arroy. Its[vector owner](https://github.com/spankyed/elmdb/blob/2441af4658d961f547c7094cd041c2ac246668c5/crates/elmdb/src/engine/vector/mod.rs)
+uses HNSW build parameters16/32. Query setup requests max(4K,16) graph neighbors and
+sets ef_search to at least64, with candidate restrictions and separate pending-unit reconciliation.
+The commit path applies journaled changes and invokes the affected graph builder once per changed graph.
+These are inspected source facts, not a profile identifying the cause of embedding cost. In particular,
+a builder call per64-item durable batch does not by itself prove a whole-graph rebuild or quadratic growth.
+The resumed27900-embedding diagnostic is not a fresh-ingestion timing; compare acknowledgments and
+post-Seagate storage boundaries explicitly, and retain the native signed-zero byte gate failure.

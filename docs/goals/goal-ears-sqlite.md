@@ -425,3 +425,14 @@ Two negative regression witnesses exercise actual three-byte short writes with U
 write retaining the incumbent; the platform verifier now requires all eight private-file cases.
 This runtime change needs affected platform qualification and final exact-input acceptance; existing
 six-case evidence does not qualify it. It does not alter the live matrix's frozen runtime.
+
+
+[Platform41189469298](../references/evidence/ears-sqlite-implementation-2026-10-28/qualification-1297/README.md)
+is terminal success: actual reports prove all ten logical archive host cases with no skips on Linux,
+macOS and Windows, including the newly enabled Windows postpublication barrier failure. This predates
+short-write runtimee5. Its affected platform owner is41190537998, dispatched once by session53394
+only after restricted Windows probe41189779880 acquired the branch slot. The latter is now active;
+inspect its actual restricted.json and negative controls before claiming non-admin ACL observations.
+Native98419 has finished99900embeddings and3600initialqueries at the latest observation; the full
+initial scan records four signed-zero losses and no other component changes. Updates/remaining3600
+queries are live; original byte gate remains failed. MatchedSQLite22187 still waits for completion.
