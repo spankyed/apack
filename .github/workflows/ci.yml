@@ -41,7 +41,39 @@ jobs:
               npm ci --no-audit --no-fund
               npm run chain -- --only packages:ensure,build:default-setup --no-native --cores 1
               npm run chain -- --only build:runtime --no-native --cores 1
-              DEBUG_E2E=1 ELECTRON_ENABLE_LOGGING=1 xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario thread-open --mode disabled --compare lightweight --trials 2 --output .apack/performance/cleanup-startup-diagnostic
+              cat > tests/performance/startup-diagnostic.config.ts <<"CONFIG"
+          import base from "./playwright.config.ts";
+          export default { ...base, testMatch: "startup-diagnostic.spec.ts", outputDir: ".apack/performance/startup-probe" };
+          CONFIG
+              cat > tests/performance/startup-diagnostic.spec.ts <<"PROBE"
+          import { test } from "@apackdev/testing";
+          import { waitForApplicationWindow } from "../../packages/apack-testing/src/application-window.ts";
+          test("inspect renderer startup", async ({ electronApp }) => {
+            const pages = new Set<import("@playwright/test").Page>();
+            const observe = (page: import("@playwright/test").Page) => {
+              if (pages.has(page)) return;
+              pages.add(page);
+              page.on("pageerror", error => console.log("[startup pageerror]", error.stack));
+              page.on("console", message => console.log("[startup console]", message.type(), message.text()));
+              page.on("requestfailed", request => console.log("[startup requestfailed]", request.url(), request.failure()));
+              page.on("response", response => { if (response.status() >= 400) console.log("[startup response]", response.status(), response.url()); });
+            };
+            electronApp.on("window", observe);
+            electronApp.windows().forEach(observe);
+            try { await waitForApplicationWindow(electronApp, 45_000); }
+            finally {
+              for (const page of pages) {
+                console.log("[startup document]", page.url(), await page.evaluate(() => ({
+                  state: document.readyState, title: document.title,
+                  scripts: [...document.scripts].map(script => ({ src: script.src, type: script.type })),
+                  html: document.documentElement.outerHTML.slice(0, 4000),
+                  resources: performance.getEntriesByType("resource").map(entry => ({ name: entry.name, duration: entry.duration })),
+                })).catch(error => ({ error: String(error) })));
+              }
+            }
+          });
+          PROBE
+              DEBUG_E2E=1 ELECTRON_ENABLE_LOGGING=1 xvfb-run -a npm run test:e2e -- --config tests/performance/startup-diagnostic.config.ts
             ' 2>&1 | tee "$RUNNER_TEMP/performance-contracts.log"
       - name: Make container-owned diagnostic evidence readable
         if: always()
@@ -54,7 +86,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-startup-diagnostic-a075fe1c41
+          name: performance-renderer-startup-probe-a075fe1c41
           include-hidden-files: true
           retention-days: 2
           path: |
