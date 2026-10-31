@@ -24,6 +24,8 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   const childAppRestart = process.env.CLAUDE_RESEARCH_BACKGROUND_APP_RESTART === '1'
   const childApiRestart = process.env.CLAUDE_RESEARCH_BACKGROUND_API_RESTART_APP === '1'
   const composerLayout = process.env.CLAUDE_RESEARCH_BACKGROUND_COMPOSER_LAYOUT_APP === '1'
+  const sourceFrontendUrl = process.env.CLAUDE_RESEARCH_SOURCE_FRONTEND_URL
+  let sourceFrontendProof: { pageUrl: string; inputModuleUrl: string; rawSha256: string; expectedSha256: string } | undefined
   const settledHandoff = childApiRestart || childAppRestart || composerLayout
   if(composerLayout)expect(childApiRestart || childAppRestart).toBe(false)
   const childFormatterPolicy = process.env.CLAUDE_RESEARCH_BACKGROUND_FORMATTER_POLICY_APP === '1'
@@ -38,6 +40,26 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   const attachChild = childResume || childInteraction || process.env.CLAUDE_RESEARCH_BACKGROUND_ATTACH_APP === '1'
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
+  if(sourceFrontendUrl){
+    expect(composerLayout).toBe(true)
+    const wanted=new URL(sourceFrontendUrl),loaded:string[]=[]
+    expect(wanted.protocol).toBe('http:');expect(wanted.hostname).toBe('127.0.0.1');expect(wanted.port).not.toBe('')
+    const record=(response:{url():string;status():number})=>{const url=new URL(response.url());if(response.status()<400&&url.origin===wanted.origin&&url.pathname.endsWith('/features/threads/fe/chat/input.vue'))loaded.push(url.href)}
+    appPage.on('response',record)
+    await appPage.reload();await app.waitForSurface('default-setup/threads')
+    await expect.poll(()=>loaded.length).toBeGreaterThan(0)
+    appPage.off('response',record)
+    const actual=new URL(appPage.url());expect(actual.origin).toBe(wanted.origin);expect(actual.pathname).toBe(wanted.pathname)
+    const module=new URL(loaded[0]!),rawUrl=new URL(module.pathname+'?raw',module.origin)
+    const response=await appPage.request.get(rawUrl.href);expect(response.ok()).toBe(true)
+    const line=(await response.text()).split('\n').find(value=>value.startsWith('export default '));expect(line).toBeTruthy()
+    const raw=JSON.parse(line!.slice('export default '.length).trim().replace(/;$/,''))
+    const expected=await readFile(join(process.cwd(),'packages/default-setup/src/features/threads/fe/chat/input.vue'),'utf8')
+    sourceFrontendProof={pageUrl:appPage.url(),inputModuleUrl:module.href,rawSha256:createHash('sha256').update(raw).digest('hex'),expectedSha256:createHash('sha256').update(expected).digest('hex')}
+    expect(sourceFrontendProof.rawSha256).toBe(sourceFrontendProof.expectedSha256)
+    await writeFile(join(workspace!,'source-frontend-proof.json'),JSON.stringify(sourceFrontendProof,null,2))
+  }
+
   await app.waitForSurface('default-setup/threads'); await app.navigate('default-setup/threads')
   await app.navigate('host/settings')
   await appPage.evaluate(() => { const settings = (window as any).applicationState.system.get('host/settings'); settings.send({ type: 'TAB.SELECT', tab: 'general' }); settings.send({ type: 'GENERAL_NAV.SELECT', item: 'secrets' }) })
@@ -90,7 +112,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   const list = async () => JSON.parse(await cli(['agents', '--json', '--all', '--cwd', project!])) as any[]
   const before = await list()
   let job: any
-  const observations: any = { parentSessionId: sessionId, parentNativePid: original.native.state.nativePid, before, errors }
+  const observations: any = { parentSessionId: sessionId, parentNativePid: original.native.state.nativePid, before, errors, ...(sourceFrontendProof?{sourceFrontendProof}:{}) }
   try {
     await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
     const composer = card.getByTestId('composer-editor-area').getByRole('textbox')
@@ -652,7 +674,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     expect(costs.length).toBeGreaterThan(0)
     expect(observations.current.claude.totalCostUsd).toBe(costs.at(-1).totalCostUSD)
 
-    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: !settledHandoff, nativeBackgroundSettledHandoff: settledHandoff, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(parentOwnerLoss?{nativeBackgroundParentOwnerLoss:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childFormatter?{nativeBackgroundFormatter:true}:{}), ...(composerLayout?{nativeBackgroundComposerLayout:true}:{}), ...(childFormatterLifecycle?{nativeBackgroundFormatterLifecycle:true}:{}), ...(childFormatterPolicy?{nativeBackgroundFormatterPolicy:true}:{}), ...(childApiRestart?{nativeBackgroundApiRestart:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
+    await writeFile(join(workspace!, 'native-terminal-app-evidence.json'), JSON.stringify({ sessionId, backgroundSessionId: job.sessionId, jobId: job.id, nativeBackgroundHandoff: true, nativeLeftArrow: true, nativeBackgroundConfirmation: !settledHandoff, nativeBackgroundSettledHandoff: settledHandoff, nativeBackgroundControls: true, ...(attachChild&&!childResume?{nativeBackgroundAttachment:true}:{}), ...(childInteraction?{nativeBackgroundChildInteractions:true}:{}), ...(childResume?{nativeBackgroundResume:true}:{}), ...(childReply?{nativeBackgroundReply:true}:{}), ...(parentOwnerLoss?{nativeBackgroundParentOwnerLoss:true}:{}), ...(childStatus?{nativeBackgroundStatus:true}:{}), ...(childFormatter?{nativeBackgroundFormatter:true}:{}), ...(composerLayout?{nativeBackgroundComposerLayout:true}:{}), ...(sourceFrontendUrl?{nativeBackgroundSourceFrontend:true,sourceFrontendProof}:{}), ...(childFormatterLifecycle?{nativeBackgroundFormatterLifecycle:true}:{}), ...(childFormatterPolicy?{nativeBackgroundFormatterPolicy:true}:{}), ...(childApiRestart?{nativeBackgroundApiRestart:true}:{}), ...(childStatusLifecycle?{nativeBackgroundStatusLifecycle:true}:{}), appHandoffAccepted: false }))
   } finally {
     if ((childInteraction && !observations.childInteraction) || (childResume && !observations.childResume?.workerRetired)) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
