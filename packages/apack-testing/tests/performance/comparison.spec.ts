@@ -1,3 +1,4 @@
+import { performanceProcessReport } from './fixtures.ts';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -18,9 +19,8 @@ function complete(candidateMs = 104) {
   const output = directory(); const run = createPerformanceScenarioRun(output, manifest, 2, 'lightweight');
   for (const entry of run.schedule) {
     run.begin(entry);
-    const process = { ...report, mode: entry.mode };
     run.append(entry, { scenario: 'thread-open', index: entry.index, warmup: entry.warmup, outcome: 'passed', correct: true,
-      completion: 'view-ready', durationMs: entry.variant === 'A' ? 100 : candidateMs, work: {}, processes: { renderer: { ...process, processId: 101 }, backend: { ...process, processId: 102 } } });
+      completion: 'view-ready', durationMs: entry.variant === 'A' ? 100 : candidateMs, work: {}, processes: { renderer: performanceProcessReport(entry.mode, 'renderer'), backend: performanceProcessReport(entry.mode, 'backend') } });
   }
   writeFileSync(path.join(output, 'invocation.json'), JSON.stringify({ code: 0, timedOut: false, aborted: false }));
   return output;
@@ -78,9 +78,9 @@ it('retains independent successful startup lifecycle and per-launch manifests fo
   const invocations = { A: [{ phase: 'seed', exitCode: 0, signal: null, index: undefined as number | undefined }], B: [{ phase: 'seed', exitCode: 0, signal: null, index: undefined as number | undefined }] };
   run.save(invocations);
   for (const entry of run.schedule) {
-    run.begin(entry); const process = { ...report, mode: entry.mode };
+    run.begin(entry);
     const trial = { scenario: 'populated-startup', index: entry.index, warmup: entry.warmup, outcome: 'passed', correct: true,
-      completion: 'view-ready', durationMs: 100, work: {}, processes: { driver: { ...process, processId: 103 }, renderer: { ...process, processId: 101 }, backend: { ...process, processId: 102 } } };
+      completion: 'view-ready', durationMs: 100, work: {}, processes: { driver: performanceProcessReport(entry.mode, 'driver'), renderer: performanceProcessReport(entry.mode, 'renderer'), backend: performanceProcessReport(entry.mode, 'backend') } };
     const own = path.join(output, entry.variant, `trial-${entry.index}`); mkdirSync(own);
     writeFileSync(path.join(own, 'manifest.json'), readFileSync(path.join(output, entry.variant, 'manifest.json')));
     writeFileSync(path.join(own, 'results.json'), JSON.stringify({ trials: [trial] }));

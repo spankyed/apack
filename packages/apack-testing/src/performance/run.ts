@@ -3,7 +3,7 @@ import { lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'n
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
-import { chromeTrace, manifestSchema, summarize, trialSchema, type PerformanceManifest, type PerformanceTrial } from './report.ts';
+import { assertPerformanceCaptures, chromeTrace, manifestSchema, summarize, trialSchema, type PerformanceManifest, type PerformanceTrial } from './report.ts';
 
 // One parsed/encoded trial at a time; full profiles never accumulate in the run index.
 export const PERFORMANCE_TRIAL_BYTES = 128 * 1024 * 1024;
@@ -127,11 +127,7 @@ export function readPerformanceRun(directory: string, measured = 20) {
       const ownResult = JSON.parse(read(path.join(own, 'results.json'), PERFORMANCE_TRIAL_BYTES).toString()) as { trials?: unknown };
       if (!isDeepStrictEqual(ownManifest, manifest) || !isDeepStrictEqual(ownResult.trials, [trial])) throw Error('Startup trial provenance or raw evidence differs');
     }
-    const required = scenario === 'populated-startup' ? ['driver', 'renderer', 'backend'] : ['renderer', 'backend'];
-    if (Object.keys(trial.processes).length !== required.length || required.some(name => !trial.processes[name])
-      || Object.values(trial.processes).some(report => report.mode !== manifest.mode)) throw Error('Missing processes or mixed modes');
-    const ids = required.map(role => trial.processes[role]!.processId);
-    if (ids.some(id => id === undefined) || new Set(ids).size !== ids.length) throw Error('Missing or duplicate process identity');
+    assertPerformanceCaptures(trial, manifest.mode);
   }
   if (scenario === 'populated-startup' && (!index.invocations || index.invocations.length !== measured + 6
     || index.invocations.some((item, position) => item.exitCode !== 0 || item.signal !== null || item.phase !== (position ? 'populated-startup' : 'seed')
