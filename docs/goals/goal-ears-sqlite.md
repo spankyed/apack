@@ -509,3 +509,11 @@ core/heap budgets and deadlines; no shell or publishing/version-policy change is
 Script types and existing preview contract cases run after normal output production in the affected
 workflow. This build-orchestrator correction requires the next packaged-platform run; no source-app
 runtime qualification is invalidated by a non-runtime tool-launch change.
+
+[Full source-app41193315293](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-9ec/README.md)
+is terminal success at9ec:33actualpasses, zero failures/flaky/retries, one named installed-only skip.
+The original five-second editor case passes within the full suite; types/harness lint also pass.
+Corrected Windows/Linux packaging owner41195143299 runs at323; renewed signed macOS owner41195510812
+is queued at the same code input. No new release or adoption is authorized by these checks.
+
+Completed evidence checkpoint: [signed installed macOS 323](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-signed-323/README.md) has six actual passes with no skips/retries; Windows packaging remains open. [Join/statistics diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/join-statistics-a9/README.md) preserves 144 matched queries on an owned copy and does not justify changing production join order. Existing performance and full-goal acceptance gaps remain open. The user separately authorized shared-fixes PR #299; that exception does not authorize SQLite adoption or merging #286.
