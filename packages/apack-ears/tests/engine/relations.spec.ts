@@ -420,6 +420,26 @@ describe('graph algorithms', () => {
     expect(e.query.ids([a, b]).strongComponents('refs')).toEqual([[a], [b]]);
   });
 
+  it('keeps graph node order, deduplicates seeds and reacts to edges and trash changes', async () => {
+    const [a, b, c] = [task('a'), task('b'), task('c')];
+    expect(e.query.ids([c, a, c, b]).weakComponents('refs')).toEqual([[c], [a], [b]]);
+    const read = () => [e.query('Task').strongComponents('refs'), e.query('Task').rank('refs').limit(1).ids()];
+    const seen: ReturnType<typeof read>[] = [], watch = e.watch(read, value => seen.push(value));
+    try {
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a], [b], [c]], [a]]);
+      e.write(a).link('refs', b); e.write(b).link('refs', a); e.write(c).link('refs', b);
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a, b], [c]], [b]]);
+      e.write(b).trash();
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a], [c]], [a]]);
+      expect(e.query.withTrashed('Task').strongComponents('refs')).toEqual([[a, b], [c]]);
+      expect(e.query('Task').rank('refs', { seeds: [a, a] }).hits())
+        .toEqual(e.query('Task').rank('refs', { seeds: [a] }).hits());
+    } finally { watch.stop(); }
+  });
+
   it('communities splits the query where its edges thin, the same each time', () => {
     // Two triangles, joined by one edge
     const [a, b, c, x, y, z] = ['a', 'b', 'c', 'x', 'y', 'z'].map(task);
@@ -434,9 +454,16 @@ describe('graph algorithms', () => {
   it('explain reports the graph a rank built and the rounds it ran', () => {
     const [a, b] = [task('a'), task('b')];
     e.write(a).link('refs', b);
-    const { stages } = e.query('Task').rank('refs').explain();
-    expect(stages[1]).toMatchObject({ stage: 'rank', nodes: 2, edges: 1, converged: true });
-    expect(stages[1]!.iterations).toBeGreaterThan(1);
+    const explanation = e.query('Task').rank('refs').explain();
+    if (explanation.backend === 'elmdb') {
+      expect(explanation.stages[1]).toMatchObject({ stage: 'rank', nodes: 2, edges: 1, converged: true });
+      expect(explanation.stages[1]!.iterations).toBeGreaterThan(1);
+    } else {
+      expect(explanation.ids).toEqual([b, a]);
+      const projection = explanation.statements.find(statement => statement.sql.includes('edges AS MATERIALIZED'));
+      expect(projection?.returnedRows).toBe(1);
+      expect(projection?.plan.some(step => step.detail.includes('relations') || step.detail.includes('SEARCH r'))).toBe(true);
+    }
   });
 });
 

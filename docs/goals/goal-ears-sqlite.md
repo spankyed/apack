@@ -223,9 +223,11 @@ Integrated master is now pinned to `8f8433a5b9e88df3c083fb723425466fab86fa97`; n
 `d33f859` (the exact revision is in `vendor/elmdb.rev`). The merge preserves SQLite explain reporting,
 both graph-boundary and new graph-algorithm tests, both private-file barrier regressions, and Preview's
 `generate:entries` step. Syntax checks pass for the conflicted TypeScript files; this is source integration,
-not a passing candidate checkpoint. The structured storage request types and SQLite query executor still
-need PageRank, weak/strong components and genuine Leiden communities, including deterministic seeds,
-watch dependencies and explain behavior. Do not substitute Louvain for Leiden or silently omit these APIs.
+not a passing candidate checkpoint. [Initial graph implementation](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-core-4f5/README.md)
+now carries the graph request/answer types and implements SQL projection, PageRank and iterative weak/strong
+components. Full EARS typechecking and five selected SQLite graph cases pass, including watch/trash changes
+and actual SQL explain output. Genuine Leiden remains incomplete and explicitly refuses; broader graph
+correctness/performance, new-pin native qualification and API report regeneration remain required. Do not substitute Louvain for Leiden or silently omit these APIs.
 Existing platform/benchmark evidence retains its original native pin; new-pin baseline and integrated
 candidate qualification remain required. Inspect actual Git/process/workflow state before continuing.
 

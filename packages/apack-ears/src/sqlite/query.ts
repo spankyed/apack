@@ -5,6 +5,7 @@ import { orderNumericIds } from "./numeric-order.ts";
 import type { QueryPlan, QueryStep, QueryAnswer, StoredHit } from "../storage.ts";
 import { SqliteValueGroups } from "./value-groups.ts";
 import { distinctScalarIds, countScalarGroups } from "./scalar-groups.ts";
+import { projectGraph, graphComponents, rankGraph } from './graph-algorithms.ts';
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
@@ -83,6 +84,15 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
   let scanSource: { sql: string; parameters: any[] } | undefined;
   for (const [stepIndex, step] of steps.entries()) {
     switch (step.step) {
+      case 'rank': {
+        const graph = projectGraph(db, idsNow(), step.kinds, step.direction);
+        const scores = rankGraph(graph, step.seeds, step.damping, step.iterations, step.tolerance);
+        const ranked = scores ? graph.ids.map((id, at) => ({ id, score: scores[at]!, terms: [] })) : [];
+        ranked.sort((a, b) => b.score - a.score);
+        searchHits = new Map(ranked.map(hit => [hit.id, hit]));
+        restart(ranked.map(hit => hit.id));
+        break;
+      }
       case "ofType":
         filter("e.type=?", [step.type]);
         break;
@@ -589,6 +599,14 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
     return { kind: "groups", groups: terminal.counts ? groups.entries.map(([value, ids]) => [value, ids.length]) : groups.entries, __visited: visited ?? ids.length };
   }
 
+  if (terminal.answer === 'weakComponents' || terminal.answer === 'strongComponents') {
+    const groups = graphComponents(projectGraph(db, ids, terminal.kinds), terminal.answer === 'strongComponents');
+    const members = terminal.counts ? groups.map(group => group.length) : groups;
+    return terminal.answer === 'weakComponents'
+      ? { kind: 'weakComponents', weakComponents: members, __visited: ids.length }
+      : { kind: 'strongComponents', strongComponents: members, __visited: ids.length };
+  }
+  if (terminal.answer === 'communities') fail('VALUE_INVALID', 'SQLite Leiden communities implementation is incomplete');
   if (terminal.answer === 'degrees') {
     for (const kind of terminal.kinds) { db.relationDefinition(kind); db.trackRange(`kind:${kind}`); }
     for (const type of terminal.types ?? []) db.definition(type);

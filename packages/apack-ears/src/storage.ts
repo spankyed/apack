@@ -14,6 +14,7 @@ export type QueryStep =
   | { step: 'linkedTo' | 'linkedFrom' | 'unlinkedTo' | 'unlinkedFrom'; kind: string; other?: string }
   | { step: 'out' | 'in' | 'both' | 'descendants' | 'ancestors'; kinds: string[]; types?: string[]; depth?: number }
   | { step: 'pathTo'; to: string; kinds: string[]; direction?: EdgeDirection; depth?: number }
+  | { step: 'rank'; kinds: string[]; direction?: EdgeDirection; seeds?: string[]; damping?: number; iterations?: number; tolerance?: number }
   | { step: 'orderBy'; field: string; descending?: boolean }
   | { step: 'reverse' }
   | { step: 'limit'; n: number }
@@ -29,6 +30,8 @@ export type QueryTerminal =
   | { answer: 'ids' | 'count' | 'first' | 'last' | 'exists' }
   | { answer: 'rows' | 'firstRow'; fields?: string[] }
   | { answer: 'degrees'; kinds: string[]; direction?: EdgeDirection; types?: string[] }
+  | { answer: 'weakComponents' | 'strongComponents'; kinds: string[]; counts?: boolean }
+  | { answer: 'communities'; kinds: string[]; resolution?: number; seed?: number; iterations?: number }
   | { answer: 'edges'; kinds: string[]; direction: 'out' | 'in'; types?: string[] }
   | { answer: 'groupBy'; field: string; counts?: boolean }
   | { answer: 'hits'; fields?: string[]; highlights?: boolean };
@@ -101,6 +104,9 @@ interface QueryAnswers {
   rows: { kind: 'rows'; rows: Record<string, unknown>[]; plainObjects?: boolean };
   firstRow: { kind: 'row'; row: Record<string, unknown> | null; plainObjects?: boolean };
   edges: { kind: 'relations'; relations: StoredRelation[] };
+  weakComponents: { kind: 'weakComponents'; weakComponents: string[][] | number[] };
+  strongComponents: { kind: 'strongComponents'; strongComponents: string[][] | number[] };
+  communities: { kind: 'communities'; communities: string[][] };
   degrees: { kind: 'degrees'; degrees: Array<[string, number]> };
   groupBy: { kind: 'groups'; groups: Array<[unknown, string[] | number]>; plainObjects?: boolean };
   hits: { kind: 'hits'; hits: StoredHit[]; plainObjects?: boolean };
