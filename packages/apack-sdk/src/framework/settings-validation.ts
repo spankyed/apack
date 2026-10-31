@@ -2,6 +2,12 @@ import { Ajv, type ErrorObject } from 'ajv';
 import type { SettingsDefinition, SettingsProblem, SettingsSchema, SettingsValidator } from './settings-definition.ts';
 import { hasOwn } from '../utils/shared.ts';
 
+const ajvOptions = { strict: true, allErrors: true, useDefaults: false, coerceTypes: false, removeAdditional: false } as const;
+// This instance only validates schema documents against Ajv's built-in meta-schema. It never compiles
+// or registers a pack's schema, so it cannot retain a pack's $id/reference namespace. Initialize lazily
+// to keep unused framework imports free of validator construction.
+let metaSchemaChecker: Ajv | undefined;
+
 /** @internal Preserve value paths when build tools report invalid declared defaults. */
 export class _SettingsDefaultsError extends Error {
   constructor(readonly problems: readonly SettingsProblem[]) {
@@ -28,8 +34,13 @@ export function _compileSettingsDefinition(definition: SettingsDefinition): Sett
   if (schemaProblems.length) throw new Error(`Settings schema must be JSON data: ${schemaProblems[0].message}`);
   if (definition.schema?.type !== 'object') throw new Error('Settings schema must declare an object at its root');
   checkReferences(definition.schema);
-  const ajv = new Ajv({ strict: true, allErrors: true, useDefaults: false, coerceTypes: false, removeAdditional: false });
-  const validate = ajv.compile(structuredClone(definition.schema));
+  const schema = structuredClone(definition.schema);
+  const checker = metaSchemaChecker ??= new Ajv(ajvOptions);
+  if (!checker.validateSchema(schema)) throw new Error(`schema is invalid: ${checker.errorsText()}`);
+  // Preserve independent reference resolution and strict compilation for every definition. Only the
+  // already-performed meta-schema check is skipped here, avoiding its recompilation per definition.
+  const ajv = new Ajv({ ...ajvOptions, validateSchema: false });
+  const validate = ajv.compile(schema);
   const validator: SettingsValidator = {
     validate(value) {
       if (value === null || typeof value !== 'object' || Array.isArray(value)) {
