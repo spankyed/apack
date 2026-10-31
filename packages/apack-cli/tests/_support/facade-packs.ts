@@ -416,6 +416,8 @@ query('Memo').rank('|rankKind|');
 query('Memo').weakComponents('|weakComponentsKind|');
 query('Memo').strongComponents('|strongComponentsKind|');
 query('Memo').communities('|communitiesKind|');
+query('Memo').topological('|topologicalKind|');
+query('Memo').similar(memoId, '|similarKind|');
 write(memoId).link('|linkKind|', memoId);
 query('Memo').linkedTo('|linkedToKind|', memoId);
 write(memoId).link('relatd', memoId);
@@ -428,7 +430,7 @@ const FIELD_POSITIONS = ['pick', 'pickOne', 'outPick', 'where', 'has', 'lacks', 
 /** The fields a write may name: the declared ones, without the engine's own (`createdAt`, `updatedAt`, …) */
 const WRITE_POSITIONS = ['set', 'append', 'removeAt'];
 /** Relation kinds: the pack's own, its dependency's and the SDK's */
-const KIND_POSITIONS = ['outKind', 'linkKind', 'linkedToKind', 'ancestorsKind', 'descendantsKind', 'bothKind', 'pathToKind', 'degreesKind', 'rankKind', 'weakComponentsKind', 'strongComponentsKind', 'communitiesKind'];
+const KIND_POSITIONS = ['outKind', 'linkKind', 'linkedToKind', 'ancestorsKind', 'descendantsKind', 'bothKind', 'pathToKind', 'degreesKind', 'rankKind', 'weakComponentsKind', 'strongComponentsKind', 'communitiesKind', 'topologicalKind', 'similarKind'];
 /** Roles: the pack's own, its dependency's and the SDK's */
 const ROLE_POSITIONS = ['grantRole', 'withRole'];
 const NAME_POSITIONS = ['query', 'newId', 'out', 'in', 'ancestors', 'descendants', 'both', 'ofType'];

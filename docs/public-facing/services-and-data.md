@@ -464,7 +464,7 @@ is `query.ids(id).ancestors(kind).ids().reverse()`.
 
 ### Graph algorithms
 
-Three reads treat a query's entities as a graph: the entities are its nodes, and the edges of the kinds you name
+These reads treat a query's entities as a graph: the entities are its nodes, and the edges of the kinds you name
 between two of them are its edges. An edge to an entity the query doesn't reach doesn't count, so a query narrows the
 graph first — a type, a search, a walk:
 
@@ -473,6 +473,8 @@ graph first — a type, a search, a walk:
 | `query(type).rank(kind, { direction?, seeds? })` | The query's entities by how much they matter from `seeds`, highest first: personalized PageRank, a walker following edges (`out` unless `direction` is `in` or `both`) and jumping back to a seed. With no `seeds`, every entity is one, which ranks what is central overall. End with `hits()` for each score, and `limit(n)` keeps the `n` highest |
 | `query(type).weakComponents(kind)` | The groups the edges join, whichever way each points: each group's ids, the largest first |
 | `query(type).strongComponents(kind)` | The groups whose entities each reach every other following the edges' direction: a group of more than one is a cycle, and an entity on no cycle is a group of its own. Each group's ids, the largest first |
+| `query(type).topological(kind, { direction? })` | The query's entities in an order where each edge (`out` unless `direction` is `in`) leads forward: with `blocks`, what blocks comes before what it blocks. The members of a cycle stay together; what the edges leave free keeps query order |
+| `query(type).similar(id, kind, { direction?, measure? })` | The query's entities that share neighbours with `id`, most alike first: `jaccard` (the default, shared over either's) or `adamicAdar` (a rarely linked shared neighbour counts more). A neighbour counts wherever it is, so files can be alike by the symbols they use. End with `hits()` for each score |
 | `query(type).communities(kind, { resolution?, seed? })` | The communities the edges form: groups more densely linked inside than out (Leiden, by modularity), each connected, the largest first. A higher `resolution` (1 by default) finds smaller ones; `0` keeps each connected group whole. The same data answers the same communities every time |
 
 ```typescript
