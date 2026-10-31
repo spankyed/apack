@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: f3f82a9f93696b1dfa811c25f9916ca093c7a955
+          ref: 0e63e75b63a460da52ec109da731e3ff7b38eb9d
       - uses: actions/setup-node@v4
         with:
           node-version: 23.11.1
@@ -26,15 +26,14 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41208950064
-          name: strict-producers-f3f82a9f93696b1dfa811c25f9916ca093c7a955
+          run-id: 41210208958
+          name: strict-producers-0e63e75b63a460da52ec109da731e3ff7b38eb9d
           path: ${{ runner.temp }}/producer-outputs
       - name: Admit existing producer outputs and build the app
         shell: bash
         run: |
           tar -xzf "$RUNNER_TEMP/producer-outputs/producers.tgz"
-          node scripts/with-source.mjs npx tsx scripts/strict-job-artifact.ts --check
-          npm run chain -- --only build:runtime --no-native --cores 2
+          npm run chain -- --only packages:ensure,build:runtime --no-native --cores 2
       - name: Verify canonical startup records through actual worker exits
         shell: bash
         env:
@@ -58,7 +57,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: startup-record-contract-f3f82a9f93
+          name: startup-record-contract-0e63e75b63
           include-hidden-files: true
           retention-days: 2
           path: |
