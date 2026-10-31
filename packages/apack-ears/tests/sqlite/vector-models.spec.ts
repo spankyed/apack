@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { createEarsEngine } from '../../src/index.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
@@ -564,6 +566,38 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     const resumed=own(path);resumed.write(()=>resumed.models.recover());await resumed.db.nativeModelsReady();
     expect(resumed.db.get('SELECT state,model_sha256 FROM vector_training')).toEqual({state:'ready',model_sha256:hash});
     expect(resumed.db.sequence).toBe(sequence);
+  });
+
+  it('recovers a durable training attempt after its process is killed without draining',async()=>{
+    const first=fixture(),path=first.db.path,sequence=first.db.sequence;
+    const canonical=first.db.all('SELECT id,embedding FROM embedding_values ORDER BY id');
+    await first.models.stop();first.db.close();
+    const databaseModule=new URL('../../src/sqlite/database.ts',import.meta.url).href;
+    const modelsModule=new URL('../../src/sqlite/vector-models.ts',import.meta.url).href;
+    const script=`const {SqliteDatabase}=await import(${JSON.stringify(databaseModule)});
+      const {SqliteVectorModels}=await import(${JSON.stringify(modelsModule)});
+      const db=new SqliteDatabase({path:${JSON.stringify(path)},syncs:true});
+      const models=new SqliteVectorModels(db,process.env.EARS_VEC1_EXTENSION);
+      const job=db.indexBuilds.jobs().find(job=>job.kind==='vector');
+      db.sql.exec('BEGIN IMMEDIATE');models.enqueue(job);db.commitWrite();
+      if(!models.start())throw Error('Training did not launch');
+      process.kill(process.pid,'SIGKILL');`;
+    const child=spawn(process.execPath,['--import','tsx','--input-type=module','-e',script],{
+      stdio:['ignore','ignore','pipe'],
+    });
+    let stderr='';child.stderr.on('data',chunk=>{stderr+=chunk;});
+    const [code,signal]=await once(child,'exit');
+    expect(code!==0||signal!==null,stderr).toBe(true);
+    const next=own(path);
+    expect(next.db.get('SELECT state,model FROM vector_training')).toEqual({state:'training',model:null});
+    expect(next.db.sequence).toBe(sequence);
+    expect(next.db.all('SELECT id,embedding FROM embedding_values ORDER BY id')).toEqual(canonical);
+    next.write(()=>next.models.recover());
+    expect(next.db.get('SELECT state,attempt FROM vector_training')).toEqual({state:'pending',attempt:null});
+    await next.db.nativeModelsReady();
+    expect(next.db.get('SELECT state FROM vector_training')!.state).toBe('ready');
+    expect(next.db.sequence).toBe(sequence);
+    expect(next.db.all('SELECT id,embedding FROM embedding_values ORDER BY id')).toEqual(canonical);
   });
 
   it('persists failure and supports explicit retry after additional primary embeddings',async()=>{
