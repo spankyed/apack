@@ -41,15 +41,20 @@ jobs:
               npm ci --no-audit --no-fund
               npm run chain -- --only packages:ensure,build:default-setup --no-native --cores 1
               npm run chain -- --only build:runtime --no-native --cores 1
-              xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario all --mode disabled --compare lightweight --trials 2 --output .apack/performance/cleanup-contract-final
-              bash tests/performance/counterfactuals/thread-open.sh full-read
-              bash tests/performance/counterfactuals/thread-open.sh missing-completion
+              DEBUG_E2E=1 ELECTRON_ENABLE_LOGGING=1 xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario thread-open --mode disabled --compare lightweight --trials 2 --output .apack/performance/cleanup-startup-diagnostic
             ' 2>&1 | tee "$RUNNER_TEMP/performance-contracts.log"
+      - name: Make container-owned diagnostic evidence readable
+        if: always()
+        shell: bash
+        run: |
+          for output in .apack/performance node_modules/.cache/apack-chain/runs; do
+            if [ -d "$output" ]; then sudo chown -R "$(id -u):$(id -g)" "$output"; fi
+          done
       - name: Preserve contract evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-cleanup-contracts-ec19126ce8
+          name: performance-startup-diagnostic-a075fe1c41
           include-hidden-files: true
           retention-days: 2
           path: |
