@@ -166,6 +166,12 @@ describe('ordering', () => {
       .toEqual([v.none, v.nil, v.list, v.text, v.word, v.later, v.earlier, v.ten, v.two, v.flag]);
   });
 
+  it('retains every missing and null field member in the same group', () => {
+    const a = e.create('Person').id(), b = e.create('Person').id();
+    const c = e.create('Person').set('value', null).id(), d = e.create('Person').set('value', null).id();
+    expect([...e.query('Person').groupBy('value')]).toEqual([[null, [a, b, c, d]]]);
+  });
+
   it('distinct and groupBy', () => {
     expect(e.query.ids([t.a, t.a, t.b]).distinct().ids()).toEqual([t.a, t.b]);
     expect(e.query('Task').distinct('title').ids()).toEqual([t.a, t.b, t.c]);

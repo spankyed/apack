@@ -82,6 +82,35 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
       .toEqual(Array.from({ length: 667 }, (_, i) => 2 + i * 3));
   });
 
+  it('batches distinct/group fields without per-entity reads or unrelated bodies', () => {
+    const { db, e } = open();
+    e.transact(() => { for (let i = 0; i < 512; i++) e.create('Row', {
+      id: `Row-${i}`, rank: i, body: 'unrelated '.repeat(1000), bucket: `bucket-${i}`,
+    }); });
+    const row = vi.spyOn(db, 'row'), read = vi.spyOn(db.values, 'read');
+    const distinct = e.query('Row').distinct('bucket').explain();
+    expect(distinct.ids).toHaveLength(512);
+    if (distinct.backend !== 'sqlite') throw new Error('Expected SQLite diagnostics');
+    expect(distinct.statementCount).toBeLessThan(20);
+    const grouped = e.query('Row').groupBy('bucket');
+    expect(grouped.size).toBe(512);
+    expect(grouped.get('bucket-511')).toEqual(['Row-511']);
+    expect(row).not.toHaveBeenCalled();
+    expect(read.mock.calls.every(call => call[2]?.length === 1 && call[2][0] === 'bucket')).toBe(true);
+  });
+
+  it('groups dates and deep values in encounter order and retains all missing/null members', () => {
+    const { e } = open();
+    const values = [true, 1, new Date(1), new Date(1), { a: 1, b: 2 }, { b: 2, a: 1 }, null];
+    values.forEach((bucket, i) => e.create('Row', { id: `Row-${i}`, rank: i, body: '', bucket }));
+    e.create('Row', { id: 'Row-missing-a', rank: 8, body: '' });
+    e.create('Row', { id: 'Row-missing-b', rank: 9, body: '' });
+    const groups = [...e.query('Row').groupBy('bucket')];
+    expect(groups).toEqual([[true, ['Row-0']], [1, ['Row-1']], [new Date(1), ['Row-2', 'Row-3']],
+      [{ a: 1, b: 2 }, ['Row-4', 'Row-5']], [null, ['Row-6', 'Row-missing-a', 'Row-missing-b']]]);
+    expect(e.query('Row').distinct('bucket').ids()).toEqual(['Row-0', 'Row-1', 'Row-2', 'Row-4', 'Row-6', 'Row-missing-a']);
+  });
+
   it('validates scalar cells outside a pushed sort prefix', () => {
     const { db, e } = open();
     e.create('Row', { id: 'Row-first', rank: 1, body: 'a' });

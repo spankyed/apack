@@ -3,7 +3,7 @@ import type { SqliteDatabase } from "./database.ts";
 import { scalarKey } from "./database.ts";
 import { orderNumericIds } from "./numeric-order.ts";
 import type { QueryPlan, QueryStep, QueryAnswer, StoredHit } from "../storage.ts";
-import { sameValue } from "../utils.ts";
+import { SqliteValueGroups } from "./value-groups.ts";
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
@@ -302,17 +302,13 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         restart(idsNow().reverse());
         break;
       case "distinct": {
-        const seen: any[] = [];
-        restart(
-          idsNow().filter((id) => {
-            const value =
-              step.field === undefined ? id : db.row(id)?.[step.field];
-            if (seen.some((v) => sameValue(v, value))) return false;
-            seen.push(value);
-            return true;
-          })
-        );
-        if (step.field !== undefined) trackField(step.field);
+        const ids = idsNow();
+        if (step.field === undefined) restart([...new Set(ids)]);
+        else {
+          trackField(step.field);
+          const rows = db.rows(ids, [step.field]), groups = new SqliteValueGroups();
+          restart(ids.filter((id, index) => groups.add(rows[index]?.[step.field!], id)));
+        }
         break;
       }
       case "orderBy": {
@@ -580,15 +576,11 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
     };
   if (terminal.answer === "groupBy") {
     trackField(terminal.field);
-    const groups: Array<[unknown, string[]]> = [];
-    for (const id of ids) {
-      const value = db.row(id)?.[terminal.field];
-      const group = groups.find(([key]) => sameValue(key, value));
-      if (group) group[1].push(id);
-      else groups.push([value ?? null, [id]]);
-    }
-    return { kind: "groups", groups: terminal.counts ? groups.map(([value, ids]) => [value, ids.length]) : groups, __visited: visited ?? ids.length };
+    const groups = new SqliteValueGroups(), rows = db.rows(ids, [terminal.field]);
+    for (let index = 0; index < ids.length; index++) groups.add(rows[index]?.[terminal.field] ?? null, ids[index]!);
+    return { kind: "groups", groups: terminal.counts ? groups.entries.map(([value, ids]) => [value, ids.length]) : groups.entries, __visited: visited ?? ids.length };
   }
+
   if (terminal.answer === 'degrees') {
     for (const kind of terminal.kinds) { db.relationDefinition(kind); db.trackRange(`kind:${kind}`); }
     for (const type of terminal.types ?? []) db.definition(type);
