@@ -82,7 +82,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
       .toEqual(Array.from({ length: 667 }, (_, i) => 2 + i * 3));
   });
 
-  it('executes scalar distinct/groups in SQL without per-entity reads or unrelated bodies', () => {
+  it('executes scalar distinct in SQL and batches member-group projection', () => {
     const { db, e } = open();
     e.transact(() => { for (let i = 0; i < 512; i++) e.create('Row', {
       id: `Row-${i}`, rank: i, body: 'unrelated '.repeat(1000), bucket: `bucket-${i}`,
@@ -92,11 +92,12 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     expect(distinct.ids).toHaveLength(512);
     if (distinct.backend !== 'sqlite') throw new Error('Expected SQLite diagnostics');
     expect(distinct.statementCount).toBeLessThan(20);
+    expect(read).not.toHaveBeenCalled();
     const grouped = e.query('Row').groupBy('bucket');
     expect(grouped.size).toBe(512);
     expect(grouped.get('bucket-511')).toEqual(['Row-511']);
     expect(row).not.toHaveBeenCalled();
-    expect(read).not.toHaveBeenCalled();
+    expect(read.mock.calls.every(call => call[2]?.length === 1 && call[2][0] === 'bucket')).toBe(true);
     expect(distinct.statements.some(statement => statement.sql.includes('GROUP BY kind,value COLLATE BINARY'))).toBe(true);
   });
 
@@ -111,9 +112,11 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     expect(e.query('Row').reverse().distinct('bucket').ids()).toEqual(['Row-missing', 'Row-4', 'Row-2', 'Row-1', 'Row-0']);
     expect(e.query('Row').limit(4).distinct('bucket').ids()).toEqual(['Row-0', 'Row-1', 'Row-2', 'Row-3']);
     expect([...e.query.ids(['Row-4', 'Row-3', 'Row-4']).ofType('Row').groupBy('bucket')]).toEqual([[0, ['Row-4', 'Row-3', 'Row-4']]]);
+    const countRead = vi.spyOn(db.values, 'read');
     const counts = db.readSync({ reads: [{ read: 'query', plan: {
       start: { from: 'types', types: ['Row'] }, terminal: { answer: 'groupBy', field: 'bucket', counts: true },
     } }] })[0];
+    expect(countRead).not.toHaveBeenCalled();
     expect(counts).toMatchObject({ kind: 'groups', groups: [[true, 1], [1, 1], ['1', 1], [-0, 2], [null, 2]] });
     if (counts.kind !== 'groups') throw new Error('Expected groups');
     expect(Object.is(counts.groups[3]![0], -0)).toBe(true);

@@ -39,15 +39,15 @@ export function distinctScalarIds(db: SqliteDatabase, input: ScalarInput): strin
     .map(row => String(row.id));
 }
 
-export function groupScalarValues(db: SqliteDatabase, input: ScalarInput, counts: boolean): Array<[unknown, string[] | number]> | undefined {
+export function countScalarGroups(db: SqliteDatabase, input: ScalarInput): Array<[unknown, number]> | undefined {
   const cells = scalarCells(db, input);
   if (!cells) return;
   // The sole min aggregate also retains the original first cell representation, including signed zero.
   return db.all(`WITH cells AS MATERIALIZED (${cells})
-    SELECT original_kind,original_value,${counts ? 'count(*)' : 'json_group_array(id ORDER BY encounter)'} members,min(encounter) first
+    SELECT original_kind,original_value,count(*) members,min(encounter) first
     FROM cells GROUP BY kind,value COLLATE BINARY ORDER BY first`, input.parameters)
     .map(row => [row.original_kind === null || row.original_kind === 'null' ? null
       : row.original_kind === 'zero' ? -0
       : row.original_kind === 'bool' ? Boolean(row.original_value) : row.original_value,
-      counts ? Number(row.members) : JSON.parse(String(row.members)) as string[]]);
+      Number(row.members)]);
 }

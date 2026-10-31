@@ -4,7 +4,7 @@ import { scalarKey } from "./database.ts";
 import { orderNumericIds } from "./numeric-order.ts";
 import type { QueryPlan, QueryStep, QueryAnswer, StoredHit } from "../storage.ts";
 import { SqliteValueGroups } from "./value-groups.ts";
-import { distinctScalarIds, groupScalarValues } from "./scalar-groups.ts";
+import { distinctScalarIds, countScalarGroups } from "./scalar-groups.ts";
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
@@ -569,11 +569,11 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       value: !!db.get(ordered() + " LIMIT 1", parameters),
       __visited: visited ?? 0,
     };
-  if (terminal.answer === 'groupBy' && specificTypes) {
+  if (terminal.answer === 'groupBy' && terminal.counts && specificTypes) {
     trackField(terminal.field);
-    const groups = groupScalarValues(db, { sql, parameters, order: order(), field: terminal.field, types }, terminal.counts ?? false);
+    const groups = countScalarGroups(db, { sql, parameters, order: order(), field: terminal.field, types });
     if (groups !== undefined) return { kind: 'groups', groups,
-      __visited: visited ?? groups.reduce((sum, [, members]) => sum + (typeof members === 'number' ? members : members.length), 0) };
+      __visited: visited ?? groups.reduce((sum, [, count]) => sum + count, 0) };
   }
   const ids = idsNow();
   if (terminal.answer === "first" || terminal.answer === "last")
