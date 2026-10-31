@@ -901,14 +901,26 @@ work buffers with the native default damping, tolerance and round limit. Graph a
 working storage; result ordering adds sorting work, and SQL may allocate or spill for its own projection.
 This is neither bounded-memory graph execution nor a realistic-load performance qualification.
 
-`communities.ts` aggregates parallel/opposite edges into undirected weights and delegates genuine Leiden
-to pinned MIT `leiden-ts@0.1.0`. Seed zero is explicit, unsigned seeds and finite nonnegative resolution
-validate, resolution zero returns connected components, and result groups retain size/encounter order.
-The library owns local moving, refinement and aggregation; convergence errors propagate rather than
-returning invented communities. Its new-package maintenance burden and comparative quality/performance
-remain acceptance concerns. [Initial evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-leiden-240/README.md)
-records 98 focused passing cases and a separate 500-graph deterministic/connectivity probe; those checks
-do not certify arbitrary graphs or replace native/new-pin and integrated runtime qualification.
+`communities.ts` sends the projected edges to locked `leiden-rs@0.8.1` through the small synchronous
+Rust/WASM wrapper in `native/graphs`. Native's graph builder preserves parallel/opposite edge weights.
+Seed zero is explicit, unsigned seeds and finite nonnegative resolution validate, resolution zero returns
+connected components, and groups retain size/encounter order. Errors propagate rather than becoming
+invented singleton partitions. The initial TypeScript dependency was rejected after its seed-zero karate
+modularity reached 0.3952 versus native 0.4198; its failed test/evidence remain, while the Rust core reaches
+0.419789612 and passes the unchanged regression.
+
+`community-core.ts` validates pinned source and generated binding/WASM hashes before evaluating trusted
+package code. It creates a fresh generated module without Node's global require cache; each SQLite handle
+owns its linear memory and releases its reference on close. App-owned opens initialize it before creating
+database files. Package production performs locked builds with Rust1.99.1/wasm-bindgen0.2.105, private
+intermediates, path remapping and third-party license texts. No compiler/download runs at database open,
+and stored metadata never selects executable code. Missing or changed artifacts refuse explicitly.
+
+[Portable-core evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-wasm-4ed/README.md)
+records Node native-quality parity and 106 focused passing EARS cases, including independent memories and
+negative integrity checks. This does not qualify the new production build, installed runtimes, realistic
+graph resource costs or all remaining original acceptance gates. The original strict checkpoint is green
+atdcbb289e56; exact-current full/platform/packaging checks remain required.
 
 
 ### Read-only media and published backups

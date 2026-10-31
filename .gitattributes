@@ -5,3 +5,6 @@ native/vectors/*.patch -text -whitespace
 
 # Pinned upstream source is hashed before patching/compilation.
 native/vectors/upstream.c -text -whitespace
+
+# The portable graph source identity is identical on Windows and POSIX checkouts.
+native/graphs/** text eol=lf

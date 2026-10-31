@@ -12,6 +12,7 @@ import { toElmdbSchema, type EngineSchema } from '../schema.ts';
 import { SqliteDatabase } from './database.ts';
 import { SqliteVectorModels } from './vector-models.ts';
 import { resolveNativeVectorExtension } from './native-extension.ts';
+import { loadGraphCommunityCore } from './community-core.ts';
 import { auditSqliteDatabase, type SqliteAuditReport } from './audit.ts';
 export type { SqliteAuditReport } from './audit.ts';
 
@@ -31,7 +32,8 @@ export interface DatabaseOptions {
 }
 
 export function openDatabase({ schema, ...options }: DatabaseOptions): EarsDatabase {
-  return new SqliteDatabase({ ...options, nativeVectorExtension: options.nativeVectorExtension ?? resolveNativeVectorExtension(), ...(schema ? { schema: toElmdbSchema(schema) } : {}) });
+  const communityCore = loadGraphCommunityCore();
+  return new SqliteDatabase({ communityCore, ...options, nativeVectorExtension: options.nativeVectorExtension ?? resolveNativeVectorExtension(), ...(schema ? { schema: toElmdbSchema(schema) } : {}) });
 }
 
 /** Claim this store's native model service and recover abandoned attempts before background work starts.

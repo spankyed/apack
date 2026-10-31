@@ -38,6 +38,9 @@ try {
   };
   report.native = record('Packaged native provenance: ');
   report.sqlite = record('EARS SQLite provenance: ');
+  assert.equal(report.sqlite.graphManifest?.leidenVersion, '0.8.1');
+  assert(/^[a-f0-9]{64}$/.test(report.sqlite.graphManifest.wasmSha256));
+  assert(/^[a-f0-9]{64}$/.test(report.sqlite.graphManifest.loaderSha256));
   assert.equal(report.native.platform, process.platform);
   assert.equal(report.native.arch, 'x64');
   assert(report.native.versions.electron, 'Probe must run inside the packaged Electron executable');

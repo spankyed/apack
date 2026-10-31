@@ -608,7 +608,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       : { kind: 'strongComponents', strongComponents: members, __visited: ids.length };
   }
   if (terminal.answer === 'communities') return { kind: 'communities',
-    communities: graphCommunities(projectGraph(db, ids, terminal.kinds), terminal.resolution, terminal.seed), __visited: ids.length };
+    communities: graphCommunities(projectGraph(db, ids, terminal.kinds), terminal.resolution, terminal.seed, db.graphCommunities), __visited: ids.length };
   if (terminal.answer === 'degrees') {
     for (const kind of terminal.kinds) { db.relationDefinition(kind); db.trackRange(`kind:${kind}`); }
     for (const type of terminal.types ?? []) db.definition(type);

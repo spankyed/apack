@@ -469,7 +469,9 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
   'packages/apack-ears/bench/ears.bench.ts', 'packages/api/tsup.config.ts',
   'packages/dev-mode.js', 'packages/entry-point.mjs',
   // Owned vector-extension build/test source is also read by repository-wide lint and guards.
-  'native/vectors'];
+  'native/vectors', 'native/graphs/build.mjs', 'native/graphs/probe.mjs',
+  'native/graphs/Cargo.toml', 'native/graphs/Cargo.lock', 'native/graphs/.cargo/config.toml',
+  'native/graphs/rust-toolchain.toml', 'native/graphs/src/lib.rs'];
 
 /**
  * `packages:ensure` builds the publishable packages, so its inputs are theirs — taken from `BUILD_UNITS`

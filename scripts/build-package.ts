@@ -49,6 +49,13 @@ async function main(): Promise<void> {
   if (pkg.name === '@apackdev/ears') {
     // Native code is built only by package production, never by opening a database. Keep compiler
     // intermediates/absolute command provenance outside the published tree.
+    const graphBuild = path.join(pkgDir, '.temp', 'native-graphs');
+    fs.rmSync(graphBuild, { recursive: true, force: true });
+    execFileSync(process.execPath, [path.join(repoRoot, 'native', 'graphs', 'build.mjs'), graphBuild], { stdio: 'inherit' });
+    const graphDestination = path.join(stagedDir, 'sqlite', 'graph');
+    fs.mkdirSync(graphDestination, { recursive: true });
+    for (const file of ['ears_graph.js', 'ears_graph_bg.wasm', 'manifest.json', 'LICENSES.txt', 'package.json'])
+      fs.copyFileSync(path.join(graphBuild, file), path.join(graphDestination, file));
     const nativeBuild = path.join(pkgDir, '.temp', 'native-vectors');
     fs.rmSync(nativeBuild, { recursive: true, force: true });
     execFileSync(process.execPath, [path.join(repoRoot, 'native', 'vectors', 'build.mjs'), nativeBuild], { stdio: 'inherit' });

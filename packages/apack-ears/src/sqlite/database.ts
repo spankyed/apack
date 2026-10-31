@@ -1,4 +1,5 @@
 import { fieldCellInvalid } from './field-query.ts';
+import { loadGraphCommunityCore, type GraphCommunityCore } from './community-core.ts';
 import { createWriteLease, withoutWriteAuthority } from '../write-lease.ts';
 // SQLite storage for the structured EARS port. Scalar columns own small values; MessagePack is limited
 // to composite persistence and canonical metadata.
@@ -147,6 +148,8 @@ export class SqliteDatabase implements EarsDatabase {
   }
 
   private readonly layouts = new Map<string, SqliteValueLayout>();
+  private communityCore?: GraphCommunityCore;
+  graphCommunities = () => this.communityCore ??= loadGraphCommunityCore();
   private explaining?: { statements: SqliteStatement[]; count: number };
 
   constructor(options: {
@@ -155,7 +158,9 @@ export class SqliteDatabase implements EarsDatabase {
     readOnly?: boolean;
     syncs?: boolean;
     nativeVectorExtension?: string;
+    communityCore?: GraphCommunityCore;
   }) {
+    this.communityCore = options.communityCore;
     this.path = resolve(options.path);
     this.readOnly = options.readOnly ?? false;
     if (!this.readOnly) mkdirSync(this.path, { recursive: true });
@@ -1583,6 +1588,7 @@ export class SqliteDatabase implements EarsDatabase {
     this.indexBuilds.releaseNativeMaintenance();
     this.closeController.abort();
     this.sql.close();
+    this.communityCore = undefined;
     this.opened = false;
     this.tracks.clear();
     this.indexListeners.clear();

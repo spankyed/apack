@@ -83,11 +83,13 @@ async function main() {
   const nativeLibrary = path.join(nativeDirectory, process.platform === 'darwin' ? 'vec1.dylib' : process.platform === 'win32' ? 'vec1.dll' : 'vec1.so');
   insideApp(nativeLibrary);
   insideApp(path.join(nativeDirectory, 'manifest.json'));
+  const graphDirectory = path.join(path.dirname(earsEntry), 'graph');
+  for (const file of ['ears_graph.js', 'ears_graph_bg.wasm', 'manifest.json']) insideApp(path.join(graphDirectory, file));
   const { openDatabase, startVectorModels, waitForNativeModels } = await import(pathToFileURL(earsEntry).href);
   const { createEarsEngine } = await import(pathToFileURL(load.resolve('@apackdev/ears')).href);
   const sqlitePath = path.join(dataDir, 'sqlite');
   const schema = { types: { Smoke: { required: [], substrings: ['title'], search: { fields: { title: 1 } },
-    embed: { from: ['title'], model: 'smoke', dims: 128 } } }, relations: {}, roles: [] };
+    embed: { from: ['title'], model: 'smoke', dims: 128 } } }, relations: { refs: {} }, roles: [] };
   const vector = i => Array.from({ length: 128 }, (_, j) => Math.sin((i + 1) * (j + 1) * 1.71));
   let sqlite = openDatabase({ path: sqlitePath, schema, syncs: false });
   const verifySqlite = () => {
@@ -96,6 +98,7 @@ async function main() {
     assert.deepEqual(engine.query('Smoke').containing('beta').ids(), ['Smoke-000001']);
     assert.deepEqual(engine.query('Smoke').search('alpha', { fuzzy: false }).ids(), ['Smoke-000000']);
     assert.deepEqual(engine.query('Smoke').near(vector(0), { k: 1 }).ids(), ['Smoke-000000']);
+    assert.deepEqual(engine.query.ids(['Smoke-000000', 'Smoke-000001']).communities('refs'), [['Smoke-000000', 'Smoke-000001']]);
   };
   try {
     await startVectorModels(sqlite);
@@ -105,6 +108,7 @@ async function main() {
         id: 'Smoke-' + String(i).padStart(6, '0'), title: i === 0 ? 'alpha marker' : i === 1 ? 'beta marker' : 'marker ' + i,
       });
     });
+    engine.write('Smoke-000000').link('refs', 'Smoke-000001');
     let embedded = 0;
     for (;;) {
       const { model, chunks } = engine.pendingEmbeddings('Smoke', { limit: 1000 });
@@ -121,7 +125,8 @@ async function main() {
     console.log('EARS SQLite provenance: ' + JSON.stringify({ entry: insideApp(earsEntry),
       driverVersion: createRequire(earsEntry)('better-sqlite3/package.json').version,
       sqliteVersion: sqlite.get('SELECT sqlite_version() version').version,
-      nativeManifest: JSON.parse(fs.readFileSync(path.join(nativeDirectory, 'manifest.json'), 'utf8')) }));
+      nativeManifest: JSON.parse(fs.readFileSync(path.join(nativeDirectory, 'manifest.json'), 'utf8')),
+      graphManifest: JSON.parse(fs.readFileSync(path.join(graphDirectory, 'manifest.json'), 'utf8')) }));
   } finally { await sqlite.drainBackground(); sqlite.close(); }
   sqlite = openDatabase({ path: sqlitePath, readOnly: true });
   try { verifySqlite(); } finally { sqlite.close(); }

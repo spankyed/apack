@@ -122,6 +122,7 @@ jobs:
           git rev-parse HEAD > .temp/sqlite-api/source.txt
           cp vendor/elmdb.rev .temp/sqlite-api/elmdb.rev
           npm run packages:build 2>&1 | tee .temp/sqlite-api/packages.log
+          node native/graphs/probe.mjs packages/apack-ears/dist/sqlite/graph .temp/sqlite-api/graph-report.json 2>&1 | tee .temp/sqlite-api/graph-probe.log
           npm run api:update -w @apackdev/ears 2>&1 | tee .temp/sqlite-api/update.log
           npm run api:check -w @apackdev/ears 2>&1 | tee .temp/sqlite-api/check.log
           git diff -- packages/apack-ears/etc > .temp/sqlite-api/reports.patch

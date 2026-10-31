@@ -1,24 +1,19 @@
-import { Graph, leiden } from 'leiden-ts';
+import { loadGraphCommunityCore, type GraphCommunityCore } from './community-core.ts';
 import { graphComponents, type SqliteGraph } from './graph-algorithms.ts';
 
 /** Undirected weighted Leiden: every directed/parallel input edge contributes once. */
-export function graphCommunities(graph: SqliteGraph, resolution = 1, seed = 0): string[][] {
+export function graphCommunities(graph: SqliteGraph, resolution = 1, seed = 0, core: () => GraphCommunityCore = loadGraphCommunityCore): string[][] {
   if (!Number.isFinite(resolution) || resolution < 0 || !Number.isInteger(seed) || seed < 0 || seed > 0xffffffff)
     throw Object.assign(new Error('Communities requires a finite nonnegative resolution and an unsigned 32-bit seed'), { code: 'VALUE_INVALID' });
   if (resolution === 0) return graphComponents(graph, false);
-  // The library rejects duplicate undirected edges. Aggregate their weights without losing multiplicity,
-  // including opposite directed edges and repeated relation kinds from the caller's projection.
-  const weights = new Map<number, Map<number, number>>();
+  const edgeCount = graph.out.reduce((n, edges) => n + edges.length, 0);
+  if (!edgeCount) return graph.ids.map(id => [id]);
+  const edges = new Float64Array(edgeCount * 3); let cursor = 0;
   for (let at = 0; at < graph.ids.length; at++) for (const far of graph.out[at]!) {
-    const a = Math.min(at, far), b = Math.max(at, far);
-    let row = weights.get(a); if (!row) weights.set(a, row = new Map());
-    row.set(b, (row.get(b) ?? 0) + 1);
+    edges[cursor++] = at; edges[cursor++] = far; edges[cursor++] = 1;
   }
-  if (!weights.size) return graph.ids.map(id => [id]);
-  const edges: Array<[number, number, number]> = [];
-  for (const [a, row] of weights) for (const [b, weight] of row) edges.push([a, b, weight]);
-  const input = Graph.fromEdgeList(graph.ids.length, edges, { selfLoops: 'allow' });
-  const assignments = leiden(input, { seed, resolution }).partition.assignments;
+  const assignments = core().communities(edges, graph.ids.length, resolution, seed);
+  if (assignments.length !== graph.ids.length) throw Object.assign(new Error('Graph core returned an invalid partition'), { code: 'CORRUPT' });
   const groups = new Map<number, number[]>();
   for (let at = 0; at < graph.ids.length; at++) {
     const key = assignments[at]!;

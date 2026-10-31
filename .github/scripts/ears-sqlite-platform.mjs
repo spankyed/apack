@@ -223,6 +223,8 @@ if (mode === 'verify') {
     'Abrupt owner-process death recovery must execute');
   assert.equal(passedIn(ears, /\/tests\/sqlite\/graph-algorithms\.spec\.ts$/), 5,
     'All exhaustive graph and Leiden adapter cases must execute');
+  assert.equal(passedIn(ears, /\/tests\/sqlite\/community-core\.spec\.ts$/), 5,
+    'All packaged graph ownership and integrity cases must execute');
   for (const title of ['rank orders the query', 'weakComponents groups the query',
     'strongComponents groups the query', 'communities splits the query',
     'keeps graph node order', 'explain reports the graph']) {

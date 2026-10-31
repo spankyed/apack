@@ -33,5 +33,5 @@ const sha = name => createHash('sha256').update(readFileSync(join(directory, nam
 const report = { completed: true, modularity, communities: [...groups.values()],
   repeatable: true, truthfulErrorCases: 2, emptyGraph: true,
   wasmSha256: sha('ears_graph_bg.wasm'), loaderSha256: sha('ears_graph.js'), node: process.version };
-writeFileSync(join(directory, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+writeFileSync(resolve(process.argv[3] ?? join(directory, 'report.json')), JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report));
