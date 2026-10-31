@@ -25,7 +25,7 @@ apack is an Electron desktop app with an actor-based architecture. Both frontend
 - **Default Setup** (`packages/default-setup/`) — the pack the app ships, installed into the data dir at first boot and loaded from there like any other: features, steps, and content sources (actions, prompts, flows, notes, commands) that `apack pack build` compiles into `packages/default-setup/dist/` from `apack.json` `content.sources` (see `packages/default-setup/CLAUDE.md` and `docs/public-facing/content.md`)
 - **Repo checks** (`packages/repo-checks/`) — the specs whose subject is the repo's own tooling: the chain's graph and cache keys, the recorded spec costs, and the scripts under `scripts/`. A workspace because a spec needs one, and because `npm run spec` routes a `scripts/` change here (see `packages/repo-checks/CLAUDE.md`)
 
-Monorepo using npm workspaces. Requires Node >= 23.5.0.
+Monorepo using npm workspaces. Requires Node >= 23.5.0 and npm >= 11: npm 10 crashes resolving vitest 4.1, which a new pack's first install does.
 
 ## Parallel editing sessions
 

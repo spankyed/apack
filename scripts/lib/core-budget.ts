@@ -128,7 +128,7 @@ export function coresFor(step: string, cores: number = box()): number {
   return Math.max(1, Math.round(width.share * cores));
 }
 
-/** A share as vitest writes it in `poolOptions`, which is how a config and this table are compared */
+/** A share as vitest writes it in `maxWorkers`, which is how a config and this table are compared */
 export const asPercent = (share: number): string => `${Math.round(share * 100)}%`;
 
 /** The share a step declares, or undefined where its width is not one — which is what a config can hold */

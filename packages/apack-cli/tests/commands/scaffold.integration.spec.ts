@@ -276,7 +276,8 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     expect(fs.existsSync(path.join(pack, 'tests', 'e2e', 'smoke.spec.ts'))).toBe(true);
 
     // inherent: runs a pack's own vitest suite — the nested runner is the thing under test
-    const unit = await run(path.join(REPO_ROOT, 'node_modules', '.bin', 'vitest'), ['run'], pack);
+    // Verbose, because which files ran is the question and the default reporter names none of them off a terminal
+    const unit = await run(path.join(REPO_ROOT, 'node_modules', '.bin', 'vitest'), ['run', '--reporter=verbose'], pack);
     expect(unit.code, unit.output).toBe(0);
     expect(unit.output).toMatch(/tests\/demo-pack\.spec\.ts/);
     // The scaffold's content test and the added feature's system test run through the harness

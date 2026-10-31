@@ -43,7 +43,7 @@ it('retires callbacks before a pending repository write finishes', async () => {
   watcher.setGitRepository(repository);
   watcher.setChangeCallback(changed);
   await watcher.startWatching(new AbortController().signal);
-  const files = vi.mocked(chokidar.FSWatcher.prototype.add).mock.instances[0];
+  const files = vi.mocked(chokidar.FSWatcher.prototype.add).mock.instances[0] as chokidar.FSWatcher;
   files.emit('change', path.join(directory, '.git', 'index'));
   expect(completions).toHaveLength(1);
   await watcher.stopWatching();

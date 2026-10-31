@@ -145,10 +145,7 @@ export function poolWorkers(pool: Pool, env: NodeJS.ProcessEnv = process.env): n
 }
 
 function workerArgs(workers?: number): string[] {
-  return workers === undefined ? [] : [
-    `--poolOptions.threads.maxThreads=${workers}`, '--poolOptions.threads.minThreads=1',
-    `--poolOptions.forks.maxForks=${workers}`, '--poolOptions.forks.minForks=1',
-  ];
+  return workers === undefined ? [] : [`--maxWorkers=${workers}`];
 }
 
 /**

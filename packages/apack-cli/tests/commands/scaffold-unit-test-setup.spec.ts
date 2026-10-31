@@ -3,11 +3,12 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { scaffoldUnitTestSetup } from '../../src/commands/init';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { npmUpgradeStep, scaffoldUnitTestSetup } from '../../src/commands/init';
 
 const dirs: string[] = [];
 afterEach(() => {
+  vi.unstubAllEnvs();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -51,7 +52,7 @@ describe('scaffoldUnitTestSetup', () => {
 
     expect(setup.addedDependencies).toEqual(['@apackdev/testing', 'vitest']);
     expect(setup.upgrades).toEqual([]);
-    expect(readPackageJson(root).devDependencies).toEqual({ '@apackdev/testing': '^0.0.7', vitest: '^3.2.7' });
+    expect(readPackageJson(root).devDependencies).toEqual({ '@apackdev/testing': '^0.0.7', vitest: '^4.1.12' });
   });
 
   it('names the upgrade for an installed @apackdev/testing without the harness and a vitest before 3, keeping them', () => {
@@ -65,7 +66,7 @@ describe('scaffoldUnitTestSetup', () => {
     expect(setup.addedDependencies).toEqual([]);
     expect(setup.upgrades).toEqual([
       { name: '@apackdev/testing', range: '^0.0.7', reason: 'the installed 0.0.7 has no @apackdev/testing/harness' },
-      { name: 'vitest', range: '^3.2.7', reason: '^2.1.0 is before 3.0.0' },
+      { name: 'vitest', range: '^4.1.12', reason: '^2.1.0 is before 3.0.0' },
     ]);
     expect(readPackageJson(root).devDependencies).toEqual({ '@apackdev/testing': '^0.0.7', vitest: '^2.1.0' });
   });
@@ -86,7 +87,26 @@ describe('scaffoldUnitTestSetup', () => {
     });
 
     expect(scaffoldUnitTestSetup(root).upgrades).toEqual([
-      { name: 'vitest', range: '^3.2.7', reason: 'the installed 2.1.9 is before 3.0.0' },
+      { name: 'vitest', range: '^4.1.12', reason: 'the installed 2.1.9 is before 3.0.0' },
     ]);
+  });
+});
+
+// A stand-in npm on PATH that reports `version`; a shell script, so not on Windows
+function npmReporting(version: string): void {
+  const bin = pack({ npm: `#!/bin/sh\necho ${version}\n` });
+  fs.chmodSync(path.join(bin, 'npm'), 0o755);
+  vi.stubEnv('PATH', `${bin}${path.delimiter}${process.env.PATH}`);
+}
+
+describe.skipIf(process.platform === 'win32')('npmUpgradeStep', () => {
+  it('names the upgrade for an npm that cannot install the setup\'s vitest', () => {
+    npmReporting('10.9.9');
+    expect(npmUpgradeStep()).toMatch(/^npm install -g npm@11\b.*npm 10\.9\.9/);
+  });
+
+  it('asks nothing of an npm that can', () => {
+    npmReporting('11.0.0');
+    expect(npmUpgradeStep()).toBeUndefined();
   });
 });

@@ -122,7 +122,7 @@ async function runShape(shape: Shape): Promise<Run & { workspace: string; files:
   const out = path.join(cwd, 'durations.json');
   const reporter = path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts');
   const { half, command, args } = SHAPES[shape]();
-  const child = boundedSpawn(command, [...args(workspace, reporter), '--maxWorkers=1', '--minWorkers=1'], SIZE_MS.small,
+  const child = boundedSpawn(command, [...args(workspace, reporter), '--maxWorkers=1'], SIZE_MS.small,
     { cwd, env: { ...process.env, [SPEC_DURATIONS_FILE]: out }, signal: lifetime.signal });
   children.push(child);
   const result = await child;
@@ -229,7 +229,7 @@ it('attributes qualified subprojects to their confirmed workspace without hiding
   const out = path.join(root, 'durations.json');
   const child = boundedSpawn(process.execPath, [path.join(REPO_ROOT, 'node_modules/vitest/vitest.mjs'), 'run',
     '--config', path.join(root, 'vitest.config.ts'),
-    `--reporter=${path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts')}`, '--maxWorkers=1', '--minWorkers=1'], SIZE_MS.small,
+    `--reporter=${path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts')}`, '--maxWorkers=1'], SIZE_MS.small,
     { cwd: root, env: { ...process.env, [SPEC_DURATIONS_FILE]: out }, signal: lifetime.signal });
   children.push(child);
   const result = await child;
@@ -255,7 +255,7 @@ it('records a test that passed past its budget, and only that one, against the b
   const out = path.join(root, 'durations.json');
   const child = boundedSpawn(process.execPath, [path.join(REPO_ROOT, 'node_modules/vitest/vitest.mjs'), 'run',
     '--config', path.join(root, 'vitest.config.ts'),
-    `--reporter=${path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts')}`, '--maxWorkers=1', '--minWorkers=1'], SIZE_MS.small,
+    `--reporter=${path.join(REPO_ROOT, 'scripts/lib/spec-durations-reporter.ts')}`, '--maxWorkers=1'], SIZE_MS.small,
     { cwd: root, env: { ...process.env, [SPEC_DURATIONS_FILE]: out }, signal: lifetime.signal });
   children.push(child);
   const result = await child;

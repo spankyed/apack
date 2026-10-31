@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { packFeatures } from '@apackdev/sdk/build';
 import { renderTemplate } from '../templates.ts';
 import { cliVersion, findPackRoot } from '../utils';
-import { scaffoldUnitTestSetup } from './init';
+import { npmUpgradeStep, scaffoldUnitTestSetup } from './init';
 
 // The Playwright version @apackdev/testing is tested with
 const PLAYWRIGHT_RANGE = '^1.55.1';
@@ -99,6 +99,8 @@ export async function initTests(_args: string[]): Promise<void> {
     } else {
       console.log('Created vitest.config.ts');
     }
+    const upgrade = [...addedDependencies, ...upgrades.map(({ name }) => name)].includes('vitest') ? npmUpgradeStep() : undefined;
+    if (upgrade) console.log(`  First: ${upgrade}`);
     if (addedDependencies.length > 0) console.log(`  Added ${addedDependencies.join(', ')} to devDependencies. Run: npm install`);
     if (upgrades.length > 0) {
       console.log(`  The harness can't run on the pack's ${upgrades.map(({ name, reason }) => `${name} (${reason})`).join(', ')}.`);

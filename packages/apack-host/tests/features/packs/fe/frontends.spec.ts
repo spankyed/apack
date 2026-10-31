@@ -3,7 +3,7 @@ import { createNativeFrontendTestRegistry } from '@apackdev/host/fe/testing';
 // cache), what a default export has to declare to count as a registration, and what unloading takes back. The
 // window's part — the import and the stylesheet — is a fake here, so these are the rules alone.
 import { createMachine } from 'xstate';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { PackFERegistration, Surface, SettingsPort } from '@apackdev/sdk/fe';
 import { createPackFrontends, loadPackFEEntry, type PackFrontendIO } from '../../../../src/fe/index.ts';
 import { type FePackRegistry } from '../../../../src/fe/pack-store.ts';
@@ -73,12 +73,14 @@ function fakeRegistry() {
   return { registry, registered, unregistered };
 }
 
-let warn: ReturnType<typeof vi.spyOn>;
-let error: ReturnType<typeof vi.spyOn>;
+let warn: MockInstance<typeof console.warn>;
+let error: MockInstance<typeof console.error>;
 beforeEach(() => {
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
   error = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
+// Spying on console again returns the spy already there, with every earlier case's warnings in it
+afterEach(() => { vi.restoreAllMocks(); });
 const buildRevision = 'a'.repeat(64);
 const warnings = () => warn.mock.calls.map(args => args.join(' '));
 
