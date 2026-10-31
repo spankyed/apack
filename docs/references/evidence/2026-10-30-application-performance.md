@@ -343,3 +343,38 @@ These are similar failure classes, not proof of the same root cause. Approval is
 offline-backed-up shared upgrade to current 2.2.5 after other agents stop their Docker workloads.
 Current disk preservation and post-upgrade verification remain necessary; no guarantee that the
 upgrade cures this precise hang is asserted. Full local acceptance and PR readiness remain open.
+
+## Final integrated acceptance (2026-10-31)
+
+The interrupted run `2026-10-31T07-19-26Z-83547` ultimately completed every native assertion:
+15 files passed, two platform files skipped; 56 cases passed and 45 platform cases skipped.
+The outer native command returned 130 after this session requested cancellation during the VM hang;
+that outer result is not a pass. The native project cache was nevertheless saved by the completed
+suite. A read-only probe using the repository's normal `freshnessSweep`, `poolUnitFor` and
+`poolStampFor` returned an existing chain-provenance native stamp with `staleReason: null`.
+No stamp was fabricated or edited.
+
+The supported command was then resumed normally with tracked inputs frozen at `93b7208b44`:
+
+```sh
+APACK_LINUX_ELMDB_ROOT=/private/tmp/apack-performance-elmdb-pinned npm run chain -- --cores 2
+```
+
+It passed in 619.0 seconds, reusing 25 of 32 valid step results. Run
+`2026-10-31T08-46-38Z-67326` records successful native acceptance (134.4 s, normal project-cache
+reuse), runtime build (62.8 s), external-pack app acceptance (188.3 s), smoke (7.1 s), packaged
+authoring author (208.8 s) and app (14.9 s), plus package admission. The earlier frozen run supplies
+the actual full native execution and all 60 integration files; the resumed chain verifies their
+cache validity and finishes the remaining end-to-end checks. The outer full chain returned zero.
+Assertions, deadlines, CPU/RAM/swap policy and native source pin were unchanged. The native pin is
+`95615ed8d493f9a7c2789eaf1f4c847ae375eb32`.
+
+All six strict CI jobs in 41179507375 passed on reviewed code `44d246444a`. Later commits through
+this closure only change documentation. The actual composed branch's 38 focused reporting/protocol
+tests, TypeScript and lint passed; all 450 raw trials re-admitted under the stronger capture rules.
+The completed goal contains the requirement audit. No repeated performance experiment was needed:
+the review changes enforce admission/lifecycle and do not alter valid collection or scenario timing.
+
+OrbStack recovered without a shared restart or upgrade. Optional shared VM maintenance still awaits
+user approval; it is no longer an application acceptance dependency. Its hang's cause remains
+unproven. Original disk preservation and other agents' data remain untouched.

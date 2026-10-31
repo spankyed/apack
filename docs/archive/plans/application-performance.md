@@ -1,9 +1,8 @@
 # Measuring real application actions
 
-Status: implemented; controlled qualification, strict CI and local non-native validation passed;
-final local native acceptance and strict CI are running after verified storage migration.
+Status: completed 2026-10-31; all four checkpoints and required validation passed.
 Originally planned on 2026-10-29 from `master` at `98386b36a18d244c19ffb501830b990ed49f7653`.
-Source-qualified measurements and limitations are recorded in the [evidence record](../references/evidence/2026-10-30-application-performance.md).
+Source-qualified measurements and limitations are recorded in the [evidence record](../../references/evidence/2026-10-30-application-performance.md).
 
 ## Outcome
 
@@ -25,12 +24,12 @@ Inspect current source before implementation; the survey is a starting point, no
 
 | Existing owner | Foundation and intended responsibility |
 |---|---|
-| [Host services](../../packages/apack-host/src/services/index.ts) | Compose diagnostics with each runtime and own recorder lifecycle. |
-| [Host runtime contract](../../packages/apack-sdk/src/runtime/host-runtime.ts) | Expose runtime diagnostics without global exporter configuration in libraries. |
-| [EARS call accounting](../../packages/apack-ears/src/calls.ts) | Reuse operation accounting; separate cheap attribution from optional stack capture. |
-| [EARS connection](../../packages/apack-ears/src/database.ts) | Observe backend-neutral read, write, unit and watch boundaries. |
-| [Renderer transport](../../packages/renderer/src/transport/client.ts) | Carry action context across transport and correlate view delivery. |
-| [E2E guidance](../../tests/e2e/CLAUDE.md) | Reuse owned Electron processes, Playwright and disposable profiles. |
+| [Host services](../../../packages/apack-host/src/services/index.ts) | Compose diagnostics with each runtime and own recorder lifecycle. |
+| [Host runtime contract](../../../packages/apack-sdk/src/runtime/host-runtime.ts) | Expose runtime diagnostics without global exporter configuration in libraries. |
+| [EARS call accounting](../../../packages/apack-ears/src/calls.ts) | Reuse operation accounting; separate cheap attribution from optional stack capture. |
+| [EARS connection](../../../packages/apack-ears/src/database.ts) | Observe backend-neutral read, write, unit and watch boundaries. |
+| [Renderer transport](../../../packages/renderer/src/transport/client.ts) | Carry action context across transport and correlate view delivery. |
+| [E2E guidance](../../../tests/e2e/CLAUDE.md) | Reuse owned Electron processes, Playwright and disposable profiles. |
 | Existing loop measurement utilities under `scripts/` | Reuse event-loop measurement lessons, with application-specific lifecycle and overhead validation. |
 
 The current call-counting start/report/stop window is useful for investigations but does not isolate
@@ -122,7 +121,7 @@ latency in lightweight mode and use detailed runs to explain it, without treatin
 Use Playwright against built application output. Own all launched processes and a disposable profile
 per run; terminate only owned processes. Build and seed outside measured intervals except where a
 scenario explicitly measures startup, admission or import. Never use the developer's active database.
-Follow the repository's [execution and validation rules](../../CLAUDE.md#keep-validation-bounded).
+Follow the repository's [execution and validation rules](../../../CLAUDE.md#keep-validation-bounded).
 
 Fixtures are deterministic generators with a version, seed and declared distributions: thread/message
 counts, body sizes, relation density and search corpus where applicable. Include realistic large
@@ -151,7 +150,7 @@ fixture and execution conditions. Preserve numerator, denominator and units for 
 Implement a small exporter to Chrome Trace Event JSON for inspection in Perfetto; OpenTelemetry
 records need conversion, not a claim that Perfetto directly reads OTLP. Use existing viewers rather
 than building a custom performance dashboard. Detailed evidence selected for a decision belongs in
-dated [evidence records](../references/evidence/), with source, commands and limitations.
+dated [evidence records](../../references/evidence/), with source, commands and limitations.
 
 ## Regression policy
 
@@ -225,13 +224,13 @@ integrated validation pass on recorded source; and remaining evidence limitation
 Archive this plan only after all required deliverables are accounted for. Keep checkpoint history in
 evidence rather than appending competing handoffs here.
 
-## Current handoff
+## Outcome (2026-10-31)
 
-Implementation is in `session/application-performance` (draft PR #293) and its dependent
-`session/application-performance-qualification` (draft PR #294). Current implemented
-requirements, source-qualified evidence and remaining acceptance work are maintained in
-[the active goal](../goals/goal-application-performance.md). This plan's full acceptance criteria remain
-in force; passing individual scenarios does not complete the measurement qualification.
+All four checkpoints are complete in foundation PR #293 and dependent qualification PR #294.
+The [completed goal](../goals/goal-application-performance.md) records the requirement audit.
+The [maintained reference](../../references/application-performance.md) owns current contracts;
+the dated evidence above preserves measurements, failures and limitations. Full local acceptance
+passed on frozen source `93b7208b44`, and all six strict CI jobs passed on reviewed code `44d246444a`.
 
 ## Upstream contracts
 
