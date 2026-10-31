@@ -1,66 +1,59 @@
-name: Startup record contract
+name: Linux application startup contract
 on:
   workflow_dispatch:
 permissions:
   contents: read
-  actions: read
 jobs:
-  startup-records:
-    runs-on: macos-26
-    timeout-minutes: 45
-    env:
-      APACK_CHAIN_CORES: 2
+  linux-startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 0e63e75b63a460da52ec109da731e3ff7b38eb9d
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 23.11.1
-          cache: npm
-      - uses: ./.github/actions/elmdb
-      - name: Install dependencies
+          ref: 9a0f431c8f56982806802c502a1f127b44e47f23
+      - name: Fetch the exact native pin
+        shell: bash
+        run: |
+          rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
+          git init -q vendor/elmdb
+          git -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"
+          git -C vendor/elmdb checkout -q FETCH_HEAD
+      - name: Build maintained Linux image
+        shell: bash
+        run: |
+          toolchain=$(sed -n 's/^channel *= *"\([^"]*\)"/\1/p' vendor/elmdb/rust-toolchain.toml)
+          test -n "$toolchain"
+          docker build --build-arg RUST_TOOLCHAIN="$toolchain" -t apack-startup-contract -f scripts/linux/Dockerfile scripts/linux
+      - name: Verify real application readiness and canonical startup reports
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: npm ci
-      - uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          run-id: 41210208958
-          name: strict-producers-0e63e75b63a460da52ec109da731e3ff7b38eb9d
-          path: ${{ runner.temp }}/producer-outputs
-      - name: Admit existing producer outputs and build the app
-        shell: bash
-        run: |
-          tar -xzf "$RUNNER_TEMP/producer-outputs/producers.tgz"
-          npm run chain -- --only packages:ensure,build:runtime --no-native --cores 2
-      - name: Verify canonical startup records through actual worker exits
-        shell: bash
-        env:
-          APACK_PERFORMANCE_MODE: lightweight
-          APACK_PERFORMANCE_TRIALS: '1'
-          APACK_PERFORMANCE_RUN_OUTPUT: .apack/performance/startup-record-contract
         run: |
           set -o pipefail
-          node scripts/with-source.mjs tsx tests/performance/startup-run.ts 2>&1 | tee "$RUNNER_TEMP/startup-record-contract.log"
-          node scripts/with-source.mjs tsx tests/performance/verify-run.ts "$APACK_PERFORMANCE_RUN_OUTPUT" "" 1
-          node --input-type=module <<'VERIFY'
-          import { readFileSync, existsSync } from 'node:fs';
-          const root = process.env.APACK_PERFORMANCE_RUN_OUTPUT;
-          const index = JSON.parse(readFileSync(`${root}/results.json`));
-          if (index.records.length !== 6 || index.invocations.length !== 7) throw Error('Missing warmup, measured worker or seed exit');
-          for (const [position, record] of index.records.entries()) {
-            if (record.file !== `trial-${position}/trial.json` || existsSync(`${root}/trial-${position}.json`)) throw Error('Startup raw record was duplicated');
-          }
-          console.log('Canonical startup record contract passed; this one-measurement run does not qualify overhead.');
-          VERIFY
+          docker run --rm --init --memory=6g --memory-swap=6g --cpus=2 \
+            -v "$GITHUB_WORKSPACE:/work" -e GITHUB_TOKEN apack-startup-contract bash -ec '
+              cd /work/vendor/elmdb
+              npm ci --no-audit --no-fund
+              npm run build
+              cd /work
+              npm ci --no-audit --no-fund
+              npm run chain -- --only packages:ensure,build:default-setup,build:runtime --no-native --cores 2
+              export DEBUG_E2E=1 ELECTRON_ENABLE_LOGGING=1
+              APACK_PERFORMANCE_SCENARIO=thread-open APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=1 APACK_PERFORMANCE_RUN_OUTPUT=/work/.apack/performance/linux-startup-thread xvfb-run -a node scripts/with-source.mjs playwright test --config tests/performance/playwright.config.ts
+              APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=1 APACK_PERFORMANCE_RUN_OUTPUT=/work/.apack/performance/linux-startup-records xvfb-run -a node scripts/with-source.mjs tsx tests/performance/startup-run.ts
+              node scripts/with-source.mjs tsx tests/performance/verify-run.ts /work/.apack/performance/linux-startup-records "" 1
+            ' 2>&1 | tee "$RUNNER_TEMP/linux-startup-contract.log"
+      - name: Make owned evidence readable
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" .apack node_modules/.cache/apack-chain/runs 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: startup-record-contract-0e63e75b63
+          name: linux-startup-contract-9a0f431c8f
           include-hidden-files: true
           retention-days: 2
           path: |
-            ${{ runner.temp }}/startup-record-contract.log
-            .apack/performance/startup-record-contract/
+            ${{ runner.temp }}/linux-startup-contract.log
+            .apack/performance/
             node_modules/.cache/apack-chain/runs/
+            packages/renderer/dist/
