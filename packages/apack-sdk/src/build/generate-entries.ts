@@ -4,7 +4,7 @@ import { dataLiteral, propertyKey } from './code-literals.ts';
 import { findSourceModule, SCRIPT_MODULE_EXTENSIONS, TYPE_MODULE_EXTENSIONS } from './source-module.ts';
 import { resolveTypeModule } from './type-module.ts';
 import { _packModuleTargets, _moduleTargetSource } from './module-targets.ts';
-import { _packEntities, _packEntityTypes, _packRelationRules, _packRelationTypes, _packRoles, _packShortCodes, _FIELD_NAME_PATTERN, type PackDataDeclarations } from '../framework/data-declaration.ts';
+import { _packEntities, _packEntityTypes, _packRelationRules, _packRelationTypes, _packWeightedKinds, _packRoles, _packShortCodes, _FIELD_NAME_PATTERN, type PackDataDeclarations } from '../framework/data-declaration.ts';
 import { _parseModuleReference } from '../framework/module-reference.ts';
 import { generateSettingsTypes } from './settings-types.ts';
 import { _declarationRevision } from './declaration-revision.ts';
@@ -112,9 +112,19 @@ export function mergeRegistries(
     return map;
   }
 
+  // In declaration order, entities first, so the first conflict a pack hears of is its entities'
+  const entities = merge(_packEntityTypes(manifest), 'entity');
+  const relKinds = merge(_packRelationTypes(manifest), 'relKind');
+  // The kinds declared weighted: the pack's own, and those its dependencies' trees declare, which each snapshot's
+  // provenance names; a weighted kind is always one of the relation kinds, the SDK declaring none
+  const weightedKinds = new Set([
+    ...Object.keys(_packWeightedKinds(manifest)),
+    ...[...depProvenance.values()].flatMap((provenance) => Object.keys(provenance.weightedKinds ?? {})),
+  ].filter((kind) => relKinds.has(kind)));
   return {
-    entities: merge(_packEntityTypes(manifest), 'entity'),
-    relKinds: merge(_packRelationTypes(manifest), 'relKind'),
+    entities,
+    relKinds,
+    weightedKinds,
     roles: merge(_packRoles(manifest), 'role'),
   };
 }
@@ -172,6 +182,7 @@ export function emitEARS(ownId: string, registry: ReturnType<typeof mergeRegistr
   const entityUnion = declaresEntities ? [...registry.entities.keys()].map(k => `Entity.${k}`).join(' | ') : 'string';
   // Closed: the SDK's kinds and roles are in every pack, so neither list is ever empty
   const relKindList = [...registry.relKinds.keys()].map(k => `RelKind.${k}`).join(', ');
+  const weightedKindList = [...registry.weightedKinds].map(k => `RelKind.${k}`).join(', ');
   const roleList = [...registry.roles.keys()].map(k => `RoleKind.${k}`).join(', ');
 
   // A namespace without members has no runtime value, and EARS.Entity is read at runtime
@@ -194,6 +205,9 @@ ${relKindMembers.join('\n')}
   /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
   export const RELATION_KINDS = [${relKindList}] as const;
   export type RelKind = (typeof RELATION_KINDS)[number];
+  /** The relation kinds declared \`weighted\`, whose links take a weight: its own and its dependencies' */
+  export const WEIGHTED_KINDS = [${weightedKindList}] as const;
+  export type WeightedKind = (typeof WEIGHTED_KINDS)[number];
   /** Whether a kind that arrived as data (an event's field, a stored row) is one of them */
   export const isRelKind = (value: unknown): value is RelKind => (RELATION_KINDS as readonly unknown[]).includes(value);
 
@@ -1278,11 +1292,12 @@ export type ShortCodeOf<E extends keyof PackShapes> = PackShapes[E] extends { sh
  */
 export type EntityName = ${entityNames.join(' | ')};
 
-/** What the helpers below check against: this pack's shapes, entity names, relation kinds and roles */
+/** What the helpers below check against: this pack's shapes, entity names, relation kinds (and which are weighted) and roles */
 export interface PackSchema extends EarsSchema {
   shapes: PackShapes;
   names: EntityName;
   relKinds: EARS.RelKind;
+  weightedKinds: EARS.WeightedKind;
   roles: EARS.RoleKind;
 }
 

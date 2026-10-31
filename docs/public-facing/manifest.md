@@ -54,7 +54,7 @@ order. `init`, `add` and the release version editor share this writer.
 | `extensions` | `object` | no | What the pack contributes to the app; see [Extensions](#extensions) |
 | `migrations` | `{ app?, pack? }` | no | Data migrations, by version line; see [Migrations](#migrations) |
 | `data.entities` | `Record<string, { shape?, shortCode?, indexes?, search?, embed?, substrings? }>` | no | Entities without a feature owner, each declared as a feature's are; see [Entities and relations](#entities-and-relations) |
-| `data.relations` | `Record<string, { acyclic?, unique? }>` | no | Pack-level snake_case relation wire names, each mapped to its rules; see [Entities and relations](#entities-and-relations) |
+| `data.relations` | `Record<string, { acyclic?, unique?, weighted? }>` | no | Pack-level snake_case relation wire names, each mapped to its rules; see [Entities and relations](#entities-and-relations) |
 | `data.roles` | `string[]` | no | Pack-level snake_case role names; see [Entities and relations](#entities-and-relations) |
 | `dependencies` | `Record<string, string>` | no | Pack IDs mapped to a nonempty npm semver range, `github:owner/repo [range]`, or `file:path` |
 | `checks` | `{ allow?: string[] }` | no | Development conventions this pack allows; schema completion lists supported rule names. See [source checks](cli.md#apack-pack-validate---json). |
@@ -718,7 +718,11 @@ wire is declared once in `data.relations`, shared across the pack's features. It
 uppercase (`tagged_with` → `TAGGED_WITH`). Each maps to the rules its edges are held to, `{}` for none:
 `"acyclic": true` refuses a link that would close a cycle through the kind (`CYCLE`), as a tree or a folder
 hierarchy wants, and `"unique": true` keeps at most one edge of the kind from an entity to another, so linking the
-pair again replaces the edge's info. The SDK's `parent_of` is acyclic. SDK-owned relation wires are refused. Every kind
+pair again replaces the edge's info. `"weighted": true` gives each edge a weight, from 0 to 2^960 and 1 unless a link
+gives another, which `rank` and `communities` read: a confidence, a strength, how often one thing calls another. A
+weighted kind is unique unless it declares `"unique": false`, so linking a pair again sets the edge's weight; with
+`"unique": false` each new weight is a second edge, whose weight a rank adds to the first's. `#generated/ears` types
+the kinds a weight is accepted on (`EARS.WeightedKind`), so a weight on any other kind doesn't compile. The SDK's `parent_of` is acyclic. SDK-owned relation wires are refused. Every kind
 the pack links with is declared: the generated `EARS.RelKind` is closed over the pack's, its dependencies' and
 the SDK's, and the engine refuses any other at runtime. Roles work the same way: `data.roles` lists every role the
 pack grants (`entry_event` → `ENTRY_EVENT`), `EARS.RoleKind` is closed over them, and an undeclared role is refused.

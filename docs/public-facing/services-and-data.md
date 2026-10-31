@@ -347,7 +347,7 @@ What a write builder does:
 | `merge(k, partial)` | Merges into the attribute's object |
 | `delete(k)` | Removes the field |
 | `removeAt(k, index)` / `removeValue(k, v)` | Removes the list's element at `index` / the list's first element equal to `v` |
-| `link(kind, target, { info? })` | Links to `target`. The same edge (kind, target and `info`) again changes nothing. A kind declared `unique` keeps one edge to `target`, whose `info` linking again replaces; one declared `acyclic` refuses a cycle through it (`CYCLE`) |
+| `link(kind, target, { info?, weight? })` | Links to `target`. The same edge (kind, target and `info`) again changes nothing. A kind declared `unique` keeps one edge to `target`, whose `info` (and `weight`) linking again replaces; one declared `acyclic` refuses a cycle through it (`CYCLE`). `weight` is a weighted kind's only (`data.relations.<kind>.weighted`): from 0 to 2^960, 1 when not given |
 | `unlink(kind, target?)` / `unlinkAll()` | Removes edges of the kind (to `target` only, when given) / every edge from the entity |
 | `grant(role)` / `revoke(role)` / `grantExclusive(role, among)` | See *Roles* |
 | `destroy()` | Deletes the entity and its edges |
@@ -470,12 +470,12 @@ graph first — a type, a search, a walk:
 
 | Call | Returns |
 |---|---|
-| `query(type).rank(kind, { direction?, seeds? })` | The query's entities by how much they matter from `seeds`, highest first: personalized PageRank, a walker following edges (`out` unless `direction` is `in` or `both`) and jumping back to a seed. With no `seeds`, every entity is one, which ranks what is central overall. End with `hits()` for each score, and `limit(n)` keeps the `n` highest |
+| `query(type).rank(kind, { direction?, seeds?, weights? })` | The query's entities by how much they matter from `seeds`, highest first: personalized PageRank, a walker following edges (`out` unless `direction` is `in` or `both`) and jumping back to a seed. With no `seeds`, every entity is one, which ranks what is central overall. A seed is an id, or `{ id, weight }` to start walkers there in proportion to its weight. Over a weighted kind a walker follows an edge in proportion to its weight; `weights: false` weighs every edge 1. End with `hits()` for each score, and `limit(n)` keeps the `n` highest |
 | `query(type).weakComponents(kind)` | The groups the edges join, whichever way each points: each group's ids, the largest first |
 | `query(type).strongComponents(kind)` | The groups whose entities each reach every other following the edges' direction: a group of more than one is a cycle, and an entity on no cycle is a group of its own. Each group's ids, the largest first |
 | `query(type).topological(kind, { direction? })` | The query's entities in an order where each edge (`out` unless `direction` is `in`) leads forward: with `blocks`, what blocks comes before what it blocks. The members of a cycle stay together; what the edges leave free keeps query order |
 | `query(type).similar(id, kind, { direction?, measure? })` | The query's entities that share neighbours with `id`, most alike first: `jaccard` (the default, shared over either's) or `adamicAdar` (a rarely linked shared neighbour counts more). A neighbour counts wherever it is, so files can be alike by the symbols they use. End with `hits()` for each score |
-| `query(type).communities(kind, { resolution?, seed? })` | The communities the edges form: groups more densely linked inside than out (Leiden, by modularity), each connected, the largest first. A higher `resolution` (1 by default) finds smaller ones; `0` keeps each connected group whole. The same data answers the same communities every time |
+| `query(type).communities(kind, { resolution?, seed?, weights? })` | The communities the edges form: groups more densely linked inside than out (Leiden, by modularity), each connected, the largest first. A higher `resolution` (1 by default) finds smaller ones; `0` keeps each connected group whole. An edge of a weighted kind counts by its weight unless `weights` is false. The same data answers the same communities every time |
 
 ```typescript
 // The ten notes most related to the open one, by the links between notes

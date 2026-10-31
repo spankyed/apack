@@ -287,6 +287,18 @@ describe("the SDK's entities and relation kinds", () => {
       .rejects.toThrow('relKind "LABELLED" declared by both "demo-pack" and "base-pack"');
   });
 
+  it('types the weighted kinds, its own and those its dependencies\' trees declare, and none when none is', async () => {
+    const base = {
+      ...dependency({}), types: { entities: {}, relKinds: { CALLS: 'calls', TAGGED: 'tagged' }, roles: {} },
+      provenance: { relKinds: { CALLS: 'core-pack', TAGGED: 'base-pack' }, weightedKinds: { CALLS: 'core-pack' } },
+    };
+    const ears = (await generate({ data: { relations: { cites: { weighted: true }, pinned: {} } }, dependencies: { 'base-pack': '*' } }, { 'base-pack': base }))['src/__generated__/ears.ts'];
+    expect(ears).toContain('export const WEIGHTED_KINDS = [RelKind.CITES, RelKind.CALLS] as const;');
+    expect(ears).toContain('weightedKinds: EARS.WeightedKind;');
+    const none = (await generate({ data: { relations: { pinned: {} } } }))['src/__generated__/ears.ts'];
+    expect(none).toContain('export const WEIGHTED_KINDS = [] as const;');
+  });
+
   it('uses entity keys as unchanged wire names in EntityName', async () => {
     const base = { ...dependency({}), types: { entities: { Tag: 'Tag' }, relKinds: {}, roles: {} } };
     const ears = (await generate({ data: { entities: { Memo: {} } }, dependencies: { 'base-pack': '*' } }, { 'base-pack': base }))['src/__generated__/ears.ts'];
@@ -558,7 +570,7 @@ describe('the snapshot format', () => {
         system: ['machine', 'receives'],
         surface: ['receives'],
       },
-      provenanceKinds: ['entities', 'referenceCategories', 'referenceTypes', 'relKinds', 'roles', 'surfaces', 'tiptapExtensions'],
+      provenanceKinds: ['entities', 'referenceCategories', 'referenceTypes', 'relKinds', 'roles', 'surfaces', 'tiptapExtensions', 'weightedKinds'],
       facadeImports: ['PackEntityShapes', 'PackFeatureSettings', 'PackGroupSettings', 'PackStepNodes', 'PackSurfaceEvents', 'PackSurfaceState', 'PackSystemEvents', 'Repositories', 'Services'],
     });
   });

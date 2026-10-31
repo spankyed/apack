@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { _packRelationRules, _packRelationTypes } from '../../src/framework/data-declaration.ts';
+import { _packRelationRules, _packRelationTypes, _packWeightedKinds } from '../../src/framework/data-declaration.ts';
 import { ManifestSchema, _NativePackDeclarationSchema } from '../../src/framework/declaration-schema.ts';
 
 const pack = { id: 'relation-pack', name: 'Relations', version: '1.0.0' };
@@ -15,6 +15,15 @@ describe('relation declarations', () => {
   it('reads each kind\'s rules, leaving out a kind that declares none', () => {
     expect(_packRelationRules({ data: { relations: { has: {}, parent: { acyclic: true }, cites: { unique: true, acyclic: false } } } }))
       .toEqual({ parent: { acyclic: true }, cites: { unique: true } });
+  });
+
+  it('makes a weighted kind unique unless it says otherwise, so a link sets an edge\'s weight', () => {
+    expect(_packRelationRules({ data: { relations: { calls: { weighted: true }, mentions: { weighted: true, unique: false }, refs: { weighted: false } } } }))
+      .toEqual({ calls: { unique: true, weighted: true }, mentions: { weighted: true } });
+    expect(_packWeightedKinds({ data: { relations: { calls: { weighted: true }, mentions: { weighted: true, unique: false }, refs: {} } } }))
+      .toEqual({ CALLS: 'calls', MENTIONS: 'mentions' });
+    expect(ManifestSchema.safeParse({ ...pack, data: { relations: { calls: { weighted: true } } } }).success).toBe(true);
+    expect(ManifestSchema.safeParse({ ...pack, data: { relations: { calls: { weighted: 1 } } } }).success).toBe(false);
   });
 
   it.each(['ParentOf', 'parent-of', '', ' parent_of', 'parent_of ', '_parent', 'parent__of', '1parent'])

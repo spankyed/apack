@@ -10,6 +10,7 @@ import type { Ears } from '@apackdev/ears';
 import { EntityRow } from '@apackdev/ears';
 import type { Query } from '@apackdev/ears';
 import { RelationMatch } from '@apackdev/ears';
+import { RelationPatch } from '@apackdev/ears';
 import { RelationRow } from '@apackdev/ears';
 import { SchemaStats } from '@apackdev/ears';
 import { UnitOptions } from '@apackdev/ears';
@@ -65,11 +66,7 @@ export const untypedUpsert: Upsert;
 export const untypedWrite: Write;
 
 // @public (undocumented)
-export const updateRelation: (relId: EARS.RelationId, patch: {
-    source?: EARS.EntityId;
-    target?: EARS.EntityId;
-    info?: unknown;
-}) => void;
+export const updateRelation: (relId: EARS.RelationId, patch: RelationPatch) => void;
 
 // @public (undocumented)
 export const wouldCreateCycle: (source: EARS.EntityId, target: EARS.EntityId, kinds: readonly EARS.RelKind[]) => boolean;

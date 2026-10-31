@@ -1177,6 +1177,9 @@ declare namespace EARS {
     /** Every relation kind this pack may link with: its own, its dependencies' and the SDK's */
     const RELATION_KINDS: readonly ["has", "relates_to", "references", "forked_from", "compacts", "blocks", "duplicates", "contains", "transitions_to", "instance_of", "parent_of"];
     type RelKind = (typeof RELATION_KINDS)[number];
+    /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
+    const WEIGHTED_KINDS: readonly [];
+    type WeightedKind = (typeof WEIGHTED_KINDS)[number];
     /** Whether a kind that arrived as data (an event's field, a stored row) is one of them */
     const isRelKind: (value: unknown) => value is RelKind;
     namespace RoleKind {

@@ -537,6 +537,7 @@ export interface PackRegistration {
 export interface PackRelationDeclaration {
     readonly acyclic?: boolean;
     readonly unique?: boolean;
+    readonly weighted?: boolean;
 }
 
 // @internal
@@ -602,6 +603,9 @@ export function _packShortCodes(declaration: PackDataDeclarations): Record<strin
 export function packSystem(entry: SystemEntry, options: {
     incoming: readonly string[];
 }): PackFeatureSystem;
+
+// @internal
+export function _packWeightedKinds(declaration: PackDataDeclarations): Record<string, string>;
 
 // @internal
 export function _parseEventContracts(data: unknown, features: Parameters<typeof _eventContractsProblem>[1], native?: boolean): PackEventContracts;
