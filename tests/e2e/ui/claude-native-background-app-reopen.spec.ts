@@ -36,6 +36,10 @@ test('recovers a linked live child after complete Electron shutdown and relaunch
   expect(report.replyDraft,'Unsent child reply survives a real window destruction').toBe(saved.retainedReply)
   expect(report.freshStatus,'A fresh native producer reconnects after graceful shutdown').toBe(true)
   await expect(widget.getByLabel('Background Claude configured status',{exact:true})).toContainText('AppNativeMain '+saved.job.sessionId)
+  const starts=(await readFile(join(workspace!,'native-children.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line)).filter(row=>JSON.stringify(row.args)===JSON.stringify(['--version']))
+  const authorities=[]
+  for(const start of starts){const state=await processState(start.pid);if(!['gone','Z'].includes(state.state))authorities.push({...start,process:state})}
+  expect(authorities).toHaveLength(1);report.authority=authorities[0]
   await widget.getByRole('button',{name:'Send message',exact:true}).click();await expect(input).toHaveValue('',{timeout:20000})
   const journal=async()=>{const directory=join(workspace!,'.claude/projects');return(await Promise.all((await readdir(directory,{withFileTypes:true})).filter(e=>e.isDirectory()).map(e=>readFile(join(directory,e.name,saved.job.sessionId+'.jsonl'),'utf8').catch(()=>'')))).join('\n').split('\n').filter(Boolean).map(line=>JSON.parse(line))}
   await expect.poll(async()=>(await journal()).filter(row=>row.origin?.kind==='human'&&row.message?.content===saved.retainedReply).length,{timeout:15000}).toBe(1)
@@ -49,6 +53,8 @@ test('recovers a linked live child after complete Electron shutdown and relaunch
    await widget.getByRole('button',{name:'Stop background session',exact:true}).click()
    await expect.poll(async()=>{const state=await processState(saved.job.pid);return state.state==='gone'||state.state==='Z'||state.start!==saved.worker.start},{timeout:15000}).toBe(true)
    report.workerAfterStop=await processState(saved.job.pid)
+   if(report.authority){await expect.poll(async()=>{const state=await processState(report.authority.pid);return state.state==='gone'||state.state==='Z'||state.start!==report.authority.process.start},{timeout:10000}).toBe(true);report.authorityAfterStop=await processState(report.authority.pid)}
+   if(report.phase==='verified'){await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0);await expect(composer).toHaveText(saved.retainedDraft);await pictures('stopped')}
   }
   await save()
  }
