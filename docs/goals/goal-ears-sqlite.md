@@ -198,7 +198,9 @@ conversion, new PR or version-only PR is authorized. All phases and original bud
 
 Authoritative source: `/private/tmp/ears-sqlite-query-integration`. The clean detached publisher is
 `monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at older `6cf6c8349e`
-and is not the current source. Latest runtime checkpoint is `45180293a3`, including the prefix implementation with partial local qualification; the last exercised test-diagnostic checkpoint is `0126eda005`. Integrated master is
+and is not the current source. Latest runtime checkpoint is `45180293a3`, including the prefix implementation with partial local qualification; platform CI487011c484 validates that runtime.
+The current SDK meta-schema reuse change is still unqualified. The original editor test-diagnostic
+checkpoint is `0126eda005`. Integrated master is
 `e3d1a37d5c622bfebba7767a09452572284881dc`; native elmdb pin remains
 `2441af4658d961f547c7094cd041c2ac246668c5`. The [completed rebase](../references/evidence/ears-sqlite-implementation-2026-10-28/master-rebase-e3d1/README.md)
 preserves checkpoint `353eb42255` exactly except master's three documentation files. Source packages
@@ -261,15 +263,19 @@ Next deliverables, dependencies and closing checks:
   requires forced termination. Child samples show filesystem-related waits but establish no causal fix.
   V8 sampled stack time is not a CPU/wait or syscall decomposition. Do not repeat the broad suite merely
   to obtain green.
-  The next deliverable is backend-only activation attribution on hosted macOS via the manual
-  `ears-activation-profile.yml` workflow and `tests/scripts/profile-ears-activation.py`. Dependencies:
-  pinned native build, normal fresh packages, API and shipped pack. Closing checks require both ordinary
-  SQLite/elmdb RPC activations and completed sampled-stack/SQL reports, or retained original-bound
-  failures. The45-second startup/30-second activation/15-second shutdown bounds are unchanged. This is
-  a diagnostic, not the renderer's five-second acceptance case; ordinary acknowledgment policies differ
-  and SQL spans overlap. Syntax checks pass; hosted run41184048338 is active at9db369afa5 through the existing App acceptance
-  dispatcher (`suite=activation-profile`). Inspect that same run, not a replacement dispatch. No production path or
-  storage policy changes are introduced by these diagnostic files.
+  [Hosted attribution41184048338](../references/evidence/ears-sqlite-implementation-2026-10-28/activation-profile-9db/README.md)
+  is terminal success at9db369afa5: both real RPC activations and sampled-stack/SQL reports complete,
+  after normal source checks and fresh package/API/pack builds. SQLite5358ms/native4258ms are diagnostic
+  timings, not the renderer's five-second assertion. SQLite197 commits total421ms; about2.75s/2.57s
+  inclusive sampled wall time is under settings compilation, including repeated meta-schema work.
+  The current unqualified SDK change reuses only a lazy built-in meta-schema checker; each definition
+  retains its own strict compiler/reference registry and fresh schema/default validation. New regressions
+  cover reused identifiers with different local references and changed invalid metadata. Closing checks:
+  affected SDK/host types/lint/settings/catalog suites, repeat attribution at the new source, then the
+  original focused editor case under its unchanged five-second deadline. Keep original failures visible.
+  The existing manual dispatcher `suite=activation-profile` now includes those focused checks. No speedup,
+  complete app acceptance or acknowledgment-policy change is claimed before actual results.
+
 - The native baseline matrix is checkpointed and stopped for the migration. Session 88639 ended by
   requested SIGTERM (exit -15), not a product failure. It created 99900 rows and last logged 69632 embeddings;
   canonical initial/update validation and the 7200-query phase were not reached. The pinned native CLI saved
@@ -347,7 +353,10 @@ Still-required acceptance, without narrowing phases 3–7:
   The [preregistered Windows API probe](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-directory-api-preregistration/README.md)
   separately observes directory-handle flush results and exclusive write-through moves in disposable
   hosted Windows, using normal-file and occupied-target controls. The manual dispatcher suite is
-  `windows-durability`; hosted execution is pending. No production fix or durability contract is claimed.
+  `windows-durability`. [Actual run41184537719](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-directory-api-c707/README.md)
+  succeeds on NTFS/build26100 as administrator: write/read-write directory handles flush successfully,
+  read/write-attributes handles refuse with5; write-through moves preserve occupied targets. Verify
+  the actual Node/libuv path and ordinary-user rights next. No production fix or durability contract is claimed.
 - Finish required installed Electron/renderer/CLI, executable-pack/SDK and OS/architecture coverage beyond
   the six signed macOS arm64 cases. Requalify provenance after inner-library signing and before app sealing
   when relevant inputs change. `asar:false` already keeps native files on disk; an unsigned/source build is
