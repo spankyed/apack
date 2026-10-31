@@ -82,6 +82,24 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
       .toEqual(Array.from({ length: 667 }, (_, i) => 2 + i * 3));
   });
 
+  it('uses keyed sort-value reads across different type layouts', () => {
+    const { e } = open();
+    e.transact(() => {
+      for (let i = 0; i < 512; i++) e.create(i % 2 ? 'Other' : 'Row', {
+        id: `${i % 2 ? 'Other' : 'Row'}-${i}`, rank: 511 - i, body: 'body',
+      });
+    });
+    const explained = e.query.all().orderBy('rank').limit(10).explain();
+    expect(explained.ids).toEqual(Array.from({ length: 10 }, (_, i) => {
+      const n = 511 - i; return `${n % 2 ? 'Other' : 'Row'}-${n}`;
+    }));
+    if (explained.backend !== 'sqlite') throw new Error('Expected SQLite diagnostics');
+    const sorted = explained.statements.find(statement => statement.sql.includes('ORDER BY CASE p._sort_kind'))!;
+    expect(sorted).toBeDefined();
+    expect(sorted.plan.filter(row => row.detail.includes('SCAN f LEFT-JOIN'))).toEqual([]);
+    expect(sorted.plan.some(row => row.detail.includes('SEARCH f USING'))).toBe(true);
+  });
+
   it('executes scalar distinct in SQL and batches member-group projection', () => {
     const { db, e } = open();
     e.transact(() => { for (let i = 0; i < 512; i++) e.create('Row', {
