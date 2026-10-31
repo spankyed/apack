@@ -146,3 +146,28 @@ Node Inspector and Playwright CDP for one CPU-only batch, with 16 MiB per profil
 Both deliberately modify the disposable harness; neither can qualify overhead. CPU samples include
 scheduling gaps and recording setup/export, so inspect sample counts and deltas before attributing
 wall time to a sampled function. Detailed combined profiles also include profiler setup/heap-stop work.
+
+Cross-revision execution uses two explicit installed checkouts that both contain the gated harness.
+Build preparation runs serially through the existing chain and reuses current outputs. Each checkout
+must own its dependencies and generated output. Execute inside one bounded Linux environment where
+both paths and their git metadata are available:
+
+```sh
+xvfb-run -a node scripts/with-source.mjs tsx scripts/compare-performance-revisions.ts \
+  --baseline /before --candidate /after --scenario all --mode lightweight
+```
+
+A same-checkout A/A control can use `--baseline /work --candidate /work --trials 2`; it validates
+execution, not a speedup. The default requires five warmups and twenty measured trials per revision.
+Warm workers remain resident and get individual ABBA permissions. Startup copies/launches/closes each
+profile under its permission. A completion is acknowledged after raw evidence is saved; startup also
+finishes profile cleanup first. The final release barrier keeps an early-finishing worker from tearing
+down during its peer's last measurement. Failed/early-exited workers abort the owned pair through the
+existing process-group reaper, retaining incomplete reports. Each worker has a separate Playwright log
+and output directory. The `paired-revisions-v1` execution policy cannot pool with isolated/mode runs.
+
+Admission requires actual, distinct process identities for recorded roles, matching mode/fixture/native
+output/runtime/machine/cache conditions, clean source, and the native checkout equal to its repository
+pin. Source/app output hashes may differ between revisions and are retained. Renderer identity is read
+outside action timing through the existing Playwright main-process handle; identity failure preserves
+raw results and invalidates capture. Node report identities come from their actual process.

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { performanceIdentity, createPerformanceScenarioRun, performanceSchedule, trialSchema } from '@apackdev/testing/performance';
+import { performanceIdentity, attachRendererProcessIdentity, createPerformanceScenarioRun, performanceSchedule, performanceExecutionPolicy, waitForPerformanceTrial, finishPerformanceTrial, trialSchema } from '@apackdev/testing/performance';
 import { searchFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -21,7 +21,7 @@ test('search a populated corpus and apply only the current query results', async
   const output = process.env.APACK_PERFORMANCE_RUN_OUTPUT ? path.resolve(process.env.APACK_PERFORMANCE_RUN_OUTPUT) : path.resolve('.apack/performance', `search-${mode}${comparison ? `-vs-${comparison}` : ''}-${Date.now()}`);
   mkdirSync(output, { recursive: true });
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
-  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime: { ...runtime, performancePolicy: comparison ? 'alternating-modes-v1' : 'single-scenario-v1' } });
+  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime: { ...runtime, performancePolicy: performanceExecutionPolicy(comparison) } });
   const journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
   const save = () => journal.save();
   try {
@@ -41,6 +41,7 @@ test('search a populated corpus and apply only the current query results', async
     await expect(appPage.getByTestId('message-search')).toBeVisible();
     for (const entry of schedule) {
       const { index, mode } = entry;
+      await waitForPerformanceTrial(entry);
       journal.begin(entry);
       const thread = entry.ordinal % 2;
       const result = await appPage.evaluate(async ({ mode, thread, expectedTimestamps }) => {
@@ -117,12 +118,17 @@ test('search a populated corpus and apply only the current query results', async
         const reports = await recording.stop();
         return { completed, durationMs, reports, failure, lastDelivery, work };
       }, { mode, thread, expectedTimestamps: fixture.data.threads[thread]!.messages.slice(0, 20).map(message => message.timestamp) });
+      if (result.reports.renderer) {
+        await attachRendererProcessIdentity(electronApp, appPage, result.reports.renderer);
+        result.reports.complete &&= result.reports.renderer.complete;
+      }
       const trial = trialSchema.parse({ scenario: 'search', index, warmup: index < warmups,
         work: result.work, outcome: result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
         correct: result.completed, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
         processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: result.failure });
       journal.append(entry, trial);
       expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
+      await finishPerformanceTrial(entry, trial.outcome);
     }
   } finally { save(); rmSync(directory, { recursive: true, force: true }); }
 });

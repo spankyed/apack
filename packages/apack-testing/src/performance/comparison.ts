@@ -14,6 +14,14 @@ export function performanceSchedule(modeInput: unknown, measured: number, compar
   const mode = modeSchema.parse(modeInput);
   const comparison = comparisonInput === undefined ? undefined : modeSchema.parse(comparisonInput);
   if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100 || comparison === mode) throw Error('Invalid performance schedule');
+  return makeSchedule(mode, measured, comparison);
+}
+/** Same recording mode, independent source workers, with the same warmup and ABBA discipline. */
+export function performanceRevisionSchedule(modeInput: unknown, measured: number): PerformanceScheduleEntry[] {
+  return makeSchedule(modeSchema.parse(modeInput), measured, modeSchema.parse(modeInput));
+}
+function makeSchedule(mode: PerformanceManifest['mode'], measured: number, comparison?: PerformanceManifest['mode']): PerformanceScheduleEntry[] {
+  if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100) throw Error('Invalid performance schedule');
   const modes = { A: mode, B: comparison };
   const variants: PerformanceVariant[] = comparison ? ['A', 'B'] : ['A'];
   const order = [...variants.flatMap(variant => Array<PerformanceVariant>(5).fill(variant)),
@@ -25,7 +33,7 @@ const entrySchema = z.object({ variant: z.enum(['A', 'B']), mode: modeSchema, in
   ordinal: z.number().int().nonnegative(), warmup: z.boolean() });
 const executionSchema = entrySchema.extend({ startedMs: z.number().finite().nonnegative(), endedMs: z.number().finite().nonnegative().optional(),
   outcome: trialSchema.shape.outcome.optional() });
-const journalSchema = z.object({ format: z.literal(1), kind: z.enum(['single', 'mode-comparison']),
+const journalSchema = z.object({ format: z.literal(1), kind: z.enum(['single', 'mode-comparison', 'revision-comparison']),
   measured: z.number().int().min(1).max(100), baseline: modeSchema, comparison: modeSchema.optional(),
   status: z.enum(['incomplete', 'failed', 'passed']), executions: z.array(executionSchema).max(210) });
 
@@ -34,7 +42,7 @@ export function createPerformanceScenarioRun(directory: string, manifestInput: u
   const manifest = manifestSchema.parse(manifestInput);
   const schedule = performanceSchedule(manifest.mode, measured, comparisonInput);
   const comparison = comparisonInput === undefined ? undefined : modeSchema.parse(comparisonInput);
-  if (manifest.runtime.performancePolicy !== (comparison ? 'alternating-modes-v1' : 'single-scenario-v1')) throw Error('Manifest does not declare the execution policy');
+  if (!(comparison ? ['alternating-modes-v1'] : ['single-scenario-v1', 'paired-revisions-v1']).includes(manifest.runtime.performancePolicy!)) throw Error('Manifest does not declare the execution policy');
   const stores = new Map<PerformanceVariant, ReturnType<typeof createPerformanceRunStore>>();
   for (const variant of comparison ? ['A', 'B'] as const : ['A'] as const) {
     stores.set(variant, createPerformanceRunStore(comparison ? path.join(directory, variant) : directory,
@@ -84,11 +92,7 @@ export function readPerformanceModeComparison(directory: string, measured = 20) 
   const journal = journalSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
   if (journal.kind !== 'mode-comparison' || journal.measured !== measured || journal.status !== 'passed' || !journal.comparison) throw Error('Incomplete mode comparison');
   const schedule = performanceSchedule(journal.baseline, measured, journal.comparison);
-  if (journal.executions.length !== schedule.length) throw Error('Incomplete observed execution order');
-  for (const [position, execution] of journal.executions.entries()) {
-    if (!isDeepStrictEqual(entrySchema.parse(execution), schedule[position]) || execution.outcome !== 'passed' || execution.endedMs === undefined
-      || execution.endedMs < execution.startedMs || position > 0 && execution.startedMs < journal.executions[position - 1]!.endedMs!) throw Error('Invalid or overlapping observed ABBA order');
-  }
+  validateObservedOrder(journal, schedule);
   const invocationFile = path.join(directory, 'invocation.json');
   const invocationStat = lstatSync(invocationFile);
   if (!invocationStat.isFile() || invocationStat.size > 16 * 1024) throw Error('Invalid invocation evidence');
@@ -105,4 +109,66 @@ export function readPerformanceModeComparison(directory: string, measured = 20) 
     budget: journal.baseline === 'disabled' && journal.comparison === 'lightweight'
       ? { medianPercent: 5, assessment: medianChangePercent === null ? 'unresolved' : medianChangePercent <= 5 ? 'within-budget' : 'over-budget' } : undefined,
     policy: 'Five warmups per mode, then individually balanced ABBA actions; no tail-percentile claim' };
+}
+
+function validateObservedOrder(journal: z.infer<typeof journalSchema>, schedule: PerformanceScheduleEntry[]) {
+  if (journal.executions.length !== schedule.length) throw Error('Incomplete observed execution order');
+  for (const [position, execution] of journal.executions.entries()) {
+    if (!isDeepStrictEqual(entrySchema.parse(execution), schedule[position]) || execution.outcome !== 'passed' || execution.endedMs === undefined
+      || execution.endedMs < execution.startedMs || position > 0 && execution.startedMs < journal.executions[position - 1]!.endedMs!) throw Error('Invalid or overlapping observed ABBA order');
+  }
+
+}
+
+/** Coordinator-only metadata: each worker remains the sole writer of its raw run. */
+export function createPerformanceRevisionJournal(directory: string, modeInput: unknown, measured: number) {
+  const mode = modeSchema.parse(modeInput);
+  const schedule = performanceRevisionSchedule(mode, measured);
+  const executions: z.infer<typeof executionSchema>[] = [];
+  let failed = false;
+  function save() {
+    const complete = executions.length === schedule.length && executions.every(item => item.outcome === 'passed');
+    const value = journalSchema.parse({ format: 1, kind: 'revision-comparison', measured, baseline: mode, comparison: mode,
+      status: failed ? 'failed' : complete ? 'passed' : 'incomplete', executions });
+    const temporary = path.join(directory, 'execution.json.tmp');
+    writeFileSync(temporary, JSON.stringify(value, null, 2)); renameSync(temporary, path.join(directory, 'execution.json'));
+  }
+  save();
+  return {
+    schedule,
+    begin(entry: PerformanceScheduleEntry) {
+      if (!isDeepStrictEqual(entry, schedule[executions.length]) || executions.length > 0 && executions.at(-1)?.endedMs === undefined) throw Error('Overlapping or out-of-order revision execution');
+      executions.push({ ...entry, startedMs: performance.now() }); save();
+    },
+    end(entry: PerformanceScheduleEntry, outcome: 'passed' | 'failed' | 'incomplete' | 'cancelled') {
+      const execution = executions.at(-1);
+      if (!execution || execution.endedMs !== undefined || !isDeepStrictEqual(entry, schedule[execution.ordinal])) throw Error('No matching revision execution');
+      execution.endedMs = performance.now(); execution.outcome = outcome; failed ||= outcome !== 'passed'; save();
+    },
+    fail() { failed = true; save(); },
+  };
+}
+
+/** Clean source/build identities may differ; fixture, native output, mode and execution conditions may not. */
+export function readPerformanceRevisionComparison(directory: string, measured = 20) {
+  const file = path.join(directory, 'execution.json');
+  const info = lstatSync(file);
+  if (!info.isFile() || info.size > 1024 * 1024) throw Error('Invalid revision execution evidence');
+  const journal = journalSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
+  if (journal.kind !== 'revision-comparison' || journal.measured !== measured || journal.status !== 'passed' || journal.baseline !== journal.comparison) throw Error('Incomplete revision comparison');
+  validateObservedOrder(journal, performanceRevisionSchedule(journal.baseline, measured));
+  for (const variant of ['A', 'B']) {
+    const invocation = path.join(directory, variant, 'invocation.json');
+    const stat = lstatSync(invocation);
+    if (!stat.isFile() || stat.size > 16 * 1024) throw Error('Invalid revision invocation');
+    z.object({ code: z.literal(0), timedOut: z.literal(false), aborted: z.literal(false) }).parse(JSON.parse(readFileSync(invocation, 'utf8')));
+  }
+  const baseline = readPerformanceRun(path.join(directory, 'A'), measured);
+  const candidate = readPerformanceRun(path.join(directory, 'B'), measured);
+  assertComparable(baseline.manifest, candidate.manifest);
+  if (baseline.manifest.runtime.performancePolicy !== 'paired-revisions-v1' || baseline.manifest.mode !== journal.baseline || baseline.scenario !== candidate.scenario) throw Error('Incompatible revision execution policy');
+  const medianDifferenceMs = candidate.summary.medianMs! - baseline.summary.medianMs!;
+  return { scenario: baseline.scenario, baseline, candidate, medianDifferenceMs,
+    medianChangePercent: baseline.summary.medianMs === 0 ? null : medianDifferenceMs / baseline.summary.medianMs! * 100,
+    policy: 'Two isolated workers, five warmups per revision, then individually balanced ABBA actions; no tail-percentile claim' };
 }

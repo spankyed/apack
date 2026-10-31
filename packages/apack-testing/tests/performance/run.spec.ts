@@ -15,7 +15,7 @@ const report = { observations: [], bytes: 0, dropped: 0, truncated: false, rejec
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0,
   contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
 const trial = (index: number) => ({ scenario: 'thread-open', index, warmup: index < 5, outcome: 'passed', durationMs: index + 1,
-  correct: true, completion: 'view-ready', work: {}, processes: { renderer: report, backend: report } });
+  correct: true, completion: 'view-ready', work: {}, processes: { renderer: { ...report, processId: 101 }, backend: { ...report, processId: 102 } } });
 function complete() { const output = directory(); const store = createPerformanceRunStore(output, manifest, 1); for (let index = 0; index < 6; index++) store.append(trial(index)); return output; }
 it('writes immutable raw trials and admits a compact run with the same scalar summary', () => {
   const output = complete();
@@ -60,7 +60,7 @@ it('rejects raw tampering, forged summaries, symbolic links and oversized files 
 it('requires startup invocation ownership, phase order and successful exit as well as correct trials', () => {
   const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
   for (let index = 0; index < 6; index++) {
-    const ownTrial = { ...trial(index), scenario: 'populated-startup', processes: { ...trial(index).processes, driver: report } };
+    const ownTrial = { ...trial(index), scenario: 'populated-startup', processes: { ...trial(index).processes, driver: { ...report, processId: 103 } } };
     store.append(ownTrial);
     const own = path.join(output, `trial-${index}`); mkdirSync(own);
     writeFileSync(path.join(own, 'manifest.json'), JSON.stringify(manifest));
@@ -70,4 +70,14 @@ it('requires startup invocation ownership, phase order and successful exit as we
   store.save(invocations); expect(readPerformanceRun(output, 1).scenario).toBe('populated-startup');
   store.save(invocations.map(item => ({ ...item, exitCode: 1 })));
   expect(() => readPerformanceRun(output, 1)).toThrow(/Incomplete/);
+});
+
+it('requires distinct actual process identities before admitting a complete run', () => {
+  for (const missing of [true, false]) {
+    const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
+    for (let index = 0; index < 6; index++) store.append({ ...trial(index), processes: {
+      renderer: { ...report, processId: 101 }, backend: { ...report, ...(missing ? {} : { processId: 101 }) },
+    } });
+    expect(() => readPerformanceRun(output, 1)).toThrow(/process identity/);
+  }
 });

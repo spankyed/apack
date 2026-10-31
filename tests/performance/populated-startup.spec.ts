@@ -3,7 +3,7 @@ import path from 'node:path';
 import { test as base, expect, applicationLaunchStartedAt } from '@apackdev/testing';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { chromeTrace, manifestSchema, performanceIdentity, summarize, trialSchema } from '@apackdev/testing/performance';
+import { chromeTrace, manifestSchema, performanceIdentity, attachRendererProcessIdentity, summarize, trialSchema } from '@apackdev/testing/performance';
 import { searchFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -102,6 +102,10 @@ test('start a populated profile through admission to its initial usable thread v
   action.end(correct ? 'ok' : 'error');
   const reports = await appPage.evaluate(() => (window as unknown as PerformanceWindow).__performance.stop());
   const driver = await parent.stop();
+  if (reports.renderer) {
+    await attachRendererProcessIdentity(electronApp, appPage, reports.renderer);
+    reports.complete &&= reports.renderer.complete;
+  }
   // Provenance hashing is outside launch-to-view readiness and every resource recording.
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
   const manifest = performanceIdentity({ fixture, mode, runtime: { ...runtime, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' }, cache: 'fresh-process-warm-filesystem', warmups: 5 });

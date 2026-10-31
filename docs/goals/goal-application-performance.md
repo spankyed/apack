@@ -197,3 +197,17 @@ these do not justify changing SDK attribute handling. Do not discard those sampl
 hotspot from them. All qualification results above and diagnostic profiles are copied to ignored
 `.apack/performance/linux-evidence/`. Cross-revision execution, remaining final-count mode evidence,
 the unresolved lightweight budget, final review and broad local/manual strict gates remain open.
+
+Revision execution is now implemented as two gated workers with serial ABBA permissions, observed
+ready/done markers, explicit exit evidence and a final teardown barrier. Startup waits for permission
+before copying and acknowledges only after closing/cleaning its profile. Preparation reuses the chain;
+separate checkouts cannot share node_modules, and every worker has separate Playwright logs/output.
+Thirty-one focused performance contract tests and three runner tests pass, with affected types/lint and
+regenerated API reports. Full real-app revision verification is pending.
+
+Completeness review also added actual per-trial process IDs (independent renderer lookup outside timing,
+Node's actual PID), required distinct role identities at run admission, and rejects a native checkout that
+differs from its repository pin. Failed renderer identity lookup preserves raw data and marks capture
+incomplete. The focused backend CPU counterfactual now checks the reported PID against its returned PID.
+A disposable sequence-getter microdiagnostic averaged 0.436 microseconds over 10,000 reads; it does not
+explain the observed search gap and does not justify changing engine sequence semantics.

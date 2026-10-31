@@ -130,6 +130,8 @@ export function readPerformanceRun(directory: string, measured = 20) {
     const required = scenario === 'populated-startup' ? ['driver', 'renderer', 'backend'] : ['renderer', 'backend'];
     if (Object.keys(trial.processes).length !== required.length || required.some(name => !trial.processes[name])
       || Object.values(trial.processes).some(report => report.mode !== manifest.mode)) throw Error('Missing processes or mixed modes');
+    const ids = required.map(role => trial.processes[role]!.processId);
+    if (ids.some(id => id === undefined) || new Set(ids).size !== ids.length) throw Error('Missing or duplicate process identity');
   }
   if (scenario === 'populated-startup' && (!index.invocations || index.invocations.length !== measured + 6
     || index.invocations.some((item, position) => item.exitCode !== 0 || item.signal !== null || item.phase !== (position ? 'populated-startup' : 'seed')

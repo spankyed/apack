@@ -1,0 +1,90 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
+import { afterEach, expect, it, vi } from 'vitest';
+import { performanceExecutionPolicy, waitForPerformanceTrial, finishPerformanceTrial } from '../../src/performance/gate.ts';
+import { coordinatePerformanceRevisions } from '../../src/performance/revision.ts';
+import { createPerformanceRevisionJournal, performanceRevisionSchedule, readPerformanceRevisionComparison } from '../../src/performance/comparison.ts';
+import { createPerformanceRunStore } from '../../src/performance/run.ts';
+const directories: string[] = [];
+const timers: Array<ReturnType<typeof setInterval>> = [];
+afterEach(() => { for (const timer of timers.splice(0)) clearInterval(timer); for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); vi.unstubAllEnvs(); });
+function directory() { const result = mkdtempSync(path.join(tmpdir(), 'apack-revision-')); directories.push(result); return result; }
+const entry = { variant: 'A' as const, mode: 'lightweight' as const, ordinal: 0, index: 0, warmup: true };
+it('waits before work, validates permission, and acknowledges completion after the caller saves evidence', async () => {
+  const own = directory(); vi.stubEnv('APACK_PERFORMANCE_GATE', JSON.stringify({ directory: own, deadline: Date.now() + 10_000, mode: 'lightweight', lastIndex: 6 }));
+  expect(performanceExecutionPolicy()).toBe('paired-revisions-v1');
+  expect(() => performanceExecutionPolicy('detailed')).toThrow();
+  const pending = waitForPerformanceTrial(entry);
+  expect(existsSync(path.join(own, 'ready-0.json'))).toBe(true);
+  await expect(finishPerformanceTrial(entry, 'passed')).rejects.toThrow();
+  writeFileSync(path.join(own, 'permit-0.json'), JSON.stringify({ index: 0, mode: 'lightweight', lastIndex: 6 }));
+  await pending; await finishPerformanceTrial(entry, 'passed');
+  expect(JSON.parse(readFileSync(path.join(own, 'done-0.json'), 'utf8'))).toEqual({ index: 0, mode: 'lightweight', outcome: 'passed' });
+});
+it('refuses a stale coordinator and mismatched permission rather than silently running', async () => {
+  for (const expired of [true, false]) {
+    const own = directory(); vi.stubEnv('APACK_PERFORMANCE_GATE', JSON.stringify({ directory: own, deadline: Date.now() + (expired ? -1 : 10_000), mode: 'lightweight', lastIndex: 6 }));
+    if (!expired) writeFileSync(path.join(own, 'permit-0.json'), JSON.stringify({ index: 1, mode: 'lightweight', lastIndex: 6 }));
+    await expect(waitForPerformanceTrial(entry)).rejects.toThrow();
+  }
+  vi.stubEnv('APACK_PERFORMANCE_GATE', '');
+  await waitForPerformanceTrial(entry); expect(performanceExecutionPolicy()).toBe('single-scenario-v1');
+});
+it('coordinates real file handshakes in ABBA order with two independently waiting workers', async () => {
+  const output = directory(); const observed: string[] = [];
+  for (const variant of ['A', 'B'] as const) {
+    const own = path.join(output, 'coordination', variant); mkdirSync(own, { recursive: true }); let index = 0;
+    const ready = () => writeFileSync(path.join(own, `ready-${index}.json`), JSON.stringify({ index, mode: 'lightweight', lastIndex: 6 })); ready();
+    timers.push(setInterval(() => {
+      if (index >= 7 || !existsSync(path.join(own, `permit-${index}.json`))) return;
+      observed.push(variant); writeFileSync(path.join(own, `done-${index}.json`), JSON.stringify({ index, mode: 'lightweight', outcome: 'passed' }));
+      if (++index < 7) ready();
+    }, 1));
+  }
+  await coordinatePerformanceRevisions({ directory: output, mode: 'lightweight', measured: 2, deadline: Date.now() + 10_000, workers: () => ({}) });
+  expect(observed).toEqual([...Array(5).fill('A'), ...Array(5).fill('B'), 'A', 'B', 'B', 'A']);
+  expect(JSON.parse(readFileSync(path.join(output, 'execution.json'), 'utf8')).status).toBe('passed');
+});
+it('refuses an exited worker and a completion that predates its permission', async () => {
+  for (const exited of [true, false]) {
+    const output = directory(); const own = path.join(output, 'coordination/A'); mkdirSync(own, { recursive: true });
+    if (!exited) { writeFileSync(path.join(own, 'ready-0.json'), JSON.stringify({ index: 0, mode: 'lightweight', lastIndex: 6 })); writeFileSync(path.join(own, 'done-0.json'), '{}'); }
+    await expect(coordinatePerformanceRevisions({ directory: output, mode: 'lightweight', measured: 2, deadline: Date.now() + 10_000, workers: () => exited ? { A: { code: 0 } } : {} })).rejects.toThrow();
+    expect(JSON.parse(readFileSync(path.join(output, 'execution.json'), 'utf8')).status).toBe('failed');
+  }
+});
+const manifest = { format: 1, source: { revision: 'one', dirty: false, excludedUntracked: [], diffSha256: 'clean' }, builds: [{ path: 'app', sha256: 'one' }],
+  fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} }, native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] },
+  mode: 'lightweight', cache: 'warm-process', warmups: 5, runtime: { performancePolicy: 'paired-revisions-v1' },
+  machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' }, clock: 'Local monotonic durations; cross-process epoch alignment is approximate' };
+const report = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0, mode: 'lightweight', active: 0, unfinished: 0,
+  droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
+it('admits differing clean revisions and rejects changed fixtures or failed process exits', () => {
+  const output = directory(); const coordinator = createPerformanceRevisionJournal(output, 'lightweight', 2);
+  const stores = { A: createPerformanceRunStore(path.join(output, 'A'), manifest, 2),
+    B: createPerformanceRunStore(path.join(output, 'B'), { ...manifest, source: { ...manifest.source, revision: 'two' }, builds: [{ path: 'app', sha256: 'two' }] }, 2) };
+  for (const step of coordinator.schedule) {
+    coordinator.begin(step); stores[step.variant].append({ scenario: 'search', index: step.index, warmup: step.warmup, outcome: 'passed', durationMs: 10, correct: true,
+      completion: 'view-ready', work: {}, processes: { backend: { ...report, processId: 102 }, renderer: { ...report, processId: 101 } } }); coordinator.end(step, 'passed');
+  }
+  for (const variant of ['A', 'B']) writeFileSync(path.join(output, variant, 'invocation.json'), JSON.stringify({ code: 0, timedOut: false, aborted: false }));
+  expect(readPerformanceRevisionComparison(output, 2).medianChangePercent).toBe(0);
+  writeFileSync(path.join(output, 'B/invocation.json'), JSON.stringify({ code: 1, timedOut: false, aborted: false }));
+  expect(() => readPerformanceRevisionComparison(output, 2)).toThrow();
+  writeFileSync(path.join(output, 'B/invocation.json'), JSON.stringify({ code: 0, timedOut: false, aborted: false }));
+  const file = path.join(output, 'B/manifest.json'); const changed = JSON.parse(readFileSync(file, 'utf8')); changed.fixture.seed = 1; writeFileSync(file, JSON.stringify(changed));
+  expect(() => readPerformanceRevisionComparison(output, 2)).toThrow(/fixture/);
+  expect(performanceRevisionSchedule('lightweight', 20).filter(step => !step.warmup)).toHaveLength(40);
+});
+
+it('keeps the last worker alive until the coordinator releases both sources', async () => {
+  const own = directory(); vi.stubEnv('APACK_PERFORMANCE_GATE', JSON.stringify({ directory: own, deadline: Date.now() + 10_000, mode: 'lightweight', lastIndex: 6 }));
+  writeFileSync(path.join(own, 'permit-6.json'), JSON.stringify({ index: 6, mode: 'lightweight' }));
+  let finished = false;
+  const pending = finishPerformanceTrial({ ...entry, index: 6 }, 'passed').then(() => { finished = true; });
+  expect(existsSync(path.join(own, 'done-6.json'))).toBe(true);
+  expect(finished).toBe(false);
+  writeFileSync(path.join(own, 'release.json'), JSON.stringify({ released: true }));
+  await pending; expect(finished).toBe(true);
+});
