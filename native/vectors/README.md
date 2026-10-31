@@ -36,18 +36,20 @@ for build environments; applications load the resulting artifact rather than com
 
 The patch changes integer membership filtering, not storage, model training or ANN
 settings. Upstream compares each entry against each allowed owner. Long integer
-operand lists are sorted once; compact 1/4-byte metadata then uses binary search
-through upstream's converted operands. Generic metadata also uses binary search for
-all-integer lists, preserving full signed 64-bit owners without a dense-ID bitmap.
+operand lists are sorted once; compact 1/4-byte metadata binary-searches those
+query-owned 64-bit operands directly, avoiding whole-list conversion/allocation for every block.
+Generic metadata also uses binary search for all-integer lists, preserving full signed
+64-bit owners without a dense-ID bitmap. Compact NULL sentinels remain excluded.
 Each entry needs logarithmic membership comparisons. Lists shorter than eight,
 non-integer operand lists and other operators retain upstream behavior. The compact
 path still accepts upstream's numeric conversion before sorting mixed operands.
 It reuses existing operand buffers; the C library owns sorting auxiliary storage.
 Previously excluded rows stay excluded when this predicate is applied.
 
-`membership-test.mjs` makes 555 independent comparisons with ordinary SQLite over
+`membership-test.mjs` makes 735 independent comparisons with ordinary SQLite over
 none/flat/IVF modes, including compact/sparse/full-width IDs, NULLs, mixed values,
-combined filters, prepared-query reuse, updates, deletion and nested/outer rollback.
+compact NULL-sentinel/out-of-range RHS cases, combined filters, prepared-query reuse, updates,
+deletion and nested/outer rollback.
 The CI wrapper delegates to this same builder; platform qualification must execute
 these comparisons and the EARS generation/training/model cases using its artifact.
 The older scratch bitmap/text patches remain historical benchmark evidence and are

@@ -188,13 +188,13 @@ if (mode === 'verify') {
   assert.equal(nativeGeneration.upstream.sha256,'b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1');
   assert.equal(nativeGeneration.patchApplied,true);
   assert.equal(nativeGeneration.patchSha256,createHash('sha256').update(readFileSync('native/vectors/vec1-membership.patch')).digest('hex'));
-  assert.equal(nativeGeneration.sourceSha256,'5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b');
+  assert.equal(nativeGeneration.sourceSha256,'04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a');
   assert.equal(nativeMembership.source,source);
   assert.equal(nativeMembership.extensionSha256,nativeGeneration.extensionSha256);
   assert.equal(nativeMembership.completed,true);
   assert.equal(nativeMembership.groups.length,15);
-  assert(nativeMembership.groups.every(group=>group.checks===37));
-  assert.equal(result.nativeMembershipChecks,555,'All independent membership comparisons must execute');
+  assert(nativeMembership.groups.every(group=>group.checks===49));
+  assert.equal(result.nativeMembershipChecks,735,'All independent membership comparisons must execute');
   assert.equal(nativeGeneration.platform,platform());assert.equal(nativeGeneration.arch,arch());
   assert.equal(createHash('sha256').update(readFileSync(nativeGeneration.extension)).digest('hex'),nativeGeneration.extensionSha256);
   assert.equal(nativeGeneration.packagedExtensionSha256,nativeGeneration.extensionSha256,'Ordinary package and independent native build must match');

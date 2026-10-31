@@ -269,8 +269,11 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: integrate the exact allocation-free compact-IN source into the candidate's ordinary native
-build, then qualify package/provenance, complete EARS/fresh-owner and affected platform/installed paths.
+Next checkpoint: qualify the integrated allocation-free compact-IN candidate through its ordinary native
+package/provenance, complete EARS/fresh-owner and affected platform/installed paths. The patch now reproduces
+the exact tested C digest below, with runtime/build/platform provenance pins and all 735 membership controls
+updated together. Prior strict/app/installed passes qualify the preceding native inputs, not this changed
+library. Preserve that source boundary until new checks finish.
 The [private direct-IN proof](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
 passes 735 ordinary-SQLite controls per library and 900 paired updated-snapshot answers. The subsequent
 [full initial/update matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-full-matrix/README.md)

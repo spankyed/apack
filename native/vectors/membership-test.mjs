@@ -57,7 +57,11 @@ try {
     const lists = [[], [1n], integers.slice(0, 7), integers.slice(0, 8), integers.slice(0, 9),
       [...integers].reverse(), [...integers, ...integers.slice(0, 12)],
       [...integers, null, '1', 1.5, Buffer.from('a')], Array(12).fill(-999n),
-      Array.from({ length: 128 }, (_, i) => BigInt(i))];
+      Array.from({ length: 128 }, (_, i) => BigInt(i)),
+      [255n, 2147483647n, 0n, 1n, 2n, 3n, 4n, 5n, 6n, 7n],
+      [-9223372036854775808n, 9223372036854775807n, -2147483649n, 2147483648n, -2n, -1n, 0n, 1n, 2n, 3n],
+      [-2n, -1n, 0n, 1n, 2n, 3n, 4n, 5.0, 6.5, 2147483647n],
+      [128n, 129n, 130n, 131n, 132n, 133n, 134n, 255n, 256n]];
     const check = (list, prefix = '', suffix = '') => {
       const where = prefix + 'owner IN (' + list.map(() => '?').join(',') + ')' + suffix;
       const expected = db.prepare('SELECT rowid FROM reference WHERE ' + where + ' ORDER BY rowid').all(...list);

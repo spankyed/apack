@@ -1,5 +1,5 @@
---- vec1.c
-+++ vec1.c
+--- a/vec1.c
++++ b/vec1.c
 @@ -5783,6 +5783,7 @@
  struct Vec1Filter {
    char vop;                       /* VEC1_OP_XXX value */
@@ -55,7 +55,36 @@
  /*
  ** Buffer pMeta contains an nEntry entry meta-value list in either
  ** 1BYTEINT (if szInt==1) or 4BYTEINT (if szInt==4) format. This function 
-@@ -7991,6 +8018,27 @@
+@@ -7981,6 +8008,28 @@
+     int rval = 0;
+     u8 op = 0;
+ 
++    /* Integer RHS entries are already sorted and owned by this query. Search
++    ** them directly instead of narrowing/copying the entire list per block.
++    ** Mixed operands retain the upstream conversion path below. */
++    if( pFilter->bSortedIntegerIn ){
++      const u8 *a = &pMeta->a[VEC1_META_SZHDR];
++      int ii;
++      for(ii=0; ii<nEntry; ii++){
++        i64 lo = 0, hi = pFilter->iVal;
++        i64 v = szInt==1 ? (i64)a[ii] : (i64)(int)vec1GetU32(&a[ii*sizeof_u32]);
++        i64 nullValue = szInt==1 ? VEC1_META_1BYTENULL : VEC1_META_4BYTENULL;
++        if( pBitmask->a[ii/8] & (1 << (ii%8)) ) continue;
++        while( lo<hi ){
++          i64 mid = lo + (hi-lo)/2;
++          if( pFilter[mid+1].iVal<v ) lo = mid+1; else hi = mid;
++        }
++        if( v==nullValue || lo==pFilter->iVal || pFilter[lo+1].iVal!=v ){
++          pBitmask->a[ii/8] |= (1 << (ii%8));
++        }
++      }
++      return SQLITE_OK;
++    }
++
+     rc = vec1FilterToIntOp(pFilter,
+         (szInt==4 ? VEC1_META_4BYTEMIN : 0), 
+         (szInt==4 ? VEC1_META_4BYTEMAX : 254),
+@@ -7991,6 +8040,27 @@
        if( op==0 ){
          /* No entries will match. Set the "filtered-out" bit for all rows. */
          memset(pBitmask->a, 0xFF, pBitmask->n);
@@ -83,7 +112,7 @@
        }else if( szInt==4 ){
          const int *a = (const int*)&pMeta->a[VEC1_META_SZHDR];
          vec1MetaFilterScan4ByteArray(a, pBitmask->a, nEntry, rval, aRval, op);
-@@ -9060,6 +9108,18 @@
+@@ -9060,6 +9130,18 @@
              pFilter->iVal++;
            }
            if( rc==SQLITE_DONE ) rc = SQLITE_OK;

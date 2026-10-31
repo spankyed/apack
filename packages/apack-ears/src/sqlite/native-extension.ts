@@ -5,8 +5,8 @@ import { join, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const upstream = '814fd8ef4d42d6567f1613a66f556c8194764d06';
-const sourceSha256 = '5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b';
-const patchSha256 = '33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923';
+const sourceSha256 = '04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a';
+const patchSha256 = 'd76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5';
 const headersPackage = '13.0.3';
 const changed = (): never => { throw Object.assign(new Error('Packaged native vector provenance or binary does not match this build'), { code: 'NATIVE_CHANGED' }); };
 
