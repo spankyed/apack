@@ -1,89 +1,67 @@
-name: Retained renderer loader diagnosis
+name: Startup record contract
 on:
   workflow_dispatch:
 permissions:
   contents: read
   actions: read
 jobs:
-  loader:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+  startup-records:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 0ca8217459bbeff990e4ff0b0978def3129893df
+          ref: f3f82a9f93696b1dfa811c25f9916ca093c7a955
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 23.11.1
+          cache: npm
+      - uses: ./.github/actions/elmdb
+      - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 41203505748
-          name: performance-runtime-cleanup-0ca8217459
-          path: retained
-      - name: Build the maintained Linux test image
+          run-id: 41208950064
+          name: strict-producers-f3f82a9f93696b1dfa811c25f9916ca093c7a955
+          path: ${{ runner.temp }}/producer-outputs
+      - name: Admit existing producer outputs and build the app
         shell: bash
         run: |
-          rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
-          git init -q vendor/elmdb
-          git -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"
-          git -C vendor/elmdb checkout -q FETCH_HEAD
-          toolchain=$(sed -n 's/^channel *= *"\([^"]*\)"/\1/p' vendor/elmdb/rust-toolchain.toml)
-          test -n "$toolchain"
-          docker build --build-arg RUST_TOOLCHAIN="$toolchain" -t apack-renderer-loader -f scripts/linux/Dockerfile scripts/linux
-      - name: Load retained renderer bytes with the same Electron version
+          tar -xzf "$RUNNER_TEMP/producer-outputs/producers.tgz"
+          node scripts/with-source.mjs npx tsx scripts/strict-job-artifact.ts --check
+          npm run chain -- --only build:runtime --no-native --cores 2
+      - name: Verify canonical startup records through actual worker exits
         shell: bash
+        env:
+          APACK_PERFORMANCE_MODE: lightweight
+          APACK_PERFORMANCE_TRIALS: '1'
+          APACK_PERFORMANCE_RUN_OUTPUT: .apack/performance/startup-record-contract
         run: |
-          mkdir -p "$RUNNER_TEMP/loader-scripts" "$RUNNER_TEMP/loader-output"
-          cat > "$RUNNER_TEMP/loader-scripts/main.cjs" <<'MAIN'
-          const { app, BrowserWindow, netLog } = require('electron');
-          app.disableHardwareAcceleration();
-          app.whenReady().then(async () => {
-            await netLog.startLogging('/out/network.json', { captureMode: 'everything' });
-            const window = new BrowserWindow({ show: false, webPreferences: { sandbox: false, contextIsolation: true, nodeIntegration: false } });
-            await window.loadFile('/renderer/index.html');
-          });
-          app.on('window-all-closed', () => app.quit());
-          MAIN
-          cat > "$RUNNER_TEMP/loader-scripts/runner.cjs" <<'RUNNER'
-          const { _electron } = require('@playwright/test');
-          const fs = require('node:fs');
-          (async () => {
-            const app = await _electron.launch({ args: ['--no-sandbox', '/probe/main.cjs'], env: { ...process.env, ELECTRON_DISABLE_SANDBOX: '1' } });
-            const failed = [], errors = [];
-            const pages = new Set();
-            const observe = page => {
-              if (pages.has(page)) return;
-              pages.add(page);
-              page.on('requestfailed', request => failed.push({ url: request.url(), failure: request.failure() }));
-              page.on('pageerror', error => errors.push(String(error)));
-            };
-            app.on('window', observe);
-            app.windows().forEach(observe);
-            const page = await app.firstWindow(); observe(page);
-            await page.waitForLoadState();
-            await page.waitForTimeout(5000);
-            await app.evaluate(({ netLog }) => netLog.stopLogging());
-            fs.writeFileSync('/out/result.json', JSON.stringify({ failed, errors, url: page.url() }, null, 2));
-            console.log(JSON.stringify({ failed: failed.length, errors }));
-            await app.close();
-          })().catch(error => { console.error(error); process.exitCode = 1; });
-          RUNNER
           set -o pipefail
-          docker run --rm --init --memory=6g --memory-swap=6g --cpus=2 \
-            -v "$GITHUB_WORKSPACE/retained/apack/apack/packages/renderer/dist:/renderer:ro" \
-            -v "$GITHUB_WORKSPACE/package.json:/manifest.json:ro" \
-            -v "$RUNNER_TEMP/loader-scripts:/scripts:ro" -v "$RUNNER_TEMP/loader-output:/out" \
-            apack-renderer-loader bash -ec '
-              mkdir /probe; cd /probe
-              cp /scripts/*.cjs .
-              npm init -y >/dev/null
-              npm install --no-audit --no-fund "electron@$(node -p "require(\"/manifest.json\").devDependencies.electron")" "@playwright/test@$(node -p "require(\"/manifest.json\").devDependencies[\"@playwright/test\"]")"
-              xvfb-run -a node runner.cjs
-            ' 2>&1 | tee "$RUNNER_TEMP/loader-output/invocation.log"
-      - name: Make owned diagnostic output readable
-        if: always()
-        run: sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/loader-output"
+          node scripts/with-source.mjs tsx tests/performance/startup-run.ts 2>&1 | tee "$RUNNER_TEMP/startup-record-contract.log"
+          node scripts/with-source.mjs tsx tests/performance/verify-run.ts "$APACK_PERFORMANCE_RUN_OUTPUT" "" 1
+          node --input-type=module <<'VERIFY'
+          import { readFileSync, existsSync } from 'node:fs';
+          const root = process.env.APACK_PERFORMANCE_RUN_OUTPUT;
+          const index = JSON.parse(readFileSync(`${root}/results.json`));
+          if (index.records.length !== 6 || index.invocations.length !== 7) throw Error('Missing warmup, measured worker or seed exit');
+          for (const [position, record] of index.records.entries()) {
+            if (record.file !== `trial-${position}/trial.json` || existsSync(`${root}/trial-${position}.json`)) throw Error('Startup raw record was duplicated');
+          }
+          console.log('Canonical startup record contract passed; this one-measurement run does not qualify overhead.');
+          VERIFY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: retained-renderer-loader-0ca8217459
+          name: startup-record-contract-f3f82a9f93
+          include-hidden-files: true
           retention-days: 2
-          path: ${{ runner.temp }}/loader-output/
+          path: |
+            ${{ runner.temp }}/startup-record-contract.log
+            .apack/performance/startup-record-contract/
+            node_modules/.cache/apack-chain/runs/
