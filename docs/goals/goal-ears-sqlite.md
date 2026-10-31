@@ -267,7 +267,8 @@ Next deliverables, dependencies and closing checks:
   SQLite/elmdb RPC activations and completed sampled-stack/SQL reports, or retained original-bound
   failures. The45-second startup/30-second activation/15-second shutdown bounds are unchanged. This is
   a diagnostic, not the renderer's five-second acceptance case; ordinary acknowledgment policies differ
-  and SQL spans overlap. Syntax checks pass; actual hosted execution is pending. No production path or
+  and SQL spans overlap. Syntax checks pass; hosted run41184048338 is active at9db369afa5 through the existing App acceptance
+  dispatcher (`suite=activation-profile`). Inspect that same run, not a replacement dispatch. No production path or
   storage policy changes are introduced by these diagnostic files.
 - The native baseline matrix is checkpointed and stopped for the migration. Session 88639 ended by
   requested SIGTERM (exit -15), not a product failure. It created 99900 rows and last logged 69632 embeddings;
@@ -343,6 +344,10 @@ Still-required acceptance, without narrowing phases 3–7:
 - Implement/qualify Windows directory publication durability, ACL assumptions and history-quarantine parent
   synchronization. The shared Windows directory-sync helper currently does no flush. Ordering/race tests and
   process-kill tests do not prove device power-loss durability or certify arbitrary filesystems.
+  The [preregistered Windows API probe](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-directory-api-preregistration/README.md)
+  separately observes directory-handle flush results and exclusive write-through moves in disposable
+  hosted Windows, using normal-file and occupied-target controls. The manual dispatcher suite is
+  `windows-durability`; hosted execution is pending. No production fix or durability contract is claimed.
 - Finish required installed Electron/renderer/CLI, executable-pack/SDK and OS/architecture coverage beyond
   the six signed macOS arm64 cases. Requalify provenance after inner-library signing and before app sealing
   when relevant inputs change. `asar:false` already keeps native files on disk; an unsigned/source build is
