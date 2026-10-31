@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
@@ -133,7 +134,7 @@ function refuse(message: string): never {
   process.exit(2);
 }
 
-const command = process.argv.slice(2);
+const { command, scratchArgs } = linuxTestInvocation(process.argv.slice(2));
 if (command.length === 0) refuse('usage: npm run test:linux -- <command> [args...]');
 
 if (docker(['info']).status !== 0) {
@@ -300,7 +301,7 @@ const script = ['set -e', run].join('\n');
 const child = spawn('docker', [
   // IPv4 loopback only, as on CI's Linux runners: with IPv6 up, `localhost` resolves to ::1 first here, so a
   // dev server binds where a client dialling 127.0.0.1 cannot reach it
-  'run', '--rm', '--init', ...RESOURCE_LIMITS, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
+  'run', '--rm', '--init', ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),
