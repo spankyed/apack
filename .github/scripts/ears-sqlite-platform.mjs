@@ -141,10 +141,14 @@ if (mode === 'verify') {
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const privateFiles = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/private-file.spec.ts') ? test.assertionResults : []);
-  assert(privateFiles.length === 8 && privateFiles.every(test => test.status === 'passed'), 'All private-file durability cases must execute');
-  for (const name of ['finishes short writes without splitting or dropping Unicode bytes',
+  assert(privateFiles.length >= 9 && privateFiles.every(test => test.status === 'passed'), 'All private-file durability cases must execute');
+  for (const name of ['replaces the file atomically and leaves no temporary file',
+    'finishes short writes without splitting or dropping Unicode bytes',
     'refuses zero-progress writes before publication and preserves the incumbent',
+    'keeps the previous file and removes its temporary one when the rename fails',
+    'retries a rename another process briefly blocks, on Windows only',
     'requests a real directory flush and propagates a refused recovery barrier',
+    'opens a writable directory descriptor for the Windows publication barrier',
     'retains a published file and reports its committed outcome when the directory flush fails',
     'retains the original refusal when temporary cleanup also fails']) {
     assert(privateFiles.some(test => test.fullName.endsWith(name)), `Missing private-file witness: ${name}`);

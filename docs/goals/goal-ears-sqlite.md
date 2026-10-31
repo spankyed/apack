@@ -241,7 +241,11 @@ passes on Linux at2cbafd7fb3, including the emitted core's unchanged quality tar
 Installed-platform41212950283 fails Linux before module execution: cold Preview generation precedes its
 required published SDK declarations. The ordinary command now ensures packages before generation, which
 is preserved; this dependency-order fix requires actual clean-path requalification. Strict41212565910
-remains separately active at2cbafd7fb3. Current-platform/native parity, packaged runtime and full
+has completed Linux/Windows candidate jobs that fail only the final stale private-file count gate: raw
+reports contain nine passing witnesses, while the verifier expected eight. [Gate reconciliation](../references/evidence/ears-sqlite-implementation-2026-10-28/private-file-gate-2cb/README.md)
+now names all nine cases and requires all reported cases to pass; omission/skip/rename negative replays
+fail on both actual reports. This corrects the verifier, not the original run's failed status. Remaining
+siblings/consumer jobs keep their original owner; fresh full/platform qualification remains required. Current-platform/native parity, packaged runtime and full
 exact-source qualification remain required. API generation41209245253
 passes at563ec93ed0 with an empty report diff. New-pin native parity, resource/quality comparisons and
 full integrated/platform acceptance remain required. Do not substitute Louvain for Leiden or silently omit these APIs.
