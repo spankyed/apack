@@ -68,13 +68,16 @@ export class SqliteVectors {
     if(Number(probe[0]!.n)<=EXACT_VECTOR_CHUNK_LIMIT)return probe.slice(1).map(row=>({id:row.id,score:row.score}));
     const owners=this.db.indexBuilds.nativeVectorOwners(generation,query,scope,exclude);
     if(owners) {
+      // Native selection already applied scope, trash and exclusion in this read snapshot. Reuse its
+      // bounded owners; only current generation/chunk membership needs checking during exact reranking.
       const rows=this.db.all(`SELECT c.entity_id id,
         1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score
         FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
         LEFT JOIN embedding_search p ON p.embedding_id=v.id
         WHERE c.entity_id IN (SELECT id FROM entities WHERE seq IN (SELECT value FROM json_each(?)))
-          AND ${eligible} GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`,
-        [query,JSON.stringify(owners),...bindings,k]);
+          AND c.type=? AND c.index_name=? AND c.generation=? AND c.embedding_id IS NOT NULL
+        GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`,
+        [query,JSON.stringify(owners),type,name,generation,k]);
       return rows.length<k?exact():rows;
     }
     // Candidate owners already passed eligibility in this read snapshot. Probe only their current chunks.

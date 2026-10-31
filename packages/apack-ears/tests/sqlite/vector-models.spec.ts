@@ -297,6 +297,27 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(scoped[0]).toBe(first);expect(scoped).not.toContain(repeated);expect(scoped).not.toContain(tied);
     expect(native).toHaveBeenCalled();expect(native.mock.calls.every(call=>call[3]!==null)).toBe(true);
     expect(e.query('Row').like(first,{k:2}).ids()).toEqual([repeated,tied]);
+    // Independently count actual scope execution: selected owners must not run the scope a third
+    // time during canonical reranking. Keep native selection real, including owner-cap expansion.
+    let inRerank=false,scopeCalls=0,rerankScopeCalls=0;
+    db.sql.function('vector_scope_probe',(_id)=>{scopeCalls++;if(inRerank)rerankScopeCalls++;return 1;});
+    const all=db.all.bind(db);
+    const statements=vi.spyOn(db,'all').mockImplementation((sql,parameters=[])=>{
+      inRerank=sql.startsWith('SELECT c.entity_id id,');
+      try{return all(sql,parameters);}finally{inRerank=false;}
+    });
+    const scopeIds=e.query('Row').limit(4500).ids();
+    db.sql.exec('BEGIN');
+    try {
+      const selected=db.search.vectors.search({
+        sql:'SELECT id FROM entities WHERE id IN (SELECT value FROM json_each(?)) AND vector_scope_probe(id)',
+        parameters:[JSON.stringify(scopeIds)],
+      },'Row',job.name,job.generation,128,vector,3);
+      expect(selected.map(row=>row.id)).toEqual(scoped);
+      expect(scopeCalls).toBeGreaterThan(0);
+      expect(rerankScopeCalls).toBe(0);
+    } finally {db.sql.exec('ROLLBACK');statements.mockRestore();}
+
     // Native candidate distances are advisory: canonical owner scoring must still compute the answer.
     native.mockImplementation((...args)=>actual(...args).map(row=>({...row,distance:12345})));
     expect(e.query('Row').near(vector,{k:3}).hits()).toEqual(hits);
