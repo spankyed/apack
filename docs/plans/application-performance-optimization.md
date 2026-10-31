@@ -22,7 +22,7 @@ target number of optimizations, determine which changes ship.
 
 Use the existing [suite](../../tests/performance/README.md), recorder, profiles, query plans, report
 admission and revision comparison. Do not build another benchmark framework. The earlier
-[query investigation](ears-query-efficiency.md) and sibling elmdb allocation/codec investigation are
+[query investigation](../archive/plans/ears-query-efficiency.md) and sibling elmdb allocation/codec investigation are
 prior art: avoid reimplementing their completed fixes.
 
 ## Execution and experiment controls
