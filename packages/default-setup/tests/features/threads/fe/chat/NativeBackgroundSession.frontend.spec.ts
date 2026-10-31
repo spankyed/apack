@@ -43,6 +43,7 @@ it('retains a refused draft across window-session loss and clears only its ackno
     expect(root.querySelector('textarea')!.value).toBe('Keep this follow-up.')
     submit();state.revision=3;state.status='pending';await nextTick();expect(root.querySelector('textarea')!.disabled).toBe(true)
     state.status='done';await nextTick();expect(root.querySelector('textarea')!.value).toBe('');expect(root.textContent).toContain('Message queued')
+    await type('Another unsent follow-up.');expect(root.textContent).not.toContain('Message queued');await type('')
   }finally{app.unmount();root.remove()}
 })
 
