@@ -52,5 +52,5 @@ test('recovers a linked live child after complete Electron shutdown and relaunch
   }
   await save()
  }
- await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({nativeBackgroundAppRestart:true,sessionId:saved.before.sessionId,backgroundSessionId:saved.job.sessionId,jobId:saved.job.id,actualAppGui:true}))
+ await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({nativeBackgroundAppRestart:true,nativeBackgroundDraftsRestored:true,nativeBackgroundFreshStatus:true,nativeBackgroundWorkerContinuity:true,nativeBackgroundUiStop:true,nativeBackgroundAppProcessesReplaced:true,nativeBackgroundParentPreserved:true,sessionId:saved.before.sessionId,backgroundSessionId:saved.job.sessionId,jobId:saved.job.id,actualAppGui:true}))
 })
