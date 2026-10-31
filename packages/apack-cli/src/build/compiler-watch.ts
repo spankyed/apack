@@ -228,7 +228,8 @@ export function createCompilerWatchMatcher(paths: CompilerWatchPaths): (changed:
   }
   return (changed, event) => {
     const kind = paths.get(changed);
-    if (event !== 'rename') return kind !== undefined && kind !== 'directory';
+    // Directory creation is not guaranteed to arrive as rename on every fs.watch backend.
+    if (event !== 'rename') return (kind !== undefined && kind !== 'directory') || (kind === undefined && ancestors.has(changed));
     return kind !== undefined || ancestors.has(changed) || paths.get(parentDirectory(changed)) === 'entries';
   };
 }
