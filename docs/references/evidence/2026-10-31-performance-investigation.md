@@ -43,6 +43,15 @@ Recording overhead is a separate acceptance issue: the initial lightweight searc
 its action timeline and recording work before proposing instrumentation changes; no favorable
 replacement run erases it.
 
+Focused disabled A/A controls for search and populated startup will use the maintained revision
+coordinator, the same checkout for both sides, twenty measured actions per side and the existing
+ABBA protocol. They measure
+same-revision process/driver variability; its two idle application processes differ from the
+single-process mode comparison, so it cannot certify that lightweight overhead is absent. If its
+absolute median difference reaches 1.9 ms, the original gap cannot confidently be assigned entirely
+to tracing without a narrower control. Apply the same rule to startup's observed 478.2 ms gap.
+The original budget failures remain failures either way.
+
 ## Dispositions
 
 Investigation in progress. Results and rejected candidates will be recorded here before closure.
