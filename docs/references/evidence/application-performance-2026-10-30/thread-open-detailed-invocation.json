@@ -1,0 +1,16 @@
+{
+  "code": 0,
+  "durationMs": 37496,
+  "timedOut": false,
+  "aborted": false,
+  "command": [
+    "/usr/local/bin/node",
+    "scripts/with-source.mjs",
+    "playwright",
+    "test",
+    "--config",
+    "tests/performance/playwright.config.ts",
+    "--output",
+    "/work/.apack/performance/qualification-disabled-vs-detailed-1793407476606/thread-open/playwright"
+  ]
+}

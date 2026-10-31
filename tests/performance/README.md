@@ -2,7 +2,9 @@
 
 This is a manual suite against built application output, separate from the ordinary E2E gate. It
 owns a disposable test profile. Never set `E2E_DATA_DIR` to a developer's profile for qualification.
-Thread-open has passed a built-app run of five warmups and twenty measured trials; overhead and A/B qualification remain open.
+All four actions have completed controlled mode comparisons. Source-qualified measurements, retained
+failures and limitations are in [the evidence record](../../docs/references/evidence/2026-10-30-application-performance.md);
+required final validation is tracked in [the active goal](../../docs/goals/goal-application-performance.md).
 
 Build with the normal repository commands, then run from the checkout root:
 
@@ -39,7 +41,7 @@ its database-backed view and DOM. Reports retain first-visible and maximum visib
 backlog reports additionally retain bounded producer-enqueue and database-backed-view receipt
 progress. Pending UTF-16 code units at receipt use approximate epoch alignment; clock-order mismatches
 remain explicit. This is pipeline backlog, not database commit latency. Missing/incomplete progress
-fails the scenario. No overhead has been established. No network/model service is called.
+fails the scenario. No network/model service is called.
 
 Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 
@@ -62,8 +64,8 @@ memory. Disabled mode starts no sampler; sample failures invalidate capture. Det
 recordings also retain named CDP task/layout/heap metrics and long-task aggregates. Profiles record sampling settings and a requested 30-second window (timers can be delayed
 by synchronous work), cap serialized CPU/allocation output at 4 MiB each, and reserve those bytes within
 the 16 MiB recording budget. Protocol failures or oversized output invalidate capture. These are V8
-isolate/JS-heap profiles; process totals cover a broader resource scope. No overhead or performance improvement is established yet.
-Cross-revision orchestration and overhead qualification remain in the goal.
+isolate/JS-heap profiles; process totals cover a broader resource scope. Mode-overhead results and the full paired execution control are recorded in the evidence above.
+A paired A/A control establishes execution/admission, not an application speedup.
 
 Populated startup uses a separate controller, `node scripts/with-source.mjs tsx tests/performance/startup-run.ts`.
 It owns profile paths, finishes real onboarding, imports the fixture and opens its declared chat outside
