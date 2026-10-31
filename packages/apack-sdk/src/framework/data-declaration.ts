@@ -40,8 +40,14 @@ export interface PackSearchDeclaration extends SearchDeclaration {
 export interface PackRelationDeclaration {
   /** A link that would close a cycle through this kind is refused (`CYCLE`): a tree, a folder hierarchy */
   readonly acyclic?: boolean;
-  /** At most one edge of this kind from an entity to another; linking the pair again replaces the edge's info */
+  /**
+   * At most one edge of this kind from an entity to another; linking the pair again replaces the edge's info and
+   * weight. On by default for a `weighted` kind, so a link sets an edge's weight rather than adding an edge;
+   * `false` keeps parallel edges, whose weights a `rank` adds
+   */
   readonly unique?: boolean;
+  /** Each edge carries a weight, 1 unless a link gives another, which `rank` and `communities` read */
+  readonly weighted?: boolean;
 }
 
 /** Declarative entity ownership/shapes and the pack-level relation wire vocabulary. */
@@ -166,11 +172,22 @@ export function _packRelationTypes(declaration: PackDataDeclarations): Record<st
   return wireConstants(Object.keys(declaration.data?.relations ?? {}), 'Relation', 'relations');
 }
 
+/** @internal The pack's relation kinds declared `weighted`, as EARS constants, a subset of `_packRelationTypes` */
+export function _packWeightedKinds(declaration: PackDataDeclarations): Record<string, string> {
+  const relations = declaration.data?.relations ?? {};
+  return wireConstants(Object.keys(relations).filter((wire) => relations[wire]?.weighted), 'Relation', 'relations');
+}
+
 /** @internal What each of the pack's relation kinds that declares a rule holds its edges to, by wire name */
 export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules> {
   const rules: Record<string, RelationRules> = {};
-  for (const [wire, { acyclic, unique }] of Object.entries(declaration.data?.relations ?? {})) {
-    if (acyclic || unique) rules[wire] = { ...(acyclic && { acyclic }), ...(unique && { unique }) };
+  for (const [wire, { acyclic, unique, weighted }] of Object.entries(declaration.data?.relations ?? {})) {
+    // A weighted kind is unique unless it says otherwise: a link sets an edge's weight, the common case, rather than
+    // adding a second edge beside it
+    const isUnique = unique ?? weighted ?? false;
+    if (acyclic || isUnique || weighted) {
+      rules[wire] = { ...(acyclic && { acyclic }), ...(isUnique && { unique: true }), ...(weighted && { weighted }) };
+    }
   }
   return rules;
 }

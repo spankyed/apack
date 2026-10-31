@@ -162,6 +162,11 @@ describe('Type inference — typed EARS helpers', () => {
       query(EARS.Entity.Note).weakComponents('refrences');
       // @ts-expect-error a rank's seeds are ids
       query(EARS.Entity.Note).rank('references', { seeds: [42] });
+      // A seed may carry a weight, and a rank may leave weights out
+      query(EARS.Entity.Note).rank('references', { seeds: [noteId, { id: noteId, weight: 2 }], weights: false });
+      // @ts-expect-error a weight is a weighted kind's, and this pack declares none
+      write(noteId).link('references', otherId, { weight: 2 });
+      expectTypeOf<EARS.WeightedKind>().toEqualTypeOf<never>();
       expectTypeOf(query(EARS.Entity.Note).rank('references', { seeds: [noteId] }).ids()).toEqualTypeOf<EARS.EntityId<'Note'>[]>();
       expectTypeOf(query(EARS.Entity.Note).weakComponents('references')).toEqualTypeOf<EARS.EntityId<'Note'>[][]>();
       // @ts-expect-error and the strong components'

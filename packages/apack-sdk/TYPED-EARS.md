@@ -57,6 +57,13 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
   and the SDK's, with no open `string` member and no `Custom`. The schema's `relKinds` (`PackSchema`, below) carries it to
   `QueryBuilder` and `WriteBuilder`, so `link`, `unlink`, `out`, `in`, `outEdges`, `inEdges`, `linkedTo`,
   `linkedFrom` and `LinkOptions.acyclicIn` take only those kinds, complete them, and list them in a typo's error.
+- `link`'s `weight` is a weighted kind's: the generated `EARS.WeightedKind` is `(typeof WEIGHTED_KINDS)[number]`, the
+  kinds the pack and its dependencies declare `weighted` (a dependency's from its snapshot's `weightedKinds`
+  provenance), `never` when none is, and the schema's `weightedKinds` carries it to `WriteBuilder.link`, whose options
+  are `WeightedLinkOptions` for such a kind and `LinkOptions` for any other. The test is `[K] extends
+  [D['weightedKinds']]`, not distributed over `K`: a kind typed as a union of weighted and other kinds takes no
+  weight, and one cast to `never` still takes options. `UntypedSchema`'s `weightedKinds` is `string`, so the untyped
+  twins take a weight on any kind and the engine refuses one on a kind not declared weighted (`VALUE_INVALID`).
 - A kind that arrives as data is narrowed with the generated `EARS.isRelKind`; the untyped twins and an engine's
   own operations take any string (`UntypedSchema`'s `relKinds` is `string`), and the engine refuses an undeclared one at runtime.
 
@@ -136,6 +143,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
    - Field positions should list the entity's fields: `query(EARS.Entity.X).pick(['|'])`, `.where('|')`, , `.orderBy('|')` and `getAttr(id, '|')`.
    - Entity-name positions should list entity names: `query('|')`, `newId('|')`, `.out(kind, '|')`, `.ofType('|')`.
    - Relation-kind positions should list the pack's, its dependencies' and the SDK's kinds: `.out('|')`, `.link('|', id)`, `.linkedTo('|', id)`.
+   - A link's options should offer `weight` for a weighted kind and not for another: `.link(kind, id, { | })`.
    - Role positions should list the pack's, its dependencies' and the SDK's roles: `.grant('|')`, `.withRole('|')`.
    - A created row should list the shape's fields and the identity it may bring, never the engine's other fields: `create(type, { | })`.
    - A typo (`where('titel')`) should produce an error that lists the valid fields.

@@ -261,7 +261,11 @@
               },
               "unique": {
                 "type": "boolean",
-                "description": "At most one edge of this kind from an entity to another: linking the pair again replaces the edge's info."
+                "description": "At most one edge of this kind from an entity to another: linking the pair again replaces the edge's info and weight. On by default for a weighted kind; false keeps parallel edges, whose weights a rank adds."
+              },
+              "weighted": {
+                "type": "boolean",
+                "description": "Each edge carries a weight, from 0 to 2^960 and 1 unless a link gives another, which rank and communities read. Makes the kind unique unless it says unique: false."
               }
             },
             "additionalProperties": false,

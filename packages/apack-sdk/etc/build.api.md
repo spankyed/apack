@@ -671,15 +671,19 @@ export const ManifestSchema: z.ZodObject<{
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
             unique?: boolean | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
             unique?: boolean | undefined;
+            weighted?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             acyclic?: boolean | undefined;
             unique?: boolean | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
             unique?: boolean | undefined;
+            weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
@@ -1301,6 +1305,7 @@ export function mergeRegistries(ownId: string, manifest: PackManifest, depManife
 depProvenance?: Map<string, PackProvenance>): {
     entities: Map<string, RegistryEntry>;
     relKinds: Map<string, RegistryEntry>;
+    weightedKinds: Set<string>;
     roles: Map<string, RegistryEntry>;
 };
 
@@ -1468,15 +1473,19 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
             unique?: boolean | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
             unique?: boolean | undefined;
+            weighted?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             acyclic?: boolean | undefined;
             unique?: boolean | undefined;
+            weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
             unique?: boolean | undefined;
+            weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
     }, z.core.$strict>>;
@@ -2073,6 +2082,7 @@ export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, strin
 export interface PackRelationDeclaration {
     readonly acyclic?: boolean;
     readonly unique?: boolean;
+    readonly weighted?: boolean;
 }
 
 // @internal
@@ -2188,6 +2198,7 @@ export const promptsCompiler: SpecialtyCompiler<DslCompiled>;
 export const PROVENANCE_KINDS: {
     readonly entities: (m: ProvenanceManifest) => string[];
     readonly relKinds: (m: ProvenanceManifest) => string[];
+    readonly weightedKinds: (m: ProvenanceManifest) => string[];
     readonly roles: (m: ProvenanceManifest) => string[];
     readonly referenceTypes: (m: ProvenanceManifest) => string[];
     readonly referenceCategories: (m: ProvenanceManifest) => string[];

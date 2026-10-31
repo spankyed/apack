@@ -146,7 +146,8 @@ const EntitiesSchema = declarationRecord(z.string().regex(_ENTITY_NAME_PATTERN, 
   .describe('Entity wire names, each mapped to its declaration: { shape?, shortCode? }, or {} for an untyped, unnumbered entity.');
 const RelationDeclarationSchema = z.object({
   acyclic: z.boolean().describe('Refuses a link that would close a cycle through this kind (CYCLE): a tree, a folder hierarchy.').optional(),
-  unique: z.boolean().describe('At most one edge of this kind from an entity to another: linking the pair again replaces the edge\'s info.').optional(),
+  unique: z.boolean().describe('At most one edge of this kind from an entity to another: linking the pair again replaces the edge\'s info and weight. On by default for a weighted kind; false keeps parallel edges, whose weights a rank adds.').optional(),
+  weighted: z.boolean().describe('Each edge carries a weight, from 0 to 2^960 and 1 unless a link gives another, which rank and communities read. Makes the kind unique unless it says unique: false.').optional(),
 }).strict().describe('One relation kind: the rules its edges are held to, each off unless declared ({} for a kind with none).');
 const RelationsSchema = declarationRecord(z.string().regex(_WIRE_NAME_PATTERN, 'Must be a snake_case relation wire name'), RelationDeclarationSchema)
   .superRefine((relations, ctx) => {
