@@ -38,11 +38,29 @@ jobs:
               cd /work
               npm ci --no-audit --no-fund
               npm run chain -- --only packages:ensure,build:default-setup,build:runtime --no-native --cores 2
-              export DEBUG_E2E=1 ELECTRON_ENABLE_LOGGING=1
-              APACK_PERFORMANCE_SCENARIO=thread-open APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=1 APACK_PERFORMANCE_RUN_OUTPUT=/work/.apack/performance/linux-startup-thread xvfb-run -a node scripts/with-source.mjs playwright test --config tests/performance/playwright.config.ts
+            ' 2>&1 | tee "$RUNNER_TEMP/linux-startup-build.log"
+          # Both probes use these exact output bytes; only shared-memory capacity changes.
+          for capacity in 64m 256m; do
+            status=0
+            docker run --rm --init --memory=6g --memory-swap=6g --cpus=2 --shm-size="$capacity" \
+              -v "$GITHUB_WORKSPACE:/work" -e CAPACITY="$capacity" apack-startup-contract bash -ec '
+                cd /work
+                df -h /dev/shm
+                export DEBUG_E2E=1 ELECTRON_ENABLE_LOGGING=1
+                export E2E_DATA_DIR="/work/.apack/performance/profile-$CAPACITY"
+                export APACK_PERFORMANCE_SCENARIO=thread-open APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=1
+                export APACK_PERFORMANCE_RUN_OUTPUT="/work/.apack/performance/linux-startup-$CAPACITY"
+                xvfb-run -a node scripts/with-source.mjs playwright test --config tests/performance/playwright.config.ts
+              ' 2>&1 | tee "$RUNNER_TEMP/linux-startup-$capacity.log" || status=$?
+            echo "$status" > "$RUNNER_TEMP/linux-startup-$capacity.exit"
+          done
+          test "$(cat "$RUNNER_TEMP/linux-startup-256m.exit")" = 0
+          docker run --rm --init --memory=6g --memory-swap=6g --cpus=2 --shm-size=256m \
+            -v "$GITHUB_WORKSPACE:/work" apack-startup-contract bash -ec '
+              cd /work
               APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=1 APACK_PERFORMANCE_RUN_OUTPUT=/work/.apack/performance/linux-startup-records xvfb-run -a node scripts/with-source.mjs tsx tests/performance/startup-run.ts
               node scripts/with-source.mjs tsx tests/performance/verify-run.ts /work/.apack/performance/linux-startup-records "" 1
-            ' 2>&1 | tee "$RUNNER_TEMP/linux-startup-contract.log"
+            ' 2>&1 | tee "$RUNNER_TEMP/linux-startup-records.log"
       - name: Make owned evidence readable
         if: always()
         run: sudo chown -R "$(id -u):$(id -g)" .apack node_modules/.cache/apack-chain/runs 2>/dev/null || true
@@ -53,7 +71,8 @@ jobs:
           include-hidden-files: true
           retention-days: 2
           path: |
-            ${{ runner.temp }}/linux-startup-contract.log
+            ${{ runner.temp }}/linux-startup-*.log
+            ${{ runner.temp }}/linux-startup-*.exit
             .apack/performance/
             node_modules/.cache/apack-chain/runs/
             packages/renderer/dist/
