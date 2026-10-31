@@ -875,6 +875,22 @@ cannot leave a path or degree watch stale. Focused contracts compare both backen
 qualification and representative graph performance measurements remain required by the goal.
 
 
+### Read-only media and published backups
+
+A low-level read-only connection does not promise to open every WAL database on read-only media.
+SQLite [requires readable existing WAL/SHM files, permission to create them, or an explicitly immutable
+image](https://sqlite.org/wal.html#read_only_databases). The candidate does not mark arbitrary profiles
+immutable: they may have a concurrent writer. A cleanly closed WAL-mode file can therefore refuse with
+`SQLITE_CANTOPEN` on an actual read-only mount when its sidecars are absent. Do not remove a committed WAL
+or switch a live database's mode to bypass that refusal. Publish a database backup before placing an image
+on read-only media; the existing `VACUUM INTO` backup uses rollback journaling and needs no WAL sidecars.
+
+The [Linux mount observation](../references/evidence/ears-sqlite-implementation-2026-10-28/readonly-mount-aea/README.md)
+verifies successful published-backup queries and logical write refusal under kernel `EROFS`, the closed-WAL
+refusal, and unchanged file hashes/inventories. Managed host opens still require writable directory-lifetime
+claim metadata, including read-only inspection. This is not support for a read-only app profile, qualification
+of a live WAL reader on that mount, or certification of arbitrary filesystems.
+
 ### Persisted identity and initialization
 
 Format-one SQLite files carry application ID `0x45415253` (EARS) and `user_version=1`. A foreign or mismatched

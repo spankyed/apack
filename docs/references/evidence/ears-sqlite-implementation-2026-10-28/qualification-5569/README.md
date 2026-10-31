@@ -15,9 +15,11 @@ silence, successful reuse and read-only reopen; this is not a simulation via dat
 Focused macOS run [41160571827](https://github.com/spankyed/apack/actions/runs/41160571827) passes all five
 original diamond integration assertions, with the original 240000-ms setup deadline. Raw completed job
 logs record setup phases 25066/26093/26086/26321 ms, about 103.6 seconds total, and the real collision case
-72994 ms. The complete selected file takes 180.15 seconds. The uploaded suites artifact contains fixture
-build inputs only, so the actual five-pass claim is supported by the completed test/job log, not an invented
-per-case JSON artifact. Linux's independent five-case observation is retained separately.
+72994 ms. The complete selected file takes 180.15 seconds. The uploaded suites artifact's hidden
+`.apack/tests/results/integration.json` independently verifies all five named passes, zero pending/failed
+cases and the exact fixture path; that report is retained alongside the raw log. The first inventory omitted
+hidden files; this corrects that inventory rather than claiming an additional test run. Linux's independent
+five-case observation is retained separately.
 
 Neither focused pass explains the earlier full strict shard's four-minute setup failure under concurrent
 files. The full strict run remains failed and source-app activation remains unresolved; no causal correction

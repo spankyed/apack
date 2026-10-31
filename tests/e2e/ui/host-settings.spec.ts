@@ -91,7 +91,35 @@ test('an open editor follows installed pack activation without losing its draft'
     const component = createApp(TiptapEditor, { mode: 'editor', modelValue: '/not-a-command [Saved memo](apack-ref://memo/Memo-live)',
       'onUpdate:modelValue': (value: string) => { updates.push(value); } });
     const exposed = component.mount(root) as unknown as { editor: Editor | undefined };
-    return { component, root, exposed, updates };
+    // Observe the lifecycle without replacing its loader, events or editor behavior.
+    const shell = (window as unknown as { applicationState: import('xstate').AnyActorRef }).applicationState;
+    const events: Array<{ at: number; type: string; packId?: string }> = [];
+    const subscription = shell.system.inspect(inspection => {
+      if (inspection.type !== '@xstate.event') return;
+      const { event } = inspection;
+      if (['PACK_ACTIVATED', 'LOAD_PACK_FRONTENDS', 'PACK_FRONTEND_LOADED', 'PACK_FRONTENDS_SETTLED',
+        'PACK_SURFACES_UNLOADED', 'SYSTEM_ERROR'].includes(event.type)) {
+        events.push({ at: Date.now(), type: event.type,
+          packId: typeof event.packId === 'string' ? event.packId : undefined });
+      }
+    });
+    const resources: Array<{ name: string; start: number; end: number; duration: number }> = [];
+    const recordResources = (entries: PerformanceEntry[]) => {
+      for (const entry of entries) if (entry.name.startsWith('pack://default-setup/')) {
+        resources.push({ name: entry.name, start: performance.timeOrigin + entry.startTime,
+          end: performance.timeOrigin + entry.startTime + entry.duration, duration: entry.duration });
+      }
+    };
+    const observer = new PerformanceObserver(list => recordResources(list.getEntries()));
+    observer.observe({ type: 'resource' });
+    const timeline = () => {
+      recordResources(observer.takeRecords());
+      const context = shell.getSnapshot().context;
+      return { events, resources, at: Date.now(), packLoadRunning: context.packLoadRunning,
+        packLoadQueued: context.packLoadQueued, acceptedPackRuntimes: context.acceptedPackRuntimes };
+    };
+    const dispose = () => { subscription.unsubscribe(); observer.disconnect(); component.unmount(); root.remove(); };
+    return { exposed, updates, timeline, dispose };
   });
   const activationSamples: Array<{ at: number; extensions: string[] | null }> = [];
   const observesSuggestion = async () => {
@@ -138,7 +166,13 @@ test('an open editor follows installed pack activation without losing its draft'
     }
     throw error;
   } finally {
-    await mounted.evaluate(({ component, root }) => { component.unmount(); root.remove(); });
+    try {
+      await testInfo.attach('editor-activation-timeline.json', { contentType: 'application/json',
+        body: Buffer.from(JSON.stringify(await mounted.evaluate(({ timeline }) => timeline()), null, 2)) });
+    } catch (diagnosticError) {
+      console.warn('Could not capture editor activation timeline', diagnosticError);
+    }
+    await mounted.evaluate(({ dispose }) => dispose());
     await mounted.dispose();
     if ((await app.getContext()).surfaceIds.some(id => id.startsWith('default-setup/'))) {
       await toggle();

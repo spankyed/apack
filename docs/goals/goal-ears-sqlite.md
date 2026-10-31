@@ -353,7 +353,21 @@ SQLite's 197 commit spans total about 474 ms, its schema call about 104 ms; nest
 Next deliverable: identify lifecycle/frontend arrival costs behind the unchanged macOS editor deadline and
 the strict shard's concurrent setup delay before selecting a fix. Dependencies are the existing source-bound
 logs/profiles; closing checks must preserve all original assertions, deadlines and durability policies.
-No owned heavy observation remains running at this checkpoint; inspect current processes before admission.
+The [test-only frontend timeline](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-timeline-static/README.md)
+records frontend lifecycle events, pack resource timings and loader state while preserving the five-second
+predicate and all editor assertions. Focused lint and the complete tests TypeScript project pass with cache
+disabled in the capped Linux container. Next closing check: the actual focused macOS editor case, retaining
+success/failure attachments to distinguish delivery, module loading and registration. No causal fix is claimed.
+The private current-elmdb real-vector preflight is now admitted through session 5092 (PID 56205), after static
+validation finished. Poll that existing handle; its reports are `/private/tmp/ears-elmdb-real-preflight-results`. It pins the existing 2441 native
+binding/CLI digests, uses actual durable units, independently verifies canonical embeddings through bounded
+dump frames, and measures the same fresh-truth initial/updated scopes at 1000 rows before scaling. This is a
+protocol preflight, not the required 100k matched comparison or an OS-cold measurement. Its owned controller enforces quiet admission and pauses only its own container if another build starts.
+
+The [actual Linux read-only mount observation](../references/evidence/ears-sqlite-implementation-2026-10-28/readonly-mount-aea/README.md)
+now verifies published-backup reads and logical write refusal under kernel EROFS, with unchanged file hashes.
+A closed WAL file without its sidecars refuses safely; the storage plan records that SQLite prerequisite.
+This does not qualify managed read-only profiles, live WAL readers or arbitrary filesystems.
 
 No evidence here certifies arbitrary filesystems or completes the goal.
 

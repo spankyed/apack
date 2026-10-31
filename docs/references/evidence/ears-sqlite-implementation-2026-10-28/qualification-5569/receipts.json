@@ -478,5 +478,10 @@
     "file": "ears-diamond-mac-5569.log.gz",
     "sha256": "6623404486360a2e85fe64f4fc2e95e78b6e7ec69c4338f0a19cf32a3af35541",
     "storedSha256": "7550d149c36b64b6f916c409a90f43811bf4aea90186e3ba601d0240d240a0d7"
+  },
+  {
+    "file": "diamond-macos-integration.json.gz",
+    "sha256": "db7d0791a672d2a7a3b90a442c8df9b2f4f4d9406ea785c91bc548fef442a8bc",
+    "storedSha256": "c6bfc90bc013ac1e9285adf2ebb773d9548bf4cbdee0c2a192a3d6a24b8acf64"
   }
 ]
