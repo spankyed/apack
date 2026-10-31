@@ -7,7 +7,7 @@ import type { TimeoutClass } from './step-timeouts.ts';
 import { UNIT_SUITES, type UnitSuite } from './unit-suites.ts';
 import { CONFIG_BY_HALF, hasHalf, type Half } from './spec-halves.ts';
 import { dependencySource, PACKAGE_DIRS, workspaceDeps } from './workspace-deps.ts';
-import { LEG_TIMEOUT, scopeOf, TYPECHECK_LEGS, type Leg } from './typecheck-legs.ts';
+import { LEG_TIMEOUT, PERFORMANCE_SCENARIO_INPUTS, scopeOf, TYPECHECK_LEGS, type Leg } from './typecheck-legs.ts';
 import { API_CHECK_TIMEOUT } from './api-report-packages.ts';
 
 /**
@@ -633,6 +633,8 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   // `pretest: ensure-packages-built`; it packs and installs the published packages, and `dependency-runtime`
   // builds a fixture pack against default-setup's `dist`
   'apack-cli': { packages: true, pack: true },
+  // Harness contracts read application helpers and their published testing entry.
+  'apack-testing': { packages: true, inputs: PERFORMANCE_SCENARIO_INPUTS },
   // `@apackdev/testing`'s bundle; and `sdk-bridge-drift.spec.ts` reads `dist/runtime/index.cjs` when it is
   // there and skips when it is not, so the tree decides whether that check checks anything
   'apack-host': { packages: true, pack: true },
