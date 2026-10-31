@@ -405,3 +405,9 @@ all ten archive host cases everywhere. A new affected platform run must qualify 
 passes all three original cases with zero retries/skips/flaky outcomes, plus E2E types/harness lint.
 This supersedes the pending observations above without erasing earlier failures or closing full app/strict acceptance.
 Native98419 remains the same live owner at frozen runtimea9; do not mutate its volume or duplicate it.
+
+The [matched post-Seagate SQLite recipe](../references/evidence/ears-sqlite-implementation-2026-10-28/seagate-sqlite-matrix-preregistration/README.md)
+is preregistered and syntax checked, not launched. It retains frozen runtimea9, the normal selected native
+artifact, explicit offline cursor preparation on a copy, paired connection reopen boundaries,7200queries,
+canonical byte checks and original gates. Native98419 must finish before quiet admission; never sync the
+new SDK/host code into its live volume. Preparation is not a claimed result.
