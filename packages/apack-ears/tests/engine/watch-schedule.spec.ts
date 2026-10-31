@@ -1,13 +1,10 @@
 // The watch scheduler's guarantees under any write rate (G14 of elmdb's goal-elmdb-next.md), on a clock the spec
 // moves: a read's cost is what it advances the clock by, so a run is as cheap or as expensive as a case says, on any
 // machine. Commits are real ones, to a real database; turns of the event loop are real too.
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { createConnection, type Connection } from '../../src/database.ts';
 import { createWatches, WATCH_SCHEDULE, type WatchClock, type Watches } from '../../src/watch.ts';
-import { createTemporaryDatabases } from '../../src/lmdb/index.ts';
-
-const databases = createTemporaryDatabases();
-afterAll(() => databases.disposeAll());
+import { openTestDatabase } from './engine-under-test.ts';
 
 /** A clock that moves only when told, firing the timers it passes */
 function fakeClock() {
@@ -57,7 +54,11 @@ const commit = () => {
   connection.write([{ op: 'create', type: 'Row', id: `Row-${sequence}`, fields: { n: sequence } }]);
 };
 /** What every watch here reads: the rows, as ids */
-const rows = () => (connection.read([{ read: 'query', plan: { scope: 'live', start: { from: 'types', types: ['Row'] }, steps: [], terminal: { answer: 'ids' } } }])[0]!.ids as string[]);
+const rows = () => {
+  const answer = connection.read([{ read: 'query', plan: { scope: 'live', start: { from: 'types', types: ['Row'] }, steps: [], terminal: { answer: 'ids' } } }])[0]!;
+  if (answer.kind !== 'ids') throw new Error(`Expected ids, received ${answer.kind}`);
+  return answer.ids;
+};
 
 /** A watch of the rows whose every run costs `costMs`, counting its runs and keeping what it was handed */
 function watching(costMs: number, label = `costs ${costMs} ms`) {
@@ -87,7 +88,7 @@ const settledNow = async () => {
 };
 
 beforeEach(() => {
-  const { database } = databases.open({ types: { Row: { required: [] } }, relations: {}, roles: [] });
+  const database = openTestDatabase({ types: { Row: { required: [] } }, relations: {}, roles: [] });
   connection = createConnection(database);
   time = fakeClock();
   warnings = [];

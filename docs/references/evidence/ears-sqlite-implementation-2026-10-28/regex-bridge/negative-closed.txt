@@ -1,0 +1,58 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/regex.spec.ts -t frees the owned
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/regex.spec.ts (11 tests | 1 failed | 10 skipped) 15ms
+   ↓ SQLite Rust regex bridge > loads the exact controlled runtime assets
+   ↓ SQLite Rust regex bridge > compiles Rust syntax with Unicode, inline flags and class intersection
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: x(?=y)
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: (a)\1
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: (
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: a{100000000}
+   × SQLite Rust regex bridge > frees the owned allocation once and refuses using a closed pattern 14ms
+     → expected error to match asymmetric matcher
+   ↓ SQLite Rust regex bridge > does not relabel a WASM runtime failure as an invalid pattern
+   ↓ SQLite Rust regex bridge > keeps WASM allocation stable through varied explicitly closed patterns
+   ↓ SQLite Rust regex bridge > imports and constructs a compiler without loading the WASM runtime
+   ↓ SQLite Rust regex bridge > preserves missing-asset errors instead of reporting a pattern refusal
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/regex.spec.ts > SQLite Rust regex bridge > frees the owned allocation once and refuses using a closed pattern
+AssertionError: expected error to match asymmetric matcher
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- ObjectContaining {[39m
+[32m-   "code": "CLOSED",[39m
+[31m+ Error {[39m
+[31m+   "message": "null pointer passed to rust",[39m
+[2m  }[22m
+
+ ❯ tests/sqlite/regex.spec.ts:46:42
+     44|     const regex = createRegexCompiler().compile('alpha'); expect(regex…
+     45|     regex.close(); regex.close(); expect(free).toHaveBeenCalledTimes(1…
+     46|     expect(() => regex.matches('alpha')).toThrow(expect.objectContaini…
+       |                                          ^
+     47|     const another = createRegexCompiler().compile('beta');
+     48|     try { expect(another.matches('beta')).toBe(true); } finally { anot…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 skipped (11)
+   Start at  15:13:58
+   Duration  248ms (transform 56ms, setup 18ms, collect 52ms, tests 15ms, environment 0ms, prepare 59ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/regex.spec.ts -t 'frees the owned'

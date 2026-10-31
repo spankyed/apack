@@ -1,0 +1,53 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/trigrams.spec.ts -t individual strings
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/trigrams.spec.ts (7 tests | 1 failed | 6 skipped) 345ms
+   ↓ SQLite exact trigram filtering > uses FTS5 for a selective literal, preserves duplicates and avoids whole-row hydration
+   × SQLite exact trigram filtering > matches individual strings, Unicode folding and short/NUL literals without crossing element boundaries 344ms
+     → expected [] to deeply equal [ 'Row-1' ]
+   ↓ SQLite exact trigram filtering > keeps changed fields, units, unchecked repairs, deletes and read-only reopen consistent
+   ↓ SQLite exact trigram filtering > releases every compiled regex on success and failures, including a later invalid pattern
+   ↓ SQLite exact trigram filtering > handles empty/set-based inputs and refuses direct typed missing indexes
+   ↓ SQLite exact trigram filtering > notifies watches on committed text and declaration changes, with no aborted answer
+   ↓ SQLite exact trigram filtering > agrees with the native backend across literal and regex corpora
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/trigrams.spec.ts > SQLite exact trigram filtering > matches individual strings, Unicode folding and short/NUL literals without crossing element boundaries
+AssertionError: expected [] to deeply equal [ 'Row-1' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [[39m
+[32m-   "Row-1",[39m
+[32m- ][39m
+[31m+ [][39m
+
+ ❯ tests/sqlite/trigrams.spec.ts:55:78
+     53|     expect(e.query('Row').matching('^alpha$').ids()).toEqual(['Row-6']…
+     54|     expect(e.query('Row').matching('^alphabeta$').ids()).toEqual([]);
+     55|     expect(e.query('Row').containing('οσ', { caseInsensitive: true }).…
+       |                                                                              ^
+     56|     expect(e.query('Row').containing('ος', { caseInsensitive: true }).…
+     57|     expect(e.query('Row').containing('i\u0307', { caseInsensitive: tru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  16:35:59
+   Duration  1.12s (transform 380ms, setup 27ms, collect 494ms, tests 345ms, environment 0ms, prepare 81ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/trigrams.spec.ts -t 'individual strings'

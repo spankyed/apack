@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
+import { findPackageDirectory } from '@apackdev/host/build/package-inputs';
 import { promisify } from 'node:util';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CONSUMER_MATRIX, PACKAGES_BUILT, TSC_VERSIONS, installPublishedPackages } from '../src/published-packages.ts';
+import { CONSUMER_MATRIX, PACKAGES_BUILT, PACKED_PACKAGES, REPO_ROOT, TSC_VERSIONS, installPublishedPackages } from '../src/published-packages.ts';
 
 /** Every export of the packed @apackdev/ears, @apackdev/sdk and @apackdev/ui resolves to declarations for consumers. */
 let consumer: string | undefined;
@@ -36,6 +37,21 @@ function nonCodeExports(name: string): string[] {
 const execFileAsync = promisify(execFile);
 
 describe.skipIf(!PACKAGES_BUILT)('published package exports', () => {
+  it("preserves each packed package's installed external dependency versions", () => {
+    for (const name of Object.keys(PACKED_PACKAGES)) {
+      const workspace = findPackageDirectory(REPO_ROOT, `@apackdev/${name}`)!;
+      const target = path.join(consumer!, 'node_modules', '@apackdev', name);
+      const manifest = JSON.parse(fs.readFileSync(path.join(target, 'package.json'), 'utf8'));
+      for (const dependency of Object.keys(manifest.dependencies ?? {})) {
+        if (dependency.startsWith('@apackdev/')) continue;
+        const expected = findPackageDirectory(workspace.directory, dependency);
+        expect(expected, `${name} must have its declared ${dependency} installed`).toBeDefined();
+        expect(findPackageDirectory(target, dependency)?.directory,
+          `${name} must resolve its own ${dependency}, including a private version override`).toBe(expected!.directory);
+      }
+    }
+  });
+
   it.each(CONSUMER_MATRIX)('all resolve to declarations under TypeScript $tsc, moduleResolution $moduleResolution', async ({ tsc, moduleResolution }) => {
     const specifiers = [...codeExports('ears'), ...codeExports('sdk'), ...codeExports('ui')];
     // Every export is code but these: the manifests and the schema. A new export without declarations lands

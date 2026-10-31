@@ -1,0 +1,74 @@
+[
+  {
+    "file": "Linux-X64/verification.json",
+    "sha256": "87c57e405afb87a5ef549f3d949d673d8042a388f3d9dc256a65b24597e55502"
+  },
+  {
+    "file": "Linux-X64/runtime.json",
+    "sha256": "7bba01616bb6da3ec5875e64d41c90e2aaeb9d6b89313fd0c0ee81fe99c1244d"
+  },
+  {
+    "file": "Linux-X64/ears.json",
+    "sha256": "6e09bbe18082b5a8f0c331ce83f35c24147f2d6fe5f68d47fa60d79f31a46fa2"
+  },
+  {
+    "file": "Linux-X64/host.json",
+    "sha256": "bf98ee127df22fd4070729fc7564feb099af844ebb4269e54f318886cc884af7"
+  },
+  {
+    "file": "Linux-X64/native-membership.json",
+    "sha256": "2ba09c5e8f6624539aa6d571c4dbdbacf678634a093b968a6e20eacb1098e963"
+  },
+  {
+    "file": "Linux-X64/native-generation/provenance.json",
+    "sha256": "14216b945f4205c2d8614efd54f70ded31a34bb8d92ecac7d7e07b25aa9d2781"
+  },
+  {
+    "file": "Windows-X64/verification.json",
+    "sha256": "0f243e8e09a830b5c231e9a4ffdeae73b22e241a458dc7fdb9e5ab7e95fd0f95"
+  },
+  {
+    "file": "Windows-X64/runtime.json",
+    "sha256": "046d0197b40297a50848bce036f21e97faa32df3de93b6b0323341b6eb1a9429"
+  },
+  {
+    "file": "Windows-X64/ears.json",
+    "sha256": "4df8817ea241e608dd5ea3ce47f17fc85a5e19c7d57d3ae5702d341cbbe4e463"
+  },
+  {
+    "file": "Windows-X64/host.json",
+    "sha256": "b967b7c34e3d9e989b36bfa33d7e9bbfc06049ec42924e44d5f2f039db562fb4"
+  },
+  {
+    "file": "Windows-X64/native-membership.json",
+    "sha256": "86238003e2017ac8094e02528c9338df4cb1c5045d823d6ab6a66106b427813f"
+  },
+  {
+    "file": "Windows-X64/native-generation/provenance.json",
+    "sha256": "9f52913177a7d9646afd28261c208308267d719ed10f5fcec956d7d9f8b6ec46"
+  },
+  {
+    "file": "macOS-ARM64/verification.json",
+    "sha256": "6d7d9cf589824f0960f5bd637f058d88e6fec5ada59c6f7f3a71db0d677bd6ab"
+  },
+  {
+    "file": "macOS-ARM64/runtime.json",
+    "sha256": "af5f835c1dbb451c3fb63a70cadece323f577d6b881da0f3a561f30ee3ce39aa"
+  },
+  {
+    "file": "macOS-ARM64/ears.json",
+    "sha256": "bc6965e4e6ad9e4194bd1836e182828b80a289c574734d9ab5b189587f711065"
+  },
+  {
+    "file": "macOS-ARM64/host.json",
+    "sha256": "8d3028fde1ac653c89ac89a30a0fa80ebbf1c8bffdb19d85e0acb4812c64a501"
+  },
+  {
+    "file": "macOS-ARM64/native-membership.json",
+    "sha256": "55ba1b6d1ed210a5206ae6115f4c498b26cd002173662f6328734171f6aee9f8"
+  },
+  {
+    "file": "macOS-ARM64/native-generation/provenance.json",
+    "sha256": "44d10d12428611bf173a53468ad0855a427a6cd9b9f55c1eb682aa2bcc9b7641"
+  }
+]

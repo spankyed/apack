@@ -1,0 +1,66 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-FyE9XZ/packages/apack-ears
+
+ ❯ tests/sqlite/watch-lifecycle.spec.ts (2 tests | 2 failed) 1575ms
+   × SQLite watch ownership > releases tracked dependencies when closing under a pending watch 302ms
+     → expected { watches: +0, keys: 1, ranges: +0 } to deeply equal { watches: +0, keys: +0, ranges: +0 }
+   × SQLite watch ownership > keeps an explicit settlement wait alive until its final delivery 1273ms
+     → Warning: Detected unsettled top-level await at file:///Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-FyE9XZ/packages/apack-ears/[eval1]:1
+import {writeSync} from 'node:fs';const {createEarsEngine}=await import("file:///Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-FyE9XZ/packages/apack-ears/src/index.ts");const {createTemporaryDatabases}=await import("file:///Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-FyE9XZ/packages/apack-ears/src/sqlite/index.ts");const temporary=createTemporaryDatabases();const {database}=temporary.open({"types":{"Row":{"required":[]}},"relations":{},"roles":[]});const e=createEarsEngine({database});const id=e.create('Row',{title:'before'}).id();let seen;e.watch(()=>{const until=performance.now()+10;while(performance.now()<until){}return e.getAttr(id,'title');},value=>{seen=value;});await e.admin.watchesSettled();e.write(id).set('title','after');await e.admin.watchesSettled();writeSync(1,JSON.stringify({seen}));temporary.disposeAll();
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ^
+
+
+
+: expected 13 to be +0 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/watch-lifecycle.spec.ts > SQLite watch ownership > releases tracked dependencies when closing under a pending watch
+AssertionError: expected { watches: +0, keys: 1, ranges: +0 } to deeply equal { watches: +0, keys: +0, ranges: +0 }
+
+- Expected
++ Received
+
+  {
+-   "keys": 0,
++   "keys": 1,
+    "ranges": 0,
+    "watches": 0,
+  }
+
+ ❯ tests/sqlite/watch-lifecycle.spec.ts:19:36
+     17|       database.close();
+     18|       await new Promise(resolve => setTimeout(resolve, 80));
+     19|       expect(e.admin.watchStats()).toEqual({ watches: 0, keys: 0, rang…
+       |                                    ^
+     20|       expect(database.trackStats()).toEqual({ owners: 0, keys: 0, rang…
+     21|     } finally { temporary.disposeAll(); }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/sqlite/watch-lifecycle.spec.ts > SQLite watch ownership > keeps an explicit settlement wait alive until its final delivery
+AssertionError: Warning: Detected unsettled top-level await at file:///Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-FyE9XZ/packages/apack-ears/[eval1]:1
+import {writeSync} from 'node:fs';const {createEarsEngine}=await import("file:///Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-FyE9XZ/packages/apack-ears/src/index.ts");const {createTemporaryDatabases}=await import("file:///Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-FyE9XZ/packages/apack-ears/src/sqlite/index.ts");const temporary=createTemporaryDatabases();const {database}=temporary.open({"types":{"Row":{"required":[]}},"relations":{},"roles":[]});const e=createEarsEngine({database});const id=e.create('Row',{title:'before'}).id();let seen;e.watch(()=>{const until=performance.now()+10;while(performance.now()<until){}return e.getAttr(id,'title');},value=>{seen=value;});await e.admin.watchesSettled();e.write(id).set('title','after');await e.admin.watchesSettled();writeSync(1,JSON.stringify({seen}));temporary.disposeAll();
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ^
+
+
+
+: expected 13 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 13
+
+ ❯ tests/sqlite/watch-lifecycle.spec.ts:29:42
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  06:39:55
+   Duration  3.76s (transform 489ms, setup 25ms, collect 1.04s, tests 1.57s, environment 0ms, prepare 508ms)
+

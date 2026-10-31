@@ -1,0 +1,3 @@
+
+> typecheck
+> tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 crates/elmdb-node/protocol/*.ts crates/elmdb-node/index.d.ts && tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --allowJs --checkJs crates/elmdb-node/test/schema-types.test.mjs

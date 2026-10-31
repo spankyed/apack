@@ -1,0 +1,17 @@
+{
+  "focused.json": {
+    "rawSha256": "8deb284d2e1b02edad93928393cecde04dfe6dbfdc25914693a30f20cdf07ec2",
+    "storedSha256": "8deb284d2e1b02edad93928393cecde04dfe6dbfdc25914693a30f20cdf07ec2",
+    "rawBytes": 5144
+  },
+  "focused.log": {
+    "rawSha256": "594ee29399518f848edb19cec8ff5b8476104a0406ecb88b259937c1fdfbe9de",
+    "storedSha256": "594ee29399518f848edb19cec8ff5b8476104a0406ecb88b259937c1fdfbe9de",
+    "rawBytes": 715
+  },
+  "original-app-job.log.gz": {
+    "rawSha256": "ac6bf2cdbac8622e233d480b82267aecff1705245504e0258b37bec04ff75c80",
+    "storedSha256": "11b7936007341b319763ba323f2336aa34f0d2b7771cc85051efc4453c9dcea9",
+    "rawBytes": 870135
+  }
+}

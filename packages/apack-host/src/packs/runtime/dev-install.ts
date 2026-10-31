@@ -24,7 +24,7 @@ export async function installDevPack(
 ): Promise<{ id: string; dir: string }> {
   const { packsDir, installedPacksFile } = resolveAppEnvironment();
   let claimedId: string | undefined;
-  let start: (() => boolean) | undefined;
+  let start: (() => Promise<boolean>) | undefined;
   try {
     const result = await installPackFromLocal(packRoot, packsDir, {
       installedPacksFile,
@@ -41,7 +41,7 @@ export async function installDevPack(
       },
     });
     if (start) {
-      if (!start()) throw new Error(`Installed ${result.id}, but ${registry.loadProblem(result.id) ?? 'it failed to start'}`);
+      if (!await start()) throw new Error(`Installed ${result.id}, but ${registry.loadProblem(result.id) ?? 'it failed to start'}`);
     } else {
       registry.refreshCatalog(packsDir);
       backendActor.send({ type: 'PACK_CHANGED', packId: result.id });

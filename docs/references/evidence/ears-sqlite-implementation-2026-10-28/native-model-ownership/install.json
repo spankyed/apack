@@ -1,0 +1,16 @@
+{
+  "lockOnly": false,
+  "args": [
+    "npm",
+    "install",
+    "--ignore-scripts",
+    "--save-exact",
+    "fs-native-extensions@1.5.2",
+    "--workspace",
+    "@apackdev/ears",
+    "--no-audit",
+    "--no-fund"
+  ],
+  "exitCode": 0,
+  "previousLockSha256": "5ebf73c66622130c9c51ad1c5f4bb1282de13821d81721981548fc4bb5fbcb66"
+}

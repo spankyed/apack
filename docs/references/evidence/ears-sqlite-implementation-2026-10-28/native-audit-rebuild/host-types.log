@@ -1,0 +1,9 @@
+
+> apack@0.3.14 typecheck:host
+> npm run typecheck --workspace @apackdev/host && echo '✅ Host type check passed'
+
+
+> @apackdev/host@0.1.0 typecheck
+> tsc --noEmit
+
+✅ Host type check passed

@@ -1,0 +1,72 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/elmdb-conversion.spec.ts (6 tests | 6 failed) 157ms
+   × explicit elmdb dump conversion > reopens an audited store, retains typed values, trash/order/relations/counters and leaves input unchanged 53ms
+     → relations.Custom: a relation kind's name has an invalid form
+   × explicit elmdb dump conversion > refuses an incumbent destination without removing its contents 30ms
+     → expected Error: relations.Custom: a relation kind'… { code: '…' } to match object { code: 'EEXIST' }
+   × explicit elmdb dump conversion > removes owned staging on late truncated failure 20ms
+     → expected Error: relations.Custom: a relation kind'… { code: '…' } to match object { code: 'DUMP_INVALID' }
+   × explicit elmdb dump conversion > removes owned staging on late trailing failure 17ms
+     → expected Error: relations.Custom: a relation kind'… { code: '…' } to match object { code: 'DUMP_INVALID' }
+   × explicit elmdb dump conversion > removes owned staging on late count failure 16ms
+     → expected Error: relations.Custom: a relation kind'… { code: '…' } to match object { code: 'DUMP_INVALID' }
+   × explicit elmdb dump conversion > refuses precision loss and malformed loads rather than silently changing primary data 19ms
+     → expected Error: relations.Custom: a relation kind'… { code: '…' } to match object { code: 'DUMP_INVALID' }
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/elmdb-conversion.spec.ts > explicit elmdb dump conversion > reopens an audited store, retains typed values, trash/order/relations/counters and leaves input unchanged
+Error: relations.Custom: a relation kind's name has an invalid form
+ ❯ refuse src/sqlite/schema-validation.ts:7:23
+      5| type Data = Record<string, any>;
+      6| const refuse = (code: string, path: string, message: string): never =>…
+      7|   throw Object.assign(new Error(`${path}: ${message}`), { code });
+       |                       ^
+      8| };
+      9| 
+ ❯ name src/sqlite/schema-validation.ts:63:31
+ ❯ src/sqlite/schema-validation.ts:84:7
+ ❯ convertElmdbDump scripts/convert-elmdb-dump.ts:85:29
+ ❯ tests/sqlite/elmdb-conversion.spec.ts:37:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/sqlite/elmdb-conversion.spec.ts > explicit elmdb dump conversion > refuses an incumbent destination without removing its contents
+AssertionError: expected Error: relations.Custom: a relation kind'… { code: '…' } to match object { code: 'EEXIST' }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- {[39m
+[32m-   "code": "EEXIST",[39m
+[31m+ Error {[39m
+[31m+   "code": "SCHEMA_INVALID",[39m
+[2m  }[22m
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/sqlite/elmdb-conversion.spec.ts > explicit elmdb dump conversion > removes owned staging on late truncated failure
+ FAIL  tests/sqlite/elmdb-conversion.spec.ts > explicit elmdb dump conversion > removes owned staging on late trailing failure
+ FAIL  tests/sqlite/elmdb-conversion.spec.ts > explicit elmdb dump conversion > removes owned staging on late count failure
+ FAIL  tests/sqlite/elmdb-conversion.spec.ts > explicit elmdb dump conversion > refuses precision loss and malformed loads rather than silently changing primary data
+AssertionError: expected Error: relations.Custom: a relation kind'… { code: '…' } to match object { code: 'DUMP_INVALID' }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- {[39m
+[32m-   "code": "DUMP_INVALID",[39m
+[31m+ Error {[39m
+[31m+   "code": "SCHEMA_INVALID",[39m
+[2m  }[22m
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed (6)
+   Start at  15:39:28
+   Duration  616ms (transform 246ms, setup 11ms, collect 334ms, tests 157ms, environment 0ms, prepare 38ms)
+

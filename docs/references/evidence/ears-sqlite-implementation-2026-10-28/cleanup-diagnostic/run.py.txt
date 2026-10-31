@@ -1,0 +1,27 @@
+import pathlib,subprocess,json,hashlib,time
+r=pathlib.Path('/metrics');o=pathlib.Path('/results')
+files=list((r/'packages/apack-ears/src').rglob('*.ts'))+list((r/'packages/apack-ears/bench/sqlite').glob('*.ts'))
+(o/'source-sha256.json').write_text(json.dumps({str(p.relative_to(r)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},indent=2)+'\n')
+def check(name,args):
+ p=subprocess.run(args,cwd=r,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=60)
+ (o/(name+'.txt')).write_text(p.stdout)
+ print(name,p.returncode,flush=True)
+ assert p.returncode==0,p.stdout
+check('heartbeat',['node','--import','tsx','packages/apack-ears/bench/sqlite/load-metrics.check.ts'])
+check('types',['npm','run','typecheck','-w','@apackdev/ears'])
+results=[]
+for control in [False,True]:
+ label='no-query-watches' if control else 'full-watch-workload'
+ args=['node','--import','tsx','packages/apack-ears/bench/sqlite/admission.ts','100000','--search','--progress','--diagnostic']+(['--no-query-watches'] if control else [])
+ started=time.monotonic()
+ try:
+  p=subprocess.run(args,cwd=r,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=300)
+  (o/(label+'.stdout')).write_text(p.stdout);(o/(label+'.stderr')).write_text(p.stderr)
+  v=json.loads(p.stdout)
+  item={'control':label,'exitCode':p.returncode,'elapsedSeconds':time.monotonic()-started,'budgets':v['budgets'],'buildMs':v['buildMs'],'gcMs':v['gcMs'],'writes':v['writes'],'qualification':False}
+ except subprocess.TimeoutExpired as e:
+  for ext,value in [('stdout',e.stdout),('stderr',e.stderr)]:
+   (o/(label+'.'+ext)).write_bytes(value.encode() if isinstance(value,str) else value or b'')
+  item={'control':label,'timeout':True,'qualification':False}
+ results.append(item);print(json.dumps(item),flush=True)
+ (o/'summary.json').write_text(json.dumps(results,indent=2)+'\n')

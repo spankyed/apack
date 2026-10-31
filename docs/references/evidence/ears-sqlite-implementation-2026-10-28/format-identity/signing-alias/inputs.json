@@ -1,0 +1,5 @@
+{
+  "scripts/lib/native-signing.mjs": "d11297ae5f6093c10f1dd7b225d9d58592e5bc39703aad06a0d7e5188b6dde8c",
+  "packages/repo-checks/tests/native-signing.spec.ts": "730ec9eca9fd8c6bf8414065dba6e9e289d6ba2cf5de3ba80cdacd66c5d3fa0d",
+  "tests/e2e/app-integration/sqlite-storage.spec.ts": "a59bb0b78314912799711fdfb9c53073860ca1479041b2b16d4ef637cdcc509a"
+}

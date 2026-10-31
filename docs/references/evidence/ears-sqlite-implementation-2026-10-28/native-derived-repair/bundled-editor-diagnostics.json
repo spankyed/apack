@@ -1,0 +1,29 @@
+{
+  "file": "tests/packs/bundled-ui-pack/tests/e2e/scribbles.spec.ts",
+  "sha256": "c96dad3bf200fde1dbbc9e778174374cc8a83299fd1fa536d69ec0ff076dbc90",
+  "checks": [
+    {
+      "label": "bundled-editor-types",
+      "exitCode": 0,
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tests/packs/bundled-ui-pack/tsconfig.json",
+        "--noEmit"
+      ]
+    },
+    {
+      "label": "bundled-editor-lint",
+      "exitCode": 0,
+      "args": [
+        "node",
+        "node_modules/oxlint/bin/oxlint",
+        "tests/packs/bundled-ui-pack/tests/e2e/scribbles.spec.ts",
+        "-D",
+        "correctness"
+      ]
+    }
+  ],
+  "purpose": "Capture DOM and ProseMirror state on the original failure without changing assertions or timeouts; actual app reproduction remains required"
+}

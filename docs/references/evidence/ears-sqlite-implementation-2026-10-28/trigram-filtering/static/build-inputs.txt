@@ -1,0 +1,21 @@
+
+> @app/repo-checks@0.0.0 pretest
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @app/repo-checks@0.0.0 test
+> vitest run tests/chain-inputs.spec.ts tests/doc-links.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/repo-checks
+
+ ✓ tests/chain-inputs.spec.ts (64 tests) 2716ms
+   ✓ a step declares the modules its script imports > leaves nothing its script imports undeclared  575ms
+   ✓ a step declares the modules its script imports > follows a step script past itself  411ms
+ ✓ tests/doc-links.spec.ts (6 tests) 219ms
+
+ Test Files  2 passed (2)
+      Tests  70 passed (70)
+   Start at  16:41:02
+   Duration  4.51s (transform 318ms, setup 31ms, collect 1.21s, tests 2.93s, environment 0ms, prepare 131ms)
+

@@ -1,0 +1,27 @@
+set -eu
+mkdir -p /build/source /build/tools /regex/node_modules/rregex/lib
+cd /build/source
+tar -xzf /source.tar.gz --strip-components=1
+tar -xzf /cli.tar.gz -C /build/tools --strip-components=1
+rustc --version > /results/toolchain.txt
+cargo --version >> /results/toolchain.txt
+/build/tools/wasm-bindgen --version >> /results/toolchain.txt
+rustup target add wasm32-unknown-unknown
+cp /extensions.rs src/extensions.rs
+printf '\nmod extensions;\n' >> src/lib.rs
+variant=trigram
+features=console_error_panic_hook
+  cargo build --locked --release --target wasm32-unknown-unknown --target-dir /artifacts/target --no-default-features --features "$features" > "/results/build-$variant.txt" 2>&1
+  mkdir -p "/artifacts/$variant"
+  /build/tools/wasm-bindgen /artifacts/target/wasm32-unknown-unknown/release/rregex.wasm --target nodejs --out-dir "/artifacts/$variant" --out-name rregex
+  cp "/artifacts/$variant/rregex.js" /regex/node_modules/rregex/lib/commonjs.cjs
+  cp "/artifacts/$variant/rregex_bg.wasm" /regex/node_modules/rregex/lib/rregex_bg.wasm
+  ln -sfn rregex_bg.wasm /regex/node_modules/rregex/lib/rregex.wasm
+  echo '{"name":"rregex","version":"1.13.1","main":"lib/commonjs.cjs"}' > /regex/node_modules/rregex/package.json
+  sha256sum "/artifacts/$variant/rregex.js" "/artifacts/$variant/rregex_bg.wasm" > "/results/artifact-$variant.sha256"
+  node /syntax-probe.cjs > "/results/syntax-$variant.json"
+  for mode in same compile-only unique; do
+    node --expose-gc /memory-probe.cjs "$mode" > "/results/memory-$variant-$mode.json"
+  done
+  echo "Completed allocator control: $variant"
+sha256sum Cargo.toml Cargo.lock src/*.rs > /results/source.sha256

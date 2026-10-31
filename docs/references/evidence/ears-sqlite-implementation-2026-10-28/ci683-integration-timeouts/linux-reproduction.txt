@@ -1,0 +1,858 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts npm run test:integration -w @apackdev/cli -- tests/commands/scaffold.integration.spec.ts tests/commands/facade-report.integration.spec.ts tests/build/build-output-swap.integration.spec.ts
+
+cannot delete non-empty directory: node_modules/.cache
+cannot delete non-empty directory: packages/renderer/node_modules
+    Finished `release` profile [optimized] target(s) in 0.14s
+Published packages are out of date:
+  @apackdev/ears: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/query.ts
+  @apackdev/testing: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/query.ts
+  @apackdev/cli: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/query.ts
+Rebuilding 3 of 5
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+Built @apackdev/testing@0.1.0 into dist/package
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/compiler-pe-environment.ts:38:102:
+      38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+         ╵                                                     ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:19:42:
+      19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+         ╵                                           ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:61:48:
+      61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+         ╵                                            ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+Built @apackdev/cli@0.1.0 into dist/package
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/cli@0.1.0 pretest:integration
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @apackdev/cli@0.1.0 test:integration
+> vitest run --config vitest.integration.config.ts tests/commands/scaffold.integration.spec.ts tests/commands/facade-report.integration.spec.ts tests/build/build-output-swap.integration.spec.ts
+
+
+ RUN  v3.2.7 /work/packages/apack-cli
+
+stdout | tests/commands/scaffold.integration.spec.ts
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack init demo-pack: 2796ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > explains instead of writing a flow the scaffold can't build (no dependency provides steps)
+[run] node /work/packages/apack-cli/bin/apack.mjs pack add flow heartbeat: 856ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > rejects a feature id that is not an identifier
+[run] node /work/packages/apack-cli/bin/apack.mjs pack add feature my-notes: 934ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > adds a feature, builds, typechecks and packs a verified archive
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack add feature notes --description Manage notes. --label Notes --designation notebook: 4975ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > adds a feature, builds, typechecks and packs a verified archive
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack validate: 2095ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > adds a feature, builds, typechecks and packs a verified archive
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack doctor: 2330ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > adds a feature, builds, typechecks and packs a verified archive
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack build: 25120ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > adds a feature, builds, typechecks and packs a verified archive
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack archive --out /tmp/apack-scaffold-IUKXn6/out: 2675ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > records the facade dependents compile against, and then reports it up to date
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack facade-report: 6308ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > records the facade dependents compile against, and then reports it up to date
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack facade-report --update: 4465ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > records the facade dependents compile against, and then reports it up to date
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack facade-report: 6276ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > adds a step (declared, shipped in build/steps.build.mjs) and a service that build
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack add step ping: 5098ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > adds a step (declared, shipped in build/steps.build.mjs) and a service that build
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack add service cache: 5135ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > adds a step (declared, shipped in build/steps.build.mjs) and a service that build
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack build: 19080ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > regenerates entries when a source file codegen reads changes, not only the manifest
+[run] node /work/packages/apack-cli/bin/apack.mjs pack generate-entries: 5031ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > regenerates entries when a source file codegen reads changes, not only the manifest
+[run] node /work/packages/apack-cli/bin/apack.mjs pack generate-entries: 3319ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > keeps unit tests runnable after init-tests adds Playwright specs
+[run] /usr/local/bin/node /work/packages/apack-cli/bin/apack.mjs pack init-tests: 941ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > keeps unit tests runnable after init-tests adds Playwright specs
+[run] /work/node_modules/.bin/vitest run: 2770ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > refuses to build, pack or generate entries for a manifest the installer would reject
+[run] node /work/packages/apack-cli/bin/apack.mjs pack build: 14666ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > refuses to build, pack or generate entries for a manifest the installer would reject
+[run] node /work/packages/apack-cli/bin/apack.mjs pack archive --out /tmp/apack-scaffold-IUKXn6/invalid-out: 958ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > refuses to build, pack or generate entries for a manifest the installer would reject
+[run] node /work/packages/apack-cli/bin/apack.mjs pack generate-entries --force: 933ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > fails the build on an unresolvable dependency
+[run] node /work/packages/apack-cli/bin/apack.mjs pack build: 8403ms
+
+stdout | tests/commands/scaffold.integration.spec.ts > apack pack init → add feature → build → tsc → pack > fails the build on an unresolvable dependency
+[run] node /work/packages/apack-cli/bin/apack.mjs pack archive --out /tmp/apack-scaffold-IUKXn6/stale-out: 1770ms
+
+ ✓ tests/commands/scaffold.integration.spec.ts (11 tests) 130244ms
+   ✓ apack pack init → add feature → build → tsc → pack > explains instead of writing a flow the scaffold can't build (no dependency provides steps)  857ms
+   ✓ apack pack init → add feature → build → tsc → pack > rejects a feature id that is not an identifier  934ms
+   ✓ apack pack init → add feature → build → tsc → pack > adds a feature, builds, typechecks and packs a verified archive  38969ms
+   ✓ apack pack init → add feature → build → tsc → pack > records the facade dependents compile against, and then reports it up to date  17051ms
+   ✓ apack pack init → add feature → build → tsc → pack > adds a step (declared, shipped in build/steps.build.mjs) and a service that build  30819ms
+   ✓ apack pack init → add feature → build → tsc → pack > regenerates entries when a source file codegen reads changes, not only the manifest  8352ms
+   ✓ apack pack init → add feature → build → tsc → pack > keeps unit tests runnable after init-tests adds Playwright specs  3712ms
+   ✓ apack pack init → add feature → build → tsc → pack > refuses to build, pack or generate entries for a manifest the installer would reject  16560ms
+   ✓ apack pack init → add feature → build → tsc → pack > fails the build on an unresolvable dependency  10175ms
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses missing producer output before sealing and retains the incumbent
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses missing producer output before sealing and retains the incumbent
+Building pack: Incomplete output v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses missing producer output before sealing and retains the incumbent
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses missing producer output before sealing and retains the incumbent
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses missing producer output before sealing and retains the incumbent
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses missing producer output before sealing and retains the incumbent
+  fe: dist/runtime/fe.js
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses copied media removed after compilation and retains the incumbent
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses copied media removed after compilation and retains the incumbent
+Building pack: Incomplete media v1.0.0
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses copied media removed after compilation and retains the incumbent
+Compiling pack: incomplete-media
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses copied media removed after compilation and retains the incumbent
+  rows: 0
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses copied media removed after compilation and retains the incumbent
+
+Build output:
+
+Note: 1 entity has no shape declared, so its fields read as unknown values: Row
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses copied media removed after compilation and retains the incumbent
+  content runtime: dist/build/content-runtime.mjs
+  content compilers: dist/build/content-compilers.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses copied media removed after compilation and retains the incumbent
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+Building pack: Changing v1.0.0
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+Compiling pack: changing-inputs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+  tags: 0
+
+stderr | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+
+Pack types aren't usable by packs that depend on this one. The types of what apack.json exposes (entity shapes, events, services, repositories) must check on their own and import only packages dependents have:
+  - .apack/build/types/pack-types.d.ts can't be checked: @apackdev/sdk doesn't resolve from /tmp/apack-clear-output-NmmgKD (install the pack's dependencies). Cannot find module '@apackdev/sdk/package.json'
+Require stack:
+- /tmp/apack-clear-output-NmmgKD/package.json
+
+stderr | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+
+Flow helpers bundle failed: the flow helpers' types aren't usable by packs that depend on this one:
+  - .apack/build/types/flow-helpers.d.ts can't be checked: @apackdev/sdk doesn't resolve from /tmp/apack-clear-output-NmmgKD (install the pack's dependencies). Cannot find module '@apackdev/sdk/package.json'
+Require stack:
+- /tmp/apack-clear-output-NmmgKD/package.json
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+
+Build output:
+
+Note: 1 entity has no shape declared, so its fields read as unknown values: Row
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+  content compilers: dist/build/content-compilers.mjs
+
+stderr | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+
+Content runtime bundle failed: .apack/build/build/content-runtime.mjs can't be checked: @apackdev/sdk doesn't resolve from /tmp/apack-clear-output-NmmgKD (install the pack's dependencies).
+Cannot find module '@apackdev/sdk/package.json'
+Require stack:
+- /tmp/apack-clear-output-NmmgKD/package.json
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses publication when an authored input changes during a real build
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > retains the previous build when a missing external resolution directory appears during compilation
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > retains the previous build when a missing external resolution directory appears during compilation
+Building pack: Demo v1.0.0
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > retains the previous build when a missing external resolution directory appears during compilation
+Compiling pack: demo-pack
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > retains the previous build when a missing external resolution directory appears during compilation
+  tags: 0
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > retains the previous build when a missing external resolution directory appears during compilation
+
+Build output:
+
+Note: 1 entity has no shape declared, so its fields read as unknown values: Row
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > retains the previous build when a missing external resolution directory appears during compilation
+  content runtime: dist/build/content-runtime.mjs
+  content compilers: dist/build/content-compilers.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > retains the previous build when a missing external resolution directory appears during compilation
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Output: ../../../tmp/apack-clear-output-RozzGG/dist/
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+generate-entries: inputs unchanged, skipping (use --force to regenerate)
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement
+
+Output: ../../../tmp/apack-clear-output-RozzGG/dist/
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses stale generated declarations and retains the previous build
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses missing generated code before replacing the previous build
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > refuses modified generated code before replacing the previous build
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+
+Output: ../../../tmp/apack-clear-output-IjmUpU/dist/
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+
+Output: ../../../tmp/apack-clear-output-IjmUpU/dist/
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit
+Building pack: Demo v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a pack whose content compiler modules fail to bundle > fails the build before it writes the snapshot
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a pack whose content compiler modules fail to bundle > fails the build before it writes the snapshot
+Building pack: Built-in v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a pack whose runtime fails to bundle > reports it and fails the build without writing the snapshot
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a pack whose runtime fails to bundle > reports it and fails the build without writing the snapshot
+Building pack: Broken v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stderr | tests/build/build-output-swap.integration.spec.ts > a pack whose runtime fails to bundle > reports it and fails the build without writing the snapshot
+
+Pack types aren't usable by packs that depend on this one. The types of what apack.json exposes (entity shapes, events, services, repositories) must check on their own and import only packages dependents have:
+  - .apack/build/types/pack-types.d.ts can't be checked: @apackdev/sdk doesn't resolve from /tmp/apack-clear-output-e0PksV (install the pack's dependencies). Cannot find module '@apackdev/sdk/package.json'
+Require stack:
+- /tmp/apack-clear-output-e0PksV/package.json
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a pack whose runtime fails to bundle > reports it and fails the build without writing the snapshot
+
+Build output:
+
+stderr | tests/build/build-output-swap.integration.spec.ts > a pack whose runtime fails to bundle > reports it and fails the build without writing the snapshot
+
+Flow helpers bundle failed: the flow helpers' types aren't usable by packs that depend on this one:
+  - .apack/build/types/flow-helpers.d.ts can't be checked: @apackdev/sdk doesn't resolve from /tmp/apack-clear-output-e0PksV (install the pack's dependencies). Cannot find module '@apackdev/sdk/package.json'
+Require stack:
+- /tmp/apack-clear-output-e0PksV/package.json
+
+stderr | tests/build/build-output-swap.integration.spec.ts > a pack whose runtime fails to bundle > reports it and fails the build without writing the snapshot
+
+Content runtime bundle failed: .apack/build/build/content-runtime.mjs can't be checked: @apackdev/sdk doesn't resolve from /tmp/apack-clear-output-e0PksV (install the pack's dependencies).
+Cannot find module '@apackdev/sdk/package.json'
+Require stack:
+- /tmp/apack-clear-output-e0PksV/package.json
+
+stderr | tests/build/build-output-swap.integration.spec.ts > a pack whose runtime fails to bundle > reports it and fails the build without writing the snapshot
+
+Runtime bundle failed: Build failed with 1 error:
+src/lifecycle.ts:1:7: ERROR: Could not resolve "./missing-runtime.ts"
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+Building pack: Sealed v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+
+Output: ../../../tmp/apack-clear-output-53yVng/dist/
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+generate-entries: inputs unchanged, skipping (use --force to regenerate)
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+Building pack: Sealed v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged facade data instead of renewing its checksums
+
+Output: ../../../tmp/apack-clear-output-53yVng/dist/
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+Building pack: Sealed v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+
+Output: ../../../tmp/apack-clear-output-62SjZ1/dist/
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+generate-entries: inputs unchanged, skipping (use --force to regenerate)
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+Building pack: Sealed v1.0.0
+No content.sources or content.datasets in manifest. Skipping content compilation.
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+
+Build output:
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+  content runtime: dist/build/content-runtime.mjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+  runtime: dist/runtime/index.cjs
+
+stdout | tests/build/build-output-swap.integration.spec.ts > a completed build > rebuilds damaged cache data instead of renewing its checksums
+
+Output: ../../../tmp/apack-clear-output-62SjZ1/dist/
+
+ ✓ tests/build/build-output-swap.integration.spec.ts (14 tests) 271452ms
+   ✓ a build that fails > refuses missing producer output before sealing and retains the incumbent  11548ms
+   ✓ a build that fails > refuses copied media removed after compilation and retains the incumbent  8042ms
+   ✓ a build that fails > refuses publication when an authored input changes during a real build  5176ms
+   ✓ a build that fails > retains the previous build when a missing external resolution directory appears during compilation  18280ms
+   ✓ a build that fails > does not reuse facade files from an incumbent with stamps from a refused replacement  65789ms
+   ✓ a build that fails > refuses stale generated declarations and retains the previous build  9187ms
+   ✓ a build that fails > refuses missing generated code before replacing the previous build  6552ms
+   ✓ a build that fails > refuses modified generated code before replacing the previous build  9120ms
+   ✓ a build that fails > publishes help as snapshot data and retains accepted articles after an invalid edit  56470ms
+   ✓ a pack whose content compiler modules fail to bundle > fails the build before it writes the snapshot  9763ms
+   ✓ a pack whose runtime fails to bundle > reports it and fails the build without writing the snapshot  10821ms
+   ✓ a completed build > rebuilds damaged facade data instead of renewing its checksums  28951ms
+   ✓ a completed build > rebuilds damaged cache data instead of renewing its checksums  31641ms
+--- /tmp/facade-report-cmd-lZ1yEN/report-pack/etc/pack-types.api.md	2026-10-28 13:32:57.592880000 +0000
++++ /tmp/facade-report-5CMreF/pack-types.api.md	2026-10-28 13:33:55.007033524 +0000
+@@ -22,6 +22,8 @@
+ type OutgoingNotifierEvents = {
+     type: 'NOTIFIED';
+     text: string;
++} | {
++    type: 'ALSO_NOTIFIED';
+ };
+ 
+ /** Entity shapes this pack declares */
+--- /tmp/facade-report-cmd-lZ1yEN/report-pack/etc/pack-types.api.md	2026-10-28 13:33:59.399121767 +0000
++++ /tmp/facade-report-CB81ST/pack-types.api.md	2026-10-28 13:34:07.802290597 +0000
+@@ -29,6 +29,7 @@
+ /** Entity shapes this pack declares */
+ type OwnEntityShapes = {
+     'Memo': MemoEntity;
++    'Reminder': ReminderEntity;
+ };
+ 
+ /** The repositories this pack declares (apack.json features[].repositories) */
+@@ -95,6 +96,10 @@
+ /** Every system this pack's code can send to, by ref: its own, its dependencies' and the host's. */
+ type QualifiedSystemEvents = Qualified<'report-pack', PackSystemEvents> & HostSystemEvents;
+ 
++interface ReminderEntity {
++    at: string;
++}
++
+ /** Every repository this pack can use: its own and its dependencies' */
+ type Repositories = OwnRepositories;
+ 
+ ✓ tests/commands/facade-report.integration.spec.ts (11 tests) 118713ms
+   ✓ apack pack facade-report > reports a missing report as missing rather than as a difference  6973ms
+   ✓ apack pack facade-report > records the facade dependents compile against, and then reports it up to date  14336ms
+   ✓ apack pack facade-report > checks the verified current build without changing generated files  20015ms
+   ✓ apack pack facade-report > refuses edited generated files on the skip path without updating the report  6429ms
+   ✓ apack pack facade-report > leaves the report alone when it is current, --update included  4119ms
+   ✓ apack pack facade-report > is not told anything by the built bundle: junk in dist does not move the verdict  4891ms
+   ✓ apack pack facade-report > needs no build at all: the check runs with no dist  4513ms
+   ✓ apack pack facade-report > follows an edit to the pack's own sources, with nothing rebuilt  12277ms
+   ✓ apack pack facade-report > follows the manifest, regenerating the barrel the facade is bundled from  13541ms
+   ✓ apack pack build > warns about a report that has gone stale, and still succeeds  15803ms
+
+ Test Files  3 passed (3)
+      Tests  36 passed (36)
+   Start at  13:25:44
+   Duration  524.68s (transform 1.17s, setup 40ms, collect 3.46s, tests 520.41s, environment 0ms, prepare 145ms)
+

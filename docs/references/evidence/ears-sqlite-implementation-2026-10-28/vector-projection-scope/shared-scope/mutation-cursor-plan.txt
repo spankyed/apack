@@ -1,0 +1,49 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/vector-index.spec.ts -t captures foreground changes --maxWorkers=1
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/vector-index.spec.ts (5 tests | 1 failed | 4 skipped) 102ms
+   × generation-owned native vector projection > captures foreground changes behind the cursor before readiness without logical commits 101ms
+     → expected false to be true // Object.is equality
+   ↓ generation-owned native vector projection > keeps nested/outer rollback, trash, replacement and destruction in the same transaction
+   ↓ generation-owned native vector projection > reopens the native generation in a read-only EARS backup with an owner-supplied extension
+   ↓ generation-owned native vector projection > refuses an implicit cursor-index build on a populated store
+   ↓ generation-owned native vector projection > rolls back refused admission and rejects stale generations and unsafe writer use
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/vector-index.spec.ts > generation-owned native vector projection > captures foreground changes behind the cursor before readiness without logical commits
+AssertionError: expected false to be true // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+ ❯ tests/sqlite/vector-index.spec.ts:37:130
+     35|     db.all=(sql,parameters=[])=>{if(sql.startsWith('WITH page AS MATER…
+     36|     expect(write(()=>index.step(job.generation,1))).toBe(false);
+     37|     expect(plan.some(row=>String(row.detail).includes('chunk_native_ad…
+       |                                                                                                                                  ^
+     38|     expect(plan.some(row=>String(row.detail).startsWith('SEARCH v USIN…
+     39|     expect(db.get(`SELECT count(*) n FROM ann_${job.generation}`)!.n).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 skipped (5)
+   Start at  23:24:57
+   Duration  504ms (transform 214ms, setup 11ms, collect 278ms, tests 102ms, environment 0ms, prepare 38ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/vector-index.spec.ts -t 'captures foreground changes' --maxWorkers=1

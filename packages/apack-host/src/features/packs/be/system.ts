@@ -296,7 +296,7 @@ export function createPacksSystem(registry: PackRegistry) {
 
         const isGitHub = resolveInstallSourceKind(packSlug, ev.sourceKind) === 'github';
         let installingId: string | undefined;
-        let startAccepted: (() => boolean) | undefined;
+        let startAccepted: (() => Promise<boolean>) | undefined;
         runInstall(packSlug, ev.sourceKind, undefined, {
           installedPacksFile: resolveAppEnvironment().installedPacksFile,
           sha256: ev.sha256,
@@ -324,14 +324,14 @@ export function createPacksSystem(registry: PackRegistry) {
           accept: candidate => {
             startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus));
           },
-        }).then(result => {
+        }).then(async result => {
           let activated: boolean;
           try {
             if (!recordInstalled(result.id, isGitHub ? packSlug : undefined)) {
               throw new Error(`${result.name} was installed, but its install source and enablement could not be saved`);
             }
           }
-          finally { activated = startAccepted!(); }
+          finally { activated = await startAccepted!(); }
           const problem = activationProblem(registry, result.id, activated);
           if (problem) {
             broadcastToSurface('packs', {
@@ -380,7 +380,7 @@ export function createPacksSystem(registry: PackRegistry) {
           return;
         }
         broadcastToSurface('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug: packId });
-        let startAccepted: (() => boolean) | undefined;
+        let startAccepted: (() => Promise<boolean>) | undefined;
         Promise.resolve().then(() => {
           registry.refreshCatalog();
           const catalog = registry.catalog.getSnapshot();
@@ -398,8 +398,8 @@ export function createPacksSystem(registry: PackRegistry) {
             beforePlace: manifest => registry.catalog.assertPackSettings(manifest),
             accept: candidate => { startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus)); },
           });
-        }).then(result => {
-          const activated = startAccepted!();
+        }).then(async result => {
+          const activated = await startAccepted!();
           const problem = activationProblem(registry, packId, activated);
           if (problem) fail(new Error(`${result.name} was restored but ${problem}`));
           else {
@@ -465,7 +465,7 @@ export function createPacksSystem(registry: PackRegistry) {
           fail(new Error(operationInProgress(packId)));
           return;
         }
-        let startAccepted: (() => boolean) | undefined;
+        let startAccepted: (() => Promise<boolean>) | undefined;
         let enabled = false;
         Promise.resolve().then(() => {
           registry.refreshCatalog();
@@ -483,8 +483,8 @@ export function createPacksSystem(registry: PackRegistry) {
               if (enabled) startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus));
             },
           });
-        }).then(result => {
-          const activated = enabled ? startAccepted!() : false;
+        }).then(async result => {
+          const activated = enabled ? await startAccepted!() : false;
           if (!enabled) registry.refreshCatalog();
           const problem = enabled ? activationProblem(registry, packId, activated) : undefined;
           if (problem) fail(new Error(`${result.name} was updated but ${problem}`));
@@ -519,7 +519,7 @@ export function createPacksSystem(registry: PackRegistry) {
         const target = entry.availableTag ? `${sourceSlug}@${entry.availableTag}` : sourceSlug;
         console.log(`[packs] Update requested: ${packId} from ${target}`);
 
-        let startAccepted: (() => boolean) | undefined;
+        let startAccepted: (() => Promise<boolean>) | undefined;
 
         installPackFromGitHub(target, undefined, {
           hostVersion: getAppVersion(),
@@ -531,13 +531,13 @@ export function createPacksSystem(registry: PackRegistry) {
           accept: candidate => {
             if (entry.enabled) startAccepted = acceptInstalledPack(registry, candidate.id, system.get(HOST.bus));
           },
-        }).then(result => {
+        }).then(async result => {
           let activated: boolean;
           try {
             if (!recordUpdateInstalled(packId)) throw new Error(`Updated ${packId}, but its update record could not be saved`);
           }
           finally {
-            if (entry.enabled) activated = startAccepted!();
+            if (entry.enabled) activated = await startAccepted!();
             else { registry.refreshCatalog(); activated = false; }
           }
           const problem = entry.enabled ? activationProblem(registry, packId, activated) : undefined;
@@ -602,6 +602,7 @@ export function createPacksSystem(registry: PackRegistry) {
         }
         // Held until a disable's teardown finishes, since the pack is registered until then
         let tearingDown: Promise<void> | undefined;
+        let activating: Promise<void> | undefined;
         try {
           if (!isInstalled(packId)) {
             reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(`${packId} is not an installed pack`) });
@@ -630,21 +631,23 @@ export function createPacksSystem(registry: PackRegistry) {
             return;
           }
 
+          const publishEnabled = () => {
+            broadcastToSurface('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: newEnabled });
+            emitPacksList(registry);
+          };
           if (!newEnabled) {
             tearingDown = teardownPack(registry, packId, system.get(HOST.bus));
             broadcastToSurface('packs', { type: 'PACK_DEACTIVATED' as const, packId });
+            publishEnabled();
           } else {
-            if (activatePack(registry, packId, system.get(HOST.bus))) {
-              broadcastToSurface('packs', { type: 'PACK_ACTIVATED' as const, packId });
-            }
+            activating = activatePack(registry, packId, system.get(HOST.bus)).then(activated => {
+              if (activated) broadcastToSurface('packs', { type: 'PACK_ACTIVATED' as const, packId });
+              publishEnabled();
+            }).catch(error => {
+              reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(errorMessage(error)) });
+              publishEnabled();
+            });
           }
-
-          broadcastToSurface('packs', {
-            type: 'PACK_ENABLED_CHANGED' as const,
-            packId,
-            enabled: newEnabled,
-          });
-          emitPacksList(registry);
         } finally {
           if (tearingDown) {
             const settled = tearingDown.finally(() => {
@@ -653,6 +656,8 @@ export function createPacksSystem(registry: PackRegistry) {
             });
             teardowns.set(packId, settled);
             void settled;
+          } else if (activating) {
+            void activating.finally(() => registry.releasePackOperation(packId));
           } else {
             registry.releasePackOperation(packId);
           }

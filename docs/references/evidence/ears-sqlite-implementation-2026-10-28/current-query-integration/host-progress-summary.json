@@ -1,0 +1,48 @@
+{
+  "completedModules": 552,
+  "states": {
+    "passed": 519,
+    "failed": 5,
+    "skipped": 28
+  },
+  "failedModules": [
+    {
+      "project": "@app/repo-checks",
+      "file": "tests/chain-inputs.spec.ts"
+    },
+    {
+      "project": "@app/repo-checks",
+      "file": "tests/unused-code-gate.spec.ts"
+    },
+    {
+      "project": "@app/repo-checks",
+      "file": "tests/chain-stamps.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/upgrade.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/open.spec.ts"
+    }
+  ],
+  "accumulatedSeconds": {
+    "duration": 351.8831639610003,
+    "collectDuration": 171.99573155200008,
+    "setupDuration": 1.2692157849999985,
+    "environmentSetupDuration": 3.628504881,
+    "prepareDuration": 24.767076809999963
+  },
+  "effectiveVitestWorkers": 1,
+  "containerCpuLimit": 2,
+  "verdict": "diagnostic timeout, not a passing pool or reproduced macOS cause",
+  "missingPrerequisites": [
+    "UI API declaration generation (subsequently prepared; targeted gate passes)",
+    "real chain stamp store"
+  ],
+  "linuxUnavailable": [
+    "plutil for installed macOS bundle version test",
+    "installed-app open explicitly supports macOS only"
+  ]
+}

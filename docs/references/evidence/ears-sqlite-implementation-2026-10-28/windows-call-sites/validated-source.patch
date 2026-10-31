@@ -1,0 +1,59 @@
+diff --git a/packages/apack-ears/src/calls.ts b/packages/apack-ears/src/calls.ts
+index be1afc37b7..f481116713 100644
+--- a/packages/apack-ears/src/calls.ts
++++ b/packages/apack-ears/src/calls.ts
+@@ -77,7 +77,9 @@ const STACK_DEPTH = 40;
+ const ENGINE_FRAME = /\/(?:apack-ears|@apackdev\/ears)\/(?:src|dist)\//;
+ 
+ function filePath(location: string): string {
+-  return location.startsWith('file://') ? decodeURIComponent(new URL(location).pathname) : location;
++  const path = location.startsWith('file://') ? decodeURIComponent(new URL(location).pathname) : location;
++  // Filtering and shortening use path components, including for Windows frames from source loaders.
++  return path.replaceAll('\\', '/');
+ }
+ 
+ /** `file:line` of each frame in a V8 stack, the frame's location without its column */
+diff --git a/packages/apack-ears/tests/engine/calls.spec.ts b/packages/apack-ears/tests/engine/calls.spec.ts
+index fb194babe1..bc0559038d 100644
+--- a/packages/apack-ears/tests/engine/calls.spec.ts
++++ b/packages/apack-ears/tests/engine/calls.spec.ts
+@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
+ import { engine } from './helpers.ts';
+ import type { EngineUnderTest } from './engine-under-test.ts';
+ import type { CallKind, CallSite } from '../../src/index.ts';
++import { callSite } from '../../src/calls.ts';
+ 
+ let e: EngineUnderTest;
+ beforeEach(() => { e = engine(); });
+@@ -13,6 +14,22 @@ const THIS_FILE = 'tests/engine/calls.spec.ts';
+ const sitesOf = (kind: CallKind, sites: CallSite[]) => sites.filter((site) => site.kind === kind);
+ 
+ describe('admin.calls', () => {
++  it.each([
++    { format: 'Windows source', internal: String.raw`D:\repo\packages\apack-ears\src\calls.ts`, caller: String.raw`D:\repo\packages\app\src\feature.ts` },
++    { format: 'Windows installed package', internal: String.raw`C:\repo\node_modules\@apackdev\ears\dist\calls.js`, caller: String.raw`C:\repo\packages\app\src\feature.ts` },
++    { format: 'file URLs', internal: 'file:///C:/some%20folder/packages/apack-ears/src/calls.ts', caller: 'file:///C:/some%20folder/packages/app/src/feature.ts' },
++  ])('attributes $format stacks to the caller, excluding engine and Node frames', ({ internal, caller }) => {
++    const prepare = Error.prepareStackTrace, limit = Error.stackTraceLimit;
++    try {
++      Error.prepareStackTrace = () => [
++        'Error', `    at callSite (${internal}:106:1)`, '    at processTick (node:internal/process/task_queues:1:1)',
++        `    at feature (${caller}:12:3)`, `    at dispatch (${caller}:20:3)`, `    at start (${caller}:30:3)`,
++        `    at ignored (${caller}:40:3)`,
++      ].join('\n');
++      expect(callSite()).toBe('packages/app/src/feature.ts:12 < packages/app/src/feature.ts:20 < packages/app/src/feature.ts:30');
++      expect(Error.stackTraceLimit).toBe(limit);
++    } finally { Error.prepareStackTrace = prepare; Error.stackTraceLimit = limit; }
++  });
+   it('counts nothing until started, and nothing after it stops', () => {
+     e.create('Task', { title: 'before' });
+     e.query('Task').ids();
+@@ -43,7 +60,7 @@ describe('admin.calls', () => {
+     expect(report.totals.unit).toMatchObject({ calls: 1 });
+     expect(sitesOf('unit', report.sites)).toEqual([expect.objectContaining({ calls: 1, writes: 2 })]);
+     for (const site of report.sites) {
+-      expect(site.site.split(' < ')[0]!.replaceAll('\\', '/')).toContain(THIS_FILE);
++      expect(site.site.split(' < ')[0]).toContain(THIS_FILE);
+       expect(site.ms).toBeGreaterThanOrEqual(0);
+     }
+   });

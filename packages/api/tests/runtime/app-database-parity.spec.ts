@@ -81,7 +81,7 @@ describe('a data dir opened by the API and by openAppDatabase', () => {
   it('reads the same entities, relations and roles', async () => {
     // A first run applies the app's content; the user adds a note with a role and a relation
     const first = await bootApi();
-    startPacks(first.packs);
+    await startPacks(first.packs);
     untypedCreate('Note', { id: 'Note-child', title: 'child', content: '', icon: null, noteType: 'document', completed: false, hideCompletedChildren: false, displayOrder: 0, lastSeen: 0 });
     untypedCreate('Note', { id: 'Note-parity', title: 'mine', content: '', icon: null, noteType: 'document', completed: false, hideCompletedChildren: false, displayOrder: 0, lastSeen: 0 }).grant('assistant_birth').link('parent_of', 'Note-child');
     closeApi(first);

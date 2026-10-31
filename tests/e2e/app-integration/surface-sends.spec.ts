@@ -14,7 +14,10 @@ interface Received { surface: string; type: string; data?: unknown; savedBookmar
 type RecordingWindow = {
   __received?: Received[];
   __sendToSystem: (systemId: string, event: Record<string, unknown>) => void;
-  applicationState: { system: { inspect(observer: (event: { type: string; actorRef: { id: string }; event: Received }) => void): void } };
+  applicationState: {
+    send(event: { type: 'SEND_TO_SURFACE'; surface: string; events: Array<Record<string, unknown>> }): void;
+    system: { inspect(observer: (event: { type: string; actorRef: { id: string }; event: Received }) => void): void };
+  };
 };
 
 /**
@@ -46,12 +49,20 @@ async function received(appPage: Page, feature: string, type: string): Promise<R
 /**
  * Sends a backend system an event as a surface does, through `window.__sendToSystem` — the renderer's door
  * for this suite (`packages/renderer/src/main.ts`), which is the SDK's `untypedSendToSystem`. A pack writes
- * the typed `sendToSystem` its `#generated/events` builds, which `defineEvents` wraps around that one.
+ * the typed `sendToSystem` its `#generated/events` builds, which `defineEvents` wraps around that one. Page
+ * evaluation has no surface reply address; requests that need an answer use the surface handler below.
  */
 async function sendToSystem(appPage: Page, feature: string, event: Record<string, unknown>): Promise<void> {
   await appPage.evaluate(({ systemId, event }) => {
     (window as unknown as RecordingWindow).__sendToSystem(systemId, event);
   }, { systemId: builtIn(feature), event });
+}
+
+/** Drive the surface's request handler so its backend ask carries the real window reply address. */
+async function sendToSurface(appPage: Page, feature: string, event: Record<string, unknown>): Promise<void> {
+  await appPage.evaluate(({ surface, event }) => {
+    (window as unknown as RecordingWindow).applicationState.send({ type: 'SEND_TO_SURFACE', surface, events: [event] });
+  }, { surface: builtIn(feature), event });
 }
 
 let workDir: string | undefined;
@@ -71,7 +82,7 @@ test("the code system's file watcher and terminal output reach the code surface"
   await sendToSystem(appPage, 'code', { type: 'SET_BASE_DIRECTORY', path: workDir, fromUserNavigation: false });
   // The watcher reports changes to open files
   await expect.poll(async () => {
-    await sendToSystem(appPage, 'code', { type: 'explorer.READ_FILE', path: changed });
+    await sendToSurface(appPage, 'code', { type: 'explorer.OPEN_FILE', path: changed });
     return (await received(appPage, 'code', 'explorer.FILE_CONTENT')).some((event) => (event.data as { path?: string }).path === changed);
   }, { timeout: 15_000, intervals: [1000] }).toBe(true);
   let writes = 0;
@@ -82,10 +93,10 @@ test("the code system's file watcher and terminal output reach the code surface"
       .some((event) => JSON.stringify(event.data).includes('changed-outside.txt'));
   }, { timeout: 20_000, intervals: [500] }).toBe(true);
 
-  await sendToSystem(appPage, 'code', { type: 'terminal.CREATE_TERMINAL', title: 'e2e surface sends', cwd: workDir });
-  await expect.poll(async () => (await received(appPage, 'code', 'terminal.CREATED'))
+  await sendToSurface(appPage, 'code', { type: 'terminal.CREATE', title: 'e2e surface sends', cwd: workDir });
+  await expect.poll(async () => (await received(appPage, 'code', 'terminal.OPENED'))
     .some((event) => (event.data as { title?: string }).title === 'e2e surface sends'), { timeout: 15_000 }).toBe(true);
-  const terminalId = (await received(appPage, 'code', 'terminal.CREATED'))
+  const terminalId = (await received(appPage, 'code', 'terminal.OPENED'))
     .map((event) => event.data as { id: string; title?: string })
     .find((terminal) => terminal.title === 'e2e surface sends')!.id;
   try {

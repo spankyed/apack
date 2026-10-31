@@ -462,3 +462,31 @@ describe('reloading a pack', () => {
     expect(registrationWhenSent[0]).not.toBe(running.features);
   });
 });
+
+
+it.each([false, true])('waits for accepted reload indexes before hooks or actor restart (failure: %s)', async fails => {
+  let finish!: () => void, refuse!: (error: Error) => void;
+  const ready = new Promise<void>((resolve, reject) => { finish = resolve; refuse = reject; });
+  const readiness = vi.spyOn(registry, 'indexesReady').mockReturnValue(ready);
+  const marker = path.join(tmpDir, 'reload-initialized');
+  writeRebuild(runtime('lifecycle: { onInit() { require("node:fs").writeFileSync(' + JSON.stringify(marker) + ', "yes"); } },'),
+    { lifecycle: { onInit: 'init.ts#onInit' } });
+  const pending = reloadPackById(registry, PACK_ID, bus as never);
+  try {
+    expect(fs.existsSync(marker)).toBe(false);
+    expect(shutdown).not.toHaveBeenCalled();
+    expect(bus.send.mock.calls.map(([event]) => event.type)).not.toContain('RELOAD_PACK');
+    if (fails) {
+      refuse(new Error('reload index build failed'));
+      await expect(pending).rejects.toThrow('reload index build failed');
+      expect(registry.getPackRegistration(PACK_ID)).toBeNull();
+      expect(registry.loadProblem(PACK_ID)).toContain('index readiness failed');
+      expect(bus.send.mock.calls.map(([event]) => event.type)).not.toContain('RELOAD_PACK');
+    } else {
+      finish(); await pending;
+      expect(fs.existsSync(marker)).toBe(true);
+      expect(shutdown).toHaveBeenCalledOnce();
+      expect(bus.send.mock.calls.map(([event]) => event.type)).toContain('RELOAD_PACK');
+    }
+  } finally { readiness.mockRestore(); }
+});

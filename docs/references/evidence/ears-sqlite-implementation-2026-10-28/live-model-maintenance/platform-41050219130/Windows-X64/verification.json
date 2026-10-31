@@ -1,0 +1,38 @@
+{
+  "source": "4903c50a4a39bba91c8dff495d54764e1472ff18",
+  "apiStartupCasesPassed": null,
+  "nativeMembershipChecks": 555,
+  "nativeMembershipPatchSha256": "33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923",
+  "sdkSqliteCasesPassed": null,
+  "sdkContentRuntimeCasesPassed": null,
+  "sdkBackendCasesPassed": 2,
+  "queryWorkCasesPassed": 5,
+  "nativeOwnerCasesPassed": 3,
+  "nativePackageCasesPassed": 5,
+  "nativeGenerationCasesPassed": 10,
+  "nativeTrainingCasesPassed": 5,
+  "nativeModelCasesPassed": 34,
+  "nativeGenerationExtensionSha256": "73913aa7da6d2da340b4d0335e22c13b9bcd94ce97fb5276501c40439444c7c7",
+  "earsPassed": 664,
+  "sqliteCasesPassed": 354,
+  "selectedTextPassed": 16,
+  "selectedTextTotal": 16,
+  "maintenanceCasesPassed": 9,
+  "logicalCommandCasesPassed": 8,
+  "logicalCrashCasesPassed": 2,
+  "builtLogicalChecks": 5,
+  "profileConversionChecks": 5,
+  "profileCrashCases": 5,
+  "convertedApi": null,
+  "nativeDumpCasesPassed": 7,
+  "logicalSnapshotCasesPassed": 5,
+  "logicalHostCasesPassed": 9,
+  "logicalHostSkipped": [
+    {
+      "name": "reports a published but unsynchronized directory truthfully and retains its complete archive",
+      "status": "skipped"
+    }
+  ],
+  "hostPassed": 132,
+  "recoveryCasesPassed": 33
+}

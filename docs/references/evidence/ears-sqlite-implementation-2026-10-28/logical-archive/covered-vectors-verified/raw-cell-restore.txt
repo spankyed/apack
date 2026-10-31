@@ -1,0 +1,39 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts tests/sqlite/logical-stage.spec.ts tests/sqlite/values.spec.ts tests/sqlite/embeddings.spec.ts tests/sqlite/logical-restore.spec.ts tests/sqlite/search-recovery.spec.ts tests/sqlite/source-node.spec.ts tests/sqlite/search-builds.spec.ts tests/engine/vector.spec.ts tests/engine/sqlite-operations.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/search-recovery.spec.ts (40 tests) 4566ms
+   ✓ SQLite missing search storage recovery > detects stale list membership independently of the copied acceleration table  316ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed before its commit  382ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed after its commit  307ms
+ ✓ tests/sqlite/search-builds.spec.ts (20 tests) 2441ms
+   ✓ shared background search generations > recovers a search cursor committed by a process killed before readiness  329ms
+   ✓ shared background search generations > lets background-only work exit but keeps an explicit readiness wait alive until complete  533ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 4885ms
+   ✓ SQLite operational feasibility > replaces logical values when the source and destination have different physical field slots  302ms
+   ✓ SQLite operational feasibility > preserves array-element and UTF-16 highlight locations  1477ms
+   ✓ SQLite operational feasibility > reports its own commit sequence when another writer commits immediately after it  787ms
+ ✓ tests/engine/vector.spec.ts (17 tests) 1607ms
+   ✓ vector search > refuses zero cosine embeddings and queries without changing pending work  807ms
+ ✓ tests/sqlite/logical-restore.spec.ts (10 tests) 2573ms
+   ✓ restored logical stores > reopens an audited real store preserving raw values, vectors, order and counters  473ms
+   ✓ restored logical stores > replaces a populated incumbent without re-encoding restored cells or losing dormant embeddings  416ms
+   ✓ restored logical stores > keeps mismatched restored vectors primary but pending until current content is embedded  307ms
+   ✓ restored logical stores > preserves an existing destination and keeps the verified spool reusable after an IO refusal  361ms
+ ✓ tests/sqlite/values.spec.ts (10 tests) 700ms
+   ✓ SQLite authoritative attribute layout > rejects invalid values and ambiguous patches before changing stored data  307ms
+ ✓ tests/sqlite/embeddings.spec.ts (9 tests) 674ms
+   ✓ primary embedding storage > retains exactly one payload when generations are rebuilt and collected  382ms
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 321ms
+ ✓ tests/sqlite/logical-stage.spec.ts (7 tests) 914ms
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 17ms
+ ✓ tests/sqlite/source-node.spec.ts (1 test) 294ms
+
+ Test Files  11 passed (11)
+      Tests  149 passed (149)
+   Start at  14:02:45
+   Duration  21.39s (transform 421ms, setup 29ms, collect 1.09s, tests 18.99s, environment 1ms, prepare 433ms)
+

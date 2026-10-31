@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import type { Ears, EARS } from '@apackdev/ears';
+import { configuredDatabaseFormat } from './storage.ts';
 import { openDatabaseStore } from './open.ts';
 
 /** The app's stored settings overrides, which boot reads before any pack is loaded: the one host-owned row */
@@ -15,6 +16,7 @@ export function readSettingsOverrides(userDataDir: string): unknown {
   if (!fs.existsSync(paths.lmdb)) return {};
   const { database, engine } = openDatabaseStore({
     path: paths.lmdb,
+    storageFormat: configuredDatabaseFormat(userDataDir),
     schema: { getRegisteredEntityTypes: () => new Set(['Settings']), getRegisteredRelationKinds: () => new Set(), getRegisteredRoles: () => new Set() }, readOnly: true,
   });
   try { return storedSettings(engine); }

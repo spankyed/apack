@@ -117,3 +117,25 @@ it('restores live data and the absence of media when accepting the imported data
   expect(notes.query('Note').ids()).toEqual(['Note-current']);
   expect(fs.existsSync(media)).toBe(false);
 });
+
+it('refuses unrelated writes from the incumbent copy until a rejected import has rolled back', async () => {
+  const { backup, database, notes, media } = await fixture();
+  const store = databaseBackupStore(database);
+  let release!: () => void, copied!: () => void;
+  const holding = new Promise<void>(resolve => { release = resolve; });
+  const snapshot = new Promise<void>(resolve => { copied = resolve; });
+  const failure = new Error('candidate acceptance refused');
+  const importing = importDatabase({ lmdb: { ...store, async copyTo(target) {
+    await store.copyTo(target); copied(); await holding;
+  } } }, backup, media, { log, accept: async () => { throw failure; } });
+  const rejected = expect(importing).rejects.toBe(failure);
+  try {
+    await snapshot;
+    expect(notes.query('Note').ids()).toEqual(['Note-current']);
+    expect(() => notes.create('Note', { id: note('Note-streamed') }))
+      .toThrow(expect.objectContaining({ code: 'WRITE_PAUSED' }));
+  } finally { release(); await rejected; }
+  expect(notes.query('Note').ids()).toEqual(['Note-current']);
+  notes.create('Note', { id: note('Note-resumed') });
+  expect(notes.query('Note').ids()).toContain('Note-resumed');
+});

@@ -1,0 +1,66 @@
+[
+  {
+    "label": "auto-1000",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "/metrics/packages/apack-ears/bench/sqlite/checkpoint-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "1000",
+      "/results/auto-1000.json",
+      "native-diagnose"
+    ],
+    "exitCode": 0,
+    "seconds": 2.278121804993134
+  },
+  {
+    "label": "manual-1000",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "/metrics/packages/apack-ears/bench/sqlite/checkpoint-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "1000",
+      "/results/manual-1000.json",
+      "native-diagnose"
+    ],
+    "exitCode": 0,
+    "seconds": 1.5794001019967254
+  },
+  {
+    "label": "auto-99900",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "/metrics/packages/apack-ears/bench/sqlite/checkpoint-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "/results/auto-99900.json",
+      "native-diagnose"
+    ],
+    "exitCode": 0,
+    "seconds": 96.94024786000955
+  },
+  {
+    "label": "manual-99900",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "/metrics/packages/apack-ears/bench/sqlite/checkpoint-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "/results/manual-99900.json",
+      "native-diagnose"
+    ],
+    "exitCode": 0,
+    "seconds": 96.15166926098755
+  }
+]

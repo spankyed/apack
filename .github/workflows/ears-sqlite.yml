@@ -1,0 +1,201 @@
+name: SQLite candidate
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ears-sqlite-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sqlite:
+    name: sqlite (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            arch: arm64
+          - os: windows-latest
+            arch: x64
+          - os: ubuntu-24.04
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    # Cold native dependency setup plus the functional suites; individual test deadlines remain unchanged.
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+      EARS_EVALUATION_BACKEND: sqlite
+      EARS_PLATFORM_ARCH: ${{ matrix.arch }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - name: Prepare evidence
+        run: node -e "require('node:fs').mkdirSync('.temp/sqlite-platform',{recursive:true})"
+      - uses: ./.github/actions/elmdb
+      - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+      - name: Build matching packages
+        run: npm run packages:build
+      - name: Native package ownership and types
+        if: runner.os == 'Linux'
+        run: |
+          set -o pipefail
+          {
+            npm run typecheck -w @apackdev/ears
+            npm run typecheck:host
+            node_modules/.bin/oxlint packages/apack-host/src/private-file.ts packages/apack-host/tests/private-file.spec.ts -D correctness
+            npm run typecheck:api
+            npm run api:check -w @apackdev/ears
+            npm run typecheck:scripts
+            node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run \
+              --project @app/repo-checks packages/repo-checks/tests/chain-inputs.spec.ts \
+              packages/repo-checks/tests/repro.spec.ts --maxWorkers=2 \
+              --reporter=default --reporter=json --outputFile=.temp/sqlite-platform/package-build-coverage.json
+          } 2>&1 | tee .temp/sqlite-platform/package-types.log
+      - name: SDK fixtures use the selected real backend
+        run: >-
+          npm test -w @apackdev/sdk -- tests/testing/database-backend.spec.ts --maxWorkers=2
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/sdk-backend.json
+          2>&1 | tee .temp/sqlite-platform/sdk-backend.log
+      - name: Build shipped pack for SQLite repository contracts
+        run: npm run build:default-setup
+      - name: Complete SDK contracts on SQLite with built content runtime
+        if: runner.os == 'Linux'
+        env:
+          REQUIRE_CONTENT_RUNTIME: '1'
+        run: >-
+          npm test -w @apackdev/sdk -- --maxWorkers=2 --reporter=default --reporter=json
+          --outputFile=../../.temp/sqlite-platform/sdk-all-sqlite.json
+          2>&1 | tee .temp/sqlite-platform/sdk-all-sqlite.log
+      - name: Managed API storage startup and shutdown
+        if: runner.os == 'Linux'
+        run: >-
+          node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run
+          --project @app/api packages/api/tests/runtime/sqlite-profile.spec.ts
+          packages/api/tests/transport/shutdown.spec.ts --maxWorkers=2
+          --reporter=default --reporter=json --outputFile=.temp/sqlite-platform/api-startup.json
+          2>&1 | tee .temp/sqlite-platform/api-startup.log
+      - name: Current app repository queries on SQLite
+        run: >-
+          npm test -w @app/default-setup -- tests/features/threads/be/query-work.spec.ts --maxWorkers=2
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/query-work.json
+          2>&1 | tee .temp/sqlite-platform/query-work.log
+      - name: Build pinned candidate vector extension
+        run: node .github/scripts/ears-vec1-build.mjs
+      - name: Native owner membership matches ordinary SQLite
+        run: >-
+          node native/vectors/membership-test.mjs "$EARS_VEC1_EXTENSION"
+          .temp/sqlite-platform/native-membership.json
+      - name: Built SQLite runtime and read-only backup
+        run: node .github/scripts/ears-sqlite-platform.mjs probe 2>&1 | tee .temp/sqlite-platform/runtime.log
+      - name: SQLite-selected EARS contracts
+        run: >-
+          npm test -w @apackdev/ears -- --reporter=default --reporter=json
+          --outputFile=../../.temp/sqlite-platform/ears.json 2>&1 | tee .temp/sqlite-platform/ears.log
+      - name: Real filesystem full rollback and reuse
+        if: runner.os == 'Linux'
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          sudo mkdir /fault
+          sudo mount -t tmpfs -o "size=8m,uid=$(id -u),gid=$(id -g),mode=0700" tmpfs /fault
+          trap 'sudo umount /fault; sudo rmdir /fault' EXIT
+          node --import tsx packages/apack-ears/bench/sqlite/filesystem-full.mjs \
+            /fault .temp/sqlite-platform/filesystem-full.json 2>&1 | tee .temp/sqlite-platform/filesystem-full.log
+      - name: Host recovery and storage contracts
+        run: >-
+          npm test -w @apackdev/host -- tests/backup/recovery.spec.ts tests/backup/recovery-crash.spec.ts
+          tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/backup/logical.spec.ts
+          tests/backup/logical-crash.spec.ts
+          tests/backup/storage.spec.ts tests/database/storage.spec.ts
+          tests/database/recovery-exclusion.spec.ts tests/database/quarantine-publication.spec.ts
+          tests/database/open-app-database.spec.ts tests/database/write-lock.spec.ts
+          tests/private-file.spec.ts
+          --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/host.json
+          2>&1 | tee .temp/sqlite-platform/host.log
+      - name: Offline SQLite maintenance and logical archive commands
+        run: >-
+          npm test -w @apackdev/cli -- tests/commands/db-rebuild.spec.ts tests/commands/db-logical.spec.ts
+          tests/commands/sqlite-profile.spec.ts tests/commands/db-target.spec.ts
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/cli-maintenance.json
+          2>&1 | tee .temp/sqlite-platform/cli-maintenance.log
+      - name: Built CLI logical archive round trip
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: >-
+          node --import tsx packages/apack-cli/tests/_support/logical-cli.mjs
+          .temp/sqlite-platform/logical-cli.json 2>&1 | tee .temp/sqlite-platform/logical-cli.log
+      - name: Verify Windows Rust linker
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $linker = (Get-Command link.exe -CommandType Application -All | Select-Object -First 1).Source
+          Write-Host "Rust linker: $linker"
+          if ($linker -match '[\\/]Git[\\/]usr[\\/]bin[\\/]') { throw "Git's link.exe must not shadow the MSVC linker" }
+          if ($linker -notmatch '[\\/]MSVC[\\/]') { throw "Expected the configured MSVC linker" }
+          "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$linker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build matching native dump producer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: vendor/elmdb
+        run: |
+          rustup show active-toolchain
+          cargo build --locked --release -p elmdb-cli
+      - name: Build matching native dump producer (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        working-directory: vendor/elmdb
+        run: |
+          rustup show active-toolchain
+          cargo build --locked --release -p elmdb-cli
+      - name: Explicit copied-profile conversion and host reopen
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: |
+          producer=vendor/elmdb/target/release/elmdb
+          if [ "$RUNNER_OS" = Windows ]; then producer="$producer.exe"; fi
+          node scripts/with-source.mjs node --import tsx tests/scripts/test-sqlite-profile-conversion.ts \
+            "$producer" .temp/sqlite-platform/profile-conversion.json 2>&1 | tee .temp/sqlite-platform/profile-conversion.log
+      - name: Profile conversion ingestion and publication process-kill boundaries
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: |
+          producer=vendor/elmdb/target/release/elmdb
+          if [ "$RUNNER_OS" = Windows ]; then producer="$producer.exe"; fi
+          node scripts/with-source.mjs node --import tsx tests/scripts/test-sqlite-profile-crash.ts \
+            "$producer" .temp/sqlite-platform/profile-crash.json 2>&1 | tee .temp/sqlite-platform/profile-crash.log
+      - name: Build shipped pack and API for converted-profile lifecycle
+        if: runner.os == 'Linux'
+        run: npm run build -w @app/api
+      - name: Native baseline and converted API restart with real pack views
+        if: runner.os == 'Linux'
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: >-
+          python3 tests/scripts/test-sqlite-converted-api.py
+          --producer vendor/elmdb/target/release/elmdb
+          --output .temp/sqlite-platform/converted-api
+      - name: Verify candidate cases actually ran
+        run: node .github/scripts/ears-sqlite-platform.mjs verify
+      - name: Retain SQLite platform evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
+          path: .temp/sqlite-platform/
+          include-hidden-files: true
+          if-no-files-found: warn

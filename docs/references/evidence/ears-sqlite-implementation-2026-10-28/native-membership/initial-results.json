@@ -1,0 +1,73 @@
+[
+  {
+    "label": "compile-original",
+    "args": [
+      "node",
+      ".github/scripts/ears-vec1-build.mjs",
+      "/metrics/original",
+      "/upstream.c"
+    ],
+    "exitCode": 0,
+    "seconds": 7.963468636997277
+  },
+  {
+    "label": "compile-patched",
+    "args": [
+      "node",
+      "native/vectors/build.mjs",
+      "/metrics/patched",
+      "/upstream.c"
+    ],
+    "exitCode": 0,
+    "seconds": 2.673589690006338
+  },
+  {
+    "label": "membership-original",
+    "args": [
+      "node",
+      "native/vectors/membership-test.mjs",
+      "/metrics/original/vec1.so",
+      "/results/membership-original.json"
+    ],
+    "exitCode": 0,
+    "seconds": 1.5715499260113575
+  },
+  {
+    "label": "membership-patched",
+    "args": [
+      "node",
+      "native/vectors/membership-test.mjs",
+      "/metrics/patched/vec1.so",
+      "/results/membership-patched.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.4463147690112237
+  },
+  {
+    "label": "refuse-source-mismatch",
+    "args": [
+      "node",
+      "native/vectors/build.mjs",
+      "/metrics/refused",
+      "/metrics/corrupt.c"
+    ],
+    "exitCode": 1,
+    "seconds": 0.03682963197934441
+  },
+  {
+    "label": "ears-sqlite-patched",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 54.67792172101326
+  }
+]

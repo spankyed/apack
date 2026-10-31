@@ -1,0 +1,134 @@
+{
+  "parent": "82b36eca5b209b44b4450e4f3db664f6a02b5c8f",
+  "master": "62f1798c9bec2c013ded929d7080b65d1083049e",
+  "inputs": {
+    "docs/goals/goal-ears-sqlite.md": "db181ae3a3b8d401ef90d3b7038acbc1c60610483bcfef9f41ffa871d45eed01",
+    "docs/plans/ears-sqlite-storage.md": "7a832d4c76376e66c5bbeaa29c555b64b0a8bead5dcb9a7c4c3aef467fae71f6",
+    "docs/public-facing/services-and-data.md": "e5dac334e6cbd668013c7c5085dea7812ff794cce0a59f219dce139e13a7abd7",
+    "packages/apack-cli/tests/_support/facade-packs.ts": "6d440f48e9ea56cf56e6e771abf7e2c487166a4e55f4076a10c5308b75778e08",
+    "packages/apack-ears/CLAUDE.md": "b5dd98aba2788b37597331fb0714fd86d6c95ae530823ef5f5e655ef54775b33",
+    "packages/apack-ears/etc/index.api.md": "e74543d9443915907329d0bdcf3ea0fd470055a5d39a7e5cdaf244d8b9edbbaf",
+    "packages/apack-ears/src/index.ts": "a1c37c3341ce58a8b77fe5eba5606097644df0b6a7aa2ca4e7048da73a419748",
+    "packages/apack-ears/src/query.ts": "6a13ab55ab355312c69ca1bf0193e672c1ccbed0af62a75ddcaf85f1f814b950",
+    "packages/apack-ears/src/runtime.ts": "2d4e65506e76663eeabd596830724719d688a58f8f5c5d5a42ab33141966ff46",
+    "packages/apack-ears/src/sqlite/database.ts": "45345bfeb0e72385437a3110517dcf477020e551307b3eab8c50ae37bc3db5ca",
+    "packages/apack-ears/src/sqlite/query.ts": "b37e91522c1b4648af80927f9210ef59fb776b6c3703c5d1dc8f083db6300a3e",
+    "packages/apack-ears/src/storage.ts": "4981e3cc23dfae96ae2c138b7e1daea2d46a473932d886c977b90f2f967a3fb4",
+    "packages/apack-ears/tests/engine/relations.spec.ts": "688290c9ade1faaa6e9842e9b59c500d7404c4ee613bf664a5080b19a59a5421",
+    "packages/apack-ears/tests/engine/sqlite-operations.spec.ts": "d74c1cbb3c4c0b2bcb6865c6ab7672b0c68a7177cb0704c4448f107875a20692",
+    "packages/apack-ears/tests/vocabulary.spec.ts": "2fff492594056ab9eb853aec7a21813143097a21a73e72def6ee74d693ac592b",
+    "packages/default-setup/tests/sdk-type-safety.spec.ts": "eeacb638df274e2e4e4361d041db969a4dc3e59cc6ef564abcea91de6e3ba3b2",
+    "scripts/api-reports.ts": "c0d8ddd8ece476d960c3fe17c9741c3dc5064b6462aaa8a563202577d80bcd73",
+    "packages/apack-ears/tests/sqlite/graph-execution.spec.ts": "a3ea0c25ad27d69ac571068b4e2ced02fe3d59bbc55cee6be1fced690bf33e8f"
+  },
+  "commands": [
+    {
+      "label": "ears-api-check",
+      "args": [
+        "npm",
+        "run",
+        "api:check",
+        "-w",
+        "@apackdev/ears"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 4.167114973068237
+    },
+    {
+      "label": "ears-types",
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/apack-ears",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 1.33729887008667
+    },
+    {
+      "label": "ears-full",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-ears",
+        "--maxWorkers",
+        "2",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/ears-full.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 61.77795886993408
+    },
+    {
+      "label": "host-full",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-host",
+        "--maxWorkers",
+        "2",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/host-full.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 134.35363507270813
+    },
+    {
+      "label": "host-types",
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/apack-host",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 10.098620176315308
+    },
+    {
+      "label": "scripts-types",
+      "args": [
+        "npm",
+        "run",
+        "typecheck:scripts"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 23.751389503479004
+    },
+    {
+      "label": "graph-lint",
+      "args": [
+        "node",
+        "node_modules/oxlint/bin/oxlint",
+        "packages/apack-cli/tests/_support/facade-packs.ts",
+        "packages/apack-ears/src/index.ts",
+        "packages/apack-ears/src/query.ts",
+        "packages/apack-ears/src/runtime.ts",
+        "packages/apack-ears/src/sqlite/database.ts",
+        "packages/apack-ears/src/sqlite/query.ts",
+        "packages/apack-ears/src/storage.ts",
+        "packages/apack-ears/tests/engine/relations.spec.ts",
+        "packages/apack-ears/tests/engine/sqlite-operations.spec.ts",
+        "packages/apack-ears/tests/vocabulary.spec.ts",
+        "packages/default-setup/tests/sdk-type-safety.spec.ts",
+        "scripts/api-reports.ts",
+        "packages/apack-ears/tests/sqlite/graph-execution.spec.ts",
+        "-D",
+        "correctness"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.12652111053466797
+    }
+  ]
+}

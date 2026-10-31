@@ -1,0 +1,174 @@
+{
+  "planned": [
+    [
+      10000,
+      false,
+      1
+    ],
+    [
+      10000,
+      false,
+      2
+    ],
+    [
+      10000,
+      false,
+      3
+    ],
+    [
+      100000,
+      false,
+      1
+    ],
+    [
+      100000,
+      false,
+      2
+    ],
+    [
+      100000,
+      false,
+      3
+    ],
+    [
+      10000,
+      true,
+      1
+    ]
+  ],
+  "results": [
+    {
+      "n": 10000,
+      "durable": false,
+      "trial": 1,
+      "exitCode": 0,
+      "passed": true,
+      "budgets": {
+        "admissionMs": {
+          "actual": 3.1420160000000124,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.2614180000000488,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.6368409999995492,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 1.6784250000000611,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 4.9647329999997964,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 9.546211000000767,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4313672,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 19890760,
+          "limit": 41239696
+        }
+      },
+      "buildMs": 8744.680874,
+      "gcMs": 2443.4811279999994,
+      "writes": 2873
+    },
+    {
+      "n": 10000,
+      "durable": false,
+      "trial": 2,
+      "exitCode": 0,
+      "passed": true,
+      "budgets": {
+        "admissionMs": {
+          "actual": 3.5551419999999325,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.4448769999999058,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.8629669999991165,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 1.7643840000000637,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 5.291983999999502,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 12.197473999998692,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4313672,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 19886664,
+          "limit": 41239696
+        }
+      },
+      "buildMs": 9791.713184,
+      "gcMs": 2246.5325780000003,
+      "writes": 2917
+    },
+    {
+      "n": 10000,
+      "durable": false,
+      "trial": 3,
+      "exitCode": 0,
+      "passed": true,
+      "budgets": {
+        "admissionMs": {
+          "actual": 3.2103910000000724,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.29375099999992926,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.7881749999996828,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 1.4200899999996182,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 5.01785800000016,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 9.805628999999499,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4404312,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 19981400,
+          "limit": 41239696
+        }
+      },
+      "buildMs": 9066.426164,
+      "gcMs": 2318.867018000001,
+      "writes": 2885
+    }
+  ],
+  "stoppedAtFirstMiss": false
+}

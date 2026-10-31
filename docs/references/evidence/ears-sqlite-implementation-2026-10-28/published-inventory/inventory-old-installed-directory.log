@@ -1,0 +1,48 @@
+
+ RUN  v3.2.7 /metrics
+
+ ❯ |@app/publish-checks| tests/published-sdk-types.integration.spec.ts (10 tests | 1 failed | 9 skipped) 1173ms
+   ↓ published @apackdev/sdk > typecheck for consumers using TypeScript 'current', moduleResolution 'node16'
+   ↓ published @apackdev/sdk > typecheck for consumers using TypeScript 'current', moduleResolution 'bundler'
+   ↓ published @apackdev/sdk > typecheck for consumers using TypeScript '5.7', moduleResolution 'node16'
+   ↓ published @apackdev/sdk > typecheck for consumers using TypeScript '5.7', moduleResolution 'bundler'
+   ↓ published @apackdev/sdk > types inference with the AI SDK's own types at the TypeScript floor, with library checks, under node16 and bundler
+   × published @apackdev/sdk > ships no host-only module 42ms
+     → expected [ 'apack.schema.json', 'dist', …(2) ] to deeply equal [ 'apack.schema.json', 'dist', …(1) ]
+   ↓ published @apackdev/sdk > loads the SDK on the installed @apackdev/ears
+   ↓ published @apackdev/sdk > publishes the workspace package.json of @apackdev/ears, derived
+   ↓ published @apackdev/sdk > publishes the workspace package.json of @apackdev/sdk, derived
+   ↓ published @apackdev/sdk > publishes the workspace package.json of @apackdev/ui, derived
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@app/publish-checks| tests/published-sdk-types.integration.spec.ts > published @apackdev/sdk > ships no host-only module
+AssertionError: expected [ 'apack.schema.json', 'dist', …(2) ] to deeply equal [ 'apack.schema.json', 'dist', …(1) ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "apack.schema.json",[22m
+[2m    "dist",[22m
+[31m+   "node_modules",[39m
+[2m    "package.json",[22m
+[2m  ][22m
+
+ ❯ tests/published-sdk-types.integration.spec.ts:156:40
+    154|     expect(await resolveFromConsumer('@apackdev/ears')).toBe(pathToFil…
+    155|     const shipped = fs.readdirSync(path.join(sdk, 'dist'), { recursive…
+    156|     expect(fs.readdirSync(sdk).sort()).toEqual(['apack.schema.json', '…
+       |                                        ^
+    157|     // Source maps would point at src, which isn't published
+    158|     expect(shipped.filter((f) => f.endsWith('.map'))).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  10:15:54
+   Duration  1.50s (transform 108ms, setup 18ms, collect 186ms, tests 1.17s, environment 0ms, prepare 37ms)
+
+JSON report written to /results/inventory-old-installed-directory.json

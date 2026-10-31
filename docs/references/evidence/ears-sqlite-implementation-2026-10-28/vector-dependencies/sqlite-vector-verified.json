@@ -1,0 +1,8 @@
+{
+  "release": "1.1.2",
+  "archiveSha256": "3d5c14db9d83e18cc58240b4c0303435d9b5c6c703636c11df60184be608553c",
+  "files": {
+    "extracted/vector.so": "3c485977eca0cd52c664b31ccf0a5c80af66ade16b0a2921f1413bac3f4f5668"
+  },
+  "tagCommit": "0c2223ada9dce1fa33248c8835a15f51d9a0f655"
+}

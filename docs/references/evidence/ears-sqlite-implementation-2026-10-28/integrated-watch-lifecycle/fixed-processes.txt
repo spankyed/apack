@@ -1,0 +1,17 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/watch-lifecycle.spec.ts
+
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-FyE9XZ/packages/apack-ears
+
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (4 tests) 2661ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  1030ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  856ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (unawaited)  663ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  06:48:40
+   Duration  4.47s (transform 444ms, setup 120ms, collect 726ms, tests 2.66s, environment 0ms, prepare 289ms)
+

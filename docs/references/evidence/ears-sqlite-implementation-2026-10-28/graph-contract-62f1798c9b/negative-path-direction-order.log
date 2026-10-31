@@ -1,0 +1,67 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ❯ tests/engine/relations.spec.ts (29 tests | 1 failed | 28 skipped) 308ms
+   ↓ links > link stores a relation row, which is no entity, and indexes both ends
+   ↓ links > linkedTo and linkedFrom without an end, and unlinkedTo and unlinkedFrom, filter by having an edge of the kind at all
+   ↓ links > linking the same edge again changes nothing, keeping its id and its place; another info is another edge
+   ↓ links > an info with the same fields in another order is the same edge
+   ↓ links > refuses options it does not know, which is info passed where the options go
+   ↓ links > refuses a self link
+   ↓ links > unlink, unlinkAll and removeRelation remove relations and empty index entries
+   ↓ links > removeRelation removes that one edge, leaving the other edges between its ends and the ends themselves, and refuses an id no relation has
+   ↓ links > a kind declared unique keeps one edge between two ends, which linking again replaces the info of; updateRelation moves one, keeping its id, and refuses an id no relation has
+   ↓ links > a kind declared acyclic refuses a link that would close a cycle through it
+   ↓ relation kinds > refuses a kind its creator did not register, before writing anything
+   ↓ relation kinds > refuses one in every read and walk that names a kind, rather than answering with nothing
+   ↓ relation kinds > loads a stored relation of any kind through the admin face, which is how data a pack's removal left is read
+   ↓ hierarchy walks > descendants and ancestors reach every entity through a kind once each; ancestors in a tree run parent to root
+   ↓ hierarchy walks > walks nearest first, keeps the reached entities of a type, and goes only where the query could reach
+   ↓ hierarchy walks > stops at a depth, a count of edges taken as limit takes one
+   ↓ graph walks > both follows edges out and in, each far end once
+   ↓ graph walks > pathTo answers a shortest path from the set, following edges the way it is told, or none
+   ↓ graph walks > degrees counts each entity's edges as outEdges and inEdges answer them
+   × graph boundary contracts > breaks shortest-path ties by seed, kind, direction and insertion order 306ms
+     → expected [ 'Task-207de70255f8da73e8f9', …(2) ] to deeply equal [ 'Task-207de70255f8da73e8f9', …(2) ]
+   ↓ graph boundary contracts > keeps zero-edge paths and excludes every original seed from bounded reachability
+   ↓ graph boundary contracts > counts parallel and unchecked self edges, repeated kinds, and empty neighborhoods
+   ↓ graph boundary contracts > invalidates paths, both and degrees when an intermediate entity changes trash scope
+   ↓ declared roles > refuses a role its creator did not register, in a role write and a query by role
+   ↓ declared roles > loads a stored role of any kind through the admin face, which is how data a pack's removal left is read
+   ↓ roles > grant, revoke, grantExclusive and withRole
+   ↓ updates cross-type graph watches when a destination is trashed or restored
+   ↓ walks each source in the requested kind order, then relation insertion order
+   ↓ matches an explicit relation end even when unchecked data has no entity at that end
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/relations.spec.ts > graph boundary contracts > breaks shortest-path ties by seed, kind, direction and insertion order
+AssertionError: expected [ 'Task-207de70255f8da73e8f9', …(2) ] to deeply equal [ 'Task-207de70255f8da73e8f9', …(2) ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "Task-207de70255f8da73e8f9",[22m
+[32m-   "Task-152fcf1a91cf71d3a9a3",[39m
+[31m+   "Task-a100c476ed8ed162f64a",[39m
+[2m    "Task-7707ad37b3bc13867f6a",[22m
+[2m  ][22m
+
+ ❯ tests/engine/relations.spec.ts:317:89
+    315|     e.write(a).link('child', left);
+    316|     expect(e.query.ids(a).both('child').ids()).toEqual([left, right]);
+    317|     expect(e.query.ids(a).pathTo(goal, ['child', 'refs'], { direction:…
+       |                                                                                         ^
+    318|   });
+    319|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 28 skipped (29)
+   Start at  17:04:28
+   Duration  2.23s (transform 1.02s, setup 14ms, collect 1.49s, tests 308ms, environment 0ms, prepare 196ms)
+
+JSON report written to /results/negative-path-direction-order.json

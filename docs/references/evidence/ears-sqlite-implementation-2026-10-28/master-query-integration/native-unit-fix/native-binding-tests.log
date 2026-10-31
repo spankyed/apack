@@ -1,0 +1,49 @@
+
+> test
+> node --test "crates/elmdb-node/test/**/*.test.mjs"
+
+✔ opens a database, creating its files, and closes it (8.838316ms)
+✔ a second open in one process throws ALREADY_OPEN (3.959549ms)
+✔ a read-only open of an empty directory throws NO_DATABASE (0.509631ms)
+✔ stores a schema, reports what opening did, and refuses an invalid one listing every problem (4.678849ms)
+✔ setSchema changes an open database's schema, and refuses while a unit is open (4.298428ms)
+✔ durable() resolves once what was committed is on disk (13.248038ms)
+✔ rebuild() takes a type and an index, or neither (3.850297ms)
+✔ another elmdb binary in the process is refused at open, naming both files (16.734247ms)
+✔ an open refuses a sync or map option that is not a whole number in range, rather than casting it (11.355264ms)
+﹣ an open database holds the two semaphores its lock file names, and a close removes them (0.380921ms) # SKIP
+﹣ a database left open where Node calls process.exit leaves none of its lock semaphores (0.061793ms) # SKIP
+﹣ a database left open where Node runs out of work leaves none of its lock semaphores (0.054167ms) # SKIP
+﹣ a database left open where Node is a worker thread its parent terminates leaves none of its lock semaphores (0.062501ms) # SKIP
+✔ a process that exits with a write group commit hasn't synced yet ends, its write on disk (25.498105ms)
+✔ random bytes and random msgpack as batches, reads and loads throw elmdb codes (21.396262ms)
+✔ valid batches and reads with bytes flipped throw elmdb codes or apply (9.175529ms)
+✔ arguments of the wrong type to every method throw rather than crash (88.55867ms)
+✔ a closed database and an ended unit refuse every call (10.49992ms)
+✔ an open from a second elmdb binary in the process is refused, naming the rejected copy (36.87166ms)
+✔ a child process opens with a binary of its own, whatever its parent claimed (57.532665ms)
+✔ claiming a process does not mutate its environment (19.092359ms)
+✔ concurrent first opens in different workers admit only one physical binary (61.779299ms)
+✔ a claim outlives its first worker and database closes (66.938488ms)
+✔ changing temporary-directory settings cannot create another process claim (40.040825ms)
+✔ claim acquisition needs no usable home or temporary directory (18.63202ms)
+✔ claiming the process creates no home-directory coordination files (18.456935ms)
+✔ the canonical form a database answers is a Schema, every absent option null (5.131105ms)
+✔ a search crosses the binding: hits with highlights, a suggestion and a quick-open (7.871764ms)
+✔ a worker embeds what is pending through the binding, and a vector search finds it (8.633106ms)
+✔ reads tracked under a token cross the binding, and a commit names the token it wrote into (6.953168ms)
+✔ pooled reads keep query results coherent while an index changes fields (39.634653ms)
+✔ a child-process schema change refuses stale pooled and synchronous reads until reopen (22.789821ms)
+✔ a batch creates and links, and answers each operation and the change set (8.714607ms)
+✔ a refused batch throws its code and writes nothing (4.218052ms)
+✔ a unit reads its own writes, refuses a write beside it, and commits its change set (3.238248ms)
+✔ reads answer on this thread and on the pool, the same, and a unit reads its own writes (8.985818ms)
+✔ admin: stats, check, a backup that opens on its own, reset, and a load the checks would refuse (14.342301ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 4
+ℹ todo 0
+ℹ duration_ms 949.234192

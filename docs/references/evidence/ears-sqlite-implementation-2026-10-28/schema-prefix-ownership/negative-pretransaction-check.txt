@@ -1,0 +1,39 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/schema-admission.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/schema-admission.spec.ts (2 tests | 1 failed) 136ms
+   ✓ SQLite schema admission ownership > allows changing an unused prefix 79ms
+   × SQLite schema admission ownership > checks issued prefixes after acquiring writer ownership, including commits with no schema change 56ms
+     → expected function to throw an error, but it didn't
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/schema-admission.spec.ts > SQLite schema admission ownership > checks issued prefixes after acquiring writer ownership, including commits with no schema change
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/sqlite/schema-admission.spec.ts:42:38
+     40|       return exec(sql);
+     41|     });
+     42|     expect(() => db.setSchema(next)).toThrow(expect.objectContaining({…
+       |                                      ^
+     43|     expect(inserted).toBe(true);
+     44|     expect(db.schema).toEqual(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  14:07:19
+   Duration  561ms (transform 224ms, setup 12ms, collect 270ms, tests 136ms, environment 0ms, prepare 56ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/schema-admission.spec.ts

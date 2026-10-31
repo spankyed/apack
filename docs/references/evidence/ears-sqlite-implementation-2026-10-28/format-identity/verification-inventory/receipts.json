@@ -1,0 +1,9 @@
+{
+  "runtimeSource": "f731a4a549f10253b08d28c5931f383617c6f377",
+  "verifierSha256": "8f2e14978934f97f49e97679ddb13cf03953d3cb1ce0aedf6c69109e28f76d8a",
+  "linuxFailedJob": 124237862012,
+  "linuxLogRawSha256": "9724d6a5b6b5ed089c9ba7dd9519b9dbd7ce649cc5f120fa8fd6d1e1d0e6a185",
+  "linuxLogStoredSha256": "dfb7e93f88fc067ac9dfa62101cca1cfbac66e34f72a1a23eede2420e3da711f",
+  "currentInstalledRun": 41106578424,
+  "installedLogDownload": "HTTP503; terminal success metadata retained separately; do not invent downloaded-log evidence"
+}

@@ -65,6 +65,31 @@ function writeManifest(dir: string, manifest: Record<string, unknown>) {
 }
 
 describe('installed runtime acceptance', () => {
+  it.each([false, true])('awaits index admission before starting an accepted pack (build failure: %s)', async fails => {
+    const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
+    const { activatePack } = await import('../../../src/packs/runtime/lifecycle.ts');
+    let finish!: () => void, refuse!: (error: Error) => void;
+    const ready = new Promise<void>((resolve, reject) => { finish = resolve; refuse = reject; });
+    const isolated = createNativePackTestRegistry({ indexesReady: () => ready });
+    const id = 'index-admission-pack', source = path.join(tmpDir, 'admission-source'), marker = path.join(tmpDir, 'initialized');
+    writeManifest(source, { id, name: id, version: '1.0.0', lifecycle: { onInit: 'init.ts#onInit' } });
+    writeBuild(source, id, '{}, lifecycle: { onInit() { require("node:fs").writeFileSync(' + JSON.stringify(marker) + ', "initialized"); } }');
+    const installed = await installPackFromLocal(source, packsDir());
+    const bus = { send: vi.fn() };
+    const started = activatePack(isolated, id, bus as never);
+    expect(isolated.getPackRegistration(id)).not.toBeNull();
+    expect(fs.existsSync(marker)).toBe(false);
+    expect(bus.send).not.toHaveBeenCalled();
+    if (fails) refuse(new Error('index build failed')); else finish();
+    expect(await started).toBe(!fails);
+    expect(fs.existsSync(marker)).toBe(!fails);
+    expect(fs.existsSync(installed.dir)).toBe(true);
+    if (fails) {
+      expect(isolated.getPackRegistration(id)).toBeNull();
+      expect(isolated.loadProblem(id)).toContain('index build failed');
+    } else isolated.unregisterPack(id);
+  });
+
   it.each([false, true])('restarts or stops both old and new system ids after acceptance (init failure: %s)', async fails => {
     const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
     const id = 'systems-pack';
@@ -82,7 +107,7 @@ describe('installed runtime acceptance', () => {
     const shutdown = vi.fn();
     isolated.registerShutdownHook(shutdown, id);
     const bus = { send: vi.fn() };
-    let start!: () => boolean;
+    let start!: () => Promise<boolean>;
     try {
       writeManifest(source, { id, name: id, version: '2.0.0', features: feature('replacement'),
         ...(fails && { lifecycle: { onInit: 'init.ts#onInit' } }),
@@ -94,7 +119,7 @@ describe('installed runtime acceptance', () => {
         expect(bus.send).not.toHaveBeenCalled();
       } });
       expect(isolated.getPackRuntime(id)?.registrationId).not.toBe(previousRevision);
-      expect(start()).toBe(!fails);
+      expect(await start()).toBe(!fails);
       expect(shutdown).toHaveBeenCalledOnce();
       expect(bus.send.mock.calls.map(([event]) => event.type)).toEqual([
         fails ? 'TEARDOWN_PACK' : 'RELOAD_PACK', 'PACK_CHANGED',
@@ -270,7 +295,7 @@ describe('activating and tearing down a pack at runtime', () => {
     writeManifest(source, { id: PACK_ID, name: 'Failing Init', version: '1.0.0', lifecycle: { onInit: 'hooks.ts#onInit', onShutdown: 'hooks.ts#onShutdown' } });
     writeBuild(source, PACK_ID, "{}, lifecycle: { onInit() { throw new Error('init refused'); }, onShutdown() { globalThis.activatePackRuns.push('shutdown'); } }");
     await installPackFromLocal(source, packsDir());
-    expect(activatePack(registry, PACK_ID, bus as never)).toBe(false);
+    expect(await activatePack(registry, PACK_ID, bus as never)).toBe(false);
     expect(registry.getPackRegistration(PACK_ID)).toBeNull();
     expect(registry.loadProblem(PACK_ID)).toContain('init refused');
     expect(registry.settingsCatalog().dependencies).toHaveProperty(PACK_ID);
@@ -283,7 +308,7 @@ describe('activating and tearing down a pack at runtime', () => {
     await install();
     const { activatePack } = await import('../../../src/packs/runtime/lifecycle.ts');
 
-    expect(activatePack(registry, PACK_ID, bus as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, bus as never)).toBe(true);
 
     expect(bus.send.mock.calls.map(([event]) => event.type)).toEqual(['PACK_CHANGED', 'ACTIVATE_PACK']);
     expect(bus.send).toHaveBeenCalledWith({ type: 'PACK_CHANGED', packId: PACK_ID });
@@ -293,14 +318,14 @@ describe('activating and tearing down a pack at runtime', () => {
     await install();
     const { activatePack, teardownPack } = await import('../../../src/packs/runtime/lifecycle.ts');
 
-    expect(activatePack(registry, PACK_ID, bus as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, bus as never)).toBe(true);
     expect(runs).toEqual(['migration', 'apply']);
     expect(appState.get()).toMatchObject({ packVersions: { [PACK_ID]: '1.0.0' } });
     expect(appliedContent.get(PACK_ID).revision).toEqual(expect.any(String));
 
     // Disabled, then enabled again
     teardownPack(registry, PACK_ID, bus as never);
-    expect(activatePack(registry, PACK_ID, bus as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, bus as never)).toBe(true);
     expect(runs).toEqual(['migration', 'apply']);
   });
 
@@ -308,7 +333,7 @@ describe('activating and tearing down a pack at runtime', () => {
     await install();
     const { activatePack, teardownPack } = await import('../../../src/packs/runtime/lifecycle.ts');
     const { importCompiledContent } = await import('@apackdev/sdk/utils');
-    activatePack(registry, PACK_ID, bus as never);
+    await activatePack(registry, PACK_ID, bus as never);
     const compiledDir = path.join(tmpDir, 'compiled-content');
     fs.mkdirSync(compiledDir);
     fs.writeFileSync(path.join(compiledDir, 'content.json'), JSON.stringify({ version: 1, packId: PACK_ID, entries: [] }));

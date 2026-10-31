@@ -1,0 +1,284 @@
+[
+  {
+    "name": "package-build",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 33.35690660000546
+  },
+  {
+    "name": "native-independent-build",
+    "args": [
+      "node",
+      ".github/scripts/ears-vec1-build.mjs",
+      ".temp/native-package-independent"
+    ],
+    "exitCode": 0,
+    "seconds": 2.545947487989906
+  },
+  {
+    "name": "membership",
+    "args": [
+      "node",
+      "native/vectors/membership-test.mjs",
+      "/metrics/packages/apack-ears/dist/sqlite/native/linux-arm64/vec1.so",
+      "/results/membership.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.5272416259977035
+  },
+  {
+    "name": "npm-artifact",
+    "args": [
+      "node",
+      "/package-probe.mjs",
+      "/results"
+    ],
+    "exitCode": 1,
+    "seconds": 0.4251307789818384
+  },
+  {
+    "name": "npm-artifact",
+    "args": [
+      "node",
+      "/package-probe.mjs",
+      "/results"
+    ],
+    "exitCode": 0,
+    "seconds": 0.8053326520021074
+  },
+  {
+    "name": "native-package-cases",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/native-extension.spec.ts",
+      "--outputFile=/results/native-package.json"
+    ],
+    "exitCode": 0,
+    "seconds": 1.6570633380033541
+  },
+  {
+    "name": "reject-missing-default-loader",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/native-extension.spec.ts",
+      "-t",
+      "loads ordinary and read-only opens",
+      "--outputFile=/results/missing-default-loader.json"
+    ],
+    "exitCode": 1,
+    "seconds": 1.3948407380084973
+  },
+  {
+    "name": "reject-unchecked-library-bytes",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/native-extension.spec.ts",
+      "-t",
+      "verifies library bytes",
+      "--outputFile=/results/unchecked-library-bytes.json"
+    ],
+    "exitCode": 1,
+    "seconds": 1.2438049750053324
+  },
+  {
+    "name": "all-ears",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/all-ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 54.4271578490152
+  },
+  {
+    "name": "types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 2,
+    "seconds": 1.7813713799987454
+  },
+  {
+    "name": "final-package-build",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 29.910084448987618
+  },
+  {
+    "name": "final-native-package-cases",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/native-extension.spec.ts",
+      "--outputFile=/results/final-native-package.json"
+    ],
+    "exitCode": 0,
+    "seconds": 1.1955487340164836
+  },
+  {
+    "name": "types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 1.360335520002991
+  },
+  {
+    "name": "host-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:host"
+    ],
+    "exitCode": 0,
+    "seconds": 5.473146731004817
+  },
+  {
+    "name": "script-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:scripts"
+    ],
+    "exitCode": 0,
+    "seconds": 23.189164953975705
+  },
+  {
+    "name": "boundaries",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 6.142844778980361
+  },
+  {
+    "name": "build-coverage",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@app/repo-checks",
+      "packages/repo-checks/tests/chain-inputs.spec.ts",
+      "packages/repo-checks/tests/repro.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/build-coverage.json"
+    ],
+    "exitCode": 0,
+    "seconds": 3.3724299219902605
+  },
+  {
+    "name": "platform-verifier-syntax",
+    "args": [
+      "node",
+      "--check",
+      ".github/scripts/ears-sqlite-platform.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 0.01836133300093934
+  },
+  {
+    "name": "lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/sqlite/database.ts",
+      "packages/apack-ears/src/sqlite/index-builds.ts",
+      "packages/apack-ears/src/sqlite/search.ts",
+      "packages/apack-ears/src/sqlite/vector-admission.ts",
+      "packages/apack-ears/src/sqlite/vector-index.ts",
+      "packages/apack-ears/src/sqlite/vector-models.ts",
+      "packages/apack-ears/src/sqlite/vector-policy.ts",
+      "packages/apack-ears/src/sqlite/vector-training.ts",
+      "packages/apack-ears/src/sqlite/vectors.ts",
+      "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "scripts/linux-runner.ts",
+      "packages/apack-ears/src/sqlite/vector-cursor.ts",
+      "packages/apack-ears/tests/sqlite/logical-snapshot.spec.ts",
+      "packages/apack-ears/src/sqlite/audit.ts",
+      "packages/apack-ears/src/sqlite/index.ts",
+      "packages/apack-ears/src/sqlite/logical-export.ts",
+      "packages/apack-ears/src/sqlite/vector-candidates.ts",
+      "packages/apack-ears/src/database.ts",
+      "packages/apack-host/src/database/index.ts",
+      "packages/api/src/transport/websocket.ts",
+      "packages/apack-host/src/database/close.ts",
+      "packages/apack-host/tests/database-close.spec.ts",
+      "packages/api/tests/transport/shutdown.spec.ts",
+      "packages/apack-host/src/build/packages-built.ts",
+      "scripts/build-package.ts",
+      "packages/apack-ears/src/sqlite/native-extension.ts",
+      "packages/apack-ears/tests/sqlite/native-extension.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.0734397919732146
+  }
+]

@@ -1,0 +1,34 @@
+2026-10-28T11:56:04.2692770Z ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+2026-10-28T11:56:04.2692780Z 
+2026-10-28T11:56:04.2693610Z  FAIL   @app/repo-checks  tests/spec-waits.spec.ts > a spec waits for the thing it waits for > has no bare wait that nothing accounts for
+2026-10-28T11:56:04.2695030Z AssertionError: A spec may not sleep and then assert. Await the thing instead — `_whenSatisfied` or `_byDeadline` from @apackdev/sdk/testing/waiting — or, if the elapsed time really is the subject, add it to BARE_WAIT_BY_DESIGN with the reason.: expected [ Array(1) ] to deeply equal []
+2026-10-28T11:56:04.2695170Z 
+2026-10-28T11:56:04.2695540Z - Expected
+2026-10-28T11:56:04.2695720Z + Received
+2026-10-28T11:56:04.2695730Z 
+2026-10-28T11:56:04.2695820Z - []
+2026-10-28T11:56:04.2695900Z + [
+2026-10-28T11:56:04.2696610Z +   "packages/apack-ears/tests/sqlite/watch-lifecycle.spec.ts:18 > releases tracked dependencies when closing under a pending watch",
+2026-10-28T11:56:04.2696700Z + ]
+2026-10-28T11:56:04.2696710Z 
+2026-10-28T11:56:04.2696960Z  ❯ tests/spec-waits.spec.ts:93:18
+2026-10-28T11:56:04.2697270Z      91|       '`_whenSatisfied` or `_byDeadline` from @apackdev/sdk/testing/wa…
+2026-10-28T11:56:04.2697610Z      92|       'the subject, add it to BARE_WAIT_BY_DESIGN with the reason.',
+2026-10-28T11:56:04.2697930Z      93|     ].join(' ')).toEqual([]);
+2026-10-28T11:56:04.2698080Z        |                  ^
+2026-10-28T11:56:04.2698220Z      94|   });
+2026-10-28T11:56:04.2698310Z      95| 
+2026-10-28T11:56:04.2698310Z 
+2026-10-28T11:56:04.2698520Z ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+2026-10-28T11:56:04.2698530Z 
+2026-10-28T11:56:04.2698540Z 
+2026-10-28T11:56:04.2699160Z  Test Files  1 failed | 510 passed | 5 skipped (516)
+2026-10-28T11:56:04.2699790Z       Tests  1 failed | 5960 passed | 50 skipped (6011)
+2026-10-28T11:56:04.2699940Z    Start at  11:49:52
+2026-10-28T11:56:04.2700480Z    Duration  369.87s (transform 20.41s, setup 1.85s, collect 254.60s, tests 342.58s, environment 8.52s, prepare 35.56s)
+2026-10-28T11:56:04.2700480Z 
+2026-10-28T11:56:04.2700490Z 
+2026-10-28T11:56:04.2700580Z host pool failed (exit 1)
+2026-10-28T11:56:04.2700590Z 
+2026-10-28T11:56:04.2700600Z 
+2026-10-28T11:56:04.2700830Z chain FAILED at test:unit:host in 622.5s on a 2-core budget

@@ -1,0 +1,29 @@
+
+> apack@0.3.14 check:specifiers
+> tsx scripts/check-import-specifiers.ts
+
+
+node:internal/modules/run_main:104
+    triggerUncaughtException(
+    ^
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/metrics/node_modules/@apackdev/sdk/dist/build/index.js' imported from /metrics/packages/apack-cli/src/build/pack-rules.ts
+    at finalizeResolution (node:internal/modules/esm/resolve:275:11)
+    at moduleResolve (node:internal/modules/esm/resolve:860:10)
+    at defaultResolve (node:internal/modules/esm/resolve:984:11)
+    at nextResolve (node:internal/modules/esm/hooks:748:28)
+    at resolveBase (file:///metrics/node_modules/tsx/dist/register-nyXW-TH3.mjs:2:10494)
+    at resolveDirectory (file:///metrics/node_modules/tsx/dist/register-nyXW-TH3.mjs:2:11581)
+    at resolveTsPaths (file:///metrics/node_modules/tsx/dist/register-nyXW-TH3.mjs:2:13222)
+    at resolve (file:///metrics/node_modules/tsx/dist/register-nyXW-TH3.mjs:2:15453)
+    at nextResolve (node:internal/modules/esm/hooks:748:28)
+    at Hooks.resolve (node:internal/modules/esm/hooks:240:30) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///metrics/node_modules/@apackdev/sdk/dist/build/index.js'
+}
+
+Node.js v23.11.1
+npm notice
+npm notice New major version of npm available! 10.9.2 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

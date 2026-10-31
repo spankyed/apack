@@ -1,0 +1,66 @@
+diff --git a/docs/goals/goal-ears-sqlite.md b/docs/goals/goal-ears-sqlite.md
+index 8efefef0b1..7541949658 100644
+--- a/docs/goals/goal-ears-sqlite.md
++++ b/docs/goals/goal-ears-sqlite.md
+@@ -305,8 +305,13 @@ The preregistered four-process cost cohort completed: recency ~28 versus ~46 ms,
+ ~35 versus ~80 ms. Other query/write costs and main-file bytes remain close; sampled RSS is lower but
+ unbounded. All expected answers pass; a post-timing premature-prefix control fails with the wrong winner.
+ See [recency cost evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-cost/README.md).
+-Next run the preregistered changed-source `text-plan.mjs` diagnosis (one 10k profile, ten samples/path,
+-including recency highlights and actual FTS VDBE programs) before choosing another correction. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
++The preregistered changed-source plan diagnosis completed: timestamp source r materializes all values
++in both score and selected-highlight statements; the latter takes ~6.4 ms while returning ten rows. See
++[recency plan evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/recency-plans/README.md).
++The local correction uses a correlated indexed timestamp selection from the same authoritative source.
++The initial value-visit observer was insufficient: the old join passed that counter, so the validation
++correctly stopped. Retain that failure. Validate the unmodified native selected-stage plan (indexed probes,
++no full timestamp scan), demonstrate old-join failure and rerun semantic suites before a new cost cohort. All p99 targets/failures and remaining acceptance criteria stay unchanged. Metadata WITHOUT ROWID is only an unmeasured
+ possible diagnostic, not a chosen layout change. The ordinary recovery alias fixtures now use Windows junctions, matching the existing storage fixture;
+ actual Windows recovery/platform qualification remains required (crash tests are POSIX-only).
+ Recency and every phase 3–7 requirement remain required; none of these diagnostics is qualification. Preserve every failed cohort and all remaining
+diff --git a/packages/apack-ears/src/sqlite/text.ts b/packages/apack-ears/src/sqlite/text.ts
+index 7043ff2701..e5c8e4b7e2 100644
+--- a/packages/apack-ears/src/sqlite/text.ts
++++ b/packages/apack-ears/src/sqlite/text.ts
+@@ -206,8 +206,9 @@ export class SqliteText {
+          accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
+       const decayed = nativeRecency ? `, decayed AS (
+         SELECT a.id,a.owner,a.seq,a.score base_score,
+-          a.score * CASE WHEN r.kind IN ('num','zero','date') THEN pow(0.5,max(0,? - r.value)/?) ELSE 1 END score
+-        FROM accepted a LEFT JOIN (${this.db.fieldSource(recency.field, [job.type])}) r ON r.id=a.id)` : '';
++          a.score * coalesce((SELECT CASE WHEN r.kind IN ('num','zero','date') THEN pow(0.5,max(0,? - r.value)/?) ELSE 1 END
++            FROM (${this.db.fieldSource(recency.field, [job.type])}) r WHERE r.id=a.id),1) score
++        FROM accepted a)` : '';
+       if (nativeRecency) args.push(now, recency.halfLife);
+       // Stable JS decay ties previously retained the base-score order, then entity insertion order.
+       const scored = nativeRecency ? 'decayed' : 'accepted';
+diff --git a/packages/apack-ears/tests/sqlite/text-limits.spec.ts b/packages/apack-ears/tests/sqlite/text-limits.spec.ts
+index 247c5c114f..c622a75c6c 100644
+--- a/packages/apack-ears/tests/sqlite/text-limits.spec.ts
++++ b/packages/apack-ears/tests/sqlite/text-limits.spec.ts
+@@ -113,6 +113,25 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native text pr
+       expect(statements.at(-1)?.returnedRows).toBe(3);
+     }
+   });
++  it('uses indexed timestamp probes for the selected native recency highlight stage', () => {
++    const definition: EngineSchema = { ...schema, types: { ...schema.types,
++      Row: { ...schema.types.Row!, fields: { at: { type: 'any', optional: true } } } } };
++    const { db, e } = open(definition);
++    e.transact(() => { for (let i = 0; i < 128; i++) e.create('Row', { id: `Row-${i}`, name: 'needle', at: i === 127 ? 99000 : 1000 }); });
++    const all = db.all.bind(db), statements: Array<{ rows: number; plan: string[] }> = [];
++    vi.spyOn(db, 'all').mockImplementation((sql, args) => {
++      const rows = all(sql, args);
++      if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) statements.push({ rows: rows.length,
++        plan: db.sql.prepare('EXPLAIN QUERY PLAN ' + sql).all(...(args ?? [])).map((row: any) => String(row.detail)) });
++      return rows;
++    });
++    const hits = e.query('Row').search('needle', { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } })
++      .limit(3).hits({ fields: ['name'], highlights: true });
++    expect(hits.map(hit => hit.id)).toEqual(['Row-127', 'Row-0', 'Row-1']);
++    expect(statements).toHaveLength(2); expect(statements[1]?.rows).toBe(3);
++    expect(statements[1]!.plan.some(detail => /^SCAN v(?:\s|$)/.test(detail))).toBe(false);
++    expect(statements[1]!.plan.some(detail => /^SEARCH v USING (?:PRIMARY KEY|INDEX)/.test(detail))).toBe(true);
++  });
+   it('ranks declared Date slots and built-in numeric timestamps natively after read-only reopen', () => {
+     const definition: EngineSchema = { ...schema, types: { ...schema.types,
+       Row: { ...schema.types.Row!, fields: { at: { type: 'any', optional: true } } } } };

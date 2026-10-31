@@ -1,0 +1,46 @@
+{
+  "integrationBase": "edf17cd0dc",
+  "priorInputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "a1a4aec3a306a1e6c2039a0bd30eb56301111aa712dbc0a2b0fb0f08dbfd9d70",
+    "packages/apack-ears/src/sqlite/database.ts": "ed872615f82487b69f3a70fe346e5034cf70c9d970a96c7386b7f51b7d4cc7d7",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "6ebc4151694f5a3cce0ee228651389999dc48e8ebf281c294f941a02639e767c",
+    "packages/apack-ears/src/sqlite/search.ts": "df726ab3d6f41b4c76c6cb4784f67f481651fac54ba717d72a9b4aba7d3ffbae",
+    "packages/apack-ears/src/sqlite/vector-admission.ts": "ed379ac0eb8d18451a8d5f6126e1b221c26f6ca1762a8b6e40c795d107aabf64",
+    "packages/apack-ears/src/sqlite/vector-index.ts": "96ceab3cf56c7c8745b52839991af56460631e1c5035b1eed8b7c260800a8c81",
+    "packages/apack-ears/src/sqlite/vector-models.ts": "28fa94e9baa1daf07181e2728cf67a94d21fed38955c1cc57c28571178f3b8cc",
+    "packages/apack-ears/src/sqlite/vector-policy.ts": "095f6cb6d2f4a6da3b4dc6267917e42d121769fa65b847c2bee5b0b08b79e2da",
+    "packages/apack-ears/src/sqlite/vector-training.ts": "52b0501bbf7a00cb8e79271b11d4eea04692361e85f06756689059cf35706081",
+    "packages/apack-ears/src/sqlite/vectors.ts": "eb95a89a11bb73d9a8546d7554e40b0787dd259b70eb7fc7f31e58f7ea710c53",
+    "packages/apack-ears/tests/sqlite/vector-index.spec.ts": "e8ca16d40662a55e29dd78c32e9f185dba4a7b793b92423ef952bf0bc0a3a515",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "18b2c2709774f09fdbfb76657ca1c5dbe44a21aaba92eac411c451cb3e9dee84",
+    "scripts/linux-runner.ts": "226ef6119d8dc1703759f61e3b7541413ad8464da9e6ffbb15d1831b75ab7527",
+    "vendor/elmdb.rev": "cddb9c04e13510b278f00d57420dbaacfa33b8586f20df994f3f5e17cf4fc983",
+    "packages/apack-ears/src/sqlite/vector-cursor.ts": "8f012bb89dadbdaa7d2ddb62b5b06b5af18f5503591f65292a7f16ebabf149f6"
+  },
+  "overlay": {
+    ".github/scripts/ears-sqlite-platform.mjs": "aa6e6a3569137d2d9cbc05ddf971a7c7cbdf0455aa34f725c105f863ab35e366",
+    "packages/apack-ears/src/sqlite/database.ts": "ed872615f82487b69f3a70fe346e5034cf70c9d970a96c7386b7f51b7d4cc7d7",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "6ebc4151694f5a3cce0ee228651389999dc48e8ebf281c294f941a02639e767c",
+    "packages/apack-ears/src/sqlite/search.ts": "df726ab3d6f41b4c76c6cb4784f67f481651fac54ba717d72a9b4aba7d3ffbae",
+    "packages/apack-ears/src/sqlite/vector-admission.ts": "ed379ac0eb8d18451a8d5f6126e1b221c26f6ca1762a8b6e40c795d107aabf64",
+    "packages/apack-ears/src/sqlite/vector-index.ts": "96ceab3cf56c7c8745b52839991af56460631e1c5035b1eed8b7c260800a8c81",
+    "packages/apack-ears/src/sqlite/vector-models.ts": "28fa94e9baa1daf07181e2728cf67a94d21fed38955c1cc57c28571178f3b8cc",
+    "packages/apack-ears/src/sqlite/vector-policy.ts": "095f6cb6d2f4a6da3b4dc6267917e42d121769fa65b847c2bee5b0b08b79e2da",
+    "packages/apack-ears/src/sqlite/vector-training.ts": "52b0501bbf7a00cb8e79271b11d4eea04692361e85f06756689059cf35706081",
+    "packages/apack-ears/src/sqlite/vectors.ts": "eb95a89a11bb73d9a8546d7554e40b0787dd259b70eb7fc7f31e58f7ea710c53",
+    "packages/apack-ears/tests/sqlite/vector-index.spec.ts": "203bff7d2b17857b24d89b4dd25d230c53646478a293625af7fbefe014230539",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "18b2c2709774f09fdbfb76657ca1c5dbe44a21aaba92eac411c451cb3e9dee84",
+    "scripts/linux-runner.ts": "226ef6119d8dc1703759f61e3b7541413ad8464da9e6ffbb15d1831b75ab7527",
+    "vendor/elmdb.rev": "cddb9c04e13510b278f00d57420dbaacfa33b8586f20df994f3f5e17cf4fc983",
+    "packages/apack-ears/src/sqlite/vector-cursor.ts": "540231379be38f8bfe52f5fa4d9ac38451efaff6073b43acc7f9f92f44f5cd75",
+    "packages/apack-ears/tests/sqlite/logical-snapshot.spec.ts": "18da224362d38013a36d7da76b2e74e7918d5a699f4044c6380f93ce0677b6fb"
+  },
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "extensionSha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d",
+  "nativeBinding": "read-only old 4d558a2 plus tested own-unit patch; not qualification of new 006d6ce elmdb pin",
+  "scope": "SQLite EARS source tests only; exact full integration/platform remains pending"
+}

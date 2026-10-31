@@ -1,0 +1,112 @@
+2026-10-28T13:04:13.3538950Z [31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+2026-10-28T13:04:13.3539270Z 
+2026-10-28T13:04:13.3540220Z [41m[1m FAIL [22m[49m [30m[43m @apackdev/cli [49m[39m tests/commands/scaffold.integration.spec.ts[2m [ packages/apack-cli/tests/commands/scaffold.integration.spec.ts ][22m
+2026-10-28T13:04:13.3542100Z [41m[1m FAIL [22m[49m [30m[43m @apackdev/cli [49m[39m tests/commands/scaffold.integration.spec.ts[2m [ packages/apack-cli/tests/commands/scaffold.integration.spec.ts ][22m
+2026-10-28T13:04:13.3547970Z [31m[1mError[22m: /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack init demo-pack: operation exceeded 60000ms
+2026-10-28T13:04:13.3550680Z [39m
+2026-10-28T13:04:13.3551310Z [36m [2m❯[22m Timeout.<anonymous> tests/_support/run-command.ts:[2m48:38[22m[39m
+2026-10-28T13:04:13.3552060Z     [90m 46| [39m      }[33m;[39m
+2026-10-28T13:04:13.3553460Z     [90m 47| [39m      abort = () => stop(new Error(`${label}: cancelled`, { cause: sig…
+2026-10-28T13:04:13.3554850Z     [90m 48| [39m      budget = setTimeout(() => stop(new Error(`${label}: operation ex…
+2026-10-28T13:04:13.3555700Z     [90m   | [39m                                     [31m^[39m
+2026-10-28T13:04:13.3557880Z     [90m 49| [39m      signal[33m?.[39m[34maddEventListener[39m([32m'abort'[39m[33m,[39m abort[33m,[39m { once[33m:[39m [35mtrue[39m })[33m;[39m
+2026-10-28T13:04:13.3562190Z     [90m 50| [39m      child[33m.[39m[34monce[39m([32m'error'[39m[33m,[39m error [33m=>[39m { failure [33m??=[39m error[33m;[39m })[33m;[39m
+2026-10-28T13:04:13.3576800Z 
+2026-10-28T13:04:13.3577930Z [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+2026-10-28T13:04:13.3578170Z 
+2026-10-28T13:04:13.3578170Z 
+2026-10-28T13:04:13.3578530Z [31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+2026-10-28T13:04:13.3578830Z 
+2026-10-28T13:04:13.3580030Z [41m[1m FAIL [22m[49m [30m[43m @apackdev/cli [49m[39m tests/commands/facade-report.integration.spec.ts[2m > [22mapack pack facade-report[2m > [22mchecks the verified current build without changing generated files
+2026-10-28T13:04:13.3583700Z [31m[1mError[22m: Test timed out in 80000ms.
+2026-10-28T13:04:13.3585740Z If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+2026-10-28T13:04:13.3586630Z [36m [2m❯[22m tests/commands/facade-report.integration.spec.ts:[2m102:3[22m[39m
+2026-10-28T13:04:13.3587070Z     [90m100| [39m  })[33m;[39m
+2026-10-28T13:04:13.3587310Z     [90m101| [39m
+2026-10-28T13:04:13.3587950Z     [90m102| [39m  it('checks the verified current build without changing generated fil…
+2026-10-28T13:04:13.3588420Z     [90m   | [39m  [31m^[39m
+2026-10-28T13:04:13.3588990Z     [90m103| [39m    // Recording the report adds an authored input; publish that state…
+2026-10-28T13:04:13.3589620Z     [90m104| [39m    [35mawait[39m [34mbuildPack[39m(pack[33m,[39m [33mID[39m)[33m;[39m
+2026-10-28T13:04:13.3589920Z 
+2026-10-28T13:04:13.3590150Z [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯[22m[39m
+2026-10-28T13:04:13.3590340Z 
+2026-10-28T13:04:13.3591350Z [41m[1m FAIL [22m[49m [30m[43m @apackdev/cli [49m[39m tests/build/build-output-swap.integration.spec.ts[2m > [22ma build that fails[2m > [22mpublishes help as snapshot data and retains accepted articles after an invalid edit
+2026-10-28T13:04:13.3592230Z [31m[1mError[22m: Test timed out in 200000ms.
+2026-10-28T13:04:13.3593020Z If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+2026-10-28T13:04:13.3593810Z [36m [2m❯[22m tests/build/build-output-swap.integration.spec.ts:[2m184:3[22m[39m
+2026-10-28T13:04:13.3594290Z     [90m182| [39m  })[33m;[39m
+2026-10-28T13:04:13.3594560Z     [90m183| [39m
+2026-10-28T13:04:13.3594980Z     [90m184| [39m  it('publishes help as snapshot data and retains accepted articles af…
+2026-10-28T13:04:13.3595390Z     [90m   | [39m  [31m^[39m
+2026-10-28T13:04:13.3595900Z     [90m185| [39m    [35mconst[39m dir [33m=[39m [34mpreviousBuild[39m([33mPREVIOUS[39m)[33m;[39m
+2026-10-28T13:04:13.3596560Z     [90m186| [39m    [35mconst[39m root [33m=[39m path[33m.[39m[34mdirname[39m(dir)[33m;[39m
+2026-10-28T13:04:13.3596860Z 
+2026-10-28T13:04:13.3597070Z [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯[22m[39m
+2026-10-28T13:04:13.3597260Z 
+2026-10-28T13:04:13.3597260Z 
+2026-10-28T13:04:13.3598790Z [2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m6 passed[39m[22m[90m (30)[39m
+2026-10-28T13:04:13.3599640Z [2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m105 passed[39m[22m[2m | [22m[33m11 skipped[39m[90m (130)[39m
+2026-10-28T13:04:13.3600230Z [2m   Start at [22m 12:51:28
+2026-10-28T13:04:13.3601050Z [2m   Duration [22m 761.78s[2m (transform 6.69s, setup 525ms, collect 26.66s, tests 1437.25s, environment 2ms, prepare 2.90s)[22m
+2026-10-28T13:04:13.3601440Z 
+2026-10-28T13:04:13.3601450Z 
+2026-10-28T13:04:13.3601590Z integration pool failed (exit 1)
+2026-10-28T13:04:13.3601750Z 
+2026-10-28T13:04:13.3601750Z 
+2026-10-28T13:04:13.3601990Z chain FAILED at test:integration in 771.7s on a 2-core budget
+2026-10-28T13:04:13.3602800Z evidence from this run in node_modules/.cache/apack-chain/runs/2026-10-28T12-51-21Z-6472 (1 step)
+2026-10-28T13:04:13.6344080Z ##[error]Process completed with exit code 1.
+2026-10-28T13:04:13.7288000Z ##[group]Run actions/upload-artifact@v4
+2026-10-28T13:04:13.7288350Z with:
+2026-10-28T13:04:13.7288760Z   name: strict-chain-683e1d5912f802fcd715a10bb8d1271dc11c1ea1-integration-1
+2026-10-28T13:04:13.7289240Z   include-hidden-files: true
+2026-10-28T13:04:13.7289680Z   path: /Users/runner/work/_temp/strict-chain.log
+node_modules/.cache/apack-chain/runs/
+
+2026-10-28T13:04:13.7291110Z   if-no-files-found: warn
+2026-10-28T13:04:13.7291350Z   compression-level: 6
+2026-10-28T13:04:13.7291570Z   overwrite: false
+2026-10-28T13:04:13.7291730Z env:
+2026-10-28T13:04:13.7292350Z   APACK_CHAIN_CORES: 2
+2026-10-28T13:04:13.7292640Z   CACHE_ON_FAILURE: false
+2026-10-28T13:04:13.7292910Z   CARGO_INCREMENTAL: 0
+2026-10-28T13:04:13.7293120Z ##[endgroup]
+2026-10-28T13:04:15.8208230Z (node:28808) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-28T13:04:15.8217760Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-28T13:04:15.8709400Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-28T13:04:15.8865210Z The least common ancestor is /Users/runner/work. This will be the root directory of the artifact
+2026-10-28T13:04:15.8971960Z With the provided path, there will be 2 files uploaded
+2026-10-28T13:04:15.9012810Z Artifact name is valid!
+2026-10-28T13:04:15.9018330Z Root directory input is valid!
+2026-10-28T13:04:16.4038240Z (node:28808) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-28T13:04:16.4068490Z Beginning upload of artifact content to blob storage
+2026-10-28T13:04:16.7021370Z Uploaded bytes 12635
+2026-10-28T13:04:16.7899290Z Finished uploading artifact content to blob storage!
+2026-10-28T13:04:16.7901790Z SHA256 digest of uploaded artifact zip is 812b449aba13edc8a74fe80e737c828d40b3f7607d9e57941816dc788fe921da
+2026-10-28T13:04:16.7902780Z Finalizing artifact upload
+2026-10-28T13:04:17.2737420Z Artifact strict-chain-683e1d5912f802fcd715a10bb8d1271dc11c1ea1-integration-1.zip successfully finalized. Artifact ID 12817988080
+2026-10-28T13:04:17.2741580Z Artifact strict-chain-683e1d5912f802fcd715a10bb8d1271dc11c1ea1-integration-1 has been successfully uploaded! Final size is 12635 bytes. Artifact ID is 12817988080
+2026-10-28T13:04:17.2763060Z Artifact download URL: https://github.com/spankyed/apack/actions/runs/40688661462/artifacts/12817988080
+2026-10-28T13:04:17.3332210Z Post job cleanup.
+2026-10-28T13:04:17.3341800Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__963de01d-2710-4991-ab23-a444bf159918.__Swatinem_rust-cache]
+2026-10-28T13:04:17.3359480Z ##[end-action id=__963de01d-2710-4991-ab23-a444bf159918.__Swatinem_rust-cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-28T13:04:17.3851240Z Post job cleanup.
+2026-10-28T13:04:17.3864330Z ##[start-action display=Run actions/setup-node@v4;id=__182be182-da1d-4604-ac20-112ab8514557.__actions_setup-node]
+2026-10-28T13:04:17.3879990Z ##[end-action id=__182be182-da1d-4604-ac20-112ab8514557.__actions_setup-node;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-28T13:04:17.4094740Z Post job cleanup.
+2026-10-28T13:04:18.0344780Z [command]/opt/homebrew/bin/git version
+2026-10-28T13:04:18.1040660Z git version 2.56.0
+2026-10-28T13:04:18.1168480Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/ab9fc22b-4742-493d-a145-c402a18dcba1/.gitconfig'
+2026-10-28T13:04:18.1172140Z Temporarily overriding HOME='/Users/runner/work/_temp/ab9fc22b-4742-493d-a145-c402a18dcba1' before making global git config changes
+2026-10-28T13:04:18.1175300Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-28T13:04:18.1192040Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/apack/apack
+2026-10-28T13:04:18.1641630Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-28T13:04:18.1707450Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-28T13:04:18.4925980Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-28T13:04:18.5101450Z http.https://github.com/.extraheader
+2026-10-28T13:04:18.5124200Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-28T13:04:18.5292320Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-28T13:04:18.8244690Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-28T13:04:18.8455940Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-28T13:04:19.1757810Z Cleaning up orphan processes
+2026-10-28T13:04:30.3131170Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache/restore@v4, actions/checkout@v4, actions/download-artifact@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

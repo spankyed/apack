@@ -1,0 +1,40 @@
+{
+  "source": "5b531948f57af606986fe3657ddd2109a8db8a18",
+  "qualification": false,
+  "ordinarySQLiteComparisonsPerLibrary": 735,
+  "baselineEqualsPackagedBinary": true,
+  "addedAllocation": false,
+  "queryExecutions": 1800,
+  "identicalOrderedAnswerPairs": 900,
+  "minimumMeanRecall": 0.9740000000000002,
+  "snapshotUnchanged": true,
+  "nativeCohorts": [
+    {
+      "size": 10000,
+      "scopePercent": 100,
+      "baselineMedianMs": 49.823929500000304,
+      "directMedianMs": 37.771725499999775,
+      "baselineMetadataTicks": 29533678,
+      "directMetadataTicks": 3873905,
+      "nativeCallsEach": 100
+    },
+    {
+      "size": 99900,
+      "scopePercent": 100,
+      "baselineMedianMs": 19.963550999999825,
+      "directMedianMs": 20.808528999999908,
+      "baselineMetadataTicks": 43290,
+      "directMetadataTicks": 41337,
+      "nativeCallsEach": 100
+    },
+    {
+      "size": 99900,
+      "scopePercent": 10,
+      "baselineMedianMs": 61.419831500003056,
+      "directMedianMs": 47.485507999998845,
+      "baselineMetadataTicks": 33545627,
+      "directMetadataTicks": 5265426,
+      "nativeCallsEach": 100
+    }
+  ]
+}

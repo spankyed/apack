@@ -1,0 +1,27 @@
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/backup/logical-crash.spec.ts tests/backup/logical.spec.ts tests/database/write-lock.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/database/write-lock.spec.ts (15 tests) 1502ms
+   ✓ the database write lock > is taken by one of several tools that ask for it at the same moment  868ms
+ ✓ tests/backup/logical.spec.ts (10 tests) 5266ms
+   ✓ exclusively publishes a complete private archive readable through the app-only staging API  550ms
+   ✓ reports a published but unsynchronized directory truthfully and retains its complete archive  451ms
+   ✓ replaces a populated store through the existing coordinator and preserves separately owned media  534ms
+   ✓ validates all selected stores before replacing either, then imports primary and run history together  1448ms
+   ✓ restores the incumbent when acceptance refuses a logical import  424ms
+   ✓ retains the ordinary recovery journal after an uncertain logical replacement  332ms
+   ✓ imports only run history without replacing or advancing the primary database  667ms
+   ✓ fully validates preview archives and primary acceptance without touching either live store  646ms
+ ✓ tests/backup/logical-crash.spec.ts (2 tests) 1798ms
+   ✓ retains exclusive complete archive semantics when killed before publication  734ms
+   ✓ retains exclusive complete archive semantics when killed after publication  1063ms
+
+ Test Files  3 passed (3)
+      Tests  27 passed (27)
+   Start at  14:56:13
+   Duration  10.55s (transform 757ms, setup 14ms, collect 1.61s, tests 8.57s, environment 0ms, prepare 115ms)
+

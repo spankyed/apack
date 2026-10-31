@@ -1,0 +1,12 @@
+
+> @apackdev/ears@0.1.0 api:check
+> npm run api:build && tsx ../../scripts/api-reports.ts .
+
+
+> @apackdev/ears@0.1.0 api:build
+> node -e "require('fs').rmSync('.temp/api-types', { recursive: true, force: true })" && tsc -p tsconfig.api-extractor.json
+
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+@apackdev/ears: 3 API reports up to date

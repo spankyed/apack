@@ -1,0 +1,9 @@
+{
+  "gitAutocrlf": true,
+  "legacySha256": "9a3ab41535721647537af740e30dd28e8d2b83aef4e910d944d1b696e74556f8",
+  "canonicalSha256": "5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b",
+  "matchesActualWindowsFailure": true,
+  "onlyLineEndingsChanged": true,
+  "membershipChecks": 555,
+  "builderSha256": "ebbc20702fd7848c839f38c5427087f81c7e0d60918694408e0eae3682318b24"
+}

@@ -1,0 +1,4 @@
+
+> apack@0.3.14 check:specifiers
+> tsx scripts/check-import-specifiers.ts
+

@@ -6,7 +6,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { Packr, Unpackr } from 'msgpackr';
+import type { ReadRequest } from '../src/database.ts';
 import { afterAll, bench, describe } from 'vitest';
 import type { EARS as EarsTypes } from '../src/index.ts';
 
@@ -204,11 +204,11 @@ describe('watches', () => {
  * The request an engine sends elmdb for `read`, as it is and as a watch's run sends it (tracked under `token`), taken
  * from an engine of its own over the same database, whose reads pass through here on their way
  */
-function requestOf(read: (probe: typeof engine) => unknown, token: number): { plain: Uint8Array; tracked: Uint8Array } {
-  let sent: Uint8Array | undefined;
+function requestOf(read: (probe: typeof engine) => unknown, token: number): { plain: ReadRequest; tracked: ReadRequest } {
+  let sent: ReadRequest | undefined;
   const capturing = new Proxy(database, {
     get(target, key) {
-      if (key === 'readSync') return (bytes: Uint8Array) => { sent = bytes; return target.readSync(bytes); };
+      if (key === 'readSync') return (request: ReadRequest) => { sent = request; return target.readSync(request); };
       const value: unknown = Reflect.get(target, key, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },
@@ -216,7 +216,6 @@ function requestOf(read: (probe: typeof engine) => unknown, token: number): { pl
   const probe = createEarsEngine({ database: capturing });
   read(probe);
   if (!sent) throw new Error('The read sent elmdb no request');
-  const { reads } = new Unpackr({ useRecords: false, mapsAsObjects: true }).unpack(sent) as { reads: unknown[] };
-  const packr = new Packr({ useRecords: false });
-  return { plain: packr.pack({ reads }), tracked: packr.pack({ reads, track: token }) };
+  const { reads } = sent;
+  return { plain: { reads }, tracked: { reads, track: token } };
 }

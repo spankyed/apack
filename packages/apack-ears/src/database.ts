@@ -1,13 +1,32 @@
-// What the engine holds of its elmdb database, and the one place it crosses to it: every read and write goes through
-// `createConnection`, which sends them to the unit `transact` holds open, or to the database itself outside one, and
-// hands back each answer decoded and each refusal as an `EarsError`.
-//
-// The port is structural so this module never loads `elmdb`: `@apackdev/ears/lmdb` opens the database, and only that
-// entry imports it.
-import { Packr, Unpackr } from 'msgpackr';
+// The structured database boundary and connection shared by EARS backends. The connection owns units,
+// instrumentation and commit delivery; each backend owns its transport and persistence representation.
 import { callSite, createCallTally, type CallCounting, type CallReport, type CallTally } from './calls.ts';
 import { EarsError, type EarsErrorCode } from './errors.ts';
-import { setField } from './ids.ts';
+import type { Op, ReadOp, Load, Answer } from './storage.ts';
+export type { Op, ReadOp, Load, Answer } from './storage.ts';
+
+/** A synchronous read batch, optionally recording dependencies for one watch. */
+export interface ReadRequest {
+  readonly reads: readonly ReadOp[];
+  readonly track?: number;
+}
+
+/** A mutation batch sharing one logical write timestamp. */
+export interface WriteRequest {
+  readonly ops: readonly Op[];
+  readonly now?: number;
+}
+
+/** The identity and dependency owners affected by this particular commit. */
+export interface Changes {
+  readonly sequence: number;
+  readonly touched: number[];
+}
+
+export interface WriteResult {
+  readonly results: OpResult[];
+  readonly changes?: Changes;
+}
 
 /** How `transact` commits */
 export interface UnitOptions {
@@ -15,14 +34,14 @@ export interface UnitOptions {
   durable?: boolean;
 }
 
-/** An elmdb unit held open across calls (`elmdb`'s `Unit`) */
+/** A backend transaction held open across synchronous engine calls. */
 export interface EarsUnit {
-  write(batch: Uint8Array): Uint8Array;
-  read(reads: Uint8Array): Uint8Array;
+  write(batch: WriteRequest): WriteResult;
+  read(reads: ReadRequest): Answer[];
   savepoint(): number;
   rollbackTo(depth: number): void;
   release(depth: number): void;
-  commit(durable?: boolean | null): Uint8Array;
+  commit(durable?: boolean | null): Changes;
   abort(): void;
   readonly isOpen: boolean;
 }
@@ -34,15 +53,17 @@ export interface SchemaChange {
   effect: string;
 }
 
-/** What the engine needs of an open elmdb database (`elmdb`'s `Database`, which `@apackdev/ears/lmdb` opens) */
+/** The structured storage port used by the engine; each backend owns its wire and persistence codecs. */
 export interface EarsDatabase {
+  /** Storage format identity for host backup/open policy; opening the actual files still validates them. */
+  readonly format: string;
   readonly path: string;
   readonly readOnly: boolean;
   readonly isOpen: boolean;
   /** The schema the database holds, in elmdb's canonical JSON */
   readonly schema: unknown;
-  write(batch: Uint8Array, durable?: boolean | null): Uint8Array;
-  readSync(reads: Uint8Array): Uint8Array;
+  write(batch: WriteRequest, durable?: boolean | null): WriteResult;
+  readSync(reads: ReadRequest): Answer[];
   begin(): EarsUnit;
   setSchema(schema: object): SchemaChange[];
   /** Every entry removed but the database's format and schema */
@@ -52,7 +73,7 @@ export interface EarsDatabase {
   /** Every entry replaced by another database's primary data, the derived data rebuilt under this one's schema */
   replaceWith(source: string): void;
   stats(): { types: Record<string, { live: number; trashed: number }>; relations: Record<string, number>; fileBytes: number };
-  bulkLoad(loads: Uint8Array): void;
+  bulkLoad(loads: readonly Load[]): void;
   /** The last commit's sequence, or 0: a number that only increases for as long as the database exists */
   readonly sequence: number;
   /** Drops what the reads tracked under `token` touched (`{ reads, track: token }`) */
@@ -60,48 +81,17 @@ export interface EarsDatabase {
   /** How many tokens have tracked reads filed, and how many keys and ranges they hold */
   trackStats(): { owners: number; keys: number; ranges: number };
   durable(): Promise<void>;
+  /** Exclusive same-handle maintenance; other async scopes cannot mutate until the owner settles. Reads continue. */
+  withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T>;
+  /** Observers must not inherit a maintenance caller's authority to mutate a database. */
+  withoutWriteAuthority<T>(operation: () => T): T;
+  /** Resolves when declared logical index generations are ready; optional model training has its own wait. Call outside write units; rejects if indexing cannot complete. */
+  indexesReady(): Promise<void>;
+  /** Backend visibility changes after a derived generation commits; no new logical commit is invented. */
+  onIndexesChanged?(listener: (changes: Changes) => void): () => void;
+  /** Terminal background shutdown before close/removal. Once begun, new writes refuse until reopen. */
+  drainBackground?(): Promise<void>;
   close(): void;
-}
-
-// A field holding `undefined` is absent, as it is once stored (msgpackr's `skipValues`, which its declarations omit);
-// Dates are msgpack timestamps, which elmdb keeps
-const packr = new Packr({ useRecords: false, skipValues: [undefined] } as ConstructorParameters<typeof Packr>[0]);
-const unpackr = new Unpackr({ useRecords: false, mapsAsObjects: true, int64AsType: 'number' });
-// The exact decode, for an answer whose maps may hold a `__proto__` key, which a decode straight to objects renames
-const exact = new Unpackr({ useRecords: false, mapsAsObjects: false, int64AsType: 'number' });
-
-export const pack = (value: unknown): Uint8Array => packr.pack(value);
-
-/** Maps decoded as `Map`s, made objects whose keys are their own properties, `__proto__` among them */
-function objectsOf(value: unknown): unknown {
-  if (value instanceof Map) {
-    const out: Record<string, unknown> = {};
-    for (const [key, inner] of value) setField(out, String(key), objectsOf(inner));
-    return out;
-  }
-  if (Array.isArray(value)) return value.map(objectsOf);
-  return value;
-}
-
-/** An answer as elmdb writes it: `kind` names it */
-export type Answer = { kind: string } & Record<string, unknown>;
-
-const PROTO = [...'__proto__'].map((char) => char.charCodeAt(0));
-
-/** Whether `bytes` hold the text `__proto__` anywhere: a key of that name, or a value that merely spells it */
-function spellsProto(bytes: Uint8Array): boolean {
-  for (let at = bytes.indexOf(PROTO[0]!); at !== -1 && at + PROTO.length <= bytes.length; at = bytes.indexOf(PROTO[0]!, at + 1)) {
-    if (PROTO.every((byte, offset) => bytes[at + offset] === byte)) return true;
-  }
-  return false;
-}
-
-/**
- * Every answer decoded alike, whatever its shape: exactly when its bytes could hold a `__proto__` key anywhere — a
- * row, a field's value, an edge's info, an answer inside another — and straight to objects otherwise
- */
-function unpackAnswers(bytes: Uint8Array): Answer[] {
-  return (spellsProto(bytes) ? objectsOf(exact.unpack(bytes)) : unpackr.unpack(bytes)) as Answer[];
 }
 
 /** `value` and everything inside it, frozen */
@@ -131,7 +121,7 @@ function freezeValues(answer: Answer): Answer {
   return answer;
 }
 
-/** elmdb's codes that are one of the engine's own, under the engine's name for it */
+/** Backend refusal codes that the engine names as an EarsError. */
 const CODES: Record<string, EarsErrorCode> = {
   UNKNOWN_TYPE: 'UNKNOWN_ENTITY_TYPE',
   RESERVED_FIELD: 'RESERVED_ATTRIBUTE',
@@ -150,13 +140,15 @@ const CODES: Record<string, EarsErrorCode> = {
   CYCLE: 'CYCLE',
   VALUE_INVALID: 'VALUE_INVALID',
   UNKNOWN_INDEX: 'UNKNOWN_INDEX',
+  INDEX_BUILDING: 'INDEX_BUILDING',
+  INDEX_FAILED: 'INDEX_FAILED',
   FIELD_TYPE: 'FIELD_TYPE',
   PATTERN_INVALID: 'PATTERN_INVALID',
 };
 
 /**
- * Runs `fn`, a call into elmdb, rethrowing a refusal the engine names as an `EarsError`; anything else elmdb throws
- * (a full disk, a closed database) is thrown as it is, with its own code
+ * Runs `fn`, a backend call, rethrowing a refusal the engine names as an `EarsError`; other storage errors
+ * (including COMMIT_UNKNOWN, a full disk or a closed database) retain their original codes and causes
  */
 export function crossing<T>(fn: () => T): T {
   try {
@@ -191,8 +183,6 @@ export function runCommitted<T>(operation: () => T, notify: () => void): T {
   return result;
 }
 
-/** One batch operation, as elmdb's protocol takes it (`elmdb/protocol/Op.ts`) */
-export type Op = { op: string } & Record<string, unknown>;
 /** One answer of a batch */
 export type OpResult = { kind: 'done' } | { kind: 'entity'; id: string; shortCode: string | null; created: boolean }
   | { kind: 'relation'; id: string; linked: boolean } | { kind: 'label'; label: string } | { kind: 'stale' };
@@ -208,10 +198,10 @@ export interface Commit {
 
 /** The engine's crossing to its database: reads and writes, in the unit `transact` holds open or each its own */
 export interface Connection {
-  read(reads: ReadonlyArray<Record<string, unknown>>): Answer[];
+  read(reads: readonly ReadOp[]): Answer[];
   write(ops: readonly Op[], now?: number): OpResult[];
   /** Unchecked loads, one durable unit of their own (`Database.bulkLoad`); refused while a unit is open */
-  load(loads: ReadonlyArray<Record<string, unknown>>): void;
+  load(loads: readonly Load[]): void;
   transact<T>(fn: () => T, options?: UnitOptions): T;
   /** Whether `transact` holds a unit open */
   readonly inUnit: boolean;
@@ -221,8 +211,8 @@ export interface Connection {
   untrack(token: number): void;
   trackStats(): { keys: number; ranges: number };
   /**
-   * Calls `listener` after each commit, outside the call that made it, with what it touched. Returns the
-   * unregistration
+   * Calls `listener` for logical commits and committed derived-index visibility changes, with affected tokens.
+   * Derived visibility reuses the current logical sequence. Returns the unregistration.
    */
   onCommit(listener: (commit: Commit) => void): () => void;
   /** Tells the commit listeners of a commit made past the connection, whose writes aren't known key by key */
@@ -247,8 +237,9 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
   /** The token the reads being made are tracked under, while `track` runs */
   let tracking: number | undefined;
   const listeners = new Set<(commit: Commit) => void>();
+  let unlistenIndexes: (() => void) | undefined;
   /** Calls every commit listener; a listener's throw is reported, not handed to the writer */
-  const committed = (commit: Commit) => {
+  const committed = (commit: Commit) => database.withoutWriteAuthority(() => {
     for (const listener of listeners) {
       try {
         listener(commit);
@@ -256,7 +247,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
         queueMicrotask(() => { throw error; });
       }
     }
-  };
+  });
   const heard = (changes: { sequence: number; touched: number[] }) => {
     if (listeners.size > 0) committed({ sequence: changes.sequence, touched: new Set(changes.touched) });
   };
@@ -341,7 +332,7 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
     }
     try {
       // The unit's deferred checks run as it commits; one that fails aborts it
-      const changes = timedInUnit(() => unpackr.unpack(crossing(() => held.commit(options?.durable ?? false))));
+      const changes = timedInUnit(() => crossing(() => held.commit(options?.durable ?? false)));
       unitEnded();
       heard(changes as { sequence: number; touched: number[] });
     } catch (error) {
@@ -396,26 +387,26 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
   return {
     read(reads) {
       return counting('read', reads.length, () => {
-        const bytes = pack(tracking === undefined ? { reads } : { reads, track: tracking });
+        const request: ReadRequest = tracking === undefined ? { reads } : { reads, track: tracking };
         const held = unit;
-        const answers = unpackAnswers(crossing(() => (held ? held.read(bytes) : database.readSync(bytes))));
+        const answers = crossing(() => (held ? held.read(request) : database.readSync(request)));
         return freeze ? answers.map(freezeValues) : answers;
       });
     },
     write(ops, now = Date.now()) {
       const written = counting('write', ops.length, () => {
-        const bytes = pack({ ops, now });
+        const request = { ops, now };
         const target = levels.length ? writable() : undefined;
-        const answer = crossing(() => (target ? target.write(bytes) : database.write(bytes, false)));
+        const answer = crossing(() => (target ? target.write(request) : database.write(request, false)));
         if (target) levels.at(-1)!.kept = true;
-        return unpackr.unpack(answer) as { results: OpResult[]; changes?: { sequence: number; touched: number[] } };
+        return answer;
       });
       if (written.changes) heard(written.changes);
       return written.results;
     },
     load(loads) {
       runCommitted(
-        () => crossing(() => database.bulkLoad(pack(loads))),
+        () => crossing(() => database.bulkLoad(loads)),
         () => committed({ sequence: database.sequence, touched: 'all' }),
       );
     },
@@ -437,8 +428,12 @@ export function createConnection(database: EarsDatabase, { freeze = false }: { f
       return { keys, ranges };
     },
     onCommit(listener) {
+      if (!listeners.size) unlistenIndexes = database.onIndexesChanged?.(heard);
       listeners.add(listener);
-      return () => { listeners.delete(listener); };
+      return () => {
+        listeners.delete(listener);
+        if (!listeners.size) { unlistenIndexes?.(); unlistenIndexes = undefined; }
+      };
     },
     committedEverything: () => committed({ sequence: database.sequence, touched: 'all' }),
     lastCommit: () => database.sequence,

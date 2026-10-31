@@ -1,0 +1,22 @@
+[
+  {
+    "label": "packages-build",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 28.83375740799238
+  },
+  {
+    "label": "specifiers",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.883096799021587
+  }
+]

@@ -1,0 +1,1 @@
+c3a5e363f4: five cases passed; the preservation case failed because msgpackr had already erased negative zero in its generated input. Corrected later with explicit Float64 bytes and raw payload retention.

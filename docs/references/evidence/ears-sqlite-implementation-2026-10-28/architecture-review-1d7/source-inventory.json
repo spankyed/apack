@@ -1,0 +1,233 @@
+{
+  "source": "1d7a3de090d74028ca36eba574686da8c794609a",
+  "scope": "Focused source architecture review; inventory is not proof every line was audited",
+  "sqliteImmediateModuleCount": 35,
+  "sqliteImmediateLines": 5756,
+  "files": [
+    {
+      "path": "packages/apack-ears/src/sqlite/audit.ts",
+      "sha256": "e283bb1b9c4e8934b407876ecd7640782a49e227bd39ca3788967da207d8a335",
+      "lines": 194
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/database.ts",
+      "sha256": "c4cdf66bdfa5189bc4be55ea7f2b2a02cb07d81215b42b766728028ca1fbdb36",
+      "lines": 1663
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/embeddings.ts",
+      "sha256": "a4b5dd4c583eac4e729dc293bfea2d8530a87fa39cc6a347abcd27ec84e4229b",
+      "lines": 65
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/file-ownership.ts",
+      "sha256": "d855fd76e422b3f5096bda1dc390d071e3c31edf712fd3cedeebb23182807f90",
+      "lines": 23
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/format.ts",
+      "sha256": "3fe30e4defae9759880ee2f4c0fde0b3180cb10cb0619ac9ac7eb99aee69a0c0",
+      "lines": 28
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/index-builds.ts",
+      "sha256": "79c6d80bb680b1ce8005894dabb28f5bd8bdb7819f01c13ffc8f921a471f1616",
+      "lines": 398
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/index.ts",
+      "sha256": "02214f037435299de097f78c60dd8982d55064466c049ae8f1d1df7bb808b977",
+      "lines": 130
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/logical-export.ts",
+      "sha256": "397802866f462240de74905e3033de02220ef164dbfbe64da22532772b12f891",
+      "lines": 27
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/logical-format.ts",
+      "sha256": "5b2ecd238d080880b400ae4f541b3226b7978f13e23fb24aa62ae5c33220d490",
+      "lines": 139
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/logical-records.ts",
+      "sha256": "3673c45fc0fca024fead055dae7d8395e332104d075dd9ad43d76748b691f731",
+      "lines": 80
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/logical-restore.ts",
+      "sha256": "ab31adba5ebf2f4c37f8996aeca33a0ac457e2178f810bc9bf8de44eb0f8d93c",
+      "lines": 111
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/logical-snapshot.ts",
+      "sha256": "9ab954b37e00367a569b257bda8b1ff5050f0581fc1b798ff004878a55e58047",
+      "lines": 49
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/logical-stage.ts",
+      "sha256": "62e1b011a0eb3e8190da5dcbea3843fdc7b3b8bdcee006d25c440b56aff52f9c",
+      "lines": 98
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/native-extension.ts",
+      "sha256": "8ee0daec39a4abe925bd5e1771158e4b110803bf077693c2cfd2a6e40bcfb97a",
+      "lines": 32
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/numeric-order.ts",
+      "sha256": "64ad0ed8d6075dba44f1e0b4ba5d98aee213eb4b28bf8fd01115bbdc5777ff97",
+      "lines": 35
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/query-scope.ts",
+      "sha256": "0b79f52292b962ec1f6a0527475b9758a937c8e17cbf82d39e10976c0dff100d",
+      "lines": 5
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/query.ts",
+      "sha256": "70ae85a470791aa829bc4cbec24134a4a7eb2d239f7ba8390dd269a76b5c7de5",
+      "lines": 632
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/regex.ts",
+      "sha256": "08146eebdc82a3efcd77fa580445b928e1481c8e753ad16c5185a1dbdc65ecb1",
+      "lines": 71
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/schema-validation.ts",
+      "sha256": "d9deead9a1fd4384780d5911ec43e9efa253fd04e2c9be427a9116407ea5cb18",
+      "lines": 134
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/search-structures.ts",
+      "sha256": "81099e151211b73f321bac833864ee46c7f632cda52aea3d3ffcdd9cbd922345",
+      "lines": 16
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/search.ts",
+      "sha256": "df726ab3d6f41b4c76c6cb4784f67f481651fac54ba717d72a9b4aba7d3ffbae",
+      "lines": 270
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/text.ts",
+      "sha256": "828ec9fefcfe9e02c7983eb3e3cfa84c49d807f0077dd201a15c6d6d489c42a6",
+      "lines": 279
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/trigrams.ts",
+      "sha256": "9cd5eae06c0364ff0b5974b1a9a8db4741e0aff4bb8c03146f35c4108dda130a",
+      "lines": 123
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/values.ts",
+      "sha256": "af92998f625df6b8a00ca9966cb71571d0fae3d043786c8580c861523180eee0",
+      "lines": 252
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-admission.ts",
+      "sha256": "ed379ac0eb8d18451a8d5f6126e1b221c26f6ca1762a8b6e40c795d107aabf64",
+      "lines": 101
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-audit.ts",
+      "sha256": "4fd6308ad42e51a46fd7d87ce1e417144d6d4b6799890fa3817832856d1f03ae",
+      "lines": 62
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-candidates.ts",
+      "sha256": "671ec986f28cee31e2788df109999d6fae4c01c16d7eb500d694bbd74f347939",
+      "lines": 20
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-cursor.ts",
+      "sha256": "540231379be38f8bfe52f5fa4d9ac38451efaff6073b43acc7f9f92f44f5cd75",
+      "lines": 19
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-index.ts",
+      "sha256": "344d2adec302c52c498dfc07896ffe3b7e9587d98b1b92fa5f1131e65b297906",
+      "lines": 179
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-models.ts",
+      "sha256": "e7306b644316981812c175a969340fdcf92ae8412d84d92300f5ebb309a231f0",
+      "lines": 240
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-owner.ts",
+      "sha256": "d18558d19e29a8da7bdb538f3156da40c4806078488896ebb7a1f8725c1af1ed",
+      "lines": 21
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-policy.ts",
+      "sha256": "095f6cb6d2f4a6da3b4dc6267917e42d121769fa65b847c2bee5b0b08b79e2da",
+      "lines": 8
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-repair.ts",
+      "sha256": "74505664affc7b4656e2acd6bb9156b96979d0dbd82256d303cd781624e1ba76",
+      "lines": 39
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vector-training.ts",
+      "sha256": "52b0501bbf7a00cb8e79271b11d4eea04692361e85f06756689059cf35706081",
+      "lines": 120
+    },
+    {
+      "path": "packages/apack-ears/src/sqlite/vectors.ts",
+      "sha256": "eb95a89a11bb73d9a8546d7554e40b0787dd259b70eb7fc7f31e58f7ea710c53",
+      "lines": 93
+    },
+    {
+      "path": "packages/apack-ears/src/storage.ts",
+      "sha256": "4e60945b30304dfd2860d6a27b4f7e5181c9277f656fbed240d889009683919e",
+      "lines": 132
+    },
+    {
+      "path": "packages/apack-ears/src/database.ts",
+      "sha256": "6830f3bd13cd456a381e09a5f0554072539b837be47db7ad01c32d911cdfe15e",
+      "lines": 443
+    },
+    {
+      "path": "packages/apack-ears/src/schema.ts",
+      "sha256": "cd46253616ef29ac5638e8fdc75926cc671280f32d84e0b6d2c4b5864165fd0b",
+      "lines": 176
+    },
+    {
+      "path": "packages/apack-ears/package.json",
+      "sha256": "cf57561185cba71e31d20bff83a877b4113b1de85c3e5741eabbf64a92c29935",
+      "lines": 73
+    },
+    {
+      "path": "native/vectors/vec1-membership.patch",
+      "sha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+      "lines": 133
+    },
+    {
+      "path": "native/vectors/README.md",
+      "sha256": "10d1a3f360908aa90a3d80073e76cf593d24af5cf76ab2f620c28bbb78fa67e4",
+      "lines": 67
+    },
+    {
+      "path": "native/vectors/upstream.c",
+      "sha256": "b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1",
+      "lines": 13170
+    },
+    {
+      "path": "packages/apack-host/src/backup/recovery.ts",
+      "sha256": "eba23abebf63401849a0f79e65bc962cd99546ad1a252b12295f4b9545898236",
+      "lines": 52
+    },
+    {
+      "path": "packages/apack-host/src/backup/publication.ts",
+      "sha256": "c2fe427088a8292702026c18ed2ff1068896db890c326b22d0625b497bd9bd5f",
+      "lines": 36
+    },
+    {
+      "path": "packages/apack-host/src/database/recovery-lock.ts",
+      "sha256": "6bc3a3f20a8895739c00a9389fd0315a8dd12146b1a577d67a1badf9bb1e8885",
+      "lines": 99
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "sourceBeforeChange": "423ad1fa57c44c25eb44d2f1cb0337b4a186a9ae",
+  "fixtureSha256": "82f20e34e549c5dad301a53d8f1b7effa9a57dd50547a86bb574091202dd1d6b",
+  "originalCasesUnchanged": 32,
+  "originalDocumentsUnchanged": 28,
+  "newCases": 4,
+  "newDocuments": 1,
+  "executed": false,
+  "scope": "Preregister usefulness before changing implementation; not actual backend pass/fail evidence"
+}

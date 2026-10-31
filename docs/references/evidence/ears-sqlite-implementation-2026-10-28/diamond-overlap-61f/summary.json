@@ -1,0 +1,39 @@
+{
+  "source": "61f0a8dabf01002f4762c5990e33787058270af2",
+  "passed": 51,
+  "failed": 0,
+  "skipped": 0,
+  "files": 11,
+  "diamondSetupWallMs": 162413.451171875,
+  "diamondOriginalSetupDeadlineMs": 240000,
+  "overlap": [
+    {
+      "file": "component-contracts.integration.spec.ts",
+      "assertionIntervalOverlapWithDiamondSetupMs": 5013.11181640625
+    },
+    {
+      "file": "harness/dependency-runtime.integration.spec.ts",
+      "assertionIntervalOverlapWithDiamondSetupMs": 32444.72021484375
+    },
+    {
+      "file": "commands/init-install-load.integration.spec.ts",
+      "assertionIntervalOverlapWithDiamondSetupMs": 18670.26513671875
+    },
+    {
+      "file": "commands/pack-doctor.integration.spec.ts",
+      "assertionIntervalOverlapWithDiamondSetupMs": 37128.98046875
+    },
+    {
+      "file": "build/editor-declarations.integration.spec.ts",
+      "assertionIntervalOverlapWithDiamondSetupMs": 45169.857177734375
+    },
+    {
+      "file": "build/facade-gate.integration.spec.ts",
+      "assertionIntervalOverlapWithDiamondSetupMs": 8547.838134765625
+    },
+    {
+      "file": "published-manifest-paths.integration.spec.ts",
+      "assertionIntervalOverlapWithDiamondSetupMs": 4683.81884765625
+    }
+  ]
+}

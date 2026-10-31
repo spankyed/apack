@@ -192,6 +192,12 @@ The resolver patch is restored in a `finally`; the bridged cache entries stay, s
 
 ## Runtime lifecycle
 
+The composition supplies `registry.indexesReady` from its owning database. Registration and installer acceptance
+remain synchronous; startup, activation, accepted install/update/restore and reload await readiness before onInit,
+migrations, apply or actor startup. Await their returned promises and retain operation claims through completion.
+Failed readiness after acceptance keeps installed files but removes the unavailable runtime and records its problem.
+Declaration-only registries have no build work. This wait does not change synchronous EARS read/write semantics.
+
 ### Activate and teardown (`lifecycle.ts`)
 
 `activatePack(registry, packId, bus)` — reads the managed `packs/<id>/` build through `loadSingleExternalPack(registry, dir)`, `registerExternalPacks()`, registers `onShutdown`, then starts it as a boot does: `onInit`, `runPackMigrations()`, `applyPacks()` (hash-checked, so enabling a pack whose content didn't change imports nothing), then sends the bus `PACK_CHANGED`, then `ACTIVATE_PACK` with the `<packId>/<featureId>` system ids. Returns `false` when reading, loading, registration or initialization fails, with why recorded as its load problem. Initialization failure runs shutdown cleanup and unregisters provisional contributions; it does not undo arbitrary data effects. The packs system then emits `PACK_ACTIVATED`, or, after install/update, `PACK_INSTALL_FAILED`/`PACK_UPDATE_FAILED` when `activationProblem()` reports one.

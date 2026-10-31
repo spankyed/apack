@@ -1,0 +1,302 @@
+[
+  {
+    "path": "native-build/runtime.json",
+    "originalSha256": "c41358f2ad525480449a5f2e9acc77e702f379cde734710fff16bbf5cf1d61ec",
+    "retainedSha256": "526ed4ee264ba20a74d1d9220ef4c41ff242be91425144e948495cf7c9ea9902",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "native-build/provenance.json",
+    "originalSha256": "28bd6b67dcd792c825c23d2d9e9b451af4313bee480afc144452410966dbf04c",
+    "retainedSha256": "b13ffa0a952e874556ab4ce55e980c758ed0a981443f963042289a9480188a02",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "native-build/build.log",
+    "originalSha256": "78aa572a92ad35bfd4de9a914c5c0e81845741aab8fbfa797da62da6272f7b24",
+    "retainedSha256": "78aa572a92ad35bfd4de9a914c5c0e81845741aab8fbfa797da62da6272f7b24",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/pack-build.txt",
+    "originalSha256": "54b7b0dd886514978f7f3b3f653dc0d3dd1aa78e1f6b7b840e28920fafca5907",
+    "retainedSha256": "54b7b0dd886514978f7f3b3f653dc0d3dd1aa78e1f6b7b840e28920fafca5907",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/sdk-sqlite.json",
+    "originalSha256": "6fc04987b020c5688a3ea21f478a08140beae621a5dc52fb57bed0e6f1a4b8dd",
+    "retainedSha256": "590d5191307978c6fa30bdc6c74a5d1b135e39f7e87f702b3c97b70efb136b83",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/sdk-fixtures-sqlite.txt",
+    "originalSha256": "1034af2551f5af00ebb756dfc4027ed0b28bd647836485228f9cac5c2cc1e7a2",
+    "retainedSha256": "1034af2551f5af00ebb756dfc4027ed0b28bd647836485228f9cac5c2cc1e7a2",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/source.json",
+    "originalSha256": "b3c3420141d23f28b4c1e8a648e93ccb0e0f46e5547c53eab46bc0a5584f5422",
+    "retainedSha256": "117fcd9d2eec6bf2351c1aea7e3905fb94a297944d3dd1b7c873e9d9bb6d97ea",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/permission-preflight.json",
+    "originalSha256": "c7f508699e967d844d2fb9c2b0b93fc92fb9c68662e2dbcab2d9d387cd435970",
+    "retainedSha256": "d78dafc71815abf491d1512b218a089786b3a11a7c790e67b1844e1ce36fa8be",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/pack-query-sqlite.txt",
+    "originalSha256": "e99994c7bb09464ce7fc683fa486e7bbf852d539144e4bc8762a0b4d0554d66f",
+    "retainedSha256": "e99994c7bb09464ce7fc683fa486e7bbf852d539144e4bc8762a0b4d0554d66f",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/pack-query-elmdb.txt",
+    "originalSha256": "948ba2d16b4d77fb81cdb7cd8ea7aeef44fad0666a6ef7f7ef3aece1cbd815f0",
+    "retainedSha256": "948ba2d16b4d77fb81cdb7cd8ea7aeef44fad0666a6ef7f7ef3aece1cbd815f0",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/native-receipt.json",
+    "originalSha256": "23ea3c9e1e6e7c9746562f33425f6523fb8e91edc26f1720568a7b631b50f322",
+    "retainedSha256": "28e0e7fb05f36469a5618f159074049aa1f63e5fd6e09e17231e9cbf830491c8",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/limits.json",
+    "originalSha256": "9c8df415719ac60f3cc4209405142f02f0bf22fae733c5c41cef4991968fca1c",
+    "retainedSha256": "cd6391e78268a987ab84ec126084e9467ac640a3f0d5e1f23d062713414db065",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/results.json",
+    "originalSha256": "673dbf6f4a24c657fce1dfd1421c76fd5018be08c6c1514002e95e0194d83964",
+    "retainedSha256": "8454b31fa0b439389808cf0996cea8c30e262e8a5b3e97363ff1648803b7efc1",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/sdk-api.txt",
+    "originalSha256": "5d9109aeb510a7f04a05816efeee9b9345d8b246b70421173f668dac161c1a7a",
+    "retainedSha256": "5d9109aeb510a7f04a05816efeee9b9345d8b246b70421173f668dac161c1a7a",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/sdk-elmdb.json",
+    "originalSha256": "50ed553925f2d7c2932726ad2a2335d3b87d41ea453b4b7686793f9beaa9b961",
+    "retainedSha256": "746ce8eee15b893b0ed1dc8d5afd6471dac785a594af11eaf1f962b89c91559c",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/pack-elmdb.json",
+    "originalSha256": "c547238866960416be5a0f17b06218d49dd21fb93025712a08efbf8dc0f62922",
+    "retainedSha256": "c30565426c93739ba2cbfa2c535381fdf555c6496a5fcc2130943a96f2138fab",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/dependencies.txt",
+    "originalSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "retainedSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/pack-sqlite.json",
+    "originalSha256": "1979ec12e92fd453b97521ed38df3bf7eb5f2ffcb4c107d38218a6195fdc3ac1",
+    "retainedSha256": "7d81c70a4eac1fcd8a15a02a06b9fcf87895b91b93c31fac2ba308d3c1b86711",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-repositories/specifiers.txt",
+    "originalSha256": "8c0ee2506a655436db74df17e7321a3f1d20d5cbae7d799ffc4a951537965907",
+    "retainedSha256": "8c0ee2506a655436db74df17e7321a3f1d20d5cbae7d799ffc4a951537965907",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/sdk-fixtures-elmdb.txt",
+    "originalSha256": "6349f43082da88e441dbfd6bf41bf49facc9b4502eb69dd318039ca4564f8f79",
+    "retainedSha256": "6349f43082da88e441dbfd6bf41bf49facc9b4502eb69dd318039ca4564f8f79",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-repositories/packages-build.txt",
+    "originalSha256": "4d33ea7eaa9582eb9e9d9d5942fd11adb6133250bb2a6c01b92f48e6673a5c66",
+    "retainedSha256": "4d33ea7eaa9582eb9e9d9d5942fd11adb6133250bb2a6c01b92f48e6673a5c66",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-broad/source.json",
+    "originalSha256": "b3c3420141d23f28b4c1e8a648e93ccb0e0f46e5547c53eab46bc0a5584f5422",
+    "retainedSha256": "117fcd9d2eec6bf2351c1aea7e3905fb94a297944d3dd1b7c873e9d9bb6d97ea",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-broad/permission-preflight.json",
+    "originalSha256": "c7f508699e967d844d2fb9c2b0b93fc92fb9c68662e2dbcab2d9d387cd435970",
+    "retainedSha256": "d78dafc71815abf491d1512b218a089786b3a11a7c790e67b1844e1ce36fa8be",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-broad/sdk-all-sqlite.json",
+    "originalSha256": "48f6d1341a2d634db243b890bc79d81345b961c7daa383796816757c43ebae00",
+    "retainedSha256": "670f0c261165a0a62cd794cfaab03d3e911abd9551a1a7ef7a2ce0297c852834",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-broad/native-receipt.json",
+    "originalSha256": "23ea3c9e1e6e7c9746562f33425f6523fb8e91edc26f1720568a7b631b50f322",
+    "retainedSha256": "28e0e7fb05f36469a5618f159074049aa1f63e5fd6e09e17231e9cbf830491c8",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-broad/limits.json",
+    "originalSha256": "9c8df415719ac60f3cc4209405142f02f0bf22fae733c5c41cef4991968fca1c",
+    "retainedSha256": "cd6391e78268a987ab84ec126084e9467ac640a3f0d5e1f23d062713414db065",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-broad/results.json",
+    "originalSha256": "8b3b64727bcedfe69b2e7428dbafdd2fea7497d4b45175f017d5026c8a97082f",
+    "retainedSha256": "7c4b1f0e0f751e038f44c471565ecda654300fe5229bfa61a7e833cddc3e77ea",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-broad/mutation-ignored-backend.txt",
+    "originalSha256": "39aa026247707e48f516a4321af13dd85fe6b334b346ff8a5df6bad67a06b337",
+    "retainedSha256": "39aa026247707e48f516a4321af13dd85fe6b334b346ff8a5df6bad67a06b337",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-broad/sdk-all-sqlite.txt",
+    "originalSha256": "648cca2d9df7a91ac5cc2425a78e8ada1425188913028796cf3263c4dea3912c",
+    "retainedSha256": "648cca2d9df7a91ac5cc2425a78e8ada1425188913028796cf3263c4dea3912c",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-broad/dependencies.txt",
+    "originalSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "retainedSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-broad/packages-build.txt",
+    "originalSha256": "8420d9cc965adfda8ee4132792f86fab3e12176ca27bf0327eebc5cfd42d4bbf",
+    "retainedSha256": "8420d9cc965adfda8ee4132792f86fab3e12176ca27bf0327eebc5cfd42d4bbf",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-built-content/pack-build.txt",
+    "originalSha256": "54b7b0dd886514978f7f3b3f653dc0d3dd1aa78e1f6b7b840e28920fafca5907",
+    "retainedSha256": "54b7b0dd886514978f7f3b3f653dc0d3dd1aa78e1f6b7b840e28920fafca5907",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-built-content/sdk-built-facet-sqlite.txt",
+    "originalSha256": "e67be7c8aabebdb9d01a372eac69a5d0120d66066e357dab2eaafda6614d0084",
+    "retainedSha256": "e67be7c8aabebdb9d01a372eac69a5d0120d66066e357dab2eaafda6614d0084",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-built-content/source.json",
+    "originalSha256": "b3c3420141d23f28b4c1e8a648e93ccb0e0f46e5547c53eab46bc0a5584f5422",
+    "retainedSha256": "117fcd9d2eec6bf2351c1aea7e3905fb94a297944d3dd1b7c873e9d9bb6d97ea",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-built-content/permission-preflight.json",
+    "originalSha256": "c7f508699e967d844d2fb9c2b0b93fc92fb9c68662e2dbcab2d9d387cd435970",
+    "retainedSha256": "d78dafc71815abf491d1512b218a089786b3a11a7c790e67b1844e1ce36fa8be",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-built-content/native-receipt.json",
+    "originalSha256": "23ea3c9e1e6e7c9746562f33425f6523fb8e91edc26f1720568a7b631b50f322",
+    "retainedSha256": "28e0e7fb05f36469a5618f159074049aa1f63e5fd6e09e17231e9cbf830491c8",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-built-content/limits.json",
+    "originalSha256": "9c8df415719ac60f3cc4209405142f02f0bf22fae733c5c41cef4991968fca1c",
+    "retainedSha256": "cd6391e78268a987ab84ec126084e9467ac640a3f0d5e1f23d062713414db065",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-built-content/results.json",
+    "originalSha256": "d924959aa67e4d6eb098020553e8ba6ddb81fe1404e95ed84942a0dd88d750c3",
+    "retainedSha256": "1383c4a24c035f4133466a75440953b48b31fc66ad9fb302e14fcafe80586f6d",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-built-content/sdk-built-facet.json",
+    "originalSha256": "2e8fd052a7aa8213fa28f9e9926e45fcf5b491b179d1654a5c8ba8b894f07ab3",
+    "retainedSha256": "a95e0a04d934c955b84986d99e97dd424f3df254c99595dd048ece07e8eb4696",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "sdk-built-content/dependencies.txt",
+    "originalSha256": "3d95424f071d325d916ced8950fdf874edbf1c23da206450f484ca9d8c5d3101",
+    "retainedSha256": "3d95424f071d325d916ced8950fdf874edbf1c23da206450f484ca9d8c5d3101",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "sdk-built-content/packages-build.txt",
+    "originalSha256": "4d33ea7eaa9582eb9e9d9d5942fd11adb6133250bb2a6c01b92f48e6673a5c66",
+    "retainedSha256": "4d33ea7eaa9582eb9e9d9d5942fd11adb6133250bb2a6c01b92f48e6673a5c66",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "native-unit-failure/source.json",
+    "originalSha256": "b3c3420141d23f28b4c1e8a648e93ccb0e0f46e5547c53eab46bc0a5584f5422",
+    "retainedSha256": "117fcd9d2eec6bf2351c1aea7e3905fb94a297944d3dd1b7c873e9d9bb6d97ea",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "native-unit-failure/permission-preflight.json",
+    "originalSha256": "c7f508699e967d844d2fb9c2b0b93fc92fb9c68662e2dbcab2d9d387cd435970",
+    "retainedSha256": "d78dafc71815abf491d1512b218a089786b3a11a7c790e67b1844e1ce36fa8be",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "native-unit-failure/native-receipt.json",
+    "originalSha256": "23ea3c9e1e6e7c9746562f33425f6523fb8e91edc26f1720568a7b631b50f322",
+    "retainedSha256": "28e0e7fb05f36469a5618f159074049aa1f63e5fd6e09e17231e9cbf830491c8",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "native-unit-failure/limits.json",
+    "originalSha256": "9c8df415719ac60f3cc4209405142f02f0bf22fae733c5c41cef4991968fca1c",
+    "retainedSha256": "cd6391e78268a987ab84ec126084e9467ac640a3f0d5e1f23d062713414db065",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "native-unit-failure/results.json",
+    "originalSha256": "3d171c87f2f3858562f5f00921ed5618b4a36d9b75a2aed1cd802b8df48a19cd",
+    "retainedSha256": "c4deba16ce361f4721a79cf43239e310490c29972e7239248c442d504e012c87",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "native-unit-failure/dependencies.txt",
+    "originalSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "retainedSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "native-unit-failure/native-own-unit.json",
+    "originalSha256": "b79e908e8441202d912b3aafc855fbbe43075bae6b6e1378525ba9f42b59c2c4",
+    "retainedSha256": "98e0932c2889425d7c67ed367f429a4c561fae8abcf3e995662e67e4baac05b2",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "native-unit-failure/packages-build.txt",
+    "originalSha256": "4dd7da753e90e91a4c81d75479fee1624183041582f16a1dc2aa3d6afe811608",
+    "retainedSha256": "4dd7da753e90e91a4c81d75479fee1624183041582f16a1dc2aa3d6afe811608",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "native-unit-failure/native-own-unit-vector.txt",
+    "originalSha256": "ed93cbfb64e8259a04a0890c9ebdff8ee568400fa32e10e6da1dee82b08c49ee",
+    "retainedSha256": "ed93cbfb64e8259a04a0890c9ebdff8ee568400fa32e10e6da1dee82b08c49ee",
+    "jsonFormattingNormalized": false
+  }
+]

@@ -1,0 +1,15 @@
+(node:70) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@app/api| tests/runtime/sqlite-profile.spec.ts (5 tests) 2040ms
+   ✓ opens both real app stores on SQLite and persists SDK operations across a restart  589ms
+   ✓ waits for real populated search admission through the live registry readiness port  751ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  09:31:10
+   Duration  4.87s (transform 1.44s, setup 12ms, collect 2.61s, tests 2.04s, environment 0ms, prepare 66ms)
+
+JSON report written to /results/api-startup-typed.json

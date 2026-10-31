@@ -1,0 +1,48 @@
+
+ RUN  v3.2.7 /metrics
+
+ ❯ |@app/publish-checks| tests/published-sdk-types.integration.spec.ts (10 tests | 1 failed) 13031ms
+   ✓ published @apackdev/sdk > typecheck for consumers using TypeScript 'current', moduleResolution 'node16'  1019ms
+   ✓ published @apackdev/sdk > typecheck for consumers using TypeScript 'current', moduleResolution 'bundler'  727ms
+   ✓ published @apackdev/sdk > typecheck for consumers using TypeScript '5.7', moduleResolution 'node16'  877ms
+   ✓ published @apackdev/sdk > typecheck for consumers using TypeScript '5.7', moduleResolution 'bundler'  759ms
+   ✓ published @apackdev/sdk > types inference with the AI SDK's own types at the TypeScript floor, with library checks, under node16 and bundler  7811ms
+   ✓ published @apackdev/sdk > ships no host-only module  459ms
+   × published @apackdev/sdk > loads the SDK on the installed @apackdev/ears 51ms
+     → expected [ 'dist', 'node_modules', …(2) ] to deeply equal [ 'dist', 'package.json', 'vendor' ]
+   ✓ published @apackdev/sdk > publishes the workspace package.json of @apackdev/ears, derived 3ms
+   ✓ published @apackdev/sdk > publishes the workspace package.json of @apackdev/sdk, derived 1ms
+   ✓ published @apackdev/sdk > publishes the workspace package.json of @apackdev/ui, derived 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@app/publish-checks| tests/published-sdk-types.integration.spec.ts > published @apackdev/sdk > loads the SDK on the installed @apackdev/ears
+AssertionError: expected [ 'dist', 'node_modules', …(2) ] to deeply equal [ 'dist', 'package.json', 'vendor' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "dist",[22m
+[31m+   "node_modules",[39m
+[2m    "package.json",[22m
+[2m    "vendor",[22m
+[2m  ][22m
+
+ ❯ tests/published-sdk-types.integration.spec.ts:168:45
+    166|     );
+    167|     expect(output).toBe('Flow contains object true');
+    168|     expect(fs.readdirSync(earsRoot).sort()).toEqual(['dist', 'package.…
+       |                                             ^
+    169|     expect(fs.readdirSync(path.join(earsRoot, 'vendor'))).toEqual(['rr…
+    170|     expect(fs.readdirSync(path.join(earsRoot, 'vendor', 'rregex')).sor…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  10:12:31
+   Duration  13.39s (transform 121ms, setup 20ms, collect 222ms, tests 13.03s, environment 0ms, prepare 41ms)
+
+JSON report written to /results/inventory-all.json

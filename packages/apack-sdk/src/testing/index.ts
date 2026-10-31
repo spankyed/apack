@@ -3,7 +3,7 @@ import type { SettingsAdmin } from '../services/settings.ts';
 // @apackdev/testing's harness drives it; it lives in the SDK so tests share the pack's SDK instance
 // (its query, repository and content-writer registries) instead of a copy.
 import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RelationRules, type RowRules } from '@apackdev/ears';
-import { createTemporaryDatabases } from '@apackdev/ears/lmdb';
+import { createTestDatabases } from './databases.ts';
 import { _bindEars } from '../ears/index.ts';
 import type { ContentRuntime } from '../framework/content-runtime.ts';
 export { nativePackDeclarationFixture } from './pack-declaration.ts';
@@ -68,7 +68,7 @@ let started: Pick<TestRuntimeStartOptions, 'packs' | 'appVersion' | 'onboarding'
 let engine: EarsEngine | undefined;
 let disposeDatabase: (() => void) | undefined;
 /** The process's test databases, each removed when it is replaced or the process exits */
-const databases = createTemporaryDatabases();
+const databases = createTestDatabases();
 
 /** The test runtime's names, each with its rules, as the database's schema */
 const testSchema = (): EngineSchema => ({

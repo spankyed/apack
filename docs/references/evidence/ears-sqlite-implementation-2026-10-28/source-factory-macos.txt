@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/index.spec.ts
+
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+
+ ✓ tests/sqlite/index.spec.ts (3 tests) 130ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  02:25:07
+   Duration  655ms (transform 151ms, setup 10ms, collect 204ms, tests 130ms, environment 0ms, prepare 59ms)
+

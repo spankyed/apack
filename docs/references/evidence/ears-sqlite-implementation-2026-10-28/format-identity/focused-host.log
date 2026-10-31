@@ -1,0 +1,21 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+(node:52) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/database/storage.spec.ts > quarantines corrupt elmdb/1 history while an unrelated primary handle stays open
+[run-history] The run history at /tmp/apack-sqlite-profile-hZqsuE/runs couldn't be opened (/tmp/apack-sqlite-profile-hZqsuE/runs/data.mdb isn't a file this LMDB reads: MDB_INVALID: File is not an LMDB file. Files lmdb-js wrote are in its own LMDB data version, which elmdb doesn't read; re-create the database with elmdb): it was moved to /tmp/apack-sqlite-profile-hZqsuE/runs.unreadable-2026-10-30T17-32-20-112Z, and a new one started
+
+stderr | tests/database/storage.spec.ts > quarantines corrupt sqlite/1 history while an unrelated primary handle stays open
+[run-history] The run history at /tmp/apack-sqlite-profile-raImrT/runs couldn't be opened (file is not a database): it was moved to /tmp/apack-sqlite-profile-raImrT/runs.unreadable-2026-10-30T17-32-20-247Z, and a new one started
+
+ ✓ tests/database/storage.spec.ts (38 tests) 2668ms
+   ✓ blocks writable recovery opens without salvaging either sqlite/1 store  441ms
+   ✓ refuses sqlite/1 history quarantine while a managed reader still holds the directory  418ms
+
+ Test Files  1 passed (1)
+      Tests  38 passed (38)
+   Start at  17:32:16
+   Duration  4.66s (transform 924ms, setup 14ms, collect 1.84s, tests 2.67s, environment 0ms, prepare 49ms)
+
+JSON report written to /results/focused-host.json

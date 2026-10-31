@@ -1,0 +1,18 @@
+
+ RUN  v3.2.7 /electron/packages/apack-cli
+
+ ✓ tests/commands/sqlite-profile.spec.ts (11 tests) 3381ms
+   ✓ queries and writes the named SQLite profile through normal CLI commands  455ms
+   ✓ backs up, verifies, reads history and restores both stores using the named target  827ms
+ ✓ tests/commands/db-logical.spec.ts (8 tests) 3649ms
+   ✓ routes real dump/load commands, validates dry run, restores primary bytes and preserves media  1317ms
+   ✓ dumps and loads history alone without replacing or advancing primary  639ms
+   ✓ validates both selected inputs before replacing primary or history  1522ms
+ ✓ tests/commands/db-rebuild.spec.ts (9 tests) 1064ms
+
+ Test Files  3 passed (3)
+      Tests  28 passed (28)
+   Start at  20:36:18
+   Duration  7.63s (transform 1.29s, setup 23ms, collect 4.38s, tests 8.09s, environment 0ms, prepare 145ms)
+
+JSON report written to /results/platform-cli.json

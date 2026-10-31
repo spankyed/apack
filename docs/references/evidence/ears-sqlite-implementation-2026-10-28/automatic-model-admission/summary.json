@@ -1,0 +1,62 @@
+{
+  "realAdmission": [
+    {
+      "size": 1000,
+      "automaticAdmission": {
+        "enqueues": 0,
+        "pages": 8,
+        "references": 1000,
+        "firstQueryHits": 10,
+        "nativeCandidateCalls": 0,
+        "explicitHarnessEnqueues": 0
+      },
+      "admissionMs": 5.614190000000008,
+      "heartbeat": {
+        "count": 4,
+        "p50": 0.12029699999993682,
+        "p95": 0.8567990000001373,
+        "p99": 0.8567990000001373,
+        "max": 0.8567990000001373
+      },
+      "walBytesAfterAdmission": 0,
+      "maxRssKiB": 784092,
+      "state": null
+    },
+    {
+      "size": 99900,
+      "automaticAdmission": {
+        "enqueues": 1,
+        "pages": 33,
+        "references": 4224,
+        "firstQueryHits": 10,
+        "nativeCandidateCalls": 1,
+        "explicitHarnessEnqueues": 0
+      },
+      "admissionMs": 20771.112460000004,
+      "heartbeat": {
+        "count": 2194,
+        "p50": 0.6932569999989937,
+        "p95": 34.701060999999754,
+        "p99": 48.14324000000488,
+        "max": 146.6940969999996
+      },
+      "walBytesAfterAdmission": 5718592,
+      "maxRssKiB": 1075588,
+      "state": {
+        "state": "ready",
+        "model_sha256": "af17094367bd688d22b2859524b00e10a8371f8c991fcca9837e7e803f1cd2d8",
+        "samples": 20000,
+        "source_commit_hex": "CD0928",
+        "extension_sha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d",
+        "native_version": "version 0.8 (NEON, multi-threaded)",
+        "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+      }
+    }
+  ],
+  "recoveryDiagnostic": {
+    "childActions": 43,
+    "maxChildMs": 2338,
+    "all32CasesPassed": true,
+    "timeoutRootCauseEstablished": false
+  }
+}

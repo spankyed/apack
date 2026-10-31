@@ -1,0 +1,38 @@
+{
+  "20000-durable-views-sqlite.log": {
+    "sha256": "c74adcada2c74635b933311f7a0784ad01bf9d7d446e419b8e96f3b09663900a",
+    "bytes": 933
+  },
+  "inputs.json": {
+    "sha256": "73b3993cb700815817a3dea06750ac65107c67816aa8310c8051325dc5d9f680",
+    "bytes": 213186
+  },
+  "probe.json": {
+    "sha256": "eed115313ff1b0fe23c88139503fa882d17ea693c91513328b86e85ddff1e605",
+    "bytes": 3539
+  },
+  "run.json": {
+    "sha256": "d2b7265add3797f96e21d146eccb11c42b24674d9afa9361edfbe33e10198a8c",
+    "bytes": 3560
+  },
+  "20000-default-views-sqlite.log": {
+    "sha256": "4563d7dcd1228e5d2c8c06d1d770718e99b25cd17079b8b4933b8a38ece416b1",
+    "bytes": 995
+  },
+  "host-launch.json": {
+    "sha256": "747dc997709055c26f36b855f0b3b98793ce72b185e12bf1b25fd3861b8aa1d6",
+    "bytes": 1011
+  },
+  "ears-sqlite-watch-sort-fixed.ts": {
+    "sha256": "dc00ebeffeed57c5c1d2549fafde664d123654a58aae4065481d030d4b68739c",
+    "bytes": 8451
+  },
+  "ears-sqlite-watch-sort-fixed-run.py": {
+    "sha256": "c672ec77731adef7df9865ecda68065e6545d682ec391666fc5f09053f98a35b",
+    "bytes": 1640
+  },
+  "ears-run-sqlite-watch-sort-fixed.py": {
+    "sha256": "94290117ba451ca776c9e743561797e03fe9cb34115c4b66f3112c6485a44129",
+    "bytes": 2986
+  }
+}

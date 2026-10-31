@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
-it('discovers native migration data without modules and executes both lines through normal startup', () => {
+it('discovers native migration data without modules and executes both lines through normal startup', async () => {
   const order: string[] = [];
   const registry = createPackRegistry({ nativeDeclarations: [{ ...declaration, lifecycle: { onInit: 'absent/hooks.ts#onInit' } }] });
   const metadata = registry.catalog.getSnapshot().native[0];
@@ -32,7 +32,7 @@ it('discovers native migration data without modules and executes both lines thro
   expect(order).toEqual([]);
   expect(registry.packMigrationTargets('pack')).toMatchObject([{ packId: declaration.id, version: '2.0.0' }]);
   expect(registry.packContentTargets()).toEqual([]);
-  startPacks(registry);
+  await startPacks(registry);
   expect(order).toEqual(['init', 'app', 'pack']);
   expect(appState.get()).toMatchObject({ version: '4.0.0', packVersions: { [declaration.id]: '2.0.0' } });
   registry.unregisterPack(declaration.id);

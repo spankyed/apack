@@ -419,3 +419,17 @@ describe('explicit settings recovery', () => {
     expect(() => store.recover({ version: store.getRecovery()!.version, reset: 'all' })).toThrow('changed');
   });
 });
+
+it.each(['COMMIT_UNKNOWN', 'RECOVERY_REQUIRED'])('never publishes ready settings after %s', async code => {
+  const changes: string[] = [];
+  const stop = store.onChange(change => { changes.push(change); });
+  const failure = Object.assign(new Error('import requires inspection'), { code });
+  try {
+    await expect(store.whileReplacingData(async () => { throw failure; })).rejects.toBe(failure);
+    expect(changes).not.toContain('replaced');
+    expect(() => store.getSnapshot()).toThrow(failure);
+    expect(() => store.get(app)).toThrow(failure);
+    expect(() => store.set(assistant, ['name'], 'unsafe')).toThrow(failure);
+    expect(() => store.getRecovery()).toThrow(failure);
+  } finally { stop(); }
+});

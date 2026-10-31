@@ -43,6 +43,9 @@ function populate(size: number) {
 
 /** A read's answer and how many reads of elmdb it made */
 function counted<T>(read: () => T): { answer: T; reads: number } {
+  if (process.env.EARS_EVALUATION_BACKEND === 'sqlite') {
+    expect(query(EARS.Entity.Thread).explain()).toMatchObject({ backend: 'sqlite' })
+  }
   testCalls().start()
   const answer = read()
   return { answer, reads: testCalls().stop().totals.read.calls }

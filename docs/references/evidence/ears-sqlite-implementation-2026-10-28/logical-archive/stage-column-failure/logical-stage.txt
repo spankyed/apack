@@ -1,0 +1,138 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts tests/sqlite/logical-stage.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 316ms
+ ❯ tests/sqlite/logical-stage.spec.ts (7 tests | 6 failed) 642ms
+   × sealed logical archive ingestion > seals a complete real snapshot with raw values and embeddings, leaving the source unchanged 151ms
+     → table relations has 6 columns but 7 values were supplied
+   × sealed logical archive ingestion > removes staging after a truncated stream, even after records were decoded 122ms
+     → expected SqliteError: table relations has 6 column… { code: '…' } to match object { code: 'DUMP_INVALID' }
+   × sealed logical archive ingestion > removes staging after a trailing stream, even after records were decoded 91ms
+     → expected SqliteError: table relations has 6 column… { code: '…' } to match object { code: 'DUMP_INVALID' }
+   × sealed logical archive ingestion > refuses duplicate identities without publishing a seal or modifying the source 81ms
+     → expected SqliteError: table relations has 6 column… { code: '…' } to match object { code: 'DUMP_INVALID' }
+   × sealed logical archive ingestion > refuses a counter behind the stored identities after verifying the stream 81ms
+     → expected [Function] to throw error including 'Invalid logical archive identity coun…' but got 'table relations has 6 columns but 7 v…'
+   ✓ sealed logical archive ingestion > refuses an existing destination without taking ownership of its files 28ms
+   × sealed logical archive ingestion > retains the original input IO error and removes partial staging 88ms
+     → expected SqliteError: table relations has 6 column… { code: '…' } to be Error: source IO failure { code: 'EIO' } // Object.is equality
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 15ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/logical-stage.spec.ts > sealed logical archive ingestion > seals a complete real snapshot with raw values and embeddings, leaving the source unchanged
+SqliteError: table relations has 6 columns but 7 values were supplied
+ ❯ Database.prepare ../../node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ stageLogicalSnapshot src/sqlite/logical-stage.ts:44:20
+     42|       meta: db.prepare('INSERT INTO meta VALUES (?,?)'), identity: db.…
+     43|       entity: db.prepare('INSERT INTO entities VALUES (?,?,?,?,?)'), v…
+     44|       relation: db.prepare('INSERT INTO relations VALUES (?,?,?,?,?,?,…
+       |                    ^
+     45|     };
+     46|     const counts: LogicalStage['counts'] = { meta: 0, entity: 0, value…
+ ❯ tests/sqlite/logical-stage.spec.ts:32:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  tests/sqlite/logical-stage.spec.ts > sealed logical archive ingestion > removes staging after a truncated stream, even after records were decoded
+ FAIL  tests/sqlite/logical-stage.spec.ts > sealed logical archive ingestion > removes staging after a trailing stream, even after records were decoded
+AssertionError: expected SqliteError: table relations has 6 column… { code: '…' } to match object { code: 'DUMP_INVALID' }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- {[39m
+[32m-   "code": "DUMP_INVALID",[39m
+[31m+ SqliteError {[39m
+[31m+   "code": "SQLITE_ERROR",[39m
+[2m  }[22m
+
+ ❯ tests/sqlite/logical-stage.spec.ts:46:5
+     44|     const f = fixture(), data = await bytes(exportLogicalSnapshot(f.db…
+     45|     const input = fault === 'truncated' ? data.subarray(0, -2) : Buffe…
+     46|     await expect(stageLogicalSnapshot(one(input), f.destination)).reje…
+       |     ^
+     47|     expect(existsSync(f.destination)).toBe(false);
+     48|     await expect(stageLogicalSnapshot(one(data), f.destination)).resol…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  tests/sqlite/logical-stage.spec.ts > sealed logical archive ingestion > refuses duplicate identities without publishing a seal or modifying the source
+AssertionError: expected SqliteError: table relations has 6 column… { code: '…' } to match object { code: 'DUMP_INVALID' }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- {[39m
+[32m-   "code": "DUMP_INVALID",[39m
+[31m+ SqliteError {[39m
+[31m+   "code": "SQLITE_ERROR",[39m
+[2m  }[22m
+
+ ❯ tests/sqlite/logical-stage.spec.ts:52:5
+     50|   it('refuses duplicate identities without publishing a seal or modify…
+     51|     const f = fixture(), duplicate: LogicalRecord = { kind: 'meta', ke…
+     52|     await expect(stageLogicalSnapshot(encodeLogicalSnapshot(0, [duplic…
+       |     ^
+     53|     expect(existsSync(f.destination)).toBe(false); expect(f.e.query('R…
+     54|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  tests/sqlite/logical-stage.spec.ts > sealed logical archive ingestion > refuses a counter behind the stored identities after verifying the stream
+AssertionError: expected [Function] to throw error including 'Invalid logical archive identity coun…' but got 'table relations has 6 columns but 7 v…'
+
+Expected: [32m"Invalid logical archive identity counter"[39m
+Received: [31m"table relations has 6 columns but 7 values were supplied"[39m
+
+ ❯ tests/sqlite/logical-stage.spec.ts:59:5
+     57|     const records: LogicalRecord[] = [{ kind: 'meta', key: 'seq', valu…
+     58|       { kind: 'entity', id: 'Row-one', type: 'Row', seq: 1, trashed: f…
+     59|     await expect(stageLogicalSnapshot(encodeLogicalSnapshot(0, records…
+       |     ^
+     60|     expect(existsSync(f.destination)).toBe(false);
+     61|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  tests/sqlite/logical-stage.spec.ts > sealed logical archive ingestion > retains the original input IO error and removes partial staging
+AssertionError: expected SqliteError: table relations has 6 column… { code: '…' } to be Error: source IO failure { code: 'EIO' } // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "source IO failure",[39m
+[32m-   "code": "EIO",[39m
+[31m+ SqliteError {[39m
+[31m+   "message": "table relations has 6 columns but 7 values were supplied",[39m
+[31m+   "code": "SQLITE_ERROR",[39m
+[2m  }[22m
+
+ ❯ tests/sqlite/logical-stage.spec.ts:70:5
+     68|     const f = fixture(), failure = Object.assign(new Error('source IO …
+     69|     async function* records(): AsyncGenerator<LogicalRecord> { yield {…
+     70|     await expect(stageLogicalSnapshot(encodeLogicalSnapshot(0, records…
+       |     ^
+     71|     expect(existsSync(f.destination)).toBe(false);
+     72|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  6 failed | 18 passed (24)
+   Start at  13:22:38
+   Duration  1.70s (transform 234ms, setup 14ms, collect 379ms, tests 973ms, environment 0ms, prepare 117ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts tests/sqlite/logical-stage.spec.ts

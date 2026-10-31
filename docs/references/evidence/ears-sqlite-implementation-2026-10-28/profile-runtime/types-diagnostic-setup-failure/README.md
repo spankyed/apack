@@ -1,0 +1,1 @@
+Setup failure, not source validation: this harness copied a stale seed dependency cache without reconciling package-lock.json. EARS package build failed AJV types; subsequent project diagnostics cannot qualify the source. Corrected harness installs dependencies and requires package build success before proceeding.

@@ -1,0 +1,72 @@
+{
+  "source": "407d468665b95790eadc8a435997f0f1502ff1e0",
+  "qualification": "Small isolated npm-tarball CLI with native install scripts; not signed apps, Electron, power loss or large-profile acceptance",
+  "node": "v23.11.1",
+  "cli": {
+    "path": "/tmp/ears-installed-y35r6u13/node_modules/@apackdev/cli/bin/apack.mjs",
+    "sha256": "f91511b7b380421b47823e6b948087e50346abfe5de8d5ff7c0e88ca1dc63591"
+  },
+  "bundle": {
+    "path": "/tmp/ears-installed-y35r6u13/node_modules/@apackdev/cli/dist/cli.js",
+    "sha256": "c49ab78e00d9cf2bc65f206b4be9a18d0d22d59ebab429a5037b09bae1eca069"
+  },
+  "entries": {
+    "@apackdev/ears": "file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/index.js",
+    "@apackdev/ears/sqlite": "file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/sqlite/index.js",
+    "@apackdev/sdk/utils": "file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/sdk/dist/utils/index.js"
+  },
+  "calls": [
+    {
+      "args": [
+        "--help"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "Usage: apack db <command> [options]\n\nThe app's database, read and changed while apack is closed. Commands that change it refuse while apack runs\non the data dir; reads warn that it is running, and read what it has committed.\n\nCommands:\n  query <code>          Run read-only query code (the Database console's)\n  exec <code>           Run transaction code\n  repl [--write]        Run console code line by line\n  script <file>         Run a script file against the database (it imports what it likes)\n  inspect [<id>]        An entity's relations, or relation counts per entity type\n  runs [--run <id>]     The flow runs in the run history, or one run's whole tree\n  backup --out <dir>    Full database and media backup to a new directory\n  backup verify <dir>   Check backup readability and completeness\n  recover               Inspect interrupted imports; explicitly restore retained incumbents\n  rebuild [--force]     Rebuild SQLite candidate derived indexes from primary data\n  audit [--json]        Inspect SQLite candidate primary values and derived indexes\n  export --out <dir>    Each entity type's entities to a file\n  dump --primary <file> Lossless SQLite logical archives (--runs may also be named)\n  load --primary <file> Validate logical archives; --force replaces selected stores\n  import <backup-dir>   Replace the database with a backup (lists the change; --force makes it)\n  reset                 Delete all data, as Reset Database does (lists it; --force deletes)\n  clear-settings        Destroy the Settings rows, so defaults come back (lists them; --force destroys)\n\nEvery command takes one of these; a command that changes the database says which data dir it means, and a command\nthat only reads takes the production app's data without being told:\n  --data-dir <path>      A data dir, a copy of the user's for example\n  --profile <name>       Built-in or custom stored profile\n  --schema-from <path>   Packs to read entity types from, for a data dir that publishes none: a snapshot,\n                         a pack directory, or a directory of them (an app, a checkout)\n\napack db <command> --help shows a command's options.\n",
+      "stderr": "",
+      "ms": 864.706437
+    },
+    {
+      "args": [
+        "dump",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-fiJAE2/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-fiJAE2/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-fiJAE2/runs.ears"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "primary: /tmp/ears-built-logical-cli-fiJAE2/primary.ears\nruns: /tmp/ears-built-logical-cli-fiJAE2/runs.ears\n",
+      "stderr": "Database: /tmp/ears-built-logical-cli-fiJAE2/profile (offline)\nWarning: /tmp/ears-built-logical-cli-fiJAE2/profile has no packs installed in /tmp/ears-built-logical-cli-fiJAE2/profile/apack/packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\n",
+      "ms": 1151.7988700000003
+    }
+  ],
+  "checks": [
+    "built dump both stores"
+  ],
+  "regexAssets": [
+    {
+      "path": "/tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/vendor/rregex/rregex.cjs",
+      "sha256": "5a8b72e18f1f25df12ec19499168be74caaa4a2476c6c098283887b5718d3e1a"
+    },
+    {
+      "path": "/tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/vendor/rregex/rregex_bg.wasm",
+      "sha256": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525"
+    }
+  ],
+  "sqlite": {
+    "version": "3.53.4"
+  },
+  "archiveHashes": {
+    "primary": "65a3ab5caa11031ed2a5eebbb7b6540c95c83ae9d5ece8fa3230d8659d8b9ff6",
+    "runs": "3f407417733019f83f66a019b6f5c42ed6eeb9289e14b3b5063f614749c0d6b2"
+  },
+  "failure": {
+    "message": "matching: Row has no trigram index",
+    "stack": "EarsError: matching: Row has no trigram index\n    at crossing (file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/database.js:78:19)\n    at file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/database.js:281:33\n    at counting (file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/database.js:240:20)\n    at read (file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/database.js:278:20)\n    at send (file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/query.js:86:24)\n    at run (file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/query.js:128:16)\n    at Object.ids (file:///tmp/ears-installed-y35r6u13/node_modules/@apackdev/ears/dist/query.js:133:27)\n    at current (file:///tmp/ears-installed-y35r6u13/probe.mjs:46:93)\n    at file:///tmp/ears-installed-y35r6u13/probe.mjs:70:18\n    at ModuleJob.run (node:internal/modules/esm/module_job:274:25)"
+  }
+}

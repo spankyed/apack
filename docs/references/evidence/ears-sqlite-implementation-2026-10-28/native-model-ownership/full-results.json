@@ -1,0 +1,129 @@
+[
+  {
+    "label": "owner-packages",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 31.467180940991966
+  },
+  {
+    "label": "reject-missing-kernel-claim",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-owner.spec.ts",
+      "-t",
+      "releases after process death",
+      "--outputFile=/results/missing-kernel-claim.json"
+    ],
+    "exitCode": 1,
+    "seconds": 0.9169520079740323
+  },
+  {
+    "label": "reject-early-claim-release",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "-t",
+      "excludes independent connections",
+      "--outputFile=/results/early-claim-release.json"
+    ],
+    "exitCode": 1,
+    "seconds": 1.4410909120051656
+  },
+  {
+    "label": "owner-all-ears",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/owner-all-ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 50.19992267500493
+  },
+  {
+    "label": "owner-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 1.3029520660056733
+  },
+  {
+    "label": "owner-host-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:host"
+    ],
+    "exitCode": 0,
+    "seconds": 6.090483175008558
+  },
+  {
+    "label": "owner-boundaries",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.543134873005329
+  },
+  {
+    "label": "owner-lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/sqlite/vector-models.ts",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "packages/apack-ears/src/sqlite/vector-owner.ts",
+      "packages/apack-ears/tests/sqlite/vector-owner.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.03562557298573665
+  },
+  {
+    "label": "owner-platform-syntax",
+    "args": [
+      "node",
+      "--check",
+      ".github/scripts/ears-sqlite-platform.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 0.01700963798793964
+  }
+]

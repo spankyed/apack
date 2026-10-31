@@ -20,7 +20,9 @@ describe('APP_ONLY_EXPORTS', () => {
     const specifiers = sharedInstanceSpecifiers('@apackdev/ears', sharedInstanceExports('@apackdev/ears', import.meta.filename));
     expect(specifiers).toContain('@apackdev/ears');
     expect(specifiers).not.toContain('@apackdev/ears/lmdb');
+    expect(specifiers).not.toContain('@apackdev/ears/sqlite');
     expect(appBridgedSpecifiers(import.meta.filename)).not.toContain('@apackdev/ears/lmdb');
+    expect(appBridgedSpecifiers(import.meta.filename)).not.toContain('@apackdev/ears/sqlite');
   });
 });
 

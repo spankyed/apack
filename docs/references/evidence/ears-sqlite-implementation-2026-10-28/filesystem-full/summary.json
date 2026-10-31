@@ -1,0 +1,132 @@
+{
+  "runtimeSource": "e29a9b1cced1e9e2e2fafe2d0ebc328e299a0735",
+  "harnessSourceSha256": "4b326baf346b77ddca83fe913d5adfb9c6fcbb934a35e628e0c3e8575e6afc59",
+  "qualifiedVerifierSha256": "236b66bfd9f5f235e6743dbaad3828339262e4de5477be18ef0cd6bc8ada74d9",
+  "cases": [
+    {
+      "mode": "commit",
+      "synchronous": 2,
+      "walAutocheckpoint": 1000,
+      "maxPageCount": 4294967294,
+      "sequenceBefore": 2,
+      "fillerError": "ENOSPC",
+      "fillerBytes": 8167424,
+      "error": {
+        "code": "SQLITE_FULL",
+        "message": "database or disk is full"
+      },
+      "enteredCommit": true,
+      "availableBytesAtFailure": 0,
+      "sequenceAfterRefusal": 2,
+      "afterRefusalIds": [
+        "Row-before"
+      ],
+      "sequenceAfterRecovery": 3,
+      "reopenedReadOnly": true,
+      "refusedWriteInvisible": true,
+      "watchNotifications": [
+        [
+          "Row-before"
+        ],
+        [
+          "Row-before",
+          "Row-recovered"
+        ]
+      ],
+      "completed": true
+    },
+    {
+      "mode": "write",
+      "synchronous": 2,
+      "walAutocheckpoint": 1000,
+      "maxPageCount": 4294967294,
+      "sequenceBefore": 2,
+      "error": {
+        "code": "SQLITE_FULL",
+        "message": "database or disk is full"
+      },
+      "enteredCommit": true,
+      "availableBytesAtFailure": 0,
+      "sequenceAfterRefusal": 2,
+      "afterRefusalIds": [
+        "Row-before"
+      ],
+      "sequenceAfterRecovery": 3,
+      "reopenedReadOnly": true,
+      "refusedWriteInvisible": true,
+      "watchNotifications": [
+        [
+          "Row-before"
+        ],
+        [
+          "Row-before",
+          "Row-recovered"
+        ]
+      ],
+      "completed": true
+    },
+    {
+      "mode": "bulkLoad",
+      "synchronous": 2,
+      "walAutocheckpoint": 1000,
+      "maxPageCount": 4294967294,
+      "sequenceBefore": 2,
+      "error": {
+        "code": "SQLITE_FULL",
+        "message": "database or disk is full"
+      },
+      "enteredCommit": true,
+      "availableBytesAtFailure": 0,
+      "sequenceAfterRefusal": 2,
+      "afterRefusalIds": [
+        "Row-before"
+      ],
+      "sequenceAfterRecovery": 3,
+      "reopenedReadOnly": true,
+      "refusedWriteInvisible": true,
+      "watchNotifications": [
+        [
+          "Row-before"
+        ],
+        [
+          "Row-before",
+          "Row-recovered"
+        ]
+      ],
+      "completed": true
+    },
+    {
+      "mode": "unit",
+      "synchronous": 2,
+      "walAutocheckpoint": 1000,
+      "maxPageCount": 4294967294,
+      "sequenceBefore": 2,
+      "error": {
+        "code": "SQLITE_FULL",
+        "message": "database or disk is full"
+      },
+      "enteredCommit": true,
+      "availableBytesAtFailure": 0,
+      "sequenceAfterRefusal": 2,
+      "afterRefusalIds": [
+        "Row-before"
+      ],
+      "sequenceAfterRecovery": 3,
+      "reopenedReadOnly": true,
+      "refusedWriteInvisible": true,
+      "watchNotifications": [
+        [
+          "Row-before"
+        ],
+        [
+          "Row-before",
+          "Row-recovered"
+        ]
+      ],
+      "completed": true
+    }
+  ],
+  "negativeReportControls": 42,
+  "platform": "Linux arm64 in bounded Docker",
+  "wholeGoalAcceptance": false
+}

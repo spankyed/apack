@@ -1,0 +1,385 @@
+diff --git a/packages/apack-ears/bench/sqlite/README.md b/packages/apack-ears/bench/sqlite/README.md
+index 2491a7fe49..f421181592 100644
+--- a/packages/apack-ears/bench/sqlite/README.md
++++ b/packages/apack-ears/bench/sqlite/README.md
+@@ -237,3 +237,23 @@ SQL snapshot, cap generated terms at 2048, and fall back to the unrestricted cla
+ is larger. Estimates never truncate results. The indexed column changes document-length statistics and adds
+ storage/build work, which this cohort must report. Fresh/reset copied format-one profiles are required.
+ This diagnostic does not settle broad-query pagination, fuzzy scaling, real app budgets or phase 3–7 acceptance.
++
++### Ranked-prefix and late-fetch cohort
++
++Before measuring the adjacent-limit/single-clause correction, run exactly **legacy / postings / prefix /
++prefix / postings / legacy**, six fresh Linux processes, unchanged two CPUs/6 GiB and 180 seconds each.
++Legacy is `9a2771ec25`, postings is `c132441538`, prefix is the converged ranked-prefix implementation.
++All six receive the identical `text-shape.mjs`, retaining its dataset and every earlier measurement, plus
++50 broad highlighted/picked-name reads and 50 positive-recency broad reads. The latter explicitly measures
++the generic-value recency fallback rather than excluding it from the comparison. Read counts stay at 250
++for point/conjunction/group/exclusion/OR, 50 for each broad mode and 1000 name writes. All samples, binding
++calls, file/RSS/WAL/heartbeat and actual entrypoints/native hashes remain. No warm samples are discarded.
++Stop on correctness/setup failure, retain every attempted process, and never retry automatically.
++
++The prefix optimization caps only an adjacent limit or a final first/first-row/exists terminal. It preserves
++each type's possible global winners and applies the existing global pipeline afterward. Active recency
++ranks generic values before limiting in JS; it has no premature SQL prefix. Single-clause aggregation removes
++redundant native grouping. Bounded highlight queries score first, then fetch complete matching strings for
++selected entities inside the request's read snapshot; only requested primary hit fields are projected.
++Actual native returned-row and highlight-call controls are required before timing. This diagnostic is not
++100k/FULL admission, full app qualification, bounded fuzzy, vector recall or an adoption decision.
+diff --git a/packages/apack-ears/bench/sqlite/text-shape.mjs b/packages/apack-ears/bench/sqlite/text-shape.mjs
+index b47d15e76a..1b6350ef50 100644
+--- a/packages/apack-ears/bench/sqlite/text-shape.mjs
++++ b/packages/apack-ears/bench/sqlite/text-shape.mjs
+@@ -37,15 +37,23 @@ try {
+   await db.indexesReady(); const buildMs = performance.now() - admitStart; sample();
+   const afterBuild = files(), sqlCalls = { all: 0, get: 0, run: 0 }, originals = {};
+   for (const key of Object.keys(sqlCalls)) { originals[key] = db[key].bind(db); db[key] = (...args) => { sqlCalls[key]++; return originals[key](...args); }; }
+-  const samples = { point: [], crossField: [], crossFieldReverse: [], medium: [], mediumReverse: [], negative: [], negativeReverse: [], disjunction: [], broad: [], update: [] }, counts = {};
+-  for (const [name, query, expected] of [['point', 'ticket42', ['Row-42']], ['crossField', 'ticket42 ready', ['Row-42']], ['crossFieldReverse', 'ready ticket42', ['Row-42']], ['medium', 'group7 ready', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['mediumReverse', 'ready group7', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['negative', 'ticket42 -storage', []], ['negativeReverse', '-storage ticket42', []], ['disjunction', 'ticket42 OR ticket43', ['Row-42', 'Row-43']], ['broad', 'storage', null]]) {
++  const samples = { point: [], crossField: [], crossFieldReverse: [], medium: [], mediumReverse: [], negative: [], negativeReverse: [], disjunction: [], broad: [], highlights: [], recency: [], update: [] }, counts = {};
++  const recencyNow = Date.now();
++  for (const [name, query, expected, extra] of [['point', 'ticket42', ['Row-42']], ['crossField', 'ticket42 ready', ['Row-42']], ['crossFieldReverse', 'ready ticket42', ['Row-42']], ['medium', 'group7 ready', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['mediumReverse', 'ready group7', Array.from({ length: 10 }, (_, i) => `Row-${7 + i * 100}`)], ['negative', 'ticket42 -storage', []], ['negativeReverse', '-storage ticket42', []], ['disjunction', 'ticket42 OR ticket43', ['Row-42', 'Row-43']], ['broad', 'storage', null], ['highlights', 'storage', null], ['recency', 'storage', null, { recency: { field: 'createdAt', halfLife: 3600000, now: recencyNow } }]]) {
+     phase = name; const callsBefore = { ...sqlCalls };
+-    const limit = name === 'broad' ? 50 : 250;
++    const limit = ['broad', 'highlights', 'recency'].includes(name) ? 50 : 250;
+     for (let i = 0; i < limit; i++) {
+       await new Promise(resolve => setImmediate(resolve));
+-      const at = performance.now(), ids = e.query('Row').search(query, { fuzzy: false }).limit(10).ids();
++      const at = performance.now(), builder = e.query('Row').search(query, { fuzzy: false, ...extra }).limit(10);
++      const answer = name === 'highlights' ? builder.hits({ fields: ['name'], highlights: true }) : builder.ids();
+       samples[name].push(performance.now() - at);
++      const ids = name === 'highlights' ? answer.map(hit => hit.id) : answer;
+       if (expected) assert.deepEqual(ids, expected); else { assert.equal(ids.length, 10); assert.equal(new Set(ids).size, 10); assert(ids.every(id => /^Row-\d+$/.test(id) && Number(id.slice(4)) < n)); }
++      if (name === 'highlights') for (const hit of answer) {
++        const i = Number(hit.id.slice(4));
++        assert.deepEqual(hit.highlights.tags, [[1, 0, 7]]);
++        assert.equal(hit.row.name, `openDatabaseStore ticket${i} group${i % 100}`);
++      }
+     }
+     counts[name] = Object.fromEntries(Object.keys(sqlCalls).map(key => [key, sqlCalls[key] - callsBefore[key]]));
+   }
+diff --git a/packages/apack-ears/src/sqlite/query.ts b/packages/apack-ears/src/sqlite/query.ts
+index 49306b8b73..5e6ce9a36d 100644
+--- a/packages/apack-ears/src/sqlite/query.ts
++++ b/packages/apack-ears/src/sqlite/query.ts
+@@ -340,6 +340,17 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
+           plan.start.from === "types" && steps[0] === step && scope === "live"
+             ? null
+             : idsNow();
++        const next = steps[stepIndex + 1];
++        // Each type's top k contains every possible global winner. Earlier limits and later filters
++        // retain their own pipeline scope; hybrid fusion still needs its complete text ranking.
++        let textLimit: number | undefined;
++        if (step.step === 'search') {
++          if (next?.step === 'limit') textLimit = Math.max(0, Math.floor(next.n));
++          else if (stepIndex === steps.length - 1 && ['first', 'firstRow', 'exists'].includes(plan.terminal.answer)) textLimit = 1;
++        }
++        const options = step.step === 'search' || step.step === 'hybrid' ? step.options : undefined;
++        const searchOptions = options?.recency && options.recency.halfLife > 0 && options.recency.now === undefined ?
++          { ...options, recency: { ...options.recency, now: Date.now() } } : options;
+         let hits: Data[] = [];
+         for (const type of types) {
+           const needs =
+@@ -366,8 +377,9 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
+                 ids,
+                 type,
+                 step.query,
+-                step.options,
+-                plan.terminal.answer === "hits"
++                searchOptions,
++                plan.terminal.answer === "hits",
++                textLimit
+               )
+             );
+           else if (step.step === "near")
+@@ -381,7 +393,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
+                 ids,
+                 type,
+                 step.query,
+-                step.options,
++                searchOptions,
+                 plan.terminal.answer === "hits"
+               ),
+               vector = db.search.vector(
+@@ -466,7 +478,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
+       const result: StoredHit = { id, score: hit.score, terms: hit.terms ?? [] };
+       if (terminal.highlights) result.highlights = hit.highlights ?? {};
+       if (terminal.fields) {
+-        const row = db.row(id)!;
++        const row = db.row(id, terminal.fields)!;
+         result.row = Object.fromEntries([
+           ["id", id],
+           ...terminal.fields
+diff --git a/packages/apack-ears/src/sqlite/search.ts b/packages/apack-ears/src/sqlite/search.ts
+index 5ff963a26f..f7b5f220e7 100644
+--- a/packages/apack-ears/src/sqlite/search.ts
++++ b/packages/apack-ears/src/sqlite/search.ts
+@@ -265,8 +265,8 @@ export class SqliteSearch {
+     );
+     return this.vector(ids, type, vector, k, id);
+   }
+-  text(ids: string[] | null, type: string, query: string, options: Data = {}, wantHits = true): Data[] {
++  text(ids: string[] | null, type: string, query: string, options: Data = {}, wantHits = true, limit?: number): Data[] {
+     const [name] = this.textIndex(type);
+-    return this.texts.search(this.db.indexBuilds.index(type, 'text', name), ids, query, options, wantHits);
++    return this.texts.search(this.db.indexBuilds.index(type, 'text', name), ids, query, options, wantHits, limit);
+   }
+ }
+diff --git a/packages/apack-ears/src/sqlite/text.ts b/packages/apack-ears/src/sqlite/text.ts
+index c323450d24..fa0e83163d 100644
+--- a/packages/apack-ears/src/sqlite/text.ts
++++ b/packages/apack-ears/src/sqlite/text.ts
+@@ -110,8 +110,12 @@ export class SqliteText {
+     this.db.run(`DELETE FROM ${table} WHERE rowid IN (SELECT id FROM ${table}_docs ORDER BY id LIMIT ?)`, [limit]);
+     return Number(this.db.run(`DELETE FROM ${table}_docs WHERE id IN (SELECT id FROM ${table}_docs ORDER BY id LIMIT ?)`, [limit]).changes) < limit;
+   }
+-  search(job: SqliteIndexJob, ids: string[] | null, query: string, options: Data, wantHits: boolean): Data[] {
++  search(job: SqliteIndexJob, ids: string[] | null, query: string, options: Data, wantHits: boolean, limit?: number): Data[] {
+     const table = searchTable(job), fields = Object.keys(job.definition.fields);
++    const recency = options.recency?.halfLife > 0 ? options.recency : undefined;
++    const now = recency ? recency.now ?? Date.now() : undefined;
++    // Decay can change the prefix. Its generic-value path ranks before limiting in JS.
++    const nativeLimit = recency ? undefined : limit;
+     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
+     if (!tokens.length) return [];
+     const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT DISTINCT term FROM ${table}_vocab WHERE col IN ('body','aliases')`).map(row => String(row.term));
+@@ -170,7 +174,10 @@ export class SqliteText {
+     // Every accepted entity belongs to at least one group's last executed positive clause. Exclusions
+     // only need those owners; their scores never contribute to a positive result.
+     const candidates = required.map(group => group.reduce((last, i) => positions.get(last)! > positions.get(i)! ? last : i));
+-    const select = (open: string, close: string) => {
++    const select = (open: string, close: string, details = wantHits, selected?: Data[]) => {
++      const filtered = selected ? [JSON.stringify(selected.map(row => row.id))] : scoped;
++      const eligible = selected ? 'f.entity_id IN (SELECT value FROM json_each(?))' : scope;
++      const ownerMask = selected && selected.length <= 2048 ? selected.map(row => quote(String(row.owner))).join(' OR ') : undefined;
+       const args: any[] = [], ctes = executionOrder.map(i => {
+         const clause = clauses[i]!;
+         const preceding = previous.get(i);
+@@ -182,28 +189,38 @@ export class SqliteText {
+           (SELECT CASE WHEN count(*)>2048 THEN '' ELSE ' AND owner : (' || coalesce(group_concat(owner,' OR '),'z') || ')' END
+            FROM (SELECT DISTINCT owner FROM (${owners}) LIMIT 2049)))`;
+         const weights = fields.map((field, position) => `WHEN ${position} THEN ${Number(job.definition.fields[field].weight ?? 1)}`).join(' ');
+-        if (wantHits) args.push(open, close, open, close);
+-        args.push(clause.match);
+-        args.push(...scoped);
++        if (details) args.push(open, close, open, close);
++        args.push(ownerMask ? `(${clause.match}) AND owner : (${ownerMask})` : clause.match);
++        args.push(...filtered);
+         return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,
+           -bm25(${table},0,0,0,1,1,0)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
+-          ${wantHits ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
++          ${details ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
+           FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ${match} AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
+-          AND ${scope})`;
++          AND ${eligible})`;
+       });
+-      return this.db.all(`WITH ${ctes.join(',')}, matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
+-        clause_scores AS (SELECT clause,id,max(score) score FROM matches WHERE negative=0 GROUP BY clause,id),
+-        accepted AS (SELECT id,sum(score) score FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))
+-        SELECT a.id,a.score${wantHits ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM accepted a
+-        JOIN entities e ON e.id=a.id ${wantHits ? 'JOIN matches m ON m.id=a.id AND m.negative=0' : ''}
+-        ORDER BY a.score DESC,e.seq${wantHits ? ',m.docid,m.clause' : ''}`, args);
++      const single = clauses.length === 1, source = single ? 'c0' : 'matches';
++      const combined = single ? 'accepted AS (SELECT id,max(score) score,min(owner) owner FROM c0 GROUP BY id)' :
++        `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
++         clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner FROM matches WHERE negative=0 GROUP BY clause,id),
++         accepted AS (SELECT id,sum(score) score,min(owner) owner FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
++      const ranked = nativeLimit === undefined ? '' : `, ranked AS MATERIALIZED
++        (SELECT a.id,a.score,a.owner FROM accepted a JOIN entities e ON e.id=a.id ORDER BY a.score DESC,e.seq LIMIT ?)`;
++      if (nativeLimit !== undefined) args.push(nativeLimit);
++      return this.db.all(`WITH ${ctes.join(',')}, ${combined}${ranked}
++        SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? 'accepted' : 'ranked'} a
++        JOIN entities e ON e.id=a.id ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
++        ORDER BY a.score DESC,e.seq${details ? ',m.docid,m.clause' : ''}`, args);
+     };
+-    let open = '\u0001', close = '\u0002', rows = select(open, close);
++    let open = '\u0001', close = '\u0002';
++    // The read request owns a snapshot across both statements. Score the entity prefix before fetching
++    // its text strings, so discarded matches do not allocate or format highlights.
++    const selected = wantHits && nativeLimit !== undefined ? select(open, close, false) : undefined;
++    let rows = selected?.length === 0 ? [] : select(open, close, wantHits, selected);
+     if (wantHits) {
+       const contains = (marker: string) => rows.some(row => String(row.body).includes(marker) || String(row.aliases).includes(marker));
+       if (contains(open) || contains(close)) {
+         do { open = '\u0001' + randomUUID() + '\u0001'; close = '\u0002' + randomUUID() + '\u0002'; } while (contains(open) || contains(close));
+-        rows = select(open, close);
++        rows = select(open, close, true, selected);
+       }
+     }
+     const hits = new Map<string, Data>();
+@@ -222,13 +239,14 @@ export class SqliteText {
+       }
+       if (ranges.length) Object.defineProperty(hit.highlights, field, { value: mergeRanges(ranges), enumerable: true, configurable: true, writable: true });
+     }
+-    if (options.recency) {
+-      const payloads = new Map(this.db.rows([...hits.keys()], [options.recency.field]).map(row => [row.id, row]));
++    if (recency) {
++      const payloads = new Map(this.db.rows([...hits.keys()], [recency.field]).map(row => [row.id, row]));
+       for (const hit of hits.values()) {
+-        const at = payloads.get(hit.id)?.[options.recency.field];
+-        if (typeof at === 'number') hit.score *= Math.pow(0.5, Math.max(0, (options.recency.now ?? Date.now()) - at) / options.recency.halfLife);
++        const value = payloads.get(hit.id)?.[recency.field], at = value instanceof Date ? value.getTime() : value;
++        if (typeof at === 'number') hit.score *= Math.pow(0.5, Math.max(0, now - at) / recency.halfLife);
+       }
+     }
+-    return [...hits.values()].sort((a, b) => b.score - a.score);
++    const ordered = [...hits.values()].sort((a, b) => b.score - a.score);
++    return limit === undefined ? ordered : ordered.slice(0, limit);
+   }
+ }
+diff --git a/packages/apack-ears/tests/engine/search.spec.ts b/packages/apack-ears/tests/engine/search.spec.ts
+index 59f00acc35..02dc197113 100644
+--- a/packages/apack-ears/tests/engine/search.spec.ts
++++ b/packages/apack-ears/tests/engine/search.spec.ts
+@@ -46,6 +46,21 @@ describe('search', () => {
+       .toBe(inSender);
+   });
+ 
++  it('decays numeric and Date times before paging, and ignores nonpositive half-lives', () => {
++    const e = engine();
++    for (const clock of ['number', 'date']) {
++      const text = 'timeline ' + clock;
++      const old = e.create('Message', { text, at: clock === 'date' ? new Date(1000) : 1000 }).id();
++      const recent = e.create('Message', { text, at: clock === 'date' ? new Date(99000) : 99000 }).id();
++      const base = e.query('Message').search(text, { fuzzy: false }).hits();
++      expect(base.map(hit => hit.id)).toEqual([old, recent]);
++      expect(e.query('Message').search(text, { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } }).limit(1).ids())
++        .toEqual([recent]);
++      for (const halfLife of [0, -10000]) expect(e.query('Message').search(text, { fuzzy: false, recency: { field: 'at', halfLife, now: 100000 } }).hits())
++        .toEqual(base);
++    }
++  });
++
+   it('pages after the last id of a page', () => {
+     const e = engine();
+     const ids = ['one note', 'two note', 'three note'].map((text) => e.create('Message', { text }).id());
+diff --git a/packages/apack-ears/tests/sqlite/text-limits.spec.ts b/packages/apack-ears/tests/sqlite/text-limits.spec.ts
+new file mode 100644
+index 0000000000..fac1e99e5a
+--- /dev/null
++++ b/packages/apack-ears/tests/sqlite/text-limits.spec.ts
+@@ -0,0 +1,124 @@
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { mkdtempSync, rmSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { createEarsEngine, type EarsEngine, type EngineSchema } from '../../src/index.ts';
++import { toElmdbSchema } from '../../src/schema.ts';
++import { SqliteDatabase } from '../../src/sqlite/database.ts';
++const schema: EngineSchema = { types: {
++  Row: { required: [], search: { fields: { name: 3, body: 1 } } },
++  Other: { required: [], search: { fields: { name: 3, body: 1 } } }, Plain: { required: [] },
++}, relations: {}, roles: [] };
++const stores: SqliteDatabase[] = [], paths: string[] = [];
++afterEach(() => { vi.restoreAllMocks(); for (const db of stores.splice(0)) db.close(); for (const path of paths.splice(0)) rmSync(path, { recursive: true, force: true }); });
++function open() {
++  const path = mkdtempSync(join(tmpdir(), 'ears-text-limits-')); paths.push(path);
++  const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema(schema) });
++  stores.push(db); return { db, e: createEarsEngine({ database: db }) };
++}
++function seed(e: EarsEngine, type = 'Row', n = 128) {
++  e.transact(() => { for (let i = 0; i < n; i++) e.create(type, { id: `${type}-${i}`, name: 'needle', body: 'other', n: i, bucket: i < 10 ? 'early' : 'late' }); });
++}
++function observe(db: SqliteDatabase, transform: (sql: string) => string = sql => sql) {
++  const all = db.all.bind(db), statements: Array<{ sql: string; returnedRows: number }> = [];
++  vi.spyOn(db, 'all').mockImplementation((sql, args) => {
++    const rows = all(transform(sql), args); if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) statements.push({ sql, returnedRows: rows.length }); return rows;
++  });
++  return statements;
++}
++describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native text prefixes', () => {
++  it('returns only the adjacent ranked prefix from native SQL and preserves counts and first terminals', () => {
++    const { db, e } = open(); seed(e);
++    const statements = observe(db), query = () => e.query('Row').search('needle', { fuzzy: false });
++    expect(query().limit(7).ids()).toEqual(Array.from({ length: 7 }, (_, i) => `Row-${i}`));
++    expect(statements.at(-1)?.returnedRows).toBe(7); expect(statements.at(-1)?.sql).toContain('LIMIT ?');
++    expect(query().limit(7).count()).toBe(7);
++    expect(query().limit(0).ids()).toEqual([]); expect(statements.at(-1)?.returnedRows).toBe(0);
++    expect(query().first()).toBe('Row-0'); expect(statements.at(-1)?.returnedRows).toBe(1);
++    expect(query().pickOne(['name'])).toEqual({ id: 'Row-0', name: 'needle' }); expect(statements.at(-1)?.returnedRows).toBe(1);
++    expect(query().exists()).toBe(true); expect(statements.at(-1)?.returnedRows).toBe(1);
++  });
++  it('keeps filters, cursors and reorderings in their original pipeline scope', () => {
++    const { db, e } = open(); seed(e, 'Row', 16); const statements = observe(db);
++    const query = () => e.query('Row').search('needle', { fuzzy: false });
++    expect(query().where('bucket', 'late').limit(3).ids()).toEqual(['Row-10', 'Row-11', 'Row-12']);
++    expect(statements.at(-1)?.returnedRows).toBe(16);
++    expect(query().after('Row-10').limit(3).ids()).toEqual(['Row-11', 'Row-12', 'Row-13']);
++    expect(query().where('bucket', 'late').first()).toBe('Row-10');
++    expect(query().after('Row-10').first()).toBe('Row-11');
++    expect(query().orderBy('n', 'desc').first()).toBe('Row-15');
++    expect(query().orderBy('n', 'desc').limit(3).ids()).toEqual(['Row-15', 'Row-14', 'Row-13']);
++    expect(query().reverse().limit(3).ids()).toEqual(['Row-15', 'Row-14', 'Row-13']);
++    expect(query().limit(3).where('bucket', 'late').ids()).toEqual([]);
++    expect(query().limit(10).orderBy('n', 'desc').limit(3).ids()).toEqual(['Row-9', 'Row-8', 'Row-7']);
++    expect(e.query('Row').limit(12).search('needle', { fuzzy: false }).limit(3).ids()).toEqual(['Row-0', 'Row-1', 'Row-2']);
++  });
++  it('preserves the global prefix across types and recency while keeping numeric and Date clocks equivalent', () => {
++    const { db, e } = open(); seed(e, 'Row', 12); seed(e, 'Other', 3); const statements = observe(db);
++    const query = () => e.query(['Other', 'Row']).search('needle', { fuzzy: false });
++    expect(query().limit(5).ids()).toEqual(query().ids().slice(0, 5));
++    const limited = statements.find(statement => statement.sql.includes('LIMIT ?'));
++    expect(limited?.returnedRows).toBeLessThanOrEqual(5);
++    e.write('Row-11').set('at', new Date(99000));
++    for (let i = 0; i < 11; i++) e.write(`Row-${i}` as const).set('at', 1000);
++    const recent = () => e.query('Row').search('needle', { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } });
++    expect(recent().limit(1).ids()).toEqual(['Row-11']);
++    expect(recent().limit(3).ids()).toEqual(recent().ids().slice(0, 3));
++    const across = () => e.query(['Other', 'Row']).search('needle', { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } });
++    expect(across().limit(4).ids()).toEqual(across().ids().slice(0, 4));
++    for (const id of e.query(['Other', 'Row']).ids()) e.write(id).set('at', 1000);
++    let clock = 100000;
++    vi.spyOn(Date, 'now').mockImplementation(() => { const value = clock; clock -= 1000; return value; });
++    expect(e.query(['Other', 'Row']).search('needle', { fuzzy: false, recency: { field: 'at', halfLife: 10000 } }).limit(1).ids())
++      .toEqual(['Other-0']);
++  });
++  it('limits complete entities before expanding their highlight strings', () => {
++    const { db, e } = open();
++    e.create('Row', { id: 'Row-first', name: 'needle', body: ['needle one', 'needle two'] }); seed(e, 'Row', 32);
++    const formatted: string[] = [];
++    db.sql.function('trace_highlight', { deterministic: false }, (value: unknown) => { const text = String(value); formatted.push(text); return text; });
++    const statements = observe(db, sql => sql.replace(/highlight\([^)]*\)/g, 'trace_highlight($&)'));
++    const hits = e.query('Row').search('needle', { fuzzy: false }).limit(1).hits({ highlights: true });
++    expect(hits.map(hit => hit.id)).toEqual(['Row-first']);
++    expect(hits[0]?.highlights).toEqual({ name: [[0, 0, 6]], body: [[0, 0, 6], [1, 0, 6]] });
++    expect(statements.at(-1)?.returnedRows).toBe(3);
++    expect(formatted).toHaveLength(6);
++  });
++  it('keeps score and text fetch in one snapshot while another handle commits', () => {
++    const { db, e } = open(); e.create('Row', { id: 'Row-one', name: 'needle' });
++    const writer = new SqliteDatabase({ path: db.path, syncs: false }); stores.push(writer);
++    const other = createEarsEngine({ database: writer }), all = db.all.bind(db); let committed = false;
++    vi.spyOn(db, 'all').mockImplementation((sql, args) => {
++      const rows = all(sql, args);
++      if (!committed && /^WITH c\d+ AS MATERIALIZED/.test(sql) && !sql.includes('highlight(')) {
++        committed = true; other.write('Row-one').set('name', 'changed');
++      }
++      return rows;
++    });
++    const [hit] = e.query('Row').search('needle', { fuzzy: false }).limit(1).hits({ fields: ['name'], highlights: true });
++    expect(committed).toBe(true);
++    expect(hit?.row).toEqual({ id: 'Row-one', name: 'needle' });
++    expect(hit?.highlights).toEqual({ name: [[0, 0, 6]] });
++    expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual([]);
++    expect(e.getAttr('Row-one', 'name')).toBe('changed');
++  });
++  it('projects requested hit fields without hydrating unrelated overflow values', () => {
++    const { db, e } = open(); e.create('Row', { id: 'Row-one', name: 'needle', payload: 'large '.repeat(100000) });
++    const read = vi.spyOn(db.values, 'read');
++    expect(e.query('Row').search('needle', { fuzzy: false }).limit(1).hits({ fields: ['name'] })[0]?.row)
++      .toEqual({ id: 'Row-one', name: 'needle' });
++    expect(read.mock.calls.every(([, , fields]) => fields !== undefined && !fields.includes('payload'))).toBe(true);
++  });
++  it('retains index refusals at a zero prefix and updates a watched prefix when an outside row becomes the winner', async () => {
++    const { e } = open(); seed(e, 'Row', 16);
++    expect(() => e.query('Plain').search('needle').limit(0).ids()).toThrow(expect.objectContaining({ code: 'UNKNOWN_INDEX' }));
++    const seen: string[][] = [], watch = e.watch(() => e.query('Row').search('needle', { fuzzy: false }).limit(1).ids(), ids => seen.push([...ids]));
++    try {
++      await e.admin.watchesSettled(); expect(seen.at(-1)).toEqual(['Row-0']);
++      e.write('Row-15').set('name', 'needle needle needle');
++      await e.admin.watchesSettled(); expect(seen.at(-1)).toEqual(['Row-15']);
++    } finally { watch.stop(); }
++    e.admin.setSchema({ ...schema, types: { ...schema.types, Row: { required: [], search: { fields: { name: 4 } } } } });
++    expect(() => e.query('Row').search('needle').limit(0).ids()).toThrow(expect.objectContaining({ code: 'INDEX_BUILDING' }));
++  });
++});

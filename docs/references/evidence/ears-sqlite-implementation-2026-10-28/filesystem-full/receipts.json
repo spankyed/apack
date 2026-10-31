@@ -1,0 +1,107 @@
+[
+  {
+    "file": "initial/source.json.gz",
+    "sha256": "07072ced12de067de9df760efeeb0f950b7fea6ddf146bb847574eabb1cff3a7",
+    "storedSha256": "fbec63998c3a5a52e76dd380024a3f4ee7c5f4cc18c21cd1c30dcf00a910b230"
+  },
+  {
+    "file": "initial/fault.log.gz",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "storedSha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+  },
+  {
+    "file": "initial/inputs.json.gz",
+    "sha256": "391ceb0b60404a873021de723e46c0cb185cc790bccf82706769251ec95feaf9",
+    "storedSha256": "1038cfa5576f192f2261bd2f67af70d40c6535f3b0d1edb535bb68d4fde57f2a"
+  },
+  {
+    "file": "initial/fault.json.gz",
+    "sha256": "4b32d4c890619200fe3df533e7a7b6009b81c114140358acf2ca458b41222968",
+    "storedSha256": "7d8d63d07581302916dbbd3e2eb275be62faa6e4c672d9de6fd4dcae38afbe27"
+  },
+  {
+    "file": "initial/run.json.gz",
+    "sha256": "8c0eafa818af5e66455dfff9d80bc98d0e0938580f8f222407135946d970f097",
+    "storedSha256": "842b35ff1dbf9942fb820bd6afe15500d99619ff649c97c6bd8337626b56afe0"
+  },
+  {
+    "file": "tracked-v2/source.json.gz",
+    "sha256": "a32683c0e9dfa9a97dbf8c74699b288071217fbf925bfed54004d63c9ca33a61",
+    "storedSha256": "59591acd553cbf5eebc8c9cbcfad73b349b40d35cd6faa9d56cf9b9a0138a47b"
+  },
+  {
+    "file": "tracked-v2/fault.log.gz",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "storedSha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+  },
+  {
+    "file": "tracked-v2/verifier-controls.json.gz",
+    "sha256": "99a42d2d0ded480dcf337703cacc72b79af7ed47355d672e2e8eca62660e8264",
+    "storedSha256": "d382fa356f82f80ec17567caa88052118e130def40eb4760fcb1774246025a10"
+  },
+  {
+    "file": "tracked-v2/inputs.json.gz",
+    "sha256": "391ceb0b60404a873021de723e46c0cb185cc790bccf82706769251ec95feaf9",
+    "storedSha256": "1038cfa5576f192f2261bd2f67af70d40c6535f3b0d1edb535bb68d4fde57f2a"
+  },
+  {
+    "file": "tracked-v2/fault.json.gz",
+    "sha256": "3c60066a9dd9cbf000300d042a743b6eb2cea1b0b065fd5ee7dd92a8b2420359",
+    "storedSha256": "112e4ab1848498f6ede7d2e7dd1173fc335c1191200a281f7836763751b35680"
+  },
+  {
+    "file": "tracked-v2/run.json.gz",
+    "sha256": "45bbeb91a3df5e50081d304224e0299cf2ee0231c8290fb61883ca3a477af78f",
+    "storedSha256": "00b0c1051e9da6e4ade2825d7c02ae7b70250211acf0097e12d331aafba9da26"
+  },
+  {
+    "file": "recipes/ears-filesystem-full-probe.mjs.gz",
+    "sha256": "50bc455a6999511087c36a24076468dac4b3ea661df0b5866fe2ac9424d66430",
+    "storedSha256": "4ae8ab2bd881f9ccd38cd35d855d78e527fe70aa63891c2d6bdaed80f6b5190d"
+  },
+  {
+    "file": "recipes/ears-filesystem-full-run.py.gz",
+    "sha256": "183e9866836a5b4889913e0b81abad50c9b226e9309d2e516655e2fd4b5b2694",
+    "storedSha256": "3b6c005e849c0140f2a01e88d53f3545e72ea480eaf1f9a1f8f4a051051cab83"
+  },
+  {
+    "file": "recipes/ears-filesystem-full-v2-run.py.gz",
+    "sha256": "9aa7c16d6d198ebead18164ff701d3156789796a6654efa6cf9e4e768b1d528c",
+    "storedSha256": "9f3a6cc03d1051f3f1f499cc7940be5b93419bc072a97ee339960b76474492d5"
+  },
+  {
+    "file": "recipes/ears-fsfull-verifier-controls.mjs.gz",
+    "sha256": "9b1b9baf30f7981a76bc253e9f4b98e03c7982c9e692707ee75b3831baff3144",
+    "storedSha256": "a04cfc0d9ec4ad0e240792aa5a51e42245680ccd4de51841c97ef8a89048225c"
+  },
+  {
+    "file": "recipes/ears-fsfull-verifier-controls.log.gz",
+    "sha256": "f50c46d8f923de3eb3a963d73c945843c2781606423d5922e9b950f736516044",
+    "storedSha256": "148c24eb6268b1992f0d2b2ef3fd9c778373202446d959d297071d5320c4f71e"
+  },
+  {
+    "file": "recipes/ears-fsfull-static.log.gz",
+    "sha256": "dc152bce88b52c106fe33f5864f16b82dfc64347a0ca5cd174cf099f7bc5bd16",
+    "storedSha256": "185f2127c809457d004f60b53b3dff63d96fec9a0ba7a96fb1a0c393a1b55d74"
+  },
+  {
+    "file": "source/packages/apack-ears/bench/sqlite/filesystem-full.mjs.gz",
+    "sha256": "4b326baf346b77ddca83fe913d5adfb9c6fcbb934a35e628e0c3e8575e6afc59",
+    "storedSha256": "890713290f9b55e26a761376514a6b931b99b92d5d353b7dd57269f2af611b11"
+  },
+  {
+    "file": "source/.github/scripts/ears-sqlite-full-report.mjs.gz",
+    "sha256": "236b66bfd9f5f235e6743dbaad3828339262e4de5477be18ef0cd6bc8ada74d9",
+    "storedSha256": "c2d228723cc62a89c7ef382f72b4cf5a3a4052f52384a35b3bd34d30e00c7acc"
+  },
+  {
+    "file": "source/.github/scripts/ears-sqlite-platform.mjs.gz",
+    "sha256": "3e8ddc1e3ef0c7bda197790cac3fd5de61df4fec657637b710507ae15fc213ff",
+    "storedSha256": "fd995a0d9e3e84fc210802e792e07f37d3ea4189cdff6250cfaf4c7aaf6e6cb8"
+  },
+  {
+    "file": "source/.github/workflows/ears-sqlite.yml.gz",
+    "sha256": "823d51956c362da0c50159ae9cf77f7126269d6070eb58841f08b8775572686b",
+    "storedSha256": "1dffa652703189539ee23552108b125d4110d1e550098fe867beef36e864da93"
+  }
+]

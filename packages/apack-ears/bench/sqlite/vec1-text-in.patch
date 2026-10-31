@@ -1,0 +1,67 @@
+--- vec1.c
++++ vec1.c
+@@ -5783,6 +5783,7 @@
+ struct Vec1Filter {
+   char vop;                       /* VEC1_OP_XXX value */
+   int iMeta;                      /* Index of meta-value column on LHS of op */
++  int bSortedTextIn;              /* All-text IN operands sorted by BINARY */
+   int eType;                      /* Type of RHS value (SQLITE_INTEGER etc.) */
+   i64 iVal;                       /* Value for integer, size in bytes for T/B */
+   double fVal;                    /* Value for float type */
+@@ -7352,11 +7353,37 @@
+ ** by the filter. This is the slow path that can do any operator for
+ ** any types of values.
+ */
++static int vec1TextBytesCompare(const u8 *a, i64 na, const u8 *b, i64 nb){
++  i64 n = MIN(na, nb);
++  int cmp = n>0 ? memcmp(a, b, n) : 0;
++  return cmp ? cmp : COMPARE(na, nb);
++}
++
++static int vec1TextFilterCompare(const void *a, const void *b){
++  const Vec1Filter *pa = (const Vec1Filter*)a;
++  const Vec1Filter *pb = (const Vec1Filter*)b;
++  return vec1TextBytesCompare(pa->pPtr, pa->iVal, pb->pPtr, pb->iVal);
++}
++
+ static int vec1MetaValueFilter(Vec1Filter *pFilter, Vec1MetaValue *pMeta){
+   int cmp = 0;
+ 
+   if( pFilter->vop==VEC1_OP_IN ){
+     int ii;
++    if( pFilter->bSortedTextIn ){
++      i64 lo = 0, hi = pFilter->iVal;
++      if( pMeta->eType!=SQLITE_TEXT ) return 1;
++      while( lo<hi ){
++        i64 mid = lo + (hi-lo)/2;
++        Vec1Filter *p = &pFilter[mid+1];
++        int order = vec1TextBytesCompare(
++            p->pPtr, p->iVal, pMeta->pPtr, pMeta->iVal
++        );
++        if( order==0 ) return 0;
++        if( order<0 ) lo = mid+1; else hi = mid;
++      }
++      return 1;
++    }
+     for(ii=0; ii<pFilter->iVal; ii++){
+       if( vec1MetaValueFilter(&pFilter[ii+1], pMeta)==0 ) return 0;
+     }
+@@ -9060,6 +9087,18 @@
+             pFilter->iVal++;
+           }
+           if( rc==SQLITE_DONE ) rc = SQLITE_OK;
++          if( rc==SQLITE_OK && pFilter->iVal>=8 ){
++            i64 jj;
++            int allText = 1;
++            for(jj=1; jj<=pFilter->iVal; jj++){
++              if( pFilter[jj].eType!=SQLITE_TEXT ) allText = 0;
++            }
++            if( allText ){
++              qsort(&pFilter[1], (size_t)pFilter->iVal,
++                  sizeof(Vec1Filter), vec1TextFilterCompare);
++              pFilter->bSortedTextIn = 1;
++            }
++          }
+ 
+         }else if( c==VEC1_OP_NOTNULL ){
+           pFilter->eType = SQLITE_BLOB;

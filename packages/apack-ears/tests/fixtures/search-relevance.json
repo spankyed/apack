@@ -1,0 +1,760 @@
+{
+  "description": "Curated repository-domain fixtures; expectations recorded before SQLite tuning, not private user data or a complete language evaluation.",
+  "documents": [
+    {
+      "id": "Document-database",
+      "name": "Database recovery checklist",
+      "body": "Retain an incumbent before replacing storage.",
+      "tags": [
+        "storage",
+        "recovery"
+      ]
+    },
+    {
+      "id": "Document-code",
+      "name": "openDatabaseStore fails on THR-12",
+      "body": "Investigate reader registration.",
+      "tags": [
+        "engineering",
+        "database"
+      ]
+    },
+    {
+      "id": "Document-snake",
+      "name": "refresh_declared_names",
+      "body": "Schema activation after a pack install.",
+      "tags": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "Document-accent",
+      "name": "Café crème meeting",
+      "body": "Discuss the résumé with Zoë.",
+      "tags": [
+        "people"
+      ]
+    },
+    {
+      "id": "Document-vietnamese",
+      "name": "Cộng đồng",
+      "body": "Planning with the community.",
+      "tags": [
+        "people"
+      ]
+    },
+    {
+      "id": "Document-phrase",
+      "name": "Release checklist",
+      "body": "safe backup before release",
+      "tags": [
+        "ops"
+      ]
+    },
+    {
+      "id": "Document-split",
+      "name": "Separated checklist",
+      "body": [
+        "safe",
+        "backup before release"
+      ],
+      "tags": [
+        "ops"
+      ]
+    },
+    {
+      "id": "Document-fieldsplit",
+      "name": "safe",
+      "body": "backup before release",
+      "tags": [
+        "ops"
+      ]
+    },
+    {
+      "id": "Document-reverse",
+      "name": "Backup safety",
+      "body": "backup safe before release",
+      "tags": [
+        "ops"
+      ]
+    },
+    {
+      "id": "Document-tags",
+      "name": "Tag-only discovery",
+      "body": "Nothing pertinent here.",
+      "tags": [
+        "ops",
+        17,
+        "storage"
+      ]
+    },
+    {
+      "id": "Document-controls",
+      "name": "Control-character transcript",
+      "body": "\u0001prefix\u0002 😀 database!",
+      "tags": [
+        "raw"
+      ]
+    },
+    {
+      "id": "Document-english",
+      "name": "Runner notes",
+      "body": "The job runs nightly.",
+      "tags": [
+        "automation"
+      ]
+    },
+    {
+      "id": "Document-french",
+      "name": "Projet français",
+      "body": "Les sauvegardes sont terminées.",
+      "tags": [
+        "français"
+      ]
+    },
+    {
+      "id": "Document-german",
+      "name": "Projekt Übersicht",
+      "body": "Die Sicherung ist abgeschlossen.",
+      "tags": [
+        "deutsch"
+      ]
+    },
+    {
+      "id": "Document-greek",
+      "name": "Ελληνικά",
+      "body": "Καλημέρα κόσμε",
+      "tags": [
+        "el"
+      ]
+    },
+    {
+      "id": "Document-japanese",
+      "name": "日本語のメモ",
+      "body": "東京のデータベース",
+      "tags": [
+        "ja"
+      ]
+    },
+    {
+      "id": "Document-chinese",
+      "name": "中文笔记",
+      "body": "数据库恢复",
+      "tags": [
+        "zh"
+      ]
+    },
+    {
+      "id": "Document-typo",
+      "name": "Database migration",
+      "body": "database checkpoint",
+      "tags": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "Document-prefix",
+      "name": "app database",
+      "body": "foreground lookup",
+      "tags": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "Document-prefixtrap",
+      "name": "application database",
+      "body": "foreground lookup",
+      "tags": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "Document-alpha",
+      "name": "alpha topic",
+      "body": "standalone",
+      "tags": [
+        "letters"
+      ]
+    },
+    {
+      "id": "Document-beta",
+      "name": "beta topic",
+      "body": "standalone",
+      "tags": [
+        "letters"
+      ]
+    },
+    {
+      "id": "Document-both",
+      "name": "alpha beta topic",
+      "body": "standalone",
+      "tags": [
+        "letters"
+      ]
+    },
+    {
+      "id": "Document-old",
+      "name": "release memo",
+      "body": "equal relevance",
+      "tags": [
+        "same"
+      ],
+      "at": 1000
+    },
+    {
+      "id": "Document-new",
+      "name": "release memo",
+      "body": "equal relevance",
+      "tags": [
+        "same"
+      ],
+      "at": 99000
+    },
+    {
+      "id": "Document-titleweight",
+      "name": "priority",
+      "body": "neutral",
+      "tags": [
+        "weight"
+      ]
+    },
+    {
+      "id": "Document-bodyweight",
+      "name": "neutral",
+      "body": "priority",
+      "tags": [
+        "weight"
+      ]
+    },
+    {
+      "id": "Document-titlecolon",
+      "name": "sender:ada",
+      "body": "quoted punctuation",
+      "tags": [
+        "syntax"
+      ]
+    },
+    {
+      "id": "Document-prefixlookalike",
+      "name": "databaseserver",
+      "body": "An unrelated single token with no camel-case boundary.",
+      "tags": [
+        "boundary"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "whole camelCase identifier",
+      "type": "Document",
+      "query": "openDatabaseStore",
+      "required": [
+        "Document-code"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "identifier component",
+      "type": "Document",
+      "query": "database",
+      "required": [
+        "Document-code",
+        "Document-database",
+        "Document-typo"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false,
+        "fields": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "snake component",
+      "type": "Document",
+      "query": "declared",
+      "required": [
+        "Document-snake"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "whole snake identifier",
+      "type": "Document",
+      "query": "refresh_declared_names",
+      "required": [
+        "Document-snake"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "issue code with punctuation",
+      "type": "Document",
+      "query": "THR-12",
+      "required": [
+        "Document-code"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "Latin accent folding",
+      "type": "Document",
+      "query": "cafe",
+      "required": [
+        "Document-accent"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "decomposed query accent",
+      "type": "Document",
+      "query": "café",
+      "required": [
+        "Document-accent"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "multi-accent Latin folding",
+      "type": "Document",
+      "query": "cong",
+      "required": [
+        "Document-vietnamese"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "accented name",
+      "type": "Document",
+      "query": "zoe",
+      "required": [
+        "Document-accent"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "contiguous phrase",
+      "type": "Document",
+      "query": "\"safe backup\"",
+      "required": [
+        "Document-phrase"
+      ],
+      "forbidden": [
+        "Document-split",
+        "Document-fieldsplit",
+        "Document-reverse"
+      ],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "negative phrase respects list boundaries",
+      "type": "Document",
+      "query": "checklist -\"safe backup\"",
+      "required": [
+        "Document-split"
+      ],
+      "forbidden": [
+        "Document-phrase"
+      ],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "AND may cross list elements",
+      "type": "Document",
+      "query": "safe backup",
+      "required": [
+        "Document-phrase",
+        "Document-split",
+        "Document-fieldsplit"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "list highlight preserves source element",
+      "type": "Document",
+      "query": "storage",
+      "required": [
+        "Document-database",
+        "Document-tags"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      },
+      "highlights": {
+        "id": "Document-tags",
+        "field": "tags",
+        "ranges": [
+          [
+            2,
+            0,
+            7
+          ]
+        ]
+      }
+    },
+    {
+      "name": "literal control markers preserve UTF16 highlights",
+      "type": "Document",
+      "query": "database",
+      "required": [
+        "Document-controls"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      },
+      "highlights": {
+        "id": "Document-controls",
+        "field": "body",
+        "ranges": [
+          [
+            0,
+            12,
+            20
+          ]
+        ]
+      }
+    },
+    {
+      "name": "field restriction name",
+      "type": "Document",
+      "query": "priority",
+      "required": [
+        "Document-titleweight"
+      ],
+      "forbidden": [
+        "Document-bodyweight"
+      ],
+      "options": {
+        "fuzzy": false,
+        "fields": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "field restriction body",
+      "type": "Document",
+      "query": "priority",
+      "required": [
+        "Document-bodyweight"
+      ],
+      "forbidden": [
+        "Document-titleweight"
+      ],
+      "options": {
+        "fuzzy": false,
+        "fields": [
+          "body"
+        ]
+      }
+    },
+    {
+      "name": "field syntax",
+      "type": "Document",
+      "query": "name:priority",
+      "required": [
+        "Document-titleweight"
+      ],
+      "forbidden": [
+        "Document-bodyweight"
+      ],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "field weight useful first result",
+      "type": "Document",
+      "query": "priority",
+      "required": [
+        "Document-titleweight",
+        "Document-bodyweight"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      },
+      "first": "Document-titleweight"
+    },
+    {
+      "name": "default conjunction",
+      "type": "Document",
+      "query": "alpha beta",
+      "required": [
+        "Document-both"
+      ],
+      "forbidden": [
+        "Document-alpha",
+        "Document-beta"
+      ],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "explicit disjunction",
+      "type": "Document",
+      "query": "alpha OR beta",
+      "required": [
+        "Document-alpha",
+        "Document-beta",
+        "Document-both"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "any option disjunction",
+      "type": "Document",
+      "query": "alpha beta",
+      "required": [
+        "Document-alpha",
+        "Document-beta",
+        "Document-both"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false,
+        "any": true
+      }
+    },
+    {
+      "name": "negative clause",
+      "type": "Document",
+      "query": "alpha -beta",
+      "required": [
+        "Document-alpha"
+      ],
+      "forbidden": [
+        "Document-both",
+        "Document-beta"
+      ],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "last-word prefix only",
+      "type": "Document",
+      "query": "app dat",
+      "required": [
+        "Document-prefix"
+      ],
+      "forbidden": [
+        "Document-prefixtrap"
+      ],
+      "options": {
+        "fuzzy": false,
+        "prefix": true
+      }
+    },
+    {
+      "name": "single typo edit",
+      "type": "Document",
+      "query": "databse",
+      "required": [
+        "Document-database",
+        "Document-typo"
+      ],
+      "forbidden": [],
+      "options": {}
+    },
+    {
+      "name": "disabled typo expansion",
+      "type": "Document",
+      "query": "databse",
+      "required": [],
+      "forbidden": [
+        "Document-database",
+        "Document-typo"
+      ],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "recency reads selected timestamp",
+      "type": "Document",
+      "query": "\"release memo\"",
+      "required": [
+        "Document-old",
+        "Document-new"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false,
+        "recency": {
+          "field": "at",
+          "halfLife": 10000,
+          "now": 100000
+        }
+      },
+      "first": "Document-new"
+    },
+    {
+      "name": "French exact words",
+      "type": "Document",
+      "query": "sauvegardes",
+      "required": [
+        "Document-french"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "German exact words",
+      "type": "Document",
+      "query": "sicherung",
+      "required": [
+        "Document-german"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "Greek exact words",
+      "type": "Document",
+      "query": "κόσμε",
+      "required": [
+        "Document-greek"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "Japanese exact token",
+      "type": "Document",
+      "query": "東京のデータベース",
+      "required": [
+        "Document-japanese"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "Chinese exact token",
+      "type": "Document",
+      "query": "数据库恢复",
+      "required": [
+        "Document-chinese"
+      ],
+      "forbidden": [],
+      "options": {
+        "fuzzy": false
+      }
+    },
+    {
+      "name": "English Porter morphology",
+      "type": "English",
+      "query": "running",
+      "options": {
+        "fuzzy": false
+      },
+      "required": [
+        "English-run"
+      ],
+      "forbidden": []
+    },
+    {
+      "name": "live prefix search retains default whole-word typo correction",
+      "type": "Document",
+      "query": "databse",
+      "options": {
+        "prefix": true
+      },
+      "required": [
+        "Document-database"
+      ],
+      "forbidden": [
+        "Document-prefixlookalike"
+      ]
+    },
+    {
+      "name": "live prefix search honors explicit fuzzy true",
+      "type": "Document",
+      "query": "databse",
+      "options": {
+        "prefix": true,
+        "fuzzy": true
+      },
+      "required": [
+        "Document-database"
+      ],
+      "forbidden": [
+        "Document-prefixlookalike"
+      ]
+    },
+    {
+      "name": "live prefix search preserves explicit fuzzy opt-out",
+      "type": "Document",
+      "query": "databse",
+      "options": {
+        "prefix": true,
+        "fuzzy": false
+      },
+      "required": [],
+      "forbidden": [
+        "Document-database",
+        "Document-prefixlookalike"
+      ]
+    },
+    {
+      "name": "literal prefix still reaches a longer whole token",
+      "type": "Document",
+      "query": "datab",
+      "options": {
+        "prefix": true,
+        "fuzzy": false
+      },
+      "required": [
+        "Document-database",
+        "Document-prefixlookalike"
+      ],
+      "forbidden": []
+    }
+  ]
+}

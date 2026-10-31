@@ -1,0 +1,10 @@
+{
+  "base": "409f08d4689100a3c0a1b68f73f4e923759ef441",
+  "changedFiles": [
+    "packages/apack-ears/bench/sqlite/README.md",
+    "packages/apack-ears/bench/sqlite/text-shape.mjs",
+    "packages/apack-ears/src/sqlite/text.ts",
+    "packages/apack-ears/tests/sqlite/text-documents.spec.ts"
+  ],
+  "sha256": "86273db400e08b677c12ab63d4ec14dfe9ac3ae4206bc2c5af51a7430fe94d1b"
+}

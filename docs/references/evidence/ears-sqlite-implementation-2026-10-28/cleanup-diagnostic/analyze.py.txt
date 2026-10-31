@@ -1,0 +1,29 @@
+import json,pathlib,collections
+root=pathlib.Path('/private/tmp/ears-cleanup-diagnostic')
+def quant(xs,q=.99):
+ xs=sorted(xs);return xs[min(len(xs)-1,int(len(xs)*q))] if xs else 0
+results=[]
+for name in ['full-watch-workload','no-query-watches']:
+ path=root/(name+'.stdout')
+ if not path.exists():continue
+ v=json.loads(path.read_text());d=v['diagnostic'];spans=sorted(d['spans'],key=lambda s:s['start'])
+ groups=collections.defaultdict(list)
+ for s in spans:groups[(s['phase'],s['kind'])].append(s['end']-s['start'])
+ stats=[{'phase':p,'kind':k,'count':len(xs),'totalMs':sum(xs),'p99Ms':quant(xs),'maxMs':max(xs)} for (p,k),xs in groups.items()]
+ stalls=[];i=0
+ for h in d['heartbeatSamples']:
+  if h['delayMs']<=16:continue
+  lo=h['at']-h['delayMs'];hi=h['at']
+  while i<len(spans) and spans[i]['end']<=lo:i+=1
+  overlaps=collections.defaultdict(float);segments=[];j=i
+  while j<len(spans) and spans[j]['start']<hi:
+   s=spans[j];a=max(lo,s['start']);b=min(hi,s['end'])
+   if b>a:overlaps[s['kind']]+=b-a;segments.append((a,b))
+   j+=1
+  covered=0;end=lo
+  for a,b in sorted(segments):
+   covered+=max(0,b-max(a,end));end=max(end,b)
+  stalls.append({'phase':h['phase'],'delayMs':h['delayMs'],'at':hi,'overlapMs':dict(overlaps),'uncoveredMs':max(0,hi-lo-covered)})
+ results.append({'control':name,'qualification':False,'budgets':v['budgets'],'spanStats':stats,'stallsAbove16ms':len(stalls),'stallsByPhase':dict(collections.Counter(s['phase'] for s in stalls)),'stallOverlapTotalMs':dict((k,sum(s['overlapMs'].get(k,0) for s in stalls)) for k in set(k for s in stalls for k in s['overlapMs'])),'worstStalls':sorted(stalls,key=lambda s:-s['delayMs'])[:20]})
+(root/'analysis.json').write_text(json.dumps(results,indent=2)+'\n')
+print(json.dumps([{k:v for k,v in r.items() if k!='worstStalls'} for r in results],indent=2))

@@ -1,0 +1,14 @@
+{
+  "source": "ab148afb550245d80cc2f11e5e4c604d6a4315ae",
+  "nativeBaselineBoots": 1,
+  "sqliteBoots": 2,
+  "livePackUpdates": 3,
+  "postRestartDataRetained": true,
+  "nativeSourceUnchanged": true,
+  "historyRetained": true,
+  "settingsRetained": true,
+  "mediaRetained": true,
+  "environmentDiagnostics": {
+    "missingOptionalCodexExecutable": true
+  }
+}

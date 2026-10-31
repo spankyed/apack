@@ -1,0 +1,164 @@
+diff --git a/packages/apack-ears/src/sqlite/search.ts b/packages/apack-ears/src/sqlite/search.ts
+index 7b99c7f2bd..367056b27a 100644
+--- a/packages/apack-ears/src/sqlite/search.ts
++++ b/packages/apack-ears/src/sqlite/search.ts
+@@ -1,7 +1,7 @@
+ /// <reference types="node" />
+ // FTS5 owns text indexing/ranking. sqlite-vec owns vector distance evaluation; EARS owns chunks and model freshness.
+ // Fuzzy expansion and highlight adaptation are explicit application work, not native FTS5 capabilities.
+-import { createHash } from "node:crypto";
++import { createHash, randomUUID } from "node:crypto";
+ import { getLoadablePath } from "sqlite-vec";
+ import type { SqliteDatabase } from "./database.ts";
+ import { searchTable, type SqliteIndexJob } from './index-builds.ts';
+@@ -122,7 +122,7 @@ export class SqliteSearch {
+               .join(",");
+           this.db.sql
+             .exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,${cols},tokenize='${
+-            index.stem ? "porter unicode61" : "unicode61"
++            index.stem ? "porter unicode61 remove_diacritics 2" : "unicode61 remove_diacritics 2"
+           }');
+           CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},row);`);
+         }
+@@ -307,7 +307,7 @@ export class SqliteSearch {
+     const [name, index] = this.textIndex(type),
+       table = this.table(type, name, index),
+       fields = Object.keys(index.fields);
+-    const tokens = query.match(/-?"[^"]+"|-?\S+/g) ?? [];
++    const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
+     if (!tokens.length) return [];
+     const vocabulary =
+       options.fuzzy === false
+@@ -332,15 +332,20 @@ export class SqliteSearch {
+       }
+       return prev[b.length]!;
+     };
+-    for (let token of tokens) {
++    for (const [position, rawToken] of tokens.entries()) {
++      let token = rawToken;
+       if (token === "OR") {
+         positive.push("OR");
+         continue;
+       }
+       const neg = token.startsWith("-");
+       if (neg) token = token.slice(1);
++      const colon = token.startsWith('"') ? -1 : token.indexOf(':');
++      const field = colon < 0 ? undefined : token.slice(0, colon);
++      if (colon >= 0) token = token.slice(colon + 1);
+       const phrase = token.startsWith('"');
+-      const normalized = fold(token.replace(/^"|"$/g, ""));
++      const raw = token.replace(/^"|"$/g, "");
++      const normalized = fold(raw);
+       if (!normalized) continue;
+       terms.push(normalized);
+       const max = normalized.length >= 9 ? 2 : normalized.length >= 5 ? 1 : 0;
+@@ -352,13 +357,14 @@ export class SqliteSearch {
+                 distance(t, normalized) <= max
+             )
+           : [];
+-      const words = [...new Set([normalized, ...expanded])];
++      const words = [...new Set([raw, ...expanded])];
+       let expression = phrase
+-        ? quote(normalized)
++        ? quote(raw)
+         : `(${words.map(quote).join(" OR ")})`;
+-      if (options.prefix && !phrase) expression = `${quote(normalized)}*`;
+-      if (options.fields?.length) {
+-        const selected = options.fields
++      if (options.prefix && !phrase && position === tokens.length - 1) expression = `${quote(raw)}*`;
++      if (field !== undefined || options.fields?.length) {
++        const selected = (field === undefined ? options.fields : [field])
++          .filter((f: string) => !options.fields?.length || options.fields.includes(f))
+           .map((f: string) => fields.indexOf(f))
+           .filter((n: number) => n >= 0)
+           .map((n: number) => "c" + n);
+@@ -368,15 +374,15 @@ export class SqliteSearch {
+       (neg ? negative : positive).push(expression);
+     }
+     if (!positive.length) return [];
+-    let match = positive.join(" AND ").replaceAll(" AND OR AND ", " OR ");
++    let match = "(" + positive.join(options.any ? " OR " : " AND ").replaceAll(options.any ? " OR OR OR " : " AND OR AND ", " OR ") + ")";
+     for (const n of negative) match += ` NOT ${n}`;
+     const weights = [0, ...fields.map((f) => index.fields[f].weight ?? 1)].join(
+       ","
+     );
+     const highlights = fields
+-      .map((_, i) => `highlight(${table},${i + 1},char(1),char(2)) h${i}`)
++      .map((_, i) => `highlight(${table},${i + 1},?,?) h${i}`)
+       .join(",");
+-    const rows = this.db.all(
++    const select = (open: string, close: string) => this.db.all(
+       `SELECT f.entity_id id,-bm25(${table},${weights}) score${
+         wantHits ? "," + highlights : ""
+       } FROM ${table} f
+@@ -385,10 +391,20 @@ export class SqliteSearch {
+           ? "e.trashed=0"
+           : "f.entity_id IN (SELECT value FROM json_each(?))"
+       } ORDER BY score DESC,e.seq`,
+-      [match, ...(ids === null ? [] : [JSON.stringify(ids)])]
++      [...(wantHits ? fields.flatMap(() => [open, close]) : []), match, ...(ids === null ? [] : [JSON.stringify(ids)])]
+     );
++    let open = "\u0001", close = "\u0002", rows = select(open, close);
+     const payloads = wantHits || options.recency ? new Map(this.db.rows(rows.map(row => row.id),
+-      [...new Set([...fields, 'updatedAt', 'createdAt'])]).map(row => [row.id, row])) : undefined;
++      [...new Set([...fields, ...(options.recency ? [options.recency.field] : [])])]).map(row => [row.id, row])) : undefined;
++    if (wantHits) {
++      // FTS inserts markers into the original text; literal marker bytes must remain ordinary source text.
++      const contains = (marker: string) => [...payloads!.values()].some(row => fields.some(field => textOf(row[field]).includes(marker)));
++      if (contains(open) || contains(close)) {
++        do { open = "\u0001" + randomUUID() + "\u0001"; close = "\u0002" + randomUUID() + "\u0002"; }
++        while (contains(open) || contains(close));
++        rows = select(open, close);
++      }
++    }
+     return rows
+       .map((r) => {
+         const ranges: Data = {},
+@@ -401,15 +417,16 @@ export class SqliteSearch {
+             let clean = "",
+               start = -1;
+             const places: number[][] = [];
+-            for (const ch of marked) {
+-              if (ch === "\u0001") start = clean.length;
+-              else if (ch === "\u0002") {
++            for (let offset = 0; offset < marked.length;) {
++              if (marked.startsWith(open, offset)) { start = clean.length; offset += open.length; }
++              else if (marked.startsWith(close, offset)) {
+                 if (start >= 0) {
+                   places.push([0, start, clean.length]);
+                   found.add(fold(clean.slice(start)));
+                   start = -1;
+                 }
+-              } else clean += ch;
++                offset += close.length;
++              } else clean += marked[offset++]!;
+             }
+             const source = payload![field];
+             let adapted = places;
+diff --git a/packages/apack-ears/tests/fixtures/search-relevance.json b/packages/apack-ears/tests/fixtures/search-relevance.json
+index e030f6bc99..261aea741d 100644
+--- a/packages/apack-ears/tests/fixtures/search-relevance.json
++++ b/packages/apack-ears/tests/fixtures/search-relevance.json
+@@ -259,7 +259,10 @@
+       ],
+       "forbidden": [],
+       "options": {
+-        "fuzzy": false
++        "fuzzy": false,
++        "fields": [
++          "name"
++        ]
+       }
+     },
+     {
+@@ -582,9 +585,7 @@
+         "Document-typo"
+       ],
+       "forbidden": [],
+-      "options": {
+-        "fuzzy": false
+-      }
++      "options": {}
+     },
+     {
+       "name": "disabled typo expansion",

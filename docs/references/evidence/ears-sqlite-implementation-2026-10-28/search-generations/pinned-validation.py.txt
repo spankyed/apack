@@ -1,0 +1,59 @@
+import os,pathlib,subprocess,json,time,shutil
+r=pathlib.Path('/metrics');o=pathlib.Path('/results');env=os.environ|{'EARS_EVALUATION_BACKEND':'sqlite'}
+def run(name,args,expected=0,backend='sqlite',timeout=None):
+ start=time.monotonic()
+ p=subprocess.run(args,cwd=r,env=env|{'EARS_EVALUATION_BACKEND':backend},text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=timeout)
+ (o/(name+'.txt')).write_text(p.stdout)
+ assert (p.returncode==0 if expected==0 else p.returncode!=0 and 'FAIL ' in p.stdout),(name,p.stdout)
+ return p,time.monotonic()-start
+args=['npm','test','-w','@apackdev/ears','--','tests/sqlite/index-builds.spec.ts','tests/sqlite/search-builds.spec.ts','tests/sqlite/search-recovery.spec.ts','tests/engine/search.spec.ts','tests/engine/vector.spec.ts','tests/sqlite/trigrams.spec.ts']
+import hashlib
+files=list((r/'packages/apack-ears/src').rglob('*.ts'))+list((r/'packages/apack-ears/tests/sqlite').glob('*.ts'))+[r/'packages/apack-ears/bench/sqlite/admission.ts']
+(o/'source-sha256.json').write_text(json.dumps({str(p.relative_to(r)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},indent=2)+'\n')
+(o/'commit.txt').write_text(subprocess.check_output(['git','rev-parse','HEAD'],cwd=r,text=True))
+run('types',['npm','run','typecheck','-w','@apackdev/ears']);run('focused',args)
+paths={n:r/('packages/apack-ears/src/sqlite/'+n+'.ts') for n in ['database','index-builds','search']};original={n:p.read_text() for n,p in paths.items()}
+mutations=[
+ ('readiness','index-builds',"if (job.state !== 'ready')",'if (false)','admits without row hydration'),
+ ('writes','database','this.search.refile(row, seq, this.heldSchema, changed);','','admits without row hydration'),
+ ('cursor','index-builds','after = Number(entity.seq); processed++;','processed++;','admits without row hydration'),
+ ('notification','index-builds','if (changed) this.db.indexesChanged(changed);','','reruns a pending watch'),
+ ('wait-ref','index-builds','if (!this.waiters.size) this.timer.unref();','this.timer.unref();','lets background-only'),
+ ('background-ref','index-builds','if (!this.waiters.size) this.timer.unref();','','lets background-only'),
+ ('admission-cache','database','const indexState = this.indexBuilds.readState();\n      this.sql.exec("COMMIT");','this.sql.exec("COMMIT");\n      const indexState = this.indexBuilds.readState();','rolls back both catalog admission'),
+ ('cleanup','index-builds','else complete = this.db.search.collectIndex(old, this.batchRows);','else complete = true;','retires replaced generations'),
+ ('retry','index-builds','this.retries.add(Number(row.generation))','void row.generation','rolls back a failed batch'),
+ ('reuse','search','WHERE old.entity_id=?','WHERE 0 AND old.entity_id=?','reuses unchanged embeddings'),
+ ('reuse-retirement','index-builds',"g.kind!='vector' OR g.reusable=0 OR",'1 OR','reuses unchanged embeddings'),
+ ('fts-point','search','this.db.run(`DELETE FROM ${table} WHERE rowid=?`, [seq]);','this.db.run(`DELETE FROM ${table} WHERE entity_id=?`, [row.id]);','uses FTS rowid point'),
+ ('owner-epoch','database',"if (this.schemaPresent) this.putMeta('schemaRevision', this.heldRevision + 1);",'', 'invalidates stale owners'),
+ ('ready-race','index-builds',"const unfinished = this.jobs().filter(job => job.state !== 'ready');\n      this.checkRevision();","const unfinished = this.jobs().filter(job => job.state !== 'ready');",'detects a schema change between'),
+ ('chunk-gc-index','search','CREATE INDEX IF NOT EXISTS chunk_generation ON chunks(generation);','','indexes retirement by generation'),
+ ('text-gc-index','search','CREATE INDEX IF NOT EXISTS text_generation ON text_meta(generation);','','indexes retirement by generation'),
+ ('pending-blob-index','search','ON chunks(type,index_name,generation,entity_id,chunk) WHERE embedding IS NULL','ON chunks(type,index_name,generation,embedding,entity_id,chunk)','indexes retirement by generation'),
+ ('fairness','index-builds',"const gc = this.preferGC ? this.nextGC() : undefined;",'const gc = undefined;','makes retirement progress'),
+]
+try:
+ for name,file,before,after,pattern in mutations:
+  assert before in original[file],name;paths[file].write_text(original[file].replace(before,after))
+  run('negative-'+name,['npm','test','-w','@apackdev/ears','--','tests/sqlite/search-builds.spec.ts','-t',pattern],expected=1)
+  paths[file].write_text(original[file])
+finally:
+ for file,p in paths.items():p.write_text(original[file])
+run('restored',args)
+run('all-sqlite',['npm','test','-w','@apackdev/ears','--','--reporter=json','--outputFile=/results/sqlite.json'])
+run('all-native',['npm','test','-w','@apackdev/ears','--','--reporter=json','--outputFile=/results/native.json'],backend='elmdb')
+for name in ['sqlite','native']:
+ v=json.loads((o/(name+'.json')).read_text());print(json.dumps({'backend':name,'passed':v['numPassedTests'],'failed':v['numFailedTests']}),flush=True)
+run('packages-build',['npm','run','packages:build'])
+for workspace,label in [('@apackdev/ears','ears'),('@apackdev/sdk','sdk')]:
+ run('api-update-'+label,['npm','run','api:update','-w',workspace])
+ dest=o/('api-'+label);dest.mkdir(exist_ok=True)
+ for p in (r/'packages'/('apack-'+label)/'etc').glob('*.api.md'):shutil.copy(p,dest/p.name)
+ run('api-check-'+label,['npm','run','api:check','-w',workspace])
+for name,command in [
+ ('build-inputs',['npm','test','-w','@app/repo-checks','--','tests/chain-inputs.spec.ts']),
+ ('lint',['npm','run','lint:check']),('specifiers',['npm','run','check:specifiers']),
+]:run(name,command)
+p,elapsed=run('typecheck-scripts',['npm','run','typecheck:scripts'],timeout=60)
+(o/'typecheck-scripts-timing.json').write_text(json.dumps({'seconds':elapsed,'budgetSeconds':60,'exitCode':p.returncode},indent=2)+'\n')

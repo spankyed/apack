@@ -1,0 +1,2218 @@
+[
+  {
+    "trial": "1-scan.json",
+    "profiles": [
+      {
+        "n": 1000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 7.016725999999949,
+            "p50": 1.9449970000000576,
+            "p99": 4.906349999999975,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 1.663242000000082,
+            "p50": 1.5937400000000252,
+            "p99": 1.7252010000000837,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              96,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 1.83262000000002,
+            "p50": 1.7422859999999218,
+            "p99": 2.992894000000092,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              98,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 1.6587829999999713,
+            "p50": 1.4897379999999885,
+            "p99": 1.851411999999982,
+            "bindingRows": [
+              1001,
+              0,
+              0
+            ],
+            "boundBytes": [
+              0,
+              47,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 0.793015999999966,
+            "p50": 0.5923870000000306,
+            "p99": 0.8353499999999485,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              186,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 0.518053000000009,
+            "p50": 0.5937209999999595,
+            "p99": 0.8207249999999249,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 0.5781359999999722,
+            "p50": 0.5558030000000826,
+            "p99": 0.7227649999999812,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 0.8823509999999715,
+            "p50": 0.5489280000000463,
+            "p99": 0.680639000000042,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 3.0122689999999466,
+            "p50": 3.181523000000084,
+            "p99": 3.380527000000029,
+            "bindingRows": [
+              1001,
+              10,
+              10
+            ],
+            "boundBytes": [
+              0,
+              47,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 2.4847169999999323,
+            "p50": 1.6282420000000002,
+            "p99": 2.1815030000000206,
+            "bindingRows": [
+              1001,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              83,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 892928,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 4185952
+        },
+        "memory": {
+          "rss": 125538304,
+          "heapTotal": 34803712,
+          "heapUsed": 21481760,
+          "external": 8919249,
+          "arrayBuffers": 42020
+        },
+        "resourceUsage": {
+          "userCPUTime": 622824,
+          "systemCPUTime": 65981,
+          "maxRSS": 122596,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 7147,
+          "majorPageFault": 1,
+          "swappedOut": 0,
+          "fsRead": 3328,
+          "fsWrite": 10944,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 1020,
+          "involuntaryContextSwitches": 83
+        }
+      },
+      {
+        "n": 10000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 15.601024000000052,
+            "p50": 14.550252999999884,
+            "p99": 15.634482999999818,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 13.981991000000107,
+            "p50": 13.787196000000222,
+            "p99": 14.446124999999938,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              96,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 13.725860999999895,
+            "p50": 13.97040799999968,
+            "p99": 14.643962999999985,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              98,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 14.044826000000285,
+            "p50": 14.1322439999999,
+            "p99": 15.007929000000331,
+            "bindingRows": [
+              10001,
+              0,
+              0
+            ],
+            "boundBytes": [
+              0,
+              47,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 4.534799999999905,
+            "p50": 4.436047999999573,
+            "p99": 4.657553000000007,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              186,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 4.196585000000141,
+            "p50": 4.33508699999993,
+            "p99": 4.580175999999938,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 4.621176999999989,
+            "p50": 4.530175000000327,
+            "p99": 7.096017999999731,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 5.259939000000031,
+            "p50": 4.30179599999974,
+            "p99": 4.91643299999987,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 29.473221000000194,
+            "p50": 29.44122100000004,
+            "p99": 30.52136799999971,
+            "bindingRows": [
+              10001,
+              10,
+              10
+            ],
+            "boundBytes": [
+              0,
+              47,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 14.09807600000022,
+            "p50": 14.620879000000059,
+            "p99": 15.083846999999878,
+            "bindingRows": [
+              10001,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              83,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 7155712,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 4239512
+        },
+        "memory": {
+          "rss": 168951808,
+          "heapTotal": 69931008,
+          "heapUsed": 41294976,
+          "external": 9092095,
+          "arrayBuffers": 214866
+        },
+        "resourceUsage": {
+          "userCPUTime": 3608732,
+          "systemCPUTime": 396630,
+          "maxRSS": 164992,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 10088,
+          "majorPageFault": 1,
+          "swappedOut": 0,
+          "fsRead": 3328,
+          "fsWrite": 40152,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 3075,
+          "involuntaryContextSwitches": 285
+        }
+      },
+      {
+        "n": 100000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 139.63340900000185,
+            "p50": 137.903664999998,
+            "p99": 145.60440399999788,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 132.91102299999693,
+            "p50": 133.30661399999735,
+            "p99": 146.80959500000245,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              96,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 146.2681679999987,
+            "p50": 140.87022499999875,
+            "p99": 146.48954700000104,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              98,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 139.58778299999904,
+            "p50": 147.5319010000021,
+            "p99": 169.97335499999826,
+            "bindingRows": [
+              100001,
+              0,
+              0
+            ],
+            "boundBytes": [
+              0,
+              47,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 47.07641099999819,
+            "p50": 43.695716999998695,
+            "p99": 52.45952000000034,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              186,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 39.427880999999616,
+            "p50": 42.21039499999824,
+            "p99": 48.825738000003184,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 42.968660999998974,
+            "p50": 41.284043999999994,
+            "p99": 44.585777000000235,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 42.84032499999739,
+            "p50": 42.146686000000045,
+            "p99": 44.19847700000173,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 301.8142310000003,
+            "p50": 299.7794819999981,
+            "p99": 327.9461349999983,
+            "bindingRows": [
+              100001,
+              10,
+              10
+            ],
+            "boundBytes": [
+              0,
+              47,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 138.6381390000024,
+            "p50": 136.72905799999717,
+            "p99": 144.61463399999775,
+            "bindingRows": [
+              100001,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              83,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 76496896,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 5697992
+        },
+        "memory": {
+          "rss": 249376768,
+          "heapTotal": 55853056,
+          "heapUsed": 10141200,
+          "external": 8907453,
+          "arrayBuffers": 33780
+        },
+        "resourceUsage": {
+          "userCPUTime": 31296710,
+          "systemCPUTime": 3743438,
+          "maxRSS": 256736,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 60025,
+          "majorPageFault": 3,
+          "swappedOut": 0,
+          "fsRead": 5176,
+          "fsWrite": 268512,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 7993,
+          "involuntaryContextSwitches": 716
+        }
+      }
+    ]
+  },
+  {
+    "trial": "2-bounded.json",
+    "profiles": [
+      {
+        "n": 1000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 11.753403999999989,
+            "p50": 9.639487000000031,
+            "p99": 10.589131000000009,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 9.302729,
+            "p50": 8.401044999999954,
+            "p99": 9.466859,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              34196,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 8.802636000000007,
+            "p50": 9.51531799999998,
+            "p99": 10.795343000000003,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 6.429004999999961,
+            "p50": 6.566883000000075,
+            "p99": 7.158770000000004,
+            "bindingRows": [
+              0,
+              0
+            ],
+            "boundBytes": [
+              38404,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 34.93762300000003,
+            "p50": 33.03054300000008,
+            "p99": 34.484155999999984,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              224544,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 0.360381999999845,
+            "p50": 0.1500860000001012,
+            "p99": 0.2772549999999683,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 0.1761700000001838,
+            "p50": 0.14358599999991384,
+            "p99": 0.18679499999984728,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 0.37134100000002945,
+            "p50": 0.13071100000001934,
+            "p99": 0.14483700000005229,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 25.08079900000007,
+            "p50": 24.5251209999999,
+            "p99": 25.097300000000132,
+            "bindingRows": [
+              10,
+              10
+            ],
+            "boundBytes": [
+              39304,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 18.47079000000008,
+            "p50": 17.545562999999902,
+            "p99": 18.46612399999981,
+            "bindingRows": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              39340,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 892928,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 4198312
+        },
+        "memory": {
+          "rss": 128839680,
+          "heapTotal": 34803712,
+          "heapUsed": 19669328,
+          "external": 8919244,
+          "arrayBuffers": 42015
+        },
+        "resourceUsage": {
+          "userCPUTime": 1938983,
+          "systemCPUTime": 58817,
+          "maxRSS": 126440,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 7985,
+          "majorPageFault": 2,
+          "swappedOut": 0,
+          "fsRead": 5480,
+          "fsWrite": 10904,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 922,
+          "involuntaryContextSwitches": 104
+        }
+      },
+      {
+        "n": 10000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 18.811171999999715,
+            "p50": 12.206287999999859,
+            "p99": 13.023305000000164,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 10.522462999999789,
+            "p50": 10.886719999999968,
+            "p99": 12.27766500000007,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              34196,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 11.960117000000082,
+            "p50": 11.818571999999676,
+            "p99": 12.730631999999787,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 8.05703799999992,
+            "p50": 7.800448999999844,
+            "p99": 8.539839000000029,
+            "bindingRows": [
+              0,
+              0
+            ],
+            "boundBytes": [
+              38404,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 43.25245900000027,
+            "p50": 40.80807499999992,
+            "p99": 42.30493900000056,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              224544,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 0.32617299999947136,
+            "p50": 0.13362800000049901,
+            "p99": 0.1805450000001656,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 0.14246099999945727,
+            "p50": 0.13254400000005262,
+            "p99": 0.16008599999986473,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 0.137377999999444,
+            "p50": 0.12296100000003207,
+            "p99": 0.16633599999931903,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 139.16460700000061,
+            "p50": 135.991043,
+            "p99": 137.49840700000004,
+            "bindingRows": [
+              10,
+              10
+            ],
+            "boundBytes": [
+              39304,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 24.243615000000318,
+            "p50": 23.67102100000011,
+            "p99": 24.8799199999994,
+            "bindingRows": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              39340,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 7155712,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 4239512
+        },
+        "memory": {
+          "rss": 153432064,
+          "heapTotal": 54726656,
+          "heapUsed": 23294152,
+          "external": 9092044,
+          "arrayBuffers": 214815
+        },
+        "resourceUsage": {
+          "userCPUTime": 6716383,
+          "systemCPUTime": 364129,
+          "maxRSS": 149836,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 10364,
+          "majorPageFault": 2,
+          "swappedOut": 0,
+          "fsRead": 5480,
+          "fsWrite": 40112,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 1782,
+          "involuntaryContextSwitches": 185
+        }
+      },
+      {
+        "n": 100000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 14.060367000001861,
+            "p50": 14.558462000000873,
+            "p99": 15.055845999999292,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 13.095140000001265,
+            "p50": 13.079972999999882,
+            "p99": 31.38692699999956,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              34196,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 14.274830000002112,
+            "p50": 14.010117000001628,
+            "p99": 15.314685000001191,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 11.406856000001426,
+            "p50": 10.62779899999805,
+            "p99": 11.67511100000047,
+            "bindingRows": [
+              0,
+              0
+            ],
+            "boundBytes": [
+              38404,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 46.615984999996726,
+            "p50": 46.45639900000242,
+            "p99": 48.448481000003085,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              224544,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 0.3544660000006843,
+            "p50": 0.12108599999919534,
+            "p99": 0.15337799999906565,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 0.13454400000046007,
+            "p50": 0.1270440000007511,
+            "p99": 0.13729500000044936,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 0.1602950000014971,
+            "p50": 0.12108599999919534,
+            "p99": 0.13875299999926938,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 1380.2710100000004,
+            "p50": 1314.7131829999998,
+            "p99": 1354.893204,
+            "bindingRows": [
+              10,
+              10
+            ],
+            "boundBytes": [
+              39304,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 28.024941999996372,
+            "p50": 27.158548999999766,
+            "p99": 29.77243599999929,
+            "bindingRows": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              39340,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 76496896,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 6002872
+        },
+        "memory": {
+          "rss": 228618240,
+          "heapTotal": 60231680,
+          "heapUsed": 34291104,
+          "external": 9232083,
+          "arrayBuffers": 354854
+        },
+        "resourceUsage": {
+          "userCPUTime": 37639776,
+          "systemCPUTime": 3589984,
+          "maxRSS": 238352,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 27002,
+          "majorPageFault": 2,
+          "swappedOut": 0,
+          "fsRead": 5480,
+          "fsWrite": 269064,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 3862,
+          "involuntaryContextSwitches": 397
+        }
+      }
+    ]
+  },
+  {
+    "trial": "3-bounded.json",
+    "profiles": [
+      {
+        "n": 1000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 11.927782999999977,
+            "p50": 9.841574000000037,
+            "p99": 11.055139999999938,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 8.855512999999974,
+            "p50": 8.70730100000003,
+            "p99": 9.522735000000011,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              34196,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 10.208372999999938,
+            "p50": 9.409898999999996,
+            "p99": 10.875635999999986,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 7.269230999999991,
+            "p50": 6.8773049999999785,
+            "p99": 8.069163000000003,
+            "bindingRows": [
+              0,
+              0
+            ],
+            "boundBytes": [
+              38404,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 34.475490000000036,
+            "p50": 33.74247400000013,
+            "p99": 34.45652999999993,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              224544,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 0.33679800000004434,
+            "p50": 0.13204399999995076,
+            "p99": 0.21675499999992098,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 0.14146100000016304,
+            "p50": 0.12833599999999024,
+            "p99": 0.16625400000020818,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 0.3824240000001282,
+            "p50": 0.11946100000000115,
+            "p99": 0.13725300000010066,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 25.417723000000024,
+            "p50": 24.786417999999912,
+            "p99": 27.71689399999991,
+            "bindingRows": [
+              10,
+              10
+            ],
+            "boundBytes": [
+              39304,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 19.39947600000005,
+            "p50": 18.640376999999944,
+            "p99": 19.47989399999983,
+            "bindingRows": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              39340,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 892928,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 4198312
+        },
+        "memory": {
+          "rss": 128512000,
+          "heapTotal": 34803712,
+          "heapUsed": 22922320,
+          "external": 8919241,
+          "arrayBuffers": 42012
+        },
+        "resourceUsage": {
+          "userCPUTime": 1982978,
+          "systemCPUTime": 55886,
+          "maxRSS": 126024,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 8021,
+          "majorPageFault": 8,
+          "swappedOut": 0,
+          "fsRead": 13296,
+          "fsWrite": 10904,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 861,
+          "involuntaryContextSwitches": 56
+        }
+      },
+      {
+        "n": 10000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 13.060597000000143,
+            "p50": 11.986241999999947,
+            "p99": 13.029555999999957,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 11.521440999999868,
+            "p50": 11.218184999999721,
+            "p99": 13.52564799999982,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              34196,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 12.298248999999942,
+            "p50": 12.314665999999761,
+            "p99": 13.533022999999957,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 7.880493000000115,
+            "p50": 8.364794999999503,
+            "p99": 8.967098000000078,
+            "bindingRows": [
+              0,
+              0
+            ],
+            "boundBytes": [
+              38404,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 41.619009000000005,
+            "p50": 42.15806100000009,
+            "p99": 44.22777000000042,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              224544,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 0.5293859999992492,
+            "p50": 0.12450199999966571,
+            "p99": 0.227628999999979,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 0.1829200000001947,
+            "p50": 0.1247109999994791,
+            "p99": 0.1890880000000834,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 0.13766899999973248,
+            "p50": 0.11758600000030128,
+            "p99": 0.14241999999921973,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 137.1853170000004,
+            "p50": 138.26996400000007,
+            "p99": 143.0383099999999,
+            "bindingRows": [
+              10,
+              10
+            ],
+            "boundBytes": [
+              39304,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 24.335659000000305,
+            "p50": 24.177279999999882,
+            "p99": 24.79291899999953,
+            "bindingRows": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              39340,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 7163904,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 4251872
+        },
+        "memory": {
+          "rss": 146497536,
+          "heapTotal": 37949440,
+          "heapUsed": 26552720,
+          "external": 9100234,
+          "arrayBuffers": 223005
+        },
+        "resourceUsage": {
+          "userCPUTime": 6822661,
+          "systemCPUTime": 378480,
+          "maxRSS": 143692,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 9953,
+          "majorPageFault": 9,
+          "swappedOut": 0,
+          "fsRead": 14192,
+          "fsWrite": 40152,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 1778,
+          "involuntaryContextSwitches": 164
+        }
+      },
+      {
+        "n": 100000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 13.387520000000222,
+            "p50": 14.092743000001065,
+            "p99": 15.736151000000973,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 13.057972000002337,
+            "p50": 12.829592999998567,
+            "p99": 13.569815999999264,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              34196,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 14.029742000002443,
+            "p50": 14.096910000000207,
+            "p99": 14.723797999999078,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 9.69477900000129,
+            "p50": 10.455212000000756,
+            "p99": 11.435356000001775,
+            "bindingRows": [
+              0,
+              0
+            ],
+            "boundBytes": [
+              38404,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 48.62535900000148,
+            "p50": 46.04597300000023,
+            "p99": 48.11264099999971,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              224544,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 0.3008810000028461,
+            "p50": 0.11733599999934086,
+            "p99": 0.16633699999874807,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 0.14333600000099977,
+            "p50": 0.12566900000092573,
+            "p99": 0.1334610000012617,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 0.1475030000001425,
+            "p50": 0.11966899999970337,
+            "p99": 0.14079399999900488,
+            "bindingRows": [
+              1,
+              1
+            ],
+            "boundBytes": [
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 1283.780515999999,
+            "p50": 1325.6776549999995,
+            "p99": 1368.5416889999979,
+            "bindingRows": [
+              10,
+              10
+            ],
+            "boundBytes": [
+              39304,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 27.943450999999186,
+            "p50": 27.45549200000096,
+            "p99": 29.12658000000374,
+            "bindingRows": [
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              39304,
+              39340,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 76496896,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 5112952
+        },
+        "memory": {
+          "rss": 228061184,
+          "heapTotal": 60231680,
+          "heapUsed": 30463912,
+          "external": 9305800,
+          "arrayBuffers": 428571
+        },
+        "resourceUsage": {
+          "userCPUTime": 37901612,
+          "systemCPUTime": 3510966,
+          "maxRSS": 238604,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 28614,
+          "majorPageFault": 9,
+          "swappedOut": 0,
+          "fsRead": 14192,
+          "fsWrite": 267352,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 3827,
+          "involuntaryContextSwitches": 411
+        }
+      }
+    ]
+  },
+  {
+    "trial": "4-scan.json",
+    "profiles": [
+      {
+        "n": 1000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 6.333516999999972,
+            "p50": 1.9008810000000267,
+            "p99": 5.163305999999977,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 1.5182949999999664,
+            "p50": 1.5547540000000026,
+            "p99": 1.8436300000000188,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              96,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 1.587462999999957,
+            "p50": 1.539295999999979,
+            "p99": 1.9347139999999854,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              98,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 1.5340449999999919,
+            "p50": 1.5790460000000053,
+            "p99": 1.9716300000000047,
+            "bindingRows": [
+              1001,
+              0,
+              0
+            ],
+            "boundBytes": [
+              0,
+              47,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 0.6046259999999961,
+            "p50": 0.5562930000000392,
+            "p99": 0.5795019999999909,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              186,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 0.5379590000000007,
+            "p50": 0.5777510000000348,
+            "p99": 0.8047940000000153,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 0.5949180000000069,
+            "p50": 0.6599600000000123,
+            "p99": 0.929002999999966,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 0.827335000000005,
+            "p50": 0.556917999999996,
+            "p99": 0.6592930000000479,
+            "bindingRows": [
+              1001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 3.1793839999999705,
+            "p50": 3.049716999999987,
+            "p99": 3.5627600000000257,
+            "bindingRows": [
+              1001,
+              10,
+              10
+            ],
+            "boundBytes": [
+              0,
+              47,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 2.34083899999996,
+            "p50": 1.7792540000000372,
+            "p99": 2.185506000000032,
+            "bindingRows": [
+              1001,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              83,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 897024,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 4181832
+        },
+        "memory": {
+          "rss": 130830336,
+          "heapTotal": 35065856,
+          "heapUsed": 21333080,
+          "external": 8919234,
+          "arrayBuffers": 42005
+        },
+        "resourceUsage": {
+          "userCPUTime": 632763,
+          "systemCPUTime": 41655,
+          "maxRSS": 127764,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 7484,
+          "majorPageFault": 3,
+          "swappedOut": 0,
+          "fsRead": 8400,
+          "fsWrite": 10880,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 1092,
+          "involuntaryContextSwitches": 142
+        }
+      },
+      {
+        "n": 10000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 16.20342000000028,
+            "p50": 14.661622999999963,
+            "p99": 16.037668999999823,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 13.233369000000039,
+            "p50": 13.71874600000001,
+            "p99": 14.189080000000104,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              96,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 13.822995999999875,
+            "p50": 14.38554000000022,
+            "p99": 15.716125999999804,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              98,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 13.945162999999866,
+            "p50": 14.2710390000002,
+            "p99": 14.845082000000275,
+            "bindingRows": [
+              10001,
+              0,
+              0
+            ],
+            "boundBytes": [
+              0,
+              47,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 4.757220999999845,
+            "p50": 4.604221000000052,
+            "p99": 4.770888000000014,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              186,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 4.205136000000039,
+            "p50": 4.278470000000198,
+            "p99": 7.821938000000046,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 4.351094999999987,
+            "p50": 4.447344999999586,
+            "p99": 4.71697099999983,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 4.306970000000092,
+            "p50": 4.359304000000066,
+            "p99": 4.757137999999941,
+            "bindingRows": [
+              10001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 28.777411999999913,
+            "p50": 29.667955999999776,
+            "p99": 30.45245900000009,
+            "bindingRows": [
+              10001,
+              10,
+              10
+            ],
+            "boundBytes": [
+              0,
+              47,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 14.439498000000185,
+            "p50": 14.727581999999984,
+            "p99": 15.440749999999753,
+            "bindingRows": [
+              10001,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              83,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 7155712,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 4239512
+        },
+        "memory": {
+          "rss": 174387200,
+          "heapTotal": 69406720,
+          "heapUsed": 40679928,
+          "external": 9092080,
+          "arrayBuffers": 214851
+        },
+        "resourceUsage": {
+          "userCPUTime": 3680476,
+          "systemCPUTime": 375538,
+          "maxRSS": 170300,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 10377,
+          "majorPageFault": 3,
+          "swappedOut": 0,
+          "fsRead": 8400,
+          "fsWrite": 40080,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 3085,
+          "involuntaryContextSwitches": 287
+        }
+      },
+      {
+        "n": 100000,
+        "queries": {
+          "exact": {
+            "firstInvocationMs": 158.69132999999783,
+            "p50": 148.54837699999916,
+            "p99": 177.75084700000298,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "deletion": {
+            "firstInvocationMs": 133.5344920000025,
+            "p50": 136.03689700000177,
+            "p99": 147.69878299999982,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              96,
+              10
+            ]
+          },
+          "transposition": {
+            "firstInvocationMs": 155.04928700000164,
+            "p50": 141.50583499999993,
+            "p99": 149.20363500000167,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              98,
+              10
+            ]
+          },
+          "absent": {
+            "firstInvocationMs": 138.66080200000215,
+            "p50": 141.659378999997,
+            "p99": 182.0582310000027,
+            "bindingRows": [
+              100001,
+              0,
+              0
+            ],
+            "boundBytes": [
+              0,
+              47,
+              2
+            ]
+          },
+          "maxToken": {
+            "firstInvocationMs": 46.151960999999574,
+            "p50": 43.61876400000256,
+            "p99": 44.69148599999971,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              186,
+              10
+            ]
+          },
+          "phrase": {
+            "firstInvocationMs": 41.621658000000025,
+            "p50": 43.36276100000032,
+            "p99": 45.611079999998765,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              10
+            ]
+          },
+          "prefix": {
+            "firstInvocationMs": 45.06911500000206,
+            "p50": 44.26427200000035,
+            "p99": 46.915053999997326,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              45,
+              10
+            ]
+          },
+          "unicode": {
+            "firstInvocationMs": 46.094960999998875,
+            "p50": 43.40838700000313,
+            "p99": 45.201742000001104,
+            "bindingRows": [
+              100001,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              57,
+              10
+            ]
+          },
+          "broad": {
+            "firstInvocationMs": 325.5301729999992,
+            "p50": 311.2534209999976,
+            "p99": 345.48940799999764,
+            "bindingRows": [
+              100001,
+              10,
+              10
+            ],
+            "boundBytes": [
+              0,
+              47,
+              81
+            ]
+          },
+          "highlights": {
+            "firstInvocationMs": 141.6198779999977,
+            "p50": 141.35279199999786,
+            "p99": 151.9312510000018,
+            "bindingRows": [
+              100001,
+              1,
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "boundBytes": [
+              0,
+              47,
+              83,
+              10,
+              10,
+              10,
+              18
+            ]
+          }
+        },
+        "files": {
+          "data.sqlite3": 76496896,
+          "data.sqlite3-shm": 32768,
+          "data.sqlite3-wal": 5784512
+        },
+        "memory": {
+          "rss": 253128704,
+          "heapTotal": 56115200,
+          "heapUsed": 10028272,
+          "external": 8907454,
+          "arrayBuffers": 33780
+        },
+        "resourceUsage": {
+          "userCPUTime": 32156403,
+          "systemCPUTime": 3774060,
+          "maxRSS": 260176,
+          "sharedMemorySize": 0,
+          "unsharedDataSize": 0,
+          "unsharedStackSize": 0,
+          "minorPageFault": 59772,
+          "majorPageFault": 5,
+          "swappedOut": 0,
+          "fsRead": 13136,
+          "fsWrite": 268704,
+          "ipcSent": 0,
+          "ipcReceived": 0,
+          "signalsCount": 0,
+          "voluntaryContextSwitches": 8050,
+          "involuntaryContextSwitches": 720
+        }
+      }
+    ]
+  }
+]

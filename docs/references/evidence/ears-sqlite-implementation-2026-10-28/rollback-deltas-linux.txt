@@ -1,0 +1,118 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc npm run typecheck -w @apackdev/ears && npm test -w @apackdev/ears && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears && python3 .temp/rollback-negative.py
+
+    Finished `release` profile [optimized] target(s) in 0.05s
+Published packages are out of date:
+  @apackdev/ears: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts
+  @apackdev/testing: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts
+  @apackdev/cli: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts
+Rebuilding 3 of 5
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+Built @apackdev/testing@0.1.0 into dist/package
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/compiler-pe-environment.ts:38:102:
+      38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+         ╵                                                     ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:19:42:
+      19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+         ╵                                           ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:61:48:
+      61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+         ╵                                            ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+Built @apackdev/cli@0.1.0 into dist/package
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/model-based.spec.ts (2 tests) 20360ms
+   ✓ refuses, holds and answers what the model does  4779ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  15580ms
+ ↓ tests/engine/sqlite-operations.spec.ts (18 tests | 18 skipped)
+ ✓ tests/engine/queries.spec.ts (27 tests) 444ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 355ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 650ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 250ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 147ms
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 91ms
+ ↓ tests/sqlite/values.spec.ts (8 tests | 8 skipped)
+ ✓ tests/engine/calls.spec.ts (6 tests) 60ms
+ ✓ tests/engine/search.spec.ts (7 tests) 41ms
+ ↓ tests/sqlite/index.spec.ts (3 tests | 3 skipped)
+ ✓ tests/engine/vector.spec.ts (6 tests) 37ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 103ms
+ ✓ tests/engines.spec.ts (4 tests) 45ms
+ ✓ tests/engine/query-values.spec.ts (4 tests) 30ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 14ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 18ms
+ ✓ tests/engine/storage-port.spec.ts (3 tests) 16ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+
+ Test Files  17 passed | 3 skipped (20)
+      Tests  231 passed | 29 skipped (260)
+   Start at  08:31:30
+   Duration  26.26s (transform 363ms, setup 34ms, collect 1.43s, tests 22.66s, environment 2ms, prepare 738ms)
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/model-based.spec.ts (2 tests) 18109ms
+   ✓ refuses, holds and answers what the model does  4928ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  13180ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 975ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 1771ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  318ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  313ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  328ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  313ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 1039ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 764ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 407ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 117ms
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 242ms
+ ✓ tests/engine/calls.spec.ts (6 tests) 136ms
+ ✓ tests/engines.spec.ts (4 tests) 83ms
+ ✓ tests/engine/search.spec.ts (7 tests) 185ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 143ms
+ ✓ tests/engine/query-values.spec.ts (4 tests) 105ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 45ms
+ ✓ tests/engine/storage-port.spec.ts (3 tests) 60ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 45ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 2500ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 186ms
+ ✓ tests/sqlite/values.spec.ts (8 tests) 172ms
+
+ Test Files  20 passed (20)
+      Tests  260 passed (260)
+   Start at  08:31:57
+   Duration  30.69s (transform 370ms, setup 38ms, collect 1.44s, tests 27.08s, environment 2ms, prepare 744ms)
+
+{"rule": "failed-batch", "path": "packages/apack-ears/src/sqlite/database.ts", "before": "this.mutate(op, request.now ?? Date.now(), pending) as OpResult", "after": "this.mutate(op, request.now ?? Date.now(), changes) as OpResult", "exit": 1, "output": "\n> @apackdev/ears@0.1.0 test\n> vitest run tests/engine/storage-port.spec.ts\n\n\n RUN  v3.2.7 /work/packages/apack-ears\n\n \u276f tests/engine/storage-port.spec.ts (3 tests | 1 failed) 83ms\n   \u2713 returns the same typed result vocabulary for reads and count-only groups 36ms\n   \u00d7 rolls back failed batches and nested writes without losing committed dependencies 21ms\n     \u2192 expected [ 1, 2, 4 ] to deeply equal [ 1, 4 ]\n   \u2713 includes released savepoints and commits that close an open savepoint 25ms\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af\n\n FAIL  tests/engine/storage-port.spec.ts > rolls back failed batches and nested writes without losing committed dependencies\nAssertionError: expected [ 1, 2, 4 ] to deeply equal [ 1, 4 ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[2m  [\u001b[22m\n\u001b[2m    1,\u001b[22m\n\u001b[31m+   2,\u001b[39m\n\u001b[2m    4,\u001b[22m\n\u001b[2m  ]\u001b[22m\n\n \u276f tests/engine/storage-port.spec.ts:52:73\n     50|   // deltas instead; verify its stronger precision without inventing a\u2026\n     51|   expect(touched).toEqual(expect.arrayContaining([1, 4]));\n     52|   if (process.env.EARS_EVALUATION_BACKEND === 'sqlite') expect(touched\u2026\n       |                                                                         ^\n     53|   expect(db.readSync({ reads: ['a', 'b', 'c', 'd'].map(suffix => ({ re\u2026\n     54|     .toEqual(['kept a', 'b', 'c', 'kept d'].map(value => ({ kind: 'fie\u2026\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[1/1]\u23af\n\n\n Test Files  1 failed (1)\n      Tests  1 failed | 2 passed (3)\n   Start at  08:32:28\n   Duration  419ms (transform 171ms, setup 12ms, collect 209ms, tests 83ms, environment 0ms, prepare 40ms)\n\nnpm error Lifecycle script `test` failed with error:\nnpm error code 1\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c vitest run tests/engine/storage-port.spec.ts\n"}
+{"rule": "nested-rollback", "path": "packages/apack-ears/src/sqlite/database.ts", "before": "    this.savepoints.splice(index);", "after": "    // mutation: retain the rolled-back delta", "exit": 1, "output": "\n> @apackdev/ears@0.1.0 test\n> vitest run tests/engine/storage-port.spec.ts\n\n\n RUN  v3.2.7 /work/packages/apack-ears\n\n \u276f tests/engine/storage-port.spec.ts (3 tests | 1 failed) 81ms\n   \u2713 returns the same typed result vocabulary for reads and count-only groups 42ms\n   \u00d7 rolls back failed batches and nested writes without losing committed dependencies 21ms\n     \u2192 expected [ 1, 2, 3, 4 ] to deeply equal [ 1, 4 ]\n   \u2713 includes released savepoints and commits that close an open savepoint 16ms\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af\n\n FAIL  tests/engine/storage-port.spec.ts > rolls back failed batches and nested writes without losing committed dependencies\nAssertionError: expected [ 1, 2, 3, 4 ] to deeply equal [ 1, 4 ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[2m  [\u001b[22m\n\u001b[2m    1,\u001b[22m\n\u001b[31m+   2,\u001b[39m\n\u001b[31m+   3,\u001b[39m\n\u001b[2m    4,\u001b[22m\n\u001b[2m  ]\u001b[22m\n\n \u276f tests/engine/storage-port.spec.ts:52:73\n     50|   // deltas instead; verify its stronger precision without inventing a\u2026\n     51|   expect(touched).toEqual(expect.arrayContaining([1, 4]));\n     52|   if (process.env.EARS_EVALUATION_BACKEND === 'sqlite') expect(touched\u2026\n       |                                                                         ^\n     53|   expect(db.readSync({ reads: ['a', 'b', 'c', 'd'].map(suffix => ({ re\u2026\n     54|     .toEqual(['kept a', 'b', 'c', 'kept d'].map(value => ({ kind: 'fie\u2026\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[1/1]\u23af\n\n\n Test Files  1 failed (1)\n      Tests  1 failed | 2 passed (3)\n   Start at  08:32:28\n   Duration  436ms (transform 179ms, setup 12ms, collect 228ms, tests 81ms, environment 0ms, prepare 39ms)\n\nnpm error Lifecycle script `test` failed with error:\nnpm error code 1\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c vitest run tests/engine/storage-port.spec.ts\n"}

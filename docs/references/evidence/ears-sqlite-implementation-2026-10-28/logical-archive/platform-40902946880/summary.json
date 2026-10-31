@@ -1,0 +1,139 @@
+{
+  "source": "29c2cf746cc6f421c5036465c2b983bfde9eec37",
+  "run": 40902946880,
+  "conclusion": "success",
+  "platforms": {
+    "macOS-ARM64": {
+      "verification": {
+        "source": "29c2cf746cc6f421c5036465c2b983bfde9eec37",
+        "earsPassed": 596,
+        "sqliteCasesPassed": 287,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalCommandCasesPassed": 8,
+        "logicalCrashCasesPassed": 2,
+        "builtLogicalChecks": 5,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 10,
+        "logicalHostSkipped": [],
+        "hostPassed": 135,
+        "recoveryCasesPassed": 34
+      },
+      "sha256": {
+        "runtime.json": "4b18240f047813d73a9ff3b03259e2619b88ca63716a3ab551bd4539071e15ea",
+        "host.json": "8d6d0cc7fbe6ef42bf74da863a68d2691828e1564fa085a19516f932f1341050",
+        "cli-maintenance.json": "bbacd1008e0de0bf3edb63a62d1f2762211cd5ca733b3cdc07e27edf554f5055",
+        "cli-maintenance.log": "a9056b0d50e6bf4e2f29aca2d83f7996f89e7c9b1f9146e8f378cb703606f580",
+        "logical-cli.json": "276ae05a1ab873a86f304df80fe9cc3284418110943447d56ae9f1ee69033f78",
+        "ears.log": "908aa0ad23fd2967d78065a6da42d0db09e1595cb355f9ecedb57292fdcd9079",
+        "verification.json": "10f7944d0c2060c7648219d61ce45028b61395dc8e6ffbc16dc1c59184222e31",
+        "runtime.log": "5cd9ac66e19da68a43e26a22aeebbe42bdcfc1516eaa13080b6c43e9430e6e86",
+        "logical-cli.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "host.log": "7ac83a502d1b5634a2524ac94555eace8d9b9641f7e42f61fe880f1c5d54bdc9",
+        "ears.json": "62db937a14575fefa5547cf9316f6b8a4f0ebbf529f8953055a04a9ed81c899d"
+      },
+      "skipped": {
+        "host.json": [],
+        "cli-maintenance.json": [],
+        "ears.json": []
+      }
+    },
+    "Windows-X64": {
+      "verification": {
+        "source": "29c2cf746cc6f421c5036465c2b983bfde9eec37",
+        "earsPassed": 595,
+        "sqliteCasesPassed": 286,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalCommandCasesPassed": 8,
+        "logicalCrashCasesPassed": 2,
+        "builtLogicalChecks": 5,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 9,
+        "logicalHostSkipped": [
+          {
+            "name": "reports a published but unsynchronized directory truthfully and retains its complete archive",
+            "status": "skipped"
+          }
+        ],
+        "hostPassed": 122,
+        "recoveryCasesPassed": 33
+      },
+      "sha256": {
+        "runtime.json": "96437baf4be7dbd983e2640f1e9c8bac50e4846db83093306e88c37d25b7e3e0",
+        "host.json": "164fc0cc106435922548de11f4d83a965b6a8e2f1848ba56f4ace10d276a3100",
+        "cli-maintenance.json": "66cbef7c879f6196b8a1f64417b429830639b4fb922c66e00eda95c56b2962d0",
+        "cli-maintenance.log": "9bf67137d6d2c26e0080faf1ae6458ac3fd48f5cb9db59b42fd51c41321d2d10",
+        "logical-cli.json": "3c5244b91b34d456f9c04a83a6bc64841ac6c43062eb79add64d8210f19b5da9",
+        "ears.log": "4df5e491f3e7fe3f569920cb64ed823194dab5fc360b023bdbef297319abe596",
+        "verification.json": "efefc0a3edd43b26ba4eb6da47f6c18cc66c9049fa7d1b08fd55e97b53ae0b8c",
+        "runtime.log": "cea310b224c09debe2aec9b18ca2736a66f512ce2cef103923d5abad2bad8012",
+        "logical-cli.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "host.log": "96660776368efc959dcbb76454e22b5767f7638fa69e4a866497aa56ce96bf39",
+        "ears.json": "ed01cbe521c33c13ec3f49a0e8f32cd3d45814374f308d393cb7eab925562752"
+      },
+      "skipped": {
+        "host.json": [
+          "refuses before replacement when syncing the recovery copy fails",
+          "refuses before replacement when syncing the recovery parent fails",
+          "reports a published but unsynchronized directory truthfully and retains its complete archive",
+          "recovers elmdb/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+          "recovers elmdb/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+          "recovers elmdb/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+          "recovers elmdb/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+          "recovers sqlite/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+          "recovers sqlite/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+          "recovers sqlite/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+          "recovers sqlite/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+          "refuses a separate live reader and reclaims its claim after SIGKILL",
+          "refuses a managed open without writable metadata while direct read-only snapshots remain available",
+          "the database write lock releases the lock when the tool is interrupted with POSIX SIGINT",
+          "the database write lock releases the lock when the tool is interrupted with POSIX SIGTERM",
+          "the database write lock releases the lock when the tool is interrupted with POSIX SIGHUP"
+        ],
+        "cli-maintenance.json": [],
+        "ears.json": [
+          "yielding value-index admission resumes a committed batch cursor after a real killed process"
+        ]
+      }
+    },
+    "Linux-X64": {
+      "verification": {
+        "source": "29c2cf746cc6f421c5036465c2b983bfde9eec37",
+        "earsPassed": 596,
+        "sqliteCasesPassed": 287,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalCommandCasesPassed": 8,
+        "logicalCrashCasesPassed": 2,
+        "builtLogicalChecks": 5,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 10,
+        "logicalHostSkipped": [],
+        "hostPassed": 135,
+        "recoveryCasesPassed": 34
+      },
+      "sha256": {
+        "runtime.json": "162f5288918a4c9115efa1c59c3a46b50a16ee1c7c22b0da30859cf32b4a6c35",
+        "host.json": "e0bd5d3fbdc3b8ab71c4451a9eb4f56b87b6e4dd8a35eae4081a61a0b254d0ca",
+        "cli-maintenance.json": "96c2a9f2b8059fe3b6db2dfee8f5033ce037c653429d4d41b19bab2cf55ac64f",
+        "cli-maintenance.log": "ebb4e409b139808b9ed81e8f7ea81ebf45a42d7feb89ae0d72d4043703acdf5c",
+        "logical-cli.json": "f64d35f6620d98297f9a223eb49147aca2b0cbb160165265880b27a09c85c319",
+        "ears.log": "87f5d9f82034d88fdc085cc287db8a8a54bd94215037e2c04eb86654776707d4",
+        "verification.json": "10f7944d0c2060c7648219d61ce45028b61395dc8e6ffbc16dc1c59184222e31",
+        "runtime.log": "0e5ac2eae18540b6d833ab749976e98e71726d118ee24c15cbc25727c5053264",
+        "logical-cli.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "host.log": "226e5e4ca0eba750ebda376059cf34fa9c72c4d611d6d5d6077e6f1ef09fe532",
+        "ears.json": "a87b0db12595e4713bd455d04362c9db210660af695a95adce48c6332dd5209e"
+      },
+      "skipped": {
+        "host.json": [],
+        "cli-maintenance.json": [],
+        "ears.json": []
+      }
+    }
+  }
+}

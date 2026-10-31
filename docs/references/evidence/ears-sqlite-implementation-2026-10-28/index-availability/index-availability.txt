@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/search-builds.spec.ts -t keeps healthy search
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/search-builds.spec.ts (19 tests | 18 skipped) 235ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 18 skipped (19)
+   Start at  11:51:19
+   Duration  651ms (transform 221ms, setup 16ms, collect 285ms, tests 235ms, environment 0ms, prepare 39ms)
+

@@ -1,0 +1,15 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 334ms
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 15ms
+
+ Test Files  2 passed (2)
+      Tests  17 passed (17)
+   Start at  13:11:54
+   Duration  894ms (transform 223ms, setup 16ms, collect 306ms, tests 350ms, environment 0ms, prepare 79ms)
+

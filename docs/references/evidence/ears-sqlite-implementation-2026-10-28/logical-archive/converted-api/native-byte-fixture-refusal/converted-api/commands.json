@@ -1,0 +1,55 @@
+[
+  {
+    "label": "prebuilt-inputs",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "--conditions=@apackdev/source",
+      "--input-type=module",
+      "-e",
+      "import {packagesBuiltOrRefuse} from '@apackdev/host/build/packages-built'; if (!packagesBuiltOrRefuse('npm run packages:build')) throw new Error('Built inputs are required for this gate');"
+    ],
+    "exitCode": 0,
+    "seconds": 0.20170056300412398
+  },
+  {
+    "label": "seed-native",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "--conditions=@apackdev/source",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "seed",
+      "/results/converted-api/seed.json"
+    ],
+    "exitCode": 0,
+    "seconds": 1.3953502200020012
+  },
+  {
+    "label": "native-baseline-rpc",
+    "args": [
+      "node",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "client",
+      "/results/converted-api/native-baseline-rpc.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.12326389500231016
+  },
+  {
+    "label": "inspect-native-baseline",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "--conditions=@apackdev/source",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "source-inspect",
+      "/results/converted-api/native-inspection.json"
+    ],
+    "exitCode": 1,
+    "seconds": 1.018191052993643
+  }
+]

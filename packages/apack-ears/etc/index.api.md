@@ -205,19 +205,23 @@ export interface EarsDatabase {
     // (undocumented)
     begin(): EarsUnit;
     // (undocumented)
-    bulkLoad(loads: Uint8Array): void;
+    bulkLoad(loads: readonly Load[]): void;
     // (undocumented)
     close(): void;
+    drainBackground?(): Promise<void>;
     // (undocumented)
     durable(): Promise<void>;
+    readonly format: string;
+    indexesReady(): Promise<void>;
     // (undocumented)
     readonly isOpen: boolean;
+    onIndexesChanged?(listener: (changes: Changes) => void): () => void;
     // (undocumented)
     readonly path: string;
     // (undocumented)
     readonly readOnly: boolean;
     // (undocumented)
-    readSync(reads: Uint8Array): Uint8Array;
+    readSync(reads: ReadRequest): Answer[];
     replaceWith(source: string): void;
     reset(): void;
     readonly schema: unknown;
@@ -239,8 +243,10 @@ export interface EarsDatabase {
         ranges: number;
     };
     untrack(token: number): void;
+    withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T>;
+    withoutWriteAuthority<T>(operation: () => T): T;
     // (undocumented)
-    write(batch: Uint8Array, durable?: boolean | null): Uint8Array;
+    write(batch: WriteRequest, durable?: boolean | null): WriteResult;
 }
 
 // @public
@@ -301,6 +307,10 @@ export type EarsErrorCode =
 * index (no `substrings`)
 */
 | 'UNKNOWN_INDEX'
+/** A declared search index has not finished its current generation; await the owning database's indexesReady(). */
+| 'INDEX_BUILDING'
+/** A background index build failed; the writable owner must recover it before indexed reads resume. */
+| 'INDEX_FAILED'
 /** `hits()` was asked of a query with no `search`, `near`, `like` or `hybrid`, or with a `where` given a function after it */
 | 'NO_SEARCH'
 /** `explain()` was asked of a query with a `where` given a function, which runs outside the plan the database explains */
@@ -330,11 +340,11 @@ export interface EarsUnit {
     // (undocumented)
     abort(): void;
     // (undocumented)
-    commit(durable?: boolean | null): Uint8Array;
+    commit(durable?: boolean | null): Changes;
     // (undocumented)
     readonly isOpen: boolean;
     // (undocumented)
-    read(reads: Uint8Array): Uint8Array;
+    read(reads: ReadRequest): Answer[];
     // (undocumented)
     release(depth: number): void;
     // (undocumented)
@@ -342,11 +352,24 @@ export interface EarsUnit {
     // (undocumented)
     savepoint(): number;
     // (undocumented)
-    write(batch: Uint8Array): Uint8Array;
+    write(batch: WriteRequest): WriteResult;
 }
 
 // @public
 export type EdgeDirection = 'out' | 'in' | 'both';
+
+// @public
+export interface ElmdbExplanation<E extends string = string> {
+    // (undocumented)
+    backend: 'elmdb';
+    // (undocumented)
+    ids: EARS.EntityId<E>[];
+    // (undocumented)
+    ms: number;
+    // (undocumented)
+    stages: QueryStage[];
+    visited: number;
+}
 
 // @public
 export interface EmbedDeclaration {
@@ -589,14 +612,7 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
 }
 
 // @public
-export interface QueryExplanation<E extends string = string> {
-    // (undocumented)
-    ids: EARS.EntityId<E>[];
-    ms: number;
-    // (undocumented)
-    stages: QueryStage[];
-    visited: number;
-}
+export type QueryExplanation<E extends string = string> = ElmdbExplanation<E> | SqliteExplanation<E>;
 
 // @public
 export interface QueryStage {
@@ -756,6 +772,41 @@ E
 } : {}) : {
     shortCode?: string;
 };
+
+// @public
+export interface SqliteExplanation<E extends string = string> {
+    // (undocumented)
+    backend: 'sqlite';
+    // (undocumented)
+    ids: EARS.EntityId<E>[];
+    // (undocumented)
+    ms: number;
+    statementCount: number;
+    // (undocumented)
+    statements: SqliteStatement[];
+}
+
+// @public
+export interface SqlitePlanStep {
+    // (undocumented)
+    detail: string;
+    // (undocumented)
+    id: number;
+    // (undocumented)
+    parent: number;
+}
+
+// @public
+export interface SqliteStatement {
+    ms: number;
+    // (undocumented)
+    parameters: unknown[];
+    // (undocumented)
+    plan: SqlitePlanStep[];
+    returnedRows: number;
+    // (undocumented)
+    sql: string;
+}
 
 // @public
 export interface TypedCreate<D extends EarsSchema> {

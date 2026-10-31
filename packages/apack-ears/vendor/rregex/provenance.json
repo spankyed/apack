@@ -1,0 +1,20 @@
+{
+  "upstream": "https://github.com/2fd/rregex",
+  "commit": "ffdc766d0ce78c2bad3eb9ce5f02229e5a47bd8a",
+  "packageVersion": "1.13.1",
+  "regexVersion": "1.13.1",
+  "rust": "1.99.1",
+  "wasmBindgen": "0.2.100",
+  "features": [
+    "console_error_panic_hook"
+  ],
+  "defaultFeatures": false,
+  "allocator": "Rust default",
+  "sha256": {
+    "rregex.cjs": "5a8b72e18f1f25df12ec19499168be74caaa4a2476c6c098283887b5718d3e1a",
+    "rregex_bg.wasm": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525"
+  },
+  "recipe": "docs/references/evidence/ears-sqlite-implementation-2026-10-28/trigram-filtering/build-runtime.sh.txt",
+  "extensionSource": "packages/apack-ears/vendor/rregex/extensions.rs",
+  "extensionSha256": "d2519a65ca9d4bf159d2889332c6eee911f62e48719da5d5e0591a5d69d13aa2"
+}

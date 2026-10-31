@@ -4,7 +4,8 @@ import type { PackRegistry } from '../registry.ts';
 import { applyPacks } from './apply.ts';
 
 /** Each registered pack's onInit, then the app's and each pack's migrations, then every pack's content, unless the app's migrations failed */
-export function startPacks(registry: PackRegistry): void {
+export async function startPacks(registry: PackRegistry): Promise<void> {
+  await registry.indexesReady();
   for (const hooks of registry.getLifecycleHooks()) hooks.onInit?.();
 
   // The versions and content revisions the packs' migrations and content read may only be in place once the app's migrations

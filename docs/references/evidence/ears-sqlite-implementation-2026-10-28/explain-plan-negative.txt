@@ -1,0 +1,71 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/queries.spec.ts -t answers the query's ids
+
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/sqlite-evaluation/packages/apack-ears
+
+ ❯ tests/engine/queries.spec.ts (27 tests | 1 failed | 26 skipped) 60ms
+   ↓ starts > a type, types, ids, and every entity
+   ↓ starts > a builder kept across writes answers as one made after them, whatever its steps
+   ↓ starts > refuses a name that is not a registered type, undefined and a list holding one included
+   ↓ starts > an id or ids start finds only entities still in the engine
+   ↓ starts > a builder kept across writes drops, at its next step, the ids destroyed since
+   ↓ filters > ofType, within, where, has, lacks, withRole, linkedTo, linkedFrom and linkedWith
+   ↓ filters > out and in walk edges, by kinds and target types, and outEdges and inEdges return their relation rows
+   ↓ ordering > orderBy numbers and strings, missing values last, reverse and limit
+   ↓ ordering > orderBy sorts by type, then value: a list or object after strings, a missing value or null last, a date by its time
+   ↓ ordering > distinct and groupBy
+   ↓ terminals > count, first, last, exists, map, forEach, reduce
+   ↓ terminals > first, exists, pickOne and limit read only as far as their answer
+   ↓ terminals > a predicate that creates an entity of the type it walks doesn't reach it
+   ↓ terminals > limit takes the first n, rounded down, and none for a count below one or one that isn't a number
+   ↓ terminals > pick holds a field named __proto__ as its own, as getRow does
+   ↓ terminals > pick, pickOne and pickAll
+   ↓ the value index > answers where and withRole as a walk would, through every kind of write once it is built
+   ↓ the value index > gives its matches in the order the types and their entities were given, and reads trashed ones only with withTrashed
+   ↓ the value index > is rebuilt from what a clear and a bulk load leave
+   ↓ the value index > leaves to a walk what it cannot answer: a predicate, an object, NaN and the entity type
+   ↓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches
+   ↓ declared indexes > warns once per call site, and not for a type small enough to walk
+   ↓ declared indexes > keeps a declared index through writes, trash and a unit that throws
+   ↓ declared indexes > finds a long string, which no index holds, and stores no infinite number
+   ↓ explain > retains entity-id typing across backend explanation variants
+   × explain > answers the query's ids and each stage of its plan: the index it read, what it visited and kept 55ms
+     → expected false to be true // Object.is equality
+   ↓ explain > refuses a query with a where given a function, which runs outside the plan
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/queries.spec.ts > explain > answers the query's ids and each stage of its plan: the index it read, what it visited and kept
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/engine/queries.spec.ts:405:81
+    403|       const selection = explained.statements.find(statement => stateme…
+    404|       expect(selection.returnedRows).toBe(5);
+    405|       expect(selection.plan.some(step => step.detail.includes('field_l…
+       |                                                                                 ^
+    406|       expect(selection.parameters).toContain('string:done');
+    407|       for (const statement of explained.statements) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 26 skipped (27)
+   Start at  03:25:24
+   Duration  556ms (transform 157ms, setup 12ms, collect 225ms, tests 60ms, environment 0ms, prepare 68ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/sqlite-evaluation/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/sqlite-evaluation/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/engine/queries.spec.ts -t 'answers the query'\''s ids'

@@ -1,0 +1,6 @@
+{
+  "source": "f806c50f279053640a6d6d8af4927bfa2a793b00",
+  "archiveSha256": "3a9818ff6ba68dea728daafde24fec25d7d40ac47c8c7f112403bfd26e18cec4",
+  "rawReceiptSourceLabel": "native-control-and-canonical-alias-checkpoint",
+  "note": "The archive commit and digest identify the exact tested tree; the runner environment uses a descriptive label."
+}

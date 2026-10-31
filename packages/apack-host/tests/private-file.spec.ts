@@ -28,6 +28,7 @@ vi.mock('node:fs', async (importOriginal) => {
 });
 
 const { writePrivateFile } = await import('../src/private-file.ts');
+const { syncRecoveryDirectory } = await import('../src/backup/recovery.ts');
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -106,6 +107,16 @@ describe('writePrivateFile', () => {
     expect(() => writePrivateFile(file, 'two')).toThrow('EPERM');
     expect(fs.readFileSync(file, 'utf-8')).toBe('one');
     expect(fs.readdirSync(path.dirname(file))).toEqual(['secrets.json']);
+  });
+
+  it('requests a real directory flush and propagates a refused recovery barrier', () => {
+    const dir = tempDir(), failure = Object.assign(new Error('directory flush refused'), { code: 'EIO' });
+    const sync = fs.fsyncSync;
+    vi.spyOn(fs, 'fsyncSync').mockImplementation(fd => {
+      if (fs.fstatSync(fd).isDirectory()) throw failure;
+      sync(fd);
+    });
+    expect(() => syncRecoveryDirectory(dir)).toThrow(failure);
   });
 
   it('opens a writable directory descriptor for the Windows publication barrier', () => {

@@ -131,12 +131,40 @@ const emitted = (sent: AnyEventObject[]) => sent.flatMap(e => {
 });
 
 describe('installing over a pack that is already running', () => {
+  it.each([false, true])('holds the install claim and withholds activation while indexes build (failure: %s)', async fails => {
+    let finish!: () => void, refuse!: (error: Error) => void;
+    const ready = new Promise<void>((resolve, reject) => { finish = resolve; refuse = reject; });
+    const readiness = vi.spyOn(registry, 'indexesReady').mockReturnValue(ready);
+    const release = vi.spyOn(registry, 'releasePackOperation');
+    const system = runPacksSystem();
+    try {
+      system.send({ type: 'INSTALL_PACK', packSlug: packSource('1.0.0'), sourceKind: 'local' });
+      await vi.waitFor(() => expect(readiness).toHaveBeenCalled());
+      const claimed = registry.claimPackOperation(PACK_ID);
+      if (claimed) registry.releasePackOperation(PACK_ID);
+      expect(claimed).toBe(false);
+      expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_ACTIVATED');
+      expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_INSTALL_COMPLETE');
+      expect(release.mock.calls.some(([id]) => id === PACK_ID)).toBe(false);
+      if (fails) refuse(new Error('install index build failed')); else finish();
+      await vi.waitFor(() => expect(emitted(system.sent).map(event => event.type)).toContain(fails ? 'PACK_INSTALL_FAILED' : 'PACK_INSTALL_COMPLETE'));
+      await vi.waitFor(() => expect(release.mock.calls.some(([id]) => id === PACK_ID)).toBe(true));
+      if (fails) {
+        expect(registry.getPackRegistration(PACK_ID)).toBeNull();
+        expect(emitted(system.sent).map(event => event.type)).not.toContain('PACK_ACTIVATED');
+      } else expect(emitted(system.sent).map(event => event.type)).toContain('PACK_ACTIVATED');
+    } finally {
+      finish(); await new Promise<void>(resolve => setImmediate(resolve));
+      readiness.mockRestore(); release.mockRestore(); system.stop();
+    }
+  });
+
   it('replaces the registered copy without a deactivation window', async () => {
     const system = runPacksSystem();
     try {
       const { installPackFromLocal } = await import('../../../../src/packs/installer.ts');
       await installPackFromLocal(packSource('1.0.0'));
-      expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+      expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
 
       system.send({ type: 'INSTALL_PACK', packSlug: packSource('2.0.0'), sourceKind: 'local' });
 
@@ -180,7 +208,7 @@ describe('install provenance for updates', () => {
 describe('a community release checksum pin', () => {
   it('refuses changed release bytes before replacing the running pack, even when GitHub publishes their checksum', async () => {
     await installPackFromLocal(packSource('1.0.0'));
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     await stubRelease(packSource('2.0.0'));
     const system = runPacksSystem();
     try {
@@ -239,7 +267,7 @@ describe('app-default installation intent and lifecycle', () => {
     await restoreShippedPack(PACK_ID, packSource('1.0.0'), resolveAppEnvironment().packsDir, {
       installedPacksFile: resolveAppEnvironment().installedPacksFile,
     });
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     const system = runPacksSystem();
     try {
       system.send({ type: 'TOGGLE_PACK_ENABLED', packId: PACK_ID });
@@ -284,7 +312,7 @@ describe('app-default installation intent and lifecycle', () => {
   it('refuses stale restore selections and replacement id mismatches before changing the incumbent', async () => {
     await installPackFromLocal(packSource('1.0.0'));
     const source = advertise();
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     const before = registry.getPackRuntime(PACK_ID);
     const record = readInstalledPacks();
     const system = runPacksSystem();
@@ -349,7 +377,7 @@ describe('pack information without activation', () => {
     return (event!.packs as InstalledPackSummary[]).find(pack => pack.id === PACK_ID)!;
   };
 
-  it.each(['disabled', 'activation-failed'])('lists %s declarations without activating backend or frontend code', kind => {
+  it.each(['disabled', 'activation-failed'])('lists %s declarations without activating backend or frontend code', async kind => {
     const dir = path.join(resolveAppEnvironment().packsDir, PACK_ID);
     const manifest = { id: PACK_ID, name: 'Declared pack', version: '1.0.0',
       data: { relations: { parent: {} } },
@@ -371,7 +399,7 @@ describe('pack information without activation', () => {
     setPackEnabled(PACK_ID, kind !== 'disabled');
     if (kind === 'activation-failed') {
       const bus = createActor(setup({}).createMachine({})).start();
-      try { expect(activatePack(registry, PACK_ID, bus)).toBe(false); }
+      try { expect(await activatePack(registry, PACK_ID, bus)).toBe(false); }
       finally { bus.stop(); }
       expect(registry.loadProblem(PACK_ID)).toContain('Do not activate');
     }
@@ -469,7 +497,7 @@ describe('an installed pack the app could not load', () => {
   it('keeps a declaration failure visible after the pack is disabled', async () => {
     await installPackFromLocal(packSource('1.0.0'));
     fs.writeFileSync(snapshotFile(), JSON.stringify({}));
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(false);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(false);
 
     const system = runPacksSystem();
     try {
@@ -496,7 +524,7 @@ describe('a decision that could not be saved', () => {
     try {
       const { installPackFromLocal } = await import('../../../../src/packs/installer.ts');
       await installPackFromLocal(packSource('1.0.0'));
-      expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+      expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
       takeSystemErrors();
       // A directory where the record goes: the rename onto it fails, whatever is written beside it
       fs.mkdirSync(resolveAppEnvironment({ env: 'test', userDataDir: tmpDir }).installedPacksFile, { recursive: true });
@@ -541,7 +569,7 @@ describe('a pack that is gone', () => {
     try {
       const { installPackFromLocal } = await import('../../../../src/packs/installer.ts');
       await installPackFromLocal(packSource('1.0.0'));
-      expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+      expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
       const accepted = registry.getPackRuntime(PACK_ID);
       // A read-only pack directory: the uninstall can't unlink what is inside it, so it throws with the
       // pack still there — which is the case this is about, an uninstall that did not happen
@@ -576,12 +604,13 @@ describe('a pack that is gone', () => {
 });
 
 describe('installing over a pack that is already running', () => {
+
   it.each([
     ['runtime import', 'throw new Error("candidate import refused");'],
     ['runtime binding', 'module.exports.registration.bindServices = () => { throw new Error("candidate binding refused"); };'],
   ])('preserves the incumbent and build after refused %s', async (_kind, runtime) => {
     const installed = await installPackFromLocal(packSource('1.0.0'));
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     const previous = registry.getPackRuntime(PACK_ID);
     const registration = registry.getPackRegistration(PACK_ID);
     const build = readPackBuild(installed.dir);
@@ -624,7 +653,7 @@ describe('installing over a pack that is already running', () => {
 
   it('retains accepted files but stops runtime after initialization fails', async () => {
     await installPackFromLocal(packSource('1.0.0'));
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     const source = packSource('2.0.0', {
       runtime: 'module.exports.registration.lifecycle = { onInit() { throw new Error("initialization refused"); } };',
       manifest: { lifecycle: { onInit: 'init.ts#onInit' } },
@@ -755,7 +784,7 @@ describe('live updates preserve availability and enablement', () => {
     await installPackFromLocal(packSource('1.0.0'));
     const { recordInstalled } = await import('../../../../src/packs/installed.ts');
     recordInstalled(PACK_ID, 'acme/pack');
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     const previous = registry.getPackRuntime(PACK_ID);
     const records = readInstalledPacks();
     let respond!: (response: Response) => void;
@@ -800,7 +829,7 @@ describe('app-source update offers and acceptance', () => {
       installedPacksFile: resolveAppEnvironment().installedPacksFile,
     });
     if (!enabled) setPackEnabled(PACK_ID, false);
-    else expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    else expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
   }
   function offer() {
     const input = readAppPackSources(tmpDir);
@@ -908,7 +937,7 @@ describe('updating to a release that holds another pack', () => {
     await installPackFromLocal(packSource('1.0.0'));
     const { recordInstalled } = await import('../../../../src/packs/installed.ts');
     recordInstalled(PACK_ID, 'acme/reinstall-pack');
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     await stubRelease(packSource('2.0.0', { id: releaseId }));
 
     const previous = registry.getPackRuntime(PACK_ID);
@@ -1228,7 +1257,7 @@ it('refuses a conflicting destination before saving enablement or importing its 
 describe('catalog refresh refusal after a completed pack mutation', () => {
   it.each(['disable', 'uninstall'] as const)('reports a failed refresh once and still publishes the completed %s', async operation => {
     await installPackFromLocal(packSource('1.0.0'));
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     const system = runPacksSystem();
     const refresh = vi.spyOn(registry, 'refreshCatalog').mockImplementation(() => { throw new Error('Refresh refused'); });
     takeSystemErrors();
@@ -1265,7 +1294,7 @@ describe('the claim on a pack', () => {
 
   it.each(['disable', 'uninstall'] as const)('is held until the bus has torn the pack down after %s', async operation => {
     await installPackFromLocal(packSource('1.0.0', withSystem));
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     const system = runPacksSystem({ deferStops: true });
     try {
       system.send({ type: operation === 'disable' ? 'TOGGLE_PACK_ENABLED' : 'UNINSTALL_PACK', packId: PACK_ID });
@@ -1283,7 +1312,7 @@ describe('the claim on a pack', () => {
 
   it("turns a pack back on when the toggle comes while the pack's disable is still tearing it down", async () => {
     await installPackFromLocal(packSource('1.0.0', withSystem));
-    expect(activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, { send: () => {} } as never)).toBe(true);
     const system = runPacksSystem({ deferStops: true });
     try {
       system.send({ type: 'TOGGLE_PACK_ENABLED', packId: PACK_ID });

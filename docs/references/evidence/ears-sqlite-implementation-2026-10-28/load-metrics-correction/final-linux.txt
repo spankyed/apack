@@ -1,0 +1,20 @@
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+(node:41) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ captures a final foreground stall even without yielding afterward (75.885243ms)
+✔ samples independently during a workload and stops cleanly (232.239254ms)
+✔ does not own process lifetime (95.051513ms)
+✔ captures a generically named prebuild and an explicitly loaded extension (3.421393ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 508.253244
+(node:64) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

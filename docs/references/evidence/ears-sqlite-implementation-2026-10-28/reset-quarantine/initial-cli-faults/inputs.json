@@ -1,0 +1,12 @@
+{
+  ".github/scripts/ears-sqlite-platform.mjs": "661854b489f33a6d50d40f2445efc3c6dc96b3e447dee51c15aea0eadb1827c3",
+  ".github/workflows/ears-sqlite.yml": "2cafcbb6154c04d4366136a4a477425327b8a2095c01a3da0313b0121b09f672",
+  "packages/apack-cli/src/commands/db/destructive.ts": "3364d442d7b84ba04135298ae589eea017f3cd7e8d0c5a14f00a1a6223cdddf1",
+  "packages/apack-cli/tests/commands/db.integration.spec.ts": "86b91cbb3c173ff0de2547b7ad8101c19e11c7b7ba14958fbe1f364187cd3af2",
+  "packages/apack-cli/tests/commands/sqlite-profile.spec.ts": "cb40aa9d061ac4038f60c560aee6a88b1a6e60ef114830f3efd3ba122586e850",
+  "packages/apack-host/src/database/index.ts": "3a57ddaad2503b9ece2a4d0674ccec7217ad4b089cde583a5d134a1c7a1de21b",
+  "packages/apack-host/src/database/open.ts": "3b487f69a598565c2d599438d1049ca97d084a26f426e6dcb8a56c400d18cc98",
+  "packages/apack-host/src/database/recovery-lock.ts": "6bc3a3f20a8895739c00a9389fd0315a8dd12146b1a577d67a1badf9bb1e8885",
+  "packages/apack-host/tests/database/recovery-exclusion.spec.ts": "f349007630a54442ac543326acb529beda1247fdb0bfb8f8006b2ca7fb5394fc",
+  "packages/apack-host/tests/database/quarantine-publication.spec.ts": "615c4dc29d6306f4f6c22108d080ffcf8c86531d9a484744fb160d12f0940fd7"
+}

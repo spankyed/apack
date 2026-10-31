@@ -305,6 +305,73 @@ describe('graph walks', () => {
   });
 });
 
+describe('graph boundary contracts', () => {
+  it('breaks shortest-path ties by seed, kind, direction and insertion order', () => {
+    const [a, b, left, right, goal] = [task('a'), task('b'), task('left'), task('right'), task('goal')];
+    e.write(a).link('refs', left).link('blocks', right);
+    e.write(b).link('refs', right);
+    e.write(left).link('refs', goal);
+    e.write(right).link('refs', goal);
+    expect(e.query.ids([b, a]).pathTo(goal, ['refs', 'blocks']).ids()).toEqual([b, right, goal]);
+    expect(e.query.ids(a).pathTo(goal, ['blocks', 'refs']).ids()).toEqual([a, right, goal]);
+    expect(e.query.ids(a).pathTo(goal, ['refs', 'blocks']).ids()).toEqual([a, left, goal]);
+    // The incoming edge was inserted first, but outgoing wins within each kind.
+    e.write(right).link('child', a);
+    e.write(a).link('child', left);
+    expect(e.query.ids(a).both('child').ids()).toEqual([left, right]);
+    expect(e.query.ids(a).pathTo(goal, ['child', 'refs'], { direction: 'both' }).ids()).toEqual([a, left, goal]);
+  });
+
+  it('keeps zero-edge paths and excludes every original seed from bounded reachability', () => {
+    const [a, b, c] = [task('a'), task('b'), task('c')];
+    e.write(a).link('refs', b);
+    e.write(b).link('refs', c);
+    e.write(c).link('refs', a);
+    expect(e.query.ids([a, b]).descendants('refs', undefined, { depth: 1 }).ids()).toEqual([c]);
+    expect(e.query.ids([a, b]).descendants('refs').ids()).toEqual([c]);
+    expect(e.query.ids([a, b]).pathTo(b, [], { depth: 0 }).ids()).toEqual([b]);
+    expect(e.query.ids(a).pathTo(c, 'refs', { depth: 0 }).ids()).toEqual([]);
+    expect(e.query.ids(a).descendants('refs', undefined, { depth: NaN }).ids()).toEqual([]);
+    expect(e.query.ids(a).descendants('refs', undefined, { depth: 2 ** 32 }).ids()).toEqual([b, c]);
+  });
+
+  it('counts parallel and unchecked self edges, repeated kinds, and empty neighborhoods', () => {
+    const [a, b, loose] = [task('a'), task('b'), task('loose')];
+    const project = e.create('Project').id();
+    e.write(a).link('refs', b, { info: { edge: 1 } }).link('refs', b, { info: { edge: 2 } }).link('refs', project);
+    e.admin.bulkLoadRelation('Relation-self' as RelId, 'refs', a, a);
+    expect(e.query.ids([a, loose]).degrees('refs')).toEqual(new Map([[a, 4], [loose, 0]]));
+    expect(e.query.ids(a).degrees('refs', 'Task', { direction: 'both' })).toEqual(new Map([[a, 4]]));
+    expect(e.query.ids(a).degrees(['refs', 'refs'], 'Task', { direction: 'both' })).toEqual(new Map([[a, 8]]));
+    expect(e.query.ids([a, loose]).degrees([])).toEqual(new Map([[a, 0], [loose, 0]]));
+    e.write(b).trash();
+    expect(e.query.ids(a).degrees('refs', 'Task', { direction: 'both' })).toEqual(new Map([[a, 2]]));
+    expect(e.query.withTrashed.ids(a).degrees('refs', 'Task', { direction: 'both' })).toEqual(new Map([[a, 4]]));
+    expect(e.query.ids(a).both('refs', 'Task').ids()).toEqual([]);
+  });
+
+  it('invalidates paths, both and degrees when an intermediate entity changes trash scope', async () => {
+    const root = e.create('Project').id(), mid = task('mid'), leaf = e.create('Project').id();
+    e.write(root).link('refs', mid);
+    e.write(mid).link('refs', leaf);
+    const read = () => [e.query.ids(root).pathTo(leaf, 'refs').ids(), e.query.ids(root).both('refs').ids(),
+      [...e.query.ids(root).degrees('refs')]];
+    const seen: ReturnType<typeof read>[] = [];
+    const watch = e.watch(read, value => seen.push(value));
+    try {
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[root, mid, leaf], [mid], [[root, 1]]]);
+      e.write(mid).trash();
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[], [], [[root, 0]]]);
+      e.write(mid).restore();
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[root, mid, leaf], [mid], [[root, 1]]]);
+      expect(seen).toHaveLength(3);
+    } finally { watch.stop(); }
+  });
+});
+
 describe('graph algorithms', () => {
   it('rank orders the query by PageRank over its own edges, scores in hits, the highest kept by limit', () => {
     const [a, b, c, d] = [task('a'), task('b'), task('c'), task('d')];
@@ -353,6 +420,26 @@ describe('graph algorithms', () => {
     expect(e.query.ids([a, b]).strongComponents('refs')).toEqual([[a], [b]]);
   });
 
+  it('keeps graph node order, deduplicates seeds and reacts to edges and trash changes', async () => {
+    const [a, b, c] = [task('a'), task('b'), task('c')];
+    expect(e.query.ids([c, a, c, b]).weakComponents('refs')).toEqual([[c], [a], [b]]);
+    const read = () => [e.query('Task').strongComponents('refs'), e.query('Task').rank('refs').limit(1).ids()];
+    const seen: ReturnType<typeof read>[] = [], watch = e.watch(read, value => seen.push(value));
+    try {
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a], [b], [c]], [a]]);
+      e.write(a).link('refs', b); e.write(b).link('refs', a); e.write(c).link('refs', b);
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a, b], [c]], [b]]);
+      e.write(b).trash();
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a], [c]], [a]]);
+      expect(e.query.withTrashed('Task').strongComponents('refs')).toEqual([[a, b], [c]]);
+      expect(e.query('Task').rank('refs', { seeds: [a, a] }).hits())
+        .toEqual(e.query('Task').rank('refs', { seeds: [a] }).hits());
+    } finally { watch.stop(); }
+  });
+
   it('communities splits the query where its edges thin, the same each time', () => {
     // Two triangles, joined by one edge
     const [a, b, c, x, y, z] = ['a', 'b', 'c', 'x', 'y', 'z'].map(task);
@@ -367,9 +454,16 @@ describe('graph algorithms', () => {
   it('explain reports the graph a rank built and the rounds it ran', () => {
     const [a, b] = [task('a'), task('b')];
     e.write(a).link('refs', b);
-    const { stages } = e.query('Task').rank('refs').explain();
-    expect(stages[1]).toMatchObject({ stage: 'rank', nodes: 2, edges: 1, converged: true });
-    expect(stages[1]!.iterations).toBeGreaterThan(1);
+    const explanation = e.query('Task').rank('refs').explain();
+    if (explanation.backend === 'elmdb') {
+      expect(explanation.stages[1]).toMatchObject({ stage: 'rank', nodes: 2, edges: 1, converged: true });
+      expect(explanation.stages[1]!.iterations).toBeGreaterThan(1);
+    } else {
+      expect(explanation.ids).toEqual([b, a]);
+      const projection = explanation.statements.find(statement => statement.sql.includes('edges AS MATERIALIZED'));
+      expect(projection?.returnedRows).toBe(1);
+      expect(projection?.plan.some(step => step.detail.includes('relations') || step.detail.includes('SEARCH r'))).toBe(true);
+    }
   });
 });
 
@@ -421,4 +515,48 @@ describe('roles', () => {
     expect(e.getRoles(b)).toEqual([]);
     expect(e.getRow(b)).not.toHaveProperty('role');
   });
+});
+
+
+it('updates cross-type graph watches when a destination is trashed or restored', async () => {
+  const root = e.create('Project').id(), leaf = task('destination');
+  e.write(root).link('refs', leaf);
+  const read = () => [
+    e.query('Project').out('refs').ids(),
+    e.query('Project').descendants('refs').ids(),
+    e.query('Project').linkedTo('refs', leaf).ids(),
+    e.query('Project').linkedWith(leaf).ids(),
+    e.query('Project').linkedTo('refs').ids(),
+  ];
+  const seen: ReturnType<typeof read>[] = [];
+  const watch = e.watch(read, value => seen.push(value));
+  try {
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[leaf], [leaf], [root], [root], [root]]);
+    e.write(leaf).trash();
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[], [], [root], [root], []]);
+    e.write(leaf).restore();
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[leaf], [leaf], [root], [root], [root]]);
+    expect(seen).toHaveLength(3);
+  } finally { watch.stop(); }
+});
+
+
+it('walks each source in the requested kind order, then relation insertion order', () => {
+  const [a, b, c, d] = [task('a'), task('b'), task('c'), task('d')];
+  e.write(a).link('refs', b).link('blocks', c).link('blocks', d);
+  expect(e.query.ids(a).out(['blocks', 'refs']).ids()).toEqual([c, d, b]);
+  expect(e.query.ids(a).descendants(['blocks', 'refs']).ids()).toEqual([c, d, b]);
+});
+
+
+it('matches an explicit relation end even when unchecked data has no entity at that end', () => {
+  const root = e.create('Project').id(), missing = 'Task-missing';
+  e.admin.addRelation(root, 'refs', missing);
+  expect(e.query('Project').linkedTo('refs', missing).ids()).toEqual([root]);
+  expect(e.query('Project').linkedWith(missing).ids()).toEqual([root]);
+  expect(e.query('Project').linkedTo('refs').ids()).toEqual([]);
+  expect(e.query('Project').out('refs').ids()).toEqual([]);
 });

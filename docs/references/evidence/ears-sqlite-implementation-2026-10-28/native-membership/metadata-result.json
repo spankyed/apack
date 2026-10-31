@@ -1,0 +1,13 @@
+{
+  "args": [
+    "node",
+    "native/vectors/membership-test.mjs",
+    "/metrics/wrapper-native/vec1.so",
+    "/results/membership.json"
+  ],
+  "exitCode": 0,
+  "seconds": 0.656617789005395,
+  "sourceDefaultVerified": true,
+  "actualLoadedArtifactHashVerified": true,
+  "testSourceSha256": "2adf4c414b8ca765120e397f0d07c5e72106f9bb4eb7e2c2b0f22c5fe97c5783"
+}

@@ -139,7 +139,7 @@ export interface Embedding {
 export interface SearchOptions<F extends string = string> {
   /** The query's last word matches the words it starts, as a search box does while it is typed in */
   prefix?: boolean;
-  /** A word of five letters or more also matches one an edit away, nine or more two; on unless false */
+  /** Expand individual words using the backend's documented typo tolerance; on unless false. Phrases stay literal. */
   fuzzy?: boolean;
   /** Any of the query's clauses matching is enough, rather than every one */
   any?: boolean;
@@ -186,15 +186,46 @@ export interface QueryStage {
   converged?: boolean;
 }
 
-/** A query's ids, and how the database found them: every stage of its plan, the entities it read, and its time */
-export interface QueryExplanation<E extends string = string> {
+/** A native engine plan's actual stage counters and execution time. */
+export interface ElmdbExplanation<E extends string = string> {
+  backend: 'elmdb';
   ids: EARS.EntityId<E>[];
-  /** Entities the plan read from the store, its index entries included */
+  /** Entities/index entries the native plan read from the store. */
   visited: number;
-  /** Milliseconds the read took in the database */
   ms: number;
   stages: QueryStage[];
 }
+
+/** One row of SQLite's EXPLAIN QUERY PLAN output; detail text is SQLite-version-specific. */
+export interface SqlitePlanStep {
+  id: number;
+  parent: number;
+  detail: string;
+}
+
+/** A SELECT actually executed by the SQLite query, excluding transaction/revision checks and diagnostic planning. */
+export interface SqliteStatement {
+  sql: string;
+  parameters: unknown[];
+  /** Rows returned to JavaScript, not VM steps or rows visited inside SQLite. */
+  returnedRows: number;
+  /** Statement preparation, binding, execution and result marshalling together. */
+  ms: number;
+  plan: SqlitePlanStep[];
+}
+
+/** SQLite query execution and adaptation, measured separately from the subsequent EXPLAIN calls. */
+export interface SqliteExplanation<E extends string = string> {
+  backend: 'sqlite';
+  /** Successful SELECT calls in query execution; only the first 256 are captured below. */
+  statementCount: number;
+  ids: EARS.EntityId<E>[];
+  ms: number;
+  statements: SqliteStatement[];
+}
+
+/** A query's ids and the selected backend's measured diagnostics; counter scopes deliberately differ. */
+export type QueryExplanation<E extends string = string> = ElmdbExplanation<E> | SqliteExplanation<E>;
 
 /**
  * A short code, `<prefix>-<n>`: how a pack's generated shapes type `shortCode` for an entity type whose manifest entry

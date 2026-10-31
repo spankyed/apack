@@ -1,0 +1,42 @@
+[
+  {
+    "trial": 1,
+    "readySeconds": 3.3486687280092156,
+    "exitCode": 0,
+    "rpc": {
+      "trial": 1,
+      "seeded": true,
+      "appStatePresent": true,
+      "loaded": [
+        "default-setup"
+      ],
+      "view": {
+        "firstCommit": 179,
+        "changedCommit": 180,
+        "label": "updated through real pack",
+        "updates": 2
+      },
+      "settingsLeaseOpenedAndClosed": true
+    }
+  },
+  {
+    "trial": 2,
+    "readySeconds": 2.497881540999515,
+    "exitCode": 0,
+    "rpc": {
+      "trial": 2,
+      "seeded": true,
+      "appStatePresent": true,
+      "loaded": [
+        "default-setup"
+      ],
+      "view": {
+        "firstCommit": 180,
+        "changedCommit": 181,
+        "label": "updated after API restart",
+        "updates": 2
+      },
+      "settingsLeaseOpenedAndClosed": true
+    }
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "command": "npm run typecheck:scripts",
+  "budgetSeconds": 60,
+  "elapsedSeconds": 38.59906749199945,
+  "exitCode": 0,
+  "source": "78eff952020f813d7a25642aa4740a394ed71a5e"
+}

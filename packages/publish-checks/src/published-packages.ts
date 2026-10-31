@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { packagesBuiltOrRefuse, publishedTreeDirs, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packTree } from '@apackdev/host/build/published-manifest';
+import { findPackageDirectory } from '@apackdev/host/build/package-inputs';
 
 const execFileAsync = promisify(execFile);
 
@@ -59,6 +60,19 @@ export const CONSUMER_MATRIX = (Object.keys(TSC_VERSIONS) as TscVersion[])
  */
 export const PACKAGES_BUILT = packagesBuiltOrRefuse('npm run packages:build (or npm test -w @app/publish-checks, which builds them)');
 
+/** Keep Node's owner-specific external overrides while packed workspace packages stay in the consumer. */
+function linkExternalModules(source: string, target: string): void {
+  if (!fs.existsSync(source)) return;
+  fs.mkdirSync(target, { recursive: true });
+  for (const entry of fs.readdirSync(source)) {
+    if (entry === '@apackdev' || entry.startsWith('.')) continue;
+    const destination = path.join(target, entry);
+    // A dependency actually bundled in a tarball takes precedence over a fixture link.
+    if (fs.lstatSync(destination, { throwIfNoEntry: false })) continue;
+    fs.symlinkSync(path.join(source, entry), destination, 'dir');
+  }
+}
+
 /**
  * A directory whose node_modules has the npm-packed @apackdev/ears, @apackdev/sdk and @apackdev/ui installed, as a
  * pack gets them from the registry, and links to the monorepo's copies of everything else.
@@ -67,10 +81,7 @@ export function installPublishedPackages(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-published-'));
   const modules = path.join(root, 'node_modules');
   fs.mkdirSync(path.join(modules, '@apackdev'), { recursive: true });
-  for (const entry of fs.readdirSync(path.join(REPO_ROOT, 'node_modules'))) {
-    if (entry === '@apackdev' || entry.startsWith('.')) continue;
-    fs.symlinkSync(path.join(REPO_ROOT, 'node_modules', entry), path.join(modules, entry), 'dir');
-  }
+  linkExternalModules(path.join(REPO_ROOT, 'node_modules'), modules);
   for (const [name, dir] of Object.entries(PACKED_PACKAGES)) {
     // `packTree` rather than npm by hand: one declaration of this, shared with `packages:check`, which needs
     // the same tarball for `attw` and must not pack it inside the tree it is checking
@@ -78,6 +89,9 @@ export function installPublishedPackages(): string {
     const target = path.join(modules, '@apackdev', name);
     fs.mkdirSync(target);
     execFileSync('tar', ['-xzf', tarball, '-C', target, '--strip-components', '1']);
+    const workspace = findPackageDirectory(REPO_ROOT, `@apackdev/${name}`);
+    if (!workspace) throw new Error(`No installed workspace package for @apackdev/${name}`);
+    linkExternalModules(path.join(workspace.directory, 'node_modules'), path.join(target, 'node_modules'));
   }
   return root;
 }

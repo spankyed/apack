@@ -1,0 +1,378 @@
+node:internal/modules/run_main:104
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: flat/compact: owner IN (?,?,?,?,?,?,?,?) / 0,1,2,3,4,5,6,7
++ actual - expected
+... Skipped lines
+
+  [
+    {
+      rowid: 2
+    },
+    {
+...
+    },
++   {
++     rowid: 10
++   },
++   {
++     rowid: 11
++   },
++   {
++     rowid: 12
++   },
++   {
++     rowid: 13
++   },
++   {
++     rowid: 14
++   },
++   {
++     rowid: 15
++   },
++   {
++     rowid: 17
++   },
++   {
++     rowid: 18
++   },
++   {
++     rowid: 19
++   },
++   {
++     rowid: 20
++   },
++   {
++     rowid: 21
++   },
++   {
++     rowid: 22
++   },
++   {
++     rowid: 23
++   },
++   {
++     rowid: 25
++   },
++   {
++     rowid: 26
++   },
++   {
++     rowid: 27
++   },
++   {
++     rowid: 28
++   },
++   {
++     rowid: 29
++   },
++   {
++     rowid: 30
++   },
++   {
++     rowid: 31
++   },
++   {
++     rowid: 33
++   },
++   {
++     rowid: 34
++   },
++   {
++     rowid: 35
++   },
++   {
++     rowid: 36
++   },
++   {
++     rowid: 37
++   },
++   {
++     rowid: 38
++   },
++   {
++     rowid: 39
++   },
++   {
++     rowid: 41
++   },
++   {
++     rowid: 42
++   },
++   {
++     rowid: 43
++   },
++   {
++     rowid: 44
++   },
++   {
++     rowid: 45
++   },
++   {
++     rowid: 46
++   },
++   {
++     rowid: 47
++   },
++   {
++     rowid: 49
++   },
++   {
++     rowid: 50
++   },
++   {
++     rowid: 51
++   },
++   {
++     rowid: 52
++   },
++   {
++     rowid: 53
++   },
++   {
++     rowid: 54
++   },
++   {
++     rowid: 55
++   },
++   {
++     rowid: 57
++   },
++   {
++     rowid: 58
++   },
++   {
++     rowid: 59
++   },
++   {
++     rowid: 60
++   },
++   {
++     rowid: 61
++   },
++   {
++     rowid: 62
++   },
++   {
++     rowid: 63
++   },
++   {
++     rowid: 65
++   },
++   {
++     rowid: 66
++   },
++   {
++     rowid: 67
++   },
++   {
++     rowid: 68
++   },
++   {
++     rowid: 69
++   },
++   {
++     rowid: 70
++   },
++   {
++     rowid: 71
++   },
++   {
++     rowid: 73
++   },
++   {
++     rowid: 74
++   },
++   {
++     rowid: 75
++   },
++   {
++     rowid: 76
++   },
++   {
++     rowid: 77
++   },
++   {
++     rowid: 78
++   },
++   {
++     rowid: 79
++   },
++   {
++     rowid: 81
++   },
++   {
++     rowid: 82
++   },
++   {
++     rowid: 83
++   },
++   {
++     rowid: 84
++   },
++   {
++     rowid: 85
++   },
++   {
++     rowid: 86
++   },
++   {
++     rowid: 87
++   },
++   {
++     rowid: 89
++   },
++   {
++     rowid: 90
++   },
++   {
++     rowid: 91
++   },
++   {
++     rowid: 92
++   },
++   {
++     rowid: 93
++   },
++   {
++     rowid: 94
++   },
++   {
++     rowid: 95
++   },
++   {
++     rowid: 97
++   },
++   {
++     rowid: 98
++   },
++   {
++     rowid: 99
++   },
++   {
++     rowid: 100
++   },
++   {
++     rowid: 101
++   },
++   {
++     rowid: 102
++   },
++   {
++     rowid: 103
++   },
++   {
++     rowid: 105
++   },
++   {
++     rowid: 106
++   },
++   {
++     rowid: 107
++   },
++   {
++     rowid: 108
++   },
++   {
++     rowid: 109
++   },
++   {
++     rowid: 110
++   },
++   {
++     rowid: 111
++   },
++   {
++     rowid: 113
++   },
++   {
++     rowid: 114
++   },
++   {
++     rowid: 115
++   },
++   {
++     rowid: 116
++   },
++   {
++     rowid: 117
++   },
++   {
++     rowid: 118
++   },
++   {
++     rowid: 119
++   },
++   {
++     rowid: 121
++   },
++   {
++     rowid: 122
++   },
++   {
++     rowid: 123
++   },
++   {
++     rowid: 124
++   },
++   {
++     rowid: 125
++   },
++   {
++     rowid: 126
++   },
++   {
++     rowid: 127
++   }
+  ]
+
+    at check (file:///metrics/native/vectors/membership-test.mjs:60:14)
+    at file:///metrics/native/vectors/membership-test.mjs:64:7
+    at ModuleJob.run (node:internal/modules/esm/module_job:274:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:98:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [
+    { rowid: 2 },   { rowid: 3 },   { rowid: 4 },   { rowid: 5 },
+    { rowid: 6 },   { rowid: 7 },   { rowid: 8 },   { rowid: 9 },
+    { rowid: 10 },  { rowid: 11 },  { rowid: 12 },  { rowid: 13 },
+    { rowid: 14 },  { rowid: 15 },  { rowid: 17 },  { rowid: 18 },
+    { rowid: 19 },  { rowid: 20 },  { rowid: 21 },  { rowid: 22 },
+    { rowid: 23 },  { rowid: 25 },  { rowid: 26 },  { rowid: 27 },
+    { rowid: 28 },  { rowid: 29 },  { rowid: 30 },  { rowid: 31 },
+    { rowid: 33 },  { rowid: 34 },  { rowid: 35 },  { rowid: 36 },
+    { rowid: 37 },  { rowid: 38 },  { rowid: 39 },  { rowid: 41 },
+    { rowid: 42 },  { rowid: 43 },  { rowid: 44 },  { rowid: 45 },
+    { rowid: 46 },  { rowid: 47 },  { rowid: 49 },  { rowid: 50 },
+    { rowid: 51 },  { rowid: 52 },  { rowid: 53 },  { rowid: 54 },
+    { rowid: 55 },  { rowid: 57 },  { rowid: 58 },  { rowid: 59 },
+    { rowid: 60 },  { rowid: 61 },  { rowid: 62 },  { rowid: 63 },
+    { rowid: 65 },  { rowid: 66 },  { rowid: 67 },  { rowid: 68 },
+    { rowid: 69 },  { rowid: 70 },  { rowid: 71 },  { rowid: 73 },
+    { rowid: 74 },  { rowid: 75 },  { rowid: 76 },  { rowid: 77 },
+    { rowid: 78 },  { rowid: 79 },  { rowid: 81 },  { rowid: 82 },
+    { rowid: 83 },  { rowid: 84 },  { rowid: 85 },  { rowid: 86 },
+    { rowid: 87 },  { rowid: 89 },  { rowid: 90 },  { rowid: 91 },
+    { rowid: 92 },  { rowid: 93 },  { rowid: 94 },  { rowid: 95 },
+    { rowid: 97 },  { rowid: 98 },  { rowid: 99 },  { rowid: 100 },
+    { rowid: 101 }, { rowid: 102 }, { rowid: 103 }, { rowid: 105 },
+    { rowid: 106 }, { rowid: 107 }, { rowid: 108 }, { rowid: 109 },
+    { rowid: 110 }, { rowid: 111 }, { rowid: 113 }, { rowid: 114 },
+    ... 12 more items
+  ],
+  expected: [
+    { rowid: 2 },
+    { rowid: 3 },
+    { rowid: 4 },
+    { rowid: 5 },
+    { rowid: 6 },
+    { rowid: 7 },
+    { rowid: 8 },
+    { rowid: 9 }
+  ],
+  operator: 'deepStrictEqual'
+}
+
+Node.js v23.11.1

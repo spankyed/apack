@@ -1,0 +1,22 @@
+import hashlib,json,pathlib,subprocess
+root=pathlib.Path('/work')
+out=pathlib.Path('/results')
+harness=root/'packages/apack-ears/bench/sqlite/admission-diagnostic.ts'
+provenance={'candidate':'6c29f083f344a2ae4b373c82d0946011e1dbb3a5','harnessSha256':hashlib.sha256(harness.read_bytes()).hexdigest(),'diagnosticOnly':True,'controlWrites':626,'sourceFiles':{}}
+for p in sorted((root/'packages/apack-ears/src/sqlite').glob('*.ts')):
+ provenance['sourceFiles'][str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
+(out/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
+rows=[]
+for trial in range(1,4):
+ for control in ([True,False] if trial%2 else [False,True]):
+  name=('control' if control else 'admission')+'-'+str(trial)
+  print(name,flush=True)
+  result=subprocess.run(['node','--import','tsx',str(harness),'10000','--durable']+(['--control'] if control else []),cwd=root,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=300)
+  (out/(name+'.stdout')).write_text(result.stdout)
+  (out/(name+'.stderr')).write_text(result.stderr)
+  value=json.loads(result.stdout)
+  assert result.returncode==(0 if value['passed'] else 1),(name,result.returncode,result.stderr)
+  (out/(name+'.json')).write_text(json.dumps(value,indent=2)+'\n')
+  row={'name':name,'operation':value['operationMs'],'timer':value['timerStallMs'],'lookup':value['lookupMs'],'passedOriginalBudgets':value['passed']}
+  rows.append(row);print(json.dumps(row),flush=True)
+(out/'summary.json').write_text(json.dumps(rows,indent=2)+'\n')

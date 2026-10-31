@@ -819,3 +819,19 @@ describe('app checks observe separately loaded shipped-pack bytes', () => {
     },
   );
 });
+
+// Runtime assets outside src/ are packaged inputs too; a cached build must not ship an earlier matcher.
+describe('EARS matcher runtime build inputs', () => {
+  it.each(['rregex.cjs', 'rregex_bg.wasm', 'provenance.json'])('invalidates the EARS build when %s changes', asset => {
+    const file = `packages/apack-ears/vendor/rregex/${asset}`;
+    let contents = 'before';
+    const tree: TreeReader = {
+      listInputs: target => covers(repoRelative(target), file) ? [file] : [],
+      listOutputs: () => [], read: () => Buffer.from(contents),
+      digest: () => createHash('sha256').update(contents).digest('hex'),
+    };
+    const before = fingerprintUnit(BUILD_UNITS['@apackdev/ears']!, undefined, tree);
+    contents = 'after';
+    expect(fingerprintUnit(BUILD_UNITS['@apackdev/ears']!, undefined, tree)).not.toBe(before);
+  });
+});

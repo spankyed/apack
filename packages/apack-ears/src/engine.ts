@@ -2,10 +2,11 @@
 // beside them in `admin`. A program is handed the engine typed as `Ears`, which has no `admin`: the faces define the
 // contract, not a security boundary (packs run in-process). Everything the engine holds is in the database; the
 // engine holds its connection, and the names its schema declares, read again when `admin.setSchema` changes them.
+import type { ReadAnswer } from './storage.ts';
 import type { EARS } from './entities.ts';
 import type { EARSRuntimeDeps, Embedding, PendingEmbeddings, RelationEdge } from './runtime.ts';
 import type { CallCounting } from './calls.ts';
-import { createConnection, runCommitted, type Answer, type SchemaChange, type UnitOptions } from './database.ts';
+import { createConnection, runCommitted, type Answer, type ReadOp, type Load, type SchemaChange, type UnitOptions } from './database.ts';
 import { createQuery, relationRow, type Query } from './query.ts';
 import { createWrites, type Create, type Upsert, type Write } from './write.ts';
 import { createNameChecks } from './names.ts';
@@ -188,7 +189,7 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
   const isRole = (name: string) => declared.roles.has(name);
   const names = createNameChecks({ isRelationKind, isRole });
   const read = connection.read;
-  const one = (op: Record<string, unknown>): Answer => read([op])[0]!;
+  const one = <R extends ReadOp>(op: R): ReadAnswer<R> => read([op])[0] as ReadAnswer<R>;
 
   const getRow = (id: EARS.EntityId) => (one({ read: 'row', id }).row as EntityRow | null) ?? undefined;
   const getAttr = (id: EARS.EntityId, field: EARS.AttrKind) => {
@@ -196,12 +197,12 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
     return answer.present ? answer.value as EARS.AttributeValue : undefined;
   };
   const getRelation = (relId: EARS.RelationId) => {
-    const row = one({ read: 'relation', id: relId }).relation as Record<string, unknown> | null;
+    const row = one({ read: 'relation', id: relId }).relation;
     return row ? relationRow(row) : undefined;
   };
   const findRelations = ({ kind, source, target }: RelationMatch = {}): RelationRow[] => {
     if (kind !== undefined) names.relationKinds(kind, 'findRelations');
-    return (one({ read: 'findRelations', kind, source, target }).relations as Record<string, unknown>[]).map(relationRow);
+    return one({ read: 'findRelations', kind, source, target }).relations.map(relationRow);
   };
 
   const query = createQuery({
@@ -215,7 +216,7 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
     names,
     exists: (id) => {
       const [entity, relation] = read([{ read: 'field', id, field: 'entityType' }, { read: 'relation', id }]);
-      return { entity: entity!.present === true, relation: relation!.relation !== null };
+      return { entity: entity!.kind === 'field' && entity!.present, relation: relation!.kind === 'relation' && relation!.relation !== null };
     },
   });
 
@@ -294,8 +295,8 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
   };
 
   // Unchecked loads: sent together when `bulkLoad`'s function returns, and each on its own outside one
-  let loading: Array<Record<string, unknown>> | undefined;
-  const load = (item: Record<string, unknown>) => {
+  let loading: Load[] | undefined;
+  const load = (item: Load) => {
     outsideUnit('An unchecked load');
     if (loading) loading.push(item);
     else connection.load([item]);
@@ -316,7 +317,7 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
     // From every entity, so a type the schema no longer declares is listed too
     getEntitiesOfType: (type) => {
       const answer = one({ read: 'query', plan: { scope: 'withTrashed', start: { from: 'all' }, steps: [{ step: 'ofType', type }], terminal: { answer: 'ids' } } });
-      return answer.ids as EARS.EntityId[];
+      return (answer as Extract<Answer, { kind: 'ids' }>).ids as EARS.EntityId[];
     },
     countEntities,
     bulkLoadAttr: entityLoad,

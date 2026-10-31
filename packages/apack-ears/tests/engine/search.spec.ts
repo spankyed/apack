@@ -46,6 +46,21 @@ describe('search', () => {
       .toBe(inSender);
   });
 
+  it('decays numeric and Date times before paging, and ignores nonpositive half-lives', () => {
+    const e = engine();
+    for (const clock of ['number', 'date']) {
+      const text = 'timeline ' + clock;
+      const old = e.create('Message', { text, at: clock === 'date' ? new Date(1000) : 1000 }).id();
+      const recent = e.create('Message', { text, at: clock === 'date' ? new Date(99000) : 99000 }).id();
+      const base = e.query('Message').search(text, { fuzzy: false }).hits();
+      expect(base.map(hit => hit.id)).toEqual([old, recent]);
+      expect(e.query('Message').search(text, { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } }).limit(1).ids())
+        .toEqual([recent]);
+      for (const halfLife of [0, -10000]) expect(e.query('Message').search(text, { fuzzy: false, recency: { field: 'at', halfLife, now: 100000 } }).hits())
+        .toEqual(base);
+    }
+  });
+
   it('pages after the last id of a page', () => {
     const e = engine();
     const ids = ['one note', 'two note', 'three note'].map((text) => e.create('Message', { text }).id());

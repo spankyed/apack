@@ -1,0 +1,33 @@
+{
+  "producer": "/native-target/release/elmdb",
+  "producerSha256": "2c997f55e1e8a6b93c02c3167f190076884df4df57b1dce1b5d32c22423b5440",
+  "producerReport": "{\n  \"schema\": true,\n  \"entities\": 2,\n  \"fields\": 12,\n  \"relations\": 1,\n  \"embeddings\": 2,\n  \"sequences\": 3\n}\n",
+  "dumpSha256": "321b686c218ccd54ffe908d3a01a5b00c7083340b013cb54ebaea6b130dc1d0c",
+  "originalUnchanged": true,
+  "copiedSourceUnchanged": true,
+  "converted": {
+    "path": "/tmp/ears-native-conversion-13cBL3/converted/store",
+    "loads": 8,
+    "sequence": 2,
+    "audit": {
+      "scope": "primary-values-and-active-derived-indexes",
+      "sequence": 2,
+      "ok": true,
+      "issues": [],
+      "issueCount": 0,
+      "checkedEntities": 2,
+      "checkedRelations": 1,
+      "comparedIndexes": 5
+    }
+  },
+  "checks": [
+    "typed rows and creation order",
+    "trash",
+    "relation info",
+    "search",
+    "reusable embeddings",
+    "label counter",
+    "short-code counter",
+    "source hashes"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "pyarrow": {
+    "version": "26.0.0",
+    "requiresPython": ">=3.11",
+    "projectUrl": "https://pypi.org/project/pyarrow/"
+  },
+  "numpy": {
+    "version": "2.5.4",
+    "requiresPython": ">=3.12",
+    "projectUrl": "https://pypi.org/project/numpy/"
+  }
+}

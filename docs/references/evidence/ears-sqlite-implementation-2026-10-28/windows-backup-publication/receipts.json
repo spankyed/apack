@@ -1,0 +1,62 @@
+{
+  "qualification.json": {
+    "rawSha256": "f19775fe9a58d147764b09baa90d5f32c5597ad00b4e0007e11b9731719a4608",
+    "storedSha256": "f19775fe9a58d147764b09baa90d5f32c5597ad00b4e0007e11b9731719a4608",
+    "rawBytes": 1897
+  },
+  "focused.json": {
+    "rawSha256": "7dcdf4571764637d66e24ccf2ecf5d93fdc16344da91b6b1154c853c8986bf88",
+    "storedSha256": "7dcdf4571764637d66e24ccf2ecf5d93fdc16344da91b6b1154c853c8986bf88",
+    "rawBytes": 3827
+  },
+  "inputs.json": {
+    "rawSha256": "1f29e9ae5abe92d2ef10c611520ebf5aff69675552e72f3e3cc339f5d74f5885",
+    "storedSha256": "1f29e9ae5abe92d2ef10c611520ebf5aff69675552e72f3e3cc339f5d74f5885",
+    "rawBytes": 251
+  },
+  "platform-cli.json": {
+    "rawSha256": "ed3769e153877e25dea3203c13d2a30d4e479dd693a87ea98d3a3cc4a2085606",
+    "storedSha256": "ed3769e153877e25dea3203c13d2a30d4e479dd693a87ea98d3a3cc4a2085606",
+    "rawBytes": 8776
+  },
+  "cli-lint.log": {
+    "rawSha256": "2e2884cc526aec79b9cfdf47258b3b1f9a923c767e7ac65681a96d5a72327da8",
+    "storedSha256": "2e2884cc526aec79b9cfdf47258b3b1f9a923c767e7ac65681a96d5a72327da8",
+    "rawBytes": 89
+  },
+  "cli-types.log": {
+    "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "storedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "rawBytes": 0
+  },
+  "cli-build.log": {
+    "rawSha256": "50dd98646b1347b4939d050d6abae3f69b512499cfb3a565e33310215a866470",
+    "storedSha256": "50dd98646b1347b4939d050d6abae3f69b512499cfb3a565e33310215a866470",
+    "rawBytes": 1506
+  },
+  "platform-cli.log": {
+    "rawSha256": "610cdc4af0f5ecf22c682348fb18264764cabf96e88799df2bc9c1cdc51d8104",
+    "storedSha256": "610cdc4af0f5ecf22c682348fb18264764cabf96e88799df2bc9c1cdc51d8104",
+    "rawBytes": 910
+  },
+  "focused.log": {
+    "rawSha256": "9ddcde2ca2c9e4e804aaeae53db64a2923858ed8de1b22fb2ac34a870fddbdc7",
+    "storedSha256": "9ddcde2ca2c9e4e804aaeae53db64a2923858ed8de1b22fb2ac34a870fddbdc7",
+    "rawBytes": 1284
+  },
+  "failed-windows-job.log.gz": {
+    "rawSha256": "d51e272ba8b31c520d16b07d8217c2fb39b24de8cc5a768046257879e8dc8c0b",
+    "storedSha256": "be96ad394969bcea5a1ad5f46c8411c4494712752c8a44edde1ba1439018db3a",
+    "rawBytes": 399898
+  },
+  "preceding-signed-run.json": {
+    "rawSha256": "1959d7f45c5fb1dd19908ec4cde3e415c0fb739531870348b73b5f2858da09b0",
+    "storedSha256": "1959d7f45c5fb1dd19908ec4cde3e415c0fb739531870348b73b5f2858da09b0",
+    "rawBytes": 6280
+  },
+  "preceding-signed-job.log.gz": {
+    "rawSha256": "fd361fe02c1b451ff89f09d773c5bcc34a71e524206fa22124eadabc1515ae78",
+    "storedSha256": "213472ef09b39b60f791d7b29cfcff0bb10af8b27577eaa880d245361860cd10",
+    "rawBytes": 75141
+  }
+}
