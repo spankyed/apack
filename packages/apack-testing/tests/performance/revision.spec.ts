@@ -1,3 +1,4 @@
+import { performanceProcessReport } from './fixtures.ts';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
@@ -58,15 +59,13 @@ const manifest = { format: 1, source: { revision: 'one', dirty: false, excludedU
   fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} }, native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] },
   mode: 'lightweight', cache: 'warm-process', warmups: 5, runtime: { performancePolicy: 'paired-focused-revisions-v1' },
   machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' }, clock: 'Local monotonic durations; cross-process epoch alignment is approximate' };
-const report = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0, mode: 'lightweight', active: 0, unfinished: 0,
-  droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
 it('admits differing clean revisions and rejects changed fixtures or failed process exits', () => {
   const output = directory(); const coordinator = createPerformanceRevisionJournal(output, 'lightweight', 2);
   const stores = { A: createPerformanceRunStore(path.join(output, 'A'), manifest, 2),
     B: createPerformanceRunStore(path.join(output, 'B'), { ...manifest, source: { ...manifest.source, revision: 'two' }, builds: [{ path: 'app', sha256: 'two' }] }, 2) };
   for (const step of coordinator.schedule) {
     coordinator.begin(step); stores[step.variant].append({ scenario: 'search', index: step.index, warmup: step.warmup, outcome: 'passed', durationMs: 10, correct: true,
-      completion: 'view-ready', work: {}, processes: { backend: { ...report, processId: 102 }, renderer: { ...report, processId: 101 } } }); coordinator.end(step, 'passed');
+      completion: 'view-ready', work: {}, processes: { backend: performanceProcessReport('lightweight', 'backend'), renderer: performanceProcessReport('lightweight', 'renderer') } }); coordinator.end(step, 'passed');
   }
   for (const variant of ['A', 'B']) writeFileSync(path.join(output, variant, 'invocation.json'), JSON.stringify({ code: 0, timedOut: false, aborted: false }));
   expect(readPerformanceRevisionComparison(output, 2).medianChangePercent).toBe(0);
@@ -98,4 +97,24 @@ it('activates the permitted worker before its action so background throttling ca
     page: { waitForFunction: async () => { steps.push('focused'); } } } as unknown as NonNullable<Parameters<typeof waitForPerformanceTrial>[1]>;
   await waitForPerformanceTrial(entry, target);
   expect(steps).toEqual(['show', 'focus', 'contents', 'dispose', 'focused']);
+});
+
+it('refuses a successful early worker exit before releasing the final peer action', async () => {
+  const output = directory();
+  const workers: { A?: { code: number }; B?: { code: number } } = {};
+  for (const variant of ['A', 'B'] as const) {
+    const own = path.join(output, 'coordination', variant); mkdirSync(own, { recursive: true }); let index = 0;
+    const ready = () => writeFileSync(path.join(own, `ready-${index}.json`), JSON.stringify({ index, mode: 'lightweight' })); ready();
+    timers.push(setInterval(() => {
+      if (index >= 7 || !existsSync(path.join(own, `permit-${index}.json`))) return;
+      writeFileSync(path.join(own, `done-${index}.json`), JSON.stringify({ index, mode: 'lightweight', outcome: 'passed' }));
+      if (variant === 'B' && index === 6) workers.B = { code: 0 };
+      if (++index < 7) ready();
+    }, 1));
+  }
+  await expect(coordinatePerformanceRevisions({ directory: output, mode: 'lightweight', measured: 2,
+    deadline: Date.now() + 10_000, workers: () => workers })).rejects.toThrow(/exited before/);
+  expect(existsSync(path.join(output, 'coordination/A/permit-6.json'))).toBe(false);
+  expect(existsSync(path.join(output, 'coordination/A/release.json'))).toBe(false);
+  expect(JSON.parse(readFileSync(path.join(output, 'execution.json'), 'utf8')).status).toBe('failed');
 });

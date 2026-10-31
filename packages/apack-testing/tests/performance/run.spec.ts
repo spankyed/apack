@@ -1,3 +1,4 @@
+import { performanceProcessReport } from './fixtures.ts';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -15,7 +16,7 @@ const report = { observations: [], bytes: 0, dropped: 0, truncated: false, rejec
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0,
   contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
 const trial = (index: number) => ({ scenario: 'thread-open', index, warmup: index < 5, outcome: 'passed', durationMs: index + 1,
-  correct: true, completion: 'view-ready', work: {}, processes: { renderer: { ...report, processId: 101 }, backend: { ...report, processId: 102 } } });
+  correct: true, completion: 'view-ready', work: {}, processes: { renderer: performanceProcessReport('lightweight', 'renderer'), backend: performanceProcessReport('lightweight', 'backend') } });
 function complete() { const output = directory(); const store = createPerformanceRunStore(output, manifest, 1); for (let index = 0; index < 6; index++) store.append(trial(index)); return output; }
 it('writes immutable raw trials and admits a compact run with the same scalar summary', () => {
   const output = complete();
@@ -60,7 +61,7 @@ it('rejects raw tampering, forged summaries, symbolic links and oversized files 
 it('requires startup invocation ownership, phase order and successful exit as well as correct trials', () => {
   const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
   for (let index = 0; index < 6; index++) {
-    const ownTrial = { ...trial(index), scenario: 'populated-startup', processes: { ...trial(index).processes, driver: { ...report, processId: 103 } } };
+    const ownTrial = { ...trial(index), scenario: 'populated-startup', processes: { ...trial(index).processes, driver: performanceProcessReport('lightweight', 'driver') } };
     store.append(ownTrial);
     const own = path.join(output, `trial-${index}`); mkdirSync(own);
     writeFileSync(path.join(own, 'manifest.json'), JSON.stringify(manifest));
@@ -80,4 +81,49 @@ it('requires distinct actual process identities before admitting a complete run'
     } });
     expect(() => readPerformanceRun(output, 1)).toThrow(/process identity/);
   }
+});
+
+it.each([
+  { mode: 'lightweight', role: 'backend', missing: 'processStatistics' },
+  { mode: 'lightweight', role: 'renderer', missing: 'rendererStatistics' },
+  { mode: 'lightweight', role: 'renderer', missing: 'rendererLongTasks' },
+  { mode: 'detailed', role: 'backend', missing: 'profiles' },
+  { mode: 'detailed', role: 'renderer', missing: 'profiles' },
+] as const)('rejects $mode runs without the promised $role $missing capture', ({ mode, role, missing }) => {
+  const output = directory(); const store = createPerformanceRunStore(output, { ...manifest, mode }, 1);
+  for (let index = 0; index < 6; index++) {
+    const processes = { renderer: performanceProcessReport(mode, 'renderer'), backend: performanceProcessReport(mode, 'backend') };
+    if (index === 0) delete processes[role][missing];
+    store.append({ ...trial(index), processes });
+  }
+  expect(() => readPerformanceRun(output, 1)).toThrow(/capture/i);
+});
+
+it('admits complete detailed captures but rejects lightweight profiles and disabled instrumentation', () => {
+  for (const mode of ['disabled', 'lightweight', 'detailed'] as const) {
+    const output = directory(); const store = createPerformanceRunStore(output, { ...manifest, mode }, 1);
+    for (let index = 0; index < 6; index++) store.append({ ...trial(index), processes: {
+      renderer: performanceProcessReport(mode, 'renderer'), backend: performanceProcessReport(mode, 'backend'),
+    } });
+    expect(readPerformanceRun(output, 1).summary.passed).toBe(1);
+  }
+  for (const mode of ['disabled', 'lightweight'] as const) {
+    const output = directory(); const store = createPerformanceRunStore(output, { ...manifest, mode }, 1);
+    for (let index = 0; index < 6; index++) {
+      const backend = performanceProcessReport(mode, 'backend');
+      if (index === 0) backend.profiles = performanceProcessReport('detailed', 'backend').profiles;
+      store.append({ ...trial(index), processes: { renderer: performanceProcessReport(mode, 'renderer'), backend } });
+    }
+    expect(() => readPerformanceRun(output, 1)).toThrow(/capture/i);
+  }
+});
+
+it('requires the declared core renderer metrics, not just an empty resource envelope', () => {
+  const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
+  for (let index = 0; index < 6; index++) {
+    const renderer = performanceProcessReport('lightweight', 'renderer');
+    if (index === 0) renderer.rendererStatistics!.metrics = [];
+    store.append({ ...trial(index), processes: { renderer, backend: performanceProcessReport('lightweight', 'backend') } });
+  }
+  expect(() => readPerformanceRun(output, 1)).toThrow(/renderer resource capture/);
 });

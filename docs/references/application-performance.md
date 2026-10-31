@@ -54,7 +54,9 @@ matched provenance and an explicit cache policy. Lightweight overhead has a decl
 detailed mode has no assumed low-cost guarantee. Twenty observations do not establish tail latency.
 
 Source/build/native identity, clean checkouts, actual process exits, fixture identity and machine/cache
-compatibility are checked before qualification. A new process does not imply a cold filesystem cache.
+compatibility are checked before qualification. Admission requires the captures promised by each
+mode and role; a complete flag cannot replace missing profiles or resource observations. Revision
+coordination refuses observed worker exits before final release. A new process does not imply a cold filesystem cache.
 Storage changes require a distinct asserted machine identity; see the
 [Docker storage guide](guides/docker-storage.md#performance-evidence). Keep historic measurements
 source-qualified rather than repeating them for unrelated documentation or runner changes.

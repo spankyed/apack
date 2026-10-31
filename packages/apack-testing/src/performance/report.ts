@@ -126,6 +126,28 @@ export function streamingBacklog(producedInput: unknown, receivedInput: unknown,
     produced, received, maxPendingChars, clockOrderMismatches };
 }
 
+/** Qualification requires the captures promised by each mode, not just a caller's complete flag. */
+export function assertPerformanceCaptures(trial: PerformanceTrial, mode: PerformanceManifest['mode']) {
+  const required = trial.scenario === 'populated-startup' ? ['driver', 'renderer', 'backend'] : ['renderer', 'backend'];
+  if (Object.keys(trial.processes).length !== required.length || required.some(role => !trial.processes[role])) throw Error('Missing or unexpected performance process');
+  const ids = required.map(role => trial.processes[role]!.processId);
+  if (ids.some(id => id === undefined) || new Set(ids).size !== ids.length) throw Error('Missing or duplicate process identity');
+  for (const role of required) {
+    const report = trial.processes[role]!;
+    if (report.mode !== mode) throw Error('Mixed recording modes');
+    if (mode === 'disabled') {
+      if (report.observations.length || report.profiles || report.processStatistics || report.rendererStatistics || report.rendererLongTasks) throw Error('Disabled recording contains enabled captures');
+      continue;
+    }
+    if (role === 'renderer') {
+      if (!report.rendererStatistics || !report.rendererLongTasks
+        || !report.rendererStatistics.metrics.some(metric => metric.name === 'TaskDuration' && metric.unit === 'seconds')
+        || !report.rendererStatistics.metrics.some(metric => metric.name === 'JSHeapUsedSize' && metric.unit === 'bytes')) throw Error('Missing renderer resource capture');
+    } else if (!report.processStatistics) throw Error('Missing Node process resource capture');
+    if (mode === 'detailed' ? !report.profiles : report.profiles !== undefined) throw Error('Profile capture differs from recording mode');
+  }
+}
+
 /** Validate a complete run before comparison; partial/failing reports remain useful diagnostic evidence. */
 export function validatePerformanceRun(manifestInput: unknown, trialsInput: unknown, measured: number) {
   const manifest = manifestSchema.parse(manifestInput);
@@ -137,11 +159,7 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
     if (trial.index !== index || trial.warmup !== (index < manifest.warmups)) throw Error('Invalid trial order or warmup classification');
     if (trial.scenario !== scenario) throw Error('Mixed scenarios');
     if (trial.outcome !== 'passed') throw Error('Unsuccessful trial');
-    const required = scenario === 'populated-startup' ? ['driver', 'renderer', 'backend'] : ['renderer', 'backend'];
-    if (required.some(process => !trial.processes[process])) throw Error('Missing required process');
-    const ids = required.map(role => trial.processes[role]!.processId);
-    if (ids.some(id => id === undefined) || new Set(ids).size !== ids.length) throw Error('Missing or duplicate process identity');
-    if (Object.values(trial.processes).some(process => process.mode !== manifest.mode)) throw Error('Mixed recording modes');
+    assertPerformanceCaptures(trial, manifest.mode);
   }
   return { manifest, trials, summary: summarize(trials) };
 }

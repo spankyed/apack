@@ -24,13 +24,13 @@ export async function coordinatePerformanceRevisions(options: {
     while (true) {
       const workers = options.workers();
       if (Object.values(workers).some(worker => worker.code !== 0)) throw Error('Revision worker failed');
+      if (Object.keys(workers).length) throw Error('Revision worker exited before final release');
       if (Date.now() >= options.deadline) throw Error('Revision comparison deadline expired');
       if (existsSync(file)) {
         const info = lstatSync(file);
         if (!info.isFile() || info.size > 4096) throw Error('Invalid revision worker marker');
         return JSON.parse(readFileSync(file, 'utf8'));
       }
-      if (workers[variant]) throw Error('Revision worker exited before completing its protocol');
       await delay(20);
     }
   }

@@ -245,3 +245,37 @@ native pin and matched fixture/machine within every pair. This validates the com
 raw-report admission and its hash checks remain the maintained runner's separate responsibility.
 The implemented recording contracts now have a maintained reference page, linked from the suite guide
 and documentation index. The plan's trace filename was reconciled with the implemented per-trial export.
+
+## Review findings and fixes (2026-10-31)
+
+Two additional qualification defects were reproduced before fixing them:
+
+- Run admission trusted `complete` while allowing the captures promised by a mode to be absent.
+  A detailed run without any profiles or resource observations was admitted as successful. Both
+  whole-run and format-2 admission now require each role's observations, detailed profiles, the
+  renderer's core metrics, and disabled-mode absence of enabled instrumentation.
+- The revision coordinator accepted a successful worker exit before final release, allowing an
+  early worker's teardown to overlap its peer's final action. A real file-handshake regression
+  reproduced the successful premature release. Any observed exit before release now aborts
+  coordination and prevents granting the final peer action.
+
+Because the original local gate was still consuming its source, fixes and regressions were first
+validated in an ignored isolated source copy using the existing worktree's own dependencies. All
+38 focused reporting/comparison/protocol checks, the corresponding TypeScript check and changed-file
+lint passed. Removing the capture guards fails all eight new capture regressions; the early-exit
+regression fails on the original coordinator. The separate source worktree contains byte-identical
+production fixes and equivalent tests (only relative import paths differ). Integrated validation
+on the composed branch remains required.
+
+All nine original full comparisons were re-admitted from their archived raw reports under the
+stronger capture rules: 450 trials passed, including per-launch startup provenance and process
+lifecycle checks. The [admission receipt](application-performance-2026-10-30/review-capture-admission.json)
+retains the archive and validator hashes. The temporary extraction was removed after checking;
+original archives remain intact. No timings, collectors or scenario behavior were changed.
+
+The local gate passed the 54 changed integration files in 1,033 seconds, then the Docker connection
+stalled during native preparation. OrbStack's host log records Docker-forwarding timeouts; macOS
+reported an interrupted OrbStack server connection while the external APFS volume remained mounted.
+This does not establish corruption or its cause. Cancellation was requested for this session's
+runner only; its terminal state must be confirmed before resuming. No shared VM restart, drive
+ejection or foreign-container termination was performed. Native acceptance remains open.
