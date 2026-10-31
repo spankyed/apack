@@ -55,6 +55,29 @@ describe('writePrivateFile', () => {
     expect(fs.readdirSync(path.dirname(file))).toEqual(['secrets.json']);
   });
 
+  it('finishes short writes without splitting or dropping Unicode bytes', () => {
+    const file = path.join(tempDir(), 'recovery.json'), contents = 'é🙂 recovery metadata '.repeat(10);
+    const write = fs.writeSync;
+    const writes = vi.spyOn(fs, 'writeSync').mockImplementation((...args: unknown[]) => {
+      const [fd, data, offset, length] = args;
+      const bytes = typeof data === 'string' ? Buffer.from(data) : data as Uint8Array;
+      return write(Number(fd), bytes, Number(offset ?? 0), Math.min(Number(length ?? bytes.byteLength), 3));
+    });
+    writePrivateFile(file, contents);
+    expect(writes.mock.calls.length).toBeGreaterThan(2);
+    expect(fs.readFileSync(file)).toEqual(Buffer.from(contents));
+    expect(fs.readdirSync(path.dirname(file))).toEqual(['recovery.json']);
+  });
+
+  it('refuses zero-progress writes before publication and preserves the incumbent', () => {
+    const file = path.join(tempDir(), 'recovery.json');
+    writePrivateFile(file, 'incumbent');
+    vi.spyOn(fs, 'writeSync').mockReturnValue(0);
+    expect(() => writePrivateFile(file, 'replacement')).toThrow(expect.objectContaining({ code: 'EIO' }));
+    expect(fs.readFileSync(file, 'utf8')).toBe('incumbent');
+    expect(fs.readdirSync(path.dirname(file))).toEqual(['recovery.json']);
+  });
+
   it('keeps the previous file and removes its temporary one when the rename fails', () => {
     const file = path.join(tempDir(), 'secrets.json');
     writePrivateFile(file, 'one');

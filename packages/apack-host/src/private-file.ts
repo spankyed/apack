@@ -49,7 +49,13 @@ export function writePrivateFile(filePath: string, contents: string): void {
   try {
     const fd = fs.openSync(temporary, 'wx', 0o600);
     try {
-      fs.writeSync(fd, contents);
+      const bytes = Buffer.from(contents);
+      let offset = 0;
+      while (offset < bytes.byteLength) {
+        const written = fs.writeSync(fd, bytes, offset, Math.min(65536, bytes.byteLength - offset));
+        if (written < 1) throw Object.assign(new Error('Private file write made no progress'), { code: 'EIO' });
+        offset += written;
+      }
       fs.fsyncSync(fd);
     } finally {
       fs.closeSync(fd);

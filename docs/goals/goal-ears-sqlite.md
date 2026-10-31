@@ -418,3 +418,10 @@ It tests actual writable directory open/flush before/after deletion under an own
 read-only-directory EACCES control. No account, existing profile ACL or machine setting is changed.
 The Win32-only result does not qualify installed Node/Electron or physical power loss; observe the
 existing windows-durability dispatcher run after publishing before claiming any result.
+
+Review found the private recovery writer assumed one writeSync completed its entire UTF-8 payload.
+It now advances a byte offset through bounded writes and refuses zero progress before publication.
+Two negative regression witnesses exercise actual three-byte short writes with Unicode and a zero-byte
+write retaining the incumbent; the platform verifier now requires all eight private-file cases.
+This runtime change needs affected platform qualification and final exact-input acceptance; existing
+six-case evidence does not qualify it. It does not alter the live matrix's frozen runtime.
