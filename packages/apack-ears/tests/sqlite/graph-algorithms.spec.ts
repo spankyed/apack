@@ -45,6 +45,38 @@ describe('SQLite graph algorithms', () => {
     for (const seed of [-1, 1.5, 2 ** 32, NaN]) expect(() => graphCommunities(g, 1, seed)).toThrow();
   });
 
+  it('matches the native known modularity on Zachary\'s karate club', () => {
+    // The same 78 friendships used by elmdb's graph-algorithm reference fixture.
+    const edges = [
+      [0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [0, 8],
+      [0, 10], [0, 11], [0, 12], [0, 13], [0, 17], [0, 19], [0, 21], [0, 31],
+      [1, 2], [1, 3], [1, 7], [1, 13], [1, 17], [1, 19], [1, 21], [1, 30],
+      [2, 3], [2, 7], [2, 8], [2, 9], [2, 13], [2, 27], [2, 28], [2, 32],
+      [3, 7], [3, 12], [3, 13], [4, 6], [4, 10], [5, 6], [5, 10], [5, 16],
+      [6, 16], [8, 30], [8, 32], [8, 33], [9, 33], [13, 33], [14, 32], [14, 33],
+      [15, 32], [15, 33], [18, 32], [18, 33], [19, 33], [20, 32], [20, 33], [22, 32],
+      [22, 33], [23, 25], [23, 27], [23, 29], [23, 32], [23, 33], [24, 25], [24, 27],
+      [24, 31], [25, 31], [26, 29], [26, 33], [27, 33], [28, 31], [28, 33], [29, 32],
+      [29, 33], [30, 32], [30, 33], [31, 32], [31, 33], [32, 33],
+    ];
+    const g = graph(34, edges.flatMap(([a, b]) => [[a!, b!], [b!, a!]]));
+    const groups = graphCommunities(g, 1, 0), owner = new Map(groups.flatMap((members, at) => members.map(id => [id, at] as const)));
+    const degree = Array(34).fill(0) as number[], internal = Array(groups.length).fill(0) as number[];
+    for (const [a, b] of edges) {
+      degree[a!]!++; degree[b!]!++;
+      if (owner.get(g.ids[a!]!) === owner.get(g.ids[b!]!)) internal[owner.get(g.ids[a!]!)!]!++;
+    }
+    // Independent undirected modularity, using the original edges rather than the library's score.
+    const q = groups.reduce((sum, members, at) => {
+      const totalDegree = members.reduce((n, id) => n + degree[Number(id.slice(5))]!, 0);
+      return sum + internal[at]! / edges.length - (totalDegree / (2 * edges.length)) ** 2;
+    }, 0);
+    expect(q).toBeCloseTo(.4197896, 6);
+    expect(groups).toHaveLength(4);
+    expect(owner.get('Node-0')).not.toBe(owner.get('Node-33'));
+    expect(graphCommunities(g, 1, 0)).toEqual(groups);
+  });
+
   it('normalizes dangling mass and duplicate seeds and refuses invalid rank controls', () => {
     const g = graph(3, [[0, 1], [0, 1], [1, 1]]);
     const scores = rankGraph(g, undefined)!;

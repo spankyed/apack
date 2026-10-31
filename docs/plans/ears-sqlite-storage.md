@@ -893,6 +893,24 @@ cannot leave a path or degree watch stale. Focused contracts compare both backen
 qualification and representative graph performance measurements remain required by the goal.
 
 
+The facade also carries `rank`, `weakComponents`, `strongComponents` and `communities` from pinned master
+`8f8433a5b9`. `graph-algorithms.ts` projects the induced graph with one SQL statement, retaining requested
+kind/direction/edge order and repeated edges, and deduplicates nodes by first encounter. Iterative Kosaraju
+computes strong components; iterative traversal computes weak components. PageRank uses two reusable
+work buffers with the native default damping, tolerance and round limit. Graph algorithms use O(V+E)
+working storage; result ordering adds sorting work, and SQL may allocate or spill for its own projection.
+This is neither bounded-memory graph execution nor a realistic-load performance qualification.
+
+`communities.ts` aggregates parallel/opposite edges into undirected weights and delegates genuine Leiden
+to pinned MIT `leiden-ts@0.1.0`. Seed zero is explicit, unsigned seeds and finite nonnegative resolution
+validate, resolution zero returns connected components, and result groups retain size/encounter order.
+The library owns local moving, refinement and aggregation; convergence errors propagate rather than
+returning invented communities. Its new-package maintenance burden and comparative quality/performance
+remain acceptance concerns. [Initial evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-leiden-240/README.md)
+records 98 focused passing cases and a separate 500-graph deterministic/connectivity probe; those checks
+do not certify arbitrary graphs or replace native/new-pin and integrated runtime qualification.
+
+
 ### Read-only media and published backups
 
 A low-level read-only connection does not promise to open every WAL database on read-only media.

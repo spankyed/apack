@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-api, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-api, sqlite-graph-wasm, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       storage_format:
         description: Storage for isolated source app/pack qualification; installed suites select SQLite explicitly
@@ -56,6 +56,44 @@ jobs:
   installed-platform:
     if: ${{ inputs.suite == 'installed-platform' }}
     uses: ./.github/workflows/ears-installed-platform.yml
+  sqlite-graph-wasm:
+    if: ${{ inputs.suite == 'sqlite-graph-wasm' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - name: Build pinned portable Leiden core
+        working-directory: native/graphs
+        run: |
+          set -o pipefail
+          mkdir -p ../../.temp/sqlite-graph-wasm
+          git rev-parse HEAD > ../../.temp/sqlite-graph-wasm/source.txt
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup target add wasm32-unknown-unknown
+          cargo generate-lockfile
+          cargo build --locked --release --target wasm32-unknown-unknown 2>&1 | tee ../../.temp/sqlite-graph-wasm/build.log
+          cargo install wasm-bindgen-cli --version 0.2.105 --locked
+          wasm-bindgen --target nodejs --out-dir ../../.temp/sqlite-graph-wasm --out-name ears_graph target/wasm32-unknown-unknown/release/ears_graph.wasm
+          node -e "require('fs').writeFileSync('../../.temp/sqlite-graph-wasm/package.json',JSON.stringify({type:'commonjs'}))"
+          node probe.mjs ../../.temp/sqlite-graph-wasm 2>&1 | tee ../../.temp/sqlite-graph-wasm/probe.log
+      - name: Preserve portable core and lockfile for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-graph-wasm-${{ github.run_id }}
+          path: |
+            native/graphs/Cargo.lock
+            .temp/sqlite-graph-wasm
+          if-no-files-found: error
+          retention-days: 14
   sqlite-api:
     if: ${{ inputs.suite == 'sqlite-api' }}
     runs-on: ubuntu-24.04
@@ -98,7 +136,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   check:
-    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-api' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
+    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
     runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45

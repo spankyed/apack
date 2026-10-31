@@ -197,7 +197,7 @@ The complete goal is active; all original acceptance criteria remain required. [
 conversion, new PR or version-only PR is authorized. All phases and original budgets above remain required.
 
 Authoritative source: `/private/tmp/ears-sqlite-query-integration`, published to `session/ears-sqlite` and
-[draft PR #286](https://github.com/spankyed/apack/pull/286). Current runtime/test checkpoint is `dcbb289e56`.
+[draft PR #286](https://github.com/spankyed/apack/pull/286). Current committed graph/runtime checkpoint is `563ec93ed0`; its graph quality is now known to regress.
 It includes keyed single-type numeric sorting, batched member grouping with native value identity,
 guarded SQL distinct/count aggregation, owner-rerank reuse and abrupt owner-process death recovery.
 The clean detached publisher is `monorepo-worktrees.noindex/integration-3AEBRl`; it may lag and must
@@ -229,8 +229,13 @@ components. Full EARS typechecking and five selected SQLite graph cases pass, in
 and actual SQL explain output. [Leiden integration and exhaustive graph checks](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-leiden-240/README.md)
 now implement seeded communities using pinned `leiden-ts@0.1.0`. Full EARS typechecking and all 98 focused
 SQLite cases pass without skips; a separate 500-graph dependency probe passes deterministic/connectivity
-checks. This new dependency still needs comparative quality, maintenance and realistic graph performance
-review. New-pin native qualification, API reports and full integrated/platform acceptance remain required. Do not substitute Louvain for Leiden or silently omit these APIs.
+checks. [Independent graph quality](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-quality-563/README.md)
+now contradicts acceptance of this dependency: the retained seed-zero karate fixture gives 0.3952 versus
+native 0.4198 (98/99 focused cases pass; the new test fails). Direct package checks reproduce the gap
+without the adapter. Keep the test and target intact. A thin portable wrapper around native's pinned
+`leiden-rs@0.8.1` is being evaluated; it is not integrated or qualified yet. API generation41209245253
+passes at563ec93ed0 with an empty report diff. New-pin native parity, resource/quality comparisons and
+full integrated/platform acceptance remain required. Do not substitute Louvain for Leiden or silently omit these APIs.
 Existing platform/benchmark evidence retains its original native pin; new-pin baseline and integrated
 candidate qualification remain required. Inspect actual Git/process/workflow state before continuing.
 

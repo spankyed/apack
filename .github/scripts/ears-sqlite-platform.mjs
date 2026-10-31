@@ -221,7 +221,7 @@ if (mode === 'verify') {
     file.assertionResults.some(test => test.status === 'passed' &&
       test.fullName.endsWith('recovers a durable training attempt after its process is killed without draining'))),
     'Abrupt owner-process death recovery must execute');
-  assert.equal(passedIn(ears, /\/tests\/sqlite\/graph-algorithms\.spec\.ts$/), 4,
+  assert.equal(passedIn(ears, /\/tests\/sqlite\/graph-algorithms\.spec\.ts$/), 5,
     'All exhaustive graph and Leiden adapter cases must execute');
   for (const title of ['rank orders the query', 'weakComponents groups the query',
     'strongComponents groups the query', 'communities splits the query',
