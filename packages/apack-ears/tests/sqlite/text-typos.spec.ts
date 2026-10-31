@@ -60,7 +60,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('bounded candid
     expect(e.query('Row').search('databse -backup').ids().sort()).toEqual(['Row-a', 'Row-b']);
     expect(e.query('Row').search('databse archive', { any: true }).count()).toBe(3);
     expect(e.query('Row').search('"databse"').ids()).toEqual([]);
-    expect(e.query('Row').search('databse', { prefix: true }).ids()).toEqual([]);
+    expect(e.query('Row').search('databse', { prefix: true }).ids().sort()).toEqual(['Row-a', 'Row-b', 'Row-c']);
+    expect(e.query('Row').search('databse', { prefix: true, fuzzy: false }).ids()).toEqual([]);
     expect(e.query('Row').search('databse arch', { prefix: true }).ids()).toEqual(['Row-a']);
   });
   it('reads units, rolls back, settles watches and reopens with the same typo matches', async () => {

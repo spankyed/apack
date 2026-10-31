@@ -157,9 +157,14 @@ export class SqliteText {
       const phrase = token.startsWith('"'), raw = token.replace(/^"|"$/g, ''), normalized = fold(raw);
       if (!normalized) continue;
       const prefix = options.prefix && !phrase && position === tokens.length - 1 ? '*' : '';
-      const expanded = !phrase && !prefix && options.fuzzy !== false ? this.presentAlternatives(job, normalized) : [];
-      const words = prefix || phrase ? [raw] : [...new Set([raw, ...expanded])];
-      const match = words.map(word => `(body : ${quote(word)}${prefix} OR aliases : ${quote(identifierParts(word).text || word)}${prefix})`).join(' OR ');
+      const expanded = !phrase && options.fuzzy !== false ? this.presentAlternatives(job, normalized) : [];
+      const words = phrase ? [raw] : [...new Set([raw, ...expanded])];
+      // Literal completion and exact typo alternatives are independent. A wildcard on every alternative
+      // would turn whole-word correction into a broader fuzzy-prefix search.
+      const match = words.map(word => {
+        const suffix = word === raw ? prefix : '';
+        return `(body : ${quote(word)}${suffix} OR aliases : ${quote(identifierParts(word).text || word)}${suffix})`;
+      }).join(' OR ');
       const selected = (field === undefined ? fields : [field]).filter(f => !options.fields?.length || options.fields.includes(f))
         .map(f => fields.indexOf(f)).filter(i => i >= 0);
       if (!negative) groups.at(-1)!.push(clauses.length);

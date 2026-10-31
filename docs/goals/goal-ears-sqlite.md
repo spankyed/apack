@@ -15,7 +15,7 @@ recorded on pinned source in disposable environments, and a draft PR is ready fo
 an adoption decision. Commit usable checkpoints. Do not silently drop requirements.
 ```
 
-Status: active candidate integration and qualification, 2026-10-30.
+Status: active after user-verified OrbStack migration to Seagate, 2026-10-31; candidate qualification remains incomplete.
 Branch: `session/ears-sqlite`. Authoritative source: `/private/tmp/ears-sqlite-query-integration`;
 `monorepo-worktrees.noindex/sqlite-evaluation` preserves an earlier session checkpoint.
 The original `session/sqlite-evaluation` branch preserves the experiment at `4a3fe698f8`.
@@ -187,7 +187,11 @@ platform claims must identify their actual tested scope.
 
 ## Current handoff
 
-The complete goal remains active. [Draft PR #286](https://github.com/spankyed/apack/pull/286) targets
+The user confirms the OrbStack move to Seagate is complete and verified and explicitly resumes work.
+No configuration change, reinstall or rebase is needed. Post-move read-only hashes match the preserved
+committed database snapshot and pinned native binding/CLI. Durable preservation notes and the pre-resume
+source patch remain at `/Users/spankyed/Develop/Projects/apack/ears-migration-preservation-20261031/README.md`.
+The complete goal is active; all original acceptance criteria remain required. [Draft PR #286](https://github.com/spankyed/apack/pull/286) targets
 `session/ears-sqlite`; production stays elmdb. No master merge, release, adoption, implicit daily-profile
 conversion, new PR or version-only PR is authorized. All phases and original budgets above remain required.
 
@@ -195,7 +199,10 @@ Authoritative source: `/private/tmp/ears-sqlite-query-integration`. The clean de
 `monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at older `6cf6c8349e`
 and is not the current source. Latest implemented/test-diagnostic checkpoint is `0126eda005`; later evidence
 changes do not alter runtime. Integrated master is `dc67febcce`; native elmdb pin is
-`2441af4658d961f547c7094cd041c2ac246668c5`. Inspect actual Git/process/workflow state before continuing.
+`2441af4658d961f547c7094cd041c2ac246668c5`. The user now requests rebasing onto current master:
+checkpoint first, then fetch/rebase and qualify the changed integration. The fetch was interrupted and no
+rebase has started. Frozen diagnostic recipes target the pre-rebase source and must be reconciled before
+new qualification. Inspect actual Git/process/workflow state before continuing.
 
 The candidate implements structured graph/query execution, typed authoritative values, live declarations,
 transaction/watch identity, search/index generations, canonical embedding/model lifecycle, both managed app
@@ -245,32 +252,42 @@ Next deliverables, dependencies and closing checks:
   itself takes about 4.48 seconds. Passing frontend loads accept about 331–336 ms after PACK_ACTIVATED.
   Resource arrays are empty even on passes, so they do not attribute fetching. Profile backend module/
   registration/content/actor-startup and event delivery before choosing a fix; no editor rebuild rejection
-  or causal SQLite statement is established. A private backend sampled-stack observer is prepared under
-  `/private/tmp/ears-activation-cpu-*`, with reports at `/private/tmp/ears-activation-cpu-results`, but is
-  **not launched**. It reuses the previously built API/pack only after verifying all source/build digests.
-  Admit it after the native matrix and queued I/O check are terminal; do not create a competing owner.
+  or causal SQLite statement is established. The private sampled-stack observer first failed before API
+  readiness at the unchanged 45-second bound; syntax and old/new preload import controls then passed.
+  The [same-bound old/new API startup control](../references/evidence/ears-sqlite-implementation-2026-10-28/activation-startup-controls-after-migration/README.md)
+  is terminal failure: both hooks reach readiness (28.53/32.27 seconds), then actual pack activation
+  exceeds the unchanged 30-second observation bound. No completed CPU profile is produced; shutdown
+  requires forced termination. Child samples show filesystem-related waits but establish no causal fix.
   V8 sampled stack time is not a CPU/wait or syscall decomposition. Do not repeat the broad suite merely
   to obtain green.
-- Finish the current native baseline matrix. Owned session **88639**, admission PID **59127**,
-  `/private/tmp/ears-elmdb-real-matrix-results`, is live; latest observation has created 99900 rows and embedded
-  20480. It uses the pinned native binding/CLI, actual durable units, the same fresh truth/exclusions,
-  independent canonical verification and original query gates. Poll the same handle; do not restart a live
-  process after an observation timeout. Connection reopen is not OS-cold. The 1000-row preflight is terminal
-  success, not full-matrix acceptance. Preserve pauses and failures before making timing comparisons.
+- The native baseline matrix is checkpointed and stopped for the migration. Session 88639 ended by
+  requested SIGTERM (exit -15), not a product failure. It created 99900 rows and last logged 69632 embeddings;
+  canonical initial/update validation and the 7200-query phase were not reached. The pinned native CLI saved
+  a committed compacted snapshot and successfully inspected it before stopping. Persistent volume:
+  `ears-electron-runtime-work`; snapshot: `/electron/.temp/ears-migration-checkpoint-20261031/native-db`.
+  Its data.mdb is 1344454656 bytes, SHA-256
+  `0fe282f82d18121c62f2828867099dedac26be67d30327b65f30b851ab5a1d00`.
+  Verify bytes before opening after migration; lock.mdb can change on open. Preserve the incumbent and
+  resume only with an explicit copy/protocol; the original fresh-run script is not automatically resumable.
 - Close the [prefix/typo app-path restriction](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-typo-preregistration/README.md).
-  The threads panel enables prefix search; current SQLite suppresses correction on its last word even with
-  fuzzy:true. Four new shared judgments are preregistered; all original judgments remain. No runtime code
-  changes or new backend results are claimed yet. Run both pinned backends, preserve the current candidate
+  The threads panel enables prefix search; published SQLite suppresses correction on its last word even
+  with fuzzy:true. Four shared judgments are preregistered at 66e8531079; all original judgments remain.
+  The checkpoint includes a text.ts/test-expectation prototype that is UNTESTED and not accepted.
+  Its qualification recipe is preserved with the checkpoint; no prefix qualification job has started.
+  No new backend result or accepted semantic fix is claimed. Run both pinned backends, preserve the current candidate
   failures, then implement literal prefix plus bounded exact whole-word alternatives and qualify semantics,
   typing/recovery and prefix-enabled growth/latency without changing the original work limits or budgets.
-- Qualify the actual I/O boundary after the native matrix: private syscall-fault admission **59998**,
-  PID **86760**, waits for 30 seconds with no running containers before starting its half-CPU/768-MiB/no-swap
-  container. Reports: `/private/tmp/ears-io-fault-results`. No injector case has run yet. Frozen private inputs
-  target only one armed owned file/call; the disabled-injector control must refuse a missing witness. Scope:
-  before/after read, write and sync faults; truthful refusal/unknown-commit fencing, watch silence and reopen.
-  Prefer existing tooling; strace is absent in the owned image, so this is a test-only interposer, not new
-  production infrastructure or device power-loss proof. Poll that admission; do not duplicate it or modify
-  its frozen scripts while active.
+- The original private syscall-fault admission 59998 was cancelled before container creation. After user
+  migration verification/resume, [actual syscall-fault validation](../references/evidence/ears-sqlite-implementation-2026-10-28/real-io-after-migration/README.md)
+  is terminal success: eighteen actual EIO cases plus a disabled-injector refusal control, at frozen runtime
+  1d7a3de090 (same behavior through 66e8531079 before the prefix prototype), FULL/default checkpoint.
+  All sixteen mutation outcomes fence the uncertain handle, reopen to the incumbent, and permit a clean
+  recovery write; both read faults preserve the main-file hash. All observed mutations roll back, so this
+  does not qualify an actual surviving commit with lost acknowledgment or physical failing media/power loss.
+  Active-worker/host publication and remaining phase-6 conditions are still required. The native checkpoint
+  and pinned binary hashes match after migration. Qualify the prefix prototype against the rebased source,
+  then explicitly resume native ingestion on a copy; old internal-storage timings are not a matched
+  comparison with the new Seagate boundary. No interrupted matrix is relabeled complete.
 - Close the current strict-shard concurrency gap without removing builds/assertions or changing deadlines.
   The phase markers and isolated results above are available; reproduce the relevant overlap before a fix,
   then run the affected suite. Do not dispatch another broad run solely to obtain green.
