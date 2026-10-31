@@ -204,3 +204,30 @@ The only remaining acceptance item is the supported local native gate when stora
 ownership permit it. Both PRs remain draft until that result is recorded. No application measurements
 were repeated for compiler bookkeeping or documentation changes; their original source-qualified
 manifests, earlier failures and limitations remain authoritative.
+
+## External storage and native scratch checkpoint (2026-10-31)
+
+OrbStack migration was verified by 22 volume metadata records, seven image identity tuples and
+checkpoint hashes. Original internal storage remains intact. Capacity admission is resolved.
+Migration receipts live outside Git under the Seagate Development/MigrationRecords directory.
+
+Two full local native attempts then failed at different subprocess deadlines:
+`2026-10-31T04-57-43Z-46429` (captured Electron pack) and
+`2026-10-31T05-20-32Z-66644` (content compiler worker external inputs). Focused isolated cases
+passed. Replaying the worker case with its two predecessors passed, but its build took 93.470 s.
+One content-load subprocess spent 34.21 s with negligible CPU, sampled 35 times blocked in
+`write_all_supers`. This establishes a filesystem wait, not a persistent JavaScript exit hang.
+
+The same original-source sequence with 3 GiB executable tmpfs scratch passed: the slow build took
+15.447 s, sampled scratch peaked at 962,887,680 bytes and sampled cgroup anon+file+kernel usage
+peaked at 3,115,945,984 bytes. The existing two CPU, 6 GiB memory and no-extra-swap bounds,
+subprocess deadlines and assertions were unchanged. This is diagnostic evidence, not a new
+application performance comparison. Raw diagnostics remain in the owned Linux work volume at
+`.apack/performance/worker-sequence-diagnostic` and `worker-sequence-tmpfs-diagnostic`.
+
+The maintained policy selects tmpfs for the native suite or an explicit leading `--native-scratch`
+runner flag. Generic Linux commands remain disk-backed. Immutable compiler copies use a per-run
+checkout `.temp` directory, removed on normal teardown; exclusive source synchronization reclaims
+interrupted run directories. Both outer and per-project native cache inputs include the policy.
+The composed source passed 179 focused checks, scripts/repository typechecks, CLI typecheck and
+changed-file lint. Maintained-policy native execution and the final broad gate remain pending.
