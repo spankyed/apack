@@ -27,7 +27,8 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let parentSessionId = options.parentSessionId
   let authority = options.authority(parentSessionId), closed = false, released = false, checking = false, releaseTimer: ReturnType<typeof setTimeout> | undefined
   let monitor: ReturnType<typeof setInterval> | undefined, closing: Promise<void> | undefined
-  const changed = () => { parentChanged(); for (const listener of listeners) { try { listener() } catch { /* Isolate windows. */ } } }
+  let statusUpdates = 0
+  const changed = (force = false): void => { if (!force && statusUpdates && status.value) return; parentChanged(); for (const listener of listeners) { try { listener() } catch { /* Isolate windows. */ } } }
   const status = createClaudeBackgroundStatus({
     async identify(sessionId, pid) {
       const currentTarget = target()
@@ -54,22 +55,25 @@ export async function createClaudeBackgroundStatusObserver(options: {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return reply(400, {})
       if (request.url === '/background-register') {
         const lease = await status.register(value.sessionId, value.pid)
-        formatter?.reset()
+        formatter?.reset(); changed(true)
         if (releaseTimer) clearTimeout(releaseTimer); releaseTimer = undefined
         reply(200, lease); return
       }
       if (request.url === '/background-status') {
-        await status.accept(value)
-        const registration = status.registration, sequence = status.sequence
-        if (value.formatter && !formatter) {
-          launcher ??= installClaudeBackgroundFormatterLauncher()
-          const path = await launcher
-          if (closed || registration !== status.registration || sequence !== status.sequence) return reply(409, {})
-          formatter ??= createClaudeBackgroundFormatter({launcher: path, socketPath, brokerToken: token, changed})
-        }
-        const result = formatter?.configure(value)
-        formatterRegistration = status.registration; formatterSequence = status.sequence
-        changed(); reply(200, result ?? {}); return
+        statusUpdates++
+        try {
+          await status.accept(value)
+          const registration = status.registration, sequence = status.sequence
+          if (value.formatter && !formatter) {
+            launcher ??= installClaudeBackgroundFormatterLauncher()
+            const path = await launcher
+            if (closed || registration !== status.registration || sequence !== status.sequence) return reply(409, {})
+            formatter ??= createClaudeBackgroundFormatter({launcher: path, socketPath, brokerToken: token, changed})
+          }
+          const result = formatter?.configure(value)
+          formatterRegistration = status.registration; formatterSequence = status.sequence
+          changed(); reply(200, result ?? {}); return
+        } finally { statusUpdates--; changed() }
       }
       if (request.url === '/background-formatter') {
         const identity = status.identity, registration = status.registration
