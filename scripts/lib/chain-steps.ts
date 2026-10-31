@@ -697,6 +697,8 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     ...ROOT,
     // A suite's half runs under one root config, so which projects that config pools is an input to it
     ...rootConfigFor(suite, half),
+    // The native pool's Docker scratch policy is part of both the outer and per-project verdict.
+    ...(half === 'native' ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/linux/Dockerfile'] : []),
     ...SUITE_RUNNER,
     ...suiteWorkspace(suite.dir),
     ...workspaceDeps(suite.dir).flatMap(dependencySource),
