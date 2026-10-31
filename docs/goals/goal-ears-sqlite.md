@@ -270,7 +270,11 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 preserves historical sources, CI boundaries and failures.
 
 Next checkpoint: test direct compact-integer membership against the existing query-owned sorted RHS,
-before adopting another representation or tuning ANN quality. The [supported-block study](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
+before adopting another representation or tuning ANN quality. The [private direct-IN proof](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
+now passes 735 ordinary-SQLite controls per library and 900 paired updated-snapshot EARS answers exactly,
+with minimum mean recall 0.974. The compiled baseline equals the packaged binary byte-for-byte, which stays
+unchanged. No production native patch is selected yet; the complete initial/update matrix and fresh owner/
+platform/package proof below remain required. The [supported-block study](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
 completes 16/64/256 KiB with one fixed trained model: all 21,600 initial/updated queries finish, canonical bytes
 verify, both larger variants reproduce all 7,200 baseline answers, and minimum mean recall is 0.973. All
 variants still fail responsiveness, including the timed-only query gates. Pauses are retained and timings do
@@ -291,6 +295,13 @@ profile, and the settings-recovery fixture must validate its explicit temporary 
 on a missing parent-process profile variable. Inspect all actual reports, failures and intentional installed-only
 skips; a green build or six installed smokes cannot substitute for these broader flows. This checkpoint also
 serves phase 3 live-pack/readiness behavior; it does not close performance or all operational requirements.
+[First broad SQLite app run 41146193993](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-delivery/README.md)
+is terminal failure: 32 pass, one intended installed-only skip, and the surface file-read/watch/terminal case
+fails at FILE_CONTENT. The test asks from page evaluation without a surface reply address, and also expects
+an obsolete terminal CREATED payload. Drive the real surface requests and addressed OPENED reply, preserving
+all deadlines/assertions, then qualify the complete SQLite app suite with actual per-case JSON. The original
+reporter gives only aggregate pass counts. Unchanged-source elmdb control 41147691838 is pending; do not infer
+its result or call the failed broad run green.
 
 
 Next deliverables and their closing checks, without narrowing phases 3–7:

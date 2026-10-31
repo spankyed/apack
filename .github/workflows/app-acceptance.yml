@@ -252,10 +252,11 @@ jobs:
         if: ${{ !cancelled() && (inputs.suite == 'all' || inputs.suite == 'app') && steps.runtime.outcome == 'success' }}
         env:
           APACK_E2E_GREP: ${{ inputs.test }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/tests/results/source-app.json
         run: |
           args=(--repeat-each "$APACK_E2E_REPEAT")
           if [[ -n "$APACK_E2E_GREP" ]]; then args+=(--grep "$APACK_E2E_GREP"); fi
-          npm run test:e2e -- "${args[@]}"
+          npm run test:e2e -- "${args[@]}" --reporter=line,json
       - name: Retain app suites before the CLI scenario
         if: always()
         uses: actions/upload-artifact@v4

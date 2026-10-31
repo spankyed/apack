@@ -1,0 +1,32 @@
+[
+  {
+    "file": "run.json.gz",
+    "originalBytes": 6513,
+    "originalSha256": "ea117014740cf9dcc398b53c95d732dcf8056e6ad185c201a2f739b40a79b58d",
+    "storedSha256": "03aa9943ed5a618540cda0d85ef51598fd95300eedf71c643c4ce4d297a80a59"
+  },
+  {
+    "file": "job.log.gz",
+    "originalBytes": 51398,
+    "originalSha256": "6d0a01c793001e42257343446065b24369cca99aad898961f3e8490a32a94207",
+    "storedSha256": "ff1c2b8ae56871c72febd7e9d635119fc311f2432b0405084501266b794ce9f7"
+  },
+  {
+    "file": "original-surface-sends.spec.ts.gz",
+    "originalBytes": 7054,
+    "originalSha256": "69850d1cabda178fce7acf25b1642aa0466fcd629140125ba397f7cb693904cd",
+    "storedSha256": "b584107a4d222ea05c073be2934f32cb99fd10a75c3f06e43d4eb9a344a5f757"
+  },
+  {
+    "file": "test.trace.gz",
+    "originalBytes": 43179,
+    "originalSha256": "e3e11a47457df01116840b9ed3fab88406644fad1b74fe23c9d7329a56e1a84f",
+    "storedSha256": "6ae8e9e755038c15ae4835c1ad95450d443d7ce51466edf893bc8a06bd3cf288"
+  },
+  {
+    "file": "app-file-request-excerpt.log.gz",
+    "originalBytes": 5929,
+    "originalSha256": "97dd1ea0630b17a529446b12a70212683a7694596adf9deeaf32e376eaaf264b",
+    "storedSha256": "e2336237b723e3098b09ce9b24c68849abfd8c2832fe372f538ad04c8ea91c6f"
+  }
+]
