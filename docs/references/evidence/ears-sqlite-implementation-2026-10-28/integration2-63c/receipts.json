@@ -23,5 +23,10 @@
     "file": "diagnostic-lint.log.gz",
     "sha256": "8192d350a8c93cb07a011dcc021c110feba4d94473d7ba8f00bf2a62fb4dbe41",
     "storedSha256": "faab4befae312fa0837cfb2ca8e93dd3754ddf15f97f60820ffcbb5c47c205ed"
+  },
+  {
+    "file": "final-strict-metadata.json.gz",
+    "sha256": "d34c6240037062f568bb378b9db2a06524129c0c7503522ef153539322496650",
+    "storedSha256": "cc19e066e91e20df53fd6ac9608b4dabc64db662a32a2a1f3b3bdb6610e14a55"
   }
 ]

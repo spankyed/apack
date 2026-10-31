@@ -1,8 +1,8 @@
 # Exact-source integration shard failure — 2026-10-30
 
 The integration-2 job (124393532944) in [strict run 41151679157](https://github.com/spankyed/apack/actions/runs/41151679157)
-fails at source `63c8267994c611bdbf9dbe30e161ba18c949513c`. Other jobs may still run; this is not full
-strict acceptance. Its actual integration summary has 540 passed tests, six skipped and one failed suite.
+fails at source `63c8267994c611bdbf9dbe30e161ba18c949513c`. The final run is terminal failure: the other eight required jobs pass and six alternate jobs skip. This is not
+full strict acceptance. Its actual integration summary has 540 passed tests, six skipped and one failed suite.
 Five skipped tests belong to the failed setup hook and are **not** intentional platform acceptance.
 
 `packages/apack-cli/tests/build/dependency-graph.integration.spec.ts` exceeds its existing 240000-ms

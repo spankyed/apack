@@ -104,6 +104,17 @@ jobs:
         run: >-
           npm test -w @apackdev/ears -- --reporter=default --reporter=json
           --outputFile=../../.temp/sqlite-platform/ears.json 2>&1 | tee .temp/sqlite-platform/ears.log
+      - name: Real filesystem full rollback and reuse
+        if: runner.os == 'Linux'
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          sudo mkdir /fault
+          sudo mount -t tmpfs -o "size=8m,uid=$(id -u),gid=$(id -g),mode=0700" tmpfs /fault
+          trap 'sudo umount /fault; sudo rmdir /fault' EXIT
+          node --import tsx packages/apack-ears/bench/sqlite/filesystem-full.mjs \
+            /fault .temp/sqlite-platform/filesystem-full.json 2>&1 | tee .temp/sqlite-platform/filesystem-full.log
       - name: Host recovery and storage contracts
         run: >-
           npm test -w @apackdev/host -- tests/backup/recovery.spec.ts tests/backup/recovery-crash.spec.ts

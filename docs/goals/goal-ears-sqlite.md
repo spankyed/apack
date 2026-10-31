@@ -270,19 +270,22 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 preserves historical sources, CI boundaries and failures.
 
 Next checkpoint: diagnose the [integration-2 hook failure](../references/evidence/ears-sqlite-implementation-2026-10-28/integration2-63c/README.md)
-in exact-source strict run 41151679157, while its other consumer shards finish, and the
+in terminal exact-source strict run 41151679157, and the
 [source-app failure](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-63c/README.md)
 in run 41152805669. Integration-2 times out at the unchanged 240000-ms four-pack diamond fixture setup;
 its five assertions never run. Added phase markers preserve that deadline and every build/assertion.
-The current strict run cannot qualify overall, even though platform/producers/native-2 pass. The actual report has 32 passes, one intended installed-only skip and one unexpected
+The current strict run cannot qualify overall: eight required jobs pass, one fails and six alternate jobs skip. The actual report has 32 passes, one intended installed-only skip and one unexpected
 failure: the open editor misses its original five-second `referenceSuggestion` predicate after pack activation.
 Backend logs show activation before the deadline but do not prove frontend acceptance or editor replacement.
 The [focused diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-activation-e76/README.md)
 at e76 (run 41155440320) reproduces one failure and two passes without retries. At failure the registry has
 only the host contribution and the shell only host surfaces; an accepted pack/editor replacement is not
-observed. The same-deadline three-repeat elmdb control is run 41157076346; inspect its terminal result before
-attributing cause. Diagnostic source passes oxlint and complete test types, with original failed invocation
-retained. No causal fix or current broad app pass is claimed.
+observed. The [same-deadline elmdb control](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-elmdb-control-897/README.md)
+in run 41157076346 passes all three actual cases without skips/retries. Investigate candidate declaration/
+content/activation work and frontend arrival; this does not isolate one statement or prove a fix. These
+app interactions do not match durable-write acknowledgments (elmdb group sync versus SQLite FULL).
+Diagnostic source passes oxlint and complete test types, with original failed invocation retained.
+No causal fix or current broad app pass is claimed.
 The [new native qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/native-63c/README.md)
 verifies the three completed platform jobs and signed installed run 41151681981 at this source: 735 native
 membership comparisons per host, Linux/macOS EARS 762 passes, Windows 757 passes plus five named platform
@@ -292,8 +295,8 @@ The ordinary Linux arm64 package, 735 controls and fresh public model-owner prob
 local EARS suite fails with one text-prefix timeout plus a worker RPC error after a protective ~1053.7-second
 pause during the suite; retain that failure and original deadlines. The remaining typecheck/lint steps were
 not reached. Independent platform passes do not relabel the local failure. Earlier strict/app/installed
-results qualify preceding native inputs; exact-source strict has a failed integration shard with others
-still live, and broader/focused source-app failures remain as recorded above. Preserve all failures.
+results qualify preceding native inputs; exact-source strict is terminal failure at integration-2 despite
+eight successful jobs, and broader/focused source-app failures remain as recorded above. Preserve all failures.
 The [private direct-IN proof](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
 passes 735 ordinary-SQLite controls per library and 900 paired updated-snapshot answers. The subsequent
 [full initial/update matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-full-matrix/README.md)
@@ -323,9 +326,23 @@ now pass for the current library, a private C lookup prototype and a SQL-only al
 ordinary metadata comparisons, complete vector bytes, paired distance projections and ten missing-base
 refusals. The initial cross-library distance comparison failed with independently trained IVF models;
 the corrected comparison shares exact frozen models and preserves the failure. Neither alternative is
-selected. The next private comparison (62850) runs 900 actual EARS queries per variant on one retained
-read-only model/snapshot; observe its existing process before new heavy work. Complete initial/update,
-real owner/multi-chunk/unit/platform/packaging proof remains required if either is promoted.
+selected. The [actual EARS comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-projection-query/README.md)
+now completes 2700 queries in independent baseline/C/SQL processes: all 900 paired ordered answers/scores
+match for each alternative, minimum cohort recall is .974 and the same read-only snapshot/model checksums
+remain intact. No protective pauses occur, but fixed order/system/cache effects remain; this is one updated-
+only pass per cohort. SQL is modestly lower in some observations, C establishes no benefit and all variants
+observe heartbeat misses. Neither alternative is promoted. The original settings/gates remain unchanged.
+Complete initial/update, actual owner/multi-chunk/unit/platform/packaging proof is required before selection.
+The [real filesystem-full checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/filesystem-full/README.md)
+passes four actual ENOSPC/COMMIT refusal paths on Linux arm64 in an isolated 8-MiB tmpfs, with verified
+0.5-CPU/768-MiB/no-swap limits, FULL=2 and default checkpoint=1000. Prior rows/sequence survive; watches
+stay silent on refusal, reuse commits once and read-only reopen retains only incumbent/recovered rows.
+The tracked regression script and mandatory Linux platform report checks reject 42 missing/invalid witness
+controls; syntax, focused lint and workflow parse pass. The new owned-mount Ubuntu CI step still requires
+actual platform qualification. This is not device power loss, other I/O fault, Windows durability or a
+replacement for all phase 6 requirements. The dependency-graph focused Linux observation is the next owned
+heavy check after the completed query diagnostic; inspect its existing admission/run handle before new work.
+
 No evidence here certifies arbitrary filesystems or completes the goal.
 
 The broader phase 5 source-app checkpoint now passes: [run 41148535620](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-qualified/README.md)

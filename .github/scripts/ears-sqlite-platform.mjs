@@ -1,5 +1,6 @@
 // Built-workspace Node qualification; complete installed/signed distributions and app budgets are separate gates.
 import assert from 'node:assert/strict';
+import { verifyFilesystemFull } from './ears-sqlite-full-report.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -136,6 +137,7 @@ if (mode === 'verify') {
   const sdkBackend=report('sdk-backend.json'),queryWork=report('query-work.json');
   const sdkAll=platform()==='linux'?report('sdk-all-sqlite.json'):null;
   const apiStartup=platform()==='linux'?report('api-startup.json'):null;
+  const filesystemFull=platform()==='linux'?report('filesystem-full.json'):null;
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const publication = host.testResults.flatMap(test => /\/tests\/(backup\/recovery|database\/storage)\.spec\.ts$/.test(test.name.replaceAll('\\', '/')) ? test.assertionResults : [])
@@ -147,7 +149,7 @@ if (mode === 'verify') {
   const logical = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/backup/logical.spec.ts') ? test.assertionResults : []);
   const logicalSkipped = logical.filter(test => test.status !== 'passed');
   const convertedApi = platform() === 'linux' ? report('converted-api/verification.json') : null;
-  const result = { source, apiStartupCasesPassed:apiStartup?.numPassedTests??null, nativeMembershipChecks:nativeMembership.groups.reduce((n,group)=>n+group.checks,0),
+  const result = { source, filesystemFullCasesPassed:filesystemFull?.cases.length??null, apiStartupCasesPassed:apiStartup?.numPassedTests??null, nativeMembershipChecks:nativeMembership.groups.reduce((n,group)=>n+group.checks,0),
     nativeMembershipPatchSha256:nativeGeneration.patchSha256, sdkSqliteCasesPassed:sdkAll?.numPassedTests??null,
     sdkContentRuntimeCasesPassed:sdkAll?passedIn(sdkAll,/\/tests\/testing\/content-runtime\.spec\.ts$/):null,
     sdkBackendCasesPassed:passedIn(sdkBackend,/\/tests\/testing\/database-backend\.spec\.ts$/),
@@ -189,6 +191,7 @@ if (mode === 'verify') {
   assert.equal(nativeGeneration.patchApplied,true);
   assert.equal(nativeGeneration.patchSha256,createHash('sha256').update(readFileSync('native/vectors/vec1-membership.patch')).digest('hex'));
   assert.equal(nativeGeneration.sourceSha256,'04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a');
+  if(platform()==='linux')verifyFilesystemFull(filesystemFull,source);
   assert.equal(nativeMembership.source,source);
   assert.equal(nativeMembership.extensionSha256,nativeGeneration.extensionSha256);
   assert.equal(nativeMembership.completed,true);

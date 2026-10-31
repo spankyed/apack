@@ -467,3 +467,17 @@ This isolates native layout/plan cost on warmed synthetic data; it does not comp
 prove a cold-store bound, resolve existing heartbeat failures or certify durability. Temporary duplicate
 storage and process-wide RSS are not production-layout peak memory or disk measurements. The diagnostic
 index is not adopted into production by this harness. Preserve both trials and decide from their limits.
+
+
+### Real filesystem-full regression
+
+`filesystem-full.mjs` runs only against an explicitly supplied Linux tmpfs mounted at `/fault`, limited to
+8 MiB. It refuses another filesystem/size or an existing output report. Use a disposable Linux runner;
+the SQLite platform workflow creates/owns/unmounts that mount and runs the source with `node --import tsx`.
+It does not change page-count limits, FULL synchronous policy or default checkpoints. Four write paths
+(COMMIT after an actual ENOSPC filler, ordinary write, bulk load and a unit with an earlier staged write)
+exhaust real filesystem space. Every refusal must preserve the prior rows/logical sequence, end the unit
+and avoid watch notification; after freeing space, reuse and read-only reopen must retain exactly the
+incumbent and recovered write. The platform verifier requires all four actual cases and their observed
+outcomes. This tests Linux filesystem ENOSPC handling, not device power loss, other I/O failures, arbitrary
+filesystems, Windows durability or general resource/performance acceptance.
