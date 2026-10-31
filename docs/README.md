@@ -33,6 +33,9 @@ For interactive Windows development and native debugging, use the
 [Windows development VM guide](references/guides/windows-development-vm.md). It covers access, source
 transfer, focused validation, costs, shutdown and recovery; it does not replace the goal's final gates.
 
+For this host's shared external OrbStack data location, safe relocation and verification, see the
+[Docker storage guide](references/guides/docker-storage.md).
+
 ## Document lifecycle
 
 Keep current decisions and requirements in place. When a decision changes, reconcile the affected

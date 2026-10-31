@@ -176,6 +176,8 @@ launching; preserve evidence without changing macOS security settings. Cause rem
 [launch incident](docs/references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17). The integration half runs directly: its builds reuse the shared compiler store, so
 macOS assesses each runtime once. Live watcher cases belong in `*.native.spec.ts`; pure unit checks stay in the
 fast half.
+For this host's shared external Docker storage and relocation checks, see the
+[Docker storage guide](docs/references/guides/docker-storage.md).
 `test:linux` limits each run's entire container to 6 GiB RAM, no additional swap and two CPUs,
 including installation, builds and subprocesses. Coordinate one expensive run across worktrees;
 separate containers each receive their own allowance. These limits do not cover Docker image builds
