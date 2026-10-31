@@ -16,7 +16,7 @@ import { untypedQuery } from '@apackdev/sdk/ears';
 import { restoreJsonMediaRefs } from '@apackdev/sdk/utils'
 import { repository } from '#generated/repository.ts';
 import type { ExportedThreadsData } from './export-types.ts'
-import { ThreadRelations, type ThreadLinkRelation } from './types.ts'
+import { ThreadRelations, type ThreadRelation } from './types.ts'
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
@@ -212,7 +212,7 @@ export function importThreads(importDir: string): ImportResult {
     const sourceId = shortCodeMap.get(thread.shortCode)
     if (!sourceId) continue
 
-    const linkedThreads: { id: string; relation: ThreadLinkRelation }[] = []
+    const linkedThreads: { id: EARS.EntityId; relation: ThreadRelation }[] = []
 
     for (const link of thread.linkedThreads) {
       // A file is data: its relation is checked here, where the type can't be
@@ -231,7 +231,7 @@ export function importThreads(importDir: string): ImportResult {
 
     if (linkedThreads.length) {
       try {
-        repository.threadCommands.update(sourceId, { linkedThreads })
+        repository.threadCommands.addLinks(sourceId, linkedThreads)
       } catch (err) {
         const message = errorMessage(err)
         result.errors.push(`Failed to restore relations for "${thread.topic}": ${message}`)

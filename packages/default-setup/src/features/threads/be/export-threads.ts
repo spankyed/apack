@@ -47,11 +47,12 @@ export function exportThreads(outputDir: string): { filePath: string; threadCoun
       return exported
     })
 
+    // The links this thread stores: a block on it is the blocking thread's, and is exported with that one
     const exportedLinks: ExportedThreadLink[] = linkedThreads
-      .map((link) => ({
+      .flatMap((link) => link.relation === 'blocked by' ? [] : [{
         shortCode: link.shortCode as string,
-        relation: link.relation as ExportedThreadLink['relation'],
-      }))
+        relation: link.relation,
+      }])
 
     // Query fork source
     const forkedFromIds = query.ids(thread.id)

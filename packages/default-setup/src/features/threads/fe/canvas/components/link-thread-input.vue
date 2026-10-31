@@ -75,7 +75,7 @@
               <select v-model="relation" class="w-full px-2 py-0.5 text-xs font-medium rounded-md bg-neutral-800 border border-neutral-700 text-neutral-400 appearance-none">
                 <option value="parent_of">parent_of</option>
                 <option value="blocks">blocks</option>
-                <option value="blocked_by">blocked_by</option>
+                <option value="blocked by">blocked by</option>
                 <option value="duplicates">duplicates</option>
               </select>
             </td>
@@ -142,6 +142,7 @@
         </tbody>
       </table>
     </div>
+    <p v-if="refusal" role="alert" class="px-3 py-2 text-xs text-red-400">{{ refusal }}</p>
   </div>
 </template>
 
@@ -169,6 +170,8 @@ const props = defineProps<{
   availableThreads: Omit<ThreadLinkItem, 'relation'>[]
   availableTags?: ThreadTagOption[]
   settings?: ThreadsSettings | null
+  /** Why the last save of these links was refused, shown under them */
+  refusal?: string | null
 }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', value: ThreadLinkItem[]): void
@@ -194,7 +197,7 @@ const { handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDrag
 const values = computed({
   get: () => {
     const relationOrder: Record<string, number> = {
-      blocked_by: 0,
+      'blocked by': 0,
       blocks: 1,
       parent_of: 2,
       duplicates: 3

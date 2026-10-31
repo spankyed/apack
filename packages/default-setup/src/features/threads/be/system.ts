@@ -17,6 +17,7 @@ import { importThreads } from './import-threads.ts';
 import { runThreadTeardown } from './thread-teardown.ts';
 import { generateAsideText } from './services/chat.ts';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
+import { RepositoryError, RepositoryErrorCode } from '@apackdev/sdk/repositories';
 
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
@@ -87,15 +88,7 @@ export const threadsSystem = setup({
         });
 
         if (thread.parentThreadId) {
-          repository.threadCommands.update(
-            thread.parentThreadId as EARS.EntityId,
-            {
-              linkedThreads: [{
-                id: newThreadId,
-                relation: 'parent_of' as const
-              }]
-            }
-          );
+          repository.threadCommands.addLinks(thread.parentThreadId as EARS.EntityId, [{ id: newThreadId, relation: 'parent_of' }]);
         }
         return { type: 'THREAD_CREATED' as const, id: newThreadId };
       });
@@ -111,6 +104,8 @@ export const threadsSystem = setup({
         'update';
       answerWrite(reply, (error) => {
         logger.warn('Failed to update thread field', { threadId, key, error });
+        // A link closing a loop is the form's to show, answered to it with the reason
+        if (key === 'linkedThreads' && error instanceof RepositoryError && error.code === RepositoryErrorCode.VALIDATION_ERROR) return;
         reportThreadOperationError(operation, error, threadId);
       }, () => { repository.threadCommands.update(threadId as EARS.EntityId, { [key]: value }); });
     },
