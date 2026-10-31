@@ -15,6 +15,7 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
@@ -59,7 +60,8 @@ const WORK_VOLUME = `apack-linux-work-${short(REPO_ROOT)}`;
 const NPM_CACHE_VOLUME = 'apack-linux-npm-cache';
 // Bound the whole process tree, including compiler children and native allocations. Equal memory/swap
 // limits allow no additional swap; exhaustion fails the container rather than consuming host swap.
-const RESOURCE_LIMITS = ['--memory=6g', '--memory-swap=6g', '--cpus=2'];
+// Renderer module loading fails at Docker's default 64 MiB; keep shared-memory capacity explicit across hosts.
+const RESOURCE_LIMITS = ['--memory=6g', '--memory-swap=6g', '--cpus=2', '--shm-size=256m'];
 /**
  * The run lock, at the volume's root. Named once because two places must agree on it: the `flock` below and
  * the rsync filter that keeps `--delete` from removing it while this run holds it.
@@ -136,7 +138,7 @@ function refuse(message: string): never {
   process.exit(2);
 }
 
-const command = process.argv.slice(2);
+const { command, scratchArgs } = linuxTestInvocation(process.argv.slice(2));
 if (command.length === 0) refuse('usage: npm run test:linux -- <command> [args...]');
 
 if (docker(['info']).status !== 0) {
@@ -303,7 +305,7 @@ const script = ['set -e', run].join('\n');
 const child = spawn('docker', [
   // IPv4 loopback only, as on CI's Linux runners: with IPv6 up, `localhost` resolves to ::1 first here, so a
   // dev server binds where a client dialling 127.0.0.1 cannot reach it
-  'run', '--rm', '--init', ...RESOURCE_LIMITS, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
+  'run', '--rm', '--init', ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
   '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
   ...gitDirMount(),

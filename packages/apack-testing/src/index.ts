@@ -1,3 +1,4 @@
+import { waitForApplicationWindow } from './application-window.ts';
 import { test as base, _electron, type ElectronApplication, type Page } from '@playwright/test';
 export { expect } from '@playwright/test';
 import * as path from 'path';
@@ -229,33 +230,8 @@ function describeFailure(message: string, app: ElectronApplication, rendererErro
 }
 
 async function findMainWindow(electronApp: ElectronApplication): Promise<Page> {
-  const deadline = Date.now() + 45_000;
-
-  for (const w of electronApp.windows()) {
-    const has = await w.evaluate(() => !!(window as any).applicationState).catch(() => false);
-    if (has) return w;
-  }
-
-  while (Date.now() < deadline) {
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) break;
-
-    try {
-      const newPage = await electronApp.waitForEvent('window', { timeout: Math.min(remaining, 5000) });
-      await (newPage as Page).waitForLoadState('domcontentloaded').catch(() => {});
-      const has = await (newPage as Page).evaluate(() => !!(window as any).applicationState).catch(() => false);
-      if (has) return newPage as Page;
-    } catch {
-      // Timeout on waitForEvent — check all existing windows again
-    }
-
-    for (const w of electronApp.windows()) {
-      const has = await w.evaluate(() => !!(window as any).applicationState).catch(() => false);
-      if (has) return w;
-    }
-  }
-
-  throw describeFailure('Main window with applicationState did not appear within timeout', electronApp);
+  try { return await waitForApplicationWindow(electronApp, 45_000); }
+  catch { throw describeFailure('Main window with applicationState did not appear within timeout', electronApp); }
 }
 
 /** What `awaitShell` waits for. A descriptor rather than a predicate, because a function cannot cross into the page. */

@@ -13,6 +13,19 @@ other sessions' containers and volumes; an unused volume is not evidence that it
 See [worktree development](../worktree-development.md) and the root
 [validation rules](../../../CLAUDE.md#keep-validation-bounded).
 
+## Native test scratch
+
+The maintained `npm run test:linux -- npm run test:native` invocation mounts executable `/tmp` as
+3 GiB tmpfs. Its memory is charged inside the existing 6 GiB container limit; CPU and swap limits and
+all test deadlines remain unchanged. Fixtures and temporary databases use RAM, while the immutable
+compiler copies remain in this checkout's disk-backed `.temp/apack-test-run-*` directories. Normal
+teardown removes those copies; the next exclusive Linux source sync removes interrupted runs.
+
+For a focused native Vitest invocation, put `--native-scratch` before the command passed to
+`test:linux`. Generic Linux commands and performance experiments retain disk-backed `/tmp` unless
+that flag is explicitly selected. This separates disposable correctness fixtures from persistent image
+and compiler writes; it does not certify physical-disk durability or speed.
+
 ## Before relocating storage
 
 1. Arrange a quiet window with every session using Docker. Check `docker ps` again immediately before
@@ -62,6 +75,15 @@ succeeds. Coordinate resumption with other sessions rather than automatically re
 
 ## Performance evidence
 
-The external drive changes the storage conditions. Existing performance reports retain their original
+The external drive changes the storage conditions. `APACK_PERFORMANCE_MACHINE_ID`, when supplied,
+is an assertion of matched conditions: choose a new value when storage or scratch configuration changes.
+The default hostname/CPU identity does not discover the physical disk behind a virtual machine. Existing performance reports retain their original
 machine/storage provenance. Run correctness validation on the new location, and identify the new storage
 in subsequent measurements; do not pool old and new timing samples as matched conditions.
+
+## Linux renderer shared memory
+
+The maintained Linux runner explicitly gives `/dev/shm` 256 MiB, within its existing 6 GiB memory
+limit. Docker's 64 MiB default can prevent Electron renderer modules loading; OrbStack's larger
+default masked this locally. Direct Docker invocations that launch the app must also pass
+`--shm-size=256m`. The [controlled startup evidence](../evidence/2026-10-30-application-performance.md#linux-startup-resolution) records the failed and successful configurations.

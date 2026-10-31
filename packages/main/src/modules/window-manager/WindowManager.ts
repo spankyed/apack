@@ -12,7 +12,7 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {getMediaBasePath} from '../media-protocol/paths.ts';
 import {logRenderer, logRendererFatal} from '../api-server/logger.ts';
-import {resolveAppEnvironment} from '@apackdev/sdk/env';
+import {performanceStartupQuery} from '../performance/startup.ts';
 import {splitRef} from '@apackdev/sdk/ids';
 import {openExternalUrl, openFilePath} from '../shell-access.ts';
 
@@ -445,11 +445,10 @@ class WindowManager implements AppModule {
     this.attachRendererDiagnostics(browserWindow);
 
     try {
-      const startup = resolveAppEnvironment().env === 'test' ? process.env.APACK_PERFORMANCE_STARTUP : undefined;
-      const query = startup === undefined ? undefined : { performanceStartup: startup };
+      const query = performanceStartupQuery();
       if (this.#renderer instanceof URL) {
         const url = new URL(this.#renderer.href);
-        if (startup !== undefined) url.searchParams.set('performanceStartup', startup);
+        for (const [key, value] of Object.entries(query ?? {})) url.searchParams.set(key, value);
         await browserWindow.loadURL(url.href);
       } else {
         await browserWindow.loadFile(this.#renderer.path, { query });

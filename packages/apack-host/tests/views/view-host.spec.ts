@@ -1,10 +1,11 @@
+import { createViewObservation } from '../../src/diagnostics/views.ts';
 import { createNodePerformanceController } from '../../src/diagnostics/node.ts';
 // The view host: each request runs the feature's view in the registered pack on the engine, subscribers asking for
 // the same view and arguments share one engine watch, the last to leave stops it, and the registry changing is what
 // a view's code changing is.
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { EarsEngine } from '@apackdev/ears';
-import { defineViews, type PackRegistration, type ViewUpdate } from '@apackdev/sdk/framework';
+import { defineViews, type PackRegistration, type ViewUpdate, type ViewRequest } from '@apackdev/sdk/framework';
 import { _createTestEngine } from '@apackdev/sdk/testing';
 import { createNativePackTestRegistry } from '../../src/testing/pack-registry.ts';
 import { createViewHost, type ViewHost } from '../../src/views/index.ts';
@@ -35,9 +36,9 @@ const notesPack = (prefix = ''): PackRegistration => ({
 });
 
 /** A window's subscription: what it heard, and how to leave */
-function subscribe(view: string, args?: unknown) {
+function subscribe(view: string, args?: unknown, diagnostics?: ViewRequest['diagnostics']) {
   const heard: ViewUpdate[] = [];
-  const stop = views.watch({ ref: 'notes/notes', view, ...(args === undefined ? {} : { args }) }, (update) => heard.push(update));
+  const stop = views.watch({ ref: 'notes/notes', view, diagnostics, ...(args === undefined ? {} : { args }) }, (update) => heard.push(update));
   return { heard, last: () => heard.at(-1), stop };
 }
 
@@ -66,8 +67,8 @@ describe('views', () => {
   it('shares one engine watch between subscribers asking for the same view and arguments, whatever their key order', async () => {
     packs.registerPack(notesPack());
     const note = engine.create('Note', { title: 'one' }).id();
-    const first = subscribe('byId', { id: note, extra: 1 });
-    const second = subscribe('byId', { extra: 1, id: note });
+    const first = subscribe('byId', { id: note, extra: 1 }, { traceparent: 'first-action' });
+    const second = subscribe('byId', { extra: 1, id: note }, { traceparent: 'second-action' });
     await settled();
     expect(views.stats()).toEqual({ views: 1, subscriptions: 2 });
     expect(engine.admin.watchStats().watches).toBe(1);
@@ -136,7 +137,7 @@ it('attributes initial reads to their subscriber and links coalesced reads to bo
   views.close();
   const recording = createNodePerformanceController();
   recording.attach(engine, 'app');
-  views = createViewHost({ ears: () => engine, packs, performance: recording });
+  views = createViewHost({ ears: () => engine, packs, observe: () => createViewObservation(recording) });
   packs.registerPack(notesPack());
   const note = engine.create('Note', { title: 'initial' }).id();
   recording.start('lightweight');

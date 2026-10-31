@@ -13,7 +13,7 @@ execution, encoding and the binding. Companion plans in the sibling elmdb reposi
 `docs/roadmap/read-allocation-codec.md` and `docs/roadmap/query-work-efficiency.md`. They own internal
 optimization and planner acceptance; this document owns application query selection and integration.
 Do not require the full application performance suite before a bounded query investigation can start.
-Use its [scenario contracts](application-performance.md) when available and preserve interim evidence
+Use its [scenario contracts](../archive/plans/application-performance.md) when available and preserve interim evidence
 with explicit limits.
 
 ## Existing behavior to retain

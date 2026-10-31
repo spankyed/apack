@@ -30,6 +30,7 @@ Modules, in order (`src/modules/`):
 | `createPackProtocol` | `pack-protocol/` | `pack://` (see Protocols) |
 | `splashScreen` | `splash-screen/` | Frameless 400×400 splash, shown on `ready-to-show` with the version; fades out on `close()` |
 | `apiServer` | `api-server/` | Spawns and supervises the API (see API server) |
+| `createPerformanceModule` | `performance/` | Dev/test renderer metrics and profiles; calling-window leases, debugger ownership, navigation/destruction cleanup |
 | `createSpeechRecognition` | `speech-recognition/` | `speech:*` IPC; spawns the native helper (`native/speech/…`) on first `speech:start` |
 | `createWindowManagerModule` | `window-manager/` | Main and popout windows, most IPC handlers (see Windows) |
 | `terminateAppOnLastWindowClose` | `ApplicationTerminatorOnLastWindowClose.ts` | Quits on `window-all-closed` except on macOS |

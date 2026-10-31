@@ -506,7 +506,8 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
       }),
 
       deliverSurfaceEvents: enqueueActions(({ event, context, system, enqueue }) => {
-        const { surface, events, asker, answering, call, entityToken, diagnostics } = typeOf('DELIVER_SURFACE_EVENTS', event);
+        const delivery = typeOf('DELIVER_SURFACE_EVENTS', event);
+        const { surface, events, asker, entityToken, answering, call } = delivery;
         if (entityToken) {
           enqueue.sendTo(context.entityOpening, { type: 'DELIVER', token: entityToken });
           return;
@@ -521,10 +522,9 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
         //
         // The call rides with it for the receiver's guards, which is the in-window half of what `connection.ts`
         // does for a backend send: one reader, `callOf(event)`, whichever channel the event came in on.
-        const correlation = { ...(diagnostics && { diagnostics }), ...(call === undefined ? {} : { call }), ...(answering === undefined ? {} : { answering }) };
         for (const e of events) {
-          if (asker) sendToSurfaceActor(actor, surface, e, asker, correlation);
-          else notifySurfaceActor(actor, surface, e, correlation);
+          if (asker) sendToSurfaceActor(actor, surface, e, asker, delivery);
+          else notifySurfaceActor(actor, surface, e, delivery);
         }
       }),
 

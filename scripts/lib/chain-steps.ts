@@ -633,6 +633,8 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   // `pretest: ensure-packages-built`; it packs and installs the published packages, and `dependency-runtime`
   // builds a fixture pack against default-setup's `dist`
   'apack-cli': { packages: true, pack: true },
+  // Resolves the published testing bundle.
+  'apack-testing': { packages: true },
   // `@apackdev/testing`'s bundle; and `sdk-bridge-drift.spec.ts` reads `dist/runtime/index.cjs` when it is
   // there and skips when it is not, so the tree decides whether that check checks anything
   'apack-host': { packages: true, pack: true },
@@ -697,6 +699,8 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     ...ROOT,
     // A suite's half runs under one root config, so which projects that config pools is an input to it
     ...rootConfigFor(suite, half),
+    // The native pool's Docker scratch policy is part of both the outer and per-project verdict.
+    ...(half === 'native' ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/linux/Dockerfile'] : []),
     ...SUITE_RUNNER,
     ...suiteWorkspace(suite.dir),
     ...workspaceDeps(suite.dir).flatMap(dependencySource),

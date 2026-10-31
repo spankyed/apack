@@ -225,9 +225,15 @@ const protocolAction = {
  * assignment, so an excess property *inside* a group would pass this check alone.
  *
  * `_HostBridge` rather than the pack-facing view, since what a window has is the whole of it; which members
- * pack authors are pointed at is `HOST_ONLY_BRIDGE_MEMBERS`' business, one declaration away.
+ * pack authors are pointed at is `PackFacingBridge`'s business, one declaration away.
  */
+const performance = {
+  start: mode => ipcRenderer.invoke('performance:renderer:start', mode),
+  stop: id => ipcRenderer.invoke('performance:renderer:stop', id),
+} satisfies _HostBridge['performance'];
+
 const electronAPI = {
+  performance,
   windowControls,
   surfaces,
   fileUtils,

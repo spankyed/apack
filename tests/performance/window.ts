@@ -2,7 +2,15 @@ import type { createPerformanceController, RecordingMode } from '@apackdev/host/
 import type { ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
 
 type Controller = ReturnType<typeof createPerformanceController>;
+export interface PerformanceViewDelivery { request: ViewRequest; update: ViewUpdate; generation: number; delivery: number }
+export interface PerformanceViewCompletion {
+  accept(delivery: PerformanceViewDelivery): boolean;
+  check(): boolean;
+  dispatch(): void;
+  errors: readonly string[];
+}
 export interface PerformanceWindow {
+  __waitForPerformanceView(options: PerformanceViewCompletion): Promise<void>;
   __sendToSystem(system: string, event: Record<string, unknown>): void;
   __performance: {
     start(mode: RecordingMode): Promise<void>;
@@ -10,7 +18,7 @@ export interface PerformanceWindow {
     withinStartup<T>(fn: () => T): T;
     lastStartupView(ref: string, view: string): { entityId?: string; ok: boolean; commit: number; subscription?: string; delivery?: number } | undefined;
     flushView(): Promise<void>;
-    onView(listener: (delivery: { request: ViewRequest; update: ViewUpdate; generation: number; delivery: number }) => void): () => void;
+    onView(listener: (delivery: PerformanceViewDelivery) => void): () => void;
     stop(): Promise<{ renderer?: Awaited<ReturnType<Controller['stop']>>; backend?: Awaited<ReturnType<Controller['stop']>>; complete: boolean }>;
   };
   applicationState: {
