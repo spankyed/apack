@@ -57,4 +57,36 @@ The original budget failures remain failures either way.
 
 ## Dispositions
 
-Investigation in progress. Results and rejected candidates will be recorded here before closure.
+**Artifact starting set: proceed to correctness validation.** The original/all-entity and type-start
+recipes returned identical ten projected rows, including either-direction links over two relation
+kinds. Start visits were 1,242 → 30 and 2,484 → 60 (97.6% less). Balanced unprofiled query medians
+were 0.670 → 0.074 ms and 1.373 → 0.082 ms. The link-neighbor set still costs work proportional to
+the thread's degree: this does not make artifact lookup constant-time. Watch coverage remains a
+required acceptance before shipping.
+
+**Read-only input/paste-rule switches: rejected without a prototype.** Named rule-construction
+ancestors accounted for 4.72 MiB of 1,639 MiB of thread-opening allocation samples (0.27%). Even
+eliminating all of that cannot meet the 10% allocation target. Sharing mutable editor parsers,
+options or storage to pursue the larger construction cost is also rejected in this bounded work.
+Streaming Markdown serialization accounted for 9.96 MiB of 212.3 MiB (4.5%); removing it entirely
+would likewise miss the allocation target, and the serializer has observable update semantics.
+
+**Query-builder allocation: prototype justified.** A focused existing-projection probe made 50,000
+message point reads with twenty projected fields. Its complete 512 KiB allocation profile attributed
+180.9 MB of 420.7 MB (43.0%) to `builder`: every recipe constructs its entire method table, even
+when the caller uses only `pickOne`. The native/binding boundary and codec ownership remain intact.
+Use shared methods with per-recipe immutable state; retain stable extracted methods without eagerly
+binding every unused method. No decoded rows, request results or database lifetimes may be cached.
+
+Before the prototype, acceptance is at least 10% less sample-attributed allocation on this point-read
+shape, no more than 5% median regression in balanced unprofiled point and chained-query batches,
+and identical protocol/answers. Preserve retained recipes across writes, independent branches,
+function predicates, method extraction, units and watch behavior. Use the existing query/ownership
+coverage and add only a missing contract case. Report per-query savings separately from app latency.
+
+The unprofiled point-read probe measured forty batches of fifty reads; total time was 178.6 ms,
+with 100.3 ms inside a wrapped `readSync` boundary. That boundary includes FFI, native execution and
+scheduling, not pure native CPU. The separate profile includes Inspector teardown; its elapsed
+sample total is not an unprofiled query duration. Raw evidence remains in the owned work volume
+under `query-path-investigation.json`, `read-codec-investigation/` and
+`viewer-allocation-attribution.json`. Investigation and controls remain in progress.
