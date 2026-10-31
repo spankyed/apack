@@ -226,12 +226,12 @@ export function importThreads(importDir: string): ImportResult {
         continue
       }
       linkedThreads.push({ id: targetId, relation: link.relation })
-      result.relationsCreated++
     }
 
     if (linkedThreads.length) {
       try {
         repository.threadCommands.addLinks(sourceId, linkedThreads)
+        result.relationsCreated += linkedThreads.length
       } catch (err) {
         const message = errorMessage(err)
         result.errors.push(`Failed to restore relations for "${thread.topic}": ${message}`)

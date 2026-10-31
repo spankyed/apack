@@ -6,7 +6,7 @@ import { setup } from 'xstate';
 import { answer } from './answer.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
 
-import { write, type EARS } from '#generated/ears.ts';
+import { write, transact, type EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
 import type { OutgoingThreadsEvents, ThreadLinkItem } from './types.ts';
@@ -79,7 +79,8 @@ export const threadsSystem = setup({
     // ---- Thread management actions ----
     createThread: ({ event, reply }) => {
       const thread = threadsSpec.typeOf('CREATE_THREAD', event);
-      answerWrite(reply, (error) => reportThreadOperationError('create', error), () => {
+      // The thread and its parent's link are one unit, so a refused link leaves no thread behind
+      answerWrite(reply, (error) => reportThreadOperationError('create', error), () => transact(() => {
         const { id: newThreadId } = repository.threadCommands.create({
           topic: thread.topic,
           instructions: thread.instructions,
@@ -91,7 +92,7 @@ export const threadsSystem = setup({
           repository.threadCommands.addLinks(thread.parentThreadId as EARS.EntityId, [{ id: newThreadId, relation: 'parent_of' }]);
         }
         return { type: 'THREAD_CREATED' as const, id: newThreadId };
-      });
+      }));
     },
     visitThread: ({ event }) => {
       repository.threadCommands.markAsVisited(threadsSpec.typeOf('VIEW_THREAD', event).threadId as EARS.EntityId);

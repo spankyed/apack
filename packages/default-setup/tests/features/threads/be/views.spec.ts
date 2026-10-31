@@ -128,4 +128,25 @@ describe('what a window asks the threads system', () => {
     await app.send('threads', { type: 'UPDATE_THREAD_FIELD', threadId: id, key: 'topic', value: 'Renamed by nobody' })
     expect(repository.threadQueries.byId(id)?.topic).toBe('Renamed by nobody')
   })
+
+  it('answers a link closing a loop to the form alone, and makes no child whose links loop with its parent', async () => {
+    const app = await connected()
+    const [a, b] = [thread('A'), thread('B')]
+    repository.threadCommands.update(a, { linkedThreads: [{ relation: 'blocks', id: b }] })
+
+    const looped = await app.send('threads', {
+      type: 'UPDATE_THREAD_FIELD', threadId: b, key: 'linkedThreads', value: [{ relation: 'blocked by', id: a }, { relation: 'blocks', id: a }],
+    }, asked)
+    expect(await app.nextEmit('threads', 'THREAD_WRITE_FAILED', { answering: looped })).toMatchObject({ error: expect.stringContaining('already blocks') })
+    expect(takeSystemErrors(), 'the form shows it, so nothing reports it').toHaveLength(0)
+
+    // A child made the parent of its own parent: the thread goes with the refused link
+    const before = repository.threadQueries.listed().length
+    const child = await app.send('threads', {
+      type: 'CREATE_THREAD', topic: 'Child', instructions: '', parentThreadId: a, linkedThreads: [{ relation: 'parent_of', id: a }],
+    }, asked)
+    expect(await app.nextEmit('threads', 'THREAD_WRITE_FAILED', { answering: child })).toMatchObject({ error: expect.stringContaining('already the parent') })
+    expect(repository.threadQueries.listed()).toHaveLength(before)
+    takeSystemErrors()
+  })
 })

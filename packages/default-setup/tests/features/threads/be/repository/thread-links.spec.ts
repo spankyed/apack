@@ -57,6 +57,12 @@ it('refuses a parent loop with the same kind of reason, not the engine\'s', () =
   expect(() => save(b.id, [{ relation: 'parent_of', id: a.id }])).toThrow(`${a.code} is already the parent of ${b.code}`)
 })
 
+it('refuses a thread linked to itself, whatever the kind, with a reason', () => {
+  const a = thread('A')
+  expect(() => save(a.id, [{ relation: 'duplicates', id: a.id }])).toThrow(`${a.code} can't duplicate itself`)
+  expect(() => save(a.id, [{ relation: 'blocks', id: a.id }])).toThrow(`${a.code} can't block itself`)
+})
+
 describe('a link that closes no loop', () => {
   it('is kept, "blocked by" as the other thread\'s block, and a block left off the list is removed', () => {
     const [a, b, c] = [thread('A'), thread('B'), thread('C')]

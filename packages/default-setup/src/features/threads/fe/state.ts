@@ -707,6 +707,7 @@ const threadsState = setup({
         // Reset view to defaults with the target id, for its detail view to fill.
         return {
           selectedThreadCode: undefined,
+          linkSave: null,
           linkRefusal: null,
           view: {
             ...defaultThread,
@@ -722,6 +723,7 @@ const threadsState = setup({
 
       return {
         selectedThreadCode: shortCode,
+        linkSave: null,
         linkRefusal: null,
         view: {
           ...defaultThread,

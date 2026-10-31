@@ -134,10 +134,11 @@ const codeOf = (id: EARS.EntityId): string => (query.ids(id).ofType(EARS.Entity.
  * already leading from `target` back to `source`: "THR-3 already blocks THR-1 through THR-2"
  */
 function refuseLoop(source: EARS.EntityId, kind: ThreadRelation, target: EARS.EntityId): void {
-  if (kind === EARS.RelKind.DUPLICATES || !wouldCreateCycle(source, target, [kind])) return;
   if (source === target) {
-    throw new RepositoryError(`${codeOf(source)} can't ${kind === EARS.RelKind.BLOCKS ? 'block' : 'be the parent of'} itself`, RepositoryErrorCode.VALIDATION_ERROR);
+    const verb = kind === EARS.RelKind.BLOCKS ? 'block' : kind === EARS.RelKind.PARENT_OF ? 'be the parent of' : 'duplicate';
+    throw new RepositoryError(`${codeOf(source)} can't ${verb} itself`, RepositoryErrorCode.VALIDATION_ERROR);
   }
+  if (kind === EARS.RelKind.DUPLICATES || !wouldCreateCycle(source, target, [kind])) return;
   const path = query.ids(target).pathTo(source, kind).ids() as EARS.EntityId[];
   const through = path.slice(1, -1).map(codeOf);
   const via = through.length ? ` through ${through.join(', ')}` : '';
