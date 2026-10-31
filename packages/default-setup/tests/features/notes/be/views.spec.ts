@@ -63,6 +63,31 @@ describe('the notes views', () => {
   })
 })
 
+describe('the related notes', () => {
+  const link = (id: string) => `[see](apack-ref://note/${id})`
+
+  it('rank the notes a walk along their links reaches from the open one, the nearest first, and follow new links', async () => {
+    // hub ← open → near → far, and alone links nothing
+    const far = note('Far')
+    const near = note('Near', link(far))
+    const hub = note('Hub')
+    const open = note('Open', `${link(near)} ${link(hub)}`)
+    note('Alone')
+    const app = await startApp({ systems: ['notes'] })
+    const related = app.watchView<NoteSummary[]>('notes', 'related', { id: open, limit: 5 })
+    const first = titles(await related.next())
+    expect(first).toEqual(expect.arrayContaining(['Near', 'Hub', 'Far']))
+    expect(first).toHaveLength(3)
+    expect(first.indexOf('Far'), 'two links away ranks below one').toBeGreaterThan(first.indexOf('Near'))
+
+    // A link from Alone into what Open reaches brings it in
+    const alone = repository.noteQueries.search('Alone')[0]!.id as EARS.EntityId
+    await app.send('notes', { type: 'UPDATE_NOTE', id: alone, content: link(hub) })
+    expect(titles(await related.next())).toContain('Alone')
+    expect(titles(await app.watchView('notes', 'related', { id: open, limit: 1 }).next())).toHaveLength(1)
+  })
+})
+
 describe('a write to a note', () => {
   const asked = { sender: NOTES, client: 'c-main' }
 

@@ -129,6 +129,39 @@ export const noteQueries = {
   ancestorChain: (noteId: EARS.EntityId): NoteDTO[] =>
     query.ids(noteId).ancestors(EARS.RelKind.CONTAINS, EARS.Entity.Note).pickAll().reverse().map(toDTO),
 
+  /**
+   * The `limit` notes most related to this one by the links between notes, either way: personalized PageRank from
+   * it, so a note linked to it, or linked to what it links to, ranks above one a long walk away, and one no walk from
+   * it reaches isn't related at all. Most related first, as the tree shows them
+   */
+  related: (noteId: EARS.EntityId, limit: number): NoteSummary[] => {
+    const hits = query(EARS.Entity.Note).rank(EARS.RelKind.REFERENCES, { direction: 'both', seeds: [noteId] }).limit(limit + 1).hits();
+    const ids = hits.filter((hit) => hit.id !== noteId && hit.score > 0).slice(0, limit).map((hit) => hit.id);
+    return ids.length ? toSummaries(query.ids(ids).ofType(EARS.Entity.Note).pick([...SUMMARY_FIELDS]) as SummaryRow[]) : [];
+  },
+
+  /**
+   * The `limit` notes most worth adding beside `mentioned` to answer `text`: reciprocal rank fusion of two orders, how
+   * much each note matters from the mentioned ones by the links between notes (`related`'s rank, seeded with them all)
+   * and how well it matches `text` (the notes' text index), each note's two places added as 1 / (60 + place), the
+   * constant the method was published with. A note in either order may be chosen; the mentioned ones never are
+   */
+  relatedToAll: (mentioned: readonly EARS.EntityId[], text: string, limit: number): EARS.EntityId[] => {
+    const exclude = new Set<string>(mentioned);
+    const candidates = 50;
+    const linked = mentioned.length
+      ? query(EARS.Entity.Note).rank(EARS.RelKind.REFERENCES, { direction: 'both', seeds: mentioned })
+        .limit(candidates + mentioned.length).hits().filter((hit) => hit.score > 0).map((hit) => hit.id)
+      : [];
+    const matched = text.trim() ? query(EARS.Entity.Note).search(text).limit(candidates + mentioned.length).ids() : [];
+    const fused = new Map<EARS.EntityId, number>();
+    for (const order of [linked, matched]) {
+      order.filter((id) => !exclude.has(id)).forEach((id, place) => fused.set(id, (fused.get(id) ?? 0) + 1 / (60 + place)));
+    }
+    // Stable: of two scored alike, the one placed first by the links
+    return [...fused.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit).map(([id]) => id);
+  },
+
   referencedBy: (noteId: EARS.EntityId): EARS.EntityId[] =>
     query.ids(noteId).in(EARS.RelKind.REFERENCES, EARS.Entity.Note).ids(),
 

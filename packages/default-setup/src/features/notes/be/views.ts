@@ -12,6 +12,8 @@ export const noteViews = defineViews({
   note: ({ id }: { id: EARS.EntityId }) => repository.noteQueries.byIdDTO(id) ?? null,
   /** What the welcome page lists: the `limit` notes seen last, and the favourites */
   recent: ({ limit }: { limit: number }) => repository.noteQueries.recent(limit),
+  /** The `limit` notes most related to one by the links between notes, most related first */
+  related: ({ id, limit }: { id: EARS.EntityId; limit: number }) => repository.noteQueries.related(id, limit),
   /** The notes whose title holds `text` */
   search: ({ text }: { text: string }) => repository.noteQueries.search(text),
   /** The notes in the trash */
