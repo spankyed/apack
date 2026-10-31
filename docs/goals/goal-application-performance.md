@@ -1,7 +1,7 @@
 # Application performance implementation
 
 Status: implementation, controlled qualification, strict CI and local non-native gate passed;
-local native acceptance remains blocked by execution-host capacity.
+local native acceptance remains pending after verified external-storage migration.
 The approved scope and acceptance remain [the application-performance plan](../plans/application-performance.md).
 Evidence, commands, raw-report identities, measurements, failures and limitations are in
 [the dated evidence record](../references/evidence/2026-10-30-application-performance.md) and its
@@ -10,7 +10,7 @@ Evidence, commands, raw-report identities, measurements, failures and limitation
 Worktree: `/private/tmp/apack-application-performance`. Foundation branch `session/application-performance`,
 [draft PR #293](https://github.com/spankyed/apack/pull/293). Qualification branch
 `session/application-performance-qualification`, [draft PR #294](https://github.com/spankyed/apack/pull/294).
-The main checkout and active native source remain untouched. No release/version/pin changes or automatic CI.
+Application changes remain isolated; the main checkout is now on master. The active native source remains untouched. No release/version/pin changes or automatic CI.
 
 ## Completed requirements
 
@@ -52,9 +52,15 @@ The main checkout and active native source remain untouched. No release/version/
 - Supported host chain: 6,072 host/tooling tests, 976 pack tests and 788 integration tests passed.
   Runtime build, external-app, smoke and both packaged-authoring checks passed. The concluding
   `chain --no-native --cores 2` passed in 347.4 seconds, reusing 25 valid steps.
-- The full local chain passed through integration, then native admission refused before execution:
-  Docker had 4.1 GiB free against the unchanged 8 GiB minimum. Subsequent capacity recovered to
-  about 7.5 GiB, still below admission. Another session owns the active Linux matrix run.
+- Capacity admission is resolved: OrbStack migrated to the external APFS volume. All 22 Docker
+  volumes, seven image identities and preserved checkpoint hashes verified; original storage is retained.
+- Two subsequent local native runs failed at subprocess deadlines. Focused process sampling observed
+  the content-load subprocess blocked in `write_all_supers` for 34 seconds with negligible CPU work.
+  The unchanged three-case sequence passed using bounded 3 GiB RAM scratch within the existing 6 GiB
+  memory cap. Immutable compiler copies are now kept on disk to avoid accumulating them in RAM.
+- The maintained scratch policy and native cache inputs passed 179 focused repository checks,
+  scripts/repository typechecks and lint. The maintained Linux three-case regression is in progress;
+  full native acceptance and final strict CI for this new composition remain unproven.
 - The stale procfs receipt was diagnosed and fixed in both startup and compilation data readers.
   Fresh Linux build/facade replay, focused regressions, mutation checks and strict CI passed.
   The original renderer timeout and the Linux-root/macOS-host unit failures remain retained,
@@ -64,7 +70,7 @@ The main checkout and active native source remain untouched. No release/version/
 
 ## Dependency-ordered remaining requirements
 
-1. **Complete local native acceptance.** Once Docker has at least 8 GiB free and the expensive Linux
+1. **Complete local native acceptance.** After the maintained scratch-policy regression passes and the expensive Linux
    slot is available, resume the supported full host chain with the frozen native checkout
    `/private/tmp/apack-performance-elmdb-pinned`. Keep valid prior results cached; do not repeat
    application qualification or weaken admission/deadlines. The full command is
