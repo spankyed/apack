@@ -16,7 +16,7 @@ export function connectionListener(client: ShellClient) {
     onFailed: (error) => sendBack({ type: 'BACKEND_ERROR', error }),
     // The event arrives exactly as the system sent it
     onMessage: (message) => {
-      const { to, event, sender, call, answering } = message;
+      const { to, event, sender, call, answering, diagnostics } = message;
       if (to === HOST.application) {
         // Every window hears it; the shell tells a backend's request to open a surface from its own window's
         sendBack((event.type === 'OPEN_SURFACE' ? { ...event, type: 'OPEN_SURFACE_FROM_APP' } : event) as ShellEvent);
@@ -34,7 +34,7 @@ export function connectionListener(client: ShellClient) {
       // to that system alone rather than to its own copy in every window that shows it. A broadcast names none.
       // The call rides along so the surface's own guards can tell this answer from one for a request it has
       // since abandoned — `callOf(event)`, injected by the door rather than declared on any contract
-      const correlation = { ...(call === undefined ? {} : { call }), ...(answering === undefined ? {} : { answering }) };
+      const correlation = { ...(diagnostics && { diagnostics }), ...(call === undefined ? {} : { call }), ...(answering === undefined ? {} : { answering }) };
       if (sender === undefined) notifySurfaceActor(surface, to, event, correlation);
       else sendToSurfaceActor(surface, to, event, { kind: 'bus', ref: sender }, correlation);
     },

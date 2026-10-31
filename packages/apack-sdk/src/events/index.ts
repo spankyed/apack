@@ -1,3 +1,4 @@
+import { _performanceExecution, type PerformanceCarrier } from '../runtime/performance.ts';
 // Messaging between frontend surfaces and backend systems. Frontend-safe: no Node modules and no
 // `services`, since pack frontends get this module from the host (the `sdkEvents` global).
 import { boundHost, _isHostBound } from '../runtime/host-runtime.ts';
@@ -19,6 +20,8 @@ export { _currentDelivery, _runDelivery, type _Delivery, type _Asker } from './d
  * Messages sent in (`sendToSystem`) go to systems, and messages sent out (`broadcastToSurface`) to surfaces.
  */
 export interface Message {
+  /** Ephemeral diagnostic context; it does not route, authorize or identify the sender. */
+  diagnostics?: PerformanceCarrier;
   to: string;
   event: { type: string; [key: string]: unknown };
   /**
@@ -413,7 +416,13 @@ export const HOST_SURFACE_EVENT_TYPES = {
  * Delivers an event to a backend system: in the renderer over its API client, elsewhere onto the bound app's bus.
  * A bound frontend wins, as it does for the registered packs' lookups (`_boundPackExtensions`).
  */
+function withDiagnostics(message: Message): Message {
+  const carrier = _performanceExecution()?.capture();
+  return carrier?.traceparent ? { ...message, diagnostics: carrier } : message;
+}
+
 function sendIncoming(message: Message): void {
+  message = withDiagnostics(message);
   if (_isFeHostBound()) boundFeHost().client.send(message);
   else if (_isHostBound()) boundHost().transport.rootEvents.emitIncoming(message);
   else throw new Error('No host is bound to send events through: call bindHost(runtime) (backend) or bindFeHost(runtime) (frontend) from @apackdev/sdk/runtime first');
@@ -432,11 +441,13 @@ function sendIncoming(message: Message): void {
  * no pack provides is reported to the user once loading settles.
  */
 function deliverInWindow(message: Message): void {
+  message = withDiagnostics(message);
   const ref = message.to;
   if (!splitRef(ref)) throw new Error(`"${ref}" doesn't name a surface: a surface is named "<packId>/<featureId>"`);
-  const { from, via, sender, answering, call } = message;
+  const { from, via, sender, answering, call, diagnostics } = message;
   boundFeHost().application.send({
     type: 'SEND_TO_SURFACE',
+    ...(diagnostics && { diagnostics }),
     surface: ref,
     events: [message.event],
     ...(from ? { from } : {}),
@@ -504,7 +515,7 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
       if (!_isHostBound() && _isFeHostBound()) {
         throw new Error(`broadcastToSurface("${name}") is the backend's, over the bus to every window. In the renderer, send to this window's surface with sendToSurface from #generated/events`);
       }
-      boundHost().transport.rootEvents.emitSurfaceSend({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress() });
+      boundHost().transport.rootEvents.emitSurfaceSend(withDiagnostics({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress() }));
     },
 
     sendToSurface(name: string, event: { type: string; [key: string]: unknown }): void {
@@ -540,7 +551,7 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
       if (!client) {
         throw new Error(`sendToWindow("${name}") was given no connection to send to. A handler is handed the one it is serving as \`client\`, which is absent when the message came from another system or from nothing — to reach every window showing that surface, use broadcastToSurface.`);
       }
-      boundHost().transport.rootEvents.emitSurfaceSend({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress(), client });
+      boundHost().transport.rootEvents.emitSurfaceSend(withDiagnostics({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress(), client }));
     },
 
     /**
@@ -680,7 +691,7 @@ export function _replyTo(delivery: _Delivery | undefined): Reply | undefined {
     // Its own call as well as the one it answers: a reply is a message, so it mints like every other send and
     // can itself be answered — which is the pattern this channel already supports. `answering` names another
     // message's call; `call` names this one.
-    const message: Message = { to: asker.ref, event, sender: receiver, call: newCall(), ...(call === undefined ? {} : { answering: call }) };
+    const message = withDiagnostics({ to: asker.ref, event, sender: receiver, call: newCall(), ...(call === undefined ? {} : { answering: call }) });
     if (_isFeHostBound()) {
       if (asker.kind === 'window') { deliverInWindow(message); return; }
       if (asker.kind === 'bus') { boundFeHost().client.send(message); return; }

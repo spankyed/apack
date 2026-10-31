@@ -1,3 +1,4 @@
+import { windowPerformance, startStartupRecording } from './runtime/performance.ts';
 import { hostDeclaration } from '@apackdev/host/fe';
 import { createApp } from 'vue'
 import { createActor } from 'xstate';
@@ -34,6 +35,8 @@ declare global {
      * that have nothing to do with it.
      */
     __sendToSystem?: (systemId: string, event: { type: string } & Record<string, unknown>) => void;
+    /** Developer/test recording; the authenticated backend refuses production admission. */
+    __performance: typeof windowPerformance;
     appVersion: string;
   }
 }
@@ -41,6 +44,7 @@ declare global {
 installGlobalErrorHandling();
 
 const query = new URLSearchParams(window.location.search);
+if (query.has('performanceStartup')) await startStartupRecording(query.get('performanceStartup'));
 const isSurfacePopout = query.get('popout') === 'surface';
 const initialSurfaceId = isSurfacePopout ? query.get('surfaceId') ?? undefined : undefined;
 
@@ -75,7 +79,7 @@ export const applicationState = createActor(createAppShell(), {
 });
 
 createdApplication = applicationState;
-applicationState.start();
+windowPerformance.withinStartup(() => applicationState.start());
 
 window.applicationState = applicationState;
 
@@ -85,6 +89,7 @@ window.__disableOnboardingUI = () => {
 };
 
 window.__sendToSystem = untypedSendToSystem;
+window.__performance = windowPerformance;
 
 applicationState.subscribe({
   error: (error: unknown) => {

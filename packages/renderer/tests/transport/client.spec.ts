@@ -1,3 +1,4 @@
+import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
 // The window's client, over tRPC and Electron's API status: a backend that gave up before this window started
 // listening is reported as main recorded it, message and stack apart, so the error page can lay them out.
 import { afterEach, expect, it, vi } from 'vitest';
@@ -13,8 +14,10 @@ type Subscription = {
 const subscribe = vi.fn((_input: unknown, _handlers: Subscription) => ({ unsubscribe() {} }));
 const catalogSubscribe = vi.fn((_input: unknown, _handlers: { onData(frame: import('@apackdev/host/fe').PackCatalogFrame): void; onError(error: unknown): void }) => ({ unsubscribe: vi.fn() }));
 const openHost = vi.fn(async () => 'host-access');
+const viewSubscribe = vi.fn((_request: unknown, _observer: Record<string, (value: unknown) => void>) => ({ unsubscribe: vi.fn() }));
 vi.mock('@/transport', () => ({
   trpc: {
+    views: { watch: { subscribe: viewSubscribe } },
     bus: { packClientReady: { mutate: ready }, sub: { subscribe }, send: { mutate: (m: unknown) => mutate(m) } },
     packs: { catalog: { subscribe: catalogSubscribe } },
     settings: { openHost: { mutate: openHost }, close: { mutate: async () => {} } },
@@ -36,6 +39,8 @@ afterEach(async () => {
   subscribe.mockClear();
   openHost.mockClear();
   catalogSubscribe.mockClear();
+  viewSubscribe.mockClear();
+  stopFeTestRuntime();
 });
 
 it('announces a connected shell only after a fresh validated settings snapshot on each connection', async () => {
@@ -176,4 +181,54 @@ it('feeds declaration data to the real window resource independently of settings
     expect(onConnected).not.toHaveBeenCalled();
   } finally { stop(); }
   expect(windowCatalog.status()).toBe('disconnected');
+});
+
+
+it('preserves view results and ignores deliveries after a subscription has stopped', () => {
+  const observer = vi.fn();
+  const stop = feClient.watchView({ ref: 'pack/feature', view: 'page', args: { id: 'one' } }, observer);
+  const callbacks = viewSubscribe.mock.calls[0][1];
+  const update = { ok: true, value: ['one'], commit: 4 };
+  callbacks.onData(update);
+  expect(observer).toHaveBeenCalledWith(update);
+  stop();
+  callbacks.onData({ ok: true, value: ['late'], commit: 5 });
+  callbacks.onError(Error('late error'));
+  expect(observer).toHaveBeenCalledTimes(1);
+});
+
+it('carries request context and restores each delivery context separately', () => {
+  const sent = { traceparent: '00-11111111111111111111111111111111-2222222222222222-01' };
+  const received = { traceparent: '00-33333333333333333333333333333333-4444444444444444-01' };
+  const withCarrier = vi.fn<(carrier: unknown) => void>();
+  startFeTestRuntime({ diagnostics: { capture: () => sent, withCarrier: (carrier, fn) => { withCarrier(carrier); return fn(); }, carryEvent() {}, withEvent: (_event, fn) => fn() } });
+  const observer = vi.fn();
+  const stop = feClient.watchView({ ref: 'pack/feature', view: 'page' }, observer);
+  try {
+    expect(viewSubscribe.mock.calls[0][0]).toMatchObject({ diagnostics: sent });
+    viewSubscribe.mock.calls[0][1].onData({ ok: true, value: ['one'], commit: 1, diagnostics: { carrier: received, subscription: 'one', delivery: 1 } });
+    expect(withCarrier.mock.calls[0][0]).toEqual(received);
+    viewSubscribe.mock.calls[0][1].onData({ ok: true, value: ['background'], commit: 2 });
+    expect(withCarrier.mock.calls[1][0], 'an uncorrelated update cannot inherit the subscription action').toBeUndefined();
+  } finally { stop(); }
+});
+
+it('drops old view callbacks when an API reload starts a new subscription generation', () => {
+  let apiEvent!: (event: { type: string; reloaded: boolean }) => void;
+  (window as unknown as { electronAPI: unknown }).electronAPI = { apiStatus: {
+    getStatus: async () => ({ running: true }), onEvent: (listener: typeof apiEvent) => { apiEvent = listener; return () => {}; },
+  } };
+  const observer = vi.fn();
+  const stopBus = feClient.subscribe({ onConnected() {}, onDisconnected() {}, onFailed() {}, onMessage() {} });
+  const stopView = feClient.watchView({ ref: 'pack/feature', view: 'page' }, observer);
+  try {
+    const old = viewSubscribe.mock.calls[0][1];
+    apiEvent({ type: 'api:started', reloaded: true });
+    expect(viewSubscribe).toHaveBeenCalledTimes(2);
+    old.onData({ ok: true, value: 'stale', commit: 1 });
+    old.onError(Error('stale error'));
+    expect(observer).not.toHaveBeenCalled();
+    viewSubscribe.mock.calls[1][1].onData({ ok: true, value: 'current', commit: 1 });
+    expect(observer).toHaveBeenCalledWith({ ok: true, value: 'current', commit: 1 });
+  } finally { stopView(); stopBus(); }
 });

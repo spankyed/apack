@@ -488,9 +488,9 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
 
       /** Hands a surface its events and leaves the view where it is — what `SEND_TO_SURFACE` asks for */
       deliverWithoutSelecting: enqueueActions(({ context, event, enqueue }) => {
-        const { surface, events, from, via, asker, answering, call } = typeOf('SEND_TO_SURFACE', event);
-        if (!readyFor(context, { surface, events, select: false, sender: { from, via, asker }, answering, call }, enqueue)) return;
-        if (events.length > 0) enqueue(({ self }) => self.send({ type: 'DELIVER_SURFACE_EVENTS', surface, events, asker, answering, call }));
+        const { surface, events, from, via, asker, answering, call, diagnostics } = typeOf('SEND_TO_SURFACE', event);
+        if (!readyFor(context, { surface, events, select: false, sender: { from, via, asker, diagnostics }, answering, call }, enqueue)) return;
+        if (events.length > 0) enqueue(({ self }) => self.send({ type: 'DELIVER_SURFACE_EVENTS', surface, events, asker, answering, call, diagnostics }));
       }),
 
       // A backend's request carries whatever the sending pack built: a payload that isn't a surface and its events
@@ -506,7 +506,7 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
       }),
 
       deliverSurfaceEvents: enqueueActions(({ event, context, system, enqueue }) => {
-        const { surface, events, asker, answering, call, entityToken } = typeOf('DELIVER_SURFACE_EVENTS', event);
+        const { surface, events, asker, answering, call, entityToken, diagnostics } = typeOf('DELIVER_SURFACE_EVENTS', event);
         if (entityToken) {
           enqueue.sendTo(context.entityOpening, { type: 'DELIVER', token: entityToken });
           return;
@@ -521,7 +521,7 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
         //
         // The call rides with it for the receiver's guards, which is the in-window half of what `connection.ts`
         // does for a backend send: one reader, `callOf(event)`, whichever channel the event came in on.
-        const correlation = { ...(call === undefined ? {} : { call }), ...(answering === undefined ? {} : { answering }) };
+        const correlation = { ...(diagnostics && { diagnostics }), ...(call === undefined ? {} : { call }), ...(answering === undefined ? {} : { answering }) };
         for (const e of events) {
           if (asker) sendToSurfaceActor(actor, surface, e, asker, correlation);
           else notifySurfaceActor(actor, surface, e, correlation);

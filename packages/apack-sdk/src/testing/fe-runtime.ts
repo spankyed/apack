@@ -82,6 +82,7 @@ const partClient = (given: Partial<FeClient>): FeClient => new Proxy(given as Fe
  */
 export function startFeTestRuntime(options: FeTestRuntimeOptions = {}): () => void {
   bindFeHost({
+    ...(options.diagnostics && { diagnostics: options.diagnostics }),
     catalog: options.catalog ?? noCatalog,
     application: options.application ?? noShell,
     secrets: options.secrets ?? noSecrets,

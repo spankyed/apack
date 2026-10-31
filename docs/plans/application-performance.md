@@ -225,9 +225,10 @@ evidence rather than appending competing handoffs here.
 
 ## Current handoff
 
-Only this design document exists. No instrumentation, scenario runner, benchmark result or acceptance
-claim has been added. Next: implement checkpoint 1 after inspecting current source and concurrent work;
-choose exact module locations and readiness markers from that inspection. Preserve independently owned work in both repositories.
+Implementation is ongoing in `session/application-performance`, draft PR #293. Current implemented
+requirements, source-qualified evidence and remaining acceptance work are maintained in
+[the active goal](../goals/goal-application-performance.md). This plan's full acceptance criteria remain
+in force; passing individual scenarios does not complete the measurement qualification.
 
 ## Upstream contracts
 

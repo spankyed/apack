@@ -1,3 +1,4 @@
+import { createNodePerformanceController } from '../../src/diagnostics/node.ts';
 // The view host: each request runs the feature's view in the registered pack on the engine, subscribers asking for
 // the same view and arguments share one engine watch, the last to leave stops it, and the registry changing is what
 // a view's code changing is.
@@ -128,4 +129,39 @@ describe('views', () => {
     expect(views.stats().views).toBe(3);
     unaddressed();
   });
+});
+
+
+it('attributes initial reads to their subscriber and links coalesced reads to both writes without an invented parent', async () => {
+  views.close();
+  const recording = createNodePerformanceController();
+  recording.attach(engine, 'app');
+  views = createViewHost({ ears: () => engine, packs, performance: recording });
+  packs.registerPack(notesPack());
+  const note = engine.create('Note', { title: 'initial' }).id();
+  recording.start('lightweight');
+  const opening = recording.begin('app.thread.open')!;
+  const openingTrace = opening.carrier().traceparent!.split('-')[1];
+  const subscription = opening.within(() => subscribe('titles'));
+  await settled();
+  opening.end();
+  const first = recording.begin('app.search')!;
+  const second = recording.begin('app.search')!;
+  const writeTraces = [first, second].map(action => action.carrier().traceparent!.split('-')[1]);
+  first.within(() => engine.write(note).set('title', 'first'));
+  second.within(() => engine.write(note).set('title', 'second'));
+  first.end(); second.end();
+  await settled();
+  expect(subscription.last()).toMatchObject({ value: ['second'] });
+  const report = await recording.stop();
+  expect(report.complete).toBe(true);
+  const spans = report.observations.map(value => JSON.parse(value));
+  const reads = spans.filter(span => span.name === 'app.view.read');
+  expect(reads).toHaveLength(2);
+  expect(reads[0].traceId).toBe(openingTrace);
+  expect(writeTraces).not.toContain(reads[1].traceId);
+  expect(reads[1].parentSpanId).toBeUndefined();
+  expect(reads[1].links.map((link: { traceId: string }) => link.traceId)).toEqual(writeTraces);
+  expect(reads[1].attributes).toMatchObject({ 'app.coalesced_commits': 2, 'app.unattributed_commits': 0 });
+  expect(spans.some(span => span.name === 'ears.read' && span.parentSpanId === reads[0].spanId)).toBe(true);
 });

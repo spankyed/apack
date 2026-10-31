@@ -9,6 +9,10 @@
       "types": "./dist/package/dist/index.d.ts",
       "default": "./dist/package/dist/index.js"
     },
+    "./performance": {
+      "types": "./dist/package/dist/performance.d.ts",
+      "default": "./dist/package/dist/performance.js"
+    },
     "./playwright": {
       "types": "./dist/package/dist/playwright.d.ts",
       "default": "./dist/package/dist/playwright.js"
@@ -38,7 +42,8 @@
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "ajv": "^8.20.0",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "@playwright/test": ">=1.40.0",

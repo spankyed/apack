@@ -1,0 +1,51 @@
+import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
+import { TRPCError } from '@trpc/server';
+import { z } from 'zod';
+import { appPerformance, appStartupPerformance } from '../runtime/index.ts';
+import { procedure, router } from './trpc.ts';
+
+/** The socket is authenticated before tRPC; a recording additionally belongs to the connection that started it. */
+interface RecordingOwner { client: string; unlisten(): void }
+let owner: RecordingOwner | undefined;
+function release(claim: RecordingOwner) {
+  claim.unlisten();
+  if (owner === claim) owner = undefined;
+}
+function controller() {
+  if (!appPerformance) throw new TRPCError({ code: 'FORBIDDEN', message: 'Performance recording is available only in development and test' });
+  return appPerformance;
+}
+function owned(client: string) {
+  const performance = controller();
+  if (owner?.client !== client) throw new TRPCError({ code: 'FORBIDDEN', message: 'This connection does not own the performance recording' });
+  return performance;
+}
+
+export const performanceRouter = router({
+  start: procedure.input(z.object({ mode: z.enum(['disabled', 'lightweight', 'detailed']), startup: z.boolean().optional() })).mutation(({ input, ctx }) => {
+    const performance = controller();
+    if (owner) throw new TRPCError({ code: 'CONFLICT', message: 'A performance recording is already active' });
+    if (ctx.closed.aborted) throw new TRPCError({ code: 'BAD_REQUEST', message: 'The connection is closed' });
+    if (input.startup) {
+      if (!appStartupPerformance || appStartupPerformance.controller !== performance) throw new TRPCError({ code: 'CONFLICT', message: 'No startup recording is available' });
+      try { appStartupPerformance.adopt(input.mode); }
+      catch { throw new TRPCError({ code: 'CONFLICT', message: 'No matching startup recording is available' }); }
+    } else performance.start(input.mode);
+    const claim: RecordingOwner = { client: ctx.client, unlisten: () => ctx.closed.removeEventListener('abort', closed) };
+    const closed = () => {
+      claim.unlisten();
+      // Keep ownership until cleanup finishes. A prior lifetime cannot release a subsequent recording.
+      try { void performance.stop().finally(() => release(claim)).catch(() => {}); }
+      catch { release(claim); }
+    };
+    owner = claim;
+    ctx.closed.addEventListener('abort', closed, { once: true });
+  }),
+  snapshot: procedure.query(({ ctx }): PerformanceRecordingReport | undefined => owned(ctx.client).snapshot()),
+  stop: procedure.mutation(async ({ ctx }): Promise<PerformanceRecordingReport> => {
+    const performance = owned(ctx.client);
+    const claim = owner!;
+    try { return await performance.stop(); }
+    finally { release(claim); }
+  }),
+});

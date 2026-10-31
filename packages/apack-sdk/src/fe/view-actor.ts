@@ -1,3 +1,4 @@
+import { _performanceExecution } from '../runtime/performance.ts';
 // A view, followed by a surface's machine rather than by a component. A surface drawn in more than one place — a
 // canvas route and the chat area, say — has no one component that is always mounted while it runs, so a view held
 // in one would stop while another area showed, and a view held in each would arrive twice. An actor the machine spawns
@@ -24,7 +25,11 @@ export function untypedFromView<Result, Args, TEvent extends EventObject>(
     const request: ViewRequest = input === undefined ? { ref, view } : { ref, view, args: input };
     let open = true;
     const unsubscribe = boundFeHost().client.watchView(request, (update) => {
-      if (open) sendBack(read(update as ViewUpdate<Result>, input));
+      if (!open) return;
+      const event = read(update as ViewUpdate<Result>, input);
+      const performance = _performanceExecution();
+      performance?.carryEvent(event, update.diagnostics?.carrier);
+      sendBack(event);
     });
     return () => {
       open = false;

@@ -1780,7 +1780,6 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
     features: z.ZodOptional<z.ZodType<Record<string, {
         description: string;
         references?: ReferenceDeclarations | undefined;
-        surface?: SurfaceDeclaration | undefined;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1807,11 +1806,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
+        surface?: SurfaceDeclaration | undefined;
         repositories?: Record<string, string> | undefined;
     }>, Record<string, {
         description: string;
         references?: unknown;
-        surface?: unknown;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1831,11 +1830,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
+        surface?: unknown;
         repositories?: Record<string, string> | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
         description: string;
         references?: ReferenceDeclarations | undefined;
-        surface?: SurfaceDeclaration | undefined;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1862,11 +1861,11 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             form?: string | undefined;
             access?: "owner" | "shared" | undefined;
         } | undefined;
+        surface?: SurfaceDeclaration | undefined;
         repositories?: Record<string, string> | undefined;
     }>, Record<string, {
         description: string;
         references?: unknown;
-        surface?: unknown;
         services?: Record<string, string> | undefined;
         entities?: Record<string, {
             shape?: string | undefined;
@@ -1886,6 +1885,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         }> | undefined;
         designation?: string | undefined;
         settings?: unknown;
+        surface?: unknown;
         repositories?: Record<string, string> | undefined;
     }>>>>;
 }, z.core.$strict>;
