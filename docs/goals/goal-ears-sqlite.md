@@ -229,20 +229,42 @@ shows projection slices do not bound deferred native COMMIT work. Smaller ANN bu
 studies do not close the gates. No later private C/SQL rewrite, bitmap, ANN setting or block-size change is
 selected. Preserve canonical bytes, FULL/default checkpoints and every original acceptance budget.
 
+The [focused architecture review](../references/evidence/ears-sqlite-implementation-2026-10-28/architecture-review-1d7/README.md)
+now maps invariant owners and the existing proof boundary. It identifies fixed-partition ANN scan growth,
+whole-COMMIT latency, real I/O evidence and Windows directory durability as existing phase 3–7 concerns;
+maintenance recommendations do not add mandatory refactors. No new ANN setting/library or product tradeoff
+is selected, and this source review does not complete the phase-7 adoption audit.
+
 Next deliverables, dependencies and closing checks:
 
 - Diagnose actual frontend arrival under the unchanged editor predicate. Test-only lifecycle/resource/loader
   [timeline diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-timeline-static/README.md)
-  pass oxlint and complete tests types with cache disabled. Focused macOS run
-  [41163254193](https://github.com/spankyed/apack/actions/runs/41163254193), source 0126, is queued at the latest
-  poll: SQLite, three original repeats. Poll that run; retain actual cases and success/failure attachments.
-  Use PACK_ACTIVATED/LOAD_PACK_FRONTENDS/resource completion/accepted-runtime evidence before choosing a fix.
+  pass oxlint and complete tests types with cache disabled. [Actual macOS run 41163254193](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-timeline-0126/README.md)
+  at source 0126 is terminal failure: one failed/two passed, zero skips/flaky/retries. At the original failed
+  deadline, no PACK_ACTIVATED/LOAD_PACK_FRONTENDS has arrived and the loader is idle; backend activation
+  itself takes about 4.48 seconds. Passing frontend loads accept about 331–336 ms after PACK_ACTIVATED.
+  Resource arrays are empty even on passes, so they do not attribute fetching. Profile backend module/
+  registration/content/actor-startup and event delivery before choosing a fix; no editor rebuild rejection
+  or causal SQLite statement is established. A private backend sampled-stack observer is prepared under
+  `/private/tmp/ears-activation-cpu-*`, with reports at `/private/tmp/ears-activation-cpu-results`, but is
+  **not launched**. It reuses the previously built API/pack only after verifying all source/build digests.
+  Admit it after the native matrix and queued I/O check are terminal; do not create a competing owner.
+  V8 sampled stack time is not a CPU/wait or syscall decomposition. Do not repeat the broad suite merely
+  to obtain green.
 - Finish the current native baseline matrix. Owned session **88639**, admission PID **59127**,
   `/private/tmp/ears-elmdb-real-matrix-results`, is live; latest observation has created 99900 rows and embedded
   20480. It uses the pinned native binding/CLI, actual durable units, the same fresh truth/exclusions,
   independent canonical verification and original query gates. Poll the same handle; do not restart a live
   process after an observation timeout. Connection reopen is not OS-cold. The 1000-row preflight is terminal
   success, not full-matrix acceptance. Preserve pauses and failures before making timing comparisons.
+- Qualify the actual I/O boundary after the native matrix: private syscall-fault admission **59998**,
+  PID **86760**, waits for 30 seconds with no running containers before starting its half-CPU/768-MiB/no-swap
+  container. Reports: `/private/tmp/ears-io-fault-results`. No injector case has run yet. Frozen private inputs
+  target only one armed owned file/call; the disabled-injector control must refuse a missing witness. Scope:
+  before/after read, write and sync faults; truthful refusal/unknown-commit fencing, watch silence and reopen.
+  Prefer existing tooling; strace is absent in the owned image, so this is a test-only interposer, not new
+  production infrastructure or device power-loss proof. Poll that admission; do not duplicate it or modify
+  its frozen scripts while active.
 - Close the current strict-shard concurrency gap without removing builds/assertions or changing deadlines.
   The phase markers and isolated results above are available; reproduce the relevant overlap before a fix,
   then run the affected suite. Do not dispatch another broad run solely to obtain green.
