@@ -1,6 +1,7 @@
 # Application performance optimization
 
-Status: approved for execution, 2026-10-31. Base: master `78c8f15ea7`; native pin
+Status: implemented and measured, 2026-10-31. Final strict validation: [run 41240214068](https://github.com/spankyed/apack/actions/runs/41240214068),
+covering code checkpoint `03a572ff0a`; subsequent edits record evidence only. Original base: master `78c8f15ea7`; native pin
 `dde229d90c60665405fdcfc93b054a77fe8d0e1d`. This work follows the completed
 [measurement foundation](../archive/plans/application-performance.md).
 
@@ -142,3 +143,21 @@ Closure requires the baseline/evidence PR, the investigation PR, and all justifi
 PRs to be committed/pushed and reviewable. Each selected query and allocation candidate must have a
 recorded disposition. The final report distinguishes measured wins, rejected ideas, remaining
 uncertainties and checks; it does not promise that all four investigation categories need code changes.
+
+
+## Delivered dispositions
+
+- Baselines: all eight original-mode comparisons admitted; failed historical budgets and controls
+  retained. [Final lightweight qualification](../references/evidence/2026-10-31-application-performance.md#final-implementation-qualification)
+  passed for all four actions with the full counts and unchanged budget.
+- Investigation: three query dossiers, CPU/allocation attribution, explicit codec/ownership limits,
+  and evidence-based rejection of editor-rule and serializer changes.
+- Queries: artifact reads use the existing type starting set; the real view guard passes and detects
+  the original unnecessary dependency. Existing bounded search/projections and message watches stay.
+- Allocations: shared query methods passed protocol/correctness checks and the predeclared paired
+  acceptance, with 36.8% less sampled allocation on the final native checkpoint.
+
+The [final investigation evidence](../references/evidence/2026-10-31-performance-investigation.md#final-combined-result)
+records the review fixes, clean native provenance, rejected copied-cache checkpoint, local
+model-test timeouts reproduced in the original factory, and required strict gate. No deadlines,
+assertions or workload counts were weakened. PRs remain unmerged for review.

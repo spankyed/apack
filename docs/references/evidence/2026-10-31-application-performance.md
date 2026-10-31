@@ -122,3 +122,40 @@ Upstream master advanced during this work to `05490e387a`, including validation 
 and elmdb pin `7b484b0`. The tables above remain the original-pin baseline; they do not certify
 the newer native binary. Final implementation checks and affected qualification must use that
 newer frozen pin and be reported separately.
+
+
+## Final implementation qualification
+
+All four disabled/lightweight comparisons qualified on clean application source `03a572ff0a`
+and frozen native `1849f6899e3d707ac8e25e7f81fa52b472b2a9a0`. The native binding SHA-256 is
+`9c0469d914d90d0ad7763e84378f0f7149855a85420ae2965dcfb4b4eb2f1474`.
+Each row admits five warmups and twenty successful measured actions **per mode**, in observed
+balanced ABBA order, with no unsuccessful measured trials and complete required captures.
+The original two-CPU, 6 GiB/no-extra-swap, 256 MiB-shared-memory Linux boundary, external-drive
+backing, fixtures, action/view deadlines and 5% lightweight median budget remain unchanged.
+
+| Action | Disabled median (min–max), ms | Lightweight median (min–max), ms | Median difference | Assessment |
+|---|---|---|---|---|
+| Thread open | 343.85 (334.40–634.50) | 354.50 (336.70–372.90) | +10.65 ms / +3.10% | Within 5% |
+| Search | 13.05 (9.90–14.90) | 13.45 (10.30–16.00) | +0.40 ms / +3.07% | Within 5% |
+| Streaming | 774.50 (734.60–3,049.40) | 753.25 (726.90–2,144.30) | -21.25 ms / -2.74% | Within 5% |
+| Populated startup | 6,681.38 (4,557.20–9,814.74) | 6,025.69 (4,948.92–13,596.67) | -655.69 ms / -9.81% | Within 5% |
+
+Negative differences do not establish that recording makes the app faster; the ranges and earlier
+A/A controls show substantial variability. Startup remains particularly variable: its lightweight maximum was 13.60 seconds. Twenty samples certify
+this declared median comparison, not tail latency, desktop macOS behavior or universal overhead.
+The historical search/startup failures and A/A controls remain unchanged above. No recorder
+optimization is claimed to have caused these later passes; the final source includes the justified
+query/allocation changes and a newer native revision. Do not pool these runs with the original pin.
+
+All six build hashes match across these four final comparisons and their two modes. Raw admitted
+comparisons, trial/index records, journals, invocation results and manifests remain in owned Linux
+work volume `apack-linux-work-2bd9183070f1` under
+`.apack/performance/final-qualification-03a572ff0a-clean-native-serial/`.
+Each `lightweight-<action>/<action>/comparison.json` records the actual source, fixture, machine,
+API/main/preload/renderer/pack outputs and native binding, plus every admitted scalar sample.
+
+The final ranking is unchanged: populated startup and thread editor construction dominate visible
+latency; query construction has a worthwhile allocation improvement, and artifact lookup avoids a
+whole-entity starting set. Existing bounded search and independently owned message watches remain.
+The rejected editor-rule and serializer candidates do not meet their predeclared benefit thresholds.

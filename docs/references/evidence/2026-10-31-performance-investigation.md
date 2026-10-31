@@ -160,3 +160,55 @@ type checking pass after integration. Final native measurements use this checkpo
 original query factory compiled against the same current engine. A matched fixed-seed model-test
 control retains the existing 120/40 workloads and deadlines; the normal suite retains randomness.
 Final application recording qualification remains required and does not supersede historical failures.
+
+
+## Final combined result
+
+The reviewed implementation at `03a572ff0a`, integrated with weighted relations, passed the same
+paired acceptance on clean native `1849f68`. The baseline differs only in query construction: its
+original factory is compiled from `27518626c4` against the same current engine, schema and binding.
+That base has the same tree as remote master's merge commit `9ec9888705`.
+
+| Shape | Original factory median | Shared methods median | Sampling unit |
+|---|---|---|---|
+| Projected point reads | 0.814191 ms | 0.801900 ms | Fifty reads |
+| Chained query | 0.379666 ms | 0.367818 ms | Per query, ten per timed batch |
+| Predicate query | 0.120688 ms | 0.119753 ms | Per query, ten per timed batch |
+
+All request/answer hashes matched. Sample-attributed allocation fell **36.8%**, from 416,985,944
+to 263,412,256 bytes over 50,000 point reads per variant. All four allocation captures were complete,
+and all three balanced unprofiled shapes met the unchanged 5% median-regression ceiling. This is
+an allocation result, not an established whole-app speedup. The native binding hash is
+`9c0469d914d90d0ad7763e84378f0f7149855a85420ae2965dcfb4b4eb2f1474`;
+the exact saved probe hash is
+`f9c2de95605eb23246ea36dd0def60a8d208a09266b3911abe328397b5c4df81`.
+Reports and profiles are retained in the owned volume under
+`query-allocation-03a572ff0a-clean-native-serial/`.
+
+Clean-native focused validation passed all 68 query/vocabulary/relation assertions, including the
+new weighted options, followed by all six real thread-view cases. Parallel files passed their
+assertions but incurred two Vitest worker-update RPC timeouts during long synchronous tests.
+Running the focused files with `--maxWorkers=1` passed cleanly in 26.38 seconds. Only invocation
+parallelism changed: every assertion, workload and deadline, and the committed test configuration,
+remained unchanged.
+
+The fixed-seed model controls retained 120 synchronous and 40 watched workloads and their existing
+30-second test deadlines. On this Linux/external-drive environment, both original and shared-method
+factories timed out: the synchronous cases took 47.572 and 47.548 seconds, respectively; both watch
+cases reached the same deadline. The full unchanged random suite, also run serially, passed 251 of 253 tests, with only
+those two deadline failures. These are failed local gates, reproduced without the implementation,
+not semantic passes. Required broad correctness acceptance remains the final strict CI gate.
+
+One intermediate native checkpoint is **invalid**: copying a completed compiler target into the
+new native checkout reused the preceding revision's binary despite the new declared pin. The
+identical binding hash and failures of the six weighted cases exposed it. The run finished, its
+reports and invalidation manifest were retained, and a provenance refusal prevented dependent
+timing trials. Only the owned generated target was removed; a clean rebuild produced the binding
+above and passed the weighted contracts. No result from that copied-target checkpoint certifies
+`1849f68`. The final measurements above use the verified clean rebuild.
+
+The [final four-action qualification](2026-10-31-application-performance.md#final-implementation-qualification)
+passed the unchanged lightweight overhead budget for every action. Required strict CI on the final
+implementation source: [run 41240214068](https://github.com/spankyed/apack/actions/runs/41240214068),
+which covers all runtime/code changes at that checkpoint. Subsequent changes record evidence only;
+the linked gate is the source of its final outcome.
