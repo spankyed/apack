@@ -156,6 +156,14 @@ describe('Type inference — typed EARS helpers', () => {
       query.ids(noteId).degrees('refrences');
       // @ts-expect-error a direction is out, in or both
       query.ids(noteId).pathTo(otherId, 'references', { direction: 'up' });
+      // @ts-expect-error a rank's kinds too
+      query(EARS.Entity.Note).rank('refrences');
+      // @ts-expect-error and the components'
+      query(EARS.Entity.Note).components('refrences');
+      // @ts-expect-error a rank's seeds are ids
+      query(EARS.Entity.Note).rank('references', { seeds: [42] });
+      expectTypeOf(query(EARS.Entity.Note).rank('references', { seeds: [noteId] }).ids()).toEqualTypeOf<EARS.EntityId<'Note'>[]>();
+      expectTypeOf(query(EARS.Entity.Note).components('references')).toEqualTypeOf<EARS.EntityId<'Note'>[][]>();
       expectTypeOf(query.ids(noteId).both(EARS.RelKind.CONTAINS, EARS.Entity.Message).ids()).toEqualTypeOf<EARS.EntityId<'Message'>[]>();
       expectTypeOf(query.ids(noteId).descendants('contains', EARS.Entity.Note, { depth: 2 }).ids()).toEqualTypeOf<EARS.EntityId<'Note'>[]>();
       expectTypeOf(query.ids(noteId).degrees('references')).toEqualTypeOf<Map<EARS.EntityId<'Note'>, number>>();
