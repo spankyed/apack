@@ -270,6 +270,17 @@ Next deliverables, dependencies and closing checks:
   `0fe282f82d18121c62f2828867099dedac26be67d30327b65f30b851ab5a1d00`.
   Verify bytes before opening after migration; lock.mdb can change on open. Preserve the incumbent and
   resume only with an explicit copy/protocol; the original fresh-run script is not automatically resumable.
+  [Strict resumed-copy preflight](../references/evidence/ears-sqlite-implementation-2026-10-28/native-resume-canonical-refusal/README.md)
+  fails canonical byte identity before any embedding writes. The [completed diagnosis](../references/evidence/ears-sqlite-implementation-2026-10-28/native-zero-sign-diagnostic/README.md)
+  checks all72000 retained embeddings: exactly three -0→+0 components, no other changes, unchanged
+  database hashes, with the actual MessagePack request codec independently reproducing the loss.
+  27900 embeddings remain. A [separate preregistered diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/native-zero-sign-matrix-preregistration/README.md)
+  may collect remaining timings/query evidence on the owned clone while recording that byte gate as
+  failed; any nonzero component mismatch still stops. This does not replace strict qualification or
+  authorize normalization, a production/native-pin change or a waiver of candidate canonical bytes.
+  Diagnostic session98419 (admission PID86351), reports `/private/tmp/ears-native-zero-sign-matrix-results`,
+  waits behind the other agent’s container. It targets runtimea9c9340df7 and reuses only the owned clone
+  after verifying pristine main hashes. Inspect this same handle; do not launch another native owner.
 - Qualify the [prefix/typo implementation](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-rebase-validation/README.md).
   Pinned native passes36 shared judgments; the pre-fix candidate passes34 and fails exactly the two new
   prefix/typo judgments. The implementation passes all153 assertions in seven affected search files,
@@ -282,8 +293,11 @@ Next deliverables, dependencies and closing checks:
   typo11.193ms. The broad common-word path still reaches197ms warm and whole-sequence heartbeat329ms;
   this does not pass the16ms responsiveness criterion. The seven full-run timeouts remain unresolved;
   do not repeat the full run merely to obtain green.
-  [Three-platform CI41181673785](https://github.com/spankyed/apack/actions/runs/41181673785) targets487011c484;
-  inspect its terminal result. No new performance claim or complete qualification is established.
+  [Three-platform CI41181673785](../references/evidence/ears-sqlite-implementation-2026-10-28/qualification-487/README.md)
+  is terminal success at487011c484: Linux/macOS766pass/0skip, Windows761pass/five named skips,
+  all hosts735 native membership controls. Linux additionally passes1320SDK/four actual ENOSPC cases.
+  All seven local timeout cases pass on Linux/macOS CI, without proving one causal storage fix.
+  No new performance claim or complete goal qualification is established.
 - The original private syscall-fault admission 59998 was cancelled before container creation. After user
   migration verification/resume, [actual syscall-fault validation](../references/evidence/ears-sqlite-implementation-2026-10-28/real-io-after-migration/README.md)
   is terminal success: eighteen actual EIO cases plus a disabled-injector refusal control, at frozen runtime
