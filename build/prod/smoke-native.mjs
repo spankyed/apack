@@ -128,9 +128,23 @@ async function main() {
   console.log('EARS SQLite: claimed ownership, trained a native model in a worker, queried and reopened read-only with FTS/regex');
 
   const pty = load('node-pty');
-  const [shell, args] = process.platform === 'win32' ? ['cmd.exe', ['/c', 'exit 0']] : ['/bin/sh', ['-c', 'exit 0']];
-  const exit = await new Promise((resolve) => pty.spawn(shell, args, { cols: 80, rows: 24 }).onExit(resolve));
-  if (exit.exitCode !== 0) throw new Error('node-pty: the shell exited ' + JSON.stringify(exit));
+  const [shell, args] = process.platform === 'win32'
+    ? ['cmd.exe', ['/d', '/c', 'echo apack-native-probe']]
+    : ['/bin/sh', ['-c', 'printf apack-native-probe']];
+  const terminal = pty.spawn(shell, args, { cols: 80, rows: 24 });
+  let output = '', exitListener;
+  const dataListener = terminal.onData(data => { output += data; });
+  try {
+    const exit = await new Promise(resolve => { exitListener = terminal.onExit(resolve); });
+    if (exit.exitCode !== 0) throw new Error('node-pty: the shell exited ' + JSON.stringify(exit));
+    assert(output.includes('apack-native-probe'), 'PTY must deliver actual shell output');
+  } finally {
+    dataListener.dispose();
+    exitListener?.dispose();
+    // ConPTY's reader worker outlives natural shell exit until the owning terminal is closed.
+    // Verified output also ensures node-pty has completed its deferred readiness handshake.
+    if (process.platform === 'win32') terminal.kill();
+  }
   console.log('node-pty: spawned a shell, which exited 0');
 
   const { Entry } = load('@napi-rs/keyring');
@@ -142,7 +156,9 @@ async function main() {
   console.log('Packaged native provenance: ' + JSON.stringify({ versions: process.versions,
     platform: process.platform, arch: process.arch, addons }));
 }
-main().catch((error) => { console.error(error?.stack ?? String(error)); process.exit(1); });
+main().then(() => {
+  console.log('Packaged native resources after cleanup: ' + JSON.stringify(process.getActiveResourcesInfo()));
+}).catch((error) => { console.error(error?.stack ?? String(error)); process.exit(1); });
 `;
 
 const executable = findExecutable();
