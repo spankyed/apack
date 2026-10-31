@@ -1,0 +1,52 @@
+[
+  {
+    "file": "source-app.json.gz",
+    "sha256": "0c9a0bfdc37824438cb4477d64d9d432a30798b0b4eb6267aaae0a75f32b145c",
+    "storedSha256": "7956c2339513baf3c7b31fe7ee16732eda3bd22e55a6eca05354727506ee3268"
+  },
+  {
+    "file": ".last-run.json.gz",
+    "sha256": "efba0ad7248b8440633e0d094820cf1d5683e536e9ec03eb47f75717412406a7",
+    "storedSha256": "ee138b5ce1860f4592ef1618d221b9d09e441375fdbf0630af113e632908af8a"
+  },
+  {
+    "file": "app-2.log.gz",
+    "sha256": "5d8088378895cd56ed6b1f5fc52b4d1fd930ed76c9d9b9fb8dfb7434223bafd8",
+    "storedSha256": "fe2d6b9839373c8cd4fada33794707abd1f07962826ecc220289ba41cc48eaaf"
+  },
+  {
+    "file": "app-0.log.gz",
+    "sha256": "5d4015c13b6bfb5f0ca01fea1bb191b2b7de9e5af7558a85ff4452e826e48ba0",
+    "storedSha256": "79aa580a9031c493fec31833eb3a6544b061aea0bf4d1804fe7cb1754e393959"
+  },
+  {
+    "file": "app-1.log.gz",
+    "sha256": "6a31b0bbe8e7cbadf1d14f27e5e2f2ccc1847316e20e5df5fbadc7de66c376f6",
+    "storedSha256": "d99f27758fbd69f0e7d8e79dd45dc3fb7c5c33021eaee0d946280d72dcc1b13a"
+  },
+  {
+    "file": "ears-editor-meta-b730-41186295488-current.json.gz",
+    "sha256": "b84fd6962b809166468e52999c16c918e18ffa356f9a33a5dd3f3fcb84d091d8",
+    "storedSha256": "470198b5ebf5992eb3ac9d5707fc49455f6de738e74e8ebb61003ff08aa724fe"
+  },
+  {
+    "file": "ears-editor-meta-b730-41186295488-failed.log.gz",
+    "sha256": "ee04b350855c52e970ef8bc32d77828bf992a2688230f2810c989a3a64fc6d04",
+    "storedSha256": "a22c85339c55aa4d736b8f18e2dd350bf787313b4ca36f0aa791fd50fb8fd26c"
+  },
+  {
+    "file": "test.trace.gz",
+    "sha256": "e40ec935517e910d75d8b6da6f4e70f7b7a6f9451d36866d105f2a8b4a928c0a",
+    "storedSha256": "75d48251819aeb408ed3526f3c2901bee6b5c0615edb393dfa3e7b2d0697a288"
+  },
+  {
+    "file": "case0-timeline.json.gz",
+    "sha256": "653bf12f65130502a43125a58bde7db2a6d90c9493f85b5fa5027664fc0c6642",
+    "storedSha256": "be7018adc007e902e9f20599ebe79a14413a5b04cd1be3ab3e89879efd475999"
+  },
+  {
+    "file": "case1-timeline.json.gz",
+    "sha256": "d553de0a956ca8bb3e4ff641ccc397ac08764635cae426671785ad70d89839e5",
+    "storedSha256": "e5964670873e9a7d146b11d0021e9cc636fad7252ba47584a9dbf9f600399c27"
+  }
+]

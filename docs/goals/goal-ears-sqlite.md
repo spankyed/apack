@@ -200,7 +200,7 @@ Authoritative source: `/private/tmp/ears-sqlite-query-integration`. The clean de
 `monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at older `6cf6c8349e`
 and is not the current source. Latest runtime checkpoint is `45180293a3`, including the prefix implementation with partial local qualification; platform CI487011c484 validates that runtime.
 SDK meta-schema reuse passes235 affected SDK/host cases plus types/lint and hosted attribution;
-the original focused renderer acceptance is still pending. The original editor test-diagnostic
+renderer acceptance remains open after two passes and one pre-mount context failure. The original editor test-diagnostic
 checkpoint is `0126eda005`. Integrated master is
 `e3d1a37d5c622bfebba7767a09452572284881dc`; native elmdb pin remains
 `2441af4658d961f547c7094cd041c2ac246668c5`. The [completed rebase](../references/evidence/ears-sqlite-implementation-2026-10-28/master-rebase-e3d1/README.md)
@@ -275,8 +275,13 @@ Next deliverables, dependencies and closing checks:
   no meta-schema compilation sampled inside activation. The checker never registers pack schemas;
   fresh private compilers, cloned metadata/default validation and identifier isolation remain enforced.
   [Original editor41186295488](https://github.com/spankyed/apack/actions/runs/41186295488) targetsb7300724a0,
-  three repeats at the unchanged five-second assertion. Inspect that same run. Profile improvement does
-  not close renderer acceptance, the strict concurrency failure, vector budgets or the complete goal.
+  three repeats at the unchanged five-second assertion. It is [terminal failure](../references/evidence/ears-sqlite-implementation-2026-10-28/editor-meta-b730/README.md):
+  two repeats pass all assertions; the third loses its execution context before editor mount or activation.
+  The trace does not establish the cause. The current test-only readiness change awaits initial document
+  load before imperative mounting and records frame/load/crash lifecycle events on failure, without retry,
+  sleep or activation deadline changes. Closing checks are cache-disabled full E2E types/lint and the
+  same original three-repeat case. Profile improvement does not close renderer acceptance, the strict
+  concurrency failure, vector budgets or the complete goal.
 
 - The native baseline matrix is checkpointed and stopped for the migration. Session 88639 ended by
   requested SIGTERM (exit -15), not a product failure. It created 99900 rows and last logged 69632 embeddings;

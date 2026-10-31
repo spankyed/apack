@@ -254,6 +254,11 @@ jobs:
           args=(--host "$GITHUB_WORKSPACE" --prebuilt --trace retain-on-failure --repeat-each "$APACK_E2E_REPEAT")
           if [[ -n "$APACK_E2E_GREP" ]]; then args+=(--grep "$APACK_E2E_GREP"); fi
           ../../../node_modules/.bin/apack pack test "${args[@]}"
+      - name: Source app test types and settings harness lint
+        if: ${{ inputs.suite == 'app' }}
+        run: |
+          node_modules/.bin/oxlint tests/e2e/ui/host-settings.spec.ts -D correctness
+          node_modules/.bin/tsc -p tests --noEmit --incremental false
       - name: App suites including settings recovery
         if: ${{ !cancelled() && (inputs.suite == 'all' || inputs.suite == 'app') && steps.runtime.outcome == 'success' }}
         env:

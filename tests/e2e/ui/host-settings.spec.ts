@@ -10,6 +10,36 @@ import { test as base, expect } from '@apackdev/testing';
 
 // A separate worker boots with a real disabled-pack record. No runtime facade, form or setting is mocked.
 const test = base.extend<{}, { hostOnlyData: string }>({
+  appPage: async ({ appPage }, use, testInfo) => {
+    const navigation: Array<{ at: number; type: string; url?: string; main?: boolean }> = [];
+    const record = (type: string) => { if (navigation.length < 64) navigation.push({ at: Date.now(), type, url: appPage.url() }); };
+    const navigated = (frame: ReturnType<typeof appPage.mainFrame>) => {
+      if (navigation.length < 64) navigation.push({ at: Date.now(), type: 'framenavigated', url: frame.url(), main: frame === appPage.mainFrame() });
+    };
+    const loaded = () => record('load'), domReady = () => record('domcontentloaded');
+    const closed = () => record('close'), crashed = () => record('crash');
+    let setupFailed = false;
+    appPage.on('framenavigated', navigated); appPage.on('load', loaded); appPage.on('domcontentloaded', domReady);
+    appPage.on('close', closed); appPage.on('crash', crashed);
+    try {
+      // The base fixture observes connected application state. These cases also inject components
+      // imperatively, so finish the initial document load before retaining handles across async imports.
+      await appPage.waitForLoadState('load');
+      await use(appPage);
+    } catch (error) {
+      setupFailed = true;
+      throw error;
+    } finally {
+      appPage.off('framenavigated', navigated); appPage.off('load', loaded); appPage.off('domcontentloaded', domReady);
+      appPage.off('close', closed); appPage.off('crash', crashed);
+      if (setupFailed || testInfo.status !== testInfo.expectedStatus) {
+        try {
+          await testInfo.attach('host-settings-page-lifecycle.json', { contentType: 'application/json',
+            body: Buffer.from(JSON.stringify({ navigation, closed: appPage.isClosed(), url: appPage.url() }, null, 2)) });
+        } catch (diagnosticError) { console.warn('Could not capture host settings page lifecycle', diagnosticError); }
+      }
+    }
+  },
   // oxlint-disable-next-line no-empty-pattern -- Playwright requires destructured fixture dependencies.
   hostOnlyData: [async ({}, use) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-host-settings-'));
