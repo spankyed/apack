@@ -82,7 +82,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
       .toEqual(Array.from({ length: 667 }, (_, i) => 2 + i * 3));
   });
 
-  it('batches distinct/group fields without per-entity reads or unrelated bodies', () => {
+  it('executes scalar distinct/groups in SQL without per-entity reads or unrelated bodies', () => {
     const { db, e } = open();
     e.transact(() => { for (let i = 0; i < 512; i++) e.create('Row', {
       id: `Row-${i}`, rank: i, body: 'unrelated '.repeat(1000), bucket: `bucket-${i}`,
@@ -96,7 +96,41 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     expect(grouped.size).toBe(512);
     expect(grouped.get('bucket-511')).toEqual(['Row-511']);
     expect(row).not.toHaveBeenCalled();
-    expect(read.mock.calls.every(call => call[2]?.length === 1 && call[2][0] === 'bucket')).toBe(true);
+    expect(read).not.toHaveBeenCalled();
+    expect(distinct.statements.some(statement => statement.sql.includes('GROUP BY kind,value COLLATE BINARY'))).toBe(true);
+  });
+
+  it('preserves scalar kind, null, numeric rounding, duplicates and first encounter in SQL groups', () => {
+    const { db, e } = open();
+    const values = [true, 1, '1', -0, 0, null];
+    values.forEach((bucket, i) => e.create('Row', { id: `Row-${i}`, rank: i, body: '', bucket }));
+    e.create('Row', { id: 'Row-missing', rank: 9, body: '' });
+    expect(e.query('Row').distinct('bucket').ids()).toEqual(['Row-0', 'Row-1', 'Row-2', 'Row-3', 'Row-5']);
+    expect([...e.query('Row').groupBy('bucket')]).toEqual([[true, ['Row-0']], [1, ['Row-1']],
+      ['1', ['Row-2']], [0, ['Row-3', 'Row-4']], [null, ['Row-5', 'Row-missing']]]);
+    expect(e.query('Row').reverse().distinct('bucket').ids()).toEqual(['Row-missing', 'Row-4', 'Row-2', 'Row-1', 'Row-0']);
+    expect(e.query('Row').limit(4).distinct('bucket').ids()).toEqual(['Row-0', 'Row-1', 'Row-2', 'Row-3']);
+    expect([...e.query.ids(['Row-4', 'Row-3', 'Row-4']).ofType('Row').groupBy('bucket')]).toEqual([[0, ['Row-4', 'Row-3', 'Row-4']]]);
+    const counts = db.readSync({ reads: [{ read: 'query', plan: {
+      start: { from: 'types', types: ['Row'] }, terminal: { answer: 'groupBy', field: 'bucket', counts: true },
+    } }] })[0];
+    expect(counts).toMatchObject({ kind: 'groups', groups: [[true, 1], [1, 1], ['1', 1], [-0, 2], [null, 2]] });
+    if (counts.kind !== 'groups') throw new Error('Expected groups');
+    expect(Object.is(counts.groups[3]![0], -0)).toBe(true);
+    const layout = db.values.layout('Row')!, slot = layout.fields.get('rank')!;
+    db.sql.exec(`UPDATE ${layout.table} SET v${slot}=CASE entity_id WHEN 'Row-0' THEN 9223372036854775807
+      WHEN 'Row-1' THEN 9223372036854775806 ELSE v${slot} END`);
+    expect(e.query('Row').distinct('rank').ids()).toEqual(['Row-0', 'Row-2', 'Row-3', 'Row-4', 'Row-5', 'Row-missing']);
+  });
+
+  it('decodes unsupported or damaged scalar-group cells instead of silently grouping them', () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-a', rank: 1, body: 'a' });
+    e.create('Row', { id: 'Row-b', rank: 2, body: 'b' });
+    const layout = db.values.layout('Row')!, slot = layout.fields.get('rank')!;
+    db.run(`UPDATE ${layout.table} SET v${slot}=? WHERE entity_id=?`, ['invalid', 'Row-b']);
+    expect(() => e.query('Row').distinct('rank').ids()).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+    expect(() => e.query('Row').groupBy('rank')).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
   });
 
   it('keeps decoded object groups separate and retains all missing/null members', () => {
@@ -109,6 +143,19 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     expect(groups).toEqual([[true, ['Row-0']], [1, ['Row-1']], [new Date(1), ['Row-2']], [new Date(1), ['Row-3']],
       [{ a: 1, b: 2 }, ['Row-4']], [{ b: 2, a: 1 }, ['Row-5']], [null, ['Row-6', 'Row-missing-a', 'Row-missing-b']]]);
     expect(e.query('Row').distinct('bucket').ids()).toEqual(['Row-0', 'Row-1', 'Row-2', 'Row-3', 'Row-4', 'Row-5', 'Row-6']);
+  });
+
+  it.each(['missing overflow', 'duplicate overflow'] as const)('refuses damaged authoritative cells in SQL and mixed-type sorts (%s)', damage => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-a', rank: 1, body: 'a' });
+    e.create('Other', { id: 'Other-a', rank: 2, body: 'b' });
+    const layout = db.values.layout('Row')!, slot = layout.fields.get('rank')!;
+    if (damage === 'missing overflow') db.sql.exec(`UPDATE ${layout.table} SET k${slot}='@',v${slot}=NULL WHERE entity_id='Row-a'`);
+    else db.run('INSERT INTO value_overflow(entity_id,field,kind,value) VALUES (?,?,?,?)', ['Row-a', 'rank', 'num', 9]);
+    expect(() => e.query('Row').orderBy('rank').ids()).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+    expect(() => e.query.all().orderBy('rank').ids()).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+    expect(() => e.query('Row').distinct('rank').ids()).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+    expect(() => e.query('Row').groupBy('rank')).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
   });
 
   it('validates scalar cells outside a pushed sort prefix', () => {

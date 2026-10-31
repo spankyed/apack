@@ -4,6 +4,7 @@ import { scalarKey } from "./database.ts";
 import { orderNumericIds } from "./numeric-order.ts";
 import type { QueryPlan, QueryStep, QueryAnswer, StoredHit } from "../storage.ts";
 import { SqliteValueGroups } from "./value-groups.ts";
+import { distinctScalarIds, groupScalarValues } from "./scalar-groups.ts";
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
@@ -302,11 +303,12 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         restart(idsNow().reverse());
         break;
       case "distinct": {
-        const ids = idsNow();
-        if (step.field === undefined) restart([...new Set(ids)]);
+        if (step.field === undefined) restart([...new Set(idsNow())]);
         else {
           trackField(step.field);
-          const rows = db.rows(ids, [step.field]), groups = new SqliteValueGroups();
+          const native = specificTypes ? distinctScalarIds(db, { sql, parameters, order: order(), field: step.field, types }) : undefined;
+          if (native !== undefined) { restart(native); break; }
+          const ids = idsNow(), rows = db.rows(ids, [step.field]), groups = new SqliteValueGroups();
           restart(ids.filter((id, index) => groups.add(rows[index]?.[step.field!], id)));
         }
         break;
@@ -567,6 +569,12 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       value: !!db.get(ordered() + " LIMIT 1", parameters),
       __visited: visited ?? 0,
     };
+  if (terminal.answer === 'groupBy' && specificTypes) {
+    trackField(terminal.field);
+    const groups = groupScalarValues(db, { sql, parameters, order: order(), field: terminal.field, types }, terminal.counts ?? false);
+    if (groups !== undefined) return { kind: 'groups', groups,
+      __visited: visited ?? groups.reduce((sum, [, members]) => sum + (typeof members === 'number' ? members : members.length), 0) };
+  }
   const ids = idsNow();
   if (terminal.answer === "first" || terminal.answer === "last")
     return {

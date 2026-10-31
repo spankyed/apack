@@ -1,4 +1,5 @@
 import type { SqliteDatabase } from './database.ts';
+import { singleTypeFieldRows } from './field-query.ts';
 
 /** SQL ordering is equivalent only for these scalar cells; ICU text and deep values use the JS comparator. */
 export function orderNumericIds(db: SqliteDatabase, input: {
@@ -10,25 +11,14 @@ export function orderNumericIds(db: SqliteDatabase, input: {
   if (!types.length) return [];
   if (types.some(type => type.includes('\0'))) return undefined;
   const source = db.fieldSource(input.field, types, true);
-  let joined = `SELECT p.id,p.major,p.ord,f.id _sort_entity,f.kind _sort_kind,f.value _sort_value
+  let joined = `SELECT p.id,p.major,p.ord,f.id _sort_entity,f.kind _sort_kind,f.value _sort_value,f.invalid _sort_invalid
     FROM (${input.sql}) p LEFT JOIN (${source}) f ON f.id=p.id`;
-  if (types.length === 1) {
-    const layout = db.values.layout(types[0]!);
-    if (layout) {
-      // A LEFT JOIN over the composite field source can materialize it and scan every value for
-      // every candidate. One type has one authoritative table: probe its primary key directly.
-      const slot = layout.fields.get(input.field);
-      const overflow = slot === undefined ? undefined : `v.k${slot} IS NULL OR v.k${slot}='@'`;
-      const kind = slot === undefined ? 'o.kind' : `CASE WHEN ${overflow} THEN o.kind ELSE v.k${slot} END`;
-      const value = slot === undefined ? 'o.value' : `CASE WHEN ${overflow} THEN o.value ELSE v.v${slot} END`;
-      joined = `SELECT p.id,p.major,p.ord,v.entity_id _sort_entity,${kind} _sort_kind,${value} _sort_value
-        FROM (${input.sql}) p LEFT JOIN ${layout.table} v ON v.entity_id=p.id
-        LEFT JOIN value_overflow o ON o.entity_id=p.id AND o.field='${input.field.replaceAll("'", "''")}'`;
-    }
-  }
+  const single = types.length === 1 ? singleTypeFieldRows(db, input.sql, types[0]!, input.field) : undefined;
+  if (single) joined = `SELECT p.id,p.major,p.ord,p._cell_entity _sort_entity,p._cell_kind _sort_kind,p._cell_value _sort_value,p._cell_invalid _sort_invalid
+    FROM (${single}) p`;
   // Unchecked imports need their actual cell kind, not their declared rule. Invalid cells and missing primary
   // records must reach the normal decoder so this optimization cannot turn corruption into missing values.
-  const invalid = `p._sort_entity IS NULL
+  const invalid = `p._sort_entity IS NULL OR p._sort_invalid<>0
     OR (p._sort_kind IS NOT NULL AND p._sort_kind NOT IN ('bool','num','zero','date','null'))
     OR (p._sort_kind IN ('bool','num','zero','date') AND
       (typeof(p._sort_value) NOT IN ('integer','real') OR p._sort_value>1.7976931348623157e308 OR p._sort_value< -1.7976931348623157e308))
