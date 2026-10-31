@@ -29,7 +29,7 @@ export type QueryTerminal =
   | { answer: 'ids' | 'count' | 'first' | 'last' | 'exists' }
   | { answer: 'rows' | 'firstRow'; fields?: string[] }
   | { answer: 'degrees'; kinds: string[]; direction?: EdgeDirection; types?: string[] }
-  | { answer: 'edges'; kinds: string[]; outward: boolean; types?: string[] }
+  | { answer: 'edges'; kinds: string[]; direction: 'out' | 'in'; types?: string[] }
   | { answer: 'groupBy'; field: string; counts?: boolean }
   | { answer: 'hits'; fields?: string[]; highlights?: boolean };
 export interface QueryPlan {

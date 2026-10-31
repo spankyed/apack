@@ -1,0 +1,17 @@
+{
+  ".github/scripts/ears-sqlite-platform.mjs": "8f2e14978934f97f49e97679ddb13cf03953d3cb1ce0aedf6c69109e28f76d8a",
+  "docs/goals/goal-ears-sqlite.md": "f713108d2ae6cc405ffa8ed8c618fb5cea5dba43ca737661dc2f8481c8e6958d",
+  "docs/references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/README.md": "04908bc02b458ddf0888786d165fa0747fee659723b311cf9b3a5c00b3cd1811",
+  "docs/references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/check.cjs": "8dece613602ab51d5765cb7d1b80153d676fdf7c70fa56dcf1d68e44b34caebc",
+  "docs/references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/controls.json": "3a7e05da91f9bec3687ef4f027b20f79d9f09a3385b334eadb549657126ad573",
+  "docs/references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/installed-run.json": "b5e017426154dec66166ac99f50e9d6a1f41639d569faf41af1e7485d4501e78",
+  "docs/references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/linux-failure.log.gz": "dfb7e93f88fc067ac9dfa62101cca1cfbac66e34f72a1a23eede2420e3da711f",
+  "docs/references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/receipts.json": "1bdb91f45d6b901b4e591255376ef5c013e7d6568c434c5edf971d29b34319e5",
+  "docs/references/evidence/ears-sqlite-implementation-2026-10-28/format-identity/verification-inventory/strict-snapshot.json": "f1d85b682abeadde8fb65c20d52df416bbae60577f54094de21392ada94a8632",
+  "packages/apack-ears/src/query.ts": "934725487c36effc925e32086e8e65fb6f6aa2fd762a5d0c052715eb3b113a34",
+  "packages/apack-ears/src/sqlite/query.ts": "70ae85a470791aa829bc4cbec24134a4a7eb2d239f7ba8390dd269a76b5c7de5",
+  "packages/apack-ears/src/storage.ts": "4e60945b30304dfd2860d6a27b4f7e5181c9277f656fbed240d889009683919e",
+  "packages/apack-ears/tests/engine/queries.spec.ts": "f264a9091536ec2b5a4f84f07165a2d46376747ec66ec7515cdd244fc7ea800e",
+  "packages/apack-ears/tests/engine/relations.spec.ts": "1255aa90e5581e804133366561ee2cdd8eb27ab359522a65b6344f8557ec5c9c",
+  "vendor/elmdb.rev": "f3d13496023eb810b73ebfb3f58904a7aceb58fb288ba56ae27623af436e622c"
+}

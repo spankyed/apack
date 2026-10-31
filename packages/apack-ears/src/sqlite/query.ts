@@ -614,8 +614,8 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
     }
     const edges = db.all(
       `SELECT r.* FROM json_each(?) seed JOIN relations r
-        ON r.${terminal.outward ? "source" : "target"}=seed.value
-        JOIN entities far ON far.id=r.${terminal.outward ? "target" : "source"}
+        ON r.${terminal.direction === 'out' ? "source" : "target"}=seed.value
+        JOIN entities far ON far.id=r.${terminal.direction === 'out' ? "target" : "source"}
         WHERE r.kind IN (SELECT value FROM json_each(?)) AND ${reachable("far")}
         ${terminal.types ? "AND far.type IN (SELECT value FROM json_each(?))" : ""}
         ORDER BY seed.key,(SELECT key FROM json_each(?) WHERE value=r.kind),r.seq`,
