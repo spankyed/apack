@@ -1,3 +1,4 @@
+import {resolveAppEnvironment} from '@apackdev/sdk/env'
 import {verifyBackgroundApiRestart} from '../../fixtures/claude-research/background-api-restart.mjs'
 import {verifyChildFormatterPolicy} from '../../fixtures/claude-research/background-formatter-policy.mjs'
 import {verifyChildFormatterLifecycle} from '../../fixtures/claude-research/background-formatter-lifecycle.mjs'
@@ -19,13 +20,15 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const restriction = planScenario === 'managed-clear'
   const parentOwnerLoss = process.env.CLAUDE_RESEARCH_BACKGROUND_OWNER_LOSS_APP === '1'
+  let transferredForAppRestart = false
+  const childAppRestart = process.env.CLAUDE_RESEARCH_BACKGROUND_APP_RESTART === '1'
   const childApiRestart = process.env.CLAUDE_RESEARCH_BACKGROUND_API_RESTART_APP === '1'
   const childFormatterPolicy = process.env.CLAUDE_RESEARCH_BACKGROUND_FORMATTER_POLICY_APP === '1'
   const childFormatterLifecycle = process.env.CLAUDE_RESEARCH_BACKGROUND_FORMATTER_LIFECYCLE_APP === '1'
   const childFormatter = process.env.CLAUDE_RESEARCH_BACKGROUND_FORMATTER_APP === '1'
   const childStatusLifecycle = process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_LIFECYCLE_APP === '1'
   const childStatus = childFormatter || childStatusLifecycle || process.env.CLAUDE_RESEARCH_BACKGROUND_STATUS_APP === '1'
-  if(childApiRestart){expect(process.platform).toBe('linux');expect(parentOwnerLoss).toBe(true);expect(childFormatter).toBe(true)}
+  if(childApiRestart||childAppRestart){expect(process.platform).toBe('linux');expect(parentOwnerLoss).toBe(true);expect(childFormatter).toBe(true)}
   const childReply = parentOwnerLoss || childStatus || process.env.CLAUDE_RESEARCH_BACKGROUND_REPLY_APP === '1'
   const childResume = process.env.CLAUDE_RESEARCH_BACKGROUND_RESUME_APP === '1'
   const childInteraction = process.env.CLAUDE_RESEARCH_BACKGROUND_INTERACTION_APP === '1'
@@ -98,7 +101,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
     await expect(approval).toHaveCount(0)
     await expect.poll(async () => (await context()).native?.state?.activity?.pendingWorkflows ?? 0).toBe(1)
     await expect.poll(async () => JSON.parse(await readFile(join(workspace!, 'native-leftarrow-reviewer-ready.json'), 'utf8').catch(() => '{}')).originalChildRequest, { timeout: 15000 }).toBe(true)
-    if(childApiRestart){
+    if(childApiRestart||childAppRestart){
       await writeFile(join(workspace!, 'native-pending-duration-release'),'settle the original review before testing API recovery')
       await expect.poll(async()=>(await context()).native?.state?.activity?.pendingWorkflows,{timeout:15000}).toBe(0)
       await expect.poll(async()=>(await context()).native?.state?.busy,{timeout:15000}).toBe(false)
@@ -350,6 +353,16 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       }
 
       const retainedReply = 'Keep this separate follow-up through navigation.'
+      if(childAppRestart){
+        await input.fill(retainedReply)
+        const api=JSON.parse(await readFile(resolveAppEnvironment({env:'test',userDataDir:join(workspace!,'app-data')}).apiPortFile,'utf8'))
+        const saved={before:await context(),job,worker:await childProcessState(),info:await readInfo(),retainedDraft,retainedReply,mainPid:electronApp.process().pid,apiPid:api.pid,savedAt:Date.now()}
+        for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await input.scrollIntoViewIfNeeded();await capture('apack-native-background-app-before-'+name+'.png')}
+        await writeFile(join(workspace!,'background-app-restart-saved.json'),JSON.stringify(saved,null,2))
+        // The testing fixture closes Electron normally; the next spec reuses only this owned profile.
+        transferredForAppRestart=true
+        return
+      }
       if(childApiRestart)observations.childApiRestart=await verifyBackgroundApiRestart({workspace:workspace!,job,widget,composer,input,retainedReply,app,appPage,electronApp,context,readInfo,childProcessState,capture,expect})
       await input.fill(retainedReply)
       await app.navigate('host/settings');await app.navigate('default-setup/threads')
@@ -513,7 +526,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       const authority=observations.independentStatusAuthority.beforeParentStop
       await expect.poll(async()=>{const current=await childProcessState(authority.pid);return !current||current.state==='Z'||current.start!==authority.process.start},{timeout:10000}).toBe(true)
       observations.independentStatusAuthority.retiredAfterChildStop=true
-      if(childApiRestart){const recoveredAuthority=observations.childApiRestart.authorityAfter;await expect.poll(async()=>{const current=await childProcessState(recoveredAuthority.pid);return !current||current.state==='Z'||current.start!==recoveredAuthority.process.start},{timeout:10000}).toBe(true);observations.childApiRestart.authorityRetiredAfterChildStop=true;observations.childApiRestart.authorityAfterStop=await childProcessState(recoveredAuthority.pid)??{state:'gone'};}
+      if(childApiRestart||childAppRestart){const recoveredAuthority=observations.childApiRestart.authorityAfter;await expect.poll(async()=>{const current=await childProcessState(recoveredAuthority.pid);return !current||current.state==='Z'||current.start!==recoveredAuthority.process.start},{timeout:10000}).toBe(true);observations.childApiRestart.authorityRetiredAfterChildStop=true;observations.childApiRestart.authorityAfterStop=await childProcessState(recoveredAuthority.pid)??{state:'gone'};}
     }
     observations.uiStop = true
     if (process.platform === 'linux') {
@@ -524,7 +537,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
 
     observations.stopped = await context()
     expect(observations.stopped.claude.sessionError).toBeUndefined()
-    if(childApiRestart){expect(observations.stopped.sessionId).toBe(sessionId);expect(observations.stopped.claude.nativeContinuation.continuedInSessionId).toBe(job.sessionId)}else expect(observations.stopped.native.state.sessionId).toBe(sessionId)
+    if(childApiRestart||childAppRestart){expect(observations.stopped.sessionId).toBe(sessionId);expect(observations.stopped.claude.nativeContinuation.continuedInSessionId).toBe(job.sessionId)}else expect(observations.stopped.native.state.sessionId).toBe(sessionId)
     for (const [name, size] of [['normal', { width: 1100, height: 900 }], ['compact', { width: 680, height: 600 }]] as const) {
       await appPage.setViewportSize(size)
       await capture('apack-native-background-stopped-' + name + '.png')
@@ -620,7 +633,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   } finally {
     if ((childInteraction && !observations.childInteraction) || (childResume && !observations.childResume?.workerRetired)) {observations.failedAttachments=await appPage.evaluate(()=>Object.values((window as any).applicationState.system.get('default-setup/threads').getSnapshot().context.nativeTerminalViews).map((view:any)=>view.attachment).filter(Boolean));await capture('apack-native-child-interaction-failure.png')}
     if (!job) job = (await list()).find((row: any) => row.kind === 'background' && row.id && !before.some((old: any) => old.id === row.id))
-    if (job) {
+    if (job && !transferredForAppRestart) {
       observations.after = await list()
       if (observations.after.find((row: any) => row.id === job.id)?.state !== 'stopped') { observations.cleanupStop = await cli(['stop', job.id]); observations.after = await list() }
       expect(observations.after.find((row: any) => row.id === job.id)?.state).toBe('stopped')
