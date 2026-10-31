@@ -269,11 +269,18 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: qualify the integrated allocation-free compact-IN candidate through its ordinary native
-package/provenance, complete EARS/fresh-owner and affected platform/installed paths. The patch now reproduces
-the exact tested C digest below, with runtime/build/platform provenance pins and all 735 membership controls
-updated together. Prior strict/app/installed passes qualify the preceding native inputs, not this changed
-library. Preserve that source boundary until new checks finish.
+Next checkpoint: finish the exact `63c8267994` strict consumer shards in run 41151679157 and broader
+SQLite source-app run 41152805669; inspect actual per-case reports before claiming integrated acceptance.
+The [new native qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/native-63c/README.md)
+verifies the three completed platform jobs and signed installed run 41151681981 at this source: 735 native
+membership comparisons per host, Linux/macOS EARS 762 passes, Windows 757 passes plus five named platform
+skips, and six actual installed passes without skips/retries. Generated C and patch digests agree with
+runtime/build pins, and signing refreshes the changed native library provenance.
+The ordinary Linux arm64 package, 735 controls and fresh public model-owner probe also pass. Its subsequent
+local EARS suite fails with one text-prefix timeout plus a worker RPC error after a protective ~1053.7-second
+pause during the suite; retain that failure and original deadlines. The remaining typecheck/lint steps were
+not reached. Independent platform passes do not relabel the local failure. Earlier strict/app/installed
+results qualify preceding native inputs; the remaining exact-source strict and source-app runs are live.
 The [private direct-IN proof](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
 passes 735 ordinary-SQLite controls per library and 900 paired updated-snapshot answers. The subsequent
 [full initial/update matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-full-matrix/README.md)

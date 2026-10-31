@@ -1,0 +1,211 @@
+{
+  "source": "63c8267994c611bdbf9dbe30e161ba18c949513c",
+  "platforms": {
+    "linux": {
+      "earsPassed": 762,
+      "earsSkipped": [],
+      "membershipComparisons": 735,
+      "extensionSha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+      "verification": {
+        "source": "63c8267994c611bdbf9dbe30e161ba18c949513c",
+        "apiStartupCasesPassed": 7,
+        "nativeMembershipChecks": 735,
+        "nativeMembershipPatchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+        "sdkSqliteCasesPassed": 1320,
+        "sdkContentRuntimeCasesPassed": 1,
+        "sdkBackendCasesPassed": 2,
+        "queryWorkCasesPassed": 5,
+        "nativeAuditCasesPassed": 25,
+        "nativeOwnerCasesPassed": 3,
+        "nativePackageCasesPassed": 5,
+        "nativeGenerationCasesPassed": 10,
+        "nativeTrainingCasesPassed": 5,
+        "nativeModelCasesPassed": 35,
+        "nativeGenerationExtensionSha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+        "earsPassed": 762,
+        "sqliteCasesPassed": 444,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalCommandCasesPassed": 8,
+        "logicalCrashCasesPassed": 2,
+        "builtLogicalChecks": 5,
+        "profileConversionChecks": 5,
+        "profileCrashCases": 5,
+        "convertedApi": {
+          "source": "63c8267994c611bdbf9dbe30e161ba18c949513c",
+          "nativeBaselineBoots": 1,
+          "sqliteBoots": 2,
+          "livePackUpdates": 3,
+          "postRestartDataRetained": true,
+          "nativeSourceUnchanged": true,
+          "historyRetained": true,
+          "settingsRetained": true,
+          "mediaRetained": true,
+          "environmentDiagnostics": {
+            "missingOptionalCodexExecutable": true
+          }
+        },
+        "nativeDumpCasesPassed": 7,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 10,
+        "logicalHostSkipped": [],
+        "databaseIdentityCasesPassed": 19,
+        "namespaceCasesPassed": 24,
+        "sqliteProfileCasesPassed": 15,
+        "managedPublicationCasesPassed": 29,
+        "hostPassed": 200,
+        "recoveryCasesPassed": 44
+      }
+    },
+    "macos": {
+      "earsPassed": 762,
+      "earsSkipped": [],
+      "membershipComparisons": 735,
+      "extensionSha256": "0d94db701c4a2a7e502898df87e54c121a51dbfa5bfa7c544572ee1c888ade6e",
+      "verification": {
+        "source": "63c8267994c611bdbf9dbe30e161ba18c949513c",
+        "apiStartupCasesPassed": null,
+        "nativeMembershipChecks": 735,
+        "nativeMembershipPatchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+        "sdkSqliteCasesPassed": null,
+        "sdkContentRuntimeCasesPassed": null,
+        "sdkBackendCasesPassed": 2,
+        "queryWorkCasesPassed": 5,
+        "nativeAuditCasesPassed": 25,
+        "nativeOwnerCasesPassed": 3,
+        "nativePackageCasesPassed": 5,
+        "nativeGenerationCasesPassed": 10,
+        "nativeTrainingCasesPassed": 5,
+        "nativeModelCasesPassed": 35,
+        "nativeGenerationExtensionSha256": "0d94db701c4a2a7e502898df87e54c121a51dbfa5bfa7c544572ee1c888ade6e",
+        "earsPassed": 762,
+        "sqliteCasesPassed": 444,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalCommandCasesPassed": 8,
+        "logicalCrashCasesPassed": 2,
+        "builtLogicalChecks": 5,
+        "profileConversionChecks": 5,
+        "profileCrashCases": 5,
+        "convertedApi": null,
+        "nativeDumpCasesPassed": 7,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 10,
+        "logicalHostSkipped": [],
+        "databaseIdentityCasesPassed": 19,
+        "namespaceCasesPassed": 24,
+        "sqliteProfileCasesPassed": 15,
+        "managedPublicationCasesPassed": 29,
+        "hostPassed": 200,
+        "recoveryCasesPassed": 44
+      }
+    },
+    "windows": {
+      "earsPassed": 757,
+      "earsSkipped": [
+        "SQLite file ownership refuses a FIFO at data.sqlite3 without blocking the native opener",
+        "SQLite file ownership refuses a FIFO at data.sqlite3-wal without blocking the native opener",
+        "SQLite file ownership refuses a FIFO at data.sqlite3-shm without blocking the native opener",
+        "SQLite file ownership refuses a FIFO at data.sqlite3-journal without blocking the native opener",
+        "yielding value-index admission resumes a committed batch cursor after a real killed process"
+      ],
+      "membershipComparisons": 735,
+      "extensionSha256": "245fe333c9ab29fd8d6d15a0a9341c0682963e3774684a913899906473075481",
+      "verification": {
+        "source": "63c8267994c611bdbf9dbe30e161ba18c949513c",
+        "apiStartupCasesPassed": null,
+        "nativeMembershipChecks": 735,
+        "nativeMembershipPatchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+        "sdkSqliteCasesPassed": null,
+        "sdkContentRuntimeCasesPassed": null,
+        "sdkBackendCasesPassed": 2,
+        "queryWorkCasesPassed": 5,
+        "nativeAuditCasesPassed": 25,
+        "nativeOwnerCasesPassed": 3,
+        "nativePackageCasesPassed": 5,
+        "nativeGenerationCasesPassed": 10,
+        "nativeTrainingCasesPassed": 5,
+        "nativeModelCasesPassed": 35,
+        "nativeGenerationExtensionSha256": "245fe333c9ab29fd8d6d15a0a9341c0682963e3774684a913899906473075481",
+        "earsPassed": 757,
+        "sqliteCasesPassed": 439,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalCommandCasesPassed": 8,
+        "logicalCrashCasesPassed": 2,
+        "builtLogicalChecks": 5,
+        "profileConversionChecks": 5,
+        "profileCrashCases": 5,
+        "convertedApi": null,
+        "nativeDumpCasesPassed": 7,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 9,
+        "logicalHostSkipped": [
+          {
+            "name": "reports a published but unsynchronized directory truthfully and retains its complete archive",
+            "status": "skipped"
+          }
+        ],
+        "databaseIdentityCasesPassed": 19,
+        "namespaceCasesPassed": 24,
+        "sqliteProfileCasesPassed": 15,
+        "managedPublicationCasesPassed": 29,
+        "hostPassed": 186,
+        "recoveryCasesPassed": 43
+      }
+    }
+  },
+  "wholeGoalAcceptance": false,
+  "installed": {
+    "run": 41151681981,
+    "passed": 6,
+    "skipped": 0,
+    "retries": 0,
+    "platform": "darwin-arm64",
+    "cases": [
+      "packaged SQLite stores hold their model claims across the real API process",
+      "app launches without crashing",
+      "app reaches connected state",
+      "applicationState is accessible with surfaces loaded",
+      "runs in an isolated per-worker test data dir",
+      "publishes no session, though a test app has a debug port open"
+    ]
+  },
+  "local": {
+    "status": "failed",
+    "steps": [
+      {
+        "label": "syntax-build",
+        "exitCode": 0
+      },
+      {
+        "label": "syntax-membership-test",
+        "exitCode": 0
+      },
+      {
+        "label": "syntax-ears-sqlite-platform",
+        "exitCode": 0
+      },
+      {
+        "label": "package",
+        "exitCode": 0
+      },
+      {
+        "label": "membership",
+        "exitCode": 0
+      },
+      {
+        "label": "ordinary-probe",
+        "exitCode": 0
+      },
+      {
+        "label": "ears",
+        "exitCode": 1
+      }
+    ],
+    "failure": "One 30s text-prefix test timeout and worker RPC error; 761 passes. Protective resource guard paused owned container for approximately1053.7s during suite; unchanged deadlines. Typecheck/lint not reached."
+  }
+}
