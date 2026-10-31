@@ -4,6 +4,11 @@ Status: approved for execution, 2026-10-31. Base: master `78c8f15ea7`; native pi
 `dde229d90c60665405fdcfc93b054a77fe8d0e1d`. This work follows the completed
 [measurement foundation](../archive/plans/application-performance.md).
 
+Integration checkpoint: upstream master advanced during execution to `05490e387a`, including
+the shared validation fixes and native pin `7b484b0834720d6d7b4fb89270d4ac02a6f42c1d`.
+Keep the completed original-pin baselines labeled; final integration and affected qualification
+use that newer frozen pin. Never switch native inputs beneath an active captured run.
+
 ## Outcome
 
 Measure the four maintained application actions on current code, identify their largest costs, and

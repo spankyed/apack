@@ -117,3 +117,8 @@ then run `scripts/qualify-performance.ts --scenario <action> --mode disabled --c
 All original journals, failures, indices, actual build hashes and raw profiles remain in the owned
 Docker work volume. `baseline-evidence.json` is a compact collection of the admitted comparisons,
 profile summaries and startup spans. No partial run contributes passing measured samples.
+
+Upstream master advanced during this work to `05490e387a`, including validation lifecycle fixes
+and elmdb pin `7b484b0`. The tables above remain the original-pin baseline; they do not certify
+the newer native binary. Final implementation checks and affected qualification must use that
+newer frozen pin and be reported separately.
