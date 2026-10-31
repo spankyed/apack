@@ -199,7 +199,8 @@ conversion, new PR or version-only PR is authorized. All phases and original bud
 Authoritative source: `/private/tmp/ears-sqlite-query-integration`. The clean detached publisher is
 `monorepo-worktrees.noindex/integration-3AEBRl`. Canonical `sqlite-evaluation` remains at older `6cf6c8349e`
 and is not the current source. Latest runtime checkpoint is `45180293a3`, including the prefix implementation with partial local qualification; platform CI487011c484 validates that runtime.
-The current SDK meta-schema reuse change is still unqualified. The original editor test-diagnostic
+SDK meta-schema reuse passes235 affected SDK/host cases plus types/lint and hosted attribution;
+the original focused renderer acceptance is still pending. The original editor test-diagnostic
 checkpoint is `0126eda005`. Integrated master is
 `e3d1a37d5c622bfebba7767a09452572284881dc`; native elmdb pin remains
 `2441af4658d961f547c7094cd041c2ac246668c5`. The [completed rebase](../references/evidence/ears-sqlite-implementation-2026-10-28/master-rebase-e3d1/README.md)
@@ -268,13 +269,14 @@ Next deliverables, dependencies and closing checks:
   after normal source checks and fresh package/API/pack builds. SQLite5358ms/native4258ms are diagnostic
   timings, not the renderer's five-second assertion. SQLite197 commits total421ms; about2.75s/2.57s
   inclusive sampled wall time is under settings compilation, including repeated meta-schema work.
-  The current unqualified SDK change reuses only a lazy built-in meta-schema checker; each definition
-  retains its own strict compiler/reference registry and fresh schema/default validation. New regressions
-  cover reused identifiers with different local references and changed invalid metadata. Closing checks:
-  affected SDK/host types/lint/settings/catalog suites, repeat attribution at the new source, then the
-  original focused editor case under its unchanged five-second deadline. Keep original failures visible.
-  The existing manual dispatcher `suite=activation-profile` now includes those focused checks. No speedup,
-  complete app acceptance or acknowledgment-policy change is claimed before actual results.
+  [Meta-schema reuse41185730370](../references/evidence/ears-sqlite-implementation-2026-10-28/activation-meta-reuse-778/README.md)
+  is terminal success at7781b2de04:118SDK/117host cases, zero skips/failures, both typechecks and lint,
+  normal builds and paired activation. SQLite1510ms/native1018ms, with197 SQLite commits retained and
+  no meta-schema compilation sampled inside activation. The checker never registers pack schemas;
+  fresh private compilers, cloned metadata/default validation and identifier isolation remain enforced.
+  [Original editor41186295488](https://github.com/spankyed/apack/actions/runs/41186295488) targetsb7300724a0,
+  three repeats at the unchanged five-second assertion. Inspect that same run. Profile improvement does
+  not close renderer acceptance, the strict concurrency failure, vector budgets or the complete goal.
 
 - The native baseline matrix is checkpointed and stopped for the migration. Session 88639 ended by
   requested SIGTERM (exit -15), not a product failure. It created 99900 rows and last logged 69632 embeddings;
@@ -347,19 +349,17 @@ Still-required acceptance, without narrowing phases 3–7:
   and resource failures. Directory claims do not exclude arbitrary external rename/delete, raw writers or
   mount aliases. Complete final identity/foreign-file/alias coverage without reopening already proven cases
   absent changed inputs. Real ENOSPC and the scoped read-only-mount observations do not close all phase 6.
-- Implement/qualify Windows directory publication durability, ACL assumptions and history-quarantine parent
-  synchronization. The shared Windows directory-sync helper currently does no flush. Ordering/race tests and
-  process-kill tests do not prove device power-loss durability or certify arbitrary filesystems.
-  The [preregistered Windows API probe](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-directory-api-preregistration/README.md)
-  separately observes directory-handle flush results and exclusive write-through moves in disposable
-  hosted Windows, using normal-file and occupied-target controls. The manual dispatcher suite is
-  `windows-durability`. [Actual run41184537719](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-directory-api-c707/README.md)
-  succeeds on NTFS/build26100 as administrator: write/read-write directory handles flush successfully,
-  read/write-attributes handles refuse with5; write-through moves preserve occupied targets. Verify
-  the actual Node/libuv path and ordinary-user rights next. The same manual suite now also probes the
-  pinned Node23 standard open/fsync path, requiring an r+ directory descriptor to flush before/after
-  removal, with a normal-file control and version/error records. That extended run is pending.
-  No production Windows fix or durability contract is claimed.
+- Qualify Windows directory publication durability, ACL assumptions and history-quarantine parent
+  synchronization. [Raw Win32 observations](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-directory-api-c707/README.md)
+  pass under an administrator on NTFS/build26100; [actual Node23/libuv1.50 run41185908325](../references/evidence/ears-sqlite-implementation-2026-10-28/windows-node-directory-b730/README.md)
+  confirms directory r+ open/fsync success before/after removal, versus EPERM for r. The current
+  unqualified implementation removes the no-op from recovery/private-file barriers using that standard
+  primitive. Private-file postpublication failure retains the installed file with NOT_DURABLE, original
+  cause and publishedPath; refusal/cleanup errors are retained together. All six private-file cases,
+  including named barrier/outcome/cleanup witnesses, are mandatory in the three-platform verifier.
+  Run that affected platform suite before accepting the change. Unsupported barriers refuse; ordinary
+  non-administrator/ACL and installed-runtime qualification remain open. No ordering/process-kill/API
+  observation certifies physical power-loss durability or arbitrary filesystems.
 - Finish required installed Electron/renderer/CLI, executable-pack/SDK and OS/architecture coverage beyond
   the six signed macOS arm64 cases. Requalify provenance after inner-library signing and before app sealing
   when relevant inputs change. `asar:false` already keeps native files on disk; an unsigned/source build is

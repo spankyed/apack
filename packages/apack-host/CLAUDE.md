@@ -52,8 +52,8 @@ not live import suspension or filesystem publication authority.
 SQLite's app-only logical archive API is composed by `backup/logical.ts` and `backup/index.ts`.
 `exportLogicalDatabase(database, file)` synchronizes a private 0600 archive before exclusive hard-link
 publication; existing/racing targets survive, unsupported hard-link filesystems refuse, and a published
-artifact whose directory sync fails is retained with `NOT_DURABLE`/`publishedPath`. Windows directory sync
-and inherited ACL durability remain platform qualification, not portable guarantees. The parent must exist.
+artifact whose directory sync fails is retained with `NOT_DURABLE`/`publishedPath`. Directory barriers request a real flush through a writable Windows descriptor. Unsupported barriers
+refuse; Windows ACL, ordinary-user and physical durability remain platform qualification, not portable guarantees. The parent must exist.
 `readLogicalBackup(stores, archives)` stages, rebuilds, audits and validates selected primary/history archives
 without replacing live data. `importLogicalDatabase` uses the same staging path and ordinary import coordinator,
 including write leases, incumbent copies, rollback and uncertain-outcome recovery. Logical archives do not own
@@ -408,7 +408,7 @@ through the supplied provider because a test reset replaces it.
 - `allowUnprotected()` re-encrypts the readable values under a new key in the file vault, sets `protection: 'unprotected'` and deletes the old OS vault entries.
 - `clearAll()` empties the key list but keeps `keyId`. If the file can't be read or emptied, it deletes the file.
 - A data key created for a write that then fails is removed from the vault again (`pendingKeys`).
-- `writePrivateFile` (`./private-file`) writes a unique temp file with mode `0600`, fsyncs it, renames it into place and fsyncs the directory. On Windows it retries renames that fail with `EPERM`, `EBUSY` or `EACCES`, and skips the directory sync.
+- `writePrivateFile` (`./private-file`) writes a unique temp file with mode `0600`, fsyncs it, renames it into place and fsyncs the directory. On Windows it retries renames that fail with `EPERM`, `EBUSY` or `EACCES`, and opens the parent with `r+` for its actual flush. A postpublication sync failure retains the installed file and reports `NOT_DURABLE`, `publishedPath` and the original cause; a failed temporary cleanup is aggregated with the original installation error. Windows permissions inherit the enclosing profile ACL.
 - `secretsSnapshot()` is the `SecretsSnapshot` (`list()` and `status()`) the API's procedures return. `forwardSecretsChanges(registry)`, which the API's boot calls once, sends `SECRETS_CHANGED` (no values) on the bound `rootEvents` to every system that declares it takes it, on every store change.
 - Only the API's `transport/secrets.ts` tRPC procedures (`add`, `replaceValue`, `allowUnprotected`, ...) and `services/inference.ts` (`keyFor`) touch values. `services/secrets.ts` exposes only `status`, `list`, `select`, `rename` and `delete` to packs.
 

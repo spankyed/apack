@@ -123,6 +123,7 @@ jobs:
           tests/backup/storage.spec.ts tests/database/storage.spec.ts
           tests/database/recovery-exclusion.spec.ts tests/database/quarantine-publication.spec.ts
           tests/database/open-app-database.spec.ts tests/database/write-lock.spec.ts
+          tests/private-file.spec.ts
           --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/host.json
           2>&1 | tee .temp/sqlite-platform/host.log
       - name: Offline SQLite maintenance and logical archive commands

@@ -4,8 +4,8 @@ import * as path from 'node:path';
 import { writePrivateFile } from '../private-file.ts';
 
 export function syncRecoveryDirectory(dir: string): void {
-  if (process.platform === 'win32') return;
-  const fd = fs.openSync(dir, 'r');
+  // Windows FlushFileBuffers requires write access; libuv supplies BACKUP_SEMANTICS for directories.
+  const fd = fs.openSync(dir, process.platform === 'win32' ? 'r+' : 'r');
   try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
 }
 export function syncRecoveryTree(dir: string): void {
