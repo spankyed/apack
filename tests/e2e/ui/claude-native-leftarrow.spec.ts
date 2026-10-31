@@ -240,13 +240,13 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         const controls=[...element.querySelectorAll('button,textarea,[aria-label="Background session usage"],[aria-label="Background Claude configured status"]')].filter(node=>node.getClientRects().length>0).map(node=>{const r=box(node);return {name:node.getAttribute('aria-label')??node.textContent?.trim(),...r,hit:node.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))}})
         return {panel:box(panel),card:box(element),clientHeight:panel.clientHeight,scrollHeight:panel.scrollHeight,scrollTop:panel.scrollTop,controls,title:element.querySelector('h3')?.textContent,titleHint:element.querySelector('h3')?.getAttribute('title')}
       })
+      observations.backgroundCombinedLayout??=[];observations.backgroundCombinedLayout.push({stage,size,...metric,background})
       expect(background.scrollHeight).toBeLessThanOrEqual(background.clientHeight+1)
       expect(background.scrollTop).toBe(0);expect(background.titleHint).toBe(background.title)
       for(const control of background.controls){
         expect(control.hit,control.name??'Background control').toBe(true)
         for(const clip of [{left:0,top:0,right:metric.viewport.width,bottom:metric.viewport.height},background.panel]){expect(control.left).toBeGreaterThanOrEqual(clip.left-1);expect(control.right).toBeLessThanOrEqual(clip.right+1);expect(control.top).toBeGreaterThanOrEqual(clip.top-1);expect(control.bottom).toBeLessThanOrEqual(clip.bottom+1)}
       }
-      observations.backgroundCombinedLayout??=[];observations.backgroundCombinedLayout.push({stage,size,...metric,background})
       expect(metric.text).toBe(retainedDraft);expect(metric.editor.height).toBeGreaterThanOrEqual(39);expect(metric.textRects.length).toBeGreaterThan(0)
       for(const r of metric.textRects){
         expect(r.hit).toBe(true)

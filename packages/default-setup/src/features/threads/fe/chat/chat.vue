@@ -1090,6 +1090,7 @@ useNativeTranscriptViewport({
 .native-chat-shell:has([data-native-notice="refusal_fallback_prompt"]) { --composer-notice-history-reserve: 10rem; }
 /* Keep pending native decisions beside useful conversation space in short windows. */
 @media (max-height: 720px) {
+  .chat-composer-area--background { min-height: min(12.5rem, 55%); }
   .native-chat-shell:has([data-native-notice]) { min-height: calc(100vh - 3rem); }
 }
 .native-chat-shell:has([data-native-command-panel]),
