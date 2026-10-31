@@ -16,7 +16,14 @@ test('recovers a linked live child after complete Electron shutdown and relaunch
  const context=()=>appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return{threadId:c.currentThread?.id,sessionId:c.currentThread?.context?.claudeCode?.sessionId,claude:c.currentThread?.context?.claudeCode,messages:c.currentThread?.messages,native:Object.values(c.nativeTerminalViews).find((v:any)=>v.threadId===c.currentThread?.id)}as any})
  const card=appPage.locator('[data-onboarding-id="agent-chat-input"]'),composer=card.getByTestId('composer-editor-area').getByRole('textbox')
  const widget=appPage.getByRole('region',{name:'Background Claude session',exact:true}),input=widget.getByLabel('Message background session',{exact:true})
- const pictures=async(stage:string)=>{for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await widget.scrollIntoViewIfNeeded();await appPage.screenshot({path:testInfo.outputPath('apack-native-background-app-'+stage+'-'+name+'.png')})}}
+ const nativeWindow=await electronApp.browserWindow(appPage)
+ const capture=async(name:string)=>{
+  await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
+  const size=appPage.viewportSize()!
+  const png=await nativeWindow.evaluate(async(window,size)=>(await window.webContents.capturePage({x:0,y:0,...size})).toPNG().toString('base64'),size)
+  await writeFile(testInfo.outputPath(name),Buffer.from(png,'base64'))
+ }
+ const pictures=async(stage:string)=>{for(const[name,size]of[['normal',{width:1100,height:900}],['compact',{width:680,height:600}]]as const){await appPage.setViewportSize(size);await widget.scrollIntoViewIfNeeded();await capture('apack-native-background-app-'+stage+'-'+name+'.png')}}
  try{
   expect(report.mainPid).not.toBe(saved.mainPid);expect(api.pid).not.toBe(saved.apiPid)
   report.oldMain=await processState(saved.mainPid);report.oldApi=await processState(saved.apiPid)
@@ -49,17 +56,18 @@ test('recovers a linked live child after complete Electron shutdown and relaunch
   await expect.poll(async()=>{const rows=await journal(),human=rows.find(row=>row.origin?.kind==='human'&&row.message?.content===saved.retainedReply),ancestors=new Set(human?[human.uuid]:[]);for(const row of rows)if(ancestors.has(row.parentUuid)){ancestors.add(row.uuid);if(row.type==='assistant'&&row.message?.content?.some((block:any)=>block.type==='text'&&block.text))return true}return false},{timeout:15000}).toBe(true)
   report.rows=await journal();report.workerAfterReply=await processState(saved.job.pid);expect(report.workerAfterReply.start).toBe(saved.worker.start)
   report.parentAfterReply=await context();expect(report.parentAfterReply.messages).toEqual(saved.before.messages);expect(report.parentAfterReply.claude.totalCostUsd).toBe(saved.before.claude.totalCostUsd)
-  await pictures('reply');report.phase='verified'
+  report.phase='reply-verified';await save();await pictures('reply')
  }catch(error){report.phase='failed-'+report.phase;report.problem=String(error);report.failureContext=await context().catch(()=>null);await pictures('failed').catch(()=>{});throw error}
  finally{
+  try{
   if(await widget.getByRole('button',{name:'Stop background session',exact:true}).isVisible()){
    await widget.getByRole('button',{name:'Stop background session',exact:true}).click()
    await expect.poll(async()=>{const state=await processState(saved.job.pid);return state.state==='gone'||state.state==='Z'||state.start!==saved.worker.start},{timeout:15000}).toBe(true)
    report.workerAfterStop=await processState(saved.job.pid)
    if(report.authority){await expect.poll(async()=>{const state=await processState(report.authority.pid);return state.state==='gone'||state.state==='Z'||state.start!==report.authority.process.start},{timeout:10000}).toBe(true);report.authorityAfterStop=await processState(report.authority.pid)}
-   if(report.phase==='verified'){await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0);await expect(composer).toHaveText(saved.retainedDraft);await pictures('stopped')}
+   if(report.phase==='reply-verified'){await expect(widget.getByLabel('Background session usage',{exact:true})).toHaveCount(0);await expect(composer).toHaveText(saved.retainedDraft);report.phase='verified';await save();await pictures('stopped')}
   }
-  await save()
+  }catch(error){report.phase='failed-'+report.phase;report.cleanupProblem=String(error);throw error}finally{await save()}
  }
  await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({nativeBackgroundAppRestart:true,nativeBackgroundDraftsRestored:true,nativeBackgroundFreshStatus:true,nativeBackgroundWorkerContinuity:true,nativeBackgroundUiStop:true,nativeBackgroundAppProcessesReplaced:true,nativeBackgroundParentPreserved:true,sessionId:saved.before.sessionId,backgroundSessionId:saved.job.sessionId,jobId:saved.job.id,actualAppGui:true}))
 })
