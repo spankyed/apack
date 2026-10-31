@@ -489,3 +489,23 @@ Full source-app owner41193315293 at9ec is queued once behind active installed-pl
 It verifies shared readiness/setup and settings validation across the full app suite after the focused
 editor3/3convergence. Observe actual cases, intentional installed-only skips and lifecycle attachments;
 do not treat its pending status or a job label as app acceptance.
+
+
+[Read-only attribution88658](../references/evidence/ears-sqlite-implementation-2026-10-28/query-attribution-a9/README.md)
+completes48normal/24explained queries with exact stored answers and both main hashes unchanged.
+Warmed CPU/wall are similar: SQLite candidate selection/eligibility/rerank SELECTs, not only transport,
+account for substantial cost. Nested indexed-equality CROSS JOIN order is a concrete next plan hypothesis;
+compare planner-led joins/statistics on a copy before a production change. This is not a replacement benchmark.
+[Installed-platform41192007255](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-platform-125/README.md)
+fails overall: Linux actual packaged Electron native/API-module witness passes; Windows stops before
+packaging with spawn npm ENOENT. The preview orchestrator now uses Node plus npm_execpath for run/exec,
+without a shell; normal arguments/no-publish/version isolation remain. The affected packaged workflow
+preserves build evidence and checks preview unit cases, script types and lint. It needs a new affected
+run; source-app411933 remains independent at9ec. No Windows module/renderer pass is inferred.
+
+The same direct npm spawn also exists in build:runtime's four declared legs, reached by Preview builds;
+it now resolves the npm JS entry through Node too. This preserves declared build commands, arguments,
+core/heap budgets and deadlines; no shell or publishing/version-policy change is introduced.
+Script types and existing preview contract cases run after normal output production in the affected
+workflow. This build-orchestrator correction requires the next packaged-platform run; no source-app
+runtime qualification is invalidated by a non-runtime tool-launch change.

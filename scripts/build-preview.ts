@@ -11,10 +11,13 @@ if (process.argv.includes('--help')) {
   console.log('Usage: npm run build:preview -- --version <x.y.z>\nBuilds unsigned apack Preview locally in dist/preview, without publishing or changing release metadata.');
 } else {
   const env = previewEnvironment(previewVersion(process.argv.slice(2)), process.env);
+  // npm.cmd/npx.cmd are shell wrappers on Windows; run this npm's JS entry without a shell.
+  const npmCli = process.env.npm_execpath;
+  if (!npmCli) throw new Error('Run preview builds with npm run build:preview -- --version <x.y.z>');
   env.APACK_BUILD_ROOT = createBuildSession(env);
   const metadata = readBuildManifest(env.APACK_BUILD_ROOT);
   const platform = process.platform === 'darwin' ? 'mac' : process.platform === 'win32' ? 'win' : 'linux';
-  const commands: [string, string[]][] = [
+  const commands: ['npm' | 'npx', string[]][] = [
     ['npm', ['run', 'build:default-setup']],
     ['npm', ['run', 'build:runtime']],
   ];
@@ -26,7 +29,8 @@ if (process.argv.includes('--help')) {
   console.log(`Building ${metadata.productName} ${metadata.version}`);
   for (const [command, args] of commands) {
     console.log(`\n${command} ${args.join(' ')}`);
-    const result = await boundedSpawn(command, args, TIMEOUT_MS.scenario.ms, { cwd: root, env, stream: true });
+    const invocation = command === 'npm' ? [npmCli, ...args] : [npmCli, 'exec', '--', ...args];
+    const result = await boundedSpawn(process.execPath, invocation, TIMEOUT_MS.scenario.ms, { cwd: root, env, stream: true });
     if (result.code !== 0) throw new Error(`${command} ${args.join(' ')} failed${result.timedOut ? ' (timed out)' : ''}`);
   }
   console.log('\nPreview built in dist/preview. It keeps its own data in apack-preview.');

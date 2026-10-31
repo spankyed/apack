@@ -23,6 +23,10 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare build evidence
+        run: |
+          mkdir -p .apack/tests/results/ears-installed-build
+          git rev-parse HEAD > .apack/tests/results/ears-installed-build/source.txt
       - uses: ./.github/actions/node-runtime
         with:
           node-version: 23.11.1
@@ -32,11 +36,17 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Check the platform witness
-        run: node_modules/.bin/oxlint tests/scripts/_support/ears-installed-platform.mjs -D correctness
+        run: |
+          node_modules/.bin/oxlint tests/scripts/_support/ears-installed-platform.mjs scripts/build-preview.ts scripts/build-runtime.ts -D correctness
       - name: Build the normal unsigned Preview
         run: |
+          set -o pipefail
           version="$(node -p 'require("./package.json").version.split("-")[0]')"
-          npm run build:preview -- --version "$version"
+          npm run build:preview -- --version "$version" 2>&1 | tee .apack/tests/results/ears-installed-build/build.log
+      - name: Check preview contracts and script types
+        run: |
+          npm run typecheck:scripts
+          node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --project @app/repo-checks packages/repo-checks/tests/preview-build.spec.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=.apack/tests/results/ears-installed-build/preview-tests.json
       - name: Exercise actual packaged Electron native runtime
         run: node tests/scripts/_support/ears-installed-platform.mjs .apack/tests/results/ears-installed-platform
       - name: Preserve packaged runtime evidence
@@ -44,6 +54,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ears-installed-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}
-          path: .apack/tests/results/ears-installed-platform
+          path: |
+            .apack/tests/results/ears-installed-platform
+            .apack/tests/results/ears-installed-build
           if-no-files-found: error
           retention-days: 14
