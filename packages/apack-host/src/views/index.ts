@@ -1,5 +1,3 @@
-import type { createPerformanceController } from '../diagnostics/controller.ts';
-import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
 // The views windows are subscribed to: each request resolved to the feature's view in the registered pack and run
 // on the engine as a watch (`Ears.watch`), so it runs again after every commit that could change its result.
 //
@@ -20,9 +18,16 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 type ViewObserver = (update: ViewUpdate) => void;
 
+/** Optional observation of one watch; view execution and delivery remain owned by the view host. */
+export interface ViewObservation {
+  read<T>(read: () => T, causes?: WatchReadContext): T;
+  deliver<T>(commit: number, deliver: () => T): T;
+  recordCauses(): boolean;
+}
+
 /** What the views read: the engine, and the packs that declare them */
 export interface ViewHostOptions {
-  performance?: Pick<ReturnType<typeof createPerformanceController>, 'begin' | 'execution' | 'isRecording'>;
+  observe?: () => ViewObservation;
   /** The engine views run on, asked for at each start, so a test's replaced engine is the one a new watch reads */
   ears: () => Ears;
   packs: {
@@ -55,7 +60,7 @@ interface SharedView {
   stop: () => void;
 }
 
-export function createViewHost({ ears, packs, performance }: ViewHostOptions): ViewHost {
+export function createViewHost({ ears, packs, observe }: ViewHostOptions): ViewHost {
   const views = new Map<string, SharedView>();
 
   const deliver = (shared: SharedView, update: ViewUpdate) => {
@@ -87,35 +92,17 @@ export function createViewHost({ ears, packs, performance }: ViewHostOptions): V
       return;
     }
     const args = shared.request.args;
-    let first = true;
-    let readCarrier: PerformanceCarrier | undefined;
-    const runRead = (causes?: WatchReadContext) => {
-      const span = performance?.begin('app.view.read', {}, causes && { database: 'app', ...causes });
-      readCarrier = span?.carrier();
-      const run = () => (read as (args: unknown) => unknown)(args);
-      try {
-        const result = span ? span.within(run) : run();
-        span?.end();
-        return result;
-      } catch (error) { span?.end('error'); throw error; }
-    };
-    const deliverRead = (update: ViewUpdate) => {
-      const run = () => {
-        const span = performance?.begin('app.view.deliver', { 'app.commit': update.commit });
-        try { if (span) span.within(() => deliver(shared, update)); else deliver(shared, update); }
-        finally { span?.end(); }
-      };
-      if (performance) performance.execution.withCarrier(readCarrier, run); else run();
-    };
-    const watching = ears().watch((causes) => {
-      const initial = first;
-      first = false;
-      // Coalesced commits are links, not whichever action happened to own the scheduler callback.
-      return !initial && performance ? performance.execution.withCarrier(undefined, () => runRead(causes)) : runRead(causes);
-    }, {
+    const observation = observe?.();
+    const runRead = observation
+      ? (causes?: WatchReadContext) => observation.read(() => (read as (args: unknown) => unknown)(args), causes)
+      : () => (read as (args: unknown) => unknown)(args);
+    const deliverRead = observation
+      ? (update: ViewUpdate) => observation.deliver(update.commit, () => deliver(shared, update))
+      : (update: ViewUpdate) => deliver(shared, update);
+    const watching = ears().watch(runRead, {
       next: (value, commit) => deliverRead({ ok: true, value, commit }),
       error: (error, commit) => deliverRead({ ok: false, error: errorMessage(error), commit }),
-    }, { label: `${shared.request.ref} · ${shared.request.view}`, recordCauses: performance?.isRecording });
+    }, { label: `${shared.request.ref} · ${shared.request.view}`, recordCauses: observation?.recordCauses });
     shared.stop = () => watching.stop();
   };
 

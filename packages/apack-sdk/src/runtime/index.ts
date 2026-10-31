@@ -8,4 +8,4 @@ export { bindFeHost, _isFeHostBound, type FeHostRuntime, type FeClient, type FeP
 export { _rootEvents, type RootEvents } from './root-events.ts';
 
 export type { PerformanceCarrier, PerformanceExecution, _PerformanceProfiles, _RendererPerformanceStatistics, _RendererPerformanceResources } from './performance.ts';
-export { _performanceExecution } from './performance.ts';
+export { _performanceExecution, _performanceCarrier, _performanceEnvelope, _withPerformanceCarrier, _carryPerformanceEvent, _withPerformanceEvent, _withPerformanceDelivery } from './performance.ts';

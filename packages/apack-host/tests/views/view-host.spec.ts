@@ -1,3 +1,4 @@
+import { createViewObservation } from '../../src/diagnostics/views.ts';
 import { createNodePerformanceController } from '../../src/diagnostics/node.ts';
 // The view host: each request runs the feature's view in the registered pack on the engine, subscribers asking for
 // the same view and arguments share one engine watch, the last to leave stops it, and the registry changing is what
@@ -136,7 +137,7 @@ it('attributes initial reads to their subscriber and links coalesced reads to bo
   views.close();
   const recording = createNodePerformanceController();
   recording.attach(engine, 'app');
-  views = createViewHost({ ears: () => engine, packs, performance: recording });
+  views = createViewHost({ ears: () => engine, packs, observe: () => createViewObservation(recording) });
   packs.registerPack(notesPack());
   const note = engine.create('Note', { title: 'initial' }).id();
   recording.start('lightweight');

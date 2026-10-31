@@ -1,3 +1,4 @@
+import { createStartupViewReceipts, type StartupViewReceipt } from './startup-view-receipts.ts';
 import { z } from 'zod';
 import type { _HostBridge } from '@apackdev/sdk/fe';
 import type { _RendererPerformanceResources } from '@apackdev/sdk/runtime';
@@ -19,22 +20,13 @@ let rendererResourceFailed = false;
 let longTasks: ReturnType<typeof observeRendererLongTasks> | undefined;
 const rendererBridge = () => (window.electronAPI as _HostBridge | undefined)?.performance;
 export interface PerformanceViewDelivery { request: ViewRequest; update: ViewUpdate; generation: number; delivery: number }
-interface StartupViewReceipt { entityId?: string; commit: number; subscription?: string; delivery?: number; ok: boolean }
-const startupViews = new Map<string, StartupViewReceipt>();
+let startupViews: ReturnType<typeof createStartupViewReceipts> | undefined;
 const listeners = new Set<(delivery: PerformanceViewDelivery) => void>();
 
 /** Ephemeral developer callbacks; no request arguments or results enter the span recorder. */
 export function notifyPerformanceView(delivery: PerformanceViewDelivery) {
   if (!controller) return;
-  const chatId = delivery.request.view === 'chat' && typeof delivery.request.args === 'object' && delivery.request.args !== null
-    ? (delivery.request.args as { threadId?: unknown }).threadId : undefined;
-  if (startupAction && (delivery.request.args === undefined || typeof chatId === 'string' && chatId.length <= 128)) {
-    const { ref, view } = delivery.request;
-    const key = `${ref}\0${view}`;
-    if (ref.length > 128 || view.length > 128 || !startupViews.has(key) && startupViews.size >= 32) failedListeners++;
-    else startupViews.set(key, { ...(typeof chatId === 'string' && { entityId: chatId }), ok: delivery.update.ok, commit: delivery.update.commit,
-      subscription: delivery.update.diagnostics?.subscription, delivery: delivery.update.diagnostics?.delivery });
-  }
+  if (startupViews && !startupViews.record(delivery)) failedListeners++;
   for (const listener of listeners) { try { listener(delivery); } catch { failedListeners++; } }
 }
 
@@ -62,9 +54,9 @@ export const windowPerformance = {
       const resource = createPerformanceController(() => new BrowserRecordingContext());
       resource.start(mode);
       failedListeners = 0;
-      startupViews.clear();
       controller = resource;
       if (options?.startup) startupAction = resource.execution.withCarrier(options.carrier, () => resource.begin('app.startup', { 'app.process': 'renderer' }));
+      startupViews = startupAction ? createStartupViewReceipts() : undefined;
     } catch (error) {
       if (rendererLease) await rendererBridge()?.stop(rendererLease).catch(() => {});
       rendererLease = undefined; longTasks?.stop(); longTasks = undefined;
@@ -73,8 +65,7 @@ export const windowPerformance = {
     } finally { starting = false; }
   },
   lastStartupView(ref: string, view: string): StartupViewReceipt | undefined {
-    const receipt = startupViews.get(`${ref}\0${view}`);
-    return receipt && { ...receipt };
+    return startupViews?.last(ref, view);
   },
   withinStartup<T>(fn: () => T): T { return startupAction ? startupAction.within(fn) : fn(); },
   begin(name: string, attributes?: Parameters<Controller['begin']>[1]) {
@@ -95,7 +86,7 @@ export const windowPerformance = {
     controller = undefined;
     stopping = true;
     listeners.clear();
-    startupViews.clear();
+    startupViews = undefined;
     // Both owners are stopped even if the socket was lost. A failed report remains a failed trial.
     try {
       const lease = rendererLease; rendererLease = undefined;

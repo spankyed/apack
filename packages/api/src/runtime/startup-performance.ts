@@ -28,3 +28,11 @@ export function createStartupPerformance(env: AppEnv, input: string | undefined)
     },
   };
 }
+
+/** Admission is a startup observation; pack loading keeps its own result and original error. */
+export function observeIndexAdmission<T>(recording: Pick<ReturnType<typeof createNodePerformanceController>, 'begin'> | undefined, load: () => T): T {
+  const span = recording?.begin('app.index.admission', { 'app.process': 'backend' });
+  try { return span ? span.within(load) : load(); }
+  catch (error) { span?.end('error'); throw error; }
+  finally { span?.end(); }
+}

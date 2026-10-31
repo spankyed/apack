@@ -1,4 +1,4 @@
-import { _performanceExecution } from '@apackdev/sdk/runtime';
+import { _performanceCarrier, _withPerformanceDelivery } from '@apackdev/sdk/runtime';
 // Handing an event to an actor in this window, named so the handler can be answered.
 //
 // **At the seam rather than in the shell, because more than one feature hands events to actors.** It was the
@@ -21,11 +21,9 @@ import { _callOn, _runDelivery, type _Asker, type Message } from '@apackdev/sdk/
  */
 export function notifySurfaceActor(actor: AnyActorRef, ref: string, event: AnyEventObject, call?: Pick<Message, 'call' | 'answering' | 'diagnostics'>): void {
   const delivered = call === undefined ? event : { ...event, ..._callOn(call) };
-  const performance = _performanceExecution();
-  if (performance) performance.carryEvent(delivered, call?.diagnostics ?? performance.capture());
   const send = () => actor.send(delivered);
   _runDelivery({ receiver: ref, event: delivered, ...(call?.call === undefined ? {} : { call: call.call }) }, () =>
-    performance ? performance.withEvent(delivered, send) : send());
+    _withPerformanceDelivery(delivered, _performanceCarrier(call?.diagnostics), send));
 }
 
 /**
@@ -54,9 +52,7 @@ export function notifySurfaceActor(actor: AnyActorRef, ref: string, event: AnyEv
  */
 export function sendToSurfaceActor(actor: AnyActorRef, ref: string, event: AnyEventObject, asker: _Asker, call?: Pick<Message, 'call' | 'answering' | 'diagnostics'>): void {
   const delivered = call === undefined ? event : { ...event, ..._callOn(call) };
-  const performance = _performanceExecution();
-  if (performance) performance.carryEvent(delivered, call?.diagnostics ?? performance.capture());
   const send = () => actor.send(delivered);
   _runDelivery({ receiver: ref, asker, event: delivered, ...(call?.call === undefined ? {} : { call: call.call }) }, () =>
-    performance ? performance.withEvent(delivered, send) : send());
+    _withPerformanceDelivery(delivered, _performanceCarrier(call?.diagnostics), send));
 }

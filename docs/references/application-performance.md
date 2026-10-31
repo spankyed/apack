@@ -21,6 +21,26 @@ Modes are disabled, lightweight and detailed. Disabled mode creates no provider,
 resource sampler or profiles. Lightweight mode records bounded spans/counters and process observations.
 Detailed mode adds CPU and sampled allocation profiles; its overhead is measured separately.
 
+## Runtime integration boundaries
+
+Runtime code owns application execution, routing, subscriptions and teardown. Diagnostics code owns
+context capture/restoration, span policy, receipt sequences and bounded recording state. Composition
+roots select these adapters; business code calls the boundary without interpreting trace metadata.
+
+| Boundary | Diagnostic owner | Runtime responsibility |
+| --- | --- | --- |
+| Event envelopes and actor delivery | SDK `runtime/performance.ts` | Route and handle the original event |
+| View reads and delivery | Host `diagnostics/views.ts`, injected through `ViewObservation` | Resolve views, share watches, compare results and release subscriptions |
+| Wire subscriptions | API `transport/diagnostics.ts` | Validate requests and forward updates |
+| Renderer subscriptions | Renderer `runtime/performance-transport.ts` | Reconnect and reject stale callbacks |
+| Engine operations and watch causes | EARS `observation.ts` | Execute transactions, track reads and schedule invalidations |
+| Startup recording | Main `modules/performance/startup.ts`, API `runtime/startup-performance.ts`, renderer `runtime/startup-view-receipts.ts` | Launch windows, admit packs and display views |
+
+Each watch and wire subscription owns its observation state. Reconnection captures a fresh cause;
+coalesced rereads clear the ambient action parent and retain commit links. Disabled observation preserves
+the engine's idle fast path and avoids copying event envelopes. These contracts are covered at the
+adapter boundary as well as by existing routing, view and actor tests.
+
 ## Attribution and limits
 
 Standard W3C trace context travels in execution/transport envelopes, outside persisted business data.

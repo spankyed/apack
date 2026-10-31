@@ -19,6 +19,42 @@ export function _performanceExecution(): PerformanceExecution | undefined {
   return undefined;
 }
 
+/** @internal Use an explicit cause when supplied; otherwise capture the current execution. */
+export function _performanceCarrier(carrier?: PerformanceCarrier): PerformanceCarrier | undefined {
+  return carrier ?? _performanceExecution()?.capture();
+}
+
+/** @internal Diagnostic envelopes never alter business payloads or allocate a copy while idle. */
+export function _performanceEnvelope<T extends object>(envelope: T): T {
+  const carrier = _performanceCarrier();
+  return carrier?.traceparent ? { ...envelope, diagnostics: carrier } : envelope;
+}
+
+/** @internal Restore context at a process or transport boundary, including an explicitly absent cause. */
+export function _withPerformanceCarrier<T>(carrier: unknown, run: () => T): T {
+  const execution = _performanceExecution();
+  return execution ? execution.withCarrier(carrier, run) : run();
+}
+
+/** @internal Associate a queued event without changing its business fields. */
+export function _carryPerformanceEvent(event: object, carrier: unknown): void {
+  _performanceExecution()?.carryEvent(event, carrier);
+}
+
+/** @internal Restore a queued event's cause when its handler runs. */
+export function _withPerformanceEvent<T>(event: unknown, run: () => T): T {
+  const execution = _performanceExecution();
+  return execution && typeof event === 'object' && event !== null ? execution.withEvent(event, run) : run();
+}
+
+/** @internal Carry and restore a delivered event under one execution owner. */
+export function _withPerformanceDelivery<T>(event: object, carrier: unknown, run: () => T): T {
+  const execution = _performanceExecution();
+  if (!execution) return run();
+  execution.carryEvent(event, carrier);
+  return execution.withEvent(event, run);
+}
+
 /** @internal Portable diagnostic data shared by app processes. */
 export interface _PerformanceProfiles {
   sampling: { cpuIntervalMicros: number; allocationIntervalBytes: number; allocationStackDepth: number; includeCollectedAllocations: boolean };

@@ -55,7 +55,7 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
         scenario: "search" | "thread-open" | "streaming" | "populated-startup";
         index: number;
         warmup: boolean;
-        outcome: "failed" | "cancelled" | "incomplete" | "passed";
+        outcome: "failed" | "passed" | "incomplete" | "cancelled";
         correct: boolean;
         completion: "missing" | "view-ready";
         durationMs?: number | undefined;
@@ -327,7 +327,7 @@ export function readPerformanceModeComparison(directory: string, measured?: numb
             scenario: "search" | "thread-open" | "streaming" | "populated-startup";
             index: number;
             warmup: boolean;
-            outcome: "failed" | "cancelled" | "incomplete" | "passed";
+            outcome: "failed" | "passed" | "incomplete" | "cancelled";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -349,7 +349,7 @@ export function readPerformanceModeComparison(directory: string, measured?: numb
             scenario: "search" | "thread-open" | "streaming" | "populated-startup";
             index: number;
             warmup: boolean;
-            outcome: "failed" | "cancelled" | "incomplete" | "passed";
+            outcome: "failed" | "passed" | "incomplete" | "cancelled";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -383,7 +383,7 @@ export function readPerformanceRevisionComparison(directory: string, measured?: 
             scenario: "search" | "thread-open" | "streaming" | "populated-startup";
             index: number;
             warmup: boolean;
-            outcome: "failed" | "cancelled" | "incomplete" | "passed";
+            outcome: "failed" | "passed" | "incomplete" | "cancelled";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -405,7 +405,7 @@ export function readPerformanceRevisionComparison(directory: string, measured?: 
             scenario: "search" | "thread-open" | "streaming" | "populated-startup";
             index: number;
             warmup: boolean;
-            outcome: "failed" | "cancelled" | "incomplete" | "passed";
+            outcome: "failed" | "passed" | "incomplete" | "cancelled";
             correct: boolean;
             completion: "missing" | "view-ready";
             durationMs?: number | undefined;
@@ -433,7 +433,7 @@ export function readPerformanceRun(directory: string, measured?: number): {
         scenario: "search" | "thread-open" | "streaming" | "populated-startup";
         index: number;
         warmup: boolean;
-        outcome: "failed" | "cancelled" | "incomplete" | "passed";
+        outcome: "failed" | "passed" | "incomplete" | "cancelled";
         correct: boolean;
         completion: "missing" | "view-ready";
         durationMs?: number | undefined;
@@ -508,9 +508,9 @@ export const trialSchema: z.ZodObject<{
     warmup: z.ZodBoolean;
     outcome: z.ZodEnum<{
         failed: "failed";
-        cancelled: "cancelled";
-        incomplete: "incomplete";
         passed: "passed";
+        incomplete: "incomplete";
+        cancelled: "cancelled";
     }>;
     durationMs: z.ZodOptional<z.ZodNumber>;
     correct: z.ZodBoolean;
@@ -676,7 +676,7 @@ export function validatePerformanceRun(manifestInput: unknown, trialsInput: unkn
         scenario: "search" | "thread-open" | "streaming" | "populated-startup";
         index: number;
         warmup: boolean;
-        outcome: "failed" | "cancelled" | "incomplete" | "passed";
+        outcome: "failed" | "passed" | "incomplete" | "cancelled";
         correct: boolean;
         completion: "missing" | "view-ready";
         work: Record<string, number>;

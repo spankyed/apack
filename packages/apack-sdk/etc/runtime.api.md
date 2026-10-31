@@ -42,6 +42,9 @@ export function bindHost(runtime: HostRuntime): void;
 // @internal
 export function _boundPackExtensions(): PackExtensionsView;
 
+// @internal
+export function _carryPerformanceEvent(event: object, carrier: unknown): void;
+
 export { Ears }
 
 // @public
@@ -177,6 +180,12 @@ export interface PerformanceCarrier {
     tracestate?: string;
 }
 
+// @internal
+export function _performanceCarrier(carrier?: PerformanceCarrier): PerformanceCarrier | undefined;
+
+// @internal
+export function _performanceEnvelope<T extends object>(envelope: T): T;
+
 // @public
 export interface PerformanceExecution {
     // (undocumented)
@@ -285,6 +294,15 @@ export interface SecretRedaction {
     // (undocumented)
     matchesSecret(text: string, from: number, to: number): boolean;
 }
+
+// @internal
+export function _withPerformanceCarrier<T>(carrier: unknown, run: () => T): T;
+
+// @internal
+export function _withPerformanceDelivery<T>(event: object, carrier: unknown, run: () => T): T;
+
+// @internal
+export function _withPerformanceEvent<T>(event: unknown, run: () => T): T;
 
 // (No @packageDocumentation comment for this package)
 

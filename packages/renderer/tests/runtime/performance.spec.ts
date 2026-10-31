@@ -98,3 +98,23 @@ it('keeps application spans usable when the renderer debugger refuses capture', 
   expect(report.failures).toContain('renderer-resource-start');
   expect(report.renderer?.observations.length).toBe(1);
 });
+
+it('retains baseline completion receipts without recording spans in disabled startup mode', async () => {
+  await windowPerformance.start('disabled', { startup: true });
+  notifyPerformanceView({ request: { ref: 'pack/feature', view: 'list' }, update: { ok: true, value: 'private payload', commit: 7 }, generation: 1, delivery: 1 });
+  expect(windowPerformance.lastStartupView('pack/feature', 'list')).toMatchObject({ ok: true, commit: 7 });
+  expect(bridge.start).not.toHaveBeenCalled();
+  expect(await windowPerformance.stop()).toMatchObject({ complete: true, renderer: { observations: [] } });
+});
+
+it('reports receipt overflow while continuing to update an admitted startup view', async () => {
+  await windowPerformance.start('lightweight', { startup: true });
+  const deliver = (ref: string, commit: number) => notifyPerformanceView({ request: { ref, view: 'list' },
+    update: { ok: true, value: null, commit }, generation: 1, delivery: commit });
+  for (let index = 0; index < 32; index++) deliver(`pack/feature-${index}`, index);
+  deliver('pack/overflow', 33);
+  deliver('pack/feature-0', 34);
+  expect(windowPerformance.lastStartupView('pack/overflow', 'list')).toBeUndefined();
+  expect(windowPerformance.lastStartupView('pack/feature-0', 'list')).toMatchObject({ commit: 34 });
+  expect(await windowPerformance.stop()).toMatchObject({ complete: false, failedListeners: 1 });
+});
