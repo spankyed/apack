@@ -236,8 +236,13 @@ native 0.4198 (98/99 focused cases pass; the new test fails). Direct package che
 without the adapter. Keep the test and target intact. [Portable native Leiden](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-wasm-4ed/README.md)
 now reaches 0.419789612 in actual Node execution and closes the unchanged quality test through SQLite:
 EARS typechecking and all106 focused cases pass. The rejected TypeScript dependency is removed. The
-core uses separate per-handle memory and integrity-checked package code. Production asset builds,
-packaged smoke, current-platform/native parity and full exact-source qualification remain required. API generation41209245253
+core uses separate per-handle memory and integrity-checked package code. [Actual production/API build](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-production-2cb/README.md)
+passes on Linux at2cbafd7fb3, including the emitted core's unchanged quality target and all three API reports.
+Installed-platform41212950283 fails Linux before module execution: cold Preview generation precedes its
+required published SDK declarations. The ordinary command now ensures packages before generation, which
+is preserved; this dependency-order fix requires actual clean-path requalification. Strict41212565910
+remains separately active at2cbafd7fb3. Current-platform/native parity, packaged runtime and full
+exact-source qualification remain required. API generation41209245253
 passes at563ec93ed0 with an empty report diff. New-pin native parity, resource/quality comparisons and
 full integrated/platform acceptance remain required. Do not substitute Louvain for Leiden or silently omit these APIs.
 Existing platform/benchmark evidence retains its original native pin; new-pin baseline and integrated
