@@ -3,17 +3,35 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
+import type { PerformanceManifest, PerformanceTrial } from '../../src/performance/report.ts';
 import { createPerformanceRunStore, readPerformanceRun, PERFORMANCE_TRIAL_BYTES } from '../../src/performance/run.ts';
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
 function directory() { const directory = mkdtempSync(path.join(tmpdir(), 'apack-run-store-')); directories.push(directory); return directory; }
 const manifest = performanceManifest();
-const report = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
-  mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0,
-  contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
-const trial = (index: number) => ({ scenario: 'thread-open', index, warmup: index < 5, outcome: 'passed', durationMs: index + 1,
+const report = performanceProcessReport('lightweight', 'backend');
+const trial = (index: number): PerformanceTrial => ({ scenario: 'thread-open', index, warmup: index < 5, outcome: 'passed', durationMs: index + 1,
   correct: true, completion: 'view-ready', work: {}, processes: { renderer: performanceProcessReport('lightweight', 'renderer'), backend: performanceProcessReport('lightweight', 'backend') } });
-function complete() { const output = directory(); const store = createPerformanceRunStore(output, manifest, 1); for (let index = 0; index < 6; index++) store.append(trial(index)); return output; }
+function complete(mode: PerformanceManifest['mode'] = 'lightweight', change: (trial: PerformanceTrial) => void = () => {}, startup = false) {
+  const output = directory(); const ownManifest = { ...manifest, mode };
+  const store = createPerformanceRunStore(output, ownManifest, 1);
+  for (let index = 0; index < 6; index++) {
+    const value: PerformanceTrial = { ...trial(index), scenario: startup ? 'populated-startup' : 'thread-open', processes: {
+      renderer: performanceProcessReport(mode, 'renderer'), backend: performanceProcessReport(mode, 'backend'),
+      ...(startup && { driver: performanceProcessReport(mode, 'driver') }),
+    } };
+    change(value);
+    if (!startup) store.append(value);
+    else {
+      const own = path.join(output, `trial-${index}`); mkdirSync(own);
+      writeFileSync(path.join(own, 'manifest.json'), JSON.stringify(ownManifest));
+      writeFileSync(path.join(own, 'trial.json'), JSON.stringify(value));
+      store.adopt(`trial-${index}/trial.json`);
+    }
+  }
+  if (startup) store.save([{ phase: 'seed', exitCode: 0, signal: null }, ...Array.from({ length: 6 }, (_, index) => ({ phase: 'populated-startup', index, exitCode: 0, signal: null }))]);
+  return output;
+}
 it('writes immutable raw trials and admits a compact run with the same scalar summary', () => {
   const output = complete();
   const run = readPerformanceRun(output, 1);
@@ -55,73 +73,39 @@ it('rejects raw tampering, forged summaries, symbolic links and oversized files 
     expect(() => readPerformanceRun(output, 1)).toThrow();
   }
 });
-it('requires startup invocation ownership, phase order and successful exit as well as correct trials', () => {
-  const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
-  for (let index = 0; index < 6; index++) {
-    const ownTrial = { ...trial(index), scenario: 'populated-startup', processes: { ...trial(index).processes, driver: performanceProcessReport('lightweight', 'driver') } };
-    const own = path.join(output, `trial-${index}`); mkdirSync(own);
-    writeFileSync(path.join(own, 'manifest.json'), JSON.stringify(manifest));
-    writeFileSync(path.join(own, 'trial.json'), JSON.stringify(ownTrial));
-    store.adopt(`trial-${index}/trial.json`);
-  }
-  const invocations = [{ phase: 'seed', exitCode: 0, signal: null }, ...Array.from({ length: 6 }, (_, index) => ({ phase: 'populated-startup', index, exitCode: 0, signal: null }))];
-  store.save(invocations); expect(readPerformanceRun(output, 1).scenario).toBe('populated-startup');
-  store.save(invocations.map(item => ({ ...item, exitCode: 1 })));
-  expect(() => readPerformanceRun(output, 1)).toThrow(/Incomplete/);
+it('requires a successful startup process exit as well as correct trials', () => {
+  const output = complete('lightweight', undefined, true);
+  expect(readPerformanceRun(output, 1).scenario).toBe('populated-startup');
+  const file = path.join(output, 'results.json'); const index = JSON.parse(readFileSync(file, 'utf8'));
+  index.invocations[1].exitCode = 1;
+  writeFileSync(file, JSON.stringify(index));
+  expect(() => readPerformanceRun(output, 1)).toThrow(/lifecycle/);
 });
 
 it('requires distinct actual process identities before admitting a complete run', () => {
-  for (const missing of [true, false]) {
-    const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
-    for (let index = 0; index < 6; index++) store.append({ ...trial(index), processes: {
-      renderer: { ...report, processId: 101 }, backend: { ...report, ...(missing ? {} : { processId: 101 }) },
-    } });
+  for (const id of [undefined, 101]) {
+    const output = complete('lightweight', value => { value.processes.backend!.processId = id; });
     expect(() => readPerformanceRun(output, 1)).toThrow(/process identity/);
   }
 });
-
 it.each([
-  { mode: 'lightweight', role: 'backend', missing: 'processStatistics' },
-  { mode: 'lightweight', role: 'renderer', missing: 'rendererStatistics' },
-  { mode: 'lightweight', role: 'renderer', missing: 'rendererLongTasks' },
-  { mode: 'detailed', role: 'backend', missing: 'profiles' },
-  { mode: 'detailed', role: 'renderer', missing: 'profiles' },
-] as const)('rejects $mode runs without the promised $role $missing capture', ({ mode, role, missing }) => {
-  const output = directory(); const store = createPerformanceRunStore(output, { ...manifest, mode }, 1);
-  for (let index = 0; index < 6; index++) {
-    const processes = { renderer: performanceProcessReport(mode, 'renderer'), backend: performanceProcessReport(mode, 'backend') };
-    if (index === 0) delete processes[role][missing];
-    store.append({ ...trial(index), processes });
-  }
+  ['lightweight', 'backend', 'processStatistics'], ['lightweight', 'renderer', 'rendererStatistics'],
+  ['lightweight', 'renderer', 'rendererLongTasks'], ['detailed', 'backend', 'profiles'],
+  ['detailed', 'renderer', 'profiles'], ['detailed', 'driver', 'profiles'],
+] as const)('rejects %s runs without the promised %s %s capture', (mode, role, missing) => {
+  const output = complete(mode, value => { if (value.index === 0) delete value.processes[role]![missing]; }, role === 'driver');
   expect(() => readPerformanceRun(output, 1)).toThrow(/capture/i);
 });
-
-it('admits complete detailed captures but rejects lightweight profiles and disabled instrumentation', () => {
-  for (const mode of ['disabled', 'lightweight', 'detailed'] as const) {
-    const output = directory(); const store = createPerformanceRunStore(output, { ...manifest, mode }, 1);
-    for (let index = 0; index < 6; index++) store.append({ ...trial(index), processes: {
-      renderer: performanceProcessReport(mode, 'renderer'), backend: performanceProcessReport(mode, 'backend'),
-    } });
-    expect(readPerformanceRun(output, 1).summary.passed).toBe(1);
-  }
+it('admits each recording mode and detailed startup, while refusing captures forbidden by that mode', () => {
+  for (const mode of ['disabled', 'lightweight', 'detailed'] as const) expect(readPerformanceRun(complete(mode), 1).summary.passed).toBe(1);
+  expect(readPerformanceRun(complete('detailed', undefined, true), 1).summary.passed).toBe(1);
   for (const mode of ['disabled', 'lightweight'] as const) {
-    const output = directory(); const store = createPerformanceRunStore(output, { ...manifest, mode }, 1);
-    for (let index = 0; index < 6; index++) {
-      const backend = performanceProcessReport(mode, 'backend');
-      if (index === 0) backend.profiles = performanceProcessReport('detailed', 'backend').profiles;
-      store.append({ ...trial(index), processes: { renderer: performanceProcessReport(mode, 'renderer'), backend } });
-    }
+    const output = complete(mode, value => { value.processes.backend!.profiles = performanceProcessReport('detailed', 'backend').profiles; });
     expect(() => readPerformanceRun(output, 1)).toThrow(/capture/i);
   }
 });
-
 it('requires the declared core renderer metrics, not just an empty resource envelope', () => {
-  const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
-  for (let index = 0; index < 6; index++) {
-    const renderer = performanceProcessReport('lightweight', 'renderer');
-    if (index === 0) renderer.rendererStatistics!.metrics = [];
-    store.append({ ...trial(index), processes: { renderer, backend: performanceProcessReport('lightweight', 'backend') } });
-  }
+  const output = complete('lightweight', value => { value.processes.renderer!.rendererStatistics!.metrics = []; });
   expect(() => readPerformanceRun(output, 1)).toThrow(/renderer resource capture/);
 });
 
@@ -153,21 +137,4 @@ it('rejects adopted child provenance changes and retains exactly one raw startup
   expect(index.records[0].file).toBe('trial-0/trial.json');
   expect(() => readFileSync(path.join(output, 'trial-0.json'))).toThrow();
   expect(() => store.adopt('../trial.json')).toThrow(/path/);
-});
-
-it('requires detailed startup driver captures in the canonical child admission path', () => {
-  for (const missing of [false, true]) {
-    const output = directory(); const detailed = { ...manifest, mode: 'detailed' }; const store = createPerformanceRunStore(output, detailed, 1);
-    for (let index = 0; index < 6; index++) {
-      const processes = { renderer: performanceProcessReport('detailed', 'renderer'), backend: performanceProcessReport('detailed', 'backend'), driver: performanceProcessReport('detailed', 'driver') };
-      if (missing && index === 0) delete processes.driver.profiles;
-      const own = path.join(output, `trial-${index}`); mkdirSync(own);
-      writeFileSync(path.join(own, 'manifest.json'), JSON.stringify(detailed));
-      writeFileSync(path.join(own, 'trial.json'), JSON.stringify({ ...trial(index), scenario: 'populated-startup', processes }));
-      store.adopt(`trial-${index}/trial.json`);
-    }
-    store.save([{ phase: 'seed', exitCode: 0, signal: null }, ...Array.from({ length: 6 }, (_, index) => ({ phase: 'populated-startup', index, exitCode: 0, signal: null }))]);
-    if (missing) expect(() => readPerformanceRun(output, 1)).toThrow(/capture/i);
-    else expect(readPerformanceRun(output, 1).summary.passed).toBe(1);
-  }
 });

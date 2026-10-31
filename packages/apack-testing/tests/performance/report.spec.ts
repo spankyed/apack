@@ -3,8 +3,7 @@ import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import { expect, it } from 'vitest';
 import { processReportSchema, summarize, streamingBacklog, trialSchema } from '../../src/performance/report.ts';
-const processReport = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
-  mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
+const processReport = performanceProcessReport('lightweight', 'backend');
 const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', work: {}, processes: { renderer: performanceProcessReport('lightweight', 'renderer'), backend: performanceProcessReport('lightweight', 'backend') } };
 it('refuses manufactured success without view readiness, a duration, or complete process reports', () => {
   for (const patch of [{ completion: 'missing' }, { durationMs: undefined }, { correct: false }]) {
@@ -28,16 +27,6 @@ it('requires visible intermediate streaming progress and plausible milestone tim
   }
 });
 
-it('preserves process statistics across the portable schema and rejects concealed sample loss', async () => {
-  const controller = createNodePerformanceController();
-  controller.start('lightweight');
-  const report = await controller.stop();
-  const parsed = processReportSchema.parse(report);
-  expect(parsed.processStatistics).toEqual(report.processStatistics);
-  expect(parsed.processStatistics).toBeDefined();
-  expect(processReportSchema.safeParse({ ...report, processStatisticsFailures: 1 }).success).toBe(false);
-});
-
 it('retains bounded raw streaming backlog, detects clock uncertainty and refuses incomplete progress', () => {
   const produced = [{ epochMs: 1, chars: 10 }, { epochMs: 2, chars: 20 }, { epochMs: 3, chars: 30 }];
   const received = [{ epochMs: 2, chars: 10 }, { epochMs: 4, chars: 30 }];
@@ -56,6 +45,9 @@ it('retains real V8 profiles across report admission and rejects hidden profile 
   expect(report.complete).toBe(true);
   const parsed: PerformanceRecordingReport = processReportSchema.parse(report);
   expect(parsed.profiles).toEqual(report.profiles);
+  expect(parsed.processStatistics).toEqual(report.processStatistics);
+  expect(parsed.processStatistics).toBeDefined();
+  expect(processReportSchema.safeParse({ ...report, processStatisticsFailures: 1 }).success).toBe(false);
   expect(JSON.parse(parsed.profiles!.cpu!).nodes).toBeInstanceOf(Array);
   expect(JSON.parse(parsed.profiles!.allocation!).head).toBeDefined();
   expect(parsed.bytes + parsed.profiles!.bytes).toBeLessThanOrEqual(16 * 1024 * 1024);

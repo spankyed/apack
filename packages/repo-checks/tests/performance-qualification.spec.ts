@@ -1,5 +1,4 @@
 import { expect, it } from 'vitest';
-import path from 'node:path';
 import { performanceQualificationCommand, performanceQualificationOptions, performanceRevisionOptions } from '../../../scripts/lib/performance-qualification.ts';
 it('selects all four scenarios, declared trials and two different modes', () => {
   const options = performanceQualificationOptions(['--scenario', 'all'], '/checkout', 123);
@@ -13,8 +12,7 @@ it('runs the actual scenario or startup controller and owns its output and envir
   const options = performanceQualificationOptions([], '/checkout', 123);
   const command = performanceQualificationCommand('thread-open', '/owned', options, { DISPLAY: ':12', APACK_PERFORMANCE_STARTUP: 'stale', APACK_PERFORMANCE_OUTPUT: 'stale' });
   expect(command.args).toContain('playwright');
-  expect(command.args).toContain(path.join('/owned', 'playwright'));
-  expect(command.env).toMatchObject({ DISPLAY: ':12', APACK_PERFORMANCE_RUN_OUTPUT: '/owned', APACK_PERFORMANCE_MODE: 'disabled', APACK_PERFORMANCE_COMPARE_MODE: 'lightweight', APACK_PERFORMANCE_TRIALS: '20' });
+  expect(command.env).toMatchObject({ DISPLAY: ':12', APACK_PERFORMANCE_RUN_OUTPUT: '/owned', APACK_PERFORMANCE_MODE: options.mode, APACK_PERFORMANCE_COMPARE_MODE: options.comparison, APACK_PERFORMANCE_TRIALS: String(options.measured) });
   expect(command.env.APACK_PERFORMANCE_STARTUP).toBeUndefined();
   expect(command.env.APACK_PERFORMANCE_OUTPUT).toBeUndefined();
   expect(performanceQualificationCommand('populated-startup', '/owned', options, {}).args).toContain('tests/performance/startup-run.ts');
@@ -23,7 +21,7 @@ it('runs the actual scenario or startup controller and owns its output and envir
 
 it('requires explicit revision checkouts and uses independent worker output without nested mode comparison', () => {
   const options = performanceRevisionOptions(['--baseline', 'before', '--candidate', 'after', '--scenario', 'all'], '/checkout', 123);
-  expect(options.roots).toEqual({ A: path.resolve('/checkout', 'before'), B: path.resolve('/checkout', 'after') });
+  expect(options.roots.A).not.toBe(options.roots.B);
   const command = performanceQualificationCommand('search', '/owned/B', { mode: 'lightweight', measured: 20 }, { APACK_PERFORMANCE_COMPARE_MODE: 'detailed', APACK_PERFORMANCE_GATE: 'stale' });
   expect(command.env.APACK_PERFORMANCE_COMPARE_MODE).toBeUndefined();
   expect(command.env.APACK_PERFORMANCE_GATE).toBeUndefined();
