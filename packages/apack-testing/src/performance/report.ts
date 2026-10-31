@@ -1,3 +1,4 @@
+import { _recordingModeSchema } from '@apackdev/sdk/runtime';
 import { z } from 'zod';
 
 const count = z.number().int().nonnegative();
@@ -48,7 +49,7 @@ export const processReportSchema = z.object({
   }).optional(),
   processStatisticsFailures: count.optional(),
   observations: z.array(z.string().max(16 * 1024 * 1024)).max(10_000), bytes: count.max(16 * 1024 * 1024), dropped: count, truncated: z.boolean(),
-  rejected: count, droppedMetadata: count, mode: z.enum(['disabled', 'lightweight', 'detailed']),
+  rejected: count, droppedMetadata: count, mode: _recordingModeSchema,
   active: count, unfinished: count, droppedStarts: count, invalidCarriers: count, detachFailures: count,
   droppedEvents: count, contextFailures: count, rejectedStarts: count, invalidAttributes: count, complete: z.boolean(),
 }).superRefine((report, ctx) => {
@@ -72,7 +73,7 @@ export const manifestSchema = z.object({
   fixture: z.object({ generator: z.string(), seed: count, sha256: z.string(), distribution: z.record(z.string(), count) }),
   native: z.object({ pin: z.string(), checkoutRevision: z.string(), dirty: z.boolean(), excludedUntracked: z.array(z.string()) }),
   runtime: z.record(z.string(), z.string()), machine: z.object({ platform: z.string(), arch: z.string(), cpus: count, memoryBytes: count, identity: z.string() }),
-  mode: z.enum(['disabled', 'lightweight', 'detailed']),
+  mode: _recordingModeSchema,
   cache: z.enum(['warm-process', 'fresh-process-warm-filesystem']), warmups: count,
   clock: z.literal('Local monotonic durations; cross-process epoch alignment is approximate'),
 });
@@ -146,22 +147,6 @@ export function assertPerformanceCaptures(trial: PerformanceTrial, mode: Perform
     } else if (!report.processStatistics) throw Error('Missing Node process resource capture');
     if (mode === 'detailed' ? !report.profiles : report.profiles !== undefined) throw Error('Profile capture differs from recording mode');
   }
-}
-
-/** Validate a complete run before comparison; partial/failing reports remain useful diagnostic evidence. */
-export function validatePerformanceRun(manifestInput: unknown, trialsInput: unknown, measured: number) {
-  const manifest = manifestSchema.parse(manifestInput);
-  if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100 || manifest.warmups > 100) throw Error('Invalid run size');
-  const trials = z.array(trialSchema).max(200).parse(trialsInput);
-  if (trials.length !== manifest.warmups + measured) throw Error('Incomplete trial count');
-  const scenario = trials[0]!.scenario;
-  for (const [index, trial] of trials.entries()) {
-    if (trial.index !== index || trial.warmup !== (index < manifest.warmups)) throw Error('Invalid trial order or warmup classification');
-    if (trial.scenario !== scenario) throw Error('Mixed scenarios');
-    if (trial.outcome !== 'passed') throw Error('Unsuccessful trial');
-    assertPerformanceCaptures(trial, manifest.mode);
-  }
-  return { manifest, trials, summary: summarize(trials) };
 }
 
 /** A spread and sample count accompany every median; failed trials remain in the report. */

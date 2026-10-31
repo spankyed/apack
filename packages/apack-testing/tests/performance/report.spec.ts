@@ -3,7 +3,7 @@ import type { PerformanceRecordingReport } from '@apackdev/host/diagnostics';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import type { z } from 'zod';
 import { expect, it } from 'vitest';
-import { assertComparable, comparisonOrder, processReportSchema, summarize, streamingBacklog, trialSchema, validatePerformanceRun } from '../../src/performance/report.ts';
+import { assertComparable, comparisonOrder, processReportSchema, summarize, streamingBacklog, trialSchema } from '../../src/performance/report.ts';
 const processReport = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
 const trial = { scenario: 'thread-open', index: 0, warmup: false, outcome: 'passed', durationMs: 10, correct: true, completion: 'view-ready', work: {}, processes: { renderer: performanceProcessReport('lightweight', 'renderer'), backend: performanceProcessReport('lightweight', 'backend') } };
@@ -51,19 +51,6 @@ it('requires visible intermediate streaming progress and plausible milestone tim
   }
 });
 
-it('rejects incomplete and internally inconsistent whole runs before comparison', () => {
-  const manifest = performanceManifest({ warmups: 1 });
-  const trials = [{ ...trial, warmup: true }, { ...trial, index: 1 }];
-  expect(validatePerformanceRun(manifest, trials, 1).summary.passed).toBe(1);
-  for (const changed of [trials.slice(1), [trials[0], trials[0]], [trials[0], { ...trials[1], warmup: true }],
-    [trials[0], { ...trials[1], scenario: 'search' }],
-    [trials[0], { ...trials[1], processes: { renderer: processReport, unrelated: processReport } }],
-    [trials[0], { ...trials[1], processes: { renderer: { ...processReport, mode: 'disabled' }, backend: processReport } }],
-    [trials[0], { ...trials[1], outcome: 'cancelled' }]]) {
-    expect(() => validatePerformanceRun(manifest, changed, 1)).toThrow();
-  }
-});
-
 it('preserves process statistics across the portable schema and rejects concealed sample loss', async () => {
   const controller = createNodePerformanceController();
   controller.start('lightweight');
@@ -93,13 +80,4 @@ it('retains real V8 profiles across report admission and rejects hidden profile 
   expect(processReportSchema.parse(report).profiles).toEqual(report.profiles);
   expect(processReportSchema.safeParse({ ...report, profileFailures: 1 }).success).toBe(false);
   expect(processReportSchema.safeParse({ ...report, profiles: { ...report.profiles, bytes: 0 } }).success).toBe(false);
-});
-
-it('requires promised captures in whole-run admission, including the startup driver', () => {
-  const manifest = performanceManifest({ mode: 'detailed', cache: 'fresh-process-warm-filesystem', warmups: 0 });
-  const processes = { renderer: performanceProcessReport('detailed', 'renderer'), backend: performanceProcessReport('detailed', 'backend'), driver: performanceProcessReport('detailed', 'driver') };
-  const startup = { ...trial, scenario: 'populated-startup', processes };
-  expect(validatePerformanceRun(manifest, [startup], 1).summary.passed).toBe(1);
-  delete processes.driver.profiles;
-  expect(() => validatePerformanceRun(manifest, [startup], 1)).toThrow(/capture/i);
 });

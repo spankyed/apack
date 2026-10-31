@@ -292,7 +292,7 @@ export const LAYERS: {
   // so `@apackdev/host` here would be a finding
   { name: '@app/preload', dir: 'packages/preload', allowed: ['@apackdev/sdk'] },
   // Both check the repo rather than run in it, and reach the host for the build and freshness primitives
-  { name: '@app/repo-checks', dir: 'packages/repo-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
+  { name: '@app/repo-checks', dir: 'packages/repo-checks', allowed: ['@apackdev/sdk', '@apackdev/host', '@apackdev/testing'] },
   { name: '@app/publish-checks', dir: 'packages/publish-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
 ];
 

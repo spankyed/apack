@@ -172,6 +172,15 @@ export interface PackRegistryView extends PackExtensionsView {
     systemIds(): readonly FeatureRef[];
 }
 
+// @internal
+export function _parseStartupPerformance(input: string): {
+    mode: "disabled" | "lightweight" | "detailed";
+    carrier?: {
+        traceparent?: string | undefined;
+        tracestate?: string | undefined;
+    } | undefined;
+};
+
 // @public
 export interface PerformanceCarrier {
     // (undocumented)
@@ -234,6 +243,16 @@ export interface _PerformanceProfiles {
     // (undocumented)
     windowLimitMs: number;
 }
+
+// @internal
+export type _RecordingMode = z.infer<typeof _recordingModeSchema>;
+
+// @internal
+export const _recordingModeSchema: z.ZodEnum<{
+    disabled: "disabled";
+    lightweight: "lightweight";
+    detailed: "detailed";
+}>;
 
 // @internal
 export interface _RendererPerformanceResources {

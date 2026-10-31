@@ -1,8 +1,23 @@
+import { z } from 'zod';
 import { _isHostBound, boundHost } from './host-runtime.ts';
 import { _isFeHostBound, boundFeHost } from './fe-host.ts';
 
 /** Standard trace context only; never stored alongside business data. */
 export interface PerformanceCarrier { traceparent?: string; tracestate?: string }
+
+/** @internal Shared process/window admission vocabulary. */
+export const _recordingModeSchema = z.enum(['disabled', 'lightweight', 'detailed']);
+/** @internal Portable mode inferred from the shared admission schema. */
+export type _RecordingMode = z.infer<typeof _recordingModeSchema>;
+const startupConfiguration = z.object({
+  mode: _recordingModeSchema,
+  carrier: z.object({ traceparent: z.string().max(512).optional(), tracestate: z.string().max(512).optional() }).strict().optional(),
+}).strict();
+/** @internal Parse the bounded test-owned startup handoff identically in each process. */
+export function _parseStartupPerformance(input: string) {
+  if (input.length > 2048) throw new Error('Startup recording configuration is too large');
+  return startupConfiguration.parse(JSON.parse(input));
+}
 
 /** Execution context owned by a development recording, separate from message return addresses. */
 export interface PerformanceExecution {

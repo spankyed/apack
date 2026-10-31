@@ -3,7 +3,7 @@ import path from 'node:path';
 import { test as base, expect, applicationLaunchStartedAt } from '@apackdev/testing';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { chromeTrace, manifestSchema, performanceIdentity, attachRendererProcessIdentity, summarize, trialSchema } from '@apackdev/testing/performance';
+import { manifestSchema, performanceIdentity, attachRendererProcessIdentity, trialSchema } from '@apackdev/testing/performance';
 import { searchFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
 
@@ -119,7 +119,6 @@ test('start a populated profile through admission to its initial usable thread v
     completion: correct ? 'view-ready' : 'missing', durationMs: correct ? durationMs : undefined, failure,
     processes: { driver, ...(reports.renderer && { renderer: reports.renderer }), ...(backend && { backend }) },
   });
-  writeFileSync(path.join(output, 'results.json'), JSON.stringify({ format: 1, trials: [trial], summary: summarize([trial]) }, null, 2));
-  writeFileSync(path.join(output, 'trace.json'), JSON.stringify(chromeTrace(Object.entries(trial.processes).map(([process, report]) => ({ process, report })))));
+  writeFileSync(path.join(output, 'trial.json'), JSON.stringify(trial), { flag: 'wx' });
   expect(trial.outcome).toBe('passed');
 });

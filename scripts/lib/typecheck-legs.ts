@@ -63,11 +63,6 @@ export interface Leg {
   readonly alsoReads?: readonly string[];
 }
 
-/** The testing workspace's harness contracts compile these application-owned helpers. */
-export const PERFORMANCE_SCENARIO_INPUTS = [
-  'tests/performance/scenario.ts', 'tests/performance/view-completion.ts', 'tests/performance/window.ts',
-] as const;
-
 /** The first ordering constraint: every other job reads what it builds */
 export const ENSURE = 'packages:ensure';
 
@@ -92,7 +87,7 @@ export const TYPECHECK_LEGS: readonly Leg[] = [
   { name: 'exports:check', command: 'npm run exports:check' },
   { name: 'schema:check', command: 'npm run schema:check' },
   { name: 'typecheck:scripts', command: 'npm run typecheck:scripts', scope: 'repo' },
-  { name: 'typecheck:cli', command: 'npm run typecheck:cli', alsoReads: PERFORMANCE_SCENARIO_INPUTS },
+  { name: 'typecheck:cli', command: 'npm run typecheck:cli' },
   { name: 'typecheck:pack', command: 'npm run typecheck:pack' },
   // Both compile `../../types/**/*.d.ts` through their own tsconfig `include`
   { name: 'typecheck:main', command: 'npm run typecheck:main', alsoReads: ['types'] },

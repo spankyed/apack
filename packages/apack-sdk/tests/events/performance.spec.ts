@@ -1,3 +1,4 @@
+import { _parseStartupPerformance } from '../../src/runtime/performance.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { startFeTestRuntime, stopFeTestRuntime } from '../../src/testing/fe-runtime.ts';
 import { untypedSendToSystem, type Message } from '../../src/events/index.ts';
@@ -55,4 +56,17 @@ it('restores explicitly carried event causes and clears missing inbound context'
   });
   expect(current).toBeUndefined();
   expect(event).toEqual({ type: 'PING' });
+});
+
+it('shares strict bounded startup configuration across process owners', () => {
+  for (const mode of ['disabled', 'lightweight', 'detailed']) {
+    const config = { mode, carrier: { traceparent: 'parent', tracestate: 'state' } };
+    expect(_parseStartupPerformance(JSON.stringify(config))).toEqual(config);
+  }
+  for (const config of [{ mode: 'unknown' }, { mode: 'lightweight', payload: 'private' },
+    { mode: 'lightweight', carrier: { traceparent: 'x'.repeat(513) } },
+    { mode: 'lightweight', carrier: { extra: true } }]) {
+    expect(() => _parseStartupPerformance(JSON.stringify(config))).toThrow();
+  }
+  expect(() => _parseStartupPerformance('x'.repeat(2049))).toThrow(/too large/);
 });

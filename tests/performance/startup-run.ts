@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process';
-import { isDeepStrictEqual } from 'node:util';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createPerformanceScenarioRun, performanceSchedule, manifestSchema, trialSchema, performanceExecutionPolicy, waitForPerformanceTrial, finishPerformanceTrial, type PerformanceInvocation, type PerformanceScheduleEntry, type PerformanceVariant } from '@apackdev/testing/performance';
@@ -44,13 +43,7 @@ async function run(phase: 'seed' | 'populated-startup', profile: string, entry?:
   for (const target of entry ? [variant] : variants) invocations[target].push({ phase, index: entry?.index, ...result });
   if (entry) {
     try {
-      const reportFile = path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'results.json');
-      if (statSync(reportFile).size > 128 * 1024 * 1024) throw Error('Startup trial exceeds admission budget');
-      const report = JSON.parse(readFileSync(reportFile, 'utf8'));
-      const ownManifest = JSON.parse(readFileSync(path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'manifest.json'), 'utf8'));
-      if (!isDeepStrictEqual(ownManifest, JSON.parse(readFileSync(path.join(own, 'manifest.json'), 'utf8')))) throw Error('Startup trial manifests differ');
-      if (report.trials.length !== 1) throw Error('Expected one startup trial per process');
-      journal!.append(entry, trialSchema.parse(report.trials[0]));
+      journal!.adopt(entry);
     } catch (error) {
       const file = path.join(environment.APACK_PERFORMANCE_OUTPUT!, 'driver-failure.json');
       try {

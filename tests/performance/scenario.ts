@@ -58,7 +58,7 @@ export async function createWarmScenario<F extends { identity: PerformanceManife
       await waitForPerformanceTrial(entry, { application: electronApp, page: appPage });
       journal.begin(entry);
     },
-    async append(entry: PerformanceScheduleEntry, result: ScenarioResult, extra: { work?: PerformanceTrial['work']; failure?: string; backlog?: PerformanceTrial['backlog'] } = {}) {
+    async append(entry: PerformanceScheduleEntry, result: ScenarioResult, extra: { work?: PerformanceTrial['work']; failure?: string; backlog?: PerformanceTrial['backlog']; expectedFailure?: 'app-read-work-bound' | 'missing-view-ready' | 'renderer-resource-start' } = {}) {
       const { reports } = result;
       if (reports.renderer) {
         await attachRendererProcessIdentity(electronApp, appPage, reports.renderer);
@@ -74,7 +74,26 @@ export async function createWarmScenario<F extends { identity: PerformanceManife
         processes: { ...(reports.renderer && { renderer: reports.renderer }), ...(reports.backend && { backend: reports.backend }) },
       });
       journal.append(entry, trial);
-      expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
+      if (extra.expectedFailure && extra.expectedFailure !== 'renderer-resource-start') {
+        expect(Object.keys(trial.processes)).toHaveLength(2);
+        expect(Object.values(trial.processes).every(report => report.complete)).toBe(true);
+      }
+      switch (extra.expectedFailure) {
+        case 'app-read-work-bound':
+          expect(trial).toMatchObject({ outcome: 'failed', correct: false, failure: 'app-read-work-bound' });
+          expect(trial.work.windowAppResponseBytes).toBeGreaterThan(trial.work.maxAppResponseBytes!);
+          break;
+        case 'missing-view-ready':
+          expect(trial).toMatchObject({ outcome: 'incomplete', correct: false, completion: 'missing', failure: 'missing-view-ready' });
+          expect(trial.durationMs).toBeUndefined();
+          expect(trial.work.observedMessages).toBe(50);
+          break;
+        case 'renderer-resource-start':
+          expect(trial).toMatchObject({ outcome: 'incomplete', correct: true, completion: 'view-ready',
+            processes: { renderer: { rendererResourceFailures: 1 }, backend: { complete: true } } });
+          break;
+        default: expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
+      }
       await finishPerformanceTrial(entry, trial.outcome);
     },
     close() {

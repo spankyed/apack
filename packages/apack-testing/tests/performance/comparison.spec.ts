@@ -79,8 +79,8 @@ it('retains independent successful startup lifecycle and per-launch manifests fo
       completion: 'view-ready', durationMs: 100, work: {}, processes: { driver: performanceProcessReport(entry.mode, 'driver'), renderer: performanceProcessReport(entry.mode, 'renderer'), backend: performanceProcessReport(entry.mode, 'backend') } };
     const own = path.join(output, entry.variant, `trial-${entry.index}`); mkdirSync(own);
     writeFileSync(path.join(own, 'manifest.json'), readFileSync(path.join(output, entry.variant, 'manifest.json')));
-    writeFileSync(path.join(own, 'results.json'), JSON.stringify({ trials: [trial] }));
-    invocations[entry.variant].push({ phase: 'populated-startup', exitCode: 0, signal: null, index: entry.index }); run.append(entry, trial);
+    writeFileSync(path.join(own, 'trial.json'), JSON.stringify(trial));
+    invocations[entry.variant].push({ phase: 'populated-startup', exitCode: 0, signal: null, index: entry.index }); run.adopt(entry);
   }
   writeFileSync(path.join(output, 'invocation.json'), JSON.stringify({ code: 0, timedOut: false, aborted: false }));
   expect(readPerformanceModeComparison(output, 2).scenario).toBe('populated-startup');

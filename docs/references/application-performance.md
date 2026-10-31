@@ -14,7 +14,9 @@ a global provider or exporter. EARS exposes a backend-neutral observer without d
 
 Recording is available only in development and test. The authenticated API recording belongs to the
 connection that started it; disconnect and shutdown release its resources. Renderer capture belongs
-to its window. The scenario runner owns the application process tree and disposable profiles and
+to its window. Each recording lifetime owns its controller, debugger lease, samplers, listeners and
+startup receipts; a retired lifetime cannot remove listeners from its successor. Shared startup
+configuration and recording-mode contracts live in the SDK runtime. The scenario runner owns the application process tree and disposable profiles and
 never opens the developer's active database.
 
 Modes are disabled, lightweight and detailed. Disabled mode creates no provider, context manager,

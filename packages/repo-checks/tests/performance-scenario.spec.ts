@@ -2,11 +2,11 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { performanceManifest, performanceProcessReport } from './fixtures.ts';
-import { createWarmScenario } from '../../../../tests/performance/scenario.ts';
+import { performanceManifest, performanceProcessReport } from '../../apack-testing/tests/performance/fixtures.ts';
+import { createWarmScenario } from '../../../tests/performance/scenario.ts';
 
 vi.mock('@apackdev/testing/performance', async original => ({
-  ...await original<typeof import('../../src/performance.ts')>(),
+  ...await original<typeof import('@apackdev/testing/performance')>(),
   performanceIdentity: vi.fn(options => performanceManifest(options)),
   attachRendererProcessIdentity: vi.fn(async () => {}),
 }));
@@ -64,4 +64,12 @@ it('retains missing completion without manufacturing a successful duration', asy
   const trial = JSON.parse(readFileSync(path.join(run.output, 'trial-0.json'), 'utf8'));
   expect(trial).toMatchObject({ outcome: 'incomplete', correct: false, completion: 'missing' });
   expect(trial.durationMs).toBeUndefined();
+});
+
+it('admits an expected counterfactual assertion without relabelling its retained failure', async () => {
+  const { run } = await scenario(); const entry = run.schedule[0]!;
+  await run.begin(entry);
+  await run.append(entry, { ...result(), completed: false, durationMs: undefined, failure: 'missing-view-ready', work: { observedMessages: 50 } }, { expectedFailure: 'missing-view-ready' });
+  expect(JSON.parse(readFileSync(path.join(run.output, 'trial-0.json'), 'utf8'))).toMatchObject({ outcome: 'incomplete', correct: false, completion: 'missing' });
+  expect(JSON.parse(readFileSync(path.join(run.output, 'execution.json'), 'utf8')).status).toBe('failed');
 });

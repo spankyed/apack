@@ -2,7 +2,7 @@ import { lstatSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
-import { assertComparable, comparisonOrder, manifestSchema, trialSchema, type PerformanceManifest } from './report.ts';
+import { assertComparable, comparisonOrder, manifestSchema, trialSchema, type PerformanceManifest, type PerformanceTrial } from './report.ts';
 import { createPerformanceRunStore, readPerformanceRun, type PerformanceInvocation } from './run.ts';
 
 const modeSchema = manifestSchema.shape.mode;
@@ -77,6 +77,15 @@ export function createPerformanceScenarioRun(directory: string, manifestInput: u
     writeJournal(directory, { format: 1, kind: comparison ? 'mode-comparison' : 'single', measured,
       baseline: manifest.mode, comparison, status: failed ? 'failed' : complete ? 'passed' : 'incomplete', executions });
   }
+  function record(entry: PerformanceScheduleEntry, write: () => Pick<PerformanceTrial, 'index' | 'warmup' | 'outcome'>) {
+    const execution = executions.at(-1);
+    if (!execution || execution.endedMs !== undefined || !isDeepStrictEqual(entry, schedule[execution.ordinal])) throw Error('No matching active execution');
+    try {
+      const trial = write();
+      if (trial.index !== entry.index || trial.warmup !== entry.warmup) throw Error('Trial differs from scheduled execution');
+      execution.endedMs = performance.now(); execution.outcome = trial.outcome; save();
+    } catch (error) { failure = true; save(); throw error; }
+  }
   save();
   return {
     schedule,
@@ -85,15 +94,13 @@ export function createPerformanceScenarioRun(directory: string, manifestInput: u
       if (!isDeepStrictEqual(entry, schedule[executions.length]) || executions.at(-1)?.endedMs === undefined && executions.length > 0) throw Error('Overlapping or out-of-order performance execution');
       executions.push({ ...entry, startedMs: performance.now() }); save();
     },
+    adopt: (entry: PerformanceScheduleEntry) => record(entry, () => stores.get(entry.variant)!.adopt(`trial-${entry.index}/trial.json`)),
     append(entry: PerformanceScheduleEntry, input: unknown) {
-      const execution = executions.at(-1);
-      if (!execution || execution.endedMs !== undefined || !isDeepStrictEqual(entry, schedule[execution.ordinal])) throw Error('No matching active execution');
-      try {
+      record(entry, () => {
         const trial = trialSchema.parse(input);
         if (trial.index !== entry.index || trial.warmup !== entry.warmup || Object.values(trial.processes).some(report => report.mode !== entry.mode)) throw Error('Trial differs from scheduled execution');
-        stores.get(entry.variant)!.append(trial);
-        execution.endedMs = performance.now(); execution.outcome = trial.outcome; save();
-      } catch (error) { failure = true; save(); throw error; }
+        return stores.get(entry.variant)!.append(trial);
+      });
     },
   };
 }

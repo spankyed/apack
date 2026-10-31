@@ -58,10 +58,10 @@ it('requires startup invocation ownership, phase order and successful exit as we
   const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
   for (let index = 0; index < 6; index++) {
     const ownTrial = { ...trial(index), scenario: 'populated-startup', processes: { ...trial(index).processes, driver: performanceProcessReport('lightweight', 'driver') } };
-    store.append(ownTrial);
     const own = path.join(output, `trial-${index}`); mkdirSync(own);
     writeFileSync(path.join(own, 'manifest.json'), JSON.stringify(manifest));
-    writeFileSync(path.join(own, 'results.json'), JSON.stringify({ trials: [ownTrial] }));
+    writeFileSync(path.join(own, 'trial.json'), JSON.stringify(ownTrial));
+    store.adopt(`trial-${index}/trial.json`);
   }
   const invocations = [{ phase: 'seed', exitCode: 0, signal: null }, ...Array.from({ length: 6 }, (_, index) => ({ phase: 'populated-startup', index, exitCode: 0, signal: null }))];
   store.save(invocations); expect(readPerformanceRun(output, 1).scenario).toBe('populated-startup');
@@ -122,4 +122,48 @@ it('requires the declared core renderer metrics, not just an empty resource enve
     store.append({ ...trial(index), processes: { renderer, backend: performanceProcessReport('lightweight', 'backend') } });
   }
   expect(() => readPerformanceRun(output, 1)).toThrow(/renderer resource capture/);
+});
+
+it('refuses inconsistent run inputs through the actual store and admission path', () => {
+  for (const patch of [{ index: 0 }, { warmup: false }, { scenario: 'search' },
+    { processes: { unrelated: report, renderer: report } },
+    { processes: { renderer: { ...report, mode: 'disabled' }, backend: report } },
+    { outcome: 'cancelled' }]) {
+    const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
+    expect(() => {
+      for (let index = 0; index < 6; index++) store.append({ ...trial(index), ...(index === 1 ? patch : {}) });
+      readPerformanceRun(output, 1);
+    }).toThrow();
+  }
+});
+it('rejects adopted child provenance changes and retains exactly one raw startup record', () => {
+  const output = directory(); const store = createPerformanceRunStore(output, manifest, 1);
+  const own = path.join(output, 'trial-0'); mkdirSync(own);
+  const startup = { ...trial(0), scenario: 'populated-startup', processes: { ...trial(0).processes, driver: performanceProcessReport('lightweight', 'driver') } };
+  writeFileSync(path.join(own, 'trial.json'), JSON.stringify(startup));
+  writeFileSync(path.join(own, 'manifest.json'), JSON.stringify({ ...manifest, fixture: { ...manifest.fixture, seed: 7 } }));
+  expect(() => store.adopt('trial-0/trial.json')).toThrow(/manifests/);
+  writeFileSync(path.join(own, 'manifest.json'), JSON.stringify(manifest));
+  store.adopt('trial-0/trial.json');
+  const index = JSON.parse(readFileSync(path.join(output, 'results.json'), 'utf8'));
+  expect(index.records[0].file).toBe('trial-0/trial.json');
+  expect(() => readFileSync(path.join(output, 'trial-0.json'))).toThrow();
+  expect(() => store.adopt('../trial.json')).toThrow(/path/);
+});
+
+it('requires detailed startup driver captures in the canonical child admission path', () => {
+  for (const missing of [false, true]) {
+    const output = directory(); const detailed = { ...manifest, mode: 'detailed' }; const store = createPerformanceRunStore(output, detailed, 1);
+    for (let index = 0; index < 6; index++) {
+      const processes = { renderer: performanceProcessReport('detailed', 'renderer'), backend: performanceProcessReport('detailed', 'backend'), driver: performanceProcessReport('detailed', 'driver') };
+      if (missing && index === 0) delete processes.driver.profiles;
+      const own = path.join(output, `trial-${index}`); mkdirSync(own);
+      writeFileSync(path.join(own, 'manifest.json'), JSON.stringify(detailed));
+      writeFileSync(path.join(own, 'trial.json'), JSON.stringify({ ...trial(index), scenario: 'populated-startup', processes }));
+      store.adopt(`trial-${index}/trial.json`);
+    }
+    store.save([{ phase: 'seed', exitCode: 0, signal: null }, ...Array.from({ length: 6 }, (_, index) => ({ phase: 'populated-startup', index, exitCode: 0, signal: null }))]);
+    if (missing) expect(() => readPerformanceRun(output, 1)).toThrow(/capture/i);
+    else expect(readPerformanceRun(output, 1).summary.passed).toBe(1);
+  }
 });

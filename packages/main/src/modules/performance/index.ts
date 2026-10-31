@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { _recordingModeSchema } from '@apackdev/sdk/runtime';
 import type { AppModule } from '../../AppModule.ts';
 import { getAppEnvironment } from '../../app-environment.ts';
 import { createRendererCapture } from './capture.ts';
@@ -19,7 +20,7 @@ export function createPerformanceModule(): AppModule {
   return { enable({ app }) {
     ipcMain.handle('performance:renderer:start', async (event, input: unknown) => {
       const contents = permitted(event);
-      const mode = z.enum(['lightweight', 'detailed']).parse(input);
+      const mode = _recordingModeSchema.exclude(['disabled']).parse(input);
       if (active.has(contents.id)) throw Error('A renderer capture is active or stopping');
       if (contents.debugger.isAttached()) throw Error('The renderer debugger is already owned');
       contents.debugger.attach('1.3');

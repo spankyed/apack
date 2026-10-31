@@ -20,7 +20,7 @@ export interface PerformanceInvocation {
 const sampleSchema = z.object({ scenario: trialSchema.shape.scenario, index: z.number().int().nonnegative(), warmup: z.boolean(),
   outcome: trialSchema.shape.outcome, durationMs: z.number().finite().nonnegative().optional(),
   correct: z.boolean(), completion: z.enum(['view-ready', 'missing']), failure: z.string().max(128).optional() });
-const recordSchema = z.object({ file: z.string().regex(/^trial-[0-9]+\.json$/), sha256: z.string().regex(/^[a-f0-9]{64}$/),
+const recordSchema = z.object({ file: z.string().regex(/^trial-[0-9]+(?:\/trial)?\.json$/), sha256: z.string().regex(/^[a-f0-9]{64}$/),
   bytes: z.number().int().positive().max(PERFORMANCE_TRIAL_BYTES), sample: sampleSchema });
 const indexSchema = z.object({ format: z.literal(2), status: z.enum(['incomplete', 'passed', 'failed']),
   measured: z.number().int().min(1).max(100), records: z.array(recordSchema).max(105),
@@ -62,42 +62,57 @@ export function createPerformanceRunStore(directory: string, manifestInput: unkn
     renameSync(temporary, path.join(directory, 'results.json'));
   }
   save();
+  function append(input: unknown, adopted?: { file: string; bytes: Buffer }) {
+    const trial = trialSchema.parse(input);
+    if (trial.index !== records.length || trial.index >= measured + manifest.warmups || trial.warmup !== (trial.index < manifest.warmups)
+      || scenario && trial.scenario !== scenario) throw Error('Invalid trial order, scenario or warmup classification');
+    if (adopted && adopted.file !== `trial-${trial.index}/trial.json`) throw Error('Invalid child trial path');
+    scenario = trial.scenario;
+    const processes = Object.keys(trial.processes);
+    if (processes.length > 3 || processes.some(name => !['driver', 'backend', 'renderer'].includes(name))) throw Error('Unexpected performance process');
+    const retained = adopted?.bytes ?? JSON.stringify(trial);
+    const size = Buffer.byteLength(retained);
+    if (size > PERFORMANCE_TRIAL_BYTES || bytes + size > PERFORMANCE_RUN_BYTES) throw Error('Performance report exceeds retention budget');
+    const file = adopted?.file ?? `trial-${trial.index}.json`;
+    if (!adopted) writeFileSync(path.join(directory, file), retained, { flag: 'wx' });
+    bytes += size;
+    records.push({ file, bytes: Buffer.byteLength(retained), sha256: hash(retained), sample: sample(trial) });
+    exportPending = true;
+    // Publish the raw evidence first. A failed viewer export must never erase the trial.
+    save();
+    try {
+      const trace = JSON.stringify(chromeTrace(Object.entries(trial.processes).map(([process, report]) => ({ process, report }))));
+      // Viewer copies have an independent bound; the run budget includes every generated copy.
+      const exports: Array<[string, string]> = [[`trial-${trial.index}.trace.json`, trace]];
+      for (const [process, report] of Object.entries(trial.processes)) {
+        if (report.profiles?.cpu) exports.push([`trial-${trial.index}.${process}.cpuprofile`, report.profiles.cpu]);
+        if (report.profiles?.allocation) exports.push([`trial-${trial.index}.${process}.heapprofile`, report.profiles.allocation]);
+      }
+      for (const [name, value] of exports) {
+        const size = Buffer.byteLength(value);
+        if (size > PERFORMANCE_TRIAL_BYTES || bytes + size > PERFORMANCE_RUN_BYTES) throw Error('Performance viewer exports exceed retention budget');
+        writeFileSync(path.join(directory, name), value, { flag: 'wx' }); bytes += size;
+      }
+      exportPending = false;
+      save();
+    } catch (error) { exportFailed = true; save(); throw error; }
+    return sample(trial);
+  }
   return {
     save,
-    append(input: unknown) {
-      const trial = trialSchema.parse(input);
-      if (trial.index !== records.length || trial.index >= measured + manifest.warmups || trial.warmup !== (trial.index < manifest.warmups)
-        || scenario && trial.scenario !== scenario) throw Error('Invalid trial order, scenario or warmup classification');
-      scenario = trial.scenario;
-      const processes = Object.keys(trial.processes);
-      if (processes.length > 3 || processes.some(name => !['driver', 'backend', 'renderer'].includes(name))) throw Error('Unexpected performance process');
-      const encoded = JSON.stringify(trial);
-      const size = Buffer.byteLength(encoded);
-      if (size > PERFORMANCE_TRIAL_BYTES || bytes + size > PERFORMANCE_RUN_BYTES) throw Error('Performance report exceeds retention budget');
-      const file = `trial-${trial.index}.json`;
-      writeFileSync(path.join(directory, file), encoded, { flag: 'wx' });
-      bytes += size;
-      records.push({ file, bytes: size, sha256: hash(encoded), sample: sample(trial) });
-      exportPending = true;
-      // Publish the raw evidence first. A failed viewer export must never erase the trial.
-      save();
-      try {
-        const trace = JSON.stringify(chromeTrace(Object.entries(trial.processes).map(([process, report]) => ({ process, report }))));
-        // Viewer copies have an independent bound; the run budget includes every generated copy.
-        const exports: Array<[string, string]> = [[`trial-${trial.index}.trace.json`, trace]];
-        for (const [process, report] of Object.entries(trial.processes)) {
-          if (report.profiles?.cpu) exports.push([`trial-${trial.index}.${process}.cpuprofile`, report.profiles.cpu]);
-          if (report.profiles?.allocation) exports.push([`trial-${trial.index}.${process}.heapprofile`, report.profiles.allocation]);
-        }
-        for (const [name, value] of exports) {
-          const size = Buffer.byteLength(value);
-          if (size > PERFORMANCE_TRIAL_BYTES || bytes + size > PERFORMANCE_RUN_BYTES) throw Error('Performance viewer exports exceed retention budget');
-          writeFileSync(path.join(directory, name), value, { flag: 'wx' }); bytes += size;
-        }
-        exportPending = false;
-        save();
-      } catch (error) { exportFailed = true; save(); throw error; }
-      return sample(trial);
+    append: (input: unknown) => append(input),
+    /** Adopt one immutable child record after its process exits; the run index references those exact bytes. */
+    adopt(file: string) {
+      if (!/^trial-[0-9]+\/trial\.json$/.test(file)) throw Error('Invalid child trial path');
+      const child = path.dirname(path.join(directory, file));
+      if (!lstatSync(child).isDirectory()) throw Error('Invalid child trial directory');
+      const childManifest = JSON.parse(read(path.join(child, 'manifest.json'), INDEX_BYTES).toString());
+      if (!isDeepStrictEqual(childManifest, manifest)) throw Error('Startup trial manifests differ');
+      const bytes = read(path.join(directory, file), PERFORMANCE_TRIAL_BYTES);
+      const trial = trialSchema.parse(JSON.parse(bytes.toString()));
+      if (Object.values(trial.processes).some(report => report.mode !== manifest.mode)) throw Error('Child recording mode differs');
+      if (trial.scenario !== 'populated-startup') throw Error('Only startup workers produce child records');
+      return append(trial, { file, bytes });
     },
   };
 }
@@ -111,7 +126,7 @@ export function readPerformanceRun(directory: string, measured = 20) {
   let bytes = 0;
   let scenario: PerformanceTrial['scenario'] | undefined;
   for (const [position, record] of index.records.entries()) {
-    if (record.file !== `trial-${position}.json`) throw Error('Invalid trial file order');
+    if (record.file !== `trial-${position}.json` && record.file !== `trial-${position}/trial.json`) throw Error('Invalid trial file order');
     bytes += record.bytes;
     if (bytes > PERFORMANCE_RUN_BYTES) throw Error('Performance run exceeds admission budget');
     const encoded = read(path.join(directory, record.file), PERFORMANCE_TRIAL_BYTES);
@@ -123,9 +138,9 @@ export function readPerformanceRun(directory: string, measured = 20) {
     scenario = trial.scenario;
     if (scenario === 'populated-startup') {
       const own = path.join(directory, `trial-${position}`);
+      if (!lstatSync(own).isDirectory()) throw Error('Invalid child trial directory');
       const ownManifest = JSON.parse(read(path.join(own, 'manifest.json'), INDEX_BYTES).toString());
-      const ownResult = JSON.parse(read(path.join(own, 'results.json'), PERFORMANCE_TRIAL_BYTES).toString()) as { trials?: unknown };
-      if (!isDeepStrictEqual(ownManifest, manifest) || !isDeepStrictEqual(ownResult.trials, [trial])) throw Error('Startup trial provenance or raw evidence differs');
+      if (record.file !== `trial-${position}/trial.json` || !isDeepStrictEqual(ownManifest, manifest)) throw Error('Startup trial provenance or raw evidence differs');
     }
     assertPerformanceCaptures(trial, manifest.mode);
   }

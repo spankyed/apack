@@ -51,7 +51,17 @@ export function createPerformanceRevisionJournal(directory: string, modeInput: u
 // @public
 export function createPerformanceRunStore(directory: string, manifestInput: unknown, measured: number): {
     save: (invocations?: readonly PerformanceInvocation[]) => void;
-    append(input: unknown): {
+    append: (input: unknown) => {
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        index: number;
+        warmup: boolean;
+        outcome: "failed" | "passed" | "incomplete" | "cancelled";
+        correct: boolean;
+        completion: "missing" | "view-ready";
+        durationMs?: number | undefined;
+        failure?: string | undefined;
+    };
+    adopt(file: string): {
         scenario: "search" | "thread-open" | "streaming" | "populated-startup";
         index: number;
         warmup: boolean;
@@ -68,6 +78,7 @@ export function createPerformanceScenarioRun(directory: string, manifestInput: u
     schedule: PerformanceScheduleEntry[];
     save: (invocations?: Partial<Record<PerformanceVariant, readonly PerformanceInvocation[]>>) => void;
     begin(entry: PerformanceScheduleEntry): void;
+    adopt: (entry: PerformanceScheduleEntry) => void;
     append(entry: PerformanceScheduleEntry, input: unknown): void;
 };
 
@@ -632,166 +643,6 @@ export const trialSchema: z.ZodObject<{
     }, z.core.$strip>>;
     failure: z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
-
-// @public
-export function validatePerformanceRun(manifestInput: unknown, trialsInput: unknown, measured: number): {
-    manifest: {
-        format: 1;
-        source: {
-            revision: string;
-            dirty: boolean;
-            excludedUntracked: string[];
-            diffSha256: string;
-        };
-        builds: {
-            path: string;
-            sha256: string;
-        }[];
-        fixture: {
-            generator: string;
-            seed: number;
-            sha256: string;
-            distribution: Record<string, number>;
-        };
-        native: {
-            pin: string;
-            checkoutRevision: string;
-            dirty: boolean;
-            excludedUntracked: string[];
-        };
-        runtime: Record<string, string>;
-        machine: {
-            platform: string;
-            arch: string;
-            cpus: number;
-            memoryBytes: number;
-            identity: string;
-        };
-        mode: "disabled" | "lightweight" | "detailed";
-        cache: "warm-process" | "fresh-process-warm-filesystem";
-        warmups: number;
-        clock: "Local monotonic durations; cross-process epoch alignment is approximate";
-    };
-    trials: {
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
-        index: number;
-        warmup: boolean;
-        outcome: "failed" | "passed" | "incomplete" | "cancelled";
-        correct: boolean;
-        completion: "missing" | "view-ready";
-        work: Record<string, number>;
-        processes: Record<string, {
-            observations: string[];
-            bytes: number;
-            dropped: number;
-            truncated: boolean;
-            rejected: number;
-            droppedMetadata: number;
-            mode: "disabled" | "lightweight" | "detailed";
-            active: number;
-            unfinished: number;
-            droppedStarts: number;
-            invalidCarriers: number;
-            detachFailures: number;
-            droppedEvents: number;
-            contextFailures: number;
-            rejectedStarts: number;
-            invalidAttributes: number;
-            complete: boolean;
-            processId?: number | undefined;
-            profiles?: {
-                sampling: {
-                    cpuIntervalMicros: 1000;
-                    allocationIntervalBytes: number;
-                    allocationStackDepth: 128;
-                    includeCollectedAllocations: true;
-                };
-                bytes: number;
-                failures: number;
-                complete: boolean;
-                windowLimitMs: 30000;
-                durationMs: number;
-                stoppedBy: "owner" | "limit";
-                cpu?: string | undefined;
-                allocation?: string | undefined;
-                failureStages?: string[] | undefined;
-                encodedBytes?: {
-                    cpu?: number | undefined;
-                    allocation?: number | undefined;
-                } | undefined;
-            } | undefined;
-            profileFailures?: number | undefined;
-            rendererResourceFailures?: number | undefined;
-            rendererListenerFailures?: number | undefined;
-            rendererStatistics?: {
-                source: "chromium-cdp";
-                pid: number;
-                metrics: {
-                    name: string;
-                    unit: "bytes" | "count" | "seconds";
-                    before: number;
-                    after: number;
-                }[];
-                unavailable: string[];
-                failures: number;
-            } | undefined;
-            rendererLongTasks?: {
-                supported: boolean;
-                count: number;
-                totalMs: number;
-                maxMs: number;
-                failures: number;
-            } | undefined;
-            processStatistics?: {
-                samplingFailures: number;
-                durationMs: number;
-                cpuUserMicros: number;
-                cpuSystemMicros: number;
-                rssStartBytes: number;
-                rssEndBytes: number;
-                rssSampledMaxBytes: number;
-                heapStartBytes: number;
-                heapEndBytes: number;
-                heapSampledMaxBytes: number;
-                gcCount: number;
-                gcDurationMs: number;
-                eventLoopUtilization: number;
-                eventLoopHistogramMaxMs: number;
-                eventLoopLateTickMaxMs: number;
-            } | undefined;
-            processStatisticsFailures?: number | undefined;
-        }>;
-        durationMs?: number | undefined;
-        timings?: {
-            firstVisibleMs: number;
-            maxVisibleGapMs: number;
-        } | undefined;
-        backlog?: {
-            unit: "UTF-16 code units";
-            boundary: "producer enqueue to database-backed view receipt";
-            clock: "approximate process epoch alignment; not database commit latency";
-            produced: {
-                epochMs: number;
-                chars: number;
-            }[];
-            received: {
-                epochMs: number;
-                chars: number;
-            }[];
-            maxPendingChars: number;
-            clockOrderMismatches: number;
-        } | undefined;
-        failure?: string | undefined;
-    }[];
-    summary: {
-        measured: number;
-        passed: number;
-        unsuccessful: number;
-        medianMs: number | null;
-        minMs: number | null;
-        maxMs: number | null;
-    };
-};
 
 // @public
 export function waitForPerformanceTrial(entry: PerformanceScheduleEntry, target?: {

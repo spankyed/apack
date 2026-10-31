@@ -51,6 +51,8 @@ Reports go to ignored `.apack/performance/thread-open-<mode>-<timestamp>/`:
 - `results.json` is a compact format-2 index: ordered raw-trial paths, byte counts, SHA-256 hashes,
   scalar samples, lifecycle status and median/range/count. It never duplicates full profiles.
 - `trial-N.json` retains each warmup, failure/incomplete trial and its complete process records once.
+  Startup workers write `trial-N/trial.json`; the parent index adopts those exact bytes and verifies
+  the per-launch manifest, instead of copying a second raw report. Viewer exports are produced once.
   A raw trial is limited to 128 MiB; generated raw/viewer files have a 4 GiB per-store budget.
   Run admission reads one trial at a time and verifies hashes, summaries, order, modes and lifecycle.
 - `trial-N.trace.json` is Chrome Trace Event JSON for Perfetto. Detailed recordings additionally export
@@ -90,7 +92,7 @@ not latency samples. Inside the runner-owned `/work` copy only, `bash tests/perf
 injects an actual full-dataset query, requires a newly written failed work-budget report, and restores
 its source on exit. Deliberate defects never enter the authored checkout.
 
-`bash tests/performance/counterfactuals/thread-open.sh missing-completion` withholds the correlated
+`bash tests/performance/counterfactuals/thread-open.sh missing-completion` executes a dedicated test that withholds the correlated
 completion signal while the actual fifty-message view arrives. It requires an incomplete trial with
 no duration/success marker and complete process captures; source is restored on exit.
 
@@ -141,14 +143,9 @@ provenance cannot qualify. The disabled-to-lightweight median budget is 5%; a fu
 above that budget exits unsuccessfully while preserving evidence and finishing other selected actions.
 Ordinary CI never runs or enforces the clock budget. Detailed overhead has no assumed low-cost claim.
 
-For a demonstrated search-overhead investigation only, the runner-owned `/work` copy can execute
-`bash tests/performance/counterfactuals/search-resource-refusal.sh` or
-`bash tests/performance/counterfactuals/search-cpu-profile.sh`. Both restore their harness on exit.
-The first asserts correct business results plus explicit incomplete capture. The second uses existing
-Node Inspector and Playwright CDP for one CPU-only batch, with 16 MiB per profile and no heap sampler.
-Both deliberately modify the disposable harness; neither can qualify overhead. CPU samples include
-scheduling gaps and recording setup/export, so inspect sample counts and deltas before attributing
-wall time to a sampled function. Detailed combined profiles also include profiler setup/heap-stop work.
+For capture-refusal proof, run `bash tests/performance/counterfactuals/search-resource-refusal.sh`.
+It executes a dedicated scenario with explicit test-owned fault injection; no source or assertions are rewritten.
+The historical CPU-only investigation is recorded in the investigation archive and is not a maintained runner.
 
 Cross-revision execution uses two explicit installed checkouts that both contain the gated harness.
 Build preparation runs serially through the existing chain and reuses current outputs. Each checkout

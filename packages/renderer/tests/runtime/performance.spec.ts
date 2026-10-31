@@ -118,3 +118,29 @@ it('reports receipt overflow while continuing to update an admitted startup view
   expect(windowPerformance.lastStartupView('pack/feature-0', 'list')).toMatchObject({ commit: 34 });
   expect(await windowPerformance.stop()).toMatchObject({ complete: false, failedListeners: 1 });
 });
+
+it('holds admission ownership until a refused start releases it', async () => {
+  let refuse!: (error: Error) => void;
+  rpc.start.mockImplementationOnce(() => new Promise<void>((_resolve, reject) => { refuse = reject; }));
+  const starting = windowPerformance.start('disabled');
+  await expect(windowPerformance.start('disabled')).rejects.toThrow(/starting/);
+  const failure = Error('admission refused');
+  const rejected = expect(starting).rejects.toThrow(failure);
+  refuse(failure); await rejected;
+  expect(windowPerformance.execution).toBeUndefined();
+  await windowPerformance.start('disabled');
+  expect(await windowPerformance.stop()).toMatchObject({ complete: true });
+});
+
+it('an unsubscribe from a closed recording cannot remove the same callback from its successor', async () => {
+  const listener = vi.fn();
+  await windowPerformance.start('disabled');
+  const unsubscribe = windowPerformance.onView(listener);
+  await windowPerformance.stop();
+  await windowPerformance.start('disabled');
+  windowPerformance.onView(listener);
+  unsubscribe();
+  notifyPerformanceView({ request: { ref: 'pack/feature', view: 'list' }, update: { ok: true, value: null, commit: 1 }, generation: 1, delivery: 1 });
+  expect(listener).toHaveBeenCalledTimes(1);
+  await windowPerformance.stop();
+});

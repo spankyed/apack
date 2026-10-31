@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { installViewCompletion } from '../../../../tests/performance/view-completion.ts';
-import type { PerformanceViewCompletion, PerformanceViewDelivery, PerformanceWindow } from '../../../../tests/performance/window.ts';
+import { installViewCompletion } from '../../../tests/performance/view-completion.ts';
+import type { PerformanceViewCompletion, PerformanceViewDelivery, PerformanceWindow } from '../../../tests/performance/window.ts';
 
 const delivery: PerformanceViewDelivery = { request: { ref: 'test/feature', view: 'chat' }, update: { ok: true, value: {}, commit: 1 }, generation: 1, delivery: 1 };
 let receive: (value: PerformanceViewDelivery) => void;
@@ -107,6 +107,6 @@ it('serializes the helper under the tsx loader without capturing transpiler glob
     if (cleaned !== 2) throw Error('Serialized completion did not release resources');
   `;
   expect(() => execFileSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
-    cwd: path.resolve(import.meta.dirname, '../../../..'), timeout: 10_000,
+    cwd: path.resolve(import.meta.dirname, '../../..'), timeout: 10_000,
   })).not.toThrow();
 });

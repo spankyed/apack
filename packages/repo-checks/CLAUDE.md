@@ -20,7 +20,7 @@ Putting them there costs two things:
   run, and a sixth of it would be answering questions about the chain.
 
 `scripts/spec.ts` routes `scripts/` and any `vitest.config.ts` here, and
-`tests/repo-check-boundary.spec.ts` holds the other half: a spec that reads the repo's scripts belongs in
+`tests/repo-check-boundary.spec.ts` holds the other half: a package spec that imports root scripts or manual performance helpers belongs in
 this package, and this package holds nothing else — bar the layout checks its `LAYOUT_CHECKS` names, which
 read the tree and so have no `scripts/` module to import.
 
@@ -57,6 +57,7 @@ names every workspace that has a second config.
 
 | Spec | Subject |
 |---|---|
+| `performance-scenario`, `performance-scenario-view` | the repository-owned manual performance harness: trial persistence, fixture lifecycle, serialized renderer completion and cleanup |
 | `preview-build` | preview version parsing, isolated build environment, and isolated staging builds, build integrity before packaging, and beta release naming |
 | `packaged-app` | manifest-based bundle selection, channel isolation, reset scope, captured exit status, signing assessment failures, and diagnostics from the selected app and profile |
 | `chain-graph`, `chain-schedule`, `step-timing` | the chain's run order, the scheduler that admits its steps on a core budget, and what a step costs. That a step's declared timeout rung matches its kind of work (`rungForKind`), with the reviewed exceptions, and what a step says when its rung killed it: the deadline and the recorded cost, without diagnosing slow from stalled. Every class a direct `npm run` bounds at through `scripts/bounded.ts` is on the ladder, and the scan is mutated in the spec because one that matched nothing would satisfy every assertion over it |
