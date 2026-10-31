@@ -49,6 +49,9 @@ useWorkDir() {
 
 # Sweep only this canonical checkout's dead owners. A live (possibly reused) PID is
 # preserved conservatively. The caller must serialize this checkout's author/app halves.
+# A work dir holds read-only directories (the CLI's compiler store under its HOME), whose
+# entries can't be unlinked until they are writable again, so each directory is made
+# writable before the removal; a work dir that still can't be removed is named on stderr.
 newWorkDir() {
   local prefix
   prefix="$(node -e '
@@ -61,9 +64,21 @@ newWorkDir() {
       if (!Number.isSafeInteger(pid) || pid <= 0 || live(pid)) continue;
       const directory = path.join(os.tmpdir(), name);
       // Only ordinary directories belong to this sweep; links and files are preserved.
+      let isDirectory = false;
+      try { isDirectory = fs.lstatSync(directory).isDirectory(); } catch {}
+      if (!isDirectory) continue;
+      const writable = (at) => {
+        fs.chmodSync(at, 0o700);
+        for (const entry of fs.readdirSync(at, { withFileTypes: true })) {
+          if (entry.isDirectory()) writable(path.join(at, entry.name));
+        }
+      };
       try {
-        if (fs.lstatSync(directory).isDirectory()) fs.rmSync(directory, { recursive: true, force: true });
-      } catch {}
+        writable(directory);
+        fs.rmSync(directory, { recursive: true, force: true });
+      } catch (error) {
+        process.stderr.write(`authoring: could not remove the dead work dir ${directory}: ${error.message}\n`);
+      }
     }
     process.stdout.write(prefix);
   ' "$ROOT")"

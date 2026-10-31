@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -53,6 +53,12 @@ describe('external authoring output ownership', () => {
     fs.symlinkSync(target, link, 'dir');
     const alias = path.join(dir, 'checkout-alias');
     fs.symlinkSync(root, alias, 'dir');
+    // A work dir holds read-only directories, as the CLI's compiler store under its HOME does
+    const store = path.join(previous, 'home/Library/Caches/apack-cli/compilers/hash');
+    fs.mkdirSync(path.join(store, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(store, 'bin/tool'), 'compiler');
+    fs.chmodSync(path.join(store, 'bin'), 0o555);
+    fs.chmodSync(store, 0o555);
     const current = run(alias, temporary, 'newWorkDir');
     expect(path.basename(current).startsWith(prefix)).toBe(true);
     expect(fs.existsSync(previous)).toBe(false);
@@ -60,6 +66,27 @@ describe('external authoring output ownership', () => {
       expect(fs.existsSync(kept), kept).toBe(true);
     }
     expect(fs.lstatSync(link).isSymbolicLink()).toBe(true);
+  });
+
+  // macOS's user immutable flag makes a file no chmod lets the sweep remove; Linux's needs root to set
+  it.skipIf(process.platform !== 'darwin')('names a dead work dir it could not remove, rather than skipping it silently', () => {
+    const dir = fixture(), temporary = path.join(dir, 'private-tmp');
+    fs.mkdirSync(temporary);
+    const root = path.join(dir, 'checkout');
+    const previous = run(root, temporary, 'newWorkDir');
+    const locked = path.join(previous, 'locked');
+    fs.writeFileSync(locked, 'immutable');
+    execFileSync('chflags', ['uchg', locked]);
+    try {
+      const swept = spawnSync('bash', ['-c', 'source "$1"; newWorkDir', path.join(root, 'tests/scripts/caller.sh'), helper], {
+        env: { ...process.env, TMPDIR: temporary }, encoding: 'utf8',
+      });
+      expect(swept.status).toBe(0);
+      expect(swept.stderr).toContain(`could not remove the dead work dir ${previous}`);
+      expect(fs.existsSync(locked)).toBe(true);
+    } finally {
+      execFileSync('chflags', ['nouchg', locked]);
+    }
   });
 
   it('orders this checkout’s app consumer after its author producer', () => {
