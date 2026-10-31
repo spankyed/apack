@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ec19126ce8de47183f1d8398158a8f45891e2e42
+          ref: a075fe1c418e6e71e5666c18e38f1a8f9727e09f
       - name: Fetch the pinned native source
         shell: bash
         run: |
@@ -39,6 +39,7 @@ jobs:
               npm run build
               cd /work
               npm ci --no-audit --no-fund
+              npm run chain -- --only packages:ensure,build:default-setup --no-native --cores 1
               npm run chain -- --only build:runtime --no-native --cores 1
               xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario all --mode disabled --compare lightweight --trials 2 --output .apack/performance/cleanup-contract-final
               bash tests/performance/counterfactuals/thread-open.sh full-read
@@ -50,7 +51,7 @@ jobs:
         with:
           name: performance-cleanup-contracts-ec19126ce8
           include-hidden-files: true
-          retention-days: 7
+          retention-days: 2
           path: |
             ${{ runner.temp }}/performance-contracts.log
             .apack/performance/
