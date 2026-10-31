@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: a075fe1c418e6e71e5666c18e38f1a8f9727e09f
+          ref: 0ca8217459bbeff990e4ff0b0978def3129893df
       - name: Fetch the pinned native source
         shell: bash
         run: |
@@ -41,21 +41,38 @@ jobs:
               npm ci --no-audit --no-fund
               npm run chain -- --only packages:ensure,build:default-setup --no-native --cores 1
               npm run chain -- --only build:runtime --no-native --cores 1
+              if xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario all --mode disabled --compare lightweight --trials 2 --output .apack/performance/runtime-cleanup-contracts; then
+                bash tests/performance/counterfactuals/thread-open.sh full-read
+                bash tests/performance/counterfactuals/thread-open.sh missing-completion
+                exit 0
+              fi
               cat > tests/performance/startup-diagnostic.config.ts <<"CONFIG"
           import base from "./playwright.config.ts";
           export default { ...base, testMatch: "startup-diagnostic.spec.ts", outputDir: ".apack/performance/startup-probe" };
           CONFIG
               cat > tests/performance/startup-diagnostic.spec.ts <<"PROBE"
           import { test } from "@apackdev/testing";
+          import { readFileSync, statSync } from "node:fs";
+          import { fileURLToPath } from "node:url";
           import { waitForApplicationWindow } from "../../packages/apack-testing/src/application-window.ts";
           test("inspect renderer startup", async ({ electronApp }) => {
+            console.log("[startup process limits]", readFileSync(`/proc/${electronApp.process().pid}/limits`, "utf8"));
             const pages = new Set<import("@playwright/test").Page>();
+            let failed = 0;
             const observe = (page: import("@playwright/test").Page) => {
               if (pages.has(page)) return;
               pages.add(page);
               page.on("pageerror", error => console.log("[startup pageerror]", error.stack));
               page.on("console", message => console.log("[startup console]", message.type(), message.text()));
-              page.on("requestfailed", request => console.log("[startup requestfailed]", request.url(), request.failure()));
+              page.on("requestfailed", request => {
+                console.log("[startup requestfailed]", request.url(), request.failure());
+                if (++failed > 10 || !request.url().startsWith("file:")) return;
+                try {
+                  const file = fileURLToPath(request.url());
+                  const stat = statSync(file);
+                  console.log("[startup file]", file, { mode: stat.mode.toString(8), uid: stat.uid, size: stat.size, readableBytes: readFileSync(file).length });
+                } catch (error) { console.log("[startup file error]", String(error)); }
+              });
               page.on("response", response => { if (response.status() >= 400) console.log("[startup response]", response.status(), response.url()); });
             };
             electronApp.on("window", observe);
@@ -73,7 +90,8 @@ jobs:
             }
           });
           PROBE
-              DEBUG_E2E=1 ELECTRON_ENABLE_LOGGING=1 xvfb-run -a npm run test:e2e -- --config tests/performance/startup-diagnostic.config.ts
+              DEBUG_E2E=1 ELECTRON_ENABLE_LOGGING=1 xvfb-run -a npm run test:e2e -- --config tests/performance/startup-diagnostic.config.ts || true
+              exit 1
             ' 2>&1 | tee "$RUNNER_TEMP/performance-contracts.log"
       - name: Make container-owned diagnostic evidence readable
         if: always()
@@ -86,10 +104,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: performance-renderer-startup-probe-a075fe1c41
+          name: performance-runtime-cleanup-0ca8217459
           include-hidden-files: true
           retention-days: 2
           path: |
             ${{ runner.temp }}/performance-contracts.log
             .apack/performance/
             node_modules/.cache/apack-chain/runs/
+            packages/renderer/dist/
