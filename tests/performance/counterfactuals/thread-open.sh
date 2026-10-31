@@ -14,15 +14,16 @@ p='tests/performance/thread-open.spec.ts'
 s=open(p).read()
 import os
 if os.environ['APACK_THREAD_FAULT'] == 'missing-completion':
-    assert s.count('delivered = true;') == 1
-    s = s.replace('delivered = true;', 'delivered = false;', 1)
+    a = '              return true;\n            },\n            dispatch:'
+    assert s.count(a) == 1
+    s = s.replace(a, a.replace('return true;', 'return false;'), 1)
     a = 'return { completed, durationMs, reports, failure, lastDelivery, work };'
     assert s.count(a) == 1
     s = s.replace(a, "work.faultObservedMessages = win.applicationState.system.get('default-setup/threads').getSnapshot().context.chatMessageIds.length;\n        " + a, 1)
     open(p, 'w').write(s)
 else:
-    a='try { action.within(() => win.applicationState.send('
-    b="try { action.within(() => (win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/database', events: [{ type: 'QUERY.EXECUTE', code: 'return query(EARS.Entity.Message).pickAll()' }] }), win.applicationState.send("
+    a='dispatch: () => { action.within(() => win.applicationState.send('
+    b="dispatch: () => { action.within(() => (win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/database', events: [{ type: 'QUERY.EXECUTE', code: 'return query(EARS.Entity.Message).pickAll()' }] }), win.applicationState.send("
     assert s.count(a)==1
     s=s.replace(a,b,1)
     assert s.count('    for (const entry of schedule)') == 1

@@ -5,7 +5,8 @@ set -euo pipefail
 test "$PWD" = /work
 scratch=$(mktemp -d)
 cp tests/performance/search.spec.ts "$scratch/before.ts"
-trap 'cp "$scratch/before.ts" tests/performance/search.spec.ts; rm -rf "$scratch"' EXIT
+cp tests/performance/scenario.ts "$scratch/scenario.ts"
+trap 'cp "$scratch/before.ts" tests/performance/search.spec.ts; cp "$scratch/scenario.ts" tests/performance/scenario.ts; rm -rf "$scratch"' EXIT
 python3 - <<'PY'
 p='tests/performance/search.spec.ts'
 s=open(p).read()
@@ -16,15 +17,18 @@ s=s.replace(a, """    await electronApp.evaluate(({ ipcMain }) => {
       ipcMain.handle('performance:renderer:start', () => { throw Error('Injected renderer resource refusal'); });
     });
 """+a,1)
+open(p,'w').write(s)
+p='tests/performance/scenario.ts'
+s=open(p).read()
 a="      expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');"
 assert s.count(a)==1
 s=s.replace(a,"""      expect(trial.correct).toBe(true);
       expect(trial.completion).toBe('view-ready');
-      if (mode === 'lightweight') {
+      if (entry.mode === 'lightweight') {
         expect(trial.processes.renderer?.rendererResourceFailures).toBe(1);
         expect(trial.processes.backend?.complete).toBe(true);
       }
-      expect(trial.outcome).toBe(mode === 'lightweight' ? 'incomplete' : 'passed');""",1)
+      expect(trial.outcome).toBe(entry.mode === 'lightweight' ? 'incomplete' : 'passed');""",1)
 open(p,'w').write(s)
 PY
 export APACK_PERFORMANCE_RUN_OUTPUT="/work/.apack/performance/search-resource-refusal-$(date +%s)"

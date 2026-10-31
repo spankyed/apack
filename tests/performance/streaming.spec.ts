@@ -1,39 +1,27 @@
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, copyFileSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@apackdev/testing';
-import type { RecordingMode } from '@apackdev/host/diagnostics';
-import { performanceIdentity, attachRendererProcessIdentity, createPerformanceScenarioRun, performanceSchedule, performanceExecutionPolicy, waitForPerformanceTrial, finishPerformanceTrial, streamingBacklog, trialSchema } from '@apackdev/testing/performance';
+import { streamingBacklog } from '@apackdev/testing/performance';
 import { streamingFixture } from './fixture.ts';
+import { createWarmScenario } from './scenario.ts';
 import type { PerformanceWindow } from './window.ts';
 
 /** Own profile per worker/run; interactive trials deliberately share a warmed process and filesystem cache. */
 test('stream a deterministic reply through the real CLI flow and persist the visible result', async ({ app, appPage, electronApp }) => {
-  const mode = (process.env.APACK_PERFORMANCE_MODE ?? 'lightweight') as RecordingMode;
-  if (!['disabled', 'lightweight', 'detailed'].includes(mode)) throw Error('Invalid APACK_PERFORMANCE_MODE');
-  const measured = Number(process.env.APACK_PERFORMANCE_TRIALS ?? 20);
-  if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100) throw Error('Trials must be between 1 and 100');
-  const warmups = 5;
-  const comparison = process.env.APACK_PERFORMANCE_COMPARE_MODE;
-  const schedule = performanceSchedule(mode, measured, comparison);
-  const fixture = streamingFixture(schedule.length);
-  const directory = mkdtempSync(path.join(tmpdir(), 'apack-performance-fixture-'));
-  const output = process.env.APACK_PERFORMANCE_RUN_OUTPUT ? path.resolve(process.env.APACK_PERFORMANCE_RUN_OUTPUT) : path.resolve('.apack/performance', `streaming-${mode}${comparison ? `-vs-${comparison}` : ''}-${Date.now()}`);
-  mkdirSync(output, { recursive: true });
-  const executable = path.join(directory, 'claude-fixture.mjs');
   const source = fileURLToPath(new URL('./fixtures/claude-stream.mjs', import.meta.url));
-  copyFileSync(source, executable);
-  chmodSync(executable, 0o700);
-  writeFileSync(path.join(directory, 'stream.json'), JSON.stringify(fixture.script));
-  fixture.identity.sha256 = createHash('sha256').update(fixture.identity.sha256).update(readFileSync(source)).digest('hex');
-  const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
-  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime: { ...runtime, performancePolicy: performanceExecutionPolicy(comparison) } });
-  const journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
-  const save = () => journal.save();
+  const run = await createWarmScenario('streaming', count => {
+    const fixture = streamingFixture(count);
+    fixture.identity.sha256 = createHash('sha256').update(fixture.identity.sha256).update(readFileSync(source)).digest('hex');
+    return fixture;
+  }, { app, appPage, electronApp });
+  const { fixture, directory, schedule } = run;
   try {
-    writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify(fixture.data));
+    const executable = path.join(directory, 'claude-fixture.mjs');
+    copyFileSync(source, executable);
+    chmodSync(executable, 0o700);
+    writeFileSync(path.join(directory, 'stream.json'), JSON.stringify(fixture.script));
     await app.waitForSurface('default-setup/threads');
     await app.navigate('default-setup/threads');
     await app.waitForSurface('default-setup/code');
@@ -56,18 +44,10 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
       const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/code').getSnapshot().context as unknown as { baseDirectory?: string };
       return context.baseDirectory;
     })).toBe(directory);
-    await app.navigate('default-setup/threads');
-    await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
-    // Preparation is outside every measured interval. The public import need not invoke a model.
-    await appPage.waitForFunction(last => {
-      const actor = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads');
-      const context = actor.getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
-      return !!context.threadMap[`Thread-stream-${last}`];
-    }, schedule.length - 1);
+    await run.importThreads(`Thread-stream-${schedule.length - 1}`);
     for (const entry of schedule) {
-      const { index, mode } = entry;
-      await waitForPerformanceTrial(entry, { application: electronApp, page: appPage });
-      journal.begin(entry);
+      const { mode } = entry;
+      await run.begin(entry);
       const thread = entry.ordinal;
       await appPage.evaluate(thread => (window as unknown as PerformanceWindow).applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: `Thread-stream-${thread}` }, { type: 'SET_MODE', mode: 'Claude Code' }] }), thread);
       await appPage.waitForFunction(thread => {
@@ -95,64 +75,51 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
         const viewProgress: Array<{ epochMs: number; chars: number }> = [];
         let persisted: { id: string; text: string; responseTimestamp?: number; commit: number; subscription?: string; delivery?: number } | undefined;
         try {
-          await new Promise<void>((resolve, reject) => {
-            let checking = false;
-            let finished = false;
-            const close = () => { clearTimeout(timeout); observer.disconnect(); detach(); };
-            const check = async () => {
-              if (checking || finished || !persisted) return;
-              checking = true;
-              try {
-                await recording.flushView();
-                if (finished || !persisted) return;
-                const state = context();
-                if (state.currentThread?.id !== `Thread-stream-${thread}` || !state.chatMessageIds.includes(persisted.id)) return;
-                const message = state.messageContents[persisted.id];
-                if (!message || message.text !== persisted.text || !expected.startsWith(message.text)) return;
-                const element = document.querySelector(`[data-message-id="${persisted.id}"]`);
-                if (!element || !element.getClientRects().length || !element.textContent?.includes(message.text.trimEnd())) return;
-                const now = performance.now() - started;
-                if (message.text.length > lastLength) {
-                  if (firstVisibleMs === undefined) firstVisibleMs = now;
-                  else maxVisibleGapMs = Math.max(maxVisibleGapMs, now - lastVisibleMs);
-                  lastLength = message.text.length;
-                  lastVisibleMs = now;
-                  work.visibleUpdates!++;
-                }
-                if (message.text !== expected || persisted.responseTimestamp === undefined || message.responseTimestamp !== persisted.responseTimestamp) return;
-                if (work.visibleUpdates! < 2 || firstVisibleMs === undefined || firstVisibleMs >= now) throw Error('missing-intermediate-progress');
-                if (state.chatMessageIds.length !== before.size + 2) throw Error('message-bound');
-                const ready = action.within(() => recording.begin('app.view.ready', {
-                  'app.generation': persisted!.subscription ?? 'disabled', 'app.delivery': persisted!.delivery ?? 0,
-                  'app.commit': persisted!.commit, 'app.result_count': state.chatMessageIds.length,
-                }));
-                ready?.end();
-                durationMs = performance.now() - started;
-                completed = true;
-                finished = true;
-                close(); resolve();
-              } catch (error) { finished = true; close(); reject(error); }
-              finally { checking = false; }
-            };
-            const detach = recording.onView(({ request, update }) => {
+          await win.__waitForPerformanceView({
+            check: () => {
+              if (!persisted) return false;
+              const state = context();
+              if (state.currentThread?.id !== `Thread-stream-${thread}` || !state.chatMessageIds.includes(persisted.id)) return false;
+              const message = state.messageContents[persisted.id];
+              if (!message || message.text !== persisted.text || !expected.startsWith(message.text)) return false;
+              const element = document.querySelector(`[data-message-id="${persisted.id}"]`);
+              if (!element || !element.getClientRects().length || !element.textContent?.includes(message.text.trimEnd())) return false;
+              const now = performance.now() - started;
+              if (message.text.length > lastLength) {
+                if (firstVisibleMs === undefined) firstVisibleMs = now;
+                else maxVisibleGapMs = Math.max(maxVisibleGapMs, now - lastVisibleMs);
+                lastLength = message.text.length;
+                lastVisibleMs = now;
+                work.visibleUpdates!++;
+              }
+              if (message.text !== expected || persisted.responseTimestamp === undefined || message.responseTimestamp !== persisted.responseTimestamp) return false;
+              if (work.visibleUpdates! < 2 || firstVisibleMs === undefined || firstVisibleMs >= now) throw Error('missing-intermediate-progress');
+              if (state.chatMessageIds.length !== before.size + 2) throw Error('message-bound');
+              const ready = action.within(() => recording.begin('app.view.ready', {
+                'app.generation': persisted!.subscription ?? 'disabled', 'app.delivery': persisted!.delivery ?? 0,
+                'app.commit': persisted!.commit, 'app.result_count': state.chatMessageIds.length,
+              }));
+              ready?.end();
+              durationMs = performance.now() - started;
+              completed = true;
+              return true;
+            },
+            accept: ({ request, update }) => {
               const args = request.args as { id?: string } | undefined;
-              if (request.ref !== 'default-setup/threads' || request.view !== 'message' || !args?.id || before.has(args.id) || !update.ok) return;
-              if (context().currentThread?.id !== `Thread-stream-${thread}` || !context().chatMessageIds.includes(args.id)) return;
+              if (request.ref !== 'default-setup/threads' || request.view !== 'message' || !args?.id || before.has(args.id) || !update.ok) return false;
+              if (context().currentThread?.id !== `Thread-stream-${thread}` || !context().chatMessageIds.includes(args.id)) return false;
               const value = update.value as { sender?: string; text?: string; responseTimestamp?: number } | null;
-              if (value?.sender !== 'assistant' || !value.text || !expected.startsWith(value.text)) return;
+              if (value?.sender !== 'assistant' || !value.text || !expected.startsWith(value.text)) return false;
               if (value.text.length > (viewProgress.at(-1)?.chars ?? 0)) {
                 if (viewProgress.length < 64) viewProgress.push({ epochMs: Date.now(), chars: value.text.length });
                 else work.droppedProgress = (work.droppedProgress ?? 0) + 1;
               }
               persisted = { id: args.id, text: value.text, responseTimestamp: value.responseTimestamp, commit: update.commit,
                 subscription: update.diagnostics?.subscription, delivery: update.diagnostics?.delivery };
-              void check();
-            });
-            const observer = new MutationObserver(() => { void check(); });
-            observer.observe(document.body, { subtree: true, childList: true, characterData: true });
-            const timeout = setTimeout(() => { finished = true; close(); reject(Error('missing-view-ready')); }, 15_000);
-            try { action.within(() => win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'SEND_MESSAGE', text: `Performance trial ${thread}` }] })); }
-            catch (error) { finished = true; close(); reject(error); }
+              return true;
+            },
+            dispatch: () => { action.within(() => win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'SEND_MESSAGE', text: `Performance trial ${thread}` }] })); },
+            errors: ['missing-intermediate-progress', 'message-bound'],
           });
         } catch (error) { failure = error instanceof Error && ['missing-intermediate-progress', 'message-bound'].includes(error.message) ? error.message : 'missing-view-ready'; }
         finally { action.end(completed ? 'ok' : 'error'); }
@@ -185,17 +152,7 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
         backlogPhase = 'progress-data';
         backlog = streamingBacklog(produced, result.viewProgress, fixture.script.chunks.join('').length);
       } catch { backlogFailure = `backlog-${backlogPhase}`; }
-      if (result.reports.renderer) {
-        await attachRendererProcessIdentity(electronApp, appPage, result.reports.renderer);
-        result.reports.complete &&= result.reports.renderer.complete;
-      }
-      const trial = trialSchema.parse({ scenario: 'streaming', index, warmup: index < warmups,
-        work: result.work, timings: result.timings, backlog, outcome: backlogFailure ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
-        correct: result.completed && !backlogFailure, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
-        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: backlogFailure ?? result.failure });
-      journal.append(entry, trial);
-      expect(trial.outcome, `Preserved evidence: ${output}`).toBe('passed');
-      await finishPerformanceTrial(entry, trial.outcome);
+      await run.append(entry, result, { backlog, failure: backlogFailure });
     }
-  } finally { save(); rmSync(directory, { recursive: true, force: true }); }
+  } finally { run.close(); }
 });

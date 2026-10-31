@@ -1,4 +1,4 @@
-import { performanceProcessReport } from './fixtures.ts';
+import { performanceManifest, performanceProcessReport } from './fixtures.ts';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -7,11 +7,7 @@ import { createPerformanceRunStore, readPerformanceRun, PERFORMANCE_TRIAL_BYTES 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }); });
 function directory() { const directory = mkdtempSync(path.join(tmpdir(), 'apack-run-store-')); directories.push(directory); return directory; }
-const manifest = { format: 1, source: { revision: 'one', dirty: false, excludedUntracked: [], diffSha256: 'clean' },
-  builds: [{ path: 'app', sha256: 'one' }], fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} },
-  native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] }, mode: 'lightweight', cache: 'warm-process', warmups: 5,
-  runtime: {}, machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' },
-  clock: 'Local monotonic durations; cross-process epoch alignment is approximate' };
+const manifest = performanceManifest();
 const report = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0,
   mode: 'lightweight', active: 0, unfinished: 0, droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0,
   contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };

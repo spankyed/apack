@@ -1,4 +1,4 @@
-import { performanceProcessReport } from './fixtures.ts';
+import { performanceManifest, performanceProcessReport } from './fixtures.ts';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
@@ -55,10 +55,7 @@ it('refuses an exited worker and a completion that predates its permission', asy
     expect(JSON.parse(readFileSync(path.join(output, 'execution.json'), 'utf8')).status).toBe('failed');
   }
 });
-const manifest = { format: 1, source: { revision: 'one', dirty: false, excludedUntracked: [], diffSha256: 'clean' }, builds: [{ path: 'app', sha256: 'one' }],
-  fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} }, native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] },
-  mode: 'lightweight', cache: 'warm-process', warmups: 5, runtime: { performancePolicy: 'paired-focused-revisions-v1' },
-  machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' }, clock: 'Local monotonic durations; cross-process epoch alignment is approximate' };
+const manifest = performanceManifest({ runtime: { performancePolicy: 'paired-focused-revisions-v1' } });
 it('admits differing clean revisions and rejects changed fixtures or failed process exits', () => {
   const output = directory(); const coordinator = createPerformanceRevisionJournal(output, 'lightweight', 2);
   const stores = { A: createPerformanceRunStore(path.join(output, 'A'), manifest, 2),

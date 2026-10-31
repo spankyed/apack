@@ -8,6 +8,8 @@ trap 'cp "$scratch/before.ts" tests/performance/search.spec.ts; rm -rf "$scratch
 python3 - <<'PY'
 p='tests/performance/search.spec.ts'
 s=open(p).read()
+s = "import { writeFileSync } from 'node:fs';\nimport path from 'node:path';\n" + s
+s = s.replace('const { fixture, schedule } = run;', 'const { fixture, schedule, output } = run;')
 a='    for (const entry of schedule) {'
 assert s.count(a)==1
 s=s.replace(a,"""    const writeCpu = (name: string, profile: unknown) => {
@@ -30,7 +32,7 @@ s=s.replace(a,"""    const writeCpu = (name: string, profile: unknown) => {
     await expect.poll(() => appPage.evaluate(() => ((window as unknown as PerformanceWindow).applicationState.system.get('default-setup/database').getSnapshot().context as unknown as { queryResult?: { marker?: string } }).queryResult?.marker)).toBe('search-cpu-started');
     await app.navigate('default-setup/threads');
 """+a,1)
-a="  } finally { save(); rmSync(directory, { recursive: true, force: true }); }"
+a="  } finally { run.close(); }"
 assert s.count(a)==1
 s=s.replace(a,"""    const rendererCpu = await cpu.send('Profiler.stop'); await cpu.detach();
     writeCpu('renderer-batch.cpuprofile', rendererCpu.profile);
