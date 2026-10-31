@@ -20,6 +20,9 @@ jobs:
         run: ./tests/scripts/probe-windows-directory-durability.ps1 -Output .apack/tests/results/windows-directory/report.json
       - name: Observe standard Node directory descriptors
         run: node tests/scripts/_support/windows-directory-node.mjs .apack/tests/results/windows-directory/node.json
+      - name: Observe directory barriers without administrator access
+        shell: pwsh
+        run: ./tests/scripts/probe-windows-restricted-directory.ps1 -Output .apack/tests/results/windows-directory/restricted.json
       - name: Preserve observations
         if: always()
         uses: actions/upload-artifact@v4

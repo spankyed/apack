@@ -411,3 +411,10 @@ is preregistered and syntax checked, not launched. It retains frozen runtimea9, 
 artifact, explicit offline cursor preparation on a copy, paired connection reopen boundaries,7200queries,
 canonical byte checks and original gates. Native98419 must finish before quiet admission; never sync the
 new SDK/host code into its live volume. Preparation is not a claimed result.
+
+A follow-up disposable Windows probe uses a copied restricted token: administrator SID deny-only,
+DISABLE_MAX_PRIVILEGE, verified non-administrator/same-user identity and enabled-privilege inventory.
+It tests actual writable directory open/flush before/after deletion under an owner-only ACL, plus a
+read-only-directory EACCES control. No account, existing profile ACL or machine setting is changed.
+The Win32-only result does not qualify installed Node/Electron or physical power loss; observe the
+existing windows-durability dispatcher run after publishing before claiming any result.
