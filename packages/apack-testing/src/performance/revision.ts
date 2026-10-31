@@ -1,4 +1,5 @@
-import { existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import { publishPerformanceMarker } from './markers.ts';
+import { existsSync, lstatSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
@@ -39,12 +40,12 @@ export async function coordinatePerformanceRevisions(options: {
       const ready = marker.parse(await wait(entry.variant, `ready-${entry.index}.json`));
       if (ready.index !== entry.index || existsSync(path.join(own, `done-${entry.index}.json`))) throw Error('Revision action completed before permission');
       journal.begin(entry);
-      writeFileSync(path.join(own, `permit-${entry.index}.json`), JSON.stringify({ index: entry.index, mode: entry.mode }), { flag: 'wx' });
+      publishPerformanceMarker(path.join(own, `permit-${entry.index}.json`), { index: entry.index, mode: entry.mode });
       const done = marker.extend({ outcome: z.enum(['passed', 'failed', 'incomplete', 'cancelled']) }).parse(await wait(entry.variant, `done-${entry.index}.json`));
       if (done.index !== entry.index) throw Error('Revision completion differs from scheduled action');
       journal.end(entry, done.outcome);
       if (done.outcome !== 'passed') throw Error('Revision action failed or capture was incomplete');
     }
-    for (const variant of ['A', 'B']) writeFileSync(path.join(options.directory, 'coordination', variant, 'release.json'), JSON.stringify({ released: true }), { flag: 'wx' });
+    for (const variant of ['A', 'B']) publishPerformanceMarker(path.join(options.directory, 'coordination', variant, 'release.json'), { released: true });
   } catch (error) { journal.fail(); throw error; }
 }
