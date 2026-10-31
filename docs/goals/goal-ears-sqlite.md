@@ -337,9 +337,12 @@ Next deliverables, dependencies and closing checks:
   and pinned binary hashes match after migration. Prefix validation and the resumed-copy protocol are
   retained above; finish the matched native/SQLite query comparison on the new storage boundary; old internal-storage timings are not a matched
   comparison with the new Seagate boundary. No interrupted matrix is relabeled complete.
-- Close the current strict-shard concurrency gap without removing builds/assertions or changing deadlines.
-  The phase markers and isolated results above are available; reproduce the relevant overlap before a fix,
-  then run the affected suite. Do not dispatch another broad run solely to obtain green.
+- [Targeted overlap41191053003](../references/evidence/ears-sqlite-implementation-2026-10-28/diamond-overlap-61f/README.md)
+  passes51actualtests across eleven files, zero skips, at61f. All four real diamond builds execute in162.4s
+  under the unchanged240s setup limit, overlapping seven other specs. Phase stdout, not the diamond JSON
+  startTime after its hook, proves setup contention. This exercises the targeted current concurrency gap;
+  the original strict failure remains unexplained and full exact-input strict acceptance remains required.
+  Do not infer a compiler fix or dispatch a broad run solely to obtain green.
 
 Still-required acceptance, without narrowing phases 3–7:
 
@@ -481,3 +484,8 @@ latency passes and its known byte gate. SQLite is slower in15of18pooled timed co
 Physical admission takes1002s:8.5sprojection and990.4scommit, demonstrating the4msslice does not bound
 FULL commit latency on this storage. No fresh-ingestion, OS-cold, universal ratio or total-memory claim.
 Retained copies support the next scoped read-only query/commit attribution before choosing a remedy.
+
+Full source-app owner41193315293 at9ec is queued once behind active installed-platform41192007255.
+It verifies shared readiness/setup and settings validation across the full app suite after the focused
+editor3/3convergence. Observe actual cases, intentional installed-only skips and lifecycle attachments;
+do not treat its pending status or a job label as app acceptance.
