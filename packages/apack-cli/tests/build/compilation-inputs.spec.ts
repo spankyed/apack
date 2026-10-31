@@ -122,3 +122,35 @@ it.each(['safeSearch', 'devOverride', 'knownDlls'] as const)('includes captured 
     expect(identity()).not.toBe(first);
   } finally { capture.mockRestore(); vi.unstubAllEnvs(); fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+it('keeps compilation executable reads with the captured runtime owner', () => {
+  const temporary = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-compilation-exe-')));
+  const root = path.join(temporary, 'pack'), installation = path.join(temporary, 'compiler');
+  fs.mkdirSync(root); fs.mkdirSync(installation);
+  fs.writeFileSync(path.join(root, 'tsconfig.json'), '{"compilerOptions":{"noLib":true,"types":[]}}');
+  const executable = path.join(installation, 'node');
+  fs.writeFileSync(executable, 'captured runtime');
+  const metadata = path.join(installation, 'inputs.json');
+  fs.writeFileSync(metadata, JSON.stringify({ hash: 'a'.repeat(64), packages: [cliPackageDirectory()], paths: [] }));
+  vi.stubEnv('APACK_COMPILER_INPUTS', metadata);
+  const environment = nativeLibraries.captureCompilerLibraryEnvironment();
+  vi.spyOn(nativeLibraries, 'captureCompilerLibraryEnvironment').mockReturnValue({ ...environment, elf: {
+    executable, cwd: root, libraryPaths: [], executableRpath: [], loader: '/lib/ld-linux.so', littleEndian: true,
+    isaLevels: 0, loadedLibraries: [], systemDirectories: [], libraryToken: 'lib', platformToken: '', hardwareCapabilities: [],
+  } });
+  let inputs: ReturnType<typeof captureCompilationInputs> | undefined;
+  const previous = process.execPath;
+  try {
+    inputs = captureCompilationInputs(root);
+    process.execPath = path.join(installation, 'spoofed-node');
+    expect(inputs.readDataPath('/proc/self/exe')).toBe(executable);
+    expect(inputs.readDataPath(`/proc/${process.pid}/exe`)).toBe(executable);
+    const metadataRead = () => inputs!.readMetadata('readlink', '/proc/self/exe', []);
+    if (fs.existsSync('/proc/self/exe')) expect(metadataRead()).toBe(fs.readlinkSync('/proc/self/exe'));
+    else expect(metadataRead).toThrow();
+    expect(inputs.readDataPath('/proc/2147483647/exe')).not.toBe(executable);
+  } finally {
+    process.execPath = previous; inputs?.dispose(); vi.restoreAllMocks(); vi.unstubAllEnvs();
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});

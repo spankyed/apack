@@ -45,14 +45,21 @@ The main checkout and active native source remain untouched. No release/version/
 
 ## Dependency-ordered remaining requirements
 
-1. **Finish local validation.** Inspect/reproduce the renderer compiler timeout alone with verbose
-   diagnostics and the unchanged deadline, then complete the broad local chain. The isolated macOS
-   static compiler passed in 16.75 seconds; it does not establish the Linux cause. Docker currently refuses
-   admission: 1.5 GiB free against its 8 GiB minimum. Storage assistance is requested; no foreign volumes
-   are removed. A timeout alone is not a compiler defect or a passed check.
-2. **Finish strict acceptance.** Track checkpoint `41150926172` to completion. Its two catalogue failures
-   are fixed and focused-tested. Dispatch the final strict run on the frozen corrected tip after that fix;
-   preserve and address material failures. The queued superseded run `41153331076` was cancelled.
+1. **Finish local validation.** The isolated Linux renderer compiler passed all three projects in
+   20.40 seconds under its unchanged deadline. The subsequent serialized broad chain found a separate
+   compiler receipt containing a dead `/proc/<pid>/exe` namespace. Focused diagnosis identified libc
+   detection through the separate compilation data reader. Both data readers now use the already-owned
+   captured executable for self-executable bytes; explicit metadata and foreign processes remain observed.
+   Thirteen focused tests, typechecking and lint pass; both reverted fixes fail their regression tests.
+   A fresh Linux build and facade check pass (65.3 and 3.1 seconds). The full local chain, including native
+   checks, is running. Retain the original timeout; its cause remains unproven.
+   Session-owned duplicate reports were archived and verified to recover storage; no foreign volumes
+   were removed and no admission minimum was changed.
+2. **Strict acceptance passed.** [41155455025](https://github.com/spankyed/apack/actions/runs/41155455025)
+   completed successfully on `d141d8d253`: producers, app-and-rest, both integration shards and both
+   native shards. It supersedes the diagnosed catalogue failure in `41150926172`. Any subsequent
+   compiler fix requires its applicable local and strict validation; the current green result does
+   not certify uncommitted changes.
 3. **Close the evidence and handoff.** Record actual final check results, reconcile the plan/README/PR
    status, commit/push the reviewable checkpoints and mark the dependent PRs ready only when required
    acceptance is complete. No further feature work is planned unless validation finds a material issue.

@@ -164,3 +164,37 @@ it('retains frontend JavaScript preload inputs without pinning later authored re
     removeCompilerReadTree(root);
   }
 });
+
+it('keeps own executable data with its runtime owner without erasing procfs metadata or other process inputs', () => {
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-runtime-alias-')));
+  const pack = path.join(root, 'pack'), workspace = path.join(root, 'workspace'), compiler = path.join(root, 'compiler');
+  fs.mkdirSync(pack); fs.mkdirSync(workspace); fs.mkdirSync(compiler);
+  const executable = path.join(compiler, 'node');
+  fs.writeFileSync(executable, 'captured runtime image');
+  const view = createCompilerFileView(pack);
+  const native = createCompilerNativeInputs(view, workspace, { directory: compiler, paths: [] }, {
+    macho: { libraryPaths: [], fallbackLibraryPaths: undefined, frameworkPaths: [], fallbackFrameworkPaths: undefined, imageSuffixes: [] },
+    elf: { executable, cwd: root, libraryPaths: [], executableRpath: [], loader: '/lib/ld-linux.so', littleEndian: true,
+      isaLevels: 0, loadedLibraries: [], systemDirectories: [], libraryToken: 'lib', platformToken: '', hardwareCapabilities: [] },
+  }, { capture: 'images' });
+  const previous = process.execPath;
+  try {
+    // User initialization cannot replace the runtime identity captured before it ran.
+    process.execPath = path.join(compiler, 'different-node');
+    for (const alias of ['/proc/self/exe', `/proc/${process.pid}/exe`]) {
+      const captured = native.readDataPath(alias);
+      expect(captured).toBe(executable);
+      expect(fs.readFileSync(captured, 'utf8')).toBe('captured runtime image');
+    }
+    expect(native.copies()).toBeUndefined();
+    expect(JSON.stringify(view.observations())).not.toContain('/proc/');
+    // Explicit metadata remains the kernel's answer, even though data has a runtime owner.
+    const metadata = () => view.readMetadata('readlink', '/proc/self/exe', []);
+    if (fs.existsSync('/proc/self/exe')) expect(metadata()).toBe(fs.readlinkSync('/proc/self/exe'));
+    else expect(metadata).toThrow();
+    const foreign = '/proc/2147483647/exe';
+    expect(native.readDataPath(foreign)).not.toBe(executable);
+    expect(JSON.stringify(view.observations())).toContain('2147483647');
+    expect(JSON.stringify(view.observations())).toContain('node-metadata');
+  } finally { process.execPath = previous; native.dispose(); removeCompilerReadTree(root); }
+});
