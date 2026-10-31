@@ -302,7 +302,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     // Independently count actual scope execution: selected owners must not run the scope a third
     // time during canonical reranking. Keep native selection real, including owner-cap expansion.
     let inRerank=false,scopeCalls=0,rerankScopeCalls=0;
-    db.sql.function('vector_scope_probe',(_id)=>{scopeCalls++;if(inRerank)rerankScopeCalls++;return 1;});
+    db.sql.function('vector_scope_probe',{deterministic:false},(_id)=>{scopeCalls++;if(inRerank)rerankScopeCalls++;return 1;});
     const all=db.all.bind(db);
     const statements=vi.spyOn(db,'all').mockImplementation((sql,parameters=[])=>{
       inRerank=sql.startsWith('SELECT c.entity_id id,');
