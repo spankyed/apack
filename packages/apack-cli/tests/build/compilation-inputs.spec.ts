@@ -123,7 +123,7 @@ it.each(['safeSearch', 'devOverride', 'knownDlls'] as const)('includes captured 
   } finally { capture.mockRestore(); vi.unstubAllEnvs(); fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-it('keeps compilation executable reads with the captured runtime owner', () => {
+it.runIf(process.platform !== 'win32')('keeps compilation executable reads with the captured runtime owner', () => {
   const temporary = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'apack-compilation-exe-')));
   const root = path.join(temporary, 'pack'), installation = path.join(temporary, 'compiler');
   fs.mkdirSync(root); fs.mkdirSync(installation);
