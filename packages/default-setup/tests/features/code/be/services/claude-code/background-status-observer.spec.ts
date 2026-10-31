@@ -124,3 +124,53 @@ it.skipIf(process.platform==='win32')('recovers the same private endpoint after 
   await recovered?.close();if(endpoint)await rm(endpoint.directory,{recursive:true,force:true});await rm(index,{recursive:true,force:true})
  }
 })
+
+it('publishes refreshed usage and its unchanged valid formatter as one snapshot',async()=>{
+ const f=await fixture(),snapshots:any[]=[]
+ try{
+  const registered=(await f.post('/background-register',{sessionId:child,pid:119})).value
+  const formatter={command:'printf steady',shellPrefix:null,policy:'{}'}
+  const first=await f.post('/background-status',{...f.message(registered.token),formatter})
+  const config=JSON.parse(Buffer.from(first.value.shellPrefix.split(' -').at(-1),'base64url').toString())
+  expect((await f.post('/background-formatter',{...config,startedAt:'1',stdout:'Native steady status'})).code).toBe(200)
+  expect(f.observer.value?.statusLine).toBe('Native steady status')
+  const detach=f.observer.subscribe(()=>snapshots.push(f.observer.value))
+  expect((await f.post('/background-status',{...f.message(registered.token,2),metadata:{model:'sonnet',turns:3},formatter})).code).toBe(200)
+  detach();expect(snapshots.length).toBeGreaterThan(0)
+  expect(snapshots.every(value=>value?.statusLine==='Native steady status')).toBe(true)
+  expect(snapshots.at(-1)?.turns).toBe(3)
+ }finally{await f.observer.close()}
+})
+
+it('clears an old formatter immediately when a new lease overtakes a pending status lookup',async()=>{
+ const f=await fixture(),snapshots:any[]=[]
+ let release!:(value:typeof original)=>void,started!:()=>void
+ const ready=new Promise<void>(resolve=>{started=resolve}),held=new Promise<typeof original>(resolve=>{release=resolve})
+ let pending:ReturnType<typeof f.post>|undefined
+ try{
+  const lease=(await f.post('/background-register',{sessionId:child,pid:119})).value.token,formatter={command:'printf steady',shellPrefix:null,policy:'{}'}
+  const configured=await f.post('/background-status',{...f.message(lease),formatter}),config=JSON.parse(Buffer.from(configured.value.shellPrefix.split(' -').at(-1),'base64url').toString())
+  await f.post('/background-formatter',{...config,startedAt:'1',stdout:'Old lease output'})
+  f.observer.subscribe(()=>snapshots.push(f.observer.value))
+  f.authorities[0].identify.mockImplementationOnce(()=>{started();return held})
+  pending=f.post('/background-status',{...f.message(lease,2),formatter});await ready
+  const fresh=await f.post('/background-register',{sessionId:child,pid:119});expect(fresh.code).toBe(200);expect(fresh.value.token).not.toBe(lease)
+  expect(snapshots.length).toBeGreaterThan(0);expect(snapshots.at(-1)?.statusLine).toBeUndefined()
+  release({...original});expect((await pending).code).toBe(409)
+ }finally{release({...original});await pending?.catch(()=>{});await f.observer.close()}
+})
+it('does not hide status expiry while a later identity lookup is pending',async()=>{
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout','Date']})
+ const f=await fixture(),snapshots:any[]=[]
+ let release!:(value:typeof original)=>void,started!:()=>void
+ const ready=new Promise<void>(resolve=>{started=resolve}),held=new Promise<typeof original>(resolve=>{release=resolve})
+ let pending:ReturnType<typeof f.post>|undefined
+ try{
+  const lease=(await f.post('/background-register',{sessionId:child,pid:119})).value.token
+  await f.post('/background-status',f.message(lease));f.observer.subscribe(()=>snapshots.push(f.observer.value))
+  f.authorities[0].identify.mockImplementationOnce(()=>{started();return held})
+  pending=f.post('/background-status',f.message(lease,2));await ready
+  await vi.advanceTimersByTimeAsync(5000);expect(snapshots.at(-1)).toBeUndefined();expect(f.observer.value).toBeUndefined()
+  release({...original});expect((await pending).code).toBe(200);expect(f.observer.value?.observedAt).toBe(Date.now())
+ }finally{release({...original});await pending?.catch(()=>{});await f.observer.close();vi.useRealTimers()}
+})
