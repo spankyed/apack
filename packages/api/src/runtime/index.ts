@@ -1,3 +1,5 @@
+import { createStartupPerformance } from './startup-performance.ts';
+import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
@@ -61,6 +63,8 @@ export let appSettingsAccess: ReturnType<typeof createSettingsAccess>;
 export let appViews: ViewHost;
 
 /** The open database, so shutdown can close it, which syncs what is owed */
+export let appPerformance: ReturnType<typeof createNodePerformanceController> | undefined;
+
 export let appDatabase: EarsDatabase | undefined;
 
 /** The run history's open database, so shutdown can close it */
@@ -89,7 +93,7 @@ function bootReading(): string {
   return `Database ${onDisk} on disk, heap ${mb(process.memoryUsage().heapUsed)}`;
 }
 
-export function openAppStore(): AppStore {
+export function openAppStore(performance?: ReturnType<typeof createNodePerformanceController>): AppStore {
   // Installed packs that aren't running keep their settings: the settings take writes for their features too
   let runtime: HostRuntime;
   const packs = createPackRegistry({
@@ -105,15 +109,20 @@ export function openAppStore(): AppStore {
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
   const runHistory = openRunHistory(_getRunHistoryPath());
+  const env = resolveAppEnvironment().env;
+  appPerformance = performance ?? (env === 'development' || env === 'test' ? createNodePerformanceController() : undefined);
+  appPerformance?.attach(engine, 'app');
+  appPerformance?.attach(runHistory.engine, 'runHistory');
   runtime = createHostRuntime({
     database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs,
+    performance: appPerformance?.execution,
     countCalls: resolveAppEnvironment().env === 'development',
   });
   bindHost(runtime);
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);
-  appViews = createViewHost({ ears: () => engine, packs });
+  appViews = createViewHost({ ears: () => engine, packs, performance: appPerformance });
   appDatabase = database;
   appRunHistory = runHistory;
   return { database, runHistory, engine, packs };
@@ -129,8 +138,20 @@ export const appClaims = createParticipantClaims();
 // Exported for graceful shutdown (SIGTERM handler stops the actor system)
 export let backendActor: ReturnType<typeof createActor<ReturnType<typeof createAppBus>>>;
 
+export let appStartupPerformance: ReturnType<typeof createStartupPerformance>;
 export async function setupBackend(): Promise<void> {
   initializeLogCapture();
+  const env = resolveAppEnvironment().env;
+  const startup = createStartupPerformance(env, process.env.APACK_PERFORMANCE_STARTUP);
+  appStartupPerformance = startup;
+  try {
+    if (startup) await startup.run(() => initializeBackend(startup.controller));
+    else await initializeBackend();
+    startup?.finish();
+  } catch (error) { startup?.finish('error'); throw error; }
+}
+
+async function initializeBackend(performance?: ReturnType<typeof createNodePerformanceController>): Promise<void> {
 
   // Before anything opens the database: a tool changing it (`apack db`) holds a lock until it's done, and opening
   // now would overwrite its change from this process's memory
@@ -138,7 +159,7 @@ export async function setupBackend(): Promise<void> {
   assertNoDatabaseWriter(appContext.userDataDir);
 
   // The app's data: the engine reads and writes it from here on
-  const { engine, packs } = openAppStore();
+  const { engine, packs } = openAppStore(performance);
 
   // Packs require workspace @apackdev/* packages at runtime: from a checkout they must get source,
   // not a stale dist (main starts the API with the condition; manual boots must pass it). The
@@ -191,7 +212,13 @@ export async function setupBackend(): Promise<void> {
   }));
 
   // Recovery starts only host actors; no executable external pack is imported.
-  const loadedPacks = recoveringSettings ? [] : loadAppPacks(packs).loaded;
+  const admission = appPerformance?.begin('app.index.admission', { 'app.process': 'backend' });
+  let loadedPacks: ReturnType<typeof loadAppPacks>['loaded'];
+  try {
+    const load = () => recoveringSettings ? [] : loadAppPacks(packs).loaded;
+    loadedPacks = admission ? admission.within(load) : load();
+  } catch (error) { admission?.end('error'); throw error; }
+  finally { admission?.end(); }
 
   console.log(`[app] apack v${APP_VERSION} startupId=${process.env.APACK_STARTUP_ID ?? 'unknown'}`);
 

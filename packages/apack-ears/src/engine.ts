@@ -5,13 +5,14 @@
 import type { EARS } from './entities.ts';
 import type { EARSRuntimeDeps, Embedding, PendingEmbeddings, RelationEdge } from './runtime.ts';
 import type { CallCounting } from './calls.ts';
+import type { EarsOperationObserver } from './observation.ts';
 import { createConnection, runCommitted, type Answer, type SchemaChange, type UnitOptions } from './database.ts';
 import { createQuery, relationRow, type Query } from './query.ts';
 import { createWrites, type Create, type Upsert, type Write } from './write.ts';
 import { createNameChecks } from './names.ts';
 import { declaredNames, toElmdbSchema, withDeclarations, type EngineSchema } from './schema.ts';
 import { idSuffix } from './utils.ts';
-import { createWatches, type WatchObserver, type WatchOptions, type Watching } from './watch.ts';
+import { createWatches, type WatchObserver, type WatchOptions, type WatchReadContext, type Watching } from './watch.ts';
 import { RESERVED_ENTITY_TYPES } from './errors.ts';
 
 /** An entity as a read gives it: its id and type, and every attribute it holds */
@@ -110,7 +111,7 @@ export interface Ears {
    * engine; what it reads anywhere else isn't tracked, and its result goes stale when that changes. `label` names it
    * where its cost is reported
    */
-  watch<T>(read: () => T, observer: WatchObserver<T> | ((value: T, commit: number) => void), options?: WatchOptions): Watching;
+  watch<T>(read: (context: WatchReadContext | undefined) => T, observer: WatchObserver<T> | ((value: T, commit: number) => void), options?: WatchOptions): Watching;
   /** The number of the last commit the engine's database made, or 0: what a watch's delivery is compared against */
   lastCommit(): number;
 }
@@ -165,6 +166,8 @@ export interface EarsAdmin {
    * code that made each, off until started: what a measurement of the app's work reads
    */
   readonly calls: CallCounting;
+  /** Observe operation boundaries without stack capture; unregister to restore the disabled path. */
+  observe(observer: EarsOperationObserver): () => void;
 }
 
 /** An EARS engine as its creator holds it: its operations, and the creator's privileges in `admin` */
@@ -366,6 +369,7 @@ export function createEarsEngine({ database, warn, freeze }: EARSRuntimeDeps): E
     watchesSettled: watches.settled,
     watchStats: watches.stats,
     calls: connection.calls,
+    observe: connection.observe,
   };
 
   return { ...operations, admin };

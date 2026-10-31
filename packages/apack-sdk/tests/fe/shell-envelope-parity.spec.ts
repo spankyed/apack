@@ -21,7 +21,7 @@ type SendToSurface = Extract<HostShellEvent, { type: 'SEND_TO_SURFACE' }>;
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
 /** What a surface reads off a send, whichever envelope brought it */
-type Carried = 'call' | 'answering' | 'from' | 'via';
+type Carried = 'call' | 'answering' | 'from' | 'via' | 'diagnostics';
 
 describe("the shell's second envelope", () => {
   /**

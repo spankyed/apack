@@ -1,0 +1,132 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { test, expect } from '@apackdev/testing';
+import type { RecordingMode } from '@apackdev/host/diagnostics';
+import { performanceIdentity, chromeTrace, summarize, trialSchema, type PerformanceTrial } from '@apackdev/testing/performance';
+import { threadFixture } from './fixture.ts';
+import type { PerformanceWindow } from './window.ts';
+
+/** Own profile per worker/run; interactive trials deliberately share a warmed process and filesystem cache. */
+test('open a populated thread through the real transport and render its bounded page', async ({ app, appPage, electronApp }) => {
+  const mode = (process.env.APACK_PERFORMANCE_MODE ?? 'lightweight') as RecordingMode;
+  if (!['disabled', 'lightweight', 'detailed'].includes(mode)) throw Error('Invalid APACK_PERFORMANCE_MODE');
+  const measured = Number(process.env.APACK_PERFORMANCE_TRIALS ?? 20);
+  if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100) throw Error('Trials must be between 1 and 100');
+  const warmups = 5;
+  const fixture = threadFixture();
+  const directory = mkdtempSync(path.join(tmpdir(), 'apack-performance-fixture-'));
+  const output = path.resolve('.apack/performance', `thread-open-${mode}-${Date.now()}`);
+  mkdirSync(output, { recursive: true });
+  const trials: PerformanceTrial[] = [];
+  const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
+  const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups, cache: 'warm-process', runtime });
+  writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  const save = () => {
+    writeFileSync(path.join(output, 'results.json'), JSON.stringify({ format: 1, trials, summary: summarize(trials) }, null, 2));
+    writeFileSync(path.join(output, 'trace.json'), JSON.stringify(chromeTrace(trials.flatMap(trial => Object.entries(trial.processes)
+      .map(([process, report]) => ({ process: `${process}/trial-${trial.index}`, report }))))));
+  };
+  try {
+    writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify(fixture.data));
+    await app.waitForSurface('default-setup/threads');
+    await app.navigate('default-setup/threads');
+    await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
+    // Preparation is outside every measured interval. The public import need not invoke a model.
+    await appPage.waitForFunction(() => {
+      const actor = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads');
+      const context = actor.getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
+      return !!context.threadMap['Thread-performance-1'];
+    });
+    for (let index = 0; index < warmups + measured; index++) {
+      const thread = index % 2;
+      const result = await appPage.evaluate(async ({ mode, thread, expectedBodies }) => {
+        const win = window as unknown as PerformanceWindow;
+        const recording = win.__performance;
+        await recording.start(mode);
+        const started = performance.now();
+        const action = recording.begin('app.thread.open', { 'app.scenario': 'thread-open', 'app.fixture': 'populated-threads-v1' })!;
+        const target = `Thread-performance-${thread}`;
+        let completed = false;
+        let durationMs: number | undefined;
+        let lastDelivery: { subscription: string; delivery: number; commit: number } | undefined;
+        let failure: string | undefined;
+        const work: Record<string, number> = {};
+        try {
+          await new Promise<void>((resolve, reject) => {
+            let checking = false;
+            let delivered = false;
+            let finished = false;
+            const close = () => { clearTimeout(timeout); observer.disconnect(); detach(); };
+            const check = async () => {
+              if (checking || finished || !delivered) return;
+              checking = true;
+              try {
+                await recording.flushView();
+                if (finished) return;
+                const context = win.applicationState.system.get('default-setup/threads').getSnapshot().context;
+                if (context.currentThread?.id !== target) return;
+                work.requestedMessages = context.chatLimit;
+                work.observedMessages = context.chatMessageIds.length;
+                if (context.chatMessageIds.length > 50 || context.chatLimit !== 50) throw Error('page-bound');
+                const elements = new Map(Array.from(document.querySelectorAll('[data-message-id]'))
+                  .map(element => [element.getAttribute('data-message-id'), element]));
+                const shown = context.chatMessageIds.map(id => elements.get(id));
+                const pattern = new RegExp(`Fixture thread ${thread} message ([0-9]+)[.]`);
+                const indices = shown.map(element => Number(element?.textContent?.match(pattern)?.[1]));
+                const readyPage = shown.length === 50 && new Set(context.chatMessageIds).size === 50
+                  && shown.every(element => element && element.getClientRects().length > 0)
+                  && new Set(indices).size === 50 && indices.every(value => value >= 50 && value < 100)
+                  && shown.every((element, at) => element!.textContent?.includes(expectedBodies[indices[at]! - 50]!));
+                if (!readyPage) return;
+                const ready = action.within(() => recording.begin('app.view.ready', {
+                  'app.generation': lastDelivery?.subscription ?? 'disabled', 'app.delivery': lastDelivery?.delivery ?? 0,
+                  'app.commit': lastDelivery?.commit ?? 0, 'app.result_count': context.chatMessageIds.length,
+                }));
+                ready?.end();
+                durationMs = performance.now() - started;
+                completed = true;
+                finished = true;
+                close(); resolve();
+              } catch (error) { finished = true; close(); reject(Error(error instanceof Error && error.message === 'page-bound' ? 'page-bound' : 'view-correctness')); }
+              finally { checking = false; }
+            };
+            const detach = recording.onView(({ request, update }) => {
+              const args = request.args as { threadId?: string } | undefined;
+              if (request.ref !== 'default-setup/threads' || request.view !== 'chat' || args?.threadId !== target || !update.ok) return;
+              const metadata = update.diagnostics;
+              if (mode !== 'disabled' && (!metadata || metadata.carrier.traceparent?.split('-')[1] !== action.carrier().traceparent?.split('-')[1])) return;
+              delivered = true;
+              lastDelivery = metadata ? { subscription: metadata.subscription, delivery: metadata.delivery, commit: update.commit } : undefined;
+              void check();
+            });
+            const observer = new MutationObserver(() => { void check(); });
+            observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+            const timeout = setTimeout(() => { finished = true; close(); reject(Error('missing-view-ready')); }, 15_000);
+            try { action.within(() => win.applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: target }] })); }
+            catch (error) { finished = true; close(); reject(error); }
+          });
+        } catch (error) { failure = error instanceof Error && ['view-correctness', 'page-bound'].includes(error.message) ? error.message : 'missing-view-ready'; }
+        finally { action.end(completed ? 'ok' : 'error'); }
+        const reports = await recording.stop();
+        return { completed, durationMs, reports, failure, lastDelivery, work };
+      }, { mode, thread, expectedBodies: fixture.data.threads[thread]!.messages.slice(50).map(message => message.text.trimEnd()) });
+      // A page may return its bodies, scalar metadata/framing (50% headroom), and 16 KiB of headers.
+      // This is a declared work budget; a full-history read must not pass just because the UI shows fifty rows.
+      const maxAppResponseBytes = Math.ceil(fixture.data.threads[thread]!.messages.slice(50)
+        .reduce((bytes, message) => bytes + Buffer.byteLength(message.text), 0) * 1.5) + 16 * 1024;
+      const appResponseBytes = mode === 'disabled' ? undefined : result.reports.backend?.observations
+        .map(encoded => JSON.parse(encoded) as { name: string; attributes: Record<string, unknown> })
+        .filter(span => span.name === 'ears.read' && span.attributes['ears.database'] === 'app')
+        .reduce((bytes, span) => bytes + Number(span.attributes['ears.response_bytes'] ?? 0), 0);
+      const excessReadWork = appResponseBytes !== undefined && appResponseBytes > maxAppResponseBytes;
+      const work = { ...result.work, maxAppResponseBytes, ...(appResponseBytes !== undefined && { windowAppResponseBytes: appResponseBytes }) };
+      trials.push(trialSchema.parse({ scenario: 'thread-open', index, warmup: index < warmups,
+        work, outcome: excessReadWork ? 'failed' : result.completed && result.reports.complete ? 'passed' : result.failure && result.failure !== 'missing-view-ready' ? 'failed' : 'incomplete',
+        correct: result.completed && !excessReadWork, completion: result.completed ? 'view-ready' : 'missing', durationMs: result.durationMs,
+        processes: { ...(result.reports.renderer && { renderer: result.reports.renderer }), ...(result.reports.backend && { backend: result.reports.backend }) }, failure: excessReadWork ? 'app-read-work-bound' : result.failure }));
+      save();
+      expect(trials.at(-1)!.outcome, `Preserved evidence: ${output}`).toBe('passed');
+    }
+  } finally { save(); rmSync(directory, { recursive: true, force: true }); }
+});

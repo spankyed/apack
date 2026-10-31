@@ -102,6 +102,14 @@ function readPackLastError(packId: string, userDataDir: string): string | undefi
 const OUTPUT_TAIL_LINES = 200;
 // Launch time per app, to report how long boot to a connected renderer took (once per worker)
 const launchStartedAt = new WeakMap<ElectronApplication, number>();
+const launchMonotonicStart = new WeakMap<ElectronApplication, number>();
+/** Parent-process monotonic time immediately before launching this owned application's process. */
+export function applicationLaunchStartedAt(app: ElectronApplication): number {
+  const started = launchMonotonicStart.get(app);
+  if (started === undefined) throw new Error('The application was not launched by this fixture');
+  return started;
+}
+
 const userDataDirs = new WeakMap<ElectronApplication, string>();
 const outputTails = new WeakMap<ElectronApplication, string[]>();
 /** Where this app's output is being written, so a failure can name it instead of asking for a re-run */
@@ -493,12 +501,14 @@ export function createTest(options: CreateTestOptions = {}) {
           : { executablePath: appLaunch.executable, args: [] };
 
         const launchStart = Date.now();
+        const monotonicStart = performance.now();
         const app = await _electron.launch({
           ...launch,
           env: appLaunchEnv(process.env, userDataDir),
         });
 
         launchStartedAt.set(app, launchStart);
+        launchMonotonicStart.set(app, monotonicStart);
         userDataDirs.set(app, userDataDir);
         captureOutput(app, appLogPath(workerInfo));
         if (process.env.DEBUG_E2E) {

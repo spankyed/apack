@@ -6,3 +6,6 @@ export {
 export { _boundPackExtensions, type PackExtensionsView, type PackRegistryView } from './packs-view.ts';
 export { bindFeHost, _isFeHostBound, type FeHostRuntime, type FeClient, type FePackRegistryView } from './fe-host.ts';
 export { _rootEvents, type RootEvents } from './root-events.ts';
+
+export type { PerformanceCarrier, PerformanceExecution } from './performance.ts';
+export { _performanceExecution } from './performance.ts';

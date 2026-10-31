@@ -1,3 +1,4 @@
+import { _performanceExecution } from '@apackdev/sdk/runtime';
 // Handing an event to an actor in this window, named so the handler can be answered.
 //
 // **At the seam rather than in the shell, because more than one feature hands events to actors.** It was the
@@ -18,10 +19,13 @@ import { _callOn, _runDelivery, type _Asker, type Message } from '@apackdev/sdk/
  *
  * The common case, and so the short one — twelve call sites against the two that carry an address.
  */
-export function notifySurfaceActor(actor: AnyActorRef, ref: string, event: AnyEventObject, call?: Pick<Message, 'call' | 'answering'>): void {
+export function notifySurfaceActor(actor: AnyActorRef, ref: string, event: AnyEventObject, call?: Pick<Message, 'call' | 'answering' | 'diagnostics'>): void {
   const delivered = call === undefined ? event : { ...event, ..._callOn(call) };
+  const performance = _performanceExecution();
+  if (performance) performance.carryEvent(delivered, call?.diagnostics ?? performance.capture());
+  const send = () => actor.send(delivered);
   _runDelivery({ receiver: ref, event: delivered, ...(call?.call === undefined ? {} : { call: call.call }) }, () =>
-    actor.send(delivered));
+    performance ? performance.withEvent(delivered, send) : send());
 }
 
 /**
@@ -48,8 +52,11 @@ export function notifySurfaceActor(actor: AnyActorRef, ref: string, event: AnyEv
  * invariant broken and worth a crash, while a send arriving for a surface whose pack has unloaded is neither. A
  * `?.` here would have levelled those two to the quieter one, which it briefly did.
  */
-export function sendToSurfaceActor(actor: AnyActorRef, ref: string, event: AnyEventObject, asker: _Asker, call?: Pick<Message, 'call' | 'answering'>): void {
+export function sendToSurfaceActor(actor: AnyActorRef, ref: string, event: AnyEventObject, asker: _Asker, call?: Pick<Message, 'call' | 'answering' | 'diagnostics'>): void {
   const delivered = call === undefined ? event : { ...event, ..._callOn(call) };
+  const performance = _performanceExecution();
+  if (performance) performance.carryEvent(delivered, call?.diagnostics ?? performance.capture());
+  const send = () => actor.send(delivered);
   _runDelivery({ receiver: ref, asker, event: delivered, ...(call?.call === undefined ? {} : { call: call.call }) }, () =>
-    actor.send(delivered));
+    performance ? performance.withEvent(delivered, send) : send());
 }

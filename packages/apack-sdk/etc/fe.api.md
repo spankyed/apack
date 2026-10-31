@@ -462,6 +462,7 @@ export type HostShellEvent = OpenEntity
 */
 | {
     type: 'SEND_TO_SURFACE';
+    diagnostics?: PerformanceCarrier;
     surface: string;
     events: SurfaceEvent[];
     from?: string;
@@ -1032,6 +1033,16 @@ export interface UseViewOptions {
 }
 
 // @public
+export interface ViewDiagnostics {
+    // (undocumented)
+    carrier: PerformanceCarrier;
+    // (undocumented)
+    delivery: number;
+    // (undocumented)
+    subscription: string;
+}
+
+// @public
 export function viewRead(writes: ViewWrites): {
     writes: ViewWrites;
     apply: boolean;
@@ -1040,6 +1051,7 @@ export function viewRead(writes: ViewWrites): {
 // @public
 export interface ViewRequest {
     args?: unknown;
+    diagnostics?: PerformanceCarrier;
     ref: string;
     view: string;
 }
@@ -1058,10 +1070,12 @@ export type ViewUpdate<Result = unknown> = {
     ok: true;
     value: Result;
     commit: number;
+    diagnostics?: ViewDiagnostics;
 } | {
     ok: false;
     error: string;
     commit: number;
+    diagnostics?: ViewDiagnostics;
 };
 
 // @public

@@ -18,12 +18,12 @@ import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
-/** The elmdb checkout `vendor/elmdb` links to (`npm run link:elmdb`), which the container builds its own binding from */
+/** Native source for this owned run; qualification may select a frozen checkout without changing the developer link. */
 const ELMDB_CHECKOUT = (() => {
   try {
-    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'elmdb'));
+    return fs.realpathSync(process.env.APACK_LINUX_ELMDB_ROOT ?? path.join(REPO_ROOT, 'vendor', 'elmdb'));
   } catch {
-    process.stderr.write('vendor/elmdb links to no elmdb checkout: run npm run link:elmdb first.\n');
+    process.stderr.write('Native source is unavailable: check APACK_LINUX_ELMDB_ROOT or run npm run link:elmdb.\n');
     process.exit(1);
   }
 })();
@@ -90,6 +90,9 @@ const FILTERS = [
   ...['apack-ears', 'apack-sdk', 'apack-ui', 'apack-testing', 'apack-cli'].flatMap((pkg) =>
     [`--exclude=/packages/${pkg}/dist`, `--exclude=/packages/${pkg}/publish`]),
   '--exclude=/packages/default-setup/dist', '--exclude=/packages/default-setup/.apack',
+  ...['api', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),
+  '--exclude=/build-manifest.json', '--exclude=/build-integrity.json',
+  '--exclude=/.apack/performance',
 ];
 
 /**
@@ -263,8 +266,7 @@ const sync = [
   '  echo "$lock" > node_modules/.apack-installed-lock',
   'fi',
   // The platform's own builds, reused when their inputs have not moved
-  'npm run -s packages:ensure',
-  'npm run -s build:default-setup >/dev/null',
+  'npm run -s chain -- --only packages:ensure,build:default-setup --no-native --cores 2',
 ].join('\n');
 /**
  * One container at a time per volume, for the whole run rather than the sync alone.
@@ -293,6 +295,7 @@ const run = [
   'rm -f /work/node_modules/.cache/apack-unit-pool/*.lock',
   `bash -ec ${quote(sync)}`,
   // `exec` keeps fd 9, so the lock is held for as long as the command runs
+  `export APACK_EXECUTION_RECORDS=${quote(JSON.stringify({ source: [RUN_LOCK, CHECKOUT_FILE], native: [ELMDB_LOCK, ELMDB_BUILT, ELMDB_CHECKOUT_FILE] }))}`,
   `exec ${command.map(quote).join(' ')}`,
 ].join('\n');
 const script = ['set -e', run].join('\n');

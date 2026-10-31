@@ -12,6 +12,7 @@ import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import {getMediaBasePath} from '../media-protocol/paths.ts';
 import {logRenderer, logRendererFatal} from '../api-server/logger.ts';
+import {resolveAppEnvironment} from '@apackdev/sdk/env';
 import {splitRef} from '@apackdev/sdk/ids';
 import {openExternalUrl, openFilePath} from '../shell-access.ts';
 
@@ -169,6 +170,7 @@ class WindowManager implements AppModule {
     });
 
     ipcMain.on('zoom:changed', (event, zoomFactor: number) => {
+      if (process.platform !== 'darwin') return;
       const win = BrowserWindow.fromWebContents(event.sender);
       if (win) {
         const y = Math.round((42 * zoomFactor - 12) / 2);
@@ -443,10 +445,14 @@ class WindowManager implements AppModule {
     this.attachRendererDiagnostics(browserWindow);
 
     try {
+      const startup = resolveAppEnvironment().env === 'test' ? process.env.APACK_PERFORMANCE_STARTUP : undefined;
+      const query = startup === undefined ? undefined : { performanceStartup: startup };
       if (this.#renderer instanceof URL) {
-        await browserWindow.loadURL(this.#renderer.href);
+        const url = new URL(this.#renderer.href);
+        if (startup !== undefined) url.searchParams.set('performanceStartup', startup);
+        await browserWindow.loadURL(url.href);
       } else {
-        await browserWindow.loadFile(this.#renderer.path);
+        await browserWindow.loadFile(this.#renderer.path, { query });
       }
     } catch (error) {
       console.error('[MAIN] Failed to load renderer:', error);
