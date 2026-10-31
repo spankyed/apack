@@ -13,12 +13,13 @@ export interface PerformanceScheduleEntry { variant: PerformanceVariant; mode: P
 export function performanceSchedule(modeInput: unknown, measured: number, comparisonInput?: unknown): PerformanceScheduleEntry[] {
   const mode = modeSchema.parse(modeInput);
   const comparison = comparisonInput === undefined ? undefined : modeSchema.parse(comparisonInput);
-  if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100 || comparison === mode) throw Error('Invalid performance schedule');
+  if (comparison === mode) throw Error('Invalid performance schedule');
   return makeSchedule(mode, measured, comparison);
 }
 /** Same recording mode, independent source workers, with the same warmup and ABBA discipline. */
 export function performanceRevisionSchedule(modeInput: unknown, measured: number): PerformanceScheduleEntry[] {
-  return makeSchedule(modeSchema.parse(modeInput), measured, modeSchema.parse(modeInput));
+  const mode = modeSchema.parse(modeInput);
+  return makeSchedule(mode, measured, mode);
 }
 function makeSchedule(mode: PerformanceManifest['mode'], measured: number, comparison?: PerformanceManifest['mode']): PerformanceScheduleEntry[] {
   if (!Number.isSafeInteger(measured) || measured < 1 || measured > 100) throw Error('Invalid performance schedule');
@@ -36,6 +37,22 @@ const executionSchema = entrySchema.extend({ startedMs: z.number().finite().nonn
 const journalSchema = z.object({ format: z.literal(1), kind: z.enum(['single', 'mode-comparison', 'revision-comparison']),
   measured: z.number().int().min(1).max(100), baseline: modeSchema, comparison: modeSchema.optional(),
   status: z.enum(['incomplete', 'failed', 'passed']), executions: z.array(executionSchema).max(210) });
+
+const invocationSchema = z.object({ code: z.literal(0), timedOut: z.literal(false), aborted: z.literal(false) });
+
+function readEvidence(file: string, maximum: number, message: string): unknown {
+  const stat = lstatSync(file);
+  if (!stat.isFile() || stat.size > maximum) throw Error(message);
+  return JSON.parse(readFileSync(file, 'utf8'));
+}
+
+function writeJournal(directory: string, input: z.input<typeof journalSchema>) {
+  const value = journalSchema.parse(input);
+  const file = path.join(directory, 'execution.json');
+  const temporary = `${file}.tmp`;
+  writeFileSync(temporary, JSON.stringify(value, null, 2));
+  renameSync(temporary, file);
+}
 
 /** Per-variant bounded stores plus observed serial execution order; raw payloads never enter this journal. */
 export function createPerformanceScenarioRun(directory: string, manifestInput: unknown, measured: number, comparisonInput?: unknown) {
@@ -57,11 +74,8 @@ export function createPerformanceScenarioRun(directory: string, manifestInput: u
     const failed = failure || executions.some(item => item.outcome && item.outcome !== 'passed')
       || Object.values(lifecycle ?? {}).some(items => items.some(item => item.exitCode !== 0));
     const complete = executions.length === schedule.length && executions.every(item => item.outcome === 'passed' && item.endedMs !== undefined);
-    const value = journalSchema.parse({ format: 1, kind: comparison ? 'mode-comparison' : 'single', measured,
+    writeJournal(directory, { format: 1, kind: comparison ? 'mode-comparison' : 'single', measured,
       baseline: manifest.mode, comparison, status: failed ? 'failed' : complete ? 'passed' : 'incomplete', executions });
-    const temporary = path.join(directory, 'execution.json.tmp');
-    writeFileSync(temporary, JSON.stringify(value, null, 2));
-    renameSync(temporary, path.join(directory, 'execution.json'));
   }
   save();
   return {
@@ -86,18 +100,11 @@ export function createPerformanceScenarioRun(directory: string, manifestInput: u
 
 /** Admit an observed ABBA mode comparison; mode is the only allowed provenance difference. */
 export function readPerformanceModeComparison(directory: string, measured = 20) {
-  const file = path.join(directory, 'execution.json');
-  const stat = lstatSync(file);
-  if (!stat.isFile() || stat.size > 1024 * 1024) throw Error('Invalid or oversized execution journal');
-  const journal = journalSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
+  const journal = journalSchema.parse(readEvidence(path.join(directory, 'execution.json'), 1024 * 1024, 'Invalid or oversized execution journal'));
   if (journal.kind !== 'mode-comparison' || journal.measured !== measured || journal.status !== 'passed' || !journal.comparison) throw Error('Incomplete mode comparison');
   const schedule = performanceSchedule(journal.baseline, measured, journal.comparison);
   validateObservedOrder(journal, schedule);
-  const invocationFile = path.join(directory, 'invocation.json');
-  const invocationStat = lstatSync(invocationFile);
-  if (!invocationStat.isFile() || invocationStat.size > 16 * 1024) throw Error('Invalid invocation evidence');
-  const invocation = z.object({ code: z.literal(0), timedOut: z.literal(false), aborted: z.literal(false) }).parse(JSON.parse(readFileSync(invocationFile, 'utf8')));
-  if (invocation.code !== 0) throw Error('Unsuccessful qualification process');
+  invocationSchema.parse(readEvidence(path.join(directory, 'invocation.json'), 16 * 1024, 'Invalid invocation evidence'));
   const baseline = readPerformanceRun(path.join(directory, 'A'), measured);
   const candidate = readPerformanceRun(path.join(directory, 'B'), measured);
   assertComparable(baseline.manifest, { ...candidate.manifest, mode: baseline.manifest.mode });
@@ -117,7 +124,6 @@ function validateObservedOrder(journal: z.infer<typeof journalSchema>, schedule:
     if (!isDeepStrictEqual(entrySchema.parse(execution), schedule[position]) || execution.outcome !== 'passed' || execution.endedMs === undefined
       || execution.endedMs < execution.startedMs || position > 0 && execution.startedMs < journal.executions[position - 1]!.endedMs!) throw Error('Invalid or overlapping observed ABBA order');
   }
-
 }
 
 /** Coordinator-only metadata: each worker remains the sole writer of its raw run. */
@@ -128,10 +134,8 @@ export function createPerformanceRevisionJournal(directory: string, modeInput: u
   let failed = false;
   function save() {
     const complete = executions.length === schedule.length && executions.every(item => item.outcome === 'passed');
-    const value = journalSchema.parse({ format: 1, kind: 'revision-comparison', measured, baseline: mode, comparison: mode,
+    writeJournal(directory, { format: 1, kind: 'revision-comparison', measured, baseline: mode, comparison: mode,
       status: failed ? 'failed' : complete ? 'passed' : 'incomplete', executions });
-    const temporary = path.join(directory, 'execution.json.tmp');
-    writeFileSync(temporary, JSON.stringify(value, null, 2)); renameSync(temporary, path.join(directory, 'execution.json'));
   }
   save();
   return {
@@ -151,17 +155,11 @@ export function createPerformanceRevisionJournal(directory: string, modeInput: u
 
 /** Clean source/build identities may differ; fixture, native output, mode and execution conditions may not. */
 export function readPerformanceRevisionComparison(directory: string, measured = 20) {
-  const file = path.join(directory, 'execution.json');
-  const info = lstatSync(file);
-  if (!info.isFile() || info.size > 1024 * 1024) throw Error('Invalid revision execution evidence');
-  const journal = journalSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
+  const journal = journalSchema.parse(readEvidence(path.join(directory, 'execution.json'), 1024 * 1024, 'Invalid revision execution evidence'));
   if (journal.kind !== 'revision-comparison' || journal.measured !== measured || journal.status !== 'passed' || journal.baseline !== journal.comparison) throw Error('Incomplete revision comparison');
   validateObservedOrder(journal, performanceRevisionSchedule(journal.baseline, measured));
   for (const variant of ['A', 'B']) {
-    const invocation = path.join(directory, variant, 'invocation.json');
-    const stat = lstatSync(invocation);
-    if (!stat.isFile() || stat.size > 16 * 1024) throw Error('Invalid revision invocation');
-    z.object({ code: z.literal(0), timedOut: z.literal(false), aborted: z.literal(false) }).parse(JSON.parse(readFileSync(invocation, 'utf8')));
+    invocationSchema.parse(readEvidence(path.join(directory, variant, 'invocation.json'), 16 * 1024, 'Invalid revision invocation'));
   }
   const baseline = readPerformanceRun(path.join(directory, 'A'), measured);
   const candidate = readPerformanceRun(path.join(directory, 'B'), measured);
