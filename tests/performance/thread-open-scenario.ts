@@ -13,10 +13,13 @@ export async function threadOpenScenario({ app, appPage, electronApp }: Paramete
       await app.navigate('default-setup/database');
       await app.navigate('default-setup/threads');
     }
+    // Every action switches threads, including the first action in a reused window.
+    const firstThread = await appPage.evaluate(() =>
+      (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.id === 'Thread-performance-0' ? 1 : 0);
     for (const entry of schedule) {
       const { mode } = entry;
       await run.begin(entry);
-      const thread = entry.ordinal % 2;
+      const thread = (entry.ordinal + firstThread) % 2;
       const result = await appPage.evaluate(async ({ mode, thread, expectedBodies, fault }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
