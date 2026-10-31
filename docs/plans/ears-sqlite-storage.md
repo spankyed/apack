@@ -933,7 +933,11 @@ report; fixed ordering/caches/cumulative RSS prevent causal or isolated-resource
 The smaller next native diagnostic is to binary-search the existing query-owned integer RHS directly for
 compact metadata, avoiding per-block conversion without a bitmap, new allocations or lifetime state. Require
 ordinary-SQLite NULL/full-width/mixed semantics, baseline controls and full scoped query/update/recall/resource
-checks before adoption. Deferred COMMIT and unfiltered scanning remain separate responsiveness requirements.
+checks before adoption. The [private direct-IN prototype](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
+passes 735 ordinary-SQLite comparisons per library, then reproduces all 900 updated-snapshot EARS answers/
+scores exactly at minimum mean recall 0.974. Its baseline binary matches the package; that package remains
+unchanged. This diagnostic does not replace the full initial/update matrix, fresh model owner, platform/
+packaging or app acceptance. Deferred COMMIT and unfiltered scanning remain separate responsiveness requirements.
 Do not discard paused/outlier samples or relax original gates. Supported allocation controls alone have
 not established a solution. Compare write volume, all query scopes/updates/recall, memory and disk before
 adopting any layout. A background worker
