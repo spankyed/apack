@@ -80,7 +80,7 @@ test('the host-only editor preserves saved references without activating default
   }
 });
 
-test('an open editor follows installed pack activation without losing its draft', async ({ app, appPage }) => {
+test('an open editor follows installed pack activation without losing its draft', async ({ app, appPage }, testInfo) => {
   expect((await app.getContext()).surfaceIds.some(id => id.startsWith('default-setup/'))).toBe(false);
   const mounted = await appPage.evaluateHandle(async () => {
     const { createApp } = await import('vue');
@@ -93,6 +93,13 @@ test('an open editor follows installed pack activation without losing its draft'
     const exposed = component.mount(root) as unknown as { editor: Editor | undefined };
     return { component, root, exposed, updates };
   });
+  const activationSamples: Array<{ at: number; extensions: string[] | null }> = [];
+  const observesSuggestion = async () => {
+    const extensions = await mounted.evaluate(({ exposed }) => exposed.editor?.extensionManager.extensions
+      .map(extension => extension.name) ?? null);
+    activationSamples.push({ at: Date.now(), extensions });
+    return extensions?.includes('referenceSuggestion') ?? false;
+  };
   const toggle = () => appPage.evaluate(async () => {
     const { untypedSendToSystem } = await import('@apackdev/sdk/events');
     untypedSendToSystem('host/packs', { type: 'TOGGLE_PACK_ENABLED', packId: 'default-setup' });
@@ -106,8 +113,7 @@ test('an open editor follows installed pack activation without losing its draft'
       return { document: editor.getJSON(), selection: editor.state.selection.toJSON(), count: updates.length };
     });
     await toggle();
-    await expect.poll(() => mounted.evaluate(({ exposed }) => exposed.editor?.extensionManager.extensions
-      .some(extension => extension.name === 'referenceSuggestion') ?? false)).toBe(true);
+    await expect.poll(observesSuggestion).toBe(true);
     expect(await mounted.evaluate(({ exposed, updates }) => ({ document: exposed.editor!.getJSON(),
       selection: exposed.editor!.state.selection.toJSON(), count: updates.length }))).toEqual(initial);
     await toggle();
@@ -116,6 +122,21 @@ test('an open editor follows installed pack activation without losing its draft'
     expect(await mounted.evaluate(({ exposed, updates }) => ({ document: exposed.editor!.getJSON(),
       selection: exposed.editor!.state.selection.toJSON(), count: updates.length }))).toEqual(initial);
     await expect(appPage.locator('#live-contribution-editor .reference-pill')).toHaveText('Saved memo');
+  } catch (error) {
+    // Keep the original five-second predicate and failure. The accepted frontend bindings distinguish
+    // a late pack load from a failed editor replacement; backend surfaces alone cannot establish that.
+    try {
+      const contributions = await appPage.evaluate(async () => {
+        const { textEditorExtensionsRegistry } = await import('@apackdev/sdk/fe');
+        return textEditorExtensionsRegistry.getAll().map(group => ({ packId: group.packId,
+          groupId: group.groupId, extensions: Object.keys(group.binding.extensions ?? {}) }));
+      });
+      await testInfo.attach('editor-activation.json', { contentType: 'application/json',
+        body: Buffer.from(JSON.stringify({ activationSamples, contributions, app: await app.getContext() }, null, 2)) });
+    } catch (diagnosticError) {
+      console.warn('Could not capture editor activation diagnostics', diagnosticError);
+    }
+    throw error;
   } finally {
     await mounted.evaluate(({ component, root }) => { component.unmount(); root.remove(); });
     await mounted.dispose();

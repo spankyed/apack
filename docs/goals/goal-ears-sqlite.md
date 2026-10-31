@@ -269,8 +269,13 @@ Neither partial/source checks nor six installed smokes complete app/performance 
 [prior handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/reset-quarantine/prior-handoff.md)
 preserves historical sources, CI boundaries and failures.
 
-Next checkpoint: finish the exact `63c8267994` strict consumer shards in run 41151679157 and broader
-SQLite source-app run 41152805669; inspect actual per-case reports before claiming integrated acceptance.
+Next checkpoint: finish the exact `63c8267994` strict consumer shards in run 41151679157 and diagnose
+the [source-app failure](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-63c/README.md)
+in run 41152805669. The actual report has 32 passes, one intended installed-only skip and one unexpected
+failure: the open editor misses its original five-second `referenceSuggestion` predicate after pack activation.
+Backend logs show activation before the deadline but do not prove frontend acceptance or editor replacement.
+A diagnostic-only test change captures observed extensions and accepted frontend bindings without changing
+the predicate/deadline or draft-preservation assertions. No causal fix or current broad app pass is claimed.
 The [new native qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/native-63c/README.md)
 verifies the three completed platform jobs and signed installed run 41151681981 at this source: 735 native
 membership comparisons per host, Linux/macOS EARS 762 passes, Windows 757 passes plus five named platform
@@ -280,7 +285,8 @@ The ordinary Linux arm64 package, 735 controls and fresh public model-owner prob
 local EARS suite fails with one text-prefix timeout plus a worker RPC error after a protective ~1053.7-second
 pause during the suite; retain that failure and original deadlines. The remaining typecheck/lint steps were
 not reached. Independent platform passes do not relabel the local failure. Earlier strict/app/installed
-results qualify preceding native inputs; the remaining exact-source strict and source-app runs are live.
+results qualify preceding native inputs; exact-source strict is still live and broader source-app failed as
+recorded above. Preserve all failures when observing focused diagnostics.
 The [private direct-IN proof](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
 passes 735 ordinary-SQLite controls per library and 900 paired updated-snapshot answers. The subsequent
 [full initial/update matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-full-matrix/README.md)
@@ -300,7 +306,13 @@ allocation/lifetime/format state, and preserved product artifacts. The private m
 Closing checks now apply to the ordinary candidate package, fresh model owner, complete EARS contracts and
 affected platform/installed inputs; retain every failed performance gate. Adoption still requires complete EARS, fresh actual-owner, platform/packaging/installed and original app
 gates. The earlier untested bitmap prototype is not selected. Scoped SQL work and durable COMMIT remain
-separate responsiveness costs; a prepared private scope-driven eligibility probe is not yet executed.
+separate responsiveness costs. The [scope-driven eligibility comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/scope-driven-eligibility/README.md)
+now completes 7200 updated-only measured queries and 950 paired controls, including duplicate IDs and prior
+order/limit operations. Every paired answer/score matches; 99900 canonical rows verify and the retained
+read-only snapshot stays unchanged. No protective pauses occurred, but fixed order/shared caches remain.
+Both shapes still fail responsiveness; the additional DISTINCT/join rewrite is not promoted. A private
+metadata-only native lookup prototype is prepared, not compiled or selected; it must preserve base-row
+existence, full vector/distance projections and ordinary SQLite semantics before any performance claim.
 No evidence here certifies arbitrary filesystems or completes the goal.
 
 The broader phase 5 source-app checkpoint now passes: [run 41148535620](../references/evidence/ears-sqlite-implementation-2026-10-28/source-app-qualified/README.md)
