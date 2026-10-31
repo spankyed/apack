@@ -67,7 +67,8 @@ test.describe('stream a deterministic reply through the real CLI flow and persis
         return context.currentThread?.id === `Thread-stream-${thread}` && context.chatMessageIds.length === 20
           && context.chatMessageIds.every(id => document.querySelector(`[data-message-id="${id}"]`));
       }, thread);
-      const productionBefore = new Set(readdirSync(directory).filter(file => /^production-[0-9]+\.jsonl$/.test(file)));
+      const production = new RegExp(`^production-${thread}-[0-9]+\\.jsonl$`);
+      const productionBefore = new Set(readdirSync(directory).filter(file => production.test(file)));
       const result = await appPage.evaluate(async ({ mode, thread, expected, scriptedChunks }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
@@ -144,7 +145,7 @@ test.describe('stream a deterministic reply through the real CLI flow and persis
       result.work.receivedProgress = result.viewProgress.length;
       result.work.receivedFinalChars = result.viewProgress.at(-1)?.chars ?? 0;
       if (result.completed) try {
-        const files = readdirSync(directory).filter(file => /^production-[0-9]+\.jsonl$/.test(file) && !productionBefore.has(file));
+        const files = readdirSync(directory).filter(file => production.test(file) && !productionBefore.has(file));
         result.work.productionFiles = files.length;
         if (files.length > 64 || result.work.droppedProgress) throw Error('Progress capture exceeded its bound');
         const completed = files.flatMap(file => {
