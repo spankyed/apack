@@ -214,17 +214,22 @@ it('carries request context and restores each delivery context separately', () =
 });
 
 it('drops old view callbacks when an API reload starts a new subscription generation', () => {
+  const original = { traceparent: '00-11111111111111111111111111111111-2222222222222222-01' };
+  const fresh = { traceparent: '00-33333333333333333333333333333333-4444444444444444-01' };
+  startFeTestRuntime({ diagnostics: { capture: () => fresh, withCarrier: (_carrier, fn) => fn(), carryEvent() {}, withEvent: (_event, fn) => fn() } });
   let apiEvent!: (event: { type: string; reloaded: boolean }) => void;
   (window as unknown as { electronAPI: unknown }).electronAPI = { apiStatus: {
     getStatus: async () => ({ running: true }), onEvent: (listener: typeof apiEvent) => { apiEvent = listener; return () => {}; },
   } };
   const observer = vi.fn();
   const stopBus = feClient.subscribe({ onConnected() {}, onDisconnected() {}, onFailed() {}, onMessage() {} });
-  const stopView = feClient.watchView({ ref: 'pack/feature', view: 'page' }, observer);
+  const stopView = feClient.watchView({ ref: 'pack/feature', view: 'page', diagnostics: original }, observer);
   try {
+    expect(viewSubscribe.mock.calls[0][0]).toMatchObject({ diagnostics: original });
     const old = viewSubscribe.mock.calls[0][1];
     apiEvent({ type: 'api:started', reloaded: true });
     expect(viewSubscribe).toHaveBeenCalledTimes(2);
+    expect(viewSubscribe.mock.calls[1][0]).toMatchObject({ diagnostics: fresh });
     old.onData({ ok: true, value: 'stale', commit: 1 });
     old.onError(Error('stale error'));
     expect(observer).not.toHaveBeenCalled();

@@ -1,9 +1,10 @@
+import type { ElectronApplication, Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { availableParallelism, cpus, hostname, release, totalmem } from 'node:os';
 import path from 'node:path';
-import { manifestSchema, type PerformanceManifest } from './report.ts';
+import { manifestSchema, type PerformanceManifest, type PerformanceTrial } from './report.ts';
 
 /** Only untracked records declared by the execution owner may be excluded; tracked edits always count. */
 export function classifySourceFiles(trackedDiff: Buffer, untracked: readonly string[], records: readonly string[]) {
@@ -60,4 +61,20 @@ export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture'
       identity: digest(JSON.stringify({ hostname: process.env.APACK_PERFORMANCE_MACHINE_ID ?? hostname(), model: cpus()[0]?.model })) },
     clock: 'Local monotonic durations; cross-process epoch alignment is approximate',
   });
+}
+
+/** Actual target identity, sampled outside action timing without starting browser instrumentation. */
+export async function rendererProcessId(application: ElectronApplication, page: Page): Promise<number> {
+  const window = await application.browserWindow(page);
+  try {
+    const id = await window.evaluate(window => window.webContents.getOSProcessId());
+    if (!Number.isSafeInteger(id) || id <= 0) throw Error('Renderer process identity is unavailable');
+    return id;
+  } finally { await window.dispose(); }
+}
+
+/** Preserve a captured business result when target identity becomes unavailable during teardown. */
+export async function attachRendererProcessIdentity(application: ElectronApplication, page: Page, report: Pick<PerformanceTrial['processes'][string], 'processId' | 'complete' | 'rendererResourceFailures'>): Promise<void> {
+  try { report.processId = await rendererProcessId(application, page); }
+  catch { report.rendererResourceFailures = (report.rendererResourceFailures ?? 0) + 1; report.complete = false; }
 }

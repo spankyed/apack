@@ -1,4 +1,5 @@
-import { createStartupPerformance } from './startup-performance.ts';
+import { createViewObservation } from '@apackdev/host/diagnostics';
+import { createStartupPerformance, observeIndexAdmission } from './startup-performance.ts';
 import { createNodePerformanceController } from '@apackdev/host/diagnostics/node';
 import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
@@ -122,7 +123,8 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   printLogEvents();
   appPacks = packs;
   appSettingsAccess = createSettingsAccess(runtime.services.settings, packs.getPackRuntime);
-  appViews = createViewHost({ ears: () => engine, packs, performance: appPerformance });
+  const recording = appPerformance;
+  appViews = createViewHost({ ears: () => engine, packs, observe: recording ? () => createViewObservation(recording) : undefined });
   appDatabase = database;
   appRunHistory = runHistory;
   return { database, runHistory, engine, packs };
@@ -145,7 +147,10 @@ export async function setupBackend(): Promise<void> {
   const startup = createStartupPerformance(env, process.env.APACK_PERFORMANCE_STARTUP);
   appStartupPerformance = startup;
   try {
-    if (startup) await startup.run(() => initializeBackend(startup.controller));
+    if (startup) {
+      await startup.controller.ready();
+      await startup.run(() => initializeBackend(startup.controller));
+    }
     else await initializeBackend();
     startup?.finish();
   } catch (error) { startup?.finish('error'); throw error; }
@@ -212,13 +217,7 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   }));
 
   // Recovery starts only host actors; no executable external pack is imported.
-  const admission = appPerformance?.begin('app.index.admission', { 'app.process': 'backend' });
-  let loadedPacks: ReturnType<typeof loadAppPacks>['loaded'];
-  try {
-    const load = () => recoveringSettings ? [] : loadAppPacks(packs).loaded;
-    loadedPacks = admission ? admission.within(load) : load();
-  } catch (error) { admission?.end('error'); throw error; }
-  finally { admission?.end(); }
+  const loadedPacks = observeIndexAdmission(appPerformance, () => recoveringSettings ? [] : loadAppPacks(packs).loaded);
 
   console.log(`[app] apack v${APP_VERSION} startupId=${process.env.APACK_STARTUP_ID ?? 'unknown'}`);
 

@@ -4,10 +4,15 @@
 
 ```ts
 
+import type { ElectronApplication } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { z } from 'zod';
 
 // @public
 export function assertComparable(leftInput: unknown, rightInput: unknown): void;
+
+// @public
+export function attachRendererProcessIdentity(application: ElectronApplication, page: Page, report: Pick<PerformanceTrial['processes'][string], 'processId' | 'complete' | 'rendererResourceFailures'>): Promise<void>;
 
 // @public
 export function chromeTrace(input: ReadonlyArray<{
@@ -25,6 +30,60 @@ export function chromeTrace(input: ReadonlyArray<{
 
 // @public
 export function comparisonOrder(perRevision?: number): Array<'A' | 'B'>;
+
+// @public
+export function coordinatePerformanceRevisions(options: {
+    directory: string;
+    mode: 'disabled' | 'lightweight' | 'detailed';
+    measured: number;
+    deadline: number;
+    workers(): PerformanceRevisionWorkers;
+}): Promise<void>;
+
+// @public
+export function createPerformanceRevisionJournal(directory: string, modeInput: unknown, measured: number): {
+    schedule: PerformanceScheduleEntry[];
+    begin(entry: PerformanceScheduleEntry): void;
+    end(entry: PerformanceScheduleEntry, outcome: "passed" | "failed" | "incomplete" | "cancelled"): void;
+    fail(): void;
+};
+
+// @public
+export function createPerformanceRunStore(directory: string, manifestInput: unknown, measured: number): {
+    save: (invocations?: readonly PerformanceInvocation[]) => void;
+    append: (input: unknown) => {
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        index: number;
+        warmup: boolean;
+        outcome: "failed" | "passed" | "incomplete" | "cancelled";
+        correct: boolean;
+        completion: "missing" | "view-ready";
+        durationMs?: number | undefined;
+        failure?: string | undefined;
+    };
+    adopt(file: string): {
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        index: number;
+        warmup: boolean;
+        outcome: "failed" | "passed" | "incomplete" | "cancelled";
+        correct: boolean;
+        completion: "missing" | "view-ready";
+        durationMs?: number | undefined;
+        failure?: string | undefined;
+    };
+};
+
+// @public
+export function createPerformanceScenarioRun(directory: string, manifestInput: unknown, measured: number, comparisonInput?: unknown): {
+    schedule: PerformanceScheduleEntry[];
+    save: (invocations?: Partial<Record<PerformanceVariant, readonly PerformanceInvocation[]>>) => void;
+    begin(entry: PerformanceScheduleEntry): void;
+    adopt: (entry: PerformanceScheduleEntry) => void;
+    append(entry: PerformanceScheduleEntry, input: unknown): void;
+};
+
+// @public
+export function finishPerformanceTrial(entry: PerformanceScheduleEntry, outcome: PerformanceTrial['outcome']): Promise<void>;
 
 // @public (undocumented)
 export const manifestSchema: z.ZodObject<{
@@ -73,6 +132,15 @@ export const manifestSchema: z.ZodObject<{
 }, z.core.$strip>;
 
 // @public (undocumented)
+export const PERFORMANCE_RUN_BYTES: number;
+
+// @public (undocumented)
+export const PERFORMANCE_TRIAL_BYTES: number;
+
+// @public (undocumented)
+export function performanceExecutionPolicy(comparison?: string): "alternating-modes-v1" | "single-scenario-v1" | "paired-focused-revisions-v1";
+
+// @public (undocumented)
 export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture' | 'mode' | 'cache' | 'warmups'> & {
     runtime?: Record<string, string>;
 }, root?: string): {
@@ -113,14 +181,112 @@ export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture'
     clock: "Local monotonic durations; cross-process epoch alignment is approximate";
 };
 
+// @public
+export interface PerformanceInvocation {
+    // (undocumented)
+    exitCode: number | null;
+    // (undocumented)
+    index?: number;
+    // (undocumented)
+    phase: string;
+    // (undocumented)
+    signal: string | null;
+}
+
 // @public (undocumented)
 export type PerformanceManifest = z.infer<typeof manifestSchema>;
+
+// @public
+export function performanceRevisionSchedule(modeInput: unknown, measured: number): PerformanceScheduleEntry[];
+
+// @public
+export interface PerformanceRevisionWorkers {
+    // (undocumented)
+    A?: {
+        code: number;
+    };
+    // (undocumented)
+    B?: {
+        code: number;
+    };
+}
+
+// @public
+export function performanceSchedule(modeInput: unknown, measured: number, comparisonInput?: unknown): PerformanceScheduleEntry[];
+
+// @public (undocumented)
+export interface PerformanceScheduleEntry {
+    // (undocumented)
+    index: number;
+    // (undocumented)
+    mode: PerformanceManifest['mode'];
+    // (undocumented)
+    ordinal: number;
+    // (undocumented)
+    variant: PerformanceVariant;
+    // (undocumented)
+    warmup: boolean;
+}
 
 // @public (undocumented)
 export type PerformanceTrial = z.infer<typeof trialSchema>;
 
 // @public (undocumented)
+export type PerformanceVariant = 'A' | 'B';
+
+// @public (undocumented)
 export const processReportSchema: z.ZodObject<{
+    processId: z.ZodOptional<z.ZodNumber>;
+    profiles: z.ZodOptional<z.ZodObject<{
+        sampling: z.ZodObject<{
+            cpuIntervalMicros: z.ZodLiteral<1000>;
+            allocationIntervalBytes: z.ZodLiteral<number>;
+            allocationStackDepth: z.ZodLiteral<128>;
+            includeCollectedAllocations: z.ZodLiteral<true>;
+        }, z.core.$strip>;
+        cpu: z.ZodOptional<z.ZodString>;
+        allocation: z.ZodOptional<z.ZodString>;
+        bytes: z.ZodNumber;
+        failures: z.ZodNumber;
+        failureStages: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        encodedBytes: z.ZodOptional<z.ZodObject<{
+            cpu: z.ZodOptional<z.ZodNumber>;
+            allocation: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strip>>;
+        complete: z.ZodBoolean;
+        windowLimitMs: z.ZodLiteral<30000>;
+        durationMs: z.ZodNumber;
+        stoppedBy: z.ZodEnum<{
+            owner: "owner";
+            limit: "limit";
+        }>;
+    }, z.core.$strip>>;
+    profileFailures: z.ZodOptional<z.ZodNumber>;
+    rendererResourceFailures: z.ZodOptional<z.ZodNumber>;
+    rendererListenerFailures: z.ZodOptional<z.ZodNumber>;
+    rendererStatistics: z.ZodOptional<z.ZodObject<{
+        source: z.ZodLiteral<"chromium-cdp">;
+        pid: z.ZodNumber;
+        metrics: z.ZodArray<z.ZodObject<{
+            name: z.ZodString;
+            unit: z.ZodEnum<{
+                bytes: "bytes";
+                count: "count";
+                seconds: "seconds";
+            }>;
+            before: z.ZodNumber;
+            after: z.ZodNumber;
+        }, z.core.$strip>>;
+        unavailable: z.ZodArray<z.ZodString>;
+        failures: z.ZodNumber;
+    }, z.core.$strip>>;
+    rendererLongTasks: z.ZodOptional<z.ZodObject<{
+        supported: z.ZodBoolean;
+        count: z.ZodNumber;
+        totalMs: z.ZodNumber;
+        maxMs: z.ZodNumber;
+        failures: z.ZodNumber;
+    }, z.core.$strip>>;
     processStatistics: z.ZodOptional<z.ZodObject<{
         samplingFailures: z.ZodNumber;
         durationMs: z.ZodNumber;
@@ -162,6 +328,141 @@ export const processReportSchema: z.ZodObject<{
     complete: z.ZodBoolean;
 }, z.core.$strip>;
 
+// @public
+export function readPerformanceModeComparison(directory: string, measured?: number): {
+    scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+    baseline: {
+        manifest: PerformanceManifest;
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        samples: {
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+            index: number;
+            warmup: boolean;
+            outcome: "failed" | "passed" | "incomplete" | "cancelled";
+            correct: boolean;
+            completion: "missing" | "view-ready";
+            durationMs?: number | undefined;
+            failure?: string | undefined;
+        }[];
+        summary: {
+            measured: number;
+            passed: number;
+            unsuccessful: number;
+            medianMs: number | null;
+            minMs: number | null;
+            maxMs: number | null;
+        };
+    };
+    candidate: {
+        manifest: PerformanceManifest;
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        samples: {
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+            index: number;
+            warmup: boolean;
+            outcome: "failed" | "passed" | "incomplete" | "cancelled";
+            correct: boolean;
+            completion: "missing" | "view-ready";
+            durationMs?: number | undefined;
+            failure?: string | undefined;
+        }[];
+        summary: {
+            measured: number;
+            passed: number;
+            unsuccessful: number;
+            medianMs: number | null;
+            minMs: number | null;
+            maxMs: number | null;
+        };
+    };
+    medianDifferenceMs: number;
+    medianChangePercent: number | null;
+    budget: {
+        medianPercent: number;
+        assessment: string;
+    } | undefined;
+    policy: string;
+};
+
+// @public
+export function readPerformanceRevisionComparison(directory: string, measured?: number): {
+    scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+    baseline: {
+        manifest: PerformanceManifest;
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        samples: {
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+            index: number;
+            warmup: boolean;
+            outcome: "failed" | "passed" | "incomplete" | "cancelled";
+            correct: boolean;
+            completion: "missing" | "view-ready";
+            durationMs?: number | undefined;
+            failure?: string | undefined;
+        }[];
+        summary: {
+            measured: number;
+            passed: number;
+            unsuccessful: number;
+            medianMs: number | null;
+            minMs: number | null;
+            maxMs: number | null;
+        };
+    };
+    candidate: {
+        manifest: PerformanceManifest;
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        samples: {
+            scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+            index: number;
+            warmup: boolean;
+            outcome: "failed" | "passed" | "incomplete" | "cancelled";
+            correct: boolean;
+            completion: "missing" | "view-ready";
+            durationMs?: number | undefined;
+            failure?: string | undefined;
+        }[];
+        summary: {
+            measured: number;
+            passed: number;
+            unsuccessful: number;
+            medianMs: number | null;
+            minMs: number | null;
+            maxMs: number | null;
+        };
+    };
+    medianDifferenceMs: number;
+    medianChangePercent: number | null;
+    policy: string;
+};
+
+// @public
+export function readPerformanceRun(directory: string, measured?: number): {
+    manifest: PerformanceManifest;
+    scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+    samples: {
+        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
+        index: number;
+        warmup: boolean;
+        outcome: "failed" | "passed" | "incomplete" | "cancelled";
+        correct: boolean;
+        completion: "missing" | "view-ready";
+        durationMs?: number | undefined;
+        failure?: string | undefined;
+    }[];
+    summary: {
+        measured: number;
+        passed: number;
+        unsuccessful: number;
+        medianMs: number | null;
+        minMs: number | null;
+        maxMs: number | null;
+    };
+};
+
+// @public
+export function rendererProcessId(application: ElectronApplication, page: Page): Promise<number>;
+
 // @public (undocumented)
 export const spanSchema: z.ZodObject<{
     name: z.ZodString;
@@ -197,7 +498,7 @@ export function streamingBacklog(producedInput: unknown, receivedInput: unknown,
 };
 
 // @public
-export function summarize(input: readonly PerformanceTrial[]): {
+export function summarize(input: readonly Pick<PerformanceTrial, 'warmup' | 'outcome' | 'durationMs'>[]): {
     measured: number;
     passed: number;
     unsuccessful: number;
@@ -218,9 +519,9 @@ export const trialSchema: z.ZodObject<{
     warmup: z.ZodBoolean;
     outcome: z.ZodEnum<{
         failed: "failed";
-        cancelled: "cancelled";
-        incomplete: "incomplete";
         passed: "passed";
+        incomplete: "incomplete";
+        cancelled: "cancelled";
     }>;
     durationMs: z.ZodOptional<z.ZodNumber>;
     correct: z.ZodBoolean;
@@ -249,6 +550,57 @@ export const trialSchema: z.ZodObject<{
         clockOrderMismatches: z.ZodNumber;
     }, z.core.$strip>>;
     processes: z.ZodRecord<z.ZodString, z.ZodObject<{
+        processId: z.ZodOptional<z.ZodNumber>;
+        profiles: z.ZodOptional<z.ZodObject<{
+            sampling: z.ZodObject<{
+                cpuIntervalMicros: z.ZodLiteral<1000>;
+                allocationIntervalBytes: z.ZodLiteral<number>;
+                allocationStackDepth: z.ZodLiteral<128>;
+                includeCollectedAllocations: z.ZodLiteral<true>;
+            }, z.core.$strip>;
+            cpu: z.ZodOptional<z.ZodString>;
+            allocation: z.ZodOptional<z.ZodString>;
+            bytes: z.ZodNumber;
+            failures: z.ZodNumber;
+            failureStages: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            encodedBytes: z.ZodOptional<z.ZodObject<{
+                cpu: z.ZodOptional<z.ZodNumber>;
+                allocation: z.ZodOptional<z.ZodNumber>;
+            }, z.core.$strip>>;
+            complete: z.ZodBoolean;
+            windowLimitMs: z.ZodLiteral<30000>;
+            durationMs: z.ZodNumber;
+            stoppedBy: z.ZodEnum<{
+                owner: "owner";
+                limit: "limit";
+            }>;
+        }, z.core.$strip>>;
+        profileFailures: z.ZodOptional<z.ZodNumber>;
+        rendererResourceFailures: z.ZodOptional<z.ZodNumber>;
+        rendererListenerFailures: z.ZodOptional<z.ZodNumber>;
+        rendererStatistics: z.ZodOptional<z.ZodObject<{
+            source: z.ZodLiteral<"chromium-cdp">;
+            pid: z.ZodNumber;
+            metrics: z.ZodArray<z.ZodObject<{
+                name: z.ZodString;
+                unit: z.ZodEnum<{
+                    bytes: "bytes";
+                    count: "count";
+                    seconds: "seconds";
+                }>;
+                before: z.ZodNumber;
+                after: z.ZodNumber;
+            }, z.core.$strip>>;
+            unavailable: z.ZodArray<z.ZodString>;
+            failures: z.ZodNumber;
+        }, z.core.$strip>>;
+        rendererLongTasks: z.ZodOptional<z.ZodObject<{
+            supported: z.ZodBoolean;
+            count: z.ZodNumber;
+            totalMs: z.ZodNumber;
+            maxMs: z.ZodNumber;
+            failures: z.ZodNumber;
+        }, z.core.$strip>>;
         processStatistics: z.ZodOptional<z.ZodObject<{
             samplingFailures: z.ZodNumber;
             durationMs: z.ZodNumber;
@@ -293,120 +645,10 @@ export const trialSchema: z.ZodObject<{
 }, z.core.$strip>;
 
 // @public
-export function validatePerformanceRun(manifestInput: unknown, trialsInput: unknown, measured: number): {
-    manifest: {
-        format: 1;
-        source: {
-            revision: string;
-            dirty: boolean;
-            excludedUntracked: string[];
-            diffSha256: string;
-        };
-        builds: {
-            path: string;
-            sha256: string;
-        }[];
-        fixture: {
-            generator: string;
-            seed: number;
-            sha256: string;
-            distribution: Record<string, number>;
-        };
-        native: {
-            pin: string;
-            checkoutRevision: string;
-            dirty: boolean;
-            excludedUntracked: string[];
-        };
-        runtime: Record<string, string>;
-        machine: {
-            platform: string;
-            arch: string;
-            cpus: number;
-            memoryBytes: number;
-            identity: string;
-        };
-        mode: "disabled" | "lightweight" | "detailed";
-        cache: "warm-process" | "fresh-process-warm-filesystem";
-        warmups: number;
-        clock: "Local monotonic durations; cross-process epoch alignment is approximate";
-    };
-    trials: {
-        scenario: "search" | "thread-open" | "streaming" | "populated-startup";
-        index: number;
-        warmup: boolean;
-        outcome: "failed" | "cancelled" | "incomplete" | "passed";
-        correct: boolean;
-        completion: "missing" | "view-ready";
-        work: Record<string, number>;
-        processes: Record<string, {
-            observations: string[];
-            bytes: number;
-            dropped: number;
-            truncated: boolean;
-            rejected: number;
-            droppedMetadata: number;
-            mode: "disabled" | "lightweight" | "detailed";
-            active: number;
-            unfinished: number;
-            droppedStarts: number;
-            invalidCarriers: number;
-            detachFailures: number;
-            droppedEvents: number;
-            contextFailures: number;
-            rejectedStarts: number;
-            invalidAttributes: number;
-            complete: boolean;
-            processStatistics?: {
-                samplingFailures: number;
-                durationMs: number;
-                cpuUserMicros: number;
-                cpuSystemMicros: number;
-                rssStartBytes: number;
-                rssEndBytes: number;
-                rssSampledMaxBytes: number;
-                heapStartBytes: number;
-                heapEndBytes: number;
-                heapSampledMaxBytes: number;
-                gcCount: number;
-                gcDurationMs: number;
-                eventLoopUtilization: number;
-                eventLoopHistogramMaxMs: number;
-                eventLoopLateTickMaxMs: number;
-            } | undefined;
-            processStatisticsFailures?: number | undefined;
-        }>;
-        durationMs?: number | undefined;
-        timings?: {
-            firstVisibleMs: number;
-            maxVisibleGapMs: number;
-        } | undefined;
-        backlog?: {
-            unit: "UTF-16 code units";
-            boundary: "producer enqueue to database-backed view receipt";
-            clock: "approximate process epoch alignment; not database commit latency";
-            produced: {
-                epochMs: number;
-                chars: number;
-            }[];
-            received: {
-                epochMs: number;
-                chars: number;
-            }[];
-            maxPendingChars: number;
-            clockOrderMismatches: number;
-        } | undefined;
-        failure?: string | undefined;
-    }[];
-    summary: {
-        measured: number;
-        passed: number;
-        unsuccessful: number;
-        medianMs: number | null;
-        minMs: number | null;
-        maxMs: number | null;
-    };
-};
+export function waitForPerformanceTrial(entry: PerformanceScheduleEntry, target?: {
+    application: ElectronApplication;
+    page: Page;
+}): Promise<void>;
 
 // (No @packageDocumentation comment for this package)
 

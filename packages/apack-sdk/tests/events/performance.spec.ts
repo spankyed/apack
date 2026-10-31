@@ -1,7 +1,8 @@
+import { _parseStartupPerformance } from '../../src/runtime/performance.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { startFeTestRuntime, stopFeTestRuntime } from '../../src/testing/fe-runtime.ts';
 import { untypedSendToSystem, type Message } from '../../src/events/index.ts';
-import type { PerformanceExecution } from '../../src/runtime/performance.ts';
+import { _performanceEnvelope, _performanceCarrier, _withPerformanceCarrier, _withPerformanceDelivery, _withPerformanceEvent, type PerformanceExecution } from '../../src/runtime/performance.ts';
 
 afterEach(stopFeTestRuntime);
 
@@ -24,4 +25,48 @@ it('does not add diagnostic metadata when recording is unavailable', () => {
   startFeTestRuntime({ client: { send } });
   untypedSendToSystem('pack/system', { type: 'PING' });
   expect(send.mock.calls[0]![0]).not.toHaveProperty('diagnostics');
+});
+
+it('keeps idle boundary calls transparent and preserves the original thrown value', () => {
+  startFeTestRuntime();
+  const message = Object.freeze({ event: { type: 'PING' } });
+  expect(_performanceEnvelope(message)).toBe(message);
+  expect(_performanceCarrier()).toBeUndefined();
+  expect(_withPerformanceCarrier(undefined, () => 42)).toBe(42);
+  expect(_withPerformanceEvent(null, () => 43)).toBe(43);
+  const failure = Error('business failure');
+  expect(() => _withPerformanceDelivery(message.event, undefined, () => { throw failure; })).toThrow(failure);
+});
+it('restores explicitly carried event causes and clears missing inbound context', () => {
+  let current: unknown;
+  const causes = new WeakMap<object, unknown>();
+  const within = <T>(carrier: unknown, fn: () => T): T => {
+    const previous = current; current = carrier;
+    try { return fn(); } finally { current = previous; }
+  };
+  startFeTestRuntime({ diagnostics: { capture: () => ({}), withCarrier: within,
+    carryEvent: (event, carrier) => { causes.set(event, carrier); }, withEvent: (event, fn) => within(causes.get(event), fn) } });
+  const cause = { traceparent: 'explicit cause' };
+  const event = { type: 'PING' };
+  _withPerformanceCarrier(cause, () => {
+    expect(current).toBe(cause);
+    _withPerformanceDelivery(event, undefined, () => expect(current).toBeUndefined());
+    expect(current).toBe(cause);
+    _withPerformanceDelivery(event, cause, () => _withPerformanceEvent(event, () => expect(current).toBe(cause)));
+  });
+  expect(current).toBeUndefined();
+  expect(event).toEqual({ type: 'PING' });
+});
+
+it('shares strict bounded startup configuration across process owners', () => {
+  for (const mode of ['disabled', 'lightweight', 'detailed']) {
+    const config = { mode, carrier: { traceparent: 'parent', tracestate: 'state' } };
+    expect(_parseStartupPerformance(JSON.stringify(config))).toEqual(config);
+  }
+  for (const config of [{ mode: 'unknown' }, { mode: 'lightweight', payload: 'private' },
+    { mode: 'lightweight', carrier: { traceparent: 'x'.repeat(513) } },
+    { mode: 'lightweight', carrier: { extra: true } }]) {
+    expect(() => _parseStartupPerformance(JSON.stringify(config))).toThrow();
+  }
+  expect(() => _parseStartupPerformance('x'.repeat(2049))).toThrow(/too large/);
 });

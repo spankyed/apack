@@ -47,6 +47,7 @@ test('attributes an injected CPU block to the backend process', async ({ app, ap
       .filter(([, report]) => report).map(([process, report]) => ({ process, report })))));
     expect(reports.complete, `Evidence: ${output}`).toBe(true);
     expect(reply?.pid).not.toBe(mainPid);
+    expect(reports.backend?.processId).toBe(reply?.pid);
     expect(reply?.cpuMicros).toBeGreaterThanOrEqual(200000);
     expect(statistics).toBeDefined();
     expect(statistics!.cpuUserMicros + statistics!.cpuSystemMicros).toBeGreaterThanOrEqual(reply!.cpuMicros!);

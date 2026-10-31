@@ -4,10 +4,11 @@ import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { SamplingDecision, TracerProvider, type SpanProcessor } from '@opentelemetry/sdk-trace';
 import { createSpanRecording } from './spans.ts';
 import { createEarsOperationObserver, EARS_SPAN_NAMES, EARS_SPAN_ATTRIBUTES } from './ears.ts';
+import type { _PerformanceProfiles, _RendererPerformanceStatistics } from '@apackdev/sdk/runtime';
 
 /** Only standard trace context crosses execution boundaries; no application payload or baggage. */
-export interface TraceCarrier { traceparent?: string; tracestate?: string }
-export type RecordingMode = 'disabled' | 'lightweight' | 'detailed';
+export type { _RecordingMode as RecordingMode } from '@apackdev/sdk/runtime';
+import type { _RecordingMode as RecordingMode, PerformanceCarrier } from '@apackdev/sdk/runtime';
 
 /** Process totals for the recording window, never attributed to individual overlapping actions. */
 export interface PerformanceProcessStatistics {
@@ -30,6 +31,13 @@ export interface PerformanceProcessStatistics {
 
 /** Encoded process observations and capture-integrity counters, portable across the API boundary. */
 export interface PerformanceRecordingReport {
+  processId?: number;
+  profiles?: _PerformanceProfiles;
+  rendererStatistics?: _RendererPerformanceStatistics;
+  rendererLongTasks?: { supported: boolean; count: number; totalMs: number; maxMs: number; failures: number };
+  rendererResourceFailures?: number;
+  rendererListenerFailures?: number;
+  profileFailures?: number;
   processStatistics?: PerformanceProcessStatistics;
   processStatisticsFailures?: number;
   observations: readonly string[];
@@ -113,8 +121,8 @@ export function createTraceSession(options: {
     const span = trace.getSpan(context);
     return span && !span.isRecording() && !span.spanContext().isRemote ? ROOT_CONTEXT : context;
   };
-  const inject = (context: Context): TraceCarrier => {
-    const carrier: TraceCarrier = {};
+  const inject = (context: Context): PerformanceCarrier => {
+    const carrier: PerformanceCarrier = {};
     propagator.inject(context, carrier, { set(target, key, value) {
       if (key === 'traceparent' || key === 'tracestate') target[key] = value;
     } });
@@ -124,12 +132,12 @@ export function createTraceSession(options: {
     if (input === undefined || input === null) return ROOT_CONTEXT;
     try {
       if (typeof input !== 'object') throw new Error('invalid carrier');
-      const value = input as TraceCarrier;
+      const value = input as PerformanceCarrier;
       const parent = value.traceparent;
       const state = value.tracestate;
       if (parent === undefined && state === undefined && Object.keys(value).length === 0) return ROOT_CONTEXT;
       if (typeof parent !== 'string' || parent.length > 512 || state !== undefined && (typeof state !== 'string' || state.length > 512)) throw new Error('invalid carrier');
-      const carrier: TraceCarrier = { traceparent: parent, ...(state !== undefined && { tracestate: state }) };
+      const carrier: PerformanceCarrier = { traceparent: parent, ...(state !== undefined && { tracestate: state }) };
       const context = propagator.extract(ROOT_CONTEXT, carrier, {
         keys: target => Object.keys(target),
         get: (target, key) => key === 'traceparent' || key === 'tracestate' ? target[key] : undefined,
@@ -186,7 +194,7 @@ export function createTraceSession(options: {
       const context = events.get(event);
       return context ? runContext(context, fn) : fn();
     },
-    capture: (): TraceCarrier => stopped || !manager ? {} : inject(current()),
+    capture: (): PerformanceCarrier => stopped || !manager ? {} : inject(current()),
     withCarrier<T>(carrier: unknown, fn: () => T): T {
       if (!manager || stopped) return fn();
       return runContext(extract(carrier), fn);
@@ -224,7 +232,7 @@ export function createTraceSession(options: {
       const context = span ? trace.setSpan(current(), span) : ROOT_CONTEXT;
       let ended = false;
       return {
-        carrier: (): TraceCarrier => stopped || ended || !span ? {} : inject(context),
+        carrier: (): PerformanceCarrier => stopped || ended || !span ? {} : inject(context),
         within<T>(fn: () => T): T { return runContext(ended ? ROOT_CONTEXT : context, fn); },
         end(outcome: 'ok' | 'error' | 'cancelled' = 'ok') {
           if (ended || stopped) return;

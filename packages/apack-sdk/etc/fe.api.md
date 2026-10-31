@@ -368,6 +368,13 @@ export interface _HostBridge {
         deleteAll: (entityId: string) => Promise<void>;
     };
     // (undocumented)
+    performance: {
+        start(mode: 'lightweight' | 'detailed'): Promise<{
+            id: string;
+        }>;
+        stop(id: string): Promise<_RendererPerformanceResources>;
+    };
+    // (undocumented)
     protocolAction: {
         onAction: (callback: (data: {
             action: string;

@@ -42,6 +42,9 @@ export function bindHost(runtime: HostRuntime): void;
 // @internal
 export function _boundPackExtensions(): PackExtensionsView;
 
+// @internal
+export function _carryPerformanceEvent(event: object, carrier: unknown): void;
+
 export { Ears }
 
 // @public
@@ -169,6 +172,15 @@ export interface PackRegistryView extends PackExtensionsView {
     systemIds(): readonly FeatureRef[];
 }
 
+// @internal
+export function _parseStartupPerformance(input: string): {
+    mode: "disabled" | "lightweight" | "detailed";
+    carrier?: {
+        traceparent?: string | undefined;
+        tracestate?: string | undefined;
+    } | undefined;
+};
+
 // @public
 export interface PerformanceCarrier {
     // (undocumented)
@@ -176,6 +188,12 @@ export interface PerformanceCarrier {
     // (undocumented)
     tracestate?: string;
 }
+
+// @internal
+export function _performanceCarrier(carrier?: PerformanceCarrier): PerformanceCarrier | undefined;
+
+// @internal
+export function _performanceEnvelope<T extends object>(envelope: T): T;
 
 // @public
 export interface PerformanceExecution {
@@ -191,6 +209,81 @@ export interface PerformanceExecution {
 
 // @internal
 export function _performanceExecution(): PerformanceExecution | undefined;
+
+// @internal
+export interface _PerformanceProfiles {
+    // (undocumented)
+    allocation?: string;
+    // (undocumented)
+    bytes: number;
+    // (undocumented)
+    complete: boolean;
+    // (undocumented)
+    cpu?: string;
+    // (undocumented)
+    durationMs: number;
+    // (undocumented)
+    encodedBytes?: {
+        cpu?: number;
+        allocation?: number;
+    };
+    // (undocumented)
+    failures: number;
+    // (undocumented)
+    failureStages?: string[];
+    // (undocumented)
+    sampling: {
+        cpuIntervalMicros: number;
+        allocationIntervalBytes: number;
+        allocationStackDepth: number;
+        includeCollectedAllocations: boolean;
+    };
+    // (undocumented)
+    stoppedBy: 'owner' | 'limit';
+    // (undocumented)
+    windowLimitMs: number;
+}
+
+// @internal
+export type _RecordingMode = z.infer<typeof _recordingModeSchema>;
+
+// @internal
+export const _recordingModeSchema: z.ZodEnum<{
+    disabled: "disabled";
+    lightweight: "lightweight";
+    detailed: "detailed";
+}>;
+
+// @internal
+export interface _RendererPerformanceResources {
+    // (undocumented)
+    complete: boolean;
+    // (undocumented)
+    profileFailures: number;
+    // (undocumented)
+    profiles?: _PerformanceProfiles;
+    // (undocumented)
+    statistics: _RendererPerformanceStatistics;
+}
+
+// @internal
+export interface _RendererPerformanceStatistics {
+    // (undocumented)
+    failures: number;
+    // (undocumented)
+    metrics: Array<{
+        name: string;
+        unit: 'seconds' | 'bytes' | 'count';
+        before: number;
+        after: number;
+    }>;
+    // (undocumented)
+    pid: number;
+    // (undocumented)
+    source: 'chromium-cdp';
+    // (undocumented)
+    unavailable: string[];
+}
 
 // @public
 export interface RootEvents {
@@ -220,6 +313,15 @@ export interface SecretRedaction {
     // (undocumented)
     matchesSecret(text: string, from: number, to: number): boolean;
 }
+
+// @internal
+export function _withPerformanceCarrier<T>(carrier: unknown, run: () => T): T;
+
+// @internal
+export function _withPerformanceDelivery<T>(event: object, carrier: unknown, run: () => T): T;
+
+// @internal
+export function _withPerformanceEvent<T>(event: unknown, run: () => T): T;
 
 // (No @packageDocumentation comment for this package)
 

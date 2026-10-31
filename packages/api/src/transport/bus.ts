@@ -1,4 +1,4 @@
-import { _performanceExecution } from '@apackdev/sdk/runtime';
+import { _withPerformanceCarrier } from '@apackdev/sdk/runtime';
 import { diagnosticCarrier } from './diagnostics.ts';
 // Lets declaration emit name tRPC's router types through a public entry (TS2742 under bundler resolution)
 import type {} from '@trpc/server/unstable-core-do-not-import';
@@ -76,9 +76,7 @@ export const systemBusRouter = router({
           bindSettingsRequest(message.event, () => access.resolve(ctx.client, settingsCredential));
         }
         const deliver = () => receiveClientEvent(appPacks, { ...message, client: ctx.client });
-        const performance = _performanceExecution();
-        if (performance) performance.withCarrier(message.diagnostics, deliver);
-        else deliver();
+        _withPerformanceCarrier(message.diagnostics, deliver);
       } catch (error) {
         if (error instanceof SettingsRefusedError) throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
         if (error instanceof UnknownClientEventError) throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });

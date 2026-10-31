@@ -24,7 +24,9 @@ it('keeps disabled recordings inert and attaches totals only to an enabled recor
   const pending = controller.stop();
   expect(controller.stop()).toBe(pending);
   expect(() => controller.start('disabled')).toThrow(/stopping/);
-  expect((await pending).processStatistics).toMatchObject({ gcCount: expect.any(Number), cpuUserMicros: expect.any(Number) });
+  const report = await pending;
+  expect(report.processStatistics).toMatchObject({ gcCount: expect.any(Number), cpuUserMicros: expect.any(Number) });
+  expect(report.profiles).toBeUndefined();
   controller.start('disabled');
   expect((await controller.stop()).processStatistics).toBeUndefined();
 });

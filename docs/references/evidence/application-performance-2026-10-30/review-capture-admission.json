@@ -1,0 +1,61 @@
+{
+  "results": [
+    {
+      "directory": "qualification-disabled-vs-lightweight-1793406874704",
+      "scenario": "thread-open",
+      "samples": 50
+    },
+    {
+      "directory": "qualification-disabled-vs-lightweight-1793406874704",
+      "scenario": "search",
+      "samples": 50
+    },
+    {
+      "directory": "qualification-disabled-vs-lightweight-1793406874704",
+      "scenario": "streaming",
+      "samples": 50
+    },
+    {
+      "directory": "qualification-disabled-vs-detailed-1793407476606",
+      "scenario": "thread-open",
+      "samples": 50
+    },
+    {
+      "directory": "qualification-disabled-vs-detailed-1793407476606",
+      "scenario": "search",
+      "samples": 50
+    },
+    {
+      "directory": "qualification-disabled-vs-detailed-1793407476606",
+      "scenario": "streaming",
+      "samples": 50
+    },
+    {
+      "directory": "qualification-disabled-vs-lightweight-1793408130509",
+      "scenario": "populated-startup",
+      "samples": 50
+    },
+    {
+      "directory": "qualification-disabled-vs-detailed-1793408480945",
+      "scenario": "populated-startup",
+      "samples": 50
+    },
+    {
+      "directory": "revisions-lightweight-1793408884962",
+      "scenario": "thread-open",
+      "samples": 50
+    }
+  ],
+  "samples": 450,
+  "strengthenedCaptureAdmission": true,
+  "archives": [
+    {
+      "path": ".apack/performance/linux-evidence-complete.tar.gz",
+      "sha256": "f4520ac721bcb90828424e35c02e753cd754f7211d18acb9ec8a5aa3dcc476c8"
+    }
+  ],
+  "reviewSource": {
+    "report.ts": "96da4e2ffaf244d9cbf0d2c09c34f945cab47cc28445808a2fd1c5c98778555d",
+    "run.ts": "0943325cfc0abaf3ee6beb2d531ea3a770b6573bca025bd5ccb784b4df3114b0"
+  }
+}

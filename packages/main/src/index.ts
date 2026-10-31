@@ -17,6 +17,7 @@ import {createMacOSAppMenu} from './modules/MacOSAppMenu.ts';
 import {createBrowserModule} from './modules/browser/index.ts';
 import {createProtocolHandler} from './modules/ProtocolHandler.ts';
 import {app} from 'electron';
+import {createPerformanceModule} from './modules/performance/index.ts';
 import {initializeMainLogCapture} from './modules/api-server/logger.ts';
 import {initAppEnvironment} from './app-environment.ts';
 
@@ -43,6 +44,7 @@ export async function initApp(initConfig: AppInitConfig) {
     // After the API it reloads, and a no-op unless `npm run dev` armed it in a development build
     .init(createDevApiReloader(apiServer))
     .init(createSpeechRecognition())
+    .init(createPerformanceModule())
     // .init(createWindowManagerModule({initConfig, openDevTools: import.meta.env.DEV}))
     .init(createWindowManagerModule({initConfig, openDevTools: false, apiServer, splashScreen}))
     .init(terminateAppOnLastWindowClose())
