@@ -5876,6 +5876,19 @@ declare const noteQueries: {
     readonly children: (parentId: EARS.EntityId) => NoteDTO[];
     /** The notes above this one, its root first */
     readonly ancestorChain: (noteId: EARS.EntityId) => NoteDTO[];
+    /**
+     * The `limit` notes most related to this one by the links between notes, either way: personalized PageRank from
+     * it, so a note linked to it, or linked to what it links to, ranks above one a long walk away, and one no walk from
+     * it reaches isn't related at all. Most related first, as the tree shows them
+     */
+    readonly related: (noteId: EARS.EntityId, limit: number) => NoteSummary[];
+    /**
+     * The `limit` notes most worth adding beside `mentioned` to answer `text`: reciprocal rank fusion of two orders, how
+     * much each note matters from the mentioned ones by the links between notes (`related`'s rank, seeded with them all)
+     * and how well it matches `text` (the notes' text index), each note's two places added as 1 / (60 + place), the
+     * constant the method was published with. A note in either order may be chosen; the mentioned ones never are
+     */
+    readonly relatedToAll: (mentioned: readonly EARS.EntityId[], text: string, limit: number) => EARS.EntityId[];
     readonly referencedBy: (noteId: EARS.EntityId) => EARS.EntityId[];
     readonly trashedDTOs: () => NoteDTO[];
     readonly expiredSoftDeleted: (maxAgeDays: number) => NoteEntity[];
@@ -5919,11 +5932,12 @@ declare function registerSchedule(key: string, cronExpression: string, callback:
  * library docs/folders) into prompt-ready content for the Claude Code CLI.
  *
  * Returns:
- * - `textPrefix`  — formatted text for non-image references, prepended to the user message
+ * - `textPrefix`  — formatted text for non-image references, prepended to the user message; with `message`, the text
+ *   the user wrote, it ends with the notes most related to the ones mentioned (`resolveRelatedNotes`)
  * - `imageBlocks` — Anthropic image content blocks (base64-encoded), with text labels
  * - `addDirs`     — directories for `--add-dir` (attached file auto-reads)
  */
-declare function resolveReferences(references: MessageReferences | undefined): Promise<{
+declare function resolveReferences(references: MessageReferences | undefined, message?: string): Promise<{
     textPrefix: string;
     imageBlocks: any[];
     addDirs: string[];
