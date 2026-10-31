@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-api, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       storage_format:
         description: Storage for isolated source app/pack qualification; installed suites select SQLite explicitly
@@ -56,8 +56,49 @@ jobs:
   installed-platform:
     if: ${{ inputs.suite == 'installed-platform' }}
     uses: ./.github/workflows/ears-installed-platform.yml
+  sqlite-api:
+    if: ${{ inputs.suite == 'sqlite-api' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Install matching dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+      - name: Regenerate EARS API from matching published packages
+        run: |
+          set -o pipefail
+          mkdir -p .temp/sqlite-api
+          git rev-parse HEAD > .temp/sqlite-api/source.txt
+          cp vendor/elmdb.rev .temp/sqlite-api/elmdb.rev
+          npm run packages:build 2>&1 | tee .temp/sqlite-api/packages.log
+          npm run api:update -w @apackdev/ears 2>&1 | tee .temp/sqlite-api/update.log
+          npm run api:check -w @apackdev/ears 2>&1 | tee .temp/sqlite-api/check.log
+          git diff -- packages/apack-ears/etc > .temp/sqlite-api/reports.patch
+      - name: Preserve generated reports for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-api-${{ github.run_id }}
+          path: |
+            .temp/sqlite-api
+            packages/apack-ears/etc
+          if-no-files-found: error
+          retention-days: 14
   check:
-    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
+    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-api' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
     runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45

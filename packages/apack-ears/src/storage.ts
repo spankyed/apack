@@ -31,7 +31,7 @@ export type QueryTerminal =
   | { answer: 'rows' | 'firstRow'; fields?: string[] }
   | { answer: 'degrees'; kinds: string[]; direction?: EdgeDirection; types?: string[] }
   | { answer: 'weakComponents' | 'strongComponents'; kinds: string[]; counts?: boolean }
-  | { answer: 'communities'; kinds: string[]; resolution?: number; seed?: number; iterations?: number }
+  | { answer: 'communities'; kinds: string[]; resolution?: number; seed?: number }
   | { answer: 'edges'; kinds: string[]; direction: 'out' | 'in'; types?: string[] }
   | { answer: 'groupBy'; field: string; counts?: boolean }
   | { answer: 'hits'; fields?: string[]; highlights?: boolean };

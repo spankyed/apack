@@ -66,6 +66,7 @@
     "better-sqlite3": "13.0.3",
     "elmdb": "file:../../vendor/elmdb/crates/elmdb-node",
     "fs-native-extensions": "1.5.2",
+    "leiden-ts": "0.1.0",
     "lru-cache": "11.5.2",
     "msgpackr": "^1.11.9",
     "sqlite-vec": "0.1.9"

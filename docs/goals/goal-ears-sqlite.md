@@ -226,8 +226,11 @@ both graph-boundary and new graph-algorithm tests, both private-file barrier reg
 not a passing candidate checkpoint. [Initial graph implementation](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-core-4f5/README.md)
 now carries the graph request/answer types and implements SQL projection, PageRank and iterative weak/strong
 components. Full EARS typechecking and five selected SQLite graph cases pass, including watch/trash changes
-and actual SQL explain output. Genuine Leiden remains incomplete and explicitly refuses; broader graph
-correctness/performance, new-pin native qualification and API report regeneration remain required. Do not substitute Louvain for Leiden or silently omit these APIs.
+and actual SQL explain output. [Leiden integration and exhaustive graph checks](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-leiden-240/README.md)
+now implement seeded communities using pinned `leiden-ts@0.1.0`. Full EARS typechecking and all 98 focused
+SQLite cases pass without skips; a separate 500-graph dependency probe passes deterministic/connectivity
+checks. This new dependency still needs comparative quality, maintenance and realistic graph performance
+review. New-pin native qualification, API reports and full integrated/platform acceptance remain required. Do not substitute Louvain for Leiden or silently omit these APIs.
 Existing platform/benchmark evidence retains its original native pin; new-pin baseline and integrated
 candidate qualification remain required. Inspect actual Git/process/workflow state before continuing.
 

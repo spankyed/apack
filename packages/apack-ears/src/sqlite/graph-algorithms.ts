@@ -65,9 +65,9 @@ export function rankGraph(graph: SqliteGraph, seeds: string[] | undefined, dampi
   const teleport: number[] = graph.ids.map(id => chosen.has(id) ? 1 : 0), count = teleport.reduce((a, b) => a + b, 0);
   if (!count) return;
   for (let at = 0; at < teleport.length; at++) teleport[at] = teleport[at]! / count;
-  let scores = [...teleport];
+  let scores = [...teleport], next: number[] = Array(graph.ids.length).fill(0);
   for (let round = 0; round < iterations; round++) {
-    const next: number[] = Array(graph.ids.length).fill(0); let dangling = 0;
+    next.fill(0); let dangling = 0;
     for (let at = 0; at < scores.length; at++) {
       const neighbors = graph.out[at]!;
       if (!neighbors.length) dangling += scores[at]!;
@@ -78,7 +78,7 @@ export function rankGraph(graph: SqliteGraph, seeds: string[] | undefined, dampi
       next[at] = damping * next[at]! + back * teleport[at]!;
       change += Math.abs(next[at]! - scores[at]!);
     }
-    scores = next;
+    [scores, next] = [next, scores];
     if (change < tolerance) break;
   }
   return scores;

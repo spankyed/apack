@@ -6,6 +6,7 @@ import type { QueryPlan, QueryStep, QueryAnswer, StoredHit } from "../storage.ts
 import { SqliteValueGroups } from "./value-groups.ts";
 import { distinctScalarIds, countScalarGroups } from "./scalar-groups.ts";
 import { projectGraph, graphComponents, rankGraph } from './graph-algorithms.ts';
+import { graphCommunities } from './communities.ts';
 type Data = Record<string, any>;
 const fail = (code: string, message: string): never => {
   throw Object.assign(new Error(message), { code });
@@ -606,7 +607,8 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       ? { kind: 'weakComponents', weakComponents: members, __visited: ids.length }
       : { kind: 'strongComponents', strongComponents: members, __visited: ids.length };
   }
-  if (terminal.answer === 'communities') fail('VALUE_INVALID', 'SQLite Leiden communities implementation is incomplete');
+  if (terminal.answer === 'communities') return { kind: 'communities',
+    communities: graphCommunities(projectGraph(db, ids, terminal.kinds), terminal.resolution, terminal.seed), __visited: ids.length };
   if (terminal.answer === 'degrees') {
     for (const kind of terminal.kinds) { db.relationDefinition(kind); db.trackRange(`kind:${kind}`); }
     for (const type of terminal.types ?? []) db.definition(type);
