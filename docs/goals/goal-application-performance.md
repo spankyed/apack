@@ -211,3 +211,8 @@ differs from its repository pin. Failed renderer identity lookup preserves raw d
 incomplete. The focused backend CPU counterfactual now checks the reported PID against its returned PID.
 A disposable sequence-getter microdiagnostic averaged 0.436 microseconds over 10,000 reads; it does not
 explain the observed search gap and does not justify changing engine sequence semantics.
+
+Revision-worker review found a focus bias: only the last-opened window would otherwise be foreground.
+The permitted warm worker now shows/focuses its own window and verifies document focus outside the
+measured interval. The focused execution policy is separate from earlier runs. Seven revision tests
+cover this preparation plus gates, failed/early workers and final teardown. Real-app A/A validation is next.

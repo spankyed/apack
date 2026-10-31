@@ -13,7 +13,7 @@ function directory() { const result = mkdtempSync(path.join(tmpdir(), 'apack-rev
 const entry = { variant: 'A' as const, mode: 'lightweight' as const, ordinal: 0, index: 0, warmup: true };
 it('waits before work, validates permission, and acknowledges completion after the caller saves evidence', async () => {
   const own = directory(); vi.stubEnv('APACK_PERFORMANCE_GATE', JSON.stringify({ directory: own, deadline: Date.now() + 10_000, mode: 'lightweight', lastIndex: 6 }));
-  expect(performanceExecutionPolicy()).toBe('paired-revisions-v1');
+  expect(performanceExecutionPolicy()).toBe('paired-focused-revisions-v1');
   expect(() => performanceExecutionPolicy('detailed')).toThrow();
   const pending = waitForPerformanceTrial(entry);
   expect(existsSync(path.join(own, 'ready-0.json'))).toBe(true);
@@ -56,7 +56,7 @@ it('refuses an exited worker and a completion that predates its permission', asy
 });
 const manifest = { format: 1, source: { revision: 'one', dirty: false, excludedUntracked: [], diffSha256: 'clean' }, builds: [{ path: 'app', sha256: 'one' }],
   fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} }, native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] },
-  mode: 'lightweight', cache: 'warm-process', warmups: 5, runtime: { performancePolicy: 'paired-revisions-v1' },
+  mode: 'lightweight', cache: 'warm-process', warmups: 5, runtime: { performancePolicy: 'paired-focused-revisions-v1' },
   machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' }, clock: 'Local monotonic durations; cross-process epoch alignment is approximate' };
 const report = { observations: [], bytes: 0, dropped: 0, truncated: false, rejected: 0, droppedMetadata: 0, mode: 'lightweight', active: 0, unfinished: 0,
   droppedStarts: 0, invalidCarriers: 0, detachFailures: 0, droppedEvents: 0, contextFailures: 0, rejectedStarts: 0, invalidAttributes: 0, complete: true };
@@ -87,4 +87,15 @@ it('keeps the last worker alive until the coordinator releases both sources', as
   expect(finished).toBe(false);
   writeFileSync(path.join(own, 'release.json'), JSON.stringify({ released: true }));
   await pending; expect(finished).toBe(true);
+});
+
+it('activates the permitted worker before its action so background throttling cannot bias a revision', async () => {
+  const own = directory(); vi.stubEnv('APACK_PERFORMANCE_GATE', JSON.stringify({ directory: own, deadline: Date.now() + 10_000, mode: 'lightweight', lastIndex: 6 }));
+  writeFileSync(path.join(own, 'permit-0.json'), JSON.stringify({ index: 0, mode: 'lightweight' }));
+  const steps: string[] = [];
+  const window = { show: () => steps.push('show'), focus: () => steps.push('focus'), webContents: { focus: () => steps.push('contents') } };
+  const target = { application: { browserWindow: async () => ({ evaluate: async (fn: (window: unknown) => unknown) => fn(window), dispose: async () => { steps.push('dispose'); } }) },
+    page: { waitForFunction: async () => { steps.push('focused'); } } } as unknown as NonNullable<Parameters<typeof waitForPerformanceTrial>[1]>;
+  await waitForPerformanceTrial(entry, target);
+  expect(steps).toEqual(['show', 'focus', 'contents', 'dispose', 'focused']);
 });

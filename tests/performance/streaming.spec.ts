@@ -66,7 +66,7 @@ test('stream a deterministic reply through the real CLI flow and persist the vis
     }, schedule.length - 1);
     for (const entry of schedule) {
       const { index, mode } = entry;
-      await waitForPerformanceTrial(entry);
+      await waitForPerformanceTrial(entry, { application: electronApp, page: appPage });
       journal.begin(entry);
       const thread = entry.ordinal;
       await appPage.evaluate(thread => (window as unknown as PerformanceWindow).applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: `Thread-stream-${thread}` }, { type: 'SET_MODE', mode: 'Claude Code' }] }), thread);

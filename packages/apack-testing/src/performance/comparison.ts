@@ -42,7 +42,7 @@ export function createPerformanceScenarioRun(directory: string, manifestInput: u
   const manifest = manifestSchema.parse(manifestInput);
   const schedule = performanceSchedule(manifest.mode, measured, comparisonInput);
   const comparison = comparisonInput === undefined ? undefined : modeSchema.parse(comparisonInput);
-  if (!(comparison ? ['alternating-modes-v1'] : ['single-scenario-v1', 'paired-revisions-v1']).includes(manifest.runtime.performancePolicy!)) throw Error('Manifest does not declare the execution policy');
+  if (!(comparison ? ['alternating-modes-v1'] : ['single-scenario-v1', 'paired-focused-revisions-v1']).includes(manifest.runtime.performancePolicy!)) throw Error('Manifest does not declare the execution policy');
   const stores = new Map<PerformanceVariant, ReturnType<typeof createPerformanceRunStore>>();
   for (const variant of comparison ? ['A', 'B'] as const : ['A'] as const) {
     stores.set(variant, createPerformanceRunStore(comparison ? path.join(directory, variant) : directory,
@@ -166,7 +166,7 @@ export function readPerformanceRevisionComparison(directory: string, measured = 
   const baseline = readPerformanceRun(path.join(directory, 'A'), measured);
   const candidate = readPerformanceRun(path.join(directory, 'B'), measured);
   assertComparable(baseline.manifest, candidate.manifest);
-  if (baseline.manifest.runtime.performancePolicy !== 'paired-revisions-v1' || baseline.manifest.mode !== journal.baseline || baseline.scenario !== candidate.scenario) throw Error('Incompatible revision execution policy');
+  if (baseline.manifest.runtime.performancePolicy !== 'paired-focused-revisions-v1' || baseline.manifest.mode !== journal.baseline || baseline.scenario !== candidate.scenario) throw Error('Incompatible revision execution policy');
   const medianDifferenceMs = candidate.summary.medianMs! - baseline.summary.medianMs!;
   return { scenario: baseline.scenario, baseline, candidate, medianDifferenceMs,
     medianChangePercent: baseline.summary.medianMs === 0 ? null : medianDifferenceMs / baseline.summary.medianMs! * 100,

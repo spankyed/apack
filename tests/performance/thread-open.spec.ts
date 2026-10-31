@@ -37,7 +37,7 @@ test('open a populated thread through the real transport and render its bounded 
     });
     for (const entry of schedule) {
       const { index, mode } = entry;
-      await waitForPerformanceTrial(entry);
+      await waitForPerformanceTrial(entry, { application: electronApp, page: appPage });
       journal.begin(entry);
       const thread = entry.ordinal % 2;
       const result = await appPage.evaluate(async ({ mode, thread, expectedBodies }) => {
