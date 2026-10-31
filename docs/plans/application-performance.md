@@ -1,7 +1,9 @@
 # Measuring real application actions
 
-Status: proposed implementation plan, 2026-10-29. No implementation or performance acceptance is
-claimed. Surveyed on `master` at `98386b36a18d244c19ffb501830b990ed49f7653`.
+Status: implemented; controlled qualification, strict CI and local non-native validation passed;
+local native acceptance is waiting for execution-host capacity.
+Originally planned on 2026-10-29 from `master` at `98386b36a18d244c19ffb501830b990ed49f7653`.
+Source-qualified measurements and limitations are recorded in the [evidence record](../references/evidence/2026-10-30-application-performance.md).
 
 ## Outcome
 
@@ -225,7 +227,8 @@ evidence rather than appending competing handoffs here.
 
 ## Current handoff
 
-Implementation is ongoing in `session/application-performance`, draft PR #293. Current implemented
+Implementation is in `session/application-performance` (draft PR #293) and its dependent
+`session/application-performance-qualification` (draft PR #294). Current implemented
 requirements, source-qualified evidence and remaining acceptance work are maintained in
 [the active goal](../goals/goal-application-performance.md). This plan's full acceptance criteria remain
 in force; passing individual scenarios does not complete the measurement qualification.

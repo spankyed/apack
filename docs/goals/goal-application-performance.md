@@ -1,6 +1,7 @@
 # Application performance implementation
 
-Status: implemented and controlled qualification complete; required final gates pending.
+Status: implementation, controlled qualification, strict CI and local non-native gate passed;
+local native acceptance remains blocked by execution-host capacity.
 The approved scope and acceptance remain [the application-performance plan](../plans/application-performance.md).
 Evidence, commands, raw-report identities, measurements, failures and limitations are in
 [the dated evidence record](../references/evidence/2026-10-30-application-performance.md) and its
@@ -43,26 +44,35 @@ The main checkout and active native source remain untouched. No release/version/
   is superseded. Handshakes publish complete JSON atomically. Forty-eight focused tests, types and lint
   pass; both reverted defects fail their regression tests. Catalogue/runner/documentation completion passes 121 focused checks.
 
+## Final validation checkpoint
+
+- Code tip: `2ede06275df49ec066eae7c7d241fedd014bc306`.
+- [Strict CI 41162244468](https://github.com/spankyed/apack/actions/runs/41162244468): all six jobs
+  passed, including both integration and both native shards.
+- Supported host chain: 6,072 host/tooling tests, 976 pack tests and 788 integration tests passed.
+  Runtime build, external-app, smoke and both packaged-authoring checks passed. The concluding
+  `chain --no-native --cores 2` passed in 347.4 seconds, reusing 25 valid steps.
+- The full local chain passed through integration, then native admission refused before execution:
+  Docker had 4.1 GiB free against the unchanged 8 GiB minimum. Subsequent capacity recovered to
+  about 7.5 GiB, still below admission. Another session owns the active Linux matrix run.
+- The stale procfs receipt was diagnosed and fixed in both startup and compilation data readers.
+  Fresh Linux build/facade replay, focused regressions, mutation checks and strict CI passed.
+  The original renderer timeout and the Linux-root/macOS-host unit failures remain retained,
+  with their separate focused dispositions in the evidence record.
+- Complete raw evidence is preserved in verified compressed archives under the ignored
+  `.apack/performance/` directory; no foreign volumes, images or caches were removed.
+
 ## Dependency-ordered remaining requirements
 
-1. **Finish local validation.** The isolated Linux renderer compiler passed all three projects in
-   20.40 seconds under its unchanged deadline. The subsequent serialized broad chain found a separate
-   compiler receipt containing a dead `/proc/<pid>/exe` namespace. Focused diagnosis identified libc
-   detection through the separate compilation data reader. Both data readers now use the already-owned
-   captured executable for self-executable bytes; explicit metadata and foreign processes remain observed.
-   Thirteen focused tests, typechecking and lint pass; both reverted fixes fail their regression tests.
-   A fresh Linux build and facade check pass (65.3 and 3.1 seconds). The full local chain, including native
-   checks, is running. Retain the original timeout; its cause remains unproven.
-   Session-owned duplicate reports were archived and verified to recover storage; no foreign volumes
-   were removed and no admission minimum was changed.
-2. **Strict acceptance passed.** [41155455025](https://github.com/spankyed/apack/actions/runs/41155455025)
-   completed successfully on `d141d8d253`: producers, app-and-rest, both integration shards and both
-   native shards. It supersedes the diagnosed catalogue failure in `41150926172`. Any subsequent
-   compiler fix requires its applicable local and strict validation; the current green result does
-   not certify uncommitted changes.
-3. **Close the evidence and handoff.** Record actual final check results, reconcile the plan/README/PR
-   status, commit/push the reviewable checkpoints and mark the dependent PRs ready only when required
-   acceptance is complete. No further feature work is planned unless validation finds a material issue.
+1. **Complete local native acceptance.** Once Docker has at least 8 GiB free and the expensive Linux
+   slot is available, resume the supported full host chain with the frozen native checkout
+   `/private/tmp/apack-performance-elmdb-pinned`. Keep valid prior results cached; do not repeat
+   application qualification or weaken admission/deadlines. The full command is
+   `APACK_LINUX_ELMDB_ROOT=/private/tmp/apack-performance-elmdb-pinned npm run chain -- --cores 2`.
+2. **Close acceptance and handoff.** Record the actual local native outcome and mark both dependent
+   PRs ready after required acceptance is complete. The implementation and measured evidence are
+   already committed and reviewable. No further feature work is planned unless validation exposes
+   a material defect.
 
-No full-goal completion follows from passing individual scenarios or capture integrity alone. Keep the
-original scope intact, reuse valid source-qualified results and do not change deadlines/assertions to pass.
+No full-goal completion is claimed while local native acceptance remains unresolved. Strict native CI
+passed, but is not presented as that local result. The original scope and acceptance remain intact.
