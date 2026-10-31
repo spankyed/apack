@@ -471,7 +471,7 @@ graph first — a type, a search, a walk:
 | Call | Returns |
 |---|---|
 | `query(type).rank(kind, { direction?, seeds? })` | The query's entities by how much they matter from `seeds`, highest first: personalized PageRank, a walker following edges (`out` unless `direction` is `in` or `both`) and jumping back to a seed. With no `seeds`, every entity is one, which ranks what is central overall. End with `hits()` for each score, and `limit(n)` keeps the `n` highest |
-| `query(type).components(kind)` | The groups the edges join, whichever way each points: each group's ids, the largest first |
+| `query(type).weakComponents(kind)` | The groups the edges join, whichever way each points: each group's ids, the largest first |
 
 ```typescript
 // The ten notes most related to the open one, by the links between notes
