@@ -513,7 +513,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       const authority=observations.independentStatusAuthority.beforeParentStop
       await expect.poll(async()=>{const current=await childProcessState(authority.pid);return !current||current.state==='Z'||current.start!==authority.process.start},{timeout:10000}).toBe(true)
       observations.independentStatusAuthority.retiredAfterChildStop=true
-      if(childApiRestart){const recoveredAuthority=observations.childApiRestart.authorityAfter;await expect.poll(async()=>{const current=await childProcessState(recoveredAuthority.pid);return !current||current.state==='Z'||current.start!==recoveredAuthority.process.start},{timeout:10000}).toBe(true);observations.childApiRestart.authorityRetiredAfterChildStop=true;}
+      if(childApiRestart){const recoveredAuthority=observations.childApiRestart.authorityAfter;await expect.poll(async()=>{const current=await childProcessState(recoveredAuthority.pid);return !current||current.state==='Z'||current.start!==recoveredAuthority.process.start},{timeout:10000}).toBe(true);observations.childApiRestart.authorityRetiredAfterChildStop=true;observations.childApiRestart.authorityAfterStop=await childProcessState(recoveredAuthority.pid)??{state:'gone'};}
     }
     observations.uiStop = true
     if (process.platform === 'linux') {
