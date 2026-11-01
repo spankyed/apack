@@ -1,0 +1,2 @@
+import { definePerformanceConfig } from '@apackdev/testing/playwright';
+export default definePerformanceConfig({ testDir: import.meta.dirname, testMatch: 'shutdown-stall.spec.ts' });

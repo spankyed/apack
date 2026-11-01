@@ -1,0 +1,1727 @@
+{
+  "source": {
+    "format": 1,
+    "source": {
+      "revision": "54007b70947d4e83adcdadd03bc86291376b88f9",
+      "dirty": false,
+      "excludedUntracked": [
+        ".apack-checkout",
+        ".apack-run.lock"
+      ],
+      "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "builds": [
+      {
+        "path": "packages/api/dist",
+        "sha256": "ca295b8504627c879b7e8229bc9e138f6a1812c920c3af482b44a6d1135d7b6c"
+      },
+      {
+        "path": "packages/main/dist",
+        "sha256": "d60646d24d78305eb15be9b1c33948774d8ce304d8702967b7f0f61af7988d8b"
+      },
+      {
+        "path": "packages/preload/dist",
+        "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+      },
+      {
+        "path": "packages/renderer/dist",
+        "sha256": "7b80975c10155afab927808ee9649ac911f01f266278f864f4fc1b070016ed6d"
+      },
+      {
+        "path": "packages/default-setup/dist",
+        "sha256": "c8a0910823a412901751663c521ebc5a14ebe7be26114546bff7898b04e7e4d4"
+      },
+      {
+        "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+        "sha256": "c088fe831664a5fb7f38eb9f6f44fad0ea81129b270f747246ea4c4d8464544e"
+      }
+    ],
+    "fixture": {
+      "generator": "message-search-v1",
+      "seed": 0,
+      "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+      "distribution": {
+        "threads": 12,
+        "messagesPerThread": 100,
+        "matchingQueries": 2,
+        "matchesPerQuery": 20,
+        "resultLimit": 20,
+        "bodyRepetitions": 50
+      }
+    },
+    "native": {
+      "pin": "dde229d90c60665405fdcfc93b054a77fe8d0e1d",
+      "checkoutRevision": "dde229d90c60665405fdcfc93b054a77fe8d0e1d",
+      "dirty": false,
+      "excludedUntracked": [
+        ".apack-elmdb-built",
+        ".apack-elmdb-checkout",
+        ".apack-elmdb.lock"
+      ]
+    },
+    "runtime": {
+      "node": "23.11.1",
+      "v8": "12.9.202.28-node.14",
+      "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+      "electron": "37.2.4",
+      "chromium": "138.0.7204.157",
+      "appNode": "22.17.1",
+      "appV8": "13.8.258.26-electron.0",
+      "performancePolicy": "alternating-modes-v1"
+    },
+    "machine": {
+      "platform": "linux",
+      "arch": "arm64",
+      "cpus": 2,
+      "memoryBytes": 6442450944,
+      "identity": "295d09f01362dd95314d96eb84dcc362769f8e8085768e765afd1fcce866821f"
+    },
+    "mode": "lightweight",
+    "cache": "warm-process",
+    "warmups": 5,
+    "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+  },
+  "derivedFromSha256": "56170f619899771fa3f3900a951de1e4fd1ee9dbcab7efd78fa26e64447ed13d",
+  "records": [
+    {
+      "index": 5,
+      "durationMs": 12.699999995529652,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 9e-06,
+            "after": 0.009637
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000385
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002579
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000747
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 79519624,
+            "after": 79896624
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 116764672,
+            "after": 117026816
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 10129,
+            "after": 10612
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.931599,
+        0.160668,
+        0.035084
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 16.181838000000425,
+        "cpuUserMicros": 6172,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 77166304,
+        "heapEndBytes": 77686048,
+        "heapSampledMaxBytes": 77686048,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.3632636651431966,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 6,
+      "durationMs": 13.5,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 1.4e-05,
+            "after": 0.00963
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000414
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002851
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000899
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 80011212,
+            "after": 80387008
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 117288960,
+            "after": 117551104
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 10612,
+            "after": 11095
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.934349,
+        0.201043,
+        0.03525
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 16.35521399999925,
+        "cpuUserMicros": 7621,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 77576416,
+        "heapEndBytes": 77970104,
+        "heapSampledMaxBytes": 77970104,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.3686688604735016,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 7,
+      "durationMs": 42.5,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 9e-06,
+            "after": 0.046978
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000501
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002637
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000883
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 67832468,
+            "after": 62879928
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 126988288,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 12061,
+            "after": 12544
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        6.212617,
+        0.193376,
+        0.037042
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 50.765981999997166,
+        "cpuUserMicros": 6314,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 78677280,
+        "heapEndBytes": 79053632,
+        "heapSampledMaxBytes": 79053632,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.1907009639762659,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 8,
+      "durationMs": 11.399999998509884,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 1.2e-05,
+            "after": 0.007733
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.00037
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002048
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000629
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 63013576,
+            "after": 63422212
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 4743,
+            "after": 5226
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.892266,
+        0.155001,
+        0.036
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 14.51428599999781,
+        "cpuUserMicros": 5972,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 79125672,
+        "heapEndBytes": 79523376,
+        "heapSampledMaxBytes": 79523376,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.4036833614459689,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 9,
+      "durationMs": 10.599999994039536,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 7e-06,
+            "after": 0.00694
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.00027
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.001988
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000623
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 64431864,
+            "after": 64833024
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 6192,
+            "after": 6675
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.913057,
+        0.173251,
+        0.035542
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 12.913735999998607,
+        "cpuUserMicros": 5322,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 80238536,
+        "heapEndBytes": 80610712,
+        "heapSampledMaxBytes": 80610712,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.442308307494171,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 10,
+      "durationMs": 14.700000002980232,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 6e-06,
+            "after": 0.010492
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000407
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002399
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.001394
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 64949408,
+            "after": 65332148
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 6675,
+            "after": 7158
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        3.30481,
+        0.176501,
+        0.036417
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 17.391927000000578,
+        "cpuUserMicros": 5700,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 80664872,
+        "heapEndBytes": 81031656,
+        "heapSampledMaxBytes": 81031656,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.3426017897860874,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 11,
+      "durationMs": 11.600000001490116,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 8e-06,
+            "after": 0.008073
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000344
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002303
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.00066
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 66289840,
+            "after": 66670756
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 8124,
+            "after": 8607
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.959683,
+        0.173959,
+        0.05025
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 14.088326000000961,
+        "cpuUserMicros": 8544,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 81735840,
+        "heapEndBytes": 70864960,
+        "heapSampledMaxBytes": 81735840,
+        "gcCount": 1,
+        "gcDurationMs": 1.107464000582695,
+        "eventLoopUtilization": 0.5160729163103273,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 12,
+      "durationMs": 11.900000005960464,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 9e-06,
+            "after": 0.008042
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000316
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002322
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000657
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 66784056,
+            "after": 67164264
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 8607,
+            "after": 9090
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        3.082975,
+        0.178043,
+        0.034834
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 14.457161000002088,
+        "cpuUserMicros": 6276,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 70919264,
+        "heapEndBytes": 71307120,
+        "heapSampledMaxBytes": 71307120,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.373534224318733,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 13,
+      "durationMs": 11.600000001490116,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 1.5e-05,
+            "after": 0.008082
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000366
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002266
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000655
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 68126112,
+            "after": 68499316
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 10056,
+            "after": 10539
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.871307,
+        0.153418,
+        0.032083
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 14.128201000003173,
+        "cpuUserMicros": 5246,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 72037776,
+        "heapEndBytes": 72402360,
+        "heapSampledMaxBytes": 72402360,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.37825221933852726,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 14,
+      "durationMs": 11.899999998509884,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 8e-06,
+            "after": 0.007927
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000367
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002012
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000841
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 68612004,
+            "after": 68983164
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 10539,
+            "after": 11022
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        3.082767,
+        0.229335,
+        0.047376
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 14.410243999998784,
+        "cpuUserMicros": 5773,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 72456576,
+        "heapEndBytes": 72823504,
+        "heapSampledMaxBytes": 72823504,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.3859652190508308,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 15,
+      "durationMs": 12.600000001490116,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 8e-06,
+            "after": 0.008529
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000532
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002337
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.00067
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 69904696,
+            "after": 70310476
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 11988,
+            "after": 12471
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        3.152225,
+        0.176168,
+        0.037167
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 15.224582999999257,
+        "cpuUserMicros": 6014,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 73525616,
+        "heapEndBytes": 73891504,
+        "heapSampledMaxBytes": 73891504,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.40182915712085454,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 16,
+      "durationMs": 12.399999998509884,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 7e-06,
+            "after": 0.008613
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000352
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.002276
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.00062
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 70423320,
+            "after": 70793608
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 12471,
+            "after": 12954
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.884683,
+        0.188501,
+        0.035709
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 15.10545700000148,
+        "cpuUserMicros": 11392,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266723328,
+        "rssEndBytes": 266723328,
+        "rssSampledMaxBytes": 266723328,
+        "heapStartBytes": 73947504,
+        "heapEndBytes": 74341968,
+        "heapSampledMaxBytes": 74341968,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.48652961575366455,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 17,
+      "durationMs": 16.700000002980232,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 8e-06,
+            "after": 0.012483
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000417
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.006385
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000698
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 71748728,
+            "after": 72136192
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 13920,
+            "after": 14403
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        3.031058,
+        0.157667,
+        0.032792
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 19.239396000000852,
+        "cpuUserMicros": 5535,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266854400,
+        "rssEndBytes": 266854400,
+        "rssSampledMaxBytes": 266854400,
+        "heapStartBytes": 75063832,
+        "heapEndBytes": 75432064,
+        "heapSampledMaxBytes": 75432064,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.29313298002065946,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 18,
+      "durationMs": 17.700000002980232,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 6e-06,
+            "after": 0.013498
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000523
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.006314
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000698
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 72248956,
+            "after": 72646744
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 14403,
+            "after": 14886
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        3.479603,
+        0.164792,
+        0.032833
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 20.164734000001772,
+        "cpuUserMicros": 6850,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266854400,
+        "rssEndBytes": 266854400,
+        "rssSampledMaxBytes": 266854400,
+        "heapStartBytes": 75485352,
+        "heapEndBytes": 75856944,
+        "heapSampledMaxBytes": 75856944,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.3327294671216089,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 19,
+      "durationMs": 15.200000002980232,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 1.2e-05,
+            "after": 0.011601
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000346
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.005814
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.0007
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 73605704,
+            "after": 73976516
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 15852,
+            "after": 16335
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.961932,
+        0.163876,
+        0.035458
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 17.75059599999804,
+        "cpuUserMicros": 5387,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266854400,
+        "rssEndBytes": 266854400,
+        "rssSampledMaxBytes": 266854400,
+        "heapStartBytes": 76558936,
+        "heapEndBytes": 76919728,
+        "heapSampledMaxBytes": 76919728,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.313862523236359,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 20,
+      "durationMs": 15.600000001490116,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 9e-06,
+            "after": 0.012424
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000285
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.006686
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000706
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 74090692,
+            "after": 74461844
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 16335,
+            "after": 16818
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.81864,
+        0.145625,
+        0.030875
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 18.2635569999984,
+        "cpuUserMicros": 5078,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266854400,
+        "rssEndBytes": 266854400,
+        "rssSampledMaxBytes": 266854400,
+        "heapStartBytes": 76972736,
+        "heapEndBytes": 77333896,
+        "heapSampledMaxBytes": 77333896,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.27508276790456193,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 21,
+      "durationMs": 15.600000001490116,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 1.2e-05,
+            "after": 0.011214
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000346
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.005616
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000622
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 75412260,
+            "after": 75781980
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 17784,
+            "after": 18267
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.953516,
+        0.166917,
+        0.03125
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 18.1562640000011,
+        "cpuUserMicros": 5887,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266854400,
+        "rssEndBytes": 266854400,
+        "rssSampledMaxBytes": 266854400,
+        "heapStartBytes": 78033312,
+        "heapEndBytes": 78404240,
+        "heapSampledMaxBytes": 78404240,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.2985317974007996,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 22,
+      "durationMs": 15.599999994039536,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 9e-06,
+            "after": 0.011691
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000317
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.006249
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000652
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 75895924,
+            "after": 76266296
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 18267,
+            "after": 18750
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        3.032933,
+        0.173835,
+        0.054292
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 18.07072199999675,
+        "cpuUserMicros": 5547,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266854400,
+        "rssEndBytes": 266854400,
+        "rssSampledMaxBytes": 266854400,
+        "heapStartBytes": 78457248,
+        "heapEndBytes": 78820192,
+        "heapSampledMaxBytes": 78820192,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.2967637849848389,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 23,
+      "durationMs": 15.400000005960464,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 9e-06,
+            "after": 0.011871
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000348
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.005896
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000693
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 77200220,
+            "after": 77569912
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 19716,
+            "after": 20199
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.85989,
+        0.147126,
+        0.031875
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 18.084263999997347,
+        "cpuUserMicros": 6166,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266854400,
+        "rssEndBytes": 266854400,
+        "rssSampledMaxBytes": 266854400,
+        "heapStartBytes": 79522640,
+        "heapEndBytes": 79897072,
+        "heapSampledMaxBytes": 79897072,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.2930595201354538,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    },
+    {
+      "index": 24,
+      "durationMs": 14.899999998509884,
+      "renderer": {
+        "source": "chromium-cdp",
+        "pid": 3378,
+        "metrics": [
+          {
+            "name": "TaskDuration",
+            "unit": "seconds",
+            "before": 7e-06,
+            "after": 0.010943
+          },
+          {
+            "name": "ScriptDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000276
+          },
+          {
+            "name": "LayoutDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.005883
+          },
+          {
+            "name": "RecalcStyleDuration",
+            "unit": "seconds",
+            "before": 0,
+            "after": 0.000664
+          },
+          {
+            "name": "JSHeapUsedSize",
+            "unit": "bytes",
+            "before": 77684280,
+            "after": 78054016
+          },
+          {
+            "name": "JSHeapTotalSize",
+            "unit": "bytes",
+            "before": 125939712,
+            "after": 125939712
+          },
+          {
+            "name": "LayoutCount",
+            "unit": "count",
+            "before": 0,
+            "after": 1
+          },
+          {
+            "name": "Nodes",
+            "unit": "count",
+            "before": 20199,
+            "after": 20682
+          }
+        ],
+        "unavailable": [],
+        "failures": 0
+      },
+      "nativeReadDurationsMs": [
+        2.881557,
+        0.164626,
+        0.035209
+      ],
+      "backendResources": {
+        "samplingFailures": 0,
+        "durationMs": 17.236759999999776,
+        "cpuUserMicros": 5136,
+        "cpuSystemMicros": 0,
+        "rssStartBytes": 266854400,
+        "rssEndBytes": 266854400,
+        "rssSampledMaxBytes": 266854400,
+        "heapStartBytes": 79950080,
+        "heapEndBytes": 80311840,
+        "heapSampledMaxBytes": 80311840,
+        "gcCount": 0,
+        "gcDurationMs": 0,
+        "eventLoopUtilization": 0.3305291766773645,
+        "eventLoopHistogramMaxMs": 0,
+        "eventLoopLateTickMaxMs": 0
+      }
+    }
+  ]
+}

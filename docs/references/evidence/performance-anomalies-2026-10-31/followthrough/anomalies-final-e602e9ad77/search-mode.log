@@ -1,0 +1,15 @@
+Qualifying search: disabled versus lightweight; evidence: /work/.apack/performance/anomalies-final-e602e9ad77/search-mode/search
+
+Running 1 test using 1 worker
+
+[e2e.launch] {"phase":"requested","elapsedMs":0.029916999999954896,"at":1793506981632}
+[e2e.launch] {"phase":"process-attached","elapsedMs":522.5498049999999,"at":1793506982155,"pid":1379}
+[e2e.launch] {"phase":"application-state-present","elapsedMs":10645.224263,"at":1793506992277,"pid":1379}
+[e2e.launch] {"phase":"viewport-ready","elapsedMs":10649.879536999999,"at":1793506992282,"pid":1379}
+[e2e.launch] {"phase":"connected","elapsedMs":17776.594854,"at":1793506999409,"pid":1379}
+
+  ✓  1 tests/performance/search.spec.ts:4:1 › search a populated corpus and apply only the current query results (33.1s)
+[e2e] quit sequence finished; ending Electron without its profile writes
+
+  1 passed (37.6s)
+{"scenario":"search","status":"over-budget","baseline":{"measured":20,"passed":20,"unsuccessful":0,"medianMs":10.599999999627471,"minMs":10,"maxMs":29.699999999254942},"candidate":{"measured":20,"passed":20,"unsuccessful":0,"medianMs":11.399999999441206,"minMs":10.300000000745058,"maxMs":21.59999999962747},"medianDifferenceMs":0.7999999998137355,"medianChangePercent":7.547169809828783,"budget":{"medianPercent":5,"assessment":"over-budget"}}

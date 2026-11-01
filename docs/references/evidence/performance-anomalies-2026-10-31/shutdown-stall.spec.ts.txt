@@ -1,0 +1,10 @@
+import { test } from '@apackdev/testing';
+test('finishes real application shutdown after its main event loop stalls', async ({ app, electronApp }) => {
+  await app.waitForSurface('default-setup/threads');
+  await electronApp.evaluate(({ app }) => {
+    app.once('before-quit', () => {
+      // Make both original timers overdue; fixture teardown still requires actual API exit.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 6500);
+    });
+  });
+});

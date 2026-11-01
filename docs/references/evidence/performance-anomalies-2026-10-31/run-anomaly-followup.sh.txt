@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -uo pipefail
+root="/work/.apack/performance/anomalies-followup-$(git rev-parse --short HEAD)"
+mkdir -p "$root"
+file=packages/apack-ears/tests/engine/model-based.spec.ts
+cp "$file" "$root/model-original.ts"
+trap 'cp "$root/model-original.ts" "$file"' EXIT
+failed=0
+run() {
+  local name="$1"; shift
+  printf 'Starting %s\n' "$name"
+  "$@" > "$root/$name.log" 2>&1
+  local status=$?
+  printf '%s\n' "$status" > "$root/$name.exit"
+  printf 'Completed %s: exit %s; evidence %s\n' "$name" "$status" "$root"
+  if [ "$status" != 0 ]; then failed=1; fi
+}
+for scenario in search populated-startup; do
+ run "$scenario-mode" xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario "$scenario" --mode disabled --compare lightweight --trials 20 --output "$root/$scenario-mode"
+done
+printf '%s\n' 'Seed acceptance: independent files/handles, unchanged seed/schema, >=50% median setup reduction; full 120/40 workloads under unchanged 30s deadlines; shared-state counterfactual must fail assertions.' > "$root/seed-criteria.txt"
+run open-probe node scripts/with-source.mjs tsx .apack/probe-database-open.ts "$root/open-probe.json"
+if [ "$(cat "$root/open-probe.exit")" != 0 ]; then exit 1; fi
+node --input-type=module - "$root/open-probe.json" <<'JS'
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const r=JSON.parse(fs.readFileSync(process.argv[2]));const median=a=>{const s=a.toSorted((a,b)=>a-b);return(s[s.length/2-1]+s[s.length/2])/2;};
+const fresh=median(r.records.filter(x=>x.variant==='fresh').map(x=>x.totalMs));
+const seeded=median(r.records.filter(x=>x.variant==='seeded').map(x=>x.totalMs));
+console.log(JSON.stringify({fresh,seeded,reduction:1-seeded/fresh,seedSetup:r.setupMs}));
+assert.ok(seeded<=0.5*fresh,'minimum worthwhile seed improvement');
+JS
+if [ "$?" != 0 ]; then exit 1; fi
+cp .apack/model-seeded-candidate.ts "$file"
+cp "$file" "$root/model-candidate.ts"
+python3 - "$file" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]);s=p.read_text();p.write_text(s.replace('numRuns: 120','numRuns: 120, seed: 20261031').replace('numRuns: 40','numRuns: 40, seed: 20261031'))
+PY
+run model-seeded npm test -w @apackdev/ears -- tests/engine/model-based.spec.ts --maxWorkers=1
+if [ "$(cat "$root/model-seeded.exit")" != 0 ]; then exit 1; fi
+python3 - "$file" <<'PY'
+from pathlib import Path
+import sys
+p=Path(sys.argv[1]);s=p.read_text();assert 'copyFileSync' in s;p.write_text(s.replace('copyFileSync','linkSync'))
+PY
+npm test -w @apackdev/ears -- tests/engine/model-based.spec.ts --maxWorkers=1 -t 'refuses, holds' > "$root/model-shared-counterfactual.log" 2>&1
+status=$?
+printf '%s\n' "$status" > "$root/model-shared-counterfactual.exit"
+if [ "$status" = 0 ] || ! grep -q AssertionError "$root/model-shared-counterfactual.log"; then
+ echo 'Shared-state counterfactual did not fail its isolation assertion' >&2
+ exit 1
+fi
+printf 'Seeded model candidate passed; deliberately shared files failed assertions as required.\n'
+exit "$failed"

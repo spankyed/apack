@@ -1,0 +1,75 @@
+
+> @apackdev/testing@0.1.0 test
+> vitest run tests/application-window.spec.ts --maxWorkers=1
+
+
+ RUN  v3.2.7 /private/tmp/apack-performance-anomalies.noindex/packages/apack-testing
+
+stderr | tests/application-window.spec.ts > retains the discovery deadline with an unresponsive window: true
+Promise returned by `expect(actual).rejects.toThrow(expected)` was not awaited. Vitest currently auto-awaits hanging assertions at the end of the test, but this will cause the test to fail in Vitest 3. Please remember to await the assertion.
+    at /private/tmp/apack-performance-anomalies.noindex/packages/apack-testing/tests/application-window.spec.ts:46:32
+
+ ❯ tests/application-window.spec.ts (5 tests | 2 failed) 18ms
+   ✓ finds readiness in an existing window without waiting for another window to be created 3ms
+   ✓ wakes on a new window beside a closed candidate 1ms
+   × wakes on a new window beside a unresponsive candidate 5ms
+     → expected undefined to be { evaluate: [AsyncFunction spy] } // Object.is equality
+   ✓ retains the discovery deadline with an unresponsive window: false 3ms
+   × retains the discovery deadline with an unresponsive window: true 5ms
+     → expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/application-window.spec.ts > wakes on a new window beside a unresponsive candidate
+AssertionError: expected undefined to be { evaluate: [AsyncFunction spy] } // Object.is equality
+
+- Expected: 
+{
+  "evaluate": [Function spy],
+}
+
++ Received: 
+undefined
+
+ ❯ tests/application-window.spec.ts:35:17
+     33|   pages.push(page); application.emit('window', page);
+     34|   await vi.advanceTimersByTimeAsync(0);
+     35|   expect(found).toBe(page);
+       |                 ^
+     36|   expect(await pending).toBe(page);
+     37|   expect(application.listenerCount('window')).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/application-window.spec.ts > retains the discovery deadline with an unresponsive window: true
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ tests/application-window.spec.ts:48:19
+     46|   const result = expect(pending).rejects.toThrow(/within timeout/);
+     47|   await vi.advanceTimersByTimeAsync(20);
+     48|   expect(expired).toBe(true);
+       |                   ^
+     49|   await result;
+     50|   expect(application.listenerCount('window')).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  21:46:48
+   Duration  343ms (transform 63ms, setup 24ms, collect 45ms, tests 18ms, environment 0ms, prepare 75ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /private/tmp/apack-performance-anomalies.noindex/packages/apack-testing
+npm error workspace @apackdev/testing@0.1.0
+npm error location /private/tmp/apack-performance-anomalies.noindex/packages/apack-testing
+npm error command failed
+npm error command sh -c vitest run tests/application-window.spec.ts --maxWorkers=1

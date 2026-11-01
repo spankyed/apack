@@ -55,7 +55,8 @@ export function prepareIntegration(root, refs) {
 async function npm(dir, args) {
   const { boundedSpawn } = await tsImport('./lib/bounded-spawn.ts', import.meta.url);
   const { TIMEOUT_MS } = await tsImport('./lib/step-timeouts.ts', import.meta.url);
-  const budget = args.includes('chain') ? TIMEOUT_MS.scenario.ms : TIMEOUT_MS.suite.ms;
+  // The full strict chain contains the complete acceptance pools; it is not one install scenario.
+  const budget = args.includes('chain') ? TIMEOUT_MS.acceptance.ms : TIMEOUT_MS.suite.ms;
   const result = await boundedSpawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', args, budget, {
     cwd: dir, stream: true, shell: process.platform === 'win32', env: { ...process.env, NODE_ENV: 'development' },
   });

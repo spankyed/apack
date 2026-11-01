@@ -1,0 +1,2739 @@
+{
+  "method": "Detailed mode changes execution cost; samples include recorder lifecycle. Sampled allocation estimates are not exact allocations. No timing qualification or isolated recording-cost claim.",
+  "search": {
+    "backend": {
+      "profiles": 20,
+      "profileWindowMedianMs": 182.18579249999857,
+      "cpuSampledMs": 3530.1700000000005,
+      "cpuTop": [
+        {
+          "function": "(idle)",
+          "url": "",
+          "line": 0,
+          "value": 1582.733
+        },
+        {
+          "function": "post",
+          "url": "node:inspector",
+          "line": 112,
+          "value": 958.8079999999999
+        },
+        {
+          "function": "(garbage collector)",
+          "url": "",
+          "line": 0,
+          "value": 829.0899999999999
+        },
+        {
+          "function": "",
+          "url": "",
+          "line": 0,
+          "value": 72.691
+        },
+        {
+          "function": "(program)",
+          "url": "",
+          "line": 0,
+          "value": 13.735
+        },
+        {
+          "function": "writev",
+          "url": "",
+          "line": 0,
+          "value": 11.248999999999999
+        },
+        {
+          "function": "Se",
+          "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+          "line": 13,
+          "value": 6.400000000000001
+        },
+        {
+          "function": "searchMessages",
+          "url": "file:///tmp/apack-e2e-NSOEsW/apack/packs/default-setup/runtime/index.cjs",
+          "line": 12570,
+          "value": 3.446
+        },
+        {
+          "function": "dispatch",
+          "url": "",
+          "line": 0,
+          "value": 3.016
+        },
+        {
+          "function": "DOMException",
+          "url": "node:internal/per_context/domexception",
+          "line": 52,
+          "value": 2.604
+        },
+        {
+          "function": "sr",
+          "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+          "line": 13,
+          "value": 2.5700000000000003
+        },
+        {
+          "function": "",
+          "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+          "line": 14,
+          "value": 2.2889999999999997
+        },
+        {
+          "function": "readableAddChunkPushByteMode",
+          "url": "node:internal/streams/readable",
+          "line": 461,
+          "value": 1.9
+        },
+        {
+          "function": "cpuUsage",
+          "url": "node:internal/process/per_thread",
+          "line": 127,
+          "value": 1.725
+        },
+        {
+          "function": "#onMessage",
+          "url": "node:inspector",
+          "line": 81,
+          "value": 1.698
+        },
+        {
+          "function": "emit",
+          "url": "node:events",
+          "line": 454,
+          "value": 1.686
+        },
+        {
+          "function": "shutdown",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 251,
+          "value": 1.626
+        },
+        {
+          "function": "",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 1077,
+          "value": 1.468
+        },
+        {
+          "function": "set",
+          "url": "node:internal/async_context_frame",
+          "line": 60,
+          "value": 1.446
+        },
+        {
+          "function": "memoryUsage",
+          "url": "",
+          "line": 0,
+          "value": 1.385
+        },
+        {
+          "function": "stop",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 251,
+          "value": 1.372
+        },
+        {
+          "function": "",
+          "url": "node:internal/event_target",
+          "line": 555,
+          "value": 1.351
+        },
+        {
+          "function": "checkBounds",
+          "url": "node:internal/buffer",
+          "line": 54,
+          "value": 1.346
+        },
+        {
+          "function": "Vl",
+          "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+          "line": 13,
+          "value": 1.344
+        },
+        {
+          "function": "snippetOf",
+          "url": "file:///tmp/apack-e2e-NSOEsW/apack/packs/default-setup/runtime/index.cjs",
+          "line": 12563,
+          "value": 1.331
+        },
+        {
+          "function": "toString",
+          "url": "node:buffer",
+          "line": 835,
+          "value": 1.33
+        },
+        {
+          "function": "o",
+          "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+          "line": 14,
+          "value": 1.329
+        },
+        {
+          "function": "inst._zod.parse",
+          "url": "file:///work/node_modules/zod/v4/core/schemas.js",
+          "line": 1044,
+          "value": 1.326
+        },
+        {
+          "function": "getStore",
+          "url": "node:internal/async_local_storage/async_hooks",
+          "line": 109,
+          "value": 1.322
+        },
+        {
+          "function": "alloc",
+          "url": "file:///work/node_modules/zod/v4/core/memoizer.js",
+          "line": 194,
+          "value": 1.312
+        }
+      ],
+      "sampledAllocationEstimate": 12598016,
+      "allocationTop": [
+        {
+          "function": "Qx",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 1072,
+          "value": 1062360
+        },
+        {
+          "function": "push",
+          "url": "",
+          "line": 0,
+          "value": 1048920
+        },
+        {
+          "function": "next",
+          "url": "",
+          "line": 0,
+          "value": 1048640
+        },
+        {
+          "function": "zL",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 251,
+          "value": 1048624
+        },
+        {
+          "function": "createReadableStreamState",
+          "url": "node:internal/webstreams/readablestream",
+          "line": 1298,
+          "value": 524544
+        },
+        {
+          "function": "",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 1077,
+          "value": 524400
+        },
+        {
+          "function": "#t",
+          "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+          "line": 16,
+          "value": 524400
+        },
+        {
+          "function": "wX",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 251,
+          "value": 524352
+        },
+        {
+          "function": "vTe",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 1074,
+          "value": 524328
+        },
+        {
+          "function": "Map",
+          "url": "",
+          "line": 0,
+          "value": 524328
+        },
+        {
+          "function": "Rs",
+          "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+          "line": 14,
+          "value": 524328
+        },
+        {
+          "function": "begin",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 251,
+          "value": 524328
+        },
+        {
+          "function": "allSettled",
+          "url": "",
+          "line": 0,
+          "value": 524320
+        },
+        {
+          "function": "Xl",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 1074,
+          "value": 524320
+        },
+        {
+          "function": "Tu.middlewares",
+          "url": "file:///work/packages/api/dist/server.js",
+          "line": 1074,
+          "value": 524304
+        },
+        {
+          "function": "trackPromise",
+          "url": "node:internal/async_hooks",
+          "line": 306,
+          "value": 524304
+        },
+        {
+          "function": "values",
+          "url": "",
+          "line": 0,
+          "value": 524304
+        },
+        {
+          "function": "snippetOf",
+          "url": "/tmp/apack-e2e-NSOEsW/apack/packs/default-setup/runtime/index.cjs",
+          "line": 12563,
+          "value": 524304
+        },
+        {
+          "function": "nonOpPull",
+          "url": "node:internal/webstreams/util",
+          "line": 198,
+          "value": 524304
+        },
+        {
+          "function": "sr",
+          "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+          "line": 13,
+          "value": 524304
+        }
+      ]
+    },
+    "renderer": {
+      "profiles": 20,
+      "profileWindowMedianMs": 138.65749049999977,
+      "cpuSampledMs": 2680.7719999999995,
+      "cpuTop": [
+        {
+          "function": "(program)",
+          "url": "",
+          "line": 0,
+          "value": 1324.895
+        },
+        {
+          "function": "(garbage collector)",
+          "url": "",
+          "line": 0,
+          "value": 952.7470000000001
+        },
+        {
+          "function": "(idle)",
+          "url": "",
+          "line": 0,
+          "value": 155.259
+        },
+        {
+          "function": "getClientRects",
+          "url": "",
+          "line": 0,
+          "value": 121.16399999999999
+        },
+        {
+          "function": "formatWhen",
+          "url": "pack://default-setup/builds/7ebb63f1d746011d22a6571edb1e0052761359f5fd80600ddd66764dd2203aea/runtime/pack-entry-fe-CoL0ievi.js",
+          "line": 9284,
+          "value": 22.239
+        },
+        {
+          "function": "getBoundingClientRect",
+          "url": "",
+          "line": 0,
+          "value": 6.379999999999999
+        },
+        {
+          "function": "",
+          "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+          "line": 1,
+          "value": 5.4190000000000005
+        },
+        {
+          "function": "next",
+          "url": "file:///work/packages/renderer/dist/assets/shared-xstate-WPEKnogK.js",
+          "line": 1,
+          "value": 4.386
+        },
+        {
+          "function": "",
+          "url": "",
+          "line": 1,
+          "value": 4.234
+        },
+        {
+          "function": "querySelectorAll",
+          "url": "",
+          "line": 0,
+          "value": 3.9309999999999996
+        },
+        {
+          "function": "",
+          "url": "",
+          "line": 8,
+          "value": 2.883
+        },
+        {
+          "function": "p",
+          "url": "file:///work/packages/renderer/dist/assets/raise-b47daa89.esm-DD3hkJS-.js",
+          "line": 1,
+          "value": 2.742
+        },
+        {
+          "function": "setElementText",
+          "url": "file:///work/packages/renderer/dist/assets/runtime-dom.esm-bundler-BWkDSkhq.js",
+          "line": 1,
+          "value": 2.74
+        },
+        {
+          "function": "invoke",
+          "url": "",
+          "line": 0,
+          "value": 2.739
+        },
+        {
+          "function": "ts",
+          "url": "file:///work/packages/renderer/dist/assets/runtime-dom.esm-bundler-BWkDSkhq.js",
+          "line": 1,
+          "value": 2.7110000000000003
+        },
+        {
+          "function": "Ye",
+          "url": "file:///work/packages/renderer/dist/assets/runtime-dom.esm-bundler-BWkDSkhq.js",
+          "line": 1,
+          "value": 2.6959999999999997
+        },
+        {
+          "function": "removeChild",
+          "url": "",
+          "line": 0,
+          "value": 2.673
+        },
+        {
+          "function": "setTimeout",
+          "url": "",
+          "line": 0,
+          "value": 1.82
+        },
+        {
+          "function": "",
+          "url": "",
+          "line": 71,
+          "value": 1.441
+        },
+        {
+          "function": "q",
+          "url": "file:///work/packages/renderer/dist/assets/raise-b47daa89.esm-DD3hkJS-.js",
+          "line": 2,
+          "value": 1.44
+        },
+        {
+          "function": "sn",
+          "url": "file:///work/packages/renderer/dist/assets/index-C-EtBV0F.js",
+          "line": 1,
+          "value": 1.435
+        },
+        {
+          "function": "Dt",
+          "url": "file:///work/packages/renderer/dist/assets/shared-tiptap-core-B4f34v0-.js",
+          "line": 5,
+          "value": 1.429
+        },
+        {
+          "function": "",
+          "url": "file:///work/packages/renderer/dist/assets/monaco-DYb3lWbd.js",
+          "line": 1,
+          "value": 1.418
+        },
+        {
+          "function": "At",
+          "url": "file:///work/packages/renderer/dist/assets/index-C-EtBV0F.js",
+          "line": 1,
+          "value": 1.417
+        },
+        {
+          "function": "Se",
+          "url": "file:///work/packages/renderer/dist/assets/monaco-DYb3lWbd.js",
+          "line": 1,
+          "value": 1.415
+        },
+        {
+          "function": "resolve",
+          "url": "",
+          "line": 0,
+          "value": 1.412
+        },
+        {
+          "function": "Kr",
+          "url": "file:///work/packages/renderer/dist/assets/index-C-EtBV0F.js",
+          "line": 1,
+          "value": 1.405
+        },
+        {
+          "function": "he",
+          "url": "file:///work/packages/renderer/dist/assets/raise-b47daa89.esm-DD3hkJS-.js",
+          "line": 2,
+          "value": 1.371
+        },
+        {
+          "function": "clearTimeout",
+          "url": "",
+          "line": 0,
+          "value": 1.369
+        },
+        {
+          "function": "li",
+          "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+          "line": 3,
+          "value": 1.367
+        }
+      ],
+      "sampledAllocationEstimate": 13636432,
+      "allocationTop": [
+        {
+          "function": "cl",
+          "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+          "line": 3,
+          "value": 1573200
+        },
+        {
+          "function": "next",
+          "url": "",
+          "line": 0,
+          "value": 1572900
+        },
+        {
+          "function": "s",
+          "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+          "line": 1,
+          "value": 1048640
+        },
+        {
+          "function": "",
+          "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+          "line": 1,
+          "value": 1048620
+        },
+        {
+          "function": "ne",
+          "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+          "line": 3,
+          "value": 1048600
+        },
+        {
+          "function": "decode",
+          "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+          "line": 1,
+          "value": 528504
+        },
+        {
+          "function": "Map",
+          "url": "",
+          "line": 0,
+          "value": 524324
+        },
+        {
+          "function": "push",
+          "url": "",
+          "line": 0,
+          "value": 524324
+        },
+        {
+          "function": "assign",
+          "url": "",
+          "line": 0,
+          "value": 524320
+        },
+        {
+          "function": "",
+          "url": "",
+          "line": 1,
+          "value": 524304
+        },
+        {
+          "function": "createText",
+          "url": "file:///work/packages/renderer/dist/assets/runtime-dom.esm-bundler-BWkDSkhq.js",
+          "line": 1,
+          "value": 524304
+        },
+        {
+          "function": "es",
+          "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+          "line": 3,
+          "value": 524304
+        },
+        {
+          "function": "gt",
+          "url": "file:///work/packages/renderer/dist/assets/raise-b47daa89.esm-DD3hkJS-.js",
+          "line": 2,
+          "value": 524304
+        },
+        {
+          "function": "register",
+          "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+          "line": 1,
+          "value": 524300
+        },
+        {
+          "function": "values",
+          "url": "",
+          "line": 0,
+          "value": 524300
+        },
+        {
+          "function": "$request",
+          "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+          "line": 1,
+          "value": 524300
+        },
+        {
+          "function": "Yt",
+          "url": "file:///work/packages/renderer/dist/assets/raise-b47daa89.esm-DD3hkJS-.js",
+          "line": 1,
+          "value": 524300
+        },
+        {
+          "function": "Qt",
+          "url": "file:///work/packages/renderer/dist/assets/index-C-EtBV0F.js",
+          "line": 1,
+          "value": 524292
+        },
+        {
+          "function": "",
+          "url": "pack://default-setup/builds/7ebb63f1d746011d22a6571edb1e0052761359f5fd80600ddd66764dd2203aea/runtime/pack-entry-fe-CoL0ievi.js",
+          "line": 9480,
+          "value": 524292
+        },
+        {
+          "function": "(root)",
+          "url": "",
+          "line": 0,
+          "value": 0
+        }
+      ]
+    }
+  },
+  "fresh": [
+    {
+      "index": 1,
+      "elapsedMs": 19086.290675,
+      "context": {
+        "activeSurfaceId": "default-setup/threads",
+        "surfaceIds": [
+          "default-setup/threads",
+          "default-setup/code",
+          "default-setup/notes",
+          "default-setup/browser",
+          "default-setup/library",
+          "default-setup/flows",
+          "default-setup/actions",
+          "default-setup/prompts",
+          "default-setup/brain",
+          "default-setup/database",
+          "default-setup/logs",
+          "host/packs",
+          "host/settings"
+        ]
+      },
+      "processes": {
+        "driver": {
+          "complete": true,
+          "cpuUserMs": 1955.598,
+          "cpuSystemMs": 410.404,
+          "profileDurationMs": 19729.516876,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 17863.82599999988
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/apack-testing/dist/package/dist/index.js",
+              "line": 15,
+              "value": 415.939
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 252.65399999999994
+            },
+            {
+              "function": "(program)",
+              "url": "",
+              "line": 0,
+              "value": 216.39100000000013
+            },
+            {
+              "function": "qn",
+              "url": "file:///work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 130.622
+            },
+            {
+              "function": "post",
+              "url": "node:inspector",
+              "line": 112,
+              "value": 82.971
+            },
+            {
+              "function": "writev",
+              "url": "",
+              "line": 0,
+              "value": 51.27700000000001
+            },
+            {
+              "function": "write",
+              "url": "",
+              "line": 0,
+              "value": 40.504000000000005
+            },
+            {
+              "function": "captureRawStack",
+              "url": "file:///work/node_modules/playwright-core/lib/utils/isomorphic/stackTrace.js",
+              "line": 29,
+              "value": 37.36400000000001
+            },
+            {
+              "function": "e.<computed>",
+              "url": "file:///work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 28.762
+            },
+            {
+              "function": "",
+              "url": "file:///work/node_modules/playwright-core/lib/server/transport.js",
+              "line": 61,
+              "value": 24.887999999999998
+            },
+            {
+              "function": "unenroll",
+              "url": "node:timers",
+              "line": 76,
+              "value": 22.777
+            },
+            {
+              "function": "writeUtf8String",
+              "url": "",
+              "line": 0,
+              "value": 22.681
+            },
+            {
+              "function": "Sc",
+              "url": "file:///work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 20.926000000000005
+            },
+            {
+              "function": "processTimers",
+              "url": "node:internal/timers",
+              "line": 528,
+              "value": 20.163999999999998
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "qn",
+              "url": "/work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 76057384
+            },
+            {
+              "function": "",
+              "url": "/work/node_modules/playwright-core/lib/server/transport.js",
+              "line": 61,
+              "value": 19428560
+            },
+            {
+              "function": "toString",
+              "url": "node:buffer",
+              "line": 835,
+              "value": 19214936
+            },
+            {
+              "function": "",
+              "url": "/work/node_modules/playwright-core/lib/protocol/validatorPrimitives.js",
+              "line": 133,
+              "value": 14156368
+            },
+            {
+              "function": "getOwnPropertyNames",
+              "url": "",
+              "line": 0,
+              "value": 13639920
+            },
+            {
+              "function": "next",
+              "url": "",
+              "line": 0,
+              "value": 6291896
+            },
+            {
+              "function": "entries",
+              "url": "",
+              "line": 0,
+              "value": 5243168
+            },
+            {
+              "function": "join",
+              "url": "",
+              "line": 0,
+              "value": 4721160
+            },
+            {
+              "function": "resolve",
+              "url": "node:path",
+              "line": 1175,
+              "value": 4194560
+            },
+            {
+              "function": "xc",
+              "url": "/work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 4194464
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508581,
+                9000000
+              ],
+              "durationMs": 19175.121955
+            }
+          ]
+        },
+        "renderer": {
+          "complete": true,
+          "cpuUserMs": 0.0,
+          "cpuSystemMs": 0.0,
+          "profileDurationMs": 2288.871364999999,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 1649.4729999999963
+            },
+            {
+              "function": "(program)",
+              "url": "",
+              "line": 0,
+              "value": 223.81999999999988
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 98.102
+            },
+            {
+              "function": "sn",
+              "url": "file:///work/packages/renderer/dist/assets/index-C-EtBV0F.js",
+              "line": 1,
+              "value": 19.433
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/shared-reka-ui-BQmfgTiC.js",
+              "line": 1,
+              "value": 15.580999999999998
+            },
+            {
+              "function": "Pt",
+              "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+              "line": 1,
+              "value": 13.436
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 11.984000000000002
+            },
+            {
+              "function": "updateStateInner",
+              "url": "file:///work/packages/renderer/dist/assets/shared-prosemirror-view-Cx_j762n.js",
+              "line": 5,
+              "value": 11.859
+            },
+            {
+              "function": "",
+              "url": "pack://default-setup/builds/7ebb63f1d746011d22a6571edb1e0052761359f5fd80600ddd66764dd2203aea/runtime/pack-entry-fe-CoL0ievi.js",
+              "line": 1,
+              "value": 6.260000000000001
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 5.434
+            },
+            {
+              "function": "getBoundingClientRect",
+              "url": "",
+              "line": 0,
+              "value": 5.345
+            },
+            {
+              "function": "i8",
+              "url": "pack://default-setup/builds/7ebb63f1d746011d22a6571edb1e0052761359f5fd80600ddd66764dd2203aea/runtime/pack-entry-fe-CoL0ievi.js",
+              "line": 18554,
+              "value": 5.311
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+              "line": 1,
+              "value": 5.026
+            },
+            {
+              "function": "i",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 5,
+              "value": 5.0040000000000004
+            },
+            {
+              "function": "decode",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 3.9850000000000003
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "n",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 5243280
+            },
+            {
+              "function": "decode",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 4336936
+            },
+            {
+              "function": "Mn",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 3935536
+            },
+            {
+              "function": "(BYTECODE_COMPILER)",
+              "url": "",
+              "line": 0,
+              "value": 3206884
+            },
+            {
+              "function": "push",
+              "url": "",
+              "line": 0,
+              "value": 1573076
+            },
+            {
+              "function": "assign",
+              "url": "",
+              "line": 0,
+              "value": 1050080
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/shared-reka-ui-BQmfgTiC.js",
+              "line": 1,
+              "value": 1048732
+            },
+            {
+              "function": "entries",
+              "url": "",
+              "line": 0,
+              "value": 1048624
+            },
+            {
+              "function": "s",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 1048608
+            },
+            {
+              "function": "(V8 API)",
+              "url": "",
+              "line": 0,
+              "value": 598476
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508598,
+                69000000
+              ],
+              "durationMs": 2117.6
+            }
+          ]
+        },
+        "backend": {
+          "complete": true,
+          "cpuUserMs": 6352.918,
+          "cpuSystemMs": 1043.415,
+          "profileDurationMs": 18380.749883,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 5395.120999999987
+            },
+            {
+              "function": "copyFile",
+              "url": "",
+              "line": 0,
+              "value": 4693.847
+            },
+            {
+              "function": "",
+              "url": "",
+              "line": 0,
+              "value": 4530.905000000009
+            },
+            {
+              "function": "fsync",
+              "url": "",
+              "line": 0,
+              "value": 1873.6290000000001
+            },
+            {
+              "function": "read",
+              "url": "",
+              "line": 0,
+              "value": 183.031
+            },
+            {
+              "function": "update",
+              "url": "",
+              "line": 0,
+              "value": 159.37999999999994
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 144.70400000000004
+            },
+            {
+              "function": "post",
+              "url": "node:inspector",
+              "line": 112,
+              "value": 55.766
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 54.305000000000014
+            },
+            {
+              "function": "get names",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 28.993
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 16,
+              "value": 27.130999999999997
+            },
+            {
+              "function": "wrapSafe",
+              "url": "node:internal/modules/cjs/loader",
+              "line": 1624,
+              "value": 26.476000000000003
+            },
+            {
+              "function": "zO",
+              "url": "file:///work/packages/api/dist/server.js",
+              "line": 1057,
+              "value": 25.288000000000004
+            },
+            {
+              "function": "An",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 25.267999999999997
+            },
+            {
+              "function": "(program)",
+              "url": "",
+              "line": 0,
+              "value": 24.687
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "n",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 16,
+              "value": 37755936
+            },
+            {
+              "function": "slice",
+              "url": "node:buffer",
+              "line": 636,
+              "value": 37498920
+            },
+            {
+              "function": "get names",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 32013992
+            },
+            {
+              "function": "zO",
+              "url": "file:///work/packages/api/dist/server.js",
+              "line": 1057,
+              "value": 29011112
+            },
+            {
+              "function": "next",
+              "url": "",
+              "line": 0,
+              "value": 28313336
+            },
+            {
+              "function": "structuredClone",
+              "url": "node:internal/worker/js_transferable",
+              "line": 112,
+              "value": 23330192
+            },
+            {
+              "function": "entries",
+              "url": "",
+              "line": 0,
+              "value": 15729920
+            },
+            {
+              "function": "toString",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 15205288
+            },
+            {
+              "function": "Wp",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 14156720
+            },
+            {
+              "function": "push",
+              "url": "",
+              "line": 0,
+              "value": 12606200
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.index.admission",
+              "startTime": [
+                1793508591,
+                361000000
+              ],
+              "durationMs": 931.688868
+            },
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508581,
+                955000000
+              ],
+              "durationMs": 10573.052037
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508598,
+                658000000
+              ],
+              "durationMs": 0.403544
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508598,
+                658000000
+              ],
+              "durationMs": 0.10625
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508598,
+                678000000
+              ],
+              "durationMs": 0.466336
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508598,
+                679000000
+              ],
+              "durationMs": 0.080792
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508598,
+                679000000
+              ],
+              "durationMs": 0.281585
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508598,
+                679000000
+              ],
+              "durationMs": 0.015333
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508598,
+                679000000
+              ],
+              "durationMs": 0.308751
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508598,
+                680000000
+              ],
+              "durationMs": 0.020208
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508598,
+                684000000
+              ],
+              "durationMs": 0.725546
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508598,
+                685000000
+              ],
+              "durationMs": 0.01575
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508598,
+                685000000
+              ],
+              "durationMs": 0.284418
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508598,
+                685000000
+              ],
+              "durationMs": 0.014375
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508598,
+                689000000
+              ],
+              "durationMs": 0.310751
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508598,
+                689000000
+              ],
+              "durationMs": 0.020333
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508599,
+                180000000
+              ],
+              "durationMs": 0.664004
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508599,
+                181000000
+              ],
+              "durationMs": 0.034041
+            }
+          ]
+        }
+      },
+      "phases": [
+        {
+          "phase": "requested",
+          "elapsedMs": 0.03416600000014114,
+          "at": 1793508581095
+        },
+        {
+          "phase": "process-attached",
+          "elapsedMs": 461.7146190000001,
+          "at": 1793508581557,
+          "pid": 504
+        },
+        {
+          "phase": "application-state-present",
+          "elapsedMs": 17012.240282,
+          "at": 1793508598107,
+          "pid": 504
+        },
+        {
+          "phase": "viewport-ready",
+          "elapsedMs": 17020.603328,
+          "at": 1793508598116,
+          "pid": 504
+        },
+        {
+          "phase": "connected",
+          "elapsedMs": 19060.241782,
+          "at": 1793508600155,
+          "pid": 504
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "elapsedMs": 17488.765073,
+      "context": {
+        "activeSurfaceId": "default-setup/threads",
+        "surfaceIds": [
+          "default-setup/threads",
+          "default-setup/code",
+          "default-setup/notes",
+          "default-setup/browser",
+          "default-setup/library",
+          "default-setup/flows",
+          "default-setup/actions",
+          "default-setup/prompts",
+          "default-setup/brain",
+          "default-setup/database",
+          "default-setup/logs",
+          "host/packs",
+          "host/settings"
+        ]
+      },
+      "processes": {
+        "driver": {
+          "complete": true,
+          "cpuUserMs": 2691.481,
+          "cpuSystemMs": 422.812,
+          "profileDurationMs": 19269.539855,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 16825.43199999989
+            },
+            {
+              "function": "read",
+              "url": "",
+              "line": 0,
+              "value": 1194.915
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 132.54399999999998
+            },
+            {
+              "function": "(program)",
+              "url": "",
+              "line": 0,
+              "value": 120.60299999999997
+            },
+            {
+              "function": "qn",
+              "url": "file:///work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 92.07199999999995
+            },
+            {
+              "function": "post",
+              "url": "node:inspector",
+              "line": 112,
+              "value": 83.757
+            },
+            {
+              "function": "fileURLToPath",
+              "url": "file:///work/node_modules/playwright-core/lib/utils/isomorphic/stackTrace.js",
+              "line": 142,
+              "value": 72.976
+            },
+            {
+              "function": "isEnabled",
+              "url": "file:///work/node_modules/playwright-core/lib/server/utils/debugLogger.js",
+              "line": 89,
+              "value": 66.825
+            },
+            {
+              "function": "write",
+              "url": "",
+              "line": 0,
+              "value": 41.868
+            },
+            {
+              "function": "",
+              "url": "file:///work/node_modules/playwright-core/lib/server/transport.js",
+              "line": 61,
+              "value": 27.578000000000003
+            },
+            {
+              "function": "writeUtf8String",
+              "url": "",
+              "line": 0,
+              "value": 26.514999999999993
+            },
+            {
+              "function": "emitInitNative",
+              "url": "node:internal/async_hooks",
+              "line": 192,
+              "value": 21.148
+            },
+            {
+              "function": "writev",
+              "url": "",
+              "line": 0,
+              "value": 19.644000000000002
+            },
+            {
+              "function": "captureRawStack",
+              "url": "file:///work/node_modules/playwright-core/lib/utils/isomorphic/stackTrace.js",
+              "line": 29,
+              "value": 16.173
+            },
+            {
+              "function": "_tick",
+              "url": "file:///work/node_modules/playwright-core/lib/server/page.js",
+              "line": 781,
+              "value": 15.224
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "qn",
+              "url": "/work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 59270152
+            },
+            {
+              "function": "toString",
+              "url": "node:buffer",
+              "line": 835,
+              "value": 18796952
+            },
+            {
+              "function": "",
+              "url": "/work/node_modules/playwright-core/lib/server/transport.js",
+              "line": 61,
+              "value": 17985640
+            },
+            {
+              "function": "",
+              "url": "/work/node_modules/playwright-core/lib/protocol/validatorPrimitives.js",
+              "line": 133,
+              "value": 11534840
+            },
+            {
+              "function": "getOwnPropertyNames",
+              "url": "",
+              "line": 0,
+              "value": 8393800
+            },
+            {
+              "function": "xc",
+              "url": "/work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 4718768
+            },
+            {
+              "function": "match",
+              "url": "",
+              "line": 0,
+              "value": 4194944
+            },
+            {
+              "function": "entries",
+              "url": "",
+              "line": 0,
+              "value": 4194464
+            },
+            {
+              "function": "resolve",
+              "url": "node:path",
+              "line": 1175,
+              "value": 3145904
+            },
+            {
+              "function": "join",
+              "url": "",
+              "line": 0,
+              "value": 2624696
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508604,
+                384000000
+              ],
+              "durationMs": 18750.311544
+            }
+          ]
+        },
+        "renderer": {
+          "complete": true,
+          "cpuUserMs": 0.0,
+          "cpuSystemMs": 0.0,
+          "profileDurationMs": 2210.689437000001,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 1646.976000000001
+            },
+            {
+              "function": "(program)",
+              "url": "",
+              "line": 0,
+              "value": 227.3859999999999
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 42.466
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/shared-reka-ui-BQmfgTiC.js",
+              "line": 1,
+              "value": 11.953
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 11.365999999999998
+            },
+            {
+              "function": "getBoundingClientRect",
+              "url": "",
+              "line": 0,
+              "value": 7.438
+            },
+            {
+              "function": "updateStateInner",
+              "url": "file:///work/packages/renderer/dist/assets/shared-prosemirror-view-Cx_j762n.js",
+              "line": 5,
+              "value": 7.391
+            },
+            {
+              "function": "update",
+              "url": "file:///work/packages/renderer/dist/assets/raise-b47daa89.esm-DD3hkJS-.js",
+              "line": 1,
+              "value": 6.841
+            },
+            {
+              "function": "",
+              "url": "pack://default-setup/builds/7ebb63f1d746011d22a6571edb1e0052761359f5fd80600ddd66764dd2203aea/runtime/pack-entry-fe-CoL0ievi.js",
+              "line": 1,
+              "value": 6.154
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 5.641
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 5.264
+            },
+            {
+              "function": "i8",
+              "url": "pack://default-setup/builds/7ebb63f1d746011d22a6571edb1e0052761359f5fd80600ddd66764dd2203aea/runtime/pack-entry-fe-CoL0ievi.js",
+              "line": 18554,
+              "value": 5.172000000000001
+            },
+            {
+              "function": "Pt",
+              "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+              "line": 1,
+              "value": 5.051
+            },
+            {
+              "function": "decode",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 4.964
+            },
+            {
+              "function": "jt",
+              "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+              "line": 3,
+              "value": 4.6530000000000005
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "decode",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 3582488
+            },
+            {
+              "function": "Mn",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 2828040
+            },
+            {
+              "function": "(BYTECODE_COMPILER)",
+              "url": "",
+              "line": 0,
+              "value": 2200692
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 2097268
+            },
+            {
+              "function": "t",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 5,
+              "value": 1572904
+            },
+            {
+              "function": "(V8 API)",
+              "url": "",
+              "line": 0,
+              "value": 1122772
+            },
+            {
+              "function": "RegExp",
+              "url": "",
+              "line": 0,
+              "value": 1056620
+            },
+            {
+              "function": "push",
+              "url": "",
+              "line": 0,
+              "value": 1048676
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/shared-reka-ui-BQmfgTiC.js",
+              "line": 1,
+              "value": 1048620
+            },
+            {
+              "function": "test",
+              "url": "",
+              "line": 0,
+              "value": 526240
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508621,
+                23000000
+              ],
+              "durationMs": 2114.9
+            }
+          ]
+        },
+        "backend": {
+          "complete": true,
+          "cpuUserMs": 3204.217,
+          "cpuSystemMs": 517.343,
+          "profileDurationMs": 16753.237616,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 6961.521000000014
+            },
+            {
+              "function": "fsync",
+              "url": "",
+              "line": 0,
+              "value": 3399.182
+            },
+            {
+              "function": "",
+              "url": "",
+              "line": 0,
+              "value": 3201.2690000000066
+            },
+            {
+              "function": "copyFile",
+              "url": "",
+              "line": 0,
+              "value": 992.3789999999999
+            },
+            {
+              "function": "rename",
+              "url": "",
+              "line": 0,
+              "value": 245.787
+            },
+            {
+              "function": "update",
+              "url": "",
+              "line": 0,
+              "value": 188.48100000000005
+            },
+            {
+              "function": "read",
+              "url": "",
+              "line": 0,
+              "value": 183.51299999999995
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 100.001
+            },
+            {
+              "function": "#onMessage",
+              "url": "node:inspector",
+              "line": 81,
+              "value": 63.589
+            },
+            {
+              "function": "post",
+              "url": "node:inspector",
+              "line": 112,
+              "value": 55.501999999999995
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 16,
+              "value": 52.40500000000001
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 52.277000000000015
+            },
+            {
+              "function": "closeSync",
+              "url": "file:///work/node_modules/graceful-fs/graceful-fs.js",
+              "line": 72,
+              "value": 42.296
+            },
+            {
+              "function": "structuredClone",
+              "url": "node:internal/worker/js_transferable",
+              "line": 112,
+              "value": 37.336
+            },
+            {
+              "function": "gr",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 7,
+              "value": 36.637
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "slice",
+              "url": "node:buffer",
+              "line": 636,
+              "value": 38606080
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 16,
+              "value": 30413960
+            },
+            {
+              "function": "zO",
+              "url": "file:///work/packages/api/dist/server.js",
+              "line": 1057,
+              "value": 28247384
+            },
+            {
+              "function": "get names",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 25198064
+            },
+            {
+              "function": "structuredClone",
+              "url": "node:internal/worker/js_transferable",
+              "line": 112,
+              "value": 19901280
+            },
+            {
+              "function": "Wp",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 18875504
+            },
+            {
+              "function": "Si",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 10,
+              "value": 16263504
+            },
+            {
+              "function": "entries",
+              "url": "",
+              "line": 0,
+              "value": 15729888
+            },
+            {
+              "function": "next",
+              "url": "",
+              "line": 0,
+              "value": 14681008
+            },
+            {
+              "function": "toString",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 13108048
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.index.admission",
+              "startTime": [
+                1793508610,
+                551000000
+              ],
+              "durationMs": 1319.971251
+            },
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508606,
+                542000000
+              ],
+              "durationMs": 5538.956926
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508621,
+                660000000
+              ],
+              "durationMs": 0.387878
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508621,
+                661000000
+              ],
+              "durationMs": 0.07925
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508621,
+                682000000
+              ],
+              "durationMs": 0.369169
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508621,
+                682000000
+              ],
+              "durationMs": 0.050917
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508621,
+                682000000
+              ],
+              "durationMs": 0.185542
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508621,
+                682000000
+              ],
+              "durationMs": 0.014334
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508621,
+                682000000
+              ],
+              "durationMs": 0.108668
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508621,
+                683000000
+              ],
+              "durationMs": 0.013459
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508621,
+                685000000
+              ],
+              "durationMs": 0.641337
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508621,
+                686000000
+              ],
+              "durationMs": 0.021417
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508621,
+                686000000
+              ],
+              "durationMs": 0.302127
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508621,
+                686000000
+              ],
+              "durationMs": 0.014
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508621,
+                690000000
+              ],
+              "durationMs": 0.289627
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508621,
+                691000000
+              ],
+              "durationMs": 0.030501
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508622,
+                132000000
+              ],
+              "durationMs": 0.920672
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508622,
+                133000000
+              ],
+              "durationMs": 0.037625
+            }
+          ]
+        }
+      },
+      "phases": [
+        {
+          "phase": "requested",
+          "elapsedMs": 0.04145899999957692,
+          "at": 1793508605642
+        },
+        {
+          "phase": "process-attached",
+          "elapsedMs": 516.753839,
+          "at": 1793508606159,
+          "pid": 743
+        },
+        {
+          "phase": "application-state-present",
+          "elapsedMs": 15415.207056,
+          "at": 1793508621057,
+          "pid": 743
+        },
+        {
+          "phase": "viewport-ready",
+          "elapsedMs": 15420.350793000001,
+          "at": 1793508621063,
+          "pid": 743
+        },
+        {
+          "phase": "connected",
+          "elapsedMs": 17469.260133,
+          "at": 1793508623111,
+          "pid": 743
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "elapsedMs": 17726.278221,
+      "context": {
+        "activeSurfaceId": "default-setup/threads",
+        "surfaceIds": [
+          "default-setup/threads",
+          "default-setup/code",
+          "default-setup/notes",
+          "default-setup/browser",
+          "default-setup/library",
+          "default-setup/flows",
+          "default-setup/actions",
+          "default-setup/prompts",
+          "default-setup/brain",
+          "default-setup/database",
+          "default-setup/logs",
+          "host/packs",
+          "host/settings"
+        ]
+      },
+      "processes": {
+        "driver": {
+          "complete": true,
+          "cpuUserMs": 2056.292,
+          "cpuSystemMs": 342.82,
+          "profileDurationMs": 18339.329381,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 14080.19799999997
+            },
+            {
+              "function": "frame",
+              "url": "file:///work/node_modules/playwright-core/lib/utilsBundleImpl/index.js",
+              "line": 183,
+              "value": 1175.795
+            },
+            {
+              "function": "Writable.cork",
+              "url": "node:internal/streams/writable",
+              "line": 511,
+              "value": 1016.434
+            },
+            {
+              "function": "writeUtf8String",
+              "url": "",
+              "line": 0,
+              "value": 711.5840000000002
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 194.26299999999992
+            },
+            {
+              "function": "(program)",
+              "url": "",
+              "line": 0,
+              "value": 120.46300000000001
+            },
+            {
+              "function": "write",
+              "url": "",
+              "line": 0,
+              "value": 105.265
+            },
+            {
+              "function": "qn",
+              "url": "file:///work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 94.00300000000003
+            },
+            {
+              "function": "post",
+              "url": "node:inspector",
+              "line": 112,
+              "value": 79.603
+            },
+            {
+              "function": "get",
+              "url": "file:///work/node_modules/playwright-core/lib/client/channelOwner.js",
+              "line": 118,
+              "value": 69.78099999999999
+            },
+            {
+              "function": "",
+              "url": "file:///work/node_modules/playwright-core/lib/server/transport.js",
+              "line": 61,
+              "value": 28.892999999999994
+            },
+            {
+              "function": "Sc",
+              "url": "file:///work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 26.621
+            },
+            {
+              "function": "e.<computed>",
+              "url": "file:///work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 23.646
+            },
+            {
+              "function": "writev",
+              "url": "",
+              "line": 0,
+              "value": 18.548000000000002
+            },
+            {
+              "function": "captureRawStack",
+              "url": "file:///work/node_modules/playwright-core/lib/utils/isomorphic/stackTrace.js",
+              "line": 29,
+              "value": 17.09
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "qn",
+              "url": "/work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 56127216
+            },
+            {
+              "function": "",
+              "url": "/work/node_modules/playwright-core/lib/server/transport.js",
+              "line": 61,
+              "value": 17364384
+            },
+            {
+              "function": "toString",
+              "url": "node:buffer",
+              "line": 835,
+              "value": 16672912
+            },
+            {
+              "function": "",
+              "url": "/work/node_modules/playwright-core/lib/protocol/validatorPrimitives.js",
+              "line": 133,
+              "value": 13107736
+            },
+            {
+              "function": "getOwnPropertyNames",
+              "url": "",
+              "line": 0,
+              "value": 6295960
+            },
+            {
+              "function": "normalizeString",
+              "url": "node:path",
+              "line": 77,
+              "value": 5767424
+            },
+            {
+              "function": "entries",
+              "url": "",
+              "line": 0,
+              "value": 5243136
+            },
+            {
+              "function": "",
+              "url": "/work/node_modules/playwright/lib/utilsBundleImpl.js",
+              "line": 14,
+              "value": 3147456
+            },
+            {
+              "function": "match",
+              "url": "",
+              "line": 0,
+              "value": 2621696
+            },
+            {
+              "function": "next",
+              "url": "",
+              "line": 0,
+              "value": 2621560
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508628,
+                13000000
+              ],
+              "durationMs": 17790.929411
+            }
+          ]
+        },
+        "renderer": {
+          "complete": true,
+          "cpuUserMs": 0.0,
+          "cpuSystemMs": 0.0,
+          "profileDurationMs": 2221.343287999998,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 1674.7350000000006
+            },
+            {
+              "function": "(program)",
+              "url": "",
+              "line": 0,
+              "value": 223.453
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 34.52700000000001
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/shared-reka-ui-BQmfgTiC.js",
+              "line": 1,
+              "value": 13.25
+            },
+            {
+              "function": "Pt",
+              "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+              "line": 1,
+              "value": 11.589
+            },
+            {
+              "function": "updateStateInner",
+              "url": "file:///work/packages/renderer/dist/assets/shared-prosemirror-view-Cx_j762n.js",
+              "line": 5,
+              "value": 9.023
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 8.688
+            },
+            {
+              "function": "i8",
+              "url": "pack://default-setup/builds/7ebb63f1d746011d22a6571edb1e0052761359f5fd80600ddd66764dd2203aea/runtime/pack-entry-fe-CoL0ievi.js",
+              "line": 18554,
+              "value": 6.677
+            },
+            {
+              "function": "decode",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 6.397
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 5.905000000000001
+            },
+            {
+              "function": "Xn",
+              "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+              "line": 3,
+              "value": 4.631
+            },
+            {
+              "function": "o",
+              "url": "file:///work/packages/renderer/dist/assets/settings-CBDwK2JX.js",
+              "line": 1,
+              "value": 3.993
+            },
+            {
+              "function": "",
+              "url": "pack://default-setup/builds/7ebb63f1d746011d22a6571edb1e0052761359f5fd80600ddd66764dd2203aea/runtime/pack-entry-fe-CoL0ievi.js",
+              "line": 1,
+              "value": 3.983
+            },
+            {
+              "function": "jt",
+              "url": "file:///work/packages/renderer/dist/assets/runtime-core.esm-bundler-CrMB5jzU.js",
+              "line": 3,
+              "value": 3.965
+            },
+            {
+              "function": "createElementNS",
+              "url": "",
+              "line": 0,
+              "value": 3.771
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "decode",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 1,
+              "value": 4915928
+            },
+            {
+              "function": "Mn",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 3407032
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 8,
+              "value": 3145888
+            },
+            {
+              "function": "get options",
+              "url": "file:///work/packages/renderer/dist/assets/shared-tiptap-core-B4f34v0-.js",
+              "line": 23,
+              "value": 2097208
+            },
+            {
+              "function": "next",
+              "url": "",
+              "line": 0,
+              "value": 1572900
+            },
+            {
+              "function": "(V8 API)",
+              "url": "",
+              "line": 0,
+              "value": 1122780
+            },
+            {
+              "function": "assign",
+              "url": "",
+              "line": 0,
+              "value": 1049376
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/shared-tiptap-core-B4f34v0-.js",
+              "line": 1,
+              "value": 1048640
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/index-CW8aemVi.js",
+              "line": 5,
+              "value": 1048620
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/renderer/dist/assets/shared-prosemirror-model-CLzrDyQg.js",
+              "line": 2,
+              "value": 1048608
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508643,
+                705000000
+              ],
+              "durationMs": 2101.3
+            }
+          ]
+        },
+        "backend": {
+          "complete": true,
+          "cpuUserMs": 3015.777,
+          "cpuSystemMs": 462.873,
+          "profileDurationMs": 14958.506307,
+          "stoppedBy": "owner",
+          "cpuTop": [
+            {
+              "function": "(idle)",
+              "url": "",
+              "line": 0,
+              "value": 4620.648000000004
+            },
+            {
+              "function": "",
+              "url": "",
+              "line": 0,
+              "value": 4502.796999999997
+            },
+            {
+              "function": "fsync",
+              "url": "",
+              "line": 0,
+              "value": 3498.603
+            },
+            {
+              "function": "copyFile",
+              "url": "",
+              "line": 0,
+              "value": 569.277
+            },
+            {
+              "function": "read",
+              "url": "",
+              "line": 0,
+              "value": 178.40899999999993
+            },
+            {
+              "function": "update",
+              "url": "",
+              "line": 0,
+              "value": 142.972
+            },
+            {
+              "function": "(garbage collector)",
+              "url": "",
+              "line": 0,
+              "value": 90.01
+            },
+            {
+              "function": "post",
+              "url": "node:inspector",
+              "line": 112,
+              "value": 55.397000000000006
+            },
+            {
+              "function": "dispatch",
+              "url": "",
+              "line": 0,
+              "value": 42.69799999999999
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 16,
+              "value": 41.675
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 37.349000000000004
+            },
+            {
+              "function": "",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 10,
+              "value": 30.449000000000005
+            },
+            {
+              "function": "validate0",
+              "url": "",
+              "line": 3,
+              "value": 29.299999999999994
+            },
+            {
+              "function": "zO",
+              "url": "file:///work/packages/api/dist/server.js",
+              "line": 1057,
+              "value": 29.096000000000004
+            },
+            {
+              "function": "gr",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 7,
+              "value": 28.498
+            }
+          ],
+          "allocationTop": [
+            {
+              "function": "get names",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 42520880
+            },
+            {
+              "function": "slice",
+              "url": "node:buffer",
+              "line": 636,
+              "value": 36896240
+            },
+            {
+              "function": "n",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 16,
+              "value": 36706928
+            },
+            {
+              "function": "zO",
+              "url": "file:///work/packages/api/dist/server.js",
+              "line": 1057,
+              "value": 33132352
+            },
+            {
+              "function": "structuredClone",
+              "url": "node:internal/worker/js_transferable",
+              "line": 112,
+              "value": 23147400
+            },
+            {
+              "function": "next",
+              "url": "",
+              "line": 0,
+              "value": 19399840
+            },
+            {
+              "function": "Bp",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 17826696
+            },
+            {
+              "function": "render",
+              "url": "file:///work/packages/api/dist/chunk-D5ECJODD.js",
+              "line": 6,
+              "value": 14681096
+            },
+            {
+              "function": "",
+              "url": "",
+              "line": 3,
+              "value": 14193128
+            },
+            {
+              "function": "push",
+              "url": "",
+              "line": 0,
+              "value": 13654416
+            }
+          ],
+          "startupSpans": [
+            {
+              "name": "app.index.admission",
+              "startTime": [
+                1793508635,
+                792000000
+              ],
+              "durationMs": 1251.879628
+            },
+            {
+              "name": "app.startup",
+              "startTime": [
+                1793508630,
+                967000000
+              ],
+              "durationMs": 6305.498517
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508644,
+                295000000
+              ],
+              "durationMs": 0.240335
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508644,
+                295000000
+              ],
+              "durationMs": 0.060417
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508644,
+                317000000
+              ],
+              "durationMs": 0.304419
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508644,
+                317000000
+              ],
+              "durationMs": 0.043708
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508644,
+                317000000
+              ],
+              "durationMs": 0.181918
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508644,
+                318000000
+              ],
+              "durationMs": 0.012958
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508644,
+                318000000
+              ],
+              "durationMs": 0.114792
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508644,
+                318000000
+              ],
+              "durationMs": 0.013125
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508644,
+                321000000
+              ],
+              "durationMs": 0.612628
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508644,
+                321000000
+              ],
+              "durationMs": 0.017709
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508644,
+                321000000
+              ],
+              "durationMs": 0.297376
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508644,
+                322000000
+              ],
+              "durationMs": 0.0415
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508644,
+                325000000
+              ],
+              "durationMs": 0.272334
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508644,
+                325000000
+              ],
+              "durationMs": 0.019083
+            },
+            {
+              "name": "app.view.read",
+              "startTime": [
+                1793508644,
+                816000000
+              ],
+              "durationMs": 0.783587
+            },
+            {
+              "name": "app.view.deliver",
+              "startTime": [
+                1793508644,
+                817000000
+              ],
+              "durationMs": 0.029167
+            }
+          ]
+        }
+      },
+      "phases": [
+        {
+          "phase": "requested",
+          "elapsedMs": 0.04770800000005693,
+          "at": 1793508628076
+        },
+        {
+          "phase": "process-attached",
+          "elapsedMs": 2486.746912,
+          "at": 1793508630562,
+          "pid": 982
+        },
+        {
+          "phase": "application-state-present",
+          "elapsedMs": 15666.649114,
+          "at": 1793508643742,
+          "pid": 982
+        },
+        {
+          "phase": "viewport-ready",
+          "elapsedMs": 15674.389073000002,
+          "at": 1793508643750,
+          "pid": 982
+        },
+        {
+          "phase": "connected",
+          "elapsedMs": 17711.828392,
+          "at": 1793508645787,
+          "pid": 982
+        }
+      ]
+    }
+  ]
+}

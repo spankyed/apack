@@ -1,0 +1,621 @@
+{
+  "root": "/work/.apack/performance/anomalies-657177c14a",
+  "controls": {
+    "search-aa": {
+      "manifest": {
+        "format": 1,
+        "source": {
+          "revision": "657177c14a374bfda762edf793ca1e8cca634c45",
+          "dirty": false,
+          "excludedUntracked": [
+            ".apack-checkout",
+            ".apack-run.lock"
+          ],
+          "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "builds": [
+          {
+            "path": "packages/api/dist",
+            "sha256": "655d4c0d794e1f95a7f7fcb65d0426721db3b87ea594e2694e473e4b60bb0be4"
+          },
+          {
+            "path": "packages/main/dist",
+            "sha256": "d60646d24d78305eb15be9b1c33948774d8ce304d8702967b7f0f61af7988d8b"
+          },
+          {
+            "path": "packages/preload/dist",
+            "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+          },
+          {
+            "path": "packages/renderer/dist",
+            "sha256": "ecc90674329710c68a0f4754d28732c2031e595fb8d206d0c2a01ab90a286fe3"
+          },
+          {
+            "path": "packages/default-setup/dist",
+            "sha256": "3205163784f6def96a8647c7476efed8b6241ccf9a46a5055dc4b98dea20fa9e"
+          },
+          {
+            "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+            "sha256": "9c0469d914d90d0ad7763e84378f0f7149855a85420ae2965dcfb4b4eb2f1474"
+          }
+        ],
+        "fixture": {
+          "generator": "message-search-v1",
+          "seed": 0,
+          "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+          "distribution": {
+            "threads": 12,
+            "messagesPerThread": 100,
+            "matchingQueries": 2,
+            "matchesPerQuery": 20,
+            "resultLimit": 20,
+            "bodyRepetitions": 50
+          }
+        },
+        "native": {
+          "pin": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+          "checkoutRevision": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+          "dirty": false,
+          "excludedUntracked": [
+            ".apack-elmdb-built",
+            ".apack-elmdb-checkout",
+            ".apack-elmdb.lock"
+          ]
+        },
+        "runtime": {
+          "node": "23.11.1",
+          "v8": "12.9.202.28-node.14",
+          "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+          "electron": "37.2.4",
+          "chromium": "138.0.7204.157",
+          "appNode": "22.17.1",
+          "appV8": "13.8.258.26-electron.0",
+          "performancePolicy": "single-scenario-v1"
+        },
+        "machine": {
+          "platform": "linux",
+          "arch": "arm64",
+          "cpus": 2,
+          "memoryBytes": 6442450944,
+          "identity": "4012f2dc6765bd252ea02afd38260512ce9a47580d2d354c04fbce41ec7a5edb"
+        },
+        "mode": "disabled",
+        "cache": "warm-process",
+        "warmups": 5,
+        "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+      },
+      "admittedSummary": {
+        "measured": 45,
+        "passed": 45,
+        "unsuccessful": 0,
+        "medianMs": 10.5,
+        "minMs": 9.700000000186265,
+        "maxMs": 17.799999999813735
+      },
+      "groups": {
+        "A": [
+          16.5,
+          10.399999999441206,
+          10.400000000372529,
+          10.5,
+          9.900000000372529,
+          10.099999999627471,
+          10.399999999441206,
+          11.099999999627471,
+          10.799999999813735,
+          10.199999999254942,
+          10.900000000372529,
+          11,
+          11.200000000186265,
+          17.799999999813735,
+          10.200000000186265,
+          10.099999999627471,
+          9.900000000372529,
+          10.899999999441206,
+          10.5,
+          10.100000000558794
+        ],
+        "B": [
+          10.799999999813735,
+          10.600000000558794,
+          10.200000000186265,
+          10.600000000558794,
+          10.600000000558794,
+          9.700000000186265,
+          10.5,
+          11.700000000186265,
+          12.700000000186265,
+          10.299999999813735,
+          10.200000000186265,
+          11.700000000186265,
+          10.900000000372529,
+          10.5,
+          11.200000000186265,
+          10.200000000186265,
+          11,
+          10,
+          10.599999999627471,
+          10.100000000558794
+        ]
+      },
+      "medianA": 10.450000000186265,
+      "medianB": 10.600000000093132,
+      "changePercent": 1.4354066976477897
+    },
+    "startup-aa": {
+      "manifest": {
+        "format": 1,
+        "source": {
+          "revision": "657177c14a374bfda762edf793ca1e8cca634c45",
+          "dirty": false,
+          "excludedUntracked": [
+            ".apack-checkout",
+            ".apack-run.lock"
+          ],
+          "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "builds": [
+          {
+            "path": "packages/api/dist",
+            "sha256": "655d4c0d794e1f95a7f7fcb65d0426721db3b87ea594e2694e473e4b60bb0be4"
+          },
+          {
+            "path": "packages/main/dist",
+            "sha256": "d60646d24d78305eb15be9b1c33948774d8ce304d8702967b7f0f61af7988d8b"
+          },
+          {
+            "path": "packages/preload/dist",
+            "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+          },
+          {
+            "path": "packages/renderer/dist",
+            "sha256": "ecc90674329710c68a0f4754d28732c2031e595fb8d206d0c2a01ab90a286fe3"
+          },
+          {
+            "path": "packages/default-setup/dist",
+            "sha256": "3205163784f6def96a8647c7476efed8b6241ccf9a46a5055dc4b98dea20fa9e"
+          },
+          {
+            "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+            "sha256": "9c0469d914d90d0ad7763e84378f0f7149855a85420ae2965dcfb4b4eb2f1474"
+          }
+        ],
+        "fixture": {
+          "generator": "message-search-v1",
+          "seed": 0,
+          "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+          "distribution": {
+            "threads": 12,
+            "messagesPerThread": 100,
+            "matchingQueries": 2,
+            "matchesPerQuery": 20,
+            "resultLimit": 20,
+            "bodyRepetitions": 50
+          }
+        },
+        "native": {
+          "pin": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+          "checkoutRevision": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+          "dirty": false,
+          "excludedUntracked": [
+            ".apack-elmdb-built",
+            ".apack-elmdb-checkout",
+            ".apack-elmdb.lock"
+          ]
+        },
+        "runtime": {
+          "node": "23.11.1",
+          "v8": "12.9.202.28-node.14",
+          "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+          "electron": "37.2.4",
+          "chromium": "138.0.7204.157",
+          "appNode": "22.17.1",
+          "appV8": "13.8.258.26-electron.0",
+          "performancePolicy": "single-scenario-v1"
+        },
+        "machine": {
+          "platform": "linux",
+          "arch": "arm64",
+          "cpus": 2,
+          "memoryBytes": 6442450944,
+          "identity": "4012f2dc6765bd252ea02afd38260512ce9a47580d2d354c04fbce41ec7a5edb"
+        },
+        "mode": "disabled",
+        "cache": "fresh-process-warm-filesystem",
+        "warmups": 5,
+        "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+      },
+      "admittedSummary": {
+        "measured": 45,
+        "passed": 45,
+        "unsuccessful": 0,
+        "medianMs": 5305.910978999999,
+        "minMs": 4064.50922,
+        "maxMs": 7257.9826490000005
+      },
+      "groups": {
+        "A": [
+          5267.070079,
+          4747.375534,
+          5386.472519,
+          4830.310301,
+          5408.299580999999,
+          6669.9881000000005,
+          4649.620154,
+          6513.650329,
+          5477.325376,
+          4776.019759999999,
+          5674.714312,
+          5277.447805000001,
+          5420.908901,
+          5086.946067999999,
+          5756.040531,
+          5848.95751,
+          5990.415139000001,
+          4940.873373,
+          4699.151853,
+          5109.074587
+        ],
+        "B": [
+          5366.446008,
+          5639.485551000001,
+          5722.597404,
+          4553.222614,
+          5880.862695000001,
+          4858.052225,
+          5373.717584,
+          5260.805308999999,
+          7257.9826490000005,
+          5336.568751000001,
+          5234.922353,
+          5115.868663,
+          5837.32404,
+          5164.531436,
+          6055.626906,
+          4584.044891,
+          6721.564229,
+          5305.910978999999,
+          4064.50922,
+          5491.854401
+        ]
+      },
+      "medianA": 5331.960162,
+      "medianB": 5351.507379500001,
+      "changePercent": 0.3666047177041998
+    }
+  },
+  "fresh": [
+    {
+      "index": 1,
+      "phases": [
+        {
+          "phase": "requested",
+          "elapsedMs": 0.03445800000008603,
+          "at": 1793498751414
+        },
+        {
+          "phase": "process-attached",
+          "elapsedMs": 13660.989626,
+          "at": 1793498765075,
+          "pid": 1464
+        },
+        {
+          "phase": "application-state-present",
+          "elapsedMs": 19979.367784,
+          "at": 1793498771393,
+          "pid": 1464
+        },
+        {
+          "phase": "viewport-ready",
+          "elapsedMs": 19986.400067,
+          "at": 1793498771400,
+          "pid": 1464
+        },
+        {
+          "phase": "connected",
+          "elapsedMs": 29156.941078,
+          "at": 1793498780571,
+          "pid": 1464
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "phases": [
+        {
+          "phase": "requested",
+          "elapsedMs": 0.03600000000005821,
+          "at": 1793498787675
+        },
+        {
+          "phase": "process-attached",
+          "elapsedMs": 1098.8660009999999,
+          "at": 1793498788774,
+          "pid": 1700
+        },
+        {
+          "phase": "application-state-present",
+          "elapsedMs": 12148.308876000001,
+          "at": 1793498799823,
+          "pid": 1700
+        },
+        {
+          "phase": "viewport-ready",
+          "elapsedMs": 12152.434812,
+          "at": 1793498799827,
+          "pid": 1700
+        },
+        {
+          "phase": "connected",
+          "elapsedMs": 21328.172014,
+          "at": 1793498809003,
+          "pid": 1700
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "phases": [
+        {
+          "phase": "requested",
+          "elapsedMs": 0.06266699999991943,
+          "at": 1793498811843
+        },
+        {
+          "phase": "process-attached",
+          "elapsedMs": 3606.105926,
+          "at": 1793498815449,
+          "pid": 1935
+        },
+        {
+          "phase": "application-state-present",
+          "elapsedMs": 11770.945211999999,
+          "at": 1793498823614,
+          "pid": 1935
+        },
+        {
+          "phase": "viewport-ready",
+          "elapsedMs": 11775.701525999999,
+          "at": 1793498823618,
+          "pid": 1935
+        },
+        {
+          "phase": "connected",
+          "elapsedMs": 19927.434707,
+          "at": 1793498831770,
+          "pid": 1935
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "phases": [
+        {
+          "phase": "requested",
+          "elapsedMs": 0.03612600000008115,
+          "at": 1793498834781
+        },
+        {
+          "phase": "process-attached",
+          "elapsedMs": 2366.442967,
+          "at": 1793498837147,
+          "pid": 2143
+        },
+        {
+          "phase": "application-state-present",
+          "elapsedMs": 13986.108004,
+          "at": 1793498848767,
+          "pid": 2143
+        },
+        {
+          "phase": "viewport-ready",
+          "elapsedMs": 13990.965694,
+          "at": 1793498848772,
+          "pid": 2143
+        },
+        {
+          "phase": "connected",
+          "elapsedMs": 21122.417081,
+          "at": 1793498855903,
+          "pid": 2143
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "phases": [
+        {
+          "phase": "requested",
+          "elapsedMs": 0.02537500000005366,
+          "at": 1793498859289
+        },
+        {
+          "phase": "process-attached",
+          "elapsedMs": 2719.7302670000004,
+          "at": 1793498862008,
+          "pid": 2407
+        },
+        {
+          "phase": "application-state-present",
+          "elapsedMs": 11700.069959,
+          "at": 1793498870989,
+          "pid": 2407
+        },
+        {
+          "phase": "viewport-ready",
+          "elapsedMs": 11706.027904,
+          "at": 1793498870995,
+          "pid": 2407
+        },
+        {
+          "phase": "connected",
+          "elapsedMs": 18842.693482,
+          "at": 1793498878131,
+          "pid": 2407
+        }
+      ]
+    }
+  ],
+  "model": [
+    {
+      "test": "refuses, holds and answers what the model does",
+      "elapsedMs": 96329.440626,
+      "cpu": {
+        "user": 10279896,
+        "system": 0
+      },
+      "phases": {
+        "database.open": {
+          "calls": 120,
+          "ms": 89445.28006799988
+        },
+        "engine.create": {
+          "calls": 120,
+          "ms": 180.36782799997673
+        },
+        "database.write:false": {
+          "calls": 3066,
+          "ms": 193.13708099998257
+        },
+        "apply/assert": {
+          "calls": 3796,
+          "ms": 559.2423530006126
+        },
+        "database.readSync": {
+          "calls": 320812,
+          "ms": 2505.2676950023415
+        },
+        "state/assert": {
+          "calls": 3796,
+          "ms": 1063.5119400001167
+        },
+        "derived/assert": {
+          "calls": 3796,
+          "ms": 4943.941144999928
+        },
+        "database.begin": {
+          "calls": 448,
+          "ms": 6.153912000037963
+        },
+        "unit.write:false": {
+          "calls": 1115,
+          "ms": 28.020182999498502
+        },
+        "unit.abort": {
+          "calls": 357,
+          "ms": 1.6493879999761702
+        },
+        "unit.read": {
+          "calls": 601,
+          "ms": 3.53925500009791
+        },
+        "unit.commit:false": {
+          "calls": 55,
+          "ms": 1.7833780000255501
+        },
+        "unit.savepoint": {
+          "calls": 180,
+          "ms": 0.5476260000250477
+        },
+        "unit.rollbackTo": {
+          "calls": 139,
+          "ms": 0.6695020000988734
+        },
+        "unit.release": {
+          "calls": 41,
+          "ms": 0.1284989999840036
+        },
+        "database.dispose": {
+          "calls": 120,
+          "ms": 43.58828899982109
+        },
+        "unit.commit:true": {
+          "calls": 36,
+          "ms": 1.1492169999546604
+        }
+      }
+    },
+    {
+      "test": "keeps every watch at what its read answers afresh, after every write, whatever wrote",
+      "elapsedMs": 31793.532313000003,
+      "cpu": {
+        "user": 4587932,
+        "system": 0
+      },
+      "phases": {
+        "database.open": {
+          "calls": 20,
+          "ms": 23666.59238099995
+        },
+        "engine.create": {
+          "calls": 20,
+          "ms": 29.90127599997504
+        },
+        "database.write:false": {
+          "calls": 558,
+          "ms": 46.78421199986769
+        },
+        "watch.apply": {
+          "calls": 688,
+          "ms": 112.88815699977567
+        },
+        "database.untrack": {
+          "calls": 7742,
+          "ms": 29.169181998600834
+        },
+        "database.readSync": {
+          "calls": 75671,
+          "ms": 707.9832009991369
+        },
+        "watch.settle": {
+          "calls": 687,
+          "ms": 5486.393027999307
+        },
+        "watch.read": {
+          "calls": 62517,
+          "ms": 1027.96081000274
+        },
+        "database.begin": {
+          "calls": 88,
+          "ms": 1.3661299999366747
+        },
+        "unit.write:false": {
+          "calls": 244,
+          "ms": 7.16767400020035
+        },
+        "unit.abort": {
+          "calls": 71,
+          "ms": 0.41837800008943304
+        },
+        "unit.read": {
+          "calls": 139,
+          "ms": 0.8205880001041805
+        },
+        "unit.commit:false": {
+          "calls": 12,
+          "ms": 0.667667999965488
+        },
+        "unit.savepoint": {
+          "calls": 43,
+          "ms": 0.1312070000130916
+        },
+        "unit.rollbackTo": {
+          "calls": 34,
+          "ms": 0.145914999928209
+        },
+        "unit.release": {
+          "calls": 9,
+          "ms": 0.041500000035739504
+        },
+        "database.dispose": {
+          "calls": 19,
+          "ms": 6.910076999964076
+        },
+        "unit.commit:true": {
+          "calls": 5,
+          "ms": 0.25554000001284294
+        }
+      }
+    }
+  ]
+}

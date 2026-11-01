@@ -1,0 +1,12 @@
+
+Running 1 test using 1 worker
+
+[e2e.launch] {"phase":"requested","elapsedMs":0.03295900000000529,"at":1793510273071}
+[e2e.launch] {"phase":"process-attached","elapsedMs":487.945478,"at":1793510273559,"pid":1230}
+[e2e.launch] {"phase":"application-state-present","elapsedMs":7445.728408000001,"at":1793510280517,"pid":1230}
+[e2e.launch] {"phase":"viewport-ready","elapsedMs":7450.859391,"at":1793510280522,"pid":1230}
+[e2e.launch] {"phase":"connected","elapsedMs":15671.342185000001,"at":1793510288742,"pid":1230}
+  ✓  1 .apack/launch-probe.spec.ts:2:1 › fresh profile reaches its connected thread surface (15.8s)
+[e2e] quit sequence finished; ending Electron without its profile writes
+
+  1 passed (18.7s)

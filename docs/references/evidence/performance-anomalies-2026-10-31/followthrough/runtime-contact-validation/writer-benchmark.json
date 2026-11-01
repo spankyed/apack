@@ -1,0 +1,165 @@
+{
+  "method": "10 balanced ABBA blocks, two private contact files per trial, disk-backed /work; no application latency claim",
+  "rows": [
+    {
+      "mode": "durable",
+      "ms": 6035.88211
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.39879299999938667
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.2286260000000766
+    },
+    {
+      "mode": "durable",
+      "ms": 4380.019987000001
+    },
+    {
+      "mode": "durable",
+      "ms": 4381.010243999999
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.18470999999954074
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.06491700000151468
+    },
+    {
+      "mode": "durable",
+      "ms": 4348.689544999999
+    },
+    {
+      "mode": "durable",
+      "ms": 3949.170001999999
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.1514999999999418
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.08704199999920093
+    },
+    {
+      "mode": "durable",
+      "ms": 3594.460676999999
+    },
+    {
+      "mode": "durable",
+      "ms": 5157.0853860000025
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.24062599999888334
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.08754299999782233
+    },
+    {
+      "mode": "durable",
+      "ms": 3636.3342999999986
+    },
+    {
+      "mode": "durable",
+      "ms": 2875.5166919999974
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.1509169999990263
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.11333400000148686
+    },
+    {
+      "mode": "durable",
+      "ms": 1747.5176990000036
+    },
+    {
+      "mode": "durable",
+      "ms": 1039.9481449999948
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.20191699999850243
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.10595900000043912
+    },
+    {
+      "mode": "durable",
+      "ms": 884.8309660000014
+    },
+    {
+      "mode": "durable",
+      "ms": 984.8076230000006
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.21325100000103703
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.08837599999969825
+    },
+    {
+      "mode": "durable",
+      "ms": 3240.346273999996
+    },
+    {
+      "mode": "durable",
+      "ms": 1460.197039000006
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.14600100000097882
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.0778340000033495
+    },
+    {
+      "mode": "durable",
+      "ms": 1105.959050999998
+    },
+    {
+      "mode": "durable",
+      "ms": 1493.5347859999965
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.17750099999830127
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.14295900000433903
+    },
+    {
+      "mode": "durable",
+      "ms": 895.8193960000062
+    },
+    {
+      "mode": "durable",
+      "ms": 906.6277820000032
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.15000099999451777
+    },
+    {
+      "mode": "runtime",
+      "ms": 0.1587500000023283
+    },
+    {
+      "mode": "durable",
+      "ms": 1150.2683929999985
+    }
+  ]
+}

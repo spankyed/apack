@@ -1,0 +1,82 @@
+{
+  "format": 1,
+  "source": {
+    "revision": "e602e9ad777770e2412f2a257e1077a0427b1566",
+    "dirty": false,
+    "excludedUntracked": [
+      ".apack-checkout",
+      ".apack-run.lock"
+    ],
+    "diffSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "builds": [
+    {
+      "path": "packages/api/dist",
+      "sha256": "655d4c0d794e1f95a7f7fcb65d0426721db3b87ea594e2694e473e4b60bb0be4"
+    },
+    {
+      "path": "packages/main/dist",
+      "sha256": "8fa0497da192cdc715d1eca80d2e88a393efd9dfadc932d897dbe13940f7aff1"
+    },
+    {
+      "path": "packages/preload/dist",
+      "sha256": "a2bae9f4f8715defb9bf042116b4b15c86366fbbbcab13906eddf45e9d7e6b9f"
+    },
+    {
+      "path": "packages/renderer/dist",
+      "sha256": "ecc90674329710c68a0f4754d28732c2031e595fb8d206d0c2a01ab90a286fe3"
+    },
+    {
+      "path": "packages/default-setup/dist",
+      "sha256": "0c211d5f71926341fdc06baafd8e7fa00c9fc1ac0ca784ed2cb9050c609e32d7"
+    },
+    {
+      "path": "vendor/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node",
+      "sha256": "9c0469d914d90d0ad7763e84378f0f7149855a85420ae2965dcfb4b4eb2f1474"
+    }
+  ],
+  "fixture": {
+    "generator": "message-search-v1",
+    "seed": 0,
+    "sha256": "fdc894145a73053b09dc61228eeb3ff8a73f77dfb7363a7fcbbc6bb65b28baf7",
+    "distribution": {
+      "threads": 12,
+      "messagesPerThread": 100,
+      "matchingQueries": 2,
+      "matchesPerQuery": 20,
+      "resultLimit": 20,
+      "bodyRepetitions": 50
+    }
+  },
+  "native": {
+    "pin": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+    "checkoutRevision": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+    "dirty": false,
+    "excludedUntracked": [
+      ".apack-elmdb-built",
+      ".apack-elmdb-checkout",
+      ".apack-elmdb.lock"
+    ]
+  },
+  "runtime": {
+    "node": "23.11.1",
+    "v8": "12.9.202.28-node.14",
+    "osRelease": "6.17.8-orbstack-00308-g8f9c941121b1",
+    "electron": "37.2.4",
+    "chromium": "138.0.7204.157",
+    "appNode": "22.17.1",
+    "appV8": "13.8.258.26-electron.0",
+    "performancePolicy": "single-scenario-v1"
+  },
+  "machine": {
+    "platform": "linux",
+    "arch": "arm64",
+    "cpus": 2,
+    "memoryBytes": 6442450944,
+    "identity": "2560fc4983b5370437af48d41b6f377fd8767c55e26a7e9a64b589233996b8a2"
+  },
+  "mode": "detailed",
+  "cache": "warm-process",
+  "warmups": 5,
+  "clock": "Local monotonic durations; cross-process epoch alignment is approximate"
+}
