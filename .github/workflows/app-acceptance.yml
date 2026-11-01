@@ -846,6 +846,7 @@ jobs:
         if: ${{ !cancelled() && steps.relation_witnesses.outcome == 'success' }}
         run: node native/vectors/runtime-info.mjs .temp/sqlite-api/vector-runtime-info.json
       - name: High-multiplicity audit resources from the built package
+        id: audit_resources
         if: ${{ !cancelled() && steps.relation_witnesses.outcome == 'success' }}
         run: |
           set -euo pipefail
@@ -862,6 +863,20 @@ jobs:
             ears-audit-runtime /runtime/node --experimental-strip-types \
             packages/apack-ears/bench/sqlite/relation-audit-resources.mjs /results/relation-audit-resources.json \
             2>&1 | tee .temp/sqlite-api/relation-audit-resources.log
+      - name: Chunk-skew vector resources from the built package
+        if: ${{ !cancelled() && steps.audit_resources.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          vector_node_binary=$(command -v node)
+          for chunks in 1 1024 16384; do
+            docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+              --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
+              -e GITHUB_SHA="$GITHUB_SHA" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+              -v "$vector_node_binary:/runtime/node:ro" -v "$GITHUB_WORKSPACE/.temp/sqlite-api:/results" \
+              ears-audit-runtime /runtime/node --expose-gc --experimental-strip-types \
+              packages/apack-ears/bench/sqlite/vector-owner-resources.mjs "$chunks" "/results/vector-owner-$chunks.json" \
+              2>&1 | tee ".temp/sqlite-api/vector-owner-$chunks.log"
+          done
       - name: Require all declared real-content relevance judgments
         run: |
           node --input-type=module <<'JS'

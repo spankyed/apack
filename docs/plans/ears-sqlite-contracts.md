@@ -236,6 +236,15 @@ Source review identifies these boundaries; measured receipts remain source-speci
 | Logical export/restore | Export first makes a private physical copy, then streams logical records; restore spools and rebuilds/audits a separate destination. Streaming does not remove physical-copy time, private disk needs, full validation or individual-value size costs. | Retain failure cleanup/source preservation and measure populated import/export/rebuild time and peak disk/WAL across the complete operational path. |
 | Statement cache | Owned references are capped at 256 statements and 1 MiB of SQL text; this is not a measurement of native prepared-VM allocations or statements still held by callers. | Keep reference/text bounds separate from process memory claims and measure actual app connections/workloads. |
 
+The built-package `bench/sqlite/vector-owner-resources.mjs` probe is added to the focused CI resource
+path, pending execution. It holds 4,608 owners and 1,536 dimensions fixed while varying one owner's
+chunks across 1/1,024/16,384, with its only winning vector in the final chunk. Twenty warm serial queries
+per fresh process verify top-five identities/scores against independent trigonometric expectations and
+record raw query/heartbeat samples, process memory and a post-query file-size snapshot. It explicitly uses
+untrained fallback selection and low-rank synthetic vectors; it cannot qualify managed-model recall,
+representative corpus resources, independent-trial variance, peak disk or app responsiveness. Existing
+16 ms heartbeat limits are reported unchanged rather than hidden behind diagnostic workflow success.
+
 These findings do not authorize deferring requirements or expanding the product into a permanent dual backend. They guide the remaining implementation, measurements and final adoption recommendation.
 
 
