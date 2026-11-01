@@ -266,6 +266,9 @@ if (mode === 'verify') {
   const hybridHighlights = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/hybrid-highlights.spec.ts') ? file.assertionResults : []);
   requirePassingCases(hybridHighlights, ['hybrid winner highlights formats only final lexical winners while preserving global fusion scores, list highlights and scoped mixed-type answers',
     'hybrid winner highlights keeps deferred text details in the ranking snapshot when an independent writer commits between phases'], 'Hybrid winner highlight work');
+  const cosineCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-cosine.spec.ts') ? file.assertionResults : []);
+  requirePassingCases(cosineCases, [1, 3, 7, 8, 127, 128, 1536].map(dimensions =>
+    `canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (${dimensions} dimensions)`), 'Canonical cosine numerical compatibility');
   const trainingCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts') ? file.assertionResults : []);
   requirePassingCases(trainingCases, requiredTrainingCases, 'Native worker ownership, corruption and retry');
   const graphAlgorithmCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/graph-algorithms.spec.ts') ? file.assertionResults : []);

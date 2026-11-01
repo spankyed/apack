@@ -266,6 +266,8 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
+          npm run typecheck -w @apackdev/ears
+          node_modules/.bin/oxlint packages/apack-ears/tests/sqlite/vector-cosine.spec.ts -D correctness
           mkdir -p .temp/vector-dispatch
           git rev-parse HEAD > .temp/vector-dispatch/source.txt
           node native/vectors/build.mjs .temp/vector-dispatch/generic
@@ -319,7 +321,7 @@ jobs:
           set -euo pipefail
           for variant in generic dispatch; do
             EARS_EVALUATION_BACKEND=sqlite EARS_VEC1_EXTENSION="$GITHUB_WORKSPACE/.temp/vector-dispatch/$variant/vec1.so" \
-              npm test -w @apackdev/ears -- tests/sqlite/vector-training.spec.ts --maxWorkers=2 \
+              npm test -w @apackdev/ears -- tests/sqlite/vector-training.spec.ts tests/sqlite/vector-cosine.spec.ts --maxWorkers=2 \
               --reporter=default --reporter=json --outputFile="../../.temp/vector-dispatch/$variant-training.json" \
               2>&1 | tee ".temp/vector-dispatch/$variant-training.log"
           done
@@ -332,6 +334,9 @@ jobs:
             const file = report.testResults.find(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts'));
             assert(file?.assertionResults.length > 0);
             for (const test of file.assertionResults) assert.equal(test.status, 'passed', test.fullName);
+            const cosine = report.testResults.find(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-cosine.spec.ts'));
+            assert.equal(cosine?.assertionResults.length, 7);
+            for (const test of cosine.assertionResults) assert.equal(test.status, 'passed', test.fullName);
             for (const syncs of [false, true]) assert(file.assertionResults.some(test => test.fullName.endsWith(
               `keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (${syncs} syncs)`)));
           }
