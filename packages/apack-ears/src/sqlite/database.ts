@@ -563,6 +563,10 @@ export class SqliteDatabase implements EarsDatabase {
   private canonical(value: unknown, depth = 0): unknown {
     if (depth > 64) fail('VALUE_INVALID', 'Invalid stored value');
     if (Array.isArray(value)) return value.map(item => this.canonical(item, depth + 1));
+    if (value instanceof Map) return Object.fromEntries([...value].map(([key, item]) => {
+      if (typeof key !== 'string') fail('VALUE_INVALID', 'Stored maps require string keys');
+      return [key, this.canonical(item, depth + 1)];
+    }));
     if (value !== null && typeof value === 'object' &&
         (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)) {
       return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)
@@ -586,6 +590,13 @@ export class SqliteDatabase implements EarsDatabase {
       return;
     }
     if (value instanceof Uint8Array || value === null) return;
+    if (value instanceof Map) {
+      for (const [key, item] of value) {
+        if (typeof key !== 'string') fail('VALUE_INVALID', 'Stored maps require string keys');
+        this.validate(item, depth + 1);
+      }
+      return;
+    }
     if (Array.isArray(value)) {
       for (const item of value) this.validate(item, depth + 1);
     } else if (typeof value === "object")
@@ -966,6 +977,7 @@ export class SqliteDatabase implements EarsDatabase {
           "SELECT * FROM relations WHERE kind=? AND source=? AND target=? ORDER BY seq",
           [op.kind, op.source, op.target]
         );
+        if (info !== undefined) this.validate(info);
         checkRelationKeyInfo(def.key ?? [], info);
         const weight = relationWeight(!!def.weighted, op.kind, op.weight);
         const existing = matching.find(r => sameRelationKey(def.key ?? [],
@@ -1031,6 +1043,7 @@ export class SqliteDatabase implements EarsDatabase {
         const definition = this.relationDefinition(r.kind);
         const key = definition.key ?? [];
         const providedInfo = op.info ?? undefined;
+        if (providedInfo !== undefined) this.validate(providedInfo);
         checkRelationKeyInfo(key, providedInfo);
         const info = providedInfo === undefined ? r.info : providedInfo;
         if (source !== r.source || target !== r.target || !sameRelationKey(key, r.info, info)) {

@@ -472,7 +472,7 @@ jobs:
         run: |
           set -o pipefail
           files=(tests/no-module-state.spec.ts tests/watch-causes.spec.ts
-                 tests/engine/relations.spec.ts tests/engine/graph-similarity.spec.ts
+                 tests/engine/relations.spec.ts tests/engine/writes.spec.ts tests/engine/graph-similarity.spec.ts
                  tests/engine/vector.spec.ts
                  tests/engine/observation.spec.ts tests/engine/search-relevance.spec.ts
                  tests/engine/watch.spec.ts tests/engine/model-based.spec.ts
@@ -508,6 +508,9 @@ jobs:
             'links treats null optional relation info as omitted, preserving an existing keyed value',
             'links keeps keyed bytes, lists and own map fields distinct, and refuses scalar keyed info atomically',
             'links a keyed kind joins two ends by one edge per value of its key, a field the info lacks being null',
+            'links uses string-keyed Maps as relation info and preserves distinct nested map keys',
+            'links refuses invalid relation info values before changing an edge or its commit identity',
+            'attribute writes stores string-keyed Map attributes as own-field objects and refuses invalid nested maps atomically',
           ];
           for(const backend of ['elmdb','sqlite']) {
             const report=JSON.parse(readFileSync(`.temp/sqlite-api/${backend}-contracts.json`,'utf8'));

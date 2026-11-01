@@ -122,6 +122,33 @@ describe('links', () => {
     expect(e.getRelation(first)?.info).toEqual({ handle: 1, label: 'kept' });
   });
 
+  it('uses string-keyed Maps as relation info and preserves distinct nested map keys', () => {
+    e = engine({ relationRules: { refs: { key: ['handle'] } } });
+    const [a, b] = [task('A'), task('B')];
+    const info = (tag: number, label: string) => new Map<string, unknown>([
+      ['handle', new Map([['tag', tag]])], ['label', label],
+    ]);
+    e.write(a).link('refs', b, { info: info(1, 'one') }).link('refs', b, { info: info(2, 'two') });
+    const first = e.findRelations()[0].id;
+    expect(e.findRelations()).toHaveLength(2);
+    e.write(a).link('refs', b, { info: new Map<string, unknown>([['label', 'updated'], ['handle', new Map([['tag', 1]])]]) });
+    expect(e.findRelations()).toHaveLength(2);
+    expect(e.getRelation(first)?.info).toEqual({ handle: { tag: 1 }, label: 'updated' });
+  });
+
+  it('refuses invalid relation info values before changing an edge or its commit identity', () => {
+    const [a, b] = [task('A'), task('B')];
+    e.write(a).link('refs', b, { info: { label: 'kept' } });
+    const relation = e.findRelations()[0], commit = e.lastCommit();
+    for (const info of [NaN, Infinity, { nested: [NaN] }, new Map([[1, 'non-string key']]),
+      new Map([['nested', new Map([[1, 'non-string key']])]])]) {
+      expect(() => e.write(a).link('refs', b, { info })).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+      expect(() => e.updateRelation(relation.id, { info })).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+      expect(e.lastCommit()).toBe(commit);
+      expect(e.findRelations()).toEqual([relation]);
+    }
+  });
+
   it('refuses options it does not know, which is info passed where the options go', () => {
     const [a, b] = [task('A'), task('B')];
     const info: any = { size: 2 };
