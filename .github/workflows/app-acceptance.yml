@@ -792,6 +792,8 @@ jobs:
           npm run typecheck -w @apackdev/ears
           node_modules/.bin/oxlint packages/apack-ears/src/sqlite/database.ts \
             packages/apack-ears/tests/sqlite/relation-audit.spec.ts native/vectors/distance-kernel.mjs -D correctness
+      - name: Hit projection regressions reject the previous execution and dependency paths
+        run: node --import tsx .github/scripts/ears-hit-projection-control.mjs
       - name: Scoped pack readiness and lifecycle contracts
         run: >-
           npm test -w @apackdev/host -- tests/packs/registration.spec.ts
