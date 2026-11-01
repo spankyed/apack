@@ -1,0 +1,69 @@
+{
+  "source": "4701bd839df1cf32e39e674b02fa285904f80a7f",
+  "scope": "Rebased-source platform reports, before projected-hit batching/dependency corrections; retained relevance failure is not waived",
+  "platforms": [
+    {
+      "platform": "linux",
+      "suites": {
+        "ears": {
+          "numPassedTests": 920,
+          "numFailedTests": 1,
+          "numPendingTests": 0
+        },
+        "host": {
+          "numPassedTests": 312,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        },
+        "host-crash": {
+          "numPassedTests": 12,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        }
+      },
+      "orderingCostPassed": 28
+    },
+    {
+      "platform": "macos",
+      "suites": {
+        "ears": {
+          "numPassedTests": 920,
+          "numFailedTests": 1,
+          "numPendingTests": 0
+        },
+        "host": {
+          "numPassedTests": 312,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        },
+        "host-crash": {
+          "numPassedTests": 12,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        }
+      },
+      "orderingCostPassed": 28
+    },
+    {
+      "platform": "windows",
+      "suites": {
+        "ears": {
+          "numPassedTests": 916,
+          "numFailedTests": 1,
+          "numPendingTests": 4
+        },
+        "host": {
+          "numPassedTests": 309,
+          "numFailedTests": 0,
+          "numPendingTests": 6
+        },
+        "host-crash": {
+          "numPassedTests": 2,
+          "numFailedTests": 0,
+          "numPendingTests": 10
+        }
+      },
+      "orderingCostPassed": 28
+    }
+  ]
+}
