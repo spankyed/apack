@@ -1,0 +1,19 @@
+import json, statistics
+from pathlib import Path
+
+def summary(a,b):
+ def change(x,y): return 100*(statistics.median(y)/statistics.median(x)-1)
+ assert len(a)==len(b)==20
+ leave=[];block=[]
+ for i in range(0,20,2):
+  leave.append(change(a[:i]+a[i+2:],b[:i]+b[i+2:]))
+  block.append(change(a[i:i+2],b[i:i+2]))
+ return {'medianA':statistics.median(a),'medianB':statistics.median(b),'changePercent':change(a,b),
+  'leaveOneBlockOutPercent':[min(leave),max(leave)],'blockChangesPercent':block,
+  'firstHalfMedians':[statistics.median(a[:10]),statistics.median(b[:10])],
+  'secondHalfMedians':[statistics.median(a[10:]),statistics.median(b[10:])]}
+r=json.load(open('/private/tmp/apack-final-qualification.json'))
+out={f'final-{k}':summary(*[[s['durationMs'] for s in v[x]['samples'] if not s['warmup']] for x in ['baseline','candidate']])for k,v in r['actions'].items()}
+p=Path('/private/tmp/apack-optimization-analysis')
+out['original-search']=summary(*[[v['sample']['durationMs'] for v in json.load(open(p/f'lightweight-search-{x}-results.json'))['records'] if not v['sample']['warmup']]for x in ['A','B']])
+print(json.dumps(out,indent=2))

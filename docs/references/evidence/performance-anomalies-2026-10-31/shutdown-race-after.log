@@ -1,0 +1,12 @@
+
+ RUN  v3.2.7 /private/tmp/apack-performance-anomalies.noindex
+
+ ✓ .apack/process-stop-candidate.spec.ts (8 tests) 2241ms
+   ✓ stopping the API process > observes exit after an overdue escalation, then reports that nothing is running  1136ms
+   ✓ stopping the API process > escalates to SIGKILL for a child that will not take the signal  1057ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  23:28:32
+   Duration  3.52s (transform 160ms, setup 0ms, collect 435ms, tests 2.24s, environment 0ms, prepare 427ms)
+

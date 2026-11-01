@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -uo pipefail
+root="/work/.apack/performance/anomalies-$(git rev-parse --short HEAD)"
+mkdir -p "$root"
+failed=0
+run() {
+  local name="$1"; shift
+  printf 'Starting %s\n' "$name"
+  "$@" > "$root/$name.log" 2>&1
+  local status=$?
+  printf '%s\n' "$status" > "$root/$name.exit"
+  printf 'Completed %s: exit %s; evidence %s\n' "$name" "$status" "$root"
+  if [ "$status" != 0 ]; then failed=1; fi
+}
+run model bash .apack/profile-model.sh "$root/model"
+run runtime npm run chain -- --only packages:ensure,build:default-setup,build:runtime --no-native --cores 2
+if [ "$(cat "$root/runtime.exit")" != 0 ]; then exit 1; fi
+for index in 1 2 3 4 5; do
+  run "fresh-$index" xvfb-run -a node scripts/with-source.mjs playwright test --config .apack/launch-probe.config.ts --output "$root/fresh-$index"
+done
+# 5 declared suite warmups + 5 predeclared additional control warmups + 40 ABBA-labelled observations.
+run search-aa xvfb-run -a env APACK_PERFORMANCE_SCENARIO=search APACK_PERFORMANCE_MODE=disabled APACK_PERFORMANCE_TRIALS=45 APACK_PERFORMANCE_RUN_OUTPUT="$root/search-aa" node scripts/with-source.mjs playwright test --config tests/performance/playwright.config.ts --output "$root/search-aa/playwright"
+run startup-aa xvfb-run -a env APACK_PERFORMANCE_MODE=disabled APACK_PERFORMANCE_TRIALS=45 APACK_PERFORMANCE_RUN_OUTPUT="$root/startup-aa" node scripts/with-source.mjs tsx tests/performance/startup-run.ts
+exit "$failed"

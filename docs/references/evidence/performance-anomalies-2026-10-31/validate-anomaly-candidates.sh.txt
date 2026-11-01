@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -uo pipefail
+root=/work/.apack/performance/anomalies-candidate-e42fcfc745
+mkdir -p "$root/original"
+files=(packages/apack-testing/src/index.ts packages/main/src/modules/api-server/process-manager.ts packages/apack-ears/src/lmdb/database.ts)
+for index in 0 1 2; do cp "${files[$index]}" "$root/original/$index.ts"; done
+restore(){ touch "$root/observer.done"; for index in 0 1 2; do cp "$root/original/$index.ts" "${files[$index]}"; done; }
+trap restore EXIT
+cp .apack/index-once-candidate.ts "${files[0]}"
+cp .apack/process-manager-candidate.ts.txt "${files[1]}"
+cp .apack/database-doc-candidate.ts "${files[2]}"
+sha256sum "${files[@]}" > "$root/candidate-hashes.txt"
+run(){ local name="$1"; shift; echo "Starting $name"; "$@" > "$root/$name.log" 2>&1; local status=$?; echo "$status" > "$root/$name.exit"; echo "Completed $name: $status; evidence $root"; return "$status"; }
+run producers npm run chain -- --only packages:ensure,build:default-setup,build:runtime --no-native --cores 2 || exit 1
+run shared-app-smoke xvfb-run -a node scripts/with-source.mjs playwright test tests/e2e/smoke/smoke.spec.ts -g 'app launches without crashing|app reaches connected state' --workers 1 --output "$root/shared-app-smoke" || exit 1
+node --input-type=module - "$root/shared-app-smoke.log" <<'JS'
+import fs from 'node:fs';import assert from 'node:assert/strict';
+const log=fs.readFileSync(process.argv[2],'utf8');assert.match(log,/2 passed/);
+const phases=[...log.matchAll(/\[e2e\.launch\]\s+(\{[^\n]+\})/g)].map(x=>JSON.parse(x[1]).phase);
+assert.deepEqual(phases,['requested','process-attached','application-state-present','viewport-ready','connected']);
+console.log('Two existing tests shared one app; each launch phase was reported exactly once.');
+JS
+if [ "$?" != 0 ]; then exit 1; fi
+printf '%s\n' 'Diagnostic only: candidate source is modified; DEBUG_E2E and a 500ms process observer are enabled. No timing qualification.' > "$root/search-trace-purpose.txt"
+node .apack/observe-application-processes.mjs "$root/search-trace.log" "$root/observer.done" "$root/process-observations.json" &
+observer=$!
+run search-trace xvfb-run -a env DEBUG_E2E=shutdown APACK_PERFORMANCE_SCENARIO=search APACK_PERFORMANCE_MODE=disabled APACK_PERFORMANCE_COMPARE_MODE=lightweight APACK_PERFORMANCE_TRIALS=20 APACK_PERFORMANCE_RUN_OUTPUT="$root/search-trace" node scripts/with-source.mjs playwright test --config tests/performance/playwright.config.ts --output "$root/search-trace/playwright"
+status=$?
+touch "$root/observer.done"
+wait "$observer"
+exit "$status"

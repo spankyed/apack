@@ -75,11 +75,14 @@ contained the previous workload's rows and edges. The committed properties retai
 Compact reports and diagnostic source snapshots live in
 [performance-anomalies-2026-10-31/](performance-anomalies-2026-10-31/). Diagnostic scripts are archived
 verbatim, with `.txt` appended; their original working directory was the checkout and their original
-location `.apack/`. They are historical probes, not a new supported command. `diagnostics.json` retains
-control manifests and all scalar control timings, launch phases and original instrumented phase totals;
+location `.apack/`. The follow-up script consumes the committed model fixture copied to
+`.apack/model-seeded-candidate.ts`. They are historical probes, not a new supported command. `diagnostics.json` retains
+control manifests and all forty regrouped control timings per action, launch phases and original instrumented phase totals;
 `historical-overhead-sensitivity.json` retains the reanalysis. `startup-mode-comparison.json` retains the
 strictly admitted real comparison. `database-open-probe.json` retains all sixteen balanced observations.
-The original instrumentation diff and both model outcomes are preserved.
+The original instrumentation diff and both model outcomes are preserved. Historical search resource
+records retain renderer metric windows, native read durations and backend CPU/GC observations behind
+the layout analysis. All per-block statistics are diagnostic sensitivity, not replacement acceptance.
 
 Full raw reports remain on session-owned Docker volume `apack-linux-work-e57d8dafb632` under
 `/work/.apack/performance/anomalies-657177c14a` and `anomalies-followup-657177c14a`. The original
@@ -103,11 +106,49 @@ retained by the application-performance optimization evidence. No failed invocat
 - Newly observed blocker: that search run's API shutdown reported `API process did not exit after
   shutdown signals`, and worker teardown exceeded its existing 120-second deadline. The API was absent
   at a later process inspection, but these logs cannot establish its exact exit time or the cause of the
-  stop refusal. The existing qualifier rejected the invocation. Preserve the failure; use lifecycle
-  evidence to diagnose it before another search qualification. No speculative shutdown change is made.
+  stop refusal. The existing qualifier rejected the invocation. The subsequently reproduced timer
+  race and its correction are described below; the original invocation remains failed.
+
+## Subsequent shutdown fix
+
+Review identified a concrete false-refusal race. If the main event loop stalls beyond both the
+escalation and refusal timers, they can run back to back before Node can deliver the child's exit.
+A real child ignores SIGTERM; blocking its parent's event loop for 1.1 seconds reproduces the exact
+shutdown error in the original implementation. The strengthened eight-case suite fails one case and
+passes seven against the old code; all eight pass the correction.
+
+The existing escalation delay and one-second confirmation grace remain. The grace now begins when
+escalation actually executes, leaving an I/O turn for exit notification. A genuine failure to exit
+still refuses. The regression replaces the simpler manager-state case and retains its assertion,
+so the file still has eight cases. This establishes a bug and its fix, not the complete historical
+cause of the retained search teardown failure. A real-app shutdown-stall probe and a new admitted
+search comparison remain to run.
+
+Launch-phase logging is also limited to initial connection: later tests sharing the same application
+do not report their readiness time as boot time. The public launch clock remains available after
+connection. Initial-format syncing is clarified in the existing option documentation.
 
 ## Validation checkpoint
 
-The full local `chain --no-native --cores 2` and required strict CI are pending. The local chain must
-verify the randomized fixture with the rest of EARS, the testing helper and affected consumers; CI
-provides clean full-chain acceptance. No runtime, query, schema, durability or recording contract changed.
+Clean strict CI passed all six jobs on `e42fcfc745`:
+[run 41266890054](https://github.com/spankyed/apack/actions/runs/41266890054). This covers the window
+discovery and model-fixture fixes, before the subsequent shutdown and one-shot logging corrections.
+The corrected actual source passes 15 focused cases: process stopping (8), application shutdown (2),
+and window discovery (5). Focused main/testing/EARS typechecks and source lint passed. A new strict CI checkpoint is pending.
+
+The local `chain --no-native --cores 2` did not pass. Its integration pool timed out in the unchanged
+facade-report case (80 seconds) and dependency-graph beforeAll (240 seconds). Its host unit step also
+reported changed inputs because evidence files were added while it ran: its aggregate cache proof is
+invalid and is not final acceptance. The separately retained full model runs remain observations of
+the unchanged model fixture. Pack unit tests passed (148 files). Preserve the failed local run at
+`node_modules/.cache/apack-chain/runs/2026-11-01T02-47-16Z-88980/`; do not increase deadlines or rerun
+the full chain to diagnose these compiler cases.
+
+The isolated candidate producer build also exceeded the existing 600-second default-pack build
+ceiling, after packages were built successfully. It did not reach the smoke or search diagnostic
+phases. This is a preparation failure, not an application measurement. Its exact candidate source
+was copied only inside the disposable runner and restored on exit. Profile that specific build on
+a quiet host before another local application run; do not count unexecuted probes as passes.
+
+Query, schema, durability and recording contracts are unchanged. The runtime shutdown correction
+changes when exit confirmation begins, and still requires the API child to be gone before quit.

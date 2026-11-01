@@ -42,17 +42,23 @@ Documentation-only findings reuse existing valid checks. Do not merge new change
 ## Current handoff
 
 Read the [finding-by-finding disposition](../references/evidence/2026-10-31-performance-anomalies.md).
-The bounded window-discovery fix is committed as `657177c14a`; the seeded model fixture passed the
-full fixed-seed workloads and isolation counterfactual before application. The original randomized
-120/40 workloads and existing deadlines remain unchanged. Independent setup improved 99.3% in the
-paired probe; this is not an app-speed claim. No native changes are proposed.
+The model-fixture and window-discovery fixes passed clean six-job strict CI on `e42fcfc745`. The local
+chain failed two compiler deadlines; evidence edits also invalidated its host-unit aggregate proof.
+Do not report the local chain as passing. The independent model properties and isolation counterfactual
+passed with unchanged 120/40 workloads and deadlines.
 
-The narrow disabled/disabled controls measured +1.44% search and +0.37% startup. A new same-build
-startup recording comparison passed (-1.82%). The new search invocation failed teardown after its
-actions passed; preserve it as failed, with no qualification claim. Historical 102.914-second setup
-attribution and a robust sub-5% short-search overhead bound remain unestablished. Diagnose the retained
-API shutdown refusal before another search qualification, without expanding or relaxing the gate.
+A subsequent real-child probe exposed a shutdown timer race. Its corrected eight-case suite passes;
+the old implementation fails the strengthened case. The existing simpler state case was replaced,
+so test count did not increase. Actual source now passes 15 focused main/testing cases. Initial-only
+launch logging is also corrected. Finish typechecks, commit/push the checkpoint and dispatch strict CI.
 
-The focused EARS typecheck, fixture lint and full Linux model properties passed. The current job is
-`chain --no-native --cores 2`; track it before starting any further broad validation. Commit/push the
-reviewable checkpoint and dispatch required strict CI after it converges. Do not merge.
+The bounded Linux candidate build timed out in default-pack preparation before its app probes. Gather
+a CPU profile of that one build before another local app run, with unchanged resource limits and
+ceiling. Once preparation succeeds, use the existing two smoke cases to verify shared-app launch logs,
+then the explicit shutdown-stall probe and one clean real search comparison. Keep all diagnostic and
+qualification invocations separate. No native source changes are proposed.
+
+The narrow disabled/disabled controls measured +1.44% search and +0.37% startup; a real startup recording
+comparison passed (-1.82%). The historical 102.914-second setup cause and a robust sub-5% short-search
+overhead bound remain unestablished. Preserve failures and do not relax the timing or correctness gates.
+Do not merge.

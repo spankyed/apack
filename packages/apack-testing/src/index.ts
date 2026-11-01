@@ -102,13 +102,13 @@ function readPackLastError(packId: string, userDataDir: string): string | undefi
 // cause (loader errors, crashes) without re-running under DEBUG_E2E.
 const OUTPUT_TAIL_LINES = 200;
 // Launch time per app, to report how long boot to a connected renderer took (once per worker)
-const launchMonotonicStart = new WeakMap<ElectronApplication, number>();
+const launches = new WeakMap<ElectronApplication, { started: number; connected: boolean }>();
 function reportLaunchPhase(phase: string, started: number, pid?: number): void {
   console.log('[e2e.launch]', JSON.stringify({ phase, elapsedMs: performance.now() - started, at: Date.now(), pid }));
 }
 /** Parent-process monotonic time immediately before launching this owned application's process. */
 export function applicationLaunchStartedAt(app: ElectronApplication): number {
-  const started = launchMonotonicStart.get(app);
+  const started = launches.get(app)?.started;
   if (started === undefined) throw new Error('The application was not launched by this fixture');
   return started;
 }
@@ -507,7 +507,7 @@ export function createTest(options: CreateTestOptions = {}) {
           env: appLaunchEnv(process.env, userDataDir),
         });
 
-        launchMonotonicStart.set(app, monotonicStart);
+        launches.set(app, { started: monotonicStart, connected: false });
         reportLaunchPhase('process-attached', monotonicStart, app.process().pid);
         userDataDirs.set(app, userDataDir);
         captureOutput(app, appLogPath(workerInfo));
@@ -597,11 +597,12 @@ export function createTest(options: CreateTestOptions = {}) {
 
     appPage: async ({ electronApp }, use, testInfo) => {
       const page = await findMainWindow(electronApp);
-      reportLaunchPhase('application-state-present', applicationLaunchStartedAt(electronApp), electronApp.process().pid);
+      const launch = launches.get(electronApp)!;
+      if (!launch.connected) reportLaunchPhase('application-state-present', launch.started, electronApp.process().pid);
       // Deterministic for a suite, and the window's own size for a run someone is watching — see `pinsViewport`
       if (pinsViewport(process.env)) await page.setViewportSize(E2E_VIEWPORT);
 
-      reportLaunchPhase('viewport-ready', applicationLaunchStartedAt(electronApp), electronApp.process().pid);
+      if (!launch.connected) reportLaunchPhase('viewport-ready', launch.started, electronApp.process().pid);
       const rendererErrors: string[] = [];
       let rejectPackFeFailed: (err: Error) => void = () => {};
       const packFeFailed = new Promise<never>((_, reject) => { rejectPackFeFailed = reject; });
@@ -635,7 +636,10 @@ export function createTest(options: CreateTestOptions = {}) {
 
       await waitOrDescribe('App did not reach connected state', waitForAppReady(page));
 
-      reportLaunchPhase('connected', applicationLaunchStartedAt(electronApp), electronApp.process().pid);
+      if (!launch.connected) {
+        reportLaunchPhase('connected', launch.started, electronApp.process().pid);
+        launch.connected = true;
+      }
 
       /**
        * Every send the bus dropped during the test, collected from the app's own SYSTEM_ERROR events.
