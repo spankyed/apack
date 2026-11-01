@@ -25,6 +25,37 @@ function open() {
 }
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite ordering work', () => {
+  it('batches projected search hits across types without changing order, scores or highlights', async () => {
+    const path = mkdtempSync(join(tmpdir(), 'ears-hit-projection-'));
+    const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema({ types: {
+      Row: { required: [], search: { fields: { body: 1 } } },
+      Other: { required: [], search: { fields: { body: 1 } } },
+    }, relations: {}, roles: [] }) });
+    held.push({ db, path });
+    const e = createEarsEngine({ database: db }), ranks = new Map<string, number>();
+    e.transact(() => {
+      for (let i = 0; i < 128; i++) {
+        const type = i % 2 ? 'Other' : 'Row', id = `${type}-${i}` as EARS.EntityId;
+        ranks.set(id, i); e.create(type, { id, rank: i, body: `needle ${i}` });
+      }
+    });
+    await db.indexesReady();
+    const query = e.query.all().search('needle', { fuzzy: false }).limit(64).reverse();
+    const expected = query.hits({ highlights: true });
+    expect(expected).toHaveLength(64);
+    const row = vi.spyOn(db, 'row'), rows = vi.spyOn(db, 'rows'), read = vi.spyOn(db.values, 'read');
+    const projected = query.hits({ fields: ['rank', 'missing'], highlights: true });
+    expect(projected).toEqual(expected.map(hit => ({ ...hit, row: { id: hit.id, rank: ranks.get(hit.id) } })));
+    expect(row).not.toHaveBeenCalled();
+    expect(rows).toHaveBeenCalledTimes(1);
+    expect(rows).toHaveBeenCalledWith(expected.map(hit => hit.id), ['rank', 'missing']);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(read.mock.calls.every(call => call[2]?.join(',') === 'rank,missing')).toBe(true);
+    rows.mockClear(); read.mockClear();
+    expect(e.query.all().search('absenttoken', { fuzzy: false }).hits({ fields: ['rank'] })).toEqual([]);
+    expect(rows).not.toHaveBeenCalled(); expect(read).not.toHaveBeenCalled();
+  });
+
   it.each(['rank', 'sortText'] as const)('orders %s without loading unrelated bodies or issuing per-entity SQL', field => {
     const { db, e } = open();
     e.transact(() => {

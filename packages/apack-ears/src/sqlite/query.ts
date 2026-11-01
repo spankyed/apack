@@ -547,12 +547,15 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
   }
   if (terminal.answer === "hits") {
     if (!searchHits) fail("NO_SEARCH", "No search in query");
-    const hits = idsNow().map((id) => {
+    const ids = idsNow();
+    const projected = terminal.fields && ids.length
+      ? new Map(db.rows(ids, terminal.fields).map(row => [row.id, row])) : undefined;
+    const hits = ids.map((id) => {
       const hit = searchHits!.get(id)!;
       const result: StoredHit = { id, score: hit.score, terms: hit.terms ?? [] };
       if (terminal.highlights) result.highlights = hit.highlights ?? {};
       if (terminal.fields) {
-        const row = db.row(id, terminal.fields)!;
+        const row = projected!.get(id)!;
         result.row = Object.fromEntries([
           ["id", id],
           ...terminal.fields
