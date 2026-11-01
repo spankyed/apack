@@ -550,6 +550,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
     const ids = idsNow();
     const projected = terminal.fields && ids.length
       ? new Map(db.rows(ids, terminal.fields).map(row => [row.id, row])) : undefined;
+    if (projected) for (const id of projected.keys()) db.trackKey(`entity:${id}`);
     const hits = ids.map((id) => {
       const hit = searchHits!.get(id)!;
       const result: StoredHit = { id, score: hit.score, terms: hit.terms ?? [] };

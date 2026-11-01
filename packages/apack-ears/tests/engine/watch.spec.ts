@@ -30,6 +30,22 @@ const settled = () => e.admin.watchesSettled();
 const titles = () => e.query('Task').ids().map((id) => e.getAttr(id, 'title'));
 
 describe('watch', () => {
+  it('refreshes graph-ranked hit projections when only a returned field changes', async () => {
+    const a = e.create('Task', { title: 'source' }).id();
+    const b = e.create('Task', { title: 'destination' }).id();
+    e.write(a).link('refs', b);
+    const w = watched(() => e.query('Task').rank('refs').limit(1).hits({ fields: ['title'] }));
+    await settled();
+    expect(w.last()?.map(hit => hit.row)).toEqual([{ id: b, title: 'destination' }]);
+    const score = w.last()![0]!.score;
+    e.write(b).set('title', 'renamed destination');
+    await settled();
+    expect(w.errors).toEqual([]);
+    expect(w.last()?.map(hit => hit.row)).toEqual([{ id: b, title: 'renamed destination' }]);
+    expect(w.last()![0]!.score).toBe(score);
+    expect(w.seen.at(-1)!.commit).toBe(e.lastCommit());
+  });
+
   it('delivers the first result after the call returns, not during it', async () => {
     e.create('Task', { title: 'one' });
     const w = watched(() => titles());
