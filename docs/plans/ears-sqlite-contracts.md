@@ -237,7 +237,7 @@ Source review identifies these boundaries; measured receipts remain source-speci
 | Statement cache | Owned references are capped at 256 statements and 1 MiB of SQL text; this is not a measurement of native prepared-VM allocations or statements still held by callers. | Keep reference/text bounds separate from process memory claims and measure actual app connections/workloads. |
 
 The built-package `bench/sqlite/vector-owner-resources.mjs` probe is added to the focused CI resource
-path, pending execution. It holds 4,608 owners and 1,536 dimensions fixed while varying one owner's
+path. [Actual 045 qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-resources-045/README.md) completes all cohorts: query p95 is 6.37/9.68/80.47 ms and heartbeat p99 is 5.98/9.27/91.44 ms, with the heavy cohort missing 16 ms. It holds 4,608 owners and 1,536 dimensions fixed while varying one owner's
 chunks across 1/1,024/16,384, with its only winning vector in the final chunk. Twenty warm serial queries
 per fresh process verify top-five identities/scores against independent trigonometric expectations and
 record raw query/heartbeat samples, process memory and a post-query file-size snapshot. It explicitly uses
