@@ -805,6 +805,11 @@ jobs:
             LD_PRELOAD="$PWD/.temp/sqlite-api/worker-read-fault/worker-read-fault.so" \
             node --experimental-strip-types packages/apack-ears/bench/sqlite/worker-read-fault.mjs \
             .temp/sqlite-api/worker-read-fault/report.json
+      - name: Native adapter readiness observes builder status
+        run: >-
+          npm test -w @apackdev/ears -- tests/lmdb/index-readiness.spec.ts
+          --maxWorkers 2 --reporter=default --reporter=json
+          --outputFile=../../.temp/sqlite-api/native-index-readiness.json
       - name: Hit projection regressions reject the previous execution and dependency paths
         run: node --import tsx .github/scripts/ears-hit-projection-control.mjs
       - name: Scoped pack readiness and lifecycle contracts

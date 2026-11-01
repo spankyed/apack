@@ -2,6 +2,7 @@ import { createOperationTransport, operationTransport, type OperationTransport }
 import { createWriteLease, withoutWriteAuthority } from '../write-lease.ts';
 // MessagePack belongs to the native boundary, not the engine's JavaScript call path.
 import { Packr, Unpackr } from 'msgpackr';
+import { createNativeIndexReadiness, type NativeIndexSource } from './index-readiness.ts';
 import { DATABASE_FORMAT } from './format.ts';
 import { setField } from '../ids.ts';
 import type { Answer, Changes, EarsDatabase, EarsUnit, WriteResult } from '../database.ts';
@@ -52,7 +53,7 @@ interface BinaryUnit extends Omit<EarsUnit, 'read' | 'write' | 'commit'> {
   write(request: Uint8Array): Uint8Array;
   commit(durable?: boolean | null): Uint8Array;
 }
-export interface BinaryDatabase extends Omit<EarsDatabase, 'readSync' | 'write' | 'begin' | 'bulkLoad' | 'format' | 'indexesReady' | 'onIndexesChanged' | 'withExclusiveWrites' | 'withoutWriteAuthority'> {
+export interface BinaryDatabase extends NativeIndexSource, Omit<EarsDatabase, 'readSync' | 'write' | 'begin' | 'bulkLoad' | 'format' | 'indexesReady' | 'onIndexesChanged' | 'withExclusiveWrites' | 'withoutWriteAuthority'> {
   readSync(request: Uint8Array): Uint8Array;
   write(request: Uint8Array, durable?: boolean | null): Uint8Array;
   begin(): BinaryUnit;
@@ -76,6 +77,14 @@ function adaptUnit(transport: OperationTransport, unit: BinaryUnit, assertWritab
 export function adaptDatabase(database: BinaryDatabase): EarsDatabase {
   const lease = createWriteLease(), units = new Set<EarsUnit>(), transport = createOperationTransport();
   const mutate = <T>(operation: () => T): T => { lease.assertWritable(); return operation(); };
+  const readiness = createNativeIndexReadiness(database, () => [...units].some(unit => unit.isOpen));
+  const replace = (operation: () => void) => mutate(() => {
+    try { operation(); readiness.invalidate(); }
+    catch (error) {
+      if ((error as { code?: string }).code === 'NOT_DURABLE') readiness.invalidate();
+      throw error;
+    }
+  });
   const adapter: EarsDatabase = {
     format: DATABASE_FORMAT,
     get path() { return database.path; },
@@ -90,23 +99,29 @@ export function adaptDatabase(database: BinaryDatabase): EarsDatabase {
       const unit = adaptUnit(transport, native, lease.assertWritable, () => { units.delete(unit); });
       units.add(unit); return unit;
     }),
-    setSchema: (schema) => mutate(() => database.setSchema(schema)),
-    reset: () => mutate(() => database.reset()),
+    setSchema: (schema) => mutate(() => {
+      try { return database.setSchema(schema); }
+      finally { readiness.changed(); }
+    }),
+    reset: () => replace(() => database.reset()),
     backup: (target) => database.backup(target),
-    replaceWith: (source) => mutate(() => database.replaceWith(source)),
+    replaceWith: (source) => replace(() => database.replaceWith(source)),
     stats: () => database.stats(),
     bulkLoad: (loads) => mutate(() => database.bulkLoad(sent(transport, loads))),
     untrack: (token) => database.untrack(token),
     trackStats: () => database.trackStats(),
     durable: () => database.durable(),
-    indexesReady: () => Promise.resolve(),
+    indexesReady: (types) => readiness.wait(types),
     withExclusiveWrites: (operation) => {
       if (!database.isOpen) return Promise.reject(Object.assign(new Error('The database is closed'), { code: 'CLOSED' }));
       if ([...units].some(unit => unit.isOpen)) return Promise.reject(Object.assign(new Error('Commit or abort the open unit before maintenance'), { code: 'UNIT_OPEN' }));
       return lease.run(operation);
     },
     withoutWriteAuthority,
-    close: () => mutate(() => database.close()),
+    close: () => mutate(() => {
+      try { database.close(); }
+      finally { if (!database.isOpen) readiness.invalidate('CLOSED'); }
+    }),
   };
   return Object.defineProperty(adapter, operationTransport, { value: transport });
 }
