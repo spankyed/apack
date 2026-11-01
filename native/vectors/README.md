@@ -73,7 +73,7 @@ then `dispatch-build.mjs` compiles the same checked patched C into upstream's tw
 Linux/x64 runtime-dispatch library. The AVX2 object explicitly disables FMA; the baseline
 object owns upstream CPU/OS feature admission. This diagnostic does not alter ordinary
 package production, published manifests, model policy or the supported CPU baseline.
-Both artifacts must pass all 735 independent membership comparisons; the runtime report
+Both artifacts must pass all 735 independent membership comparisons; `dispatch-model-test.mjs` also writes BQ model databases with each artifact and reads them with the other, in separate processes at 128/1536 dimensions, checking full filtered memberships and distance differences no greater than 1e-5; the runtime report
 records actual Scalar/AVX2 selection and hashes, preserving failures. Compilation happens
 in disposable CI. No diagnostic library is substituted into the application.
 

@@ -300,6 +300,11 @@ jobs:
             writeFileSync('.temp/vector-dispatch/runtime.json', JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
           }
           JS
+      - name: Verify persisted trained models in both backend directions
+        run: |
+          node native/vectors/dispatch-model-test.mjs compare \
+            .temp/vector-dispatch/generic/vec1.so .temp/vector-dispatch/dispatch/vec1.so \
+            .temp/vector-dispatch/cross-backend-models.json
       - name: Preserve diagnostic source, commands and outcomes
         if: always()
         uses: actions/upload-artifact@v4

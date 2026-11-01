@@ -1,0 +1,7 @@
+# Upstream runtime dispatch builds and passes membership
+
+[Run 41302386357](https://github.com/spankyed/apack/actions/runs/41302386357), source `9c4c1c759689da64d083542dc53c4c913070b1b2`, passes on Linux/x64, Node 23.11.1, AMD EPYC 7763 exposing AVX2, GCC 13.3.0. Both libraries compile from the identical checked patched vec1 C. The diagnostic compiles upstream scalar/AVX2 objects separately, explicitly disables FMA in the AVX2 object and links upstream runtime dispatch; the ordinary package remains generic.
+
+Actual runtime reports are Scalar for generic and AVX2 for dispatch. Each passes all 735 independent ordinary-SQLite membership comparisons across 15 groups (none/flat/IVF-BQ, compact/sparse/wide/mixed/real owners, filters and transaction operations). The generic binary SHA is `93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138`; dispatch is `b983932f78fcda4415ee637d92df7be518190f968e65786c2960d617eb60f028`. Complete metadata reports/commands are compressed here with decompressed hashes; binary/object/source outputs remain in the original CI artifact and are not vendored.
+
+This establishes actual build/loading/backend selection and membership on this runner. It does not test persistent model interchange, full EARS/native-worker contracts, paired corpus latency/recall, actual execution without AVX2, Windows/macOS packaging or installed/signing. No artifact is promoted and no speedup is claimed. A separate model interchange check must precede paired performance interpretation.
