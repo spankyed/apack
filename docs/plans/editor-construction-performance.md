@@ -131,3 +131,10 @@ fix and the new delimiter afterward, preserving DOM identity. Copy reads the acc
 demand; this one-line copy-only change does not execute in opening/streaming, whose measurements
 are reused. All 43 UI cases, UI type checking and repository lint pass. Strict CI must cover this
 last fix; existing jobs remain uncancelled.
+
+The final clipboard API audit replaced an undocumented storage serializer lookup with the public
+ProseMirror `serializeForClipboard` method. Existing copy tests also verify contributed clipboard
+hooks and exclude viewer controls from HTML. All 43 UI cases, type checks and lint pass. This remains
+copy-only; the final real-browser behavior check is rerun on that handler, with opening/streaming
+measurements reused. Delay further strict dispatch until the existing pending run starts, preserving
+all queued jobs, then run the final source through strict acceptance.

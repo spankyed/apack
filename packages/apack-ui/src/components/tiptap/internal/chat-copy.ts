@@ -1,5 +1,5 @@
 import { Editor } from '@tiptap/core'
-import { DOMParser, type Fragment } from '@tiptap/pm/model'
+import { DOMParser } from '@tiptap/pm/model'
 import type { TextEditorExtensionsBinding } from '@apackdev/sdk/fe'
 import { formatReferenceHref } from '@apackdev/sdk/fe/references'
 import { createExtensions } from '../extensions.ts'
@@ -32,10 +32,9 @@ export function copyChatSelection(event: ClipboardEvent, root: HTMLElement, grou
   }) })
   try {
     const slice = DOMParser.fromSchema(editor.schema).parseSlice(container)
-    const storage = editor.storage as typeof editor.storage & { markdown: { serializer: { serialize(content: Fragment): string } } }
-    const markdown = storage.markdown.serializer.serialize(slice.content)
-    event.clipboardData.setData('text/plain', markdown)
-    event.clipboardData.setData('text/html', container.innerHTML)
+    const clipboard = editor.view.serializeForClipboard(slice)
+    event.clipboardData.setData('text/plain', clipboard.text)
+    event.clipboardData.setData('text/html', clipboard.dom.innerHTML)
     event.preventDefault()
   } finally { editor.destroy() }
 }

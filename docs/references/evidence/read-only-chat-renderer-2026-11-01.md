@@ -43,7 +43,10 @@ caught stale serializer bindings when an extension changes but its read-only ada
 now reads the current accepted registry rather than the DOM-rendering dependency snapshot. A real
 clipboard regression fails with the retired serializer and passes with its replacement, while the
 rendered DOM stays identical. This changes only the copy event path; opening/streaming do not execute
-it. Their valid qualifications are reused. Rendering owns no editor.
+it. Their valid qualifications are reused. The helper uses ProseMirror's public `serializeForClipboard` API, preserving configured clipboard
+hooks and semantic HTML instead of reading an undocumented Markdown serializer field. Full/partial
+copy coverage includes a contributed clipboard hook and excludes viewer controls from copied HTML.
+Rendering owns no editor.
 
 Unknown contributions use the original viewer; accepted adapters are validated without executing
 them and their callbacks are captured. Replacement/removal disposes subscriptions and timers,

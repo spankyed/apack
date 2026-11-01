@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JSDOM } from 'jsdom'
-import { Editor } from '@tiptap/core'
+import { Plugin } from '@tiptap/pm/state'
+import { Editor, Extension } from '@tiptap/core'
 import { createExtensions } from '../../../../src/components/tiptap/extensions.ts'
 import { createChatMarkdownParser } from '../../../../src/components/tiptap/internal/chat-markdown.ts'
 import { copyChatSelection } from '../../../../src/components/tiptap/internal/chat-copy.ts'
@@ -67,12 +68,13 @@ it('copies full and partial selections using the existing Markdown serializer', 
   const pair = compare('## Heading\n\n**Bold** and *emphasis*\n\n```js\nconst x = 1\n```\n\n| a | b |\n| --- | --- |\n| x | y |')
   document.body.appendChild(pair.candidate)
   const selection = document.getSelection()!
-  const copied = (range: Range) => {
+  const copied = (range: Range, groups: Parameters<typeof copyChatSelection>[2] = []) => {
     selection.removeAllRanges(); selection.addRange(range)
     const values = new Map<string, string>()
     const event = { clipboardData: { setData: (type: string, value: string) => values.set(type, value) }, preventDefault: vi.fn() }
-    copyChatSelection(event as unknown as ClipboardEvent, pair.candidate, [])
+    copyChatSelection(event as unknown as ClipboardEvent, pair.candidate, groups)
     expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(values.get('text/html')).not.toContain('code-block-copy-btn')
     return values.get('text/plain')
   }
   const all = document.createRange(); all.selectNodeContents(pair.candidate)
@@ -86,5 +88,9 @@ it('copies full and partial selections using the existing Markdown serializer', 
   const code = pair.candidate.querySelector('pre code')!
   const codeRange = document.createRange(); codeRange.selectNodeContents(code)
   expect(copied(codeRange)).toBe('```js\nconst x = 1\n```')
+  const clipboard = Extension.create({ name: 'customClipboard', priority: 1000,
+    addProseMirrorPlugins: () => [new Plugin({ props: { clipboardTextSerializer: () => 'custom clipboard' } })],
+  })
+  expect(copied(all, [{ packId: 'pack', groupId: 'clipboard', binding: { readOnly: {}, extensions: { customClipboard: clipboard } } }])).toBe('custom clipboard')
   selection.removeAllRanges()
 })
