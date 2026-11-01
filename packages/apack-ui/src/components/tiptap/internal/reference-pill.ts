@@ -40,6 +40,7 @@ export function createReferencePill(initial: ReferencePillTarget, editable = () 
   const update = (next: ReferencePillTarget) => {
     target = next
     dom.dataset.refType = target.type
+    dom.dataset.refId = target.id
     icon.replaceChildren(createIconSvg(target.type))
     label.textContent = target.label
   }

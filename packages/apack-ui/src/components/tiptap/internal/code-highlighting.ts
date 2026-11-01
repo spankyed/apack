@@ -18,6 +18,5 @@ export function highlightCode(code: HTMLElement): void {
     span.append(...node.children.map(render))
     return span
   }
-  code.classList.add('hljs')
   code.replaceChildren(...tree.children.map(render))
 }

@@ -1,7 +1,7 @@
 <template>
   <TiptapEditor v-if="unsupported" mode="viewer" variant="chat" :model-value="modelValue"
     :open-viewer-link="openViewerLink" @image-click="emit('imageClick', $event)" />
-  <div v-else class="tiptap-wrapper tiptap-viewer tiptap-viewer-chat" @click="onClick">
+  <div v-else class="tiptap-wrapper tiptap-viewer tiptap-viewer-chat" @click="onClick" @copy="onCopy">
     <p v-if="problem" role="status">The message could not be displayed.</p>
     <div v-show="!problem" ref="content" />
   </div>
@@ -13,6 +13,7 @@ import { textEditorExtensionsRegistry, type TextEditorExtensionsBinding, type Re
 import { createLogger } from '@apackdev/sdk/logger'
 import TiptapEditor from './TiptapEditor.vue'
 import { createChatMarkdownParser } from './internal/chat-markdown.ts'
+import { copyChatSelection } from './internal/chat-copy.ts'
 import { renderChat } from './internal/render-chat.ts'
 import { createViewerClickHandler } from './composables/createEditorClickHandler.ts'
 
@@ -55,6 +56,10 @@ watch([() => props.modelValue, groups, content], () => {
     logger.error('Read-only message rendering failed', { error })
   }
 }, { flush: 'post', immediate: true })
+function onCopy(event: ClipboardEvent) {
+  const root = content.value?.firstElementChild
+  if (root instanceof HTMLElement) copyChatSelection(event, root, groups.value)
+}
 function onClick(event: MouseEvent) {
   createViewerClickHandler({ imageClick: src => emit('imageClick', src), openLink: props.openViewerLink })(undefined, event)
 }

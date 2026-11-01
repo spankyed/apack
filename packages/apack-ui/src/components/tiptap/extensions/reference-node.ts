@@ -106,7 +106,18 @@ export const ReadOnlyReferences: ReadOnlyTextRenderer = {
         const target = parseReferenceHref(anchor.getAttribute('href') ?? '')
         if (!target) continue
         const pill = createReferencePill({ ...target, label: anchor.textContent ?? '' })
-        anchor.replaceWith(pill.dom)
+        const separator = () => {
+          const image = document.createElement('img')
+          image.className = 'ProseMirror-separator'
+          image.alt = ''
+          return image
+        }
+        anchor.replaceWith(separator(), pill.dom, separator())
+        if (pill.dom.parentElement?.tagName === 'P' && pill.dom.parentElement.lastChild === pill.dom.nextSibling) {
+          const line = document.createElement('br')
+          line.className = 'ProseMirror-trailingBreak'
+          pill.dom.parentElement.appendChild(line)
+        }
         cleanups.push(pill.dispose)
       }
     } catch (error) { for (const cleanup of cleanups.reverse()) cleanup(); throw error }

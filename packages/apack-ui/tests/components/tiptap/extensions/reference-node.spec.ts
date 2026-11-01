@@ -1,3 +1,4 @@
+import { copyChatSelection } from '../../../../src/components/tiptap/internal/chat-copy.ts'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { Editor } from '@tiptap/core';
@@ -181,6 +182,14 @@ it('preserves read-only reference navigation and metadata updates, then releases
   const cleanup = ReadOnlyReferences.decorate!(root);
   const pill = root.querySelector('.reference-pill')!;
   const label = pill.querySelector('.reference-pill-label')!.firstChild;
+  document.body.appendChild(root);
+  const range = document.createRange(); range.selectNodeContents(root);
+  const selection = document.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+  const copied = new Map<string, string>();
+  copyChatSelection({ clipboardData: { setData: (type: string, value: string) => copied.set(type, value) }, preventDefault() {} } as unknown as ClipboardEvent,
+    root, [{ packId: 'host', groupId: 'references', binding: { extensions: { reference: ReferenceNode } } }]);
+  expect(copied.get('text/plain')).toBe('[Saved thread](apack-ref://thread/Thread-one)');
+  selection.removeAllRanges();
   try {
     pill.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(send).toHaveBeenCalledWith({ type: 'OPEN_ENTITY', id: 'Thread-one' });

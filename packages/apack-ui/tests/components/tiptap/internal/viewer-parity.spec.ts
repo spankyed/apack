@@ -3,6 +3,7 @@ import { JSDOM } from 'jsdom'
 import { Editor } from '@tiptap/core'
 import { createExtensions } from '../../../../src/components/tiptap/extensions.ts'
 import { createChatMarkdownParser } from '../../../../src/components/tiptap/internal/chat-markdown.ts'
+import { copyChatSelection } from '../../../../src/components/tiptap/internal/chat-copy.ts'
 import { renderChat } from '../../../../src/components/tiptap/internal/render-chat.ts'
 
 let dom: JSDOM
@@ -60,4 +61,30 @@ it('preserves links introduced by streamed content updates', () => {
   const links = (root: HTMLElement) => [...root.querySelectorAll('a')].map(link => link.getAttribute('href'))
   expect(links(pair.baseline)).toEqual(['https://example.com'])
   expect(links(updated.root)).toEqual(links(pair.baseline))
+})
+
+it('copies full and partial selections using the existing Markdown serializer', () => {
+  const pair = compare('## Heading\n\n**Bold** and *emphasis*\n\n```js\nconst x = 1\n```\n\n| a | b |\n| --- | --- |\n| x | y |')
+  document.body.appendChild(pair.candidate)
+  const selection = document.getSelection()!
+  const copied = (range: Range) => {
+    selection.removeAllRanges(); selection.addRange(range)
+    const values = new Map<string, string>()
+    const event = { clipboardData: { setData: (type: string, value: string) => values.set(type, value) }, preventDefault: vi.fn() }
+    copyChatSelection(event as unknown as ClipboardEvent, pair.candidate, [])
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    return values.get('text/plain')
+  }
+  const all = document.createRange(); all.selectNodeContents(pair.candidate)
+  const editor = editors[editors.length - 1]!
+  const storage = editor.storage as typeof editor.storage & { markdown: { getMarkdown(): string } }
+  expect(copied(all)).toBe(storage.markdown.getMarkdown())
+  const partial = document.createRange()
+  const bold = pair.candidate.querySelector('strong')!.firstChild!
+  partial.setStart(bold, 1); partial.setEnd(bold, 3)
+  expect(copied(partial)).toBe('**ol**')
+  const code = pair.candidate.querySelector('pre code')!
+  const codeRange = document.createRange(); codeRange.selectNodeContents(code)
+  expect(copied(codeRange)).toBe('```js\nconst x = 1\n```')
+  selection.removeAllRanges()
 })
