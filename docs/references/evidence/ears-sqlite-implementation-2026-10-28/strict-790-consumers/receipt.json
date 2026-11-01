@@ -1,0 +1,13 @@
+{
+  "source": "790acc5a33802e49e4405e8eb87bb025fad4ceca",
+  "consumers": [
+    {
+      "name": "integration-2",
+      "passedTests": 580,
+      "skippedTests": 1,
+      "passedFiles": 31,
+      "chainSeconds": 412.3,
+      "cache": "Inputs changed; no reusable successful stamp"
+    }
+  ]
+}
