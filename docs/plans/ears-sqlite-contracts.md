@@ -259,3 +259,11 @@ A corpus-only `sqlite_vector_backend=paired-dispatch` mode is prepared: same acq
 inputs/CPU/limits/source, original candidate policy, independently trained models and
 full reference checks per variant. Model/cache variance is explicitly uncontrolled; one
 pair cannot establish a causal speedup or full model-variance acceptance.
+
+[Corrected model interchange qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-model-015/README.md)
+passes eight fresh child processes, all 48 filtered comparisons at 128/1536 dimensions,
+independent Float64/cross-backend canonical cosine checks, read-only source preservation
+and cleanup. This closes that bounded model slice only. The paired full-corpus run
+41303652459 at `b9f05c894a` now measures both builds on one runner; seventeen
+[receipt protocol controls](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-pair-protocol/README.md)
+pass and preserve original recall/heartbeat failures. Ordinary package SIMD remains unchanged.
