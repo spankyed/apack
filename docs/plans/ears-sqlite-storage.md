@@ -222,10 +222,11 @@ therefore leaves the incumbent intact for filesystem rollback. Fresh committed/u
 accepted files/identity and fail readiness with the original NOT_DURABLE/COMMIT_UNKNOWN error. Existing
 quarantine is checked separately and cannot be mistaken for a new ambiguous commit. Unload preserves retained
 data and remains possible on a faulted handle. Post-publication notification/reporting errors do not become
-installation refusals. These changes and their new tests are implemented but still await disposable validation.
+installation refusals. The focused disposable run at `9b77497124` passes all 112 host cases; full integrated acceptance remains required.
 The pinned pre-fix real-peer regression demonstrates restored old files with a replacement still published.
 
-The composition supplies `PackRegistryOptions.indexesReady` from its owning database. Registration stays
+Writable store opening binds declaration and readiness to the same database owner. The optional
+`PackRegistryOptions.indexesReady` callback serves unbound declaration-only fixtures. Registration stays
 synchronous for installer acceptance; boot/reset and accepted activation/update/restore/reload await readiness
 before onInit, migrations, content and actor publication. Pack operation claims cover that wait. An index failure
 after acceptance retains published files and reports an unavailable runtime, rather than restoring obsolete

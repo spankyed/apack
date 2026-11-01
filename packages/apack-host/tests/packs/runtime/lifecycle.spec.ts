@@ -179,6 +179,27 @@ describe('installed runtime acceptance', () => {
     }
   });
 
+  it.each(['elmdb/1', 'sqlite/1'])('refuses registration inside a real write unit without losing staged writes (%s)', format => {
+    const isolated = createNativePackTestRegistry();
+    isolated.registerPack({ id: 'unit-owner', ears: { entities: { UnitProbe: 'UnitProbe' }, relKinds: {}, roles: {} } });
+    const { database, engine } = openDatabaseStore({ path: path.join(tmpDir, 'unit-store'), storageFormat: format, schema: isolated });
+    const unit = database.begin();
+    try {
+      unit.write({ ops: [{ op: 'create', type: 'UnitProbe', id: 'UnitProbe-held', fields: { label: 'staged' } }] });
+      const before = database.sequence;
+      expect(() => isolated.registerPack({ id: 'refused-unit-pack', ears: { entities: { RefusedProbe: 'RefusedProbe' }, relKinds: {}, roles: {} } })).toThrow(expect.objectContaining({ code: 'UNIT_OPEN' }));
+      expect(unit.isOpen).toBe(true);
+      expect(database.sequence).toBe(before);
+      expect(isolated.getPackRegistration('refused-unit-pack')).toBeNull();
+      unit.commit();
+      expect(engine.query('UnitProbe').ids()).toEqual(['UnitProbe-held']);
+      expect(database.sequence).toBeGreaterThan(before);
+    } finally {
+      if (unit.isOpen) unit.abort();
+      database.close();
+    }
+  });
+
   it.each(['NOT_DURABLE', 'COMMIT_UNKNOWN'])('keeps accepted replacement files and refuses startup after schema %s', async code => {
     const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
     const id = 'outcome-pack', source = path.join(tmpDir, 'outcome-source'), marker = path.join(tmpDir, 'outcome-initialized');
