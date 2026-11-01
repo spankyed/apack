@@ -95,7 +95,9 @@ Linux x64, then calls the existing `build/prod/smoke-native.mjs` against its unp
 It requires actual packaged Electron provenance, native ownership,4097-vector worker model admission,
 FTS/regex queries and read-only reopen, plus elmdb/PTY/keyring controls. Its evidence is explicitly
 native/API runtime only: renderer, installer/signature and final app/platform/strict acceptance remain
-separate. Missing/skipped witnesses refuse; pending execution is not qualification.
+separate. [Current-source Linux execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-linux/README.md)
+passes inside Electron 37.2.4 at `2d1307c672`, with four Preview contract passes. Windows and signed
+macOS remain pending. Missing/skipped witnesses refuse; pending execution is not qualification.
 
 ## Candidate invariant and maintenance review
 
