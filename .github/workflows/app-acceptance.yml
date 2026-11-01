@@ -242,9 +242,11 @@ jobs:
               elif [ "$1" = sqlite-admission-watch ]; then
                 python3 packages/apack-ears/bench/sqlite/run-watch.py /results/trials --admission
               else
-                for mode in released retained; do
-                  timeout --kill-after=10s 180s node --experimental-strip-types \
-                    packages/apack-ears/bench/sqlite/wal-resources.mjs "$mode" "/results/wal-$mode.json"
+                for regime in burst sustained; do
+                  for mode in released retained; do
+                    timeout --kill-after=10s 180s node --experimental-strip-types \
+                      packages/apack-ears/bench/sqlite/wal-resources.mjs "$mode" "/results/wal-$regime-$mode.json" "$regime"
+                  done
                 done
               fi
             ' -- '${{ inputs.suite }}'

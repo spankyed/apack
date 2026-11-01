@@ -9,7 +9,8 @@ import { SqliteDatabase } from '../../dist/sqlite/database.js';
 import { toElmdbSchema } from '../../dist/schema.js';
 import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
 
-const [mode, output, ...extra] = process.argv.slice(2);
+const [mode, output, regime = 'burst', ...extra] = process.argv.slice(2);
+assert(['burst', 'sustained'].includes(regime));
 assert(['released', 'retained'].includes(mode)); assert(output && !existsSync(output) && !extra.length);
 assert.equal(process.platform, 'linux');
 assert.match(process.env.GITHUB_SHA ?? '', /^[a-f0-9]{40}$/);
@@ -17,11 +18,12 @@ const limits = Object.fromEntries(['cpu.max', 'memory.max', 'memory.swap.max'].m
   [name, readFileSync('/sys/fs/cgroup/' + name, 'utf8').trim()]));
 assert.deepEqual(limits, { 'cpu.max': '200000 100000', 'memory.max': '6442450944', 'memory.swap.max': '0' });
 const directory = mkdtempSync(join(tmpdir(), 'ears-wal-resources-')), store = join(directory, 'store');
-const report = { protocol: 'ears-wal-resources/1', source: process.env.GITHUB_SHA, mode,
+const report = { protocol: 'ears-wal-resources/2', source: process.env.GITHUB_SHA, mode, regime,
   completed: false, qualification: false, execution: 'built-package', limits,
   node: process.version, cpuModels: [...new Set(cpus().map(cpu => cpu.model))],
-  commits: 512, payloadBytes: 65536, syncs: true, samples: [],
-  scope: 'One synthetic fresh process per reader state; not independent trial/device variance, physical power loss or complete app qualification',
+  commits: regime === 'sustained' ? 4096 : 512, scheduledMs: regime === 'sustained' ? 120000 : 0,
+  payloadBytes: 65536, syncs: true, samples: [],
+  scope: 'One synthetic fresh process per reader state/regime; paced sustained workload is not saturation throughput, independent trial/device variance, physical power loss or complete app qualification',
   measurement: 'Logical sizes and allocated blocks sampled after every commit; transient intra-commit peaks are not observed. Memory includes setup and instrumentation.' };
 const connections = [];
 let failure;
@@ -44,22 +46,34 @@ try {
   if (mode === 'retained') reader.sql.exec('BEGIN');
   assert.equal(reader.get('SELECT count(*) n FROM entities').n, 1);
   report.before = { files: files(), memory: process.memoryUsage() };
+  report.pacingIntervalMs = report.scheduledMs / report.commits;
   const heartbeat = startHeartbeat(1), cpu = process.cpuUsage(), at = performance.now();
   try {
     for (let i = 0; i < report.commits; i++) {
       const start = performance.now();
       e.create('Row', { id: `Row-${i}`, body: String(i).padStart(8, '0') + 'x'.repeat(report.payloadBytes - 8) });
       const writeMs = performance.now() - start;
-      report.samples.push({ commit: i + 1, writeMs, files: files() });
+      report.samples.push({ commit: i + 1, writeMs, files: files(),
+        ...(regime === 'sustained' && { startedAtMs: start - at,
+          pacingLateMs: Math.max(0, start - at - i * report.pacingIntervalMs) }) });
+      // Retain incomplete numeric evidence if the existing process watchdog terminates a slow trial.
+      if (regime === 'sustained' && (i + 1) % 128 === 0)
+        writeFileSync(output + '.progress.json', JSON.stringify({ ...report, finishedCommits: i + 1,
+          elapsedMs: performance.now() - at, heartbeatDelaysMs: heartbeat.delaysMs }));
       // Every 32 commits checks the actual retained snapshot or fresh reader visibility.
       if ((i + 1) % 32 === 0) assert.equal(reader.get('SELECT count(*) n FROM entities').n, mode === 'retained' ? 1 : i + 2);
-      await new Promise(resolve => setImmediate(resolve));
+      const remaining = at + (i + 1) * report.pacingIntervalMs - performance.now();
+      if (regime === 'sustained' && remaining > 0)
+        await new Promise(resolve => setTimeout(resolve, Math.ceil(remaining)));
+      else await new Promise(resolve => setImmediate(resolve));
     }
   } finally {
     report.elapsedMs = performance.now() - at; report.cpu = process.cpuUsage(cpu);
     heartbeat.stop(); report.heartbeatDelaysMs = heartbeat.delaysMs;
   }
   assert.equal(e.query('Row').count(), report.commits + 1);
+  report.finishedCommits = report.samples.length;
+  if (regime === 'sustained') assert(report.elapsedMs >= report.scheduledMs - 1, 'Sustained trial must cover its scheduled two minutes');
   report.afterWrites = { files: files(), memory: process.memoryUsage(), usage: process.resourceUsage() };
   report.checkpointWhileReader = checkpoint(db);
   assert.equal(report.checkpointWhileReader.busy, mode === 'retained' ? 1 : 0);
