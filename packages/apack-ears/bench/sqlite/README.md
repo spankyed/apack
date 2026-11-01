@@ -37,6 +37,14 @@ node --import tsx packages/apack-ears/bench/sqlite/primitive-bench.ts
 node --import tsx packages/apack-ears/bench/sqlite/explain.ts
 ```
 
+For the matched current-source CI measurement, dispatch `app-acceptance.yml` with `suite=sqlite-bench`
+on `session/ears-sqlite` after focused contracts converge. The separate OFF and FULL jobs each alternate three
+fresh processes per backend under enforced 2 CPU/6 GiB/no-swap limits. Each records its exact app/native source,
+actually loaded binding hashes, raw samples and failure outcomes. An incomplete or invalid run stops and retains
+its evidence; a new run requires an empty output directory. Compare medians and dispersion per task and durability
+cohort, retaining all three trials. These are synthetic API throughput/resource measurements, not app latency,
+real-corpus recall or durability/platform acceptance. Do not combine OFF and FULL into one headline speed ratio.
+
 `run-bench.py` alternates backend order, uses fresh processes, and preserves every timing sample and stderr.
 `bench.ts` measures the actual EARS facade over the same synthetic fixture; SQLite transport is structured, while
 MessagePack remains at the native elmdb boundary. Rerun comparisons on pinned current source before making claims.

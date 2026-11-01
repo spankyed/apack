@@ -1,3 +1,4 @@
+import { checkRelationKeyInfo, sameRelationKey, sameStoredValue } from './relation-identity.ts';
 import { relationWeight } from './relation-weights.ts';
 import { SqliteReadTracking, type SqliteTrackedRead } from './read-tracking.ts';
 import { fieldCellInvalid } from './field-query.ts';
@@ -958,27 +959,24 @@ export class SqliteDatabase implements EarsDatabase {
       }
       case "link": {
         const def = this.relationDefinition(op.kind);
-        if (op.source === op.target)
-          fail("SELF_LINK", "A self link is refused");
         const matching = this.all(
           "SELECT * FROM relations WHERE kind=? AND source=? AND target=? ORDER BY seq",
           [op.kind, op.source, op.target]
         );
+        checkRelationKeyInfo(def.key ?? [], op.info);
         const weight = relationWeight(!!def.weighted, op.kind, op.weight);
-        if (def.unique && matching.length) {
-          const held = matching[0]!;
-          const sameInfo = op.info === undefined || (held.info === null && op.info === null) ||
-            (held.info !== null && sameValue(this.unpack(held.info), op.info));
-          const sameWeight = op.weight === undefined || (held.weight === null ? 1 : this.unpack(held.weight)) === (weight ?? 1);
+        const existing = matching.find(r => sameRelationKey(def.key ?? [],
+          r.info === null ? undefined : this.unpack(r.info), op.info));
+        if (existing) {
+          const sameInfo = op.info === undefined || (existing.info !== null &&
+            sameStoredValue(this.unpack(existing.info), op.info));
+          const sameWeight = op.weight === undefined ||
+            (existing.weight === null ? 1 : this.unpack(existing.weight)) === (weight ?? 1);
           if (!sameInfo || !sameWeight)
-            this.mutate({ op: 'updateRelation', relation: held.id, info: op.info, weight: op.weight }, now, changes);
-          return { kind: 'relation', id: held.id, linked: false };
+            this.mutate({ op: 'updateRelation', relation: existing.id, info: op.info, weight: op.weight }, now, changes);
+          return { kind: 'relation', id: existing.id, linked: false };
         }
-        const existing = matching.find(r =>
-          (op.info === undefined || (r.info === null && op.info === null) ||
-            (r.info !== null && sameValue(this.unpack(r.info), op.info))) &&
-          (op.weight === undefined || (r.weight === null ? 1 : this.unpack(r.weight)) === (weight ?? 1)));
-        if (existing) return { kind: 'relation', id: existing.id, linked: false };
+        if (op.source === op.target) fail('SELF_LINK', 'A self link is refused');
         if (def.acyclic && this.wouldCycle(op.source, op.target, [op.kind]))
           fail('CYCLE', 'Link would create a cycle');
         const id = op.id ?? `Relation-${randomBytes(10).toString("hex")}`;
@@ -1027,6 +1025,16 @@ export class SqliteDatabase implements EarsDatabase {
           fail("NO_SUCH_RELATION", "No such relation");
         const source = op.source ?? r.source,
           target = op.target ?? r.target;
+        const definition = this.relationDefinition(r.kind);
+        const key = definition.key ?? [];
+        checkRelationKeyInfo(key, op.info);
+        const info = op.info === undefined ? r.info : op.info;
+        if (source !== r.source || target !== r.target || !sameRelationKey(key, r.info, info)) {
+          const duplicate = this.all('SELECT id,info FROM relations WHERE kind=? AND source=? AND target=? AND id<>? ORDER BY seq',
+            [r.kind, source, target, r.id]).find(other => sameRelationKey(key,
+              other.info === null ? undefined : this.unpack(other.info), info));
+          if (duplicate) fail('DUPLICATE_EDGE', `An edge of ${r.kind} with these ends and key already exists: ${duplicate.id}`);
+        }
         if (source === target) fail("SELF_LINK", "A self link is refused");
         if (
           this.relationDefinition(r.kind).acyclic &&
@@ -1034,12 +1042,12 @@ export class SqliteDatabase implements EarsDatabase {
           this.wouldCycle(source, target, [r.kind])
         )
           fail("CYCLE", "Moving relation would create a cycle");
-        const definition = this.relationDefinition(r.kind);
         const weight = op.weight === undefined ? this.get('SELECT weight FROM relations WHERE id=?', [r.id])!.weight :
           relationWeight(!!definition.weighted, r.kind, op.weight);
-        this.run("UPDATE relations SET source=?,target=?,info=?,weight=? WHERE id=?", [
+        this.run("UPDATE relations SET source=?,target=?,seq=?,info=?,weight=? WHERE id=?", [
           source,
           target,
+          source !== r.source || target !== r.target ? this.next('seq') : this.get('SELECT seq FROM relations WHERE id=?', [r.id])!.seq,
           op.info === undefined
             ? r.info === null
               ? null

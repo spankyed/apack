@@ -84,6 +84,27 @@ describe('links', () => {
     expect(e.findRelations()).toHaveLength(5);
   });
 
+  it('keeps keyed bytes, lists and own map fields distinct, and refuses scalar keyed info atomically', () => {
+    e = engine({ relationRules: { refs: { key: ['handle'] } } });
+    const [a, b] = [task('A'), task('B')];
+    for (const handle of [new Uint8Array([1]), new Uint8Array([1, 0]), [1], { x: null }, { y: null }])
+      e.write(a).link('refs', b, { info: { handle } });
+    expect(e.findRelations()).toHaveLength(5);
+    const first = e.findRelations()[0].id;
+    e.write(a).link('refs', b, { info: { handle: new Uint8Array([1]), label: 'updated' } });
+    expect(e.findRelations()).toHaveLength(5);
+    const readInfo = () => e.getRelation(first)?.info as { handle: Uint8Array; label: string };
+    expect([...readInfo().handle]).toEqual([1]);
+    expect(readInfo().label).toBe('updated');
+    for (const info of [null, 1, 'key', [1], new Uint8Array([1])]) {
+      expect(() => e.write(a).link('refs', b, { info })).toThrow(expect.objectContaining({ code: 'FIELD_TYPE' }));
+      expect(() => e.updateRelation(first, { info })).toThrow(expect.objectContaining({ code: 'FIELD_TYPE' }));
+    }
+    expect(e.findRelations()).toHaveLength(5);
+    expect([...readInfo().handle]).toEqual([1]);
+    expect(readInfo().label).toBe('updated');
+  });
+
   it('refuses options it does not know, which is info passed where the options go', () => {
     const [a, b] = [task('A'), task('B')];
     const info: any = { size: 2 };

@@ -35,7 +35,7 @@ export function createSchemaValidator(): (input: unknown) => void {
       }),
       relation: object({
         declaredBy, cardinality: { enum: ['many-to-many', 'one-to-one', 'one-to-many', 'many-to-one'] },
-        acyclic: { type: 'boolean' }, weighted: { type: 'boolean' }, unique: { type: 'boolean' }, info: { $ref: '#/definitions/field' },
+        acyclic: { type: 'boolean' }, weighted: { type: 'boolean' }, key: { ...strings(0), uniqueItems: true }, info: { $ref: '#/definitions/field' },
         endpoints: { anyOf: [{ type: 'null' }, { type: 'array', minItems: 1, items: object({ source: { type: 'string' }, target: { type: 'string' } }, ['source', 'target']) }] },
       }, ['cardinality']),
       index: { oneOf: [
@@ -86,6 +86,9 @@ export function createSchemaValidator(): (input: unknown) => void {
         reference(end.source, `relations.${kind}.endpoints.source`); reference(end.target, `relations.${kind}.endpoints.target`);
       }
       if (definition.info) checkValue(definition.info, `relations.${kind}.info`);
+      for (const field of definition.key ?? []) name(`relations.${kind}.key`, field, /^[a-z][A-Za-z0-9]*$/, 'key field');
+      if (definition.key?.length && definition.info && !['object', 'any'].includes(definition.info.type))
+        refuse('SCHEMA_INVALID', `relations.${kind}.key`, 'key fields require object or any info');
       if (definition.cardinality !== 'many-to-many' || definition.endpoints != null ||
           (definition.info && (definition.info.type !== 'any' || !definition.info.optional || !definition.info.nullable)))
         refuse('UNSUPPORTED', `relations.${kind}`, 'SQLite currently supports unconstrained many-to-many endpoints and optional any info');
