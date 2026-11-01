@@ -85,7 +85,8 @@ SQLite applies the omission per changed value rather than serializing a structur
 
 The shipping targets in `electron-builder.mjs` are macOS arm64, Windows x64 and Linux x64.
 Local Linux arm64 is a validation environment, not an additional shipping target. The recorded
-master rebase preserves the previous package trees; the current native pin is `7b484b0834720d6d7b4fb89270d4ac02a6f42c1d`.
+master rebase preserves the previous package trees; the integrated master is `984f1b4aca6d99719a323ec779808def5b2d1c9b`, with native pin
+`f496470679a7bd9764398108b20f62a73333c701`. Earlier package trees remain historical evidence.
 Three-host Node/backend passes do not prove packaged Electron loading. Existing signed installed
 macOS arm64 evidence predates the latest runtime inputs and needs final requalification.
 
