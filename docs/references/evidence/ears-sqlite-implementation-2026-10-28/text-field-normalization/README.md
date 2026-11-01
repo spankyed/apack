@@ -1,0 +1,5 @@
+# Per-field FTS normalization diagnostic
+
+Hypothesis declared before running: native FTS5 length normalization mixes short name rows and long body rows in a shared population; ranking each field against its own native statistics might improve the frozen usefulness judgments. The scratch probe uses the actual SqliteText query generator through Python SQLite, with separate per-field FTS indexes for scoring and the original shared vocabulary for typo expansion. It retains existing field boosts, queries, highlights, top-five judgments and all 214 public fixture sections.
+
+Both baseline and per-field-statistics variants pass 24/25. `generate-entries` still misses the Generated files section; even its top-five IDs remain unchanged. This hypothesis does not close relevance and is not promoted. This is not packaged-driver, performance, storage-cost or feature-completeness qualification. Scratch database directories were removed in finally. results.json retains every judgment and score; scratch-check.mjs preserves the transformation but references its original /private/tmp RPC helper, so it is an experiment record rather than a standalone supported command.

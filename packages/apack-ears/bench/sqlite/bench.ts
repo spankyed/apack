@@ -198,10 +198,10 @@ try {
   samples.watch20 = [((performance.now() - start) * 1000) / 50];
   assert.equal(deliveries, 70);
   for (const w of watches) w.stop();
-  const fileBytes = readdirSync(dir).reduce(
-    (sum, file) => sum + statSync(join(dir, file)).size,
-    0
-  );
+  const files = Object.fromEntries(readdirSync(dir).map(file => [file, statSync(join(dir, file)).size]));
+  const fileBytes = Object.values(files).reduce((sum, bytes) => sum + bytes, 0);
+  globalThis.gc?.();
+  const memory = process.memoryUsage(), resourceUsage = process.resourceUsage();
   // A separate instrumented diagnostic pass, excluded from the uninstrumented timing samples above.
   // Driver spans include preparation/binding/native execution/result marshalling; the binding does not expose
   // these individually. Remaining facade time includes JS plan construction, mapping, checks and instrumentation.
@@ -236,7 +236,6 @@ try {
     backend === "sqlite"
       ? (db as SqliteDatabase).get("SELECT sqlite_version() version")
       : undefined;
-  const memory = process.memoryUsage(), resourceUsage = process.resourceUsage();
   const extension = backend === 'sqlite' ? (db as SqliteDatabase).nativeVectorExtension : undefined;
   const nativeBindings = loadedNativeBindings(backend === 'sqlite' ? [(await import('sqlite-vec')).getLoadablePath(), ...(extension ? [extension] : [])] : []);
   console.log(
@@ -252,7 +251,7 @@ try {
       fileBytes,
       memory,
       resourceUsage,
-      files: Object.fromEntries(readdirSync(dir).map(file => [file, statSync(join(dir, file)).size])),
+      files,
       samples,
       diagnostics,
       largeFixture: { rows: 64, bodyBytes: 256 * 1024, streamChunks: 16, streamChunkBytes: 16 * 1024 },
