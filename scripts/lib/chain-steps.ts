@@ -580,7 +580,17 @@ const PACK_SOURCES = ['packages/default-setup/src', 'packages/default-setup/apac
  * `packages:ensure`' inputs are derived to avoid, a few hundred lines up. The two steps differ in what they
  * *write*, not in what they read: `build:default-setup` declares `PACK_OUTPUTS`, and the check declares nothing.
  */
-const PACK_DERIVED_READS = [...ROOT, ...PACK_SOURCES, 'packages/default-setup/tsconfig.json',
+/**
+ * The root manifest, for a step that runs `apack pack build`: the exception to `ROOT`'s leaving it out.
+ *
+ * The pack compiler records every file it reads, and Node's package-scope lookup reads this one whole, so a
+ * pack build's recorded inputs carry its hash and the build is stale after any edit to it — a new script
+ * included. Leaving it out made the chain keep a build that the compiler then refused to replay ("Compiler
+ * startup input changed"), failing the step that consumed it rather than rebuilding the one that made it.
+ */
+const PACK_BUILD_MANIFEST = ['package.json'];
+
+const PACK_DERIVED_READS = [...ROOT, ...PACK_BUILD_MANIFEST, ...PACK_SOURCES, 'packages/default-setup/tsconfig.json',
   'packages/default-setup/etc', ...PACKAGE_BUILD_READS];
 
 /**
@@ -949,11 +959,10 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // It declares `tests/packs` for the pack sources; the Playwright output under each pack is written
     // by `:app`, changes every run, and is read by nothing
     excludes: FIXTURE_TEST_OUTPUT,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/scripts/test-external-pack-contract.sh',
+    inputs: [...ROOT, ...PACK_BUILD_MANIFEST, ...BOUNDED_RUNNER, 'tests/packs', 'tests/scripts/test-external-pack-contract.sh',
       'tests/scripts/lib', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
-  // A full shipped-pack fork is a separate producer, not work charged to the fixture contract suite.
-  // Its 120s is the shipped build's measured 60s with as much again for the archive phase, which is not measured separately.
-  // A 600s build, 180s archive and 120s housekeeping compose the existing 900s scenario bound.
+  // A full shipped-pack fork is a separate producer, not work charged to the fixture contract suite. Its build,
+  // archive and housekeeping phases take shares of this step's bound (`DEFAULT_FORK_BUDGET_MS`).
   { name: 'test:external-pack:fork', timeout: 'scenario', outputs: [DEFAULT_FORK_OUTPUT],
     inputs: [...PACK_DERIVED_READS, ...BOUNDED_RUNNER, 'tests/scripts/prepare-default-pack-fork.ts',
       ...['apack-host', ...workspaceDeps('apack-host')].flatMap(dependencySource), ...PACK_OUTPUTS] },

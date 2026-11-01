@@ -784,6 +784,10 @@ describe('a step keys on the command it runs', () => {
    * and the renderer config checked by typecheck:renderer;
    * source-wide checks and suites cover those readers through EVERY_SOURCE.
    *
+   * A step that runs `apack pack build` declares it through `PACK_BUILD_MANIFEST`: the pack compiler's own record
+   * is the evidence, each build's `build-inputs.json` holding `["file", "<root>/package.json"]` with its hash, and a
+   * build kept across an edit to it is refused when replayed.
+   *
    * `packages:ensure` declares it too, through `SHARED_INPUTS` in `BUILD_UNITS`, and is filtered out
    * rather than listed: it is never cached, so it has no key to invalidate.
    */
@@ -793,6 +797,7 @@ describe('a step keys on the command it runs', () => {
     expect(cached.filter((step) => step.inputs.includes('package.json')).map((step) => step.name),
       'a step keying on the whole manifest re-runs when any unrelated script is edited; add one here only '
       + 'with the dep-file evidence that it reads the manifest').toEqual([
+        'build:default-setup', 'facade:check', 'test:external-pack:contract', 'test:external-pack:fork',
         'typecheck:renderer', 'typecheck:api', 'check:specifiers', 'typecheck:scripts', 'check:tiers',
         'lint:check', 'test:unit:host', 'test:integration', 'build:runtime',
       ]);
