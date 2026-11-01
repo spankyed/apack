@@ -202,6 +202,7 @@ jobs:
         run: |
           npm ci
           npm run packages:build
+          npm run typecheck -w @apackdev/ears
       - name: Sequential fresh-process backend trials under enforced limits
         env:
           BENCH_DURABILITY: ${{ matrix.durability }}
