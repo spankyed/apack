@@ -18,6 +18,10 @@ function requirePassingCases(cases, required, label) {
   for (const name of required) assert.equal(named.get(name)?.status, 'passed', `${label}: required case must execute: ${name}`);
   for (const test of cases) assert.equal(test.status, 'passed', `${label}: selected case must pass: ${test.fullName}`);
 }
+const requiredRelationAuditCases = ['SQLite relation audit grouping groups distinct keys on disk and compares only colliding fingerprints without changing source data',
+  'SQLite relation audit grouping checks existing equality after forced fingerprint collisions instead of inventing duplicates',
+  'SQLite relation audit grouping closes and removes a failed private identity spool while preserving the original error and writable source',
+  'SQLite relation audit grouping buckets persisted key values consistently with existing equality and skips nonreflexive decoded keys'];
 const requiredTrainingCases = [
   'yields the foreground, preserves logical commits and returns an installable identified model',
   'rejects stale work after declaration changes without installing it',
@@ -254,6 +258,8 @@ if (mode === 'verify') {
     file.assertionResults.some(test => test.status === 'passed' &&
       test.fullName.endsWith('recovers a durable training attempt after its process is killed without draining'))),
     'Abrupt owner-process death recovery must execute');
+  const relationAuditCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/relation-audit.spec.ts') ? file.assertionResults : []);
+  requirePassingCases(relationAuditCases, requiredRelationAuditCases, 'Relation audit grouping and cleanup');
   const relationIdentityCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/relation-identity.spec.ts') ? file.assertionResults : []);
   requirePassingCases(relationIdentityCases, ['SQLite relation identity work stops at a matching key and releases its cursor before mutation, refusal and exhaustion'], 'Relation identity cursor ownership');
   const trainingCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts') ? file.assertionResults : []);

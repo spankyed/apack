@@ -1,4 +1,5 @@
-import { checkRelationKeyInfo, sameRelationKey } from './relation-identity.ts';
+import NativeDatabase from 'better-sqlite3';
+import { checkRelationKeyInfo, relationKeyFingerprint, sameRelationKey } from './relation-identity.ts';
 import { validRelationWeight } from './relation-weights.ts';
 // Offline semantic comparison runs on private snapshots; it never repairs the incumbent being audited.
 import { createHash } from 'node:crypto';
@@ -29,7 +30,10 @@ function digest(db: SqliteDatabase, sql: string, parameters: unknown[] = []): st
   }
   return hash.digest('hex');
 }
-function primaryData(db: SqliteDatabase, report: SqliteAuditReport, issue: (message: string) => void): void {
+function primaryData(db: SqliteDatabase, report: SqliteAuditReport, issue: (message: string) => void,
+  identities: InstanceType<typeof NativeDatabase>): void {
+  const candidates = identities.prepare('SELECT id FROM identities WHERE kind=? AND source=? AND target=? AND fingerprint=? ORDER BY position');
+  const remember = identities.prepare('INSERT INTO identities VALUES (?,?,?,?,?,?)');
   let page: Array<{ id: string; type: string }> = [];
   const decode = () => {
     try { db.hydrate(page); }
@@ -70,18 +74,23 @@ function primaryData(db: SqliteDatabase, report: SqliteAuditReport, issue: (mess
       const fields = definition.key ?? [];
       try { checkRelationKeyInfo(fields, info); }
       catch { issue(`${row.id}: keyed relation info is not a map`); }
-      // The between index bounds each scan to these ends. Stream prior identities rather than retaining
-      // the whole graph; unchecked imports and changed declarations can introduce collisions.
-      for (const entry of db.statement(`SELECT id,info FROM relations WHERE source=? AND kind=? AND target=?
-        AND seq<=? AND id<>? ORDER BY seq`).iterate(row.source, row.kind, row.target, row.seq, row.id)) {
-        const other = entry as { id: string; info: Uint8Array | null };
-        let held: unknown;
-        try { held = other.info === null ? undefined : db.unpack(other.info); }
-        catch { continue; } // The primary traversal reports its decoding error separately.
-        if (sameRelationKey(fields, info, held)) {
-          issue(`${row.id}, ${other.id}: duplicate relation identity`);
-          break;
+      // Keep candidate identities on disk, not in a graph-sized JS map or repeated endpoint scan.
+      // A fingerprint is never proof of equality: compare each colliding primary value independently.
+      const fingerprint = relationKeyFingerprint(fields, info);
+      if (fingerprint !== undefined) {
+        let duplicate = false;
+        for (const value of candidates.iterate(row.kind, row.source, row.target, fingerprint)) {
+          const other = value as { id: string };
+          const prior = db.get('SELECT info FROM relations WHERE id=?', [other.id]);
+          if (!prior) continue;
+          let held: unknown;
+          try { held = prior.info === null ? undefined : db.unpack(prior.info); }
+          catch { continue; }
+          if (sameRelationKey(fields, info, held)) {
+            issue(`${row.id}, ${other.id}: duplicate relation identity`); duplicate = true; break;
+          }
         }
+        if (!duplicate) remember.run(row.kind, row.source, row.target, fingerprint, report.checkedRelations, row.id);
       }
     }
     if (row.weight !== null) try { if (!validRelationWeight(db.unpack(row.weight))) issue(`${row.id}: invalid relation weight`); } catch { issue(`${row.id}: relation weight cannot be decoded`); }
@@ -166,6 +175,7 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
   return source.withExclusiveWrites(async () => {
     const root = mkdtempSync(join(tmpdir(), 'ears-sqlite-audit-'));
     let incumbent: SqliteDatabase | undefined, rebuilt: SqliteDatabase | undefined;
+    let identities: InstanceType<typeof NativeDatabase> | undefined;
     const inspect = async (): Promise<SqliteAuditReport> => {
       const originalPath = join(root, 'incumbent'), rebuiltPath = join(root, 'rebuilt');
       source.backup(originalPath);
@@ -178,7 +188,12 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
       for (const row of incumbent.all('PRAGMA integrity_check(100)')) {
         const message = String(Object.values(row)[0]); if (message !== 'ok') issue(message);
       }
-      primaryData(incumbent, report, issue);
+      identities = new NativeDatabase(join(root, 'relation-identities.sqlite3'));
+      identities.exec(`PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=FILE; PRAGMA cache_size=-8192;
+        CREATE TABLE identities(kind TEXT,source TEXT,target TEXT,fingerprint TEXT,position INTEGER,id TEXT);
+        CREATE INDEX identity_lookup ON identities(kind,source,target,fingerprint,position); BEGIN`);
+      primaryData(incumbent, report, issue, identities);
+      identities.close(); identities = undefined;
       metadataAndEmbeddings(incumbent, issue);
       const jobs = incumbent.indexBuilds.jobs();
       for (const job of jobs) if (job.state !== 'ready') issue(`${job.type}.${job.name}: ${job.state}`);
@@ -215,7 +230,7 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
     let report: SqliteAuditReport | undefined, failure: unknown, failed = false;
     try { report = await inspect(); } catch (error) { failed = true; failure = error; }
     const cleanup: unknown[] = [];
-    for (const db of [rebuilt, incumbent]) try { db?.close(); } catch (error) { cleanup.push(error); }
+    for (const db of [identities, rebuilt, incumbent]) try { db?.close(); } catch (error) { cleanup.push(error); }
     try { rmSync(root, { recursive: true, force: true }); } catch (error) { cleanup.push(error); }
     if (cleanup.length) throw new AggregateError(failed ? [failure, ...cleanup] : cleanup,
       'SQLite audit cleanup failed', { cause: failed ? failure : cleanup[0] });

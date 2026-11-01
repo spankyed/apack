@@ -1,9 +1,9 @@
-import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {stripTypeScriptTypes} from 'node:module';
-const identity=stripTypeScriptTypes(fs.readFileSync('packages/apack-ears/src/sqlite/relation-identity.ts','utf8')).replaceAll('export function','function');
-const audit=stripTypeScriptTypes(fs.readFileSync('packages/apack-ears/src/sqlite/audit.ts','utf8'));
+import {execFileSync} from 'node:child_process';
+const identity=stripTypeScriptTypes(execFileSync('git',['show','cf68785d3c:packages/apack-ears/src/sqlite/relation-identity.ts'],{encoding:'utf8'})).replaceAll('export function','function');
+const audit=stripTypeScriptTypes(execFileSync('git',['show','cf68785d3c:packages/apack-ears/src/sqlite/audit.ts'],{encoding:'utf8'}));
 const body=audit.slice(audit.indexOf('function primaryData('),audit.indexOf('function metadataAndEmbeddings('));
 assert(body.startsWith('function primaryData('));
 const context=vm.createContext({});

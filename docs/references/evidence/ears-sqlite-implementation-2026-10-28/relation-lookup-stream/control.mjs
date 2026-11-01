@@ -1,5 +1,5 @@
 import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';import {stripTypeScriptTypes} from 'node:module';
-const identity=stripTypeScriptTypes(fs.readFileSync('packages/apack-ears/src/sqlite/relation-identity.ts','utf8')).replaceAll('export function','function');
+const identity=stripTypeScriptTypes(fs.readFileSync('packages/apack-ears/src/sqlite/relation-identity.ts','utf8')).replaceAll('export function','function').replace(/^import .*;\n/gm,'');
 const source=stripTypeScriptTypes(fs.readFileSync('packages/apack-ears/src/sqlite/database.ts','utf8'));
 const start=source.indexOf('  matchingRelation('),end=source.indexOf('  role(',start);
 assert(start>=0&&end>start);
