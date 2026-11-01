@@ -238,32 +238,43 @@ These findings do not authorize deferring requirements or expanding the product 
 
 ### Native CPU backend investigation
 
-The pinned vec1 source has explicit AVX2/NEON paths and an upstream `VEC1SIMD=SCALAR/AVX2` multi-object runtime-dispatch entry point. The current x64 recipe compiles one generic `-O3` or `/O2` object without requesting AVX2. The actual trusted artifact in [run 41301810718](../references/evidence/ears-sqlite-implementation-2026-10-28/audit-resource-441/README.md) reports Scalar on AMD EPYC 9V45 exposing AVX2/FMA. This confirms runtime selection at that source, not an explanation of the heartbeat failure. Existing corpus receipts did not record vec1_info, so their CPU models alone cannot establish their selected backend.
+The pinned vec1 source provides explicit AVX2/NEON paths and upstream two-object runtime
+dispatch. Ordinary x64 package production still compiles one generic object. The trusted
+artifact [actually reports Scalar on exposed AVX2/FMA hardware](../references/evidence/ears-sqlite-implementation-2026-10-28/audit-resource-441/README.md).
+This establishes backend selection at that source, not a measured cause of heartbeat failure.
+Historical corpus reports without vec1_info cannot establish backend selection from CPU names.
 
-The focused run records the trusted packaged extension and exposed instruction flags; future corpus reports retain current runtime and training-worker versions. Before changing probes/recall policy, investigate upstream portable runtime dispatch with a real scalar fallback, CPU/OS feature admission (including FMA requirements where relevant), cross-backend model/file compatibility, all native membership/semantic/fault contracts, package provenance/signing and independent recall/resource measurements. No local-machine-only compiler flag, hardware-baseline increase or SIMD speed claim is approved by this finding. No ordinary-package SIMD build/runtime change has been made.
+The isolated `sqlite-vector-dispatch` suite compiles the identical checked patched source
+as upstream scalar/AVX2 objects, with GNU/Clang AVX2 and explicitly no FMA. Upstream's
+baseline object admits AVX2 using CPU/OS checks; no ordinary artifact or hardware baseline
+is changed. [Actual build/runtime/membership checks](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-dispatch-9c/README.md)
+pass both libraries and 735 independent comparisons each. Future Windows dispatch must
+account for the source's FMA assumption, not simply reuse AVX2 admission.
 
-The isolated `sqlite-vector-dispatch` CI suite now prepares that first build/loading check:
-`native/vectors/dispatch-build.mjs` uses the exact checked patched source, upstream's
-scalar/AVX2 objects and GNU/Clang AVX2 without FMA. Both the unchanged generic library
-and diagnostic library must pass all 735 independent membership comparisons and report
-their actual runtime backend. This does not substitute an artifact into package production.
-Its receipt must precede paired corpus/model compatibility, unsupported-CPU fallback,
-cross-platform and installed qualification; build success alone cannot close responsiveness.
+[Persistent-model interchange checks](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-model-015/README.md)
+pass eight fresh writer/reader processes, both directions at 128/1536 dimensions, 48 full
+filtered comparisons, canonical cosine against independent Float64 within 4.221e-7,
+unchanged read-only source and cleanup. The [original failed probe](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-model-03e/README.md)
+compared hidden transformed-space BQ distance to an absolute cosine tolerance. Corrected
+checks retain those approximate deltas separately and keep the original canonical 1e-5
+bound. No product score, original recall or heartbeat criterion changes.
 
-The first cross-model diagnostic rejects hidden BQ ANN distance equality; its
-[original failure](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-model-03e/README.md)
-is preserved. The corrected probe distinguishes approximate native selection distances
-from canonical cosine, retains approximate deltas, and keeps the canonical 1e-5 check
-against independent Float64 accumulation. No production score or recall criterion changes.
-A corpus-only `sqlite_vector_backend=paired-dispatch` mode is prepared: same acquired
-inputs/CPU/limits/source, original candidate policy, independently trained models and
-full reference checks per variant. Model/cache variance is explicitly uncontrolled; one
-pair cannot establish a causal speedup or full model-variance acceptance.
+Paired corpus run 41303652459 at `b9f05c894a` is live: same acquired inputs, run identity,
+CPU, limits and source, original candidate policy and full reference checks per variant.
+[Seventeen protocol controls](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-pair-protocol/README.md)
+reject mixed run/artifact/worker/policy evidence and retain failed recall/heartbeat outcomes.
+Models train independently and OS cache is uncontrolled; one pair cannot establish a
+causal speedup or model-variance acceptance. Ordinary package defaults are unchanged.
 
-[Corrected model interchange qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-model-015/README.md)
-passes eight fresh child processes, all 48 filtered comparisons at 128/1536 dimensions,
-independent Float64/cross-backend canonical cosine checks, read-only source preservation
-and cleanup. This closes that bounded model slice only. The paired full-corpus run
-41303652459 at `b9f05c894a` now measures both builds on one runner; seventeen
-[receipt protocol controls](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-pair-protocol/README.md)
-pass and preserve original recall/heartbeat failures. Ordinary package SIMD remains unchanged.
+The next worker checkpoint holds an actual training read snapshot while 16 foreground
+writes commit, observes WAL/truncation refusal, then checks release after worker exit,
+under both OFF/FULL modes and both artifacts. It extends actual worker malformed-input,
+cancellation and ownership tests; no production fault hook is added. CI must pass these
+named cases before claiming that specific long-reader regime qualified. This does not
+replace sustained-load, busy-writer, storage-I/O or power-loss evidence.
+
+Before any promotion, qualify actual unsupported-CPU fallback execution, all native-worker
+semantic/fault contracts, independent recall/resource/responsiveness/model variance,
+cross-platform packaging, provenance/signing and installed app behavior. No host-only
+compiler flag, hardware-baseline increase or SIMD speed claim follows from source/build
+success. The full unmet requirements remain owned by the implementation goal.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -38,15 +38,15 @@ function release(gate:SharedArrayBuffer) {Atomics.store(new Int32Array(gate),1,1
 const held:Array<{db:SqliteDatabase;trainer:SqliteVectorTraining;path:string}>=[];
 afterEach(async()=>{control.gate=undefined;for(const {db,trainer,path} of held.splice(0)){db.close();await trainer.stop();rmSync(path,{recursive:true,force:true});}});
 const schema=(model='fixture'):EngineSchema=>({types:{Row:{required:[],embed:{from:['title'],model,dims:128}}},relations:{},roles:[]});
-function fixture(count=512) {
+function fixture(count=512,syncs=false) {
   const path=mkdtempSync(join(tmpdir(),'ears-vector-training-'));
-  const db=new SqliteDatabase({path,syncs:false,schema:toElmdbSchema(schema())}),e=createEarsEngine({database:db});
+  const db=new SqliteDatabase({path,syncs,schema:toElmdbSchema(schema())}),e=createEarsEngine({database:db});
   const index=new SqliteVectorIndex(db,process.env.EARS_VEC1_EXTENSION!);
   const trainer=new SqliteVectorTraining(db,process.env.EARS_VEC1_EXTENSION!);held.push({db,trainer,path});
   e.transact(()=>{for(let i=0;i<count;i++)e.create('Row',{title:String(i)});});
   const pending=e.pendingEmbeddings('Row',{limit:1000});
   e.embed(pending.chunks.map((c,i)=>({...c,model:pending.model,vector:Array.from({length:128},(_,j)=>Math.sin((i+1)*(j+1)*1.71))})));
-  return {db,e,index,trainer,job:db.indexBuilds.jobs().find(j=>j.kind==='vector')!};
+  return {db,e,index,trainer,path,job:db.indexBuilds.jobs().find(j=>j.kind==='vector')!};
 }
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EARS_VEC1_EXTENSION)('native vector training ownership',()=>{
@@ -63,6 +63,30 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     for(let ready=false;!ready;){db.sql.exec('BEGIN IMMEDIATE');ready=index.step(job.generation,32);db.commitWrite();}
     expect(index.candidates(job.generation,Buffer.from(Float32Array.from(Array(128).fill(1)).buffer),100)).toHaveLength(100);
     expect(db.sequence).toBe(sequence+1);
+  });
+
+  it.each([false, true])('keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (%s syncs)', async syncs => {
+    const { db, e, trainer, job, path } = fixture(512, syncs);
+    const sequence = db.sequence, sourceCommit = db.get("SELECT hex(value) value FROM meta WHERE key='commit'")!.value;
+    const gate = control.gate = new SharedArrayBuffer(8);
+    const pending = trainer.train(job);
+    try {
+      await snapshot(gate, pending);
+      for (let i = 0; i < 16; i++) e.create('Row', { title: `foreground-${i}` });
+      expect(db.sequence).toBe(sequence + 16);
+      expect(e.query('Row').count()).toBe(528);
+      expect(db.sql.pragma('busy_timeout', { simple: true })).toBe(0);
+      const checkpoint = db.sql.pragma('wal_checkpoint(TRUNCATE)')[0] as { busy: number };
+      expect(checkpoint.busy).toBe(1);
+      expect(statSync(join(path, 'data.sqlite3-wal')).size).toBeGreaterThan(0);
+    } finally { release(gate); control.gate = undefined; }
+    const model = await pending;
+    expect(model.samples).toBe(512);
+    expect(model.sourceCommitHex).toBe(sourceCommit);
+    expect(db.sequence).toBe(sequence + 16);
+    expect(e.query('Row').count()).toBe(528);
+    expect(db.sql.pragma('wal_checkpoint(TRUNCATE)')).toEqual([{ busy: 0, log: 0, checkpointed: 0 }]);
+    expect(statSync(join(path, 'data.sqlite3-wal')).size).toBe(0);
   });
 
   it.each([1, 8])('refuses a malformed derived vector in the real worker and retries after repair (%i bytes)', async bytes => {

@@ -29,6 +29,7 @@ const requiredTrainingCases = [
   'rejects close and drains the worker before fixture cleanup',
   'refuses foreground transaction ownership and insufficient input without poisoning the database',
   ...[1, 8].map(bytes => `refuses a malformed derived vector in the real worker and retries after repair (${bytes} bytes)`),
+  ...[false, true].map(syncs => `keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (${syncs} syncs)`),
 ].map(title => `native vector training ownership ${title}`);
 const requiredLibraryIndexCases = [
   "the library search index indexes a folder's documents and its subfolders', pending until embedded, then searches them",

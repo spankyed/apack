@@ -313,6 +313,28 @@ jobs:
           node native/vectors/dispatch-model-test.mjs compare \
             .temp/vector-dispatch/generic/vec1.so .temp/vector-dispatch/dispatch/vec1.so \
             .temp/vector-dispatch/cross-backend-models.json
+      - name: Real EARS training worker ownership and checkpoint contracts
+        run: |
+          set -euo pipefail
+          for variant in generic dispatch; do
+            EARS_EVALUATION_BACKEND=sqlite EARS_VEC1_EXTENSION="$GITHUB_WORKSPACE/.temp/vector-dispatch/$variant/vec1.so" \
+              npm test -w @apackdev/ears -- tests/sqlite/vector-training.spec.ts --maxWorkers=2 \
+              --reporter=default --reporter=json --outputFile="../../.temp/vector-dispatch/$variant-training.json" \
+              2>&1 | tee ".temp/vector-dispatch/$variant-training.log"
+          done
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          for (const variant of ['generic', 'dispatch']) {
+            const report = JSON.parse(readFileSync(`.temp/vector-dispatch/${variant}-training.json`, 'utf8'));
+            assert.equal(report.numFailedTests, 0); assert.equal(report.numPendingTests, 0);
+            const file = report.testResults.find(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts'));
+            assert(file?.assertionResults.length > 0);
+            for (const test of file.assertionResults) assert.equal(test.status, 'passed', test.fullName);
+            for (const syncs of [false, true]) assert(file.assertionResults.some(test => test.fullName.endsWith(
+              `keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (${syncs} syncs)`)));
+          }
+          JS
       - name: Preserve diagnostic source, commands and outcomes
         if: always()
         uses: actions/upload-artifact@v4

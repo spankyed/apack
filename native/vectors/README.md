@@ -82,3 +82,10 @@ not latency, recall, representative trained-model variance, non-AVX fallback exe
 Windows/macOS packaging or installed/signing acceptance. Those are required before any
 promotion. Next compare paired frozen corpus runs with verified actual backend selection
 and unchanged candidate/recall/heartbeat criteria; never infer a speedup from compiler flags.
+
+The diagnostic also runs the actual EARS training suite against both artifacts. Named
+OFF/FULL cases hold a real worker snapshot during foreground commits, require checkpoint
+busy refusal with retained WAL, and require truncation after worker exit. Existing real
+malformed-input/repair, cancellation, stale-generation and close/drain cases remain
+required with no skips. These checks prove their specific regimes rather than all
+contention, resource or physical storage failure behavior.
