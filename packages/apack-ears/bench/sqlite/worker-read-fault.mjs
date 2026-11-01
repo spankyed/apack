@@ -68,8 +68,9 @@ try {
     assert(report.syscall.successfulMatchedReads > 0, 'Worker must open/read the database before reaching the canonical embedding table');
     assert(report.syscall.offset > 0, 'Embedding-page fault must be beyond the database header');
   }
-  // SQLite unixRead explicitly maps POSIX EIO to this extended result, including during open.
-  assert.equal(refused.code, 'SQLITE_IOERR_CORRUPTFS');
+  // The pinned runtime preserves the VFS code on the header read, but page-query processing
+  // surfaces CORRUPT. Require the observed phase-specific code, never an arbitrary refusal.
+  assert.equal(refused.code, phase === 'header' ? 'SQLITE_IOERR_CORRUPTFS' : 'SQLITE_CORRUPT');
   await trainer.stop();
   assert.equal(db.sequence, sequence); assert.equal(canonical(), before);
   assert.equal(e.query('Row').count(), 512);
