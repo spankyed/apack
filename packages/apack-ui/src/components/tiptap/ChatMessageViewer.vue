@@ -58,7 +58,7 @@ watch([() => props.modelValue, groups, content], () => {
 }, { flush: 'post', immediate: true })
 function onCopy(event: ClipboardEvent) {
   const root = content.value?.firstElementChild
-  if (root instanceof HTMLElement) copyChatSelection(event, root, groups.value)
+  if (root instanceof HTMLElement) copyChatSelection(event, root, textEditorExtensionsRegistry.getAll())
 }
 function onClick(event: MouseEvent) {
   createViewerClickHandler({ imageClick: src => emit('imageClick', src), openLink: props.openViewerLink })(undefined, event)

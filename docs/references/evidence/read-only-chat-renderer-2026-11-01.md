@@ -38,13 +38,18 @@ Review found and fixed table-cell paragraphs, nested list wrapping, empty-messag
 code-copy text, reference boundary markers, adapter callback capture and cleanup, and preservation
 of adapter root classes. Clipboard checks exposed a real Markdown-versus-plain-text difference:
 copy now reuses the existing serializer in a temporary detached editor, always destroyed afterward.
-Partial marked text, code and references have focused copy coverage. Rendering owns no editor.
+Partial marked text, code and references have focused copy coverage. Final review additionally
+caught stale serializer bindings when an extension changes but its read-only adapter does not. Copy
+now reads the current accepted registry rather than the DOM-rendering dependency snapshot. A real
+clipboard regression fails with the retired serializer and passes with its replacement, while the
+rendered DOM stays identical. This changes only the copy event path; opening/streaming do not execute
+it. Their valid qualifications are reused. Rendering owns no editor.
 
 Unknown contributions use the original viewer; accepted adapters are validated without executing
 them and their callbacks are captured. Replacement/removal disposes subscriptions and timers,
 including error paths. Unrelated editing-only changes preserve DOM and selection targets.
 
-All 42 UI cases pass, as do the 45 frontend-admission and 45 code-generation cases. The additional
+All 43 UI cases pass, as do the 45 frontend-admission and 45 code-generation cases. The additional
 foregrounding cases cover both gated and ungated execution; fifteen performance coordination cases,
 relevant type checks and repository lint pass. Strict CI for the final code is [run 41352291011](https://github.com/spankyed/apack/actions/runs/41352291011), queued behind the earlier strict run. Results will be recorded on completion.
 
@@ -83,8 +88,8 @@ successfully. No runtime startup change or weakened timeout was made.
 
 Production measurements: clean candidate `d7e63c7678795f2734b80741577905b7bf58b465` versus clean
 baseline `02bc0c50d744a81870fce956f740693f094b4a5e`. The baseline is master `461f7bf2cb` plus only
-the shared corpus/readiness harness. Subsequent changes are a test lint fix and benchmark foregrounding;
-application code is unchanged. Final overhead source: `b7b7af330f933384f8f3288bc4f4687f0ba0dd8d`.
+the shared corpus/readiness harness. Subsequent changes are a test lint fix, benchmark foregrounding and a copy-only registry lookup fix;
+the measured opening/streaming rendering path is unchanged. Final overhead source: `b7b7af330f933384f8f3288bc4f4687f0ba0dd8d`.
 
 All runs use native pin `f496470679a7bd9764398108b20f62a73333c701`, binary SHA-256
 `176e439110468bf2855b836a50d5a0ce7e7c0cdbfd43215eeef2b202546cc463`. Linux arm64, Electron

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest'
+import { Mark } from '@tiptap/core'
 import { createApp, h, nextTick, ref, type App } from 'vue'
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
 import type { TextEditorExtensionsBinding } from '@apackdev/sdk/fe'
@@ -73,4 +74,28 @@ it('keeps the displayed DOM and selection target for unrelated editing-only cont
   const strong = f.root.querySelector('strong')
   await f.publish([{ packId: 'editing', groupId: 'suggestions', binding: { readOnly: false } }])
   expect(f.root.querySelector('strong')).toBe(strong)
+})
+
+it('preserves rendered DOM while copy uses a replaced contribution serializer', async () => {
+  const readOnly = {}
+  const bold = (delimiter: string) => Mark.create({ name: 'bold',
+    parseHTML: () => [{ tag: 'strong' }], renderHTML: () => ['strong', 0],
+    addStorage: () => ({ markdown: { serialize: { open: delimiter, close: delimiter, mixable: true, expelEnclosingWhitespace: true } } }),
+  })
+  const group = (delimiter: string): TextEditorExtensionsBinding => ({ packId: 'pack', groupId: 'format',
+    binding: { readOnly, extensions: { bold: bold(delimiter) } } })
+  const f = fixture([group('**')])
+  await nextTick()
+  const root = f.root.querySelector('.ProseMirror')!
+  await f.publish([group('__')])
+  expect(f.root.querySelector('.ProseMirror')).toBe(root)
+  const range = document.createRange(); range.selectNodeContents(root)
+  const selection = document.getSelection()!; selection.removeAllRanges(); selection.addRange(range)
+  const copied = new Map<string, string>()
+  const event = new Event('copy', { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'clipboardData', { value: { setData: (type: string, value: string) => copied.set(type, value) } })
+  root.dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(true)
+  expect(copied.get('text/plain')).toBe('__first__')
+  selection.removeAllRanges()
 })

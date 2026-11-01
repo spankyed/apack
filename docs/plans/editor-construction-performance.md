@@ -124,3 +124,10 @@ All local required checks are complete. Strict run `41351118556` has passed prod
 integration jobs; native shards are still running. Final-code strict run `41352291011` is queued
 behind it; no jobs were cancelled. Next: inspect/fix any material CI failures, wait for all six final
 jobs, record final review/checks, archive this plan and mark #311 ready. No automatic merge.
+
+Final review found and fixed stale copy serializers after a contribution replacement that leaves
+read-only callbacks unchanged. The regression reproduces the retired Markdown delimiter before the
+fix and the new delimiter afterward, preserving DOM identity. Copy reads the accepted registry on
+demand; this one-line copy-only change does not execute in opening/streaming, whose measurements
+are reused. All 43 UI cases, UI type checking and repository lint pass. Strict CI must cover this
+last fix; existing jobs remain uncancelled.
