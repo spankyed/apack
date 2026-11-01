@@ -569,6 +569,7 @@ jobs:
           done
           exit "$failed"
       - name: Require real backend model and relation key witnesses
+        id: relation_witnesses
         if: ${{ !cancelled() }}
         run: |
           node --input-type=module <<'JS'
@@ -616,6 +617,23 @@ jobs:
           }
           writeFileSync('.temp/sqlite-api/relation-model-witnesses.json',JSON.stringify(summary,null,2)+'\n');
           JS
+      - name: High-multiplicity audit resources from the built package
+        if: ${{ !cancelled() && steps.relation_witnesses.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          docker build -t ears-audit-runtime - <<'DOCKER'
+          FROM ubuntu:24.04
+          RUN apt-get update && apt-get install -y --no-install-recommends python3 git libstdc++6 && rm -rf /var/lib/apt/lists/*
+          DOCKER
+          docker image inspect ears-audit-runtime --format '{{.Id}}' > .temp/sqlite-api/audit-image.txt
+          audit_node_binary=$(command -v node)
+          docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+            --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
+            -e GITHUB_SHA="$GITHUB_SHA" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$audit_node_binary:/runtime/node:ro" -v "$GITHUB_WORKSPACE/.temp/sqlite-api:/results" \
+            ears-audit-runtime /runtime/node --experimental-strip-types \
+            packages/apack-ears/bench/sqlite/relation-audit-resources.mjs /results/relation-audit-resources.json \
+            2>&1 | tee .temp/sqlite-api/relation-audit-resources.log
       - name: Require all declared real-content relevance judgments
         run: |
           node --input-type=module <<'JS'
