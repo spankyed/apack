@@ -34,11 +34,25 @@ test('prepare a populated startup profile outside measurement', async ({ app, ap
       const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
       return Object.values(context.messageContents).some(message => message.text?.startsWith("You're all setup!"));
     })).toBe(true);
-    await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
-    await expect.poll(() => appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
-      return Object.keys(context.threadMap).filter(id => id.startsWith('Thread-search-')).length;
-    })).toBe(fixture.data.threads.length);
+    // Seed ingestion is setup, outside startup timing. Use the same page-completion wait as
+    // the existing search/import scenarios; a five-second assertion poll can close the app mid-import.
+    const importStarted = performance.now();
+    let importCompleted = false;
+    try {
+      await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
+      await appPage.waitForFunction(expected => {
+        const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
+        return Object.keys(context.threadMap).filter(id => id.startsWith('Thread-search-')).length === expected;
+      }, fixture.data.threads.length);
+      importCompleted = true;
+    } finally {
+      writeFileSync(path.join(path.dirname(process.env.APACK_PERFORMANCE_SEED_REPORT), 'preparation.json'), JSON.stringify({
+        source: process.env.GITHUB_SHA, storageFormat: process.env.APACK_STORAGE_FORMAT,
+        phase: 'seed-import', expectedThreads: fixture.data.threads.length,
+        importCompleted, importMs: performance.now() - importStarted,
+        scope: 'Seed preparation outside measured startup; not an ingestion latency or foreground-budget pass',
+      }, null, 2));
+    }
     await appPage.evaluate(() => (window as unknown as PerformanceWindow).applicationState.send({
       type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: 'Thread-search-11' }],
     }));

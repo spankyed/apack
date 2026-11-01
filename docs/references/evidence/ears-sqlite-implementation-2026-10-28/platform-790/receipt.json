@@ -77,5 +77,48 @@
       "numFailedTests": 0,
       "numPendingTests": 0
     }
+  },
+  "macOS": {
+    "ears": {
+      "numPassedTests": 930,
+      "numFailedTests": 1,
+      "numPendingTests": 0
+    },
+    "hostPassed": 312,
+    "hostRecoveryPassed": 12,
+    "nativeAdapterReadiness": [
+      {
+        "name": "waits for the native builder without blocking foreground turns and releases its timer",
+        "status": "passed"
+      },
+      {
+        "name": "scopes readiness and failures to the requested type",
+        "status": "passed"
+      },
+      {
+        "name": "rejects superseded scoped declarations even if changed back before the timer runs",
+        "status": "passed"
+      },
+      {
+        "name": "keeps a scoped wait through an unrelated type declaration",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when reset changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when replaceWith changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when close changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "refuses open units, closed handles and unfinished read-only builds",
+        "status": "passed"
+      }
+    ]
   }
 }
