@@ -1,7 +1,7 @@
 # Thread-opening performance
 
-Status: paused at the user’s request after completed Docker preparation, 2026-10-31. Baseline code: merged master `8e2d334e2b`;
-native pin `1849f6899e3d707ac8e25e7f81fa52b472b2a9a0`.
+Status: resumed after rebase onto master `984f1b4aca`, 2026-11-01.
+Native pin: `f496470679a7bd9764398108b20f62a73333c701`.
 
 ## Outcome and scope
 
@@ -123,3 +123,18 @@ Raw reports: volume paths `thread-investigation-8b6e43317e/` and
 `thread-ready-8b6e43317e/` under `.apack/performance`. Host summaries/logs: relative to
 `/private/tmp/`, `apack-thread-phase-attribution.json`, `apack-thread-baseline-phase-counts.json`,
 `apack-thread-baseline-preparation.log`, and `apack-thread-comparison-preparation.log`.
+
+## Rebased resumption
+
+The branch rebased cleanly onto `984f1b4aca`. Chat/editor source and the root lockfile are
+unchanged from the original baseline; upstream changes include the native revision and application
+startup/test infrastructure. Historical attribution remains useful, but historical latency is not
+a comparison against this revision. The independent native checkout now matches the new pin.
+
+Use baseline `84be38849d` (new master plus the stronger harness, original application behavior)
+against candidate `218903c3af`; checkpoint HEAD `4d3a7f6356` adds documentation only. The existing
+Linux baseline directory and independent dependencies are retained, with its source explicitly
+updated before either comparison. The owned `.apack/resume-thread-comparison.sh` runs candidate
+preparation, the readiness diagnostic, a two-trial contract check, then twenty measured actions per
+revision. Evidence goes under `.apack/performance/thread-resumed-4d3a7f6356/`. None of these
+resumed measurements has yet completed; candidate acceptance remains pending.
