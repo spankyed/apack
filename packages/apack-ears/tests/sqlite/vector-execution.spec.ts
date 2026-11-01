@@ -114,23 +114,32 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native vector 
     const pending = e.pendingEmbeddings('Row', { limit: 5000 });
     e.embed(pending.chunks.map(chunk => ({ ...chunk, model: pending.model, vector })));
     const job = db.indexBuilds.jobs().find(job => job.kind === 'vector')!;
-    let visits = 0;
-    db.sql.function('stream_scope_probe', { deterministic: false }, (_id) => { visits++; return 1; });
+    let visits = 0, excludedVisited = false;
+    db.sql.function('stream_scope_probe', { deterministic: false }, (id) => {
+      visits++; if (id === ids[0]) excludedVisited = true; return 1;
+    });
     const reachedNative = new Error('bounded probe reached native routing');
     const native = vi.spyOn(db.indexBuilds, 'nativeVectorOwners').mockImplementation(() => { throw reachedNative; });
     try {
       expect(() => db.search.vectors.search({ sql: 'SELECT id FROM entities WHERE stream_scope_probe(id)', parameters: [] },
         'Row', job.name, job.generation, 128, vector, 10)).toThrow(reachedNative);
       expect(visits).toBe(4097);
-      visits = 0;
+      visits = 0; excludedVisited = false;
       expect(() => db.search.vectors.search({ sql: 'SELECT id FROM entities WHERE stream_scope_probe(id)', parameters: [] },
         'Row', job.name, job.generation, 128, vector, 10, ids[0])).toThrow(reachedNative);
-      expect(visits).toBe(4098);
+      // Random IDs need not put the excluded owner inside this unordered streaming prefix.
+      // Count 4,097 eligible chunks, plus the excluded owner only when it was actually visited.
+      expect(visits).toBe(4097 + Number(excludedVisited));
       visits = 0;
       const limited = db.search.vectors.search({
         sql: 'SELECT id FROM entities WHERE stream_scope_probe(id) ORDER BY seq LIMIT 20', parameters: [],
       }, 'Row', job.name, job.generation, 128, vector, 10);
       expect(limited.map(row => row.id)).toEqual(ids.slice(0, 10)); expect(visits).toBe(20);
+      visits = 0;
+      const limitedExcluded = db.search.vectors.search({
+        sql: 'SELECT id FROM entities WHERE stream_scope_probe(id) ORDER BY seq LIMIT 20', parameters: [],
+      }, 'Row', job.name, job.generation, 128, vector, 10, ids[0]);
+      expect(limitedExcluded.map(row => row.id)).toEqual(ids.slice(1, 11)); expect(visits).toBe(20);
       const duplicates = Array.from({ length: 2000 }, () => [ids[2], ids[1], ids[0]]).flat();
       const repeated = db.search.vectors.search({ sql: 'SELECT value id FROM json_each(?)', parameters: [JSON.stringify(duplicates)] },
         'Row', job.name, job.generation, 128, vector, 10);
