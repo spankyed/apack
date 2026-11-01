@@ -78,7 +78,9 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite relatio
       const x = identity.relationKeyFingerprint(['slot'], left), y = identity.relationKeyFingerprint(['slot'], right);
       if (equal) expect(x).toBe(y); else expect(x).not.toBe(y);
     }
-    const dense = db.unpack(db.pack({ slot: [, 1] })).slot as unknown[];
+    const sparse: unknown[] = []; sparse[1] = 1;
+    expect(sparse).toHaveLength(2); expect(Object.hasOwn(sparse, 0)).toBe(false);
+    const dense = db.unpack(db.pack({ slot: sparse })).slot as unknown[];
     expect(Object.hasOwn(dense, 0)).toBe(true);
     const left = db.unpack(db.pack({ slot: { nested: NaN } })), right = db.unpack(db.pack({ slot: { nested: NaN } }));
     expect(identity.sameRelationKey(['slot'], left, right)).toBe(false);

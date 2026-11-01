@@ -1581,17 +1581,16 @@ export class SqliteDatabase implements EarsDatabase {
         incoming.close();
         unit.changes.add('all'); unit.commit();
       } catch (error) { this.abortFailedOperation(error); }
-    } catch (error) { failed = true; failure = error; throw error; }
-    finally {
-      if (incoming.isOpen) {
-        try { incoming.close(); }
-        catch (cleanup) {
-          if (!failed) throw cleanup;
-          throw Object.assign(new AggregateError([failure, cleanup], 'Replacement and source cleanup failed', { cause: failure }),
-            { code: (failure as { code?: unknown })?.code });
-        }
+    } catch (error) { failed = true; failure = error; }
+    if (incoming.isOpen) {
+      try { incoming.close(); }
+      catch (cleanup) {
+        failure = failed ? Object.assign(new AggregateError([failure, cleanup], 'Replacement and source cleanup failed', { cause: failure }),
+          { code: (failure as { code?: unknown })?.code }) : cleanup;
+        failed = true;
       }
     }
+    if (failed) throw failure;
   }
 
   withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T> {
