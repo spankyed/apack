@@ -20,7 +20,7 @@
     "relations": {
       "has": {},
       "relates_to": {},
-      "references": { "unique": true },
+      "references": {},
       "forked_from": {},
       "compacts": {},
       "blocks": {},

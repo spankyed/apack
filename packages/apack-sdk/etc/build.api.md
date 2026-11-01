@@ -670,19 +670,19 @@ export const ManifestSchema: z.ZodObject<{
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
             weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
             weighted?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
             weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
             weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -1472,19 +1472,19 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         }>>>>;
         relations: z.ZodOptional<z.ZodType<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
             weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
             weighted?: boolean | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
             weighted?: boolean | undefined;
         }>, Record<string, {
             acyclic?: boolean | undefined;
-            unique?: boolean | undefined;
+            key?: readonly string[] | undefined;
             weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -2081,7 +2081,7 @@ export type PackProvenance = Partial<Record<ProvenanceKind, Record<string, strin
 // @public
 export interface PackRelationDeclaration {
     readonly acyclic?: boolean;
-    readonly unique?: boolean;
+    readonly key?: readonly string[];
     readonly weighted?: boolean;
 }
 

@@ -347,7 +347,7 @@ What a write builder does:
 | `merge(k, partial)` | Merges into the attribute's object |
 | `delete(k)` | Removes the field |
 | `removeAt(k, index)` / `removeValue(k, v)` | Removes the list's element at `index` / the list's first element equal to `v` |
-| `link(kind, target, { info?, weight? })` | Links to `target`. The same edge (kind, target and `info`) again changes nothing. A kind declared `unique` keeps one edge to `target`, whose `info` (and `weight`) linking again replaces; one declared `acyclic` refuses a cycle through it (`CYCLE`). `weight` is a weighted kind's only (`data.relations.<kind>.weighted`): from 0 to 2^960, 1 when not given |
+| `link(kind, target, { info?, weight? })` | Links to `target`. An edge is its ends and the values of its kind's `key` fields in `info` (none declared: one edge to `target`), and linking to an identity an edge holds updates it, keeping its id: a given `info` replaces its info, a given `weight` its weight. A kind declared `acyclic` refuses a cycle through it (`CYCLE`). `weight` is a weighted kind's only (`data.relations.<kind>.weighted`): from 0 to 2^960, 1 when not given |
 | `unlink(kind, target?)` / `unlinkAll()` | Removes edges of the kind (to `target` only, when given) / every edge from the entity |
 | `grant(role)` / `revoke(role)` / `grantExclusive(role, among)` | See *Roles* |
 | `destroy()` | Deletes the entity and its edges |

@@ -41,9 +41,13 @@ export const SDK_REL_KINDS = {
   PARENT_OF: 'parent_of',
 } as const;
 
-/** What the SDK's relation kinds hold their edges to: folders nest as a tree, so `parent_of` closes no cycle */
+/**
+ * What the SDK's relation kinds hold their edges to: folders nest as a tree, so `parent_of` closes no cycle, and a
+ * flow's transitions are one per pair of handles they join, so two nodes may be joined by several
+ */
 export const SDK_RELATION_RULES: Readonly<Record<string, RelationRules>> = {
   [SDK_REL_KINDS.PARENT_OF]: { acyclic: true },
+  [SDK_REL_KINDS.TRANSITIONS_TO]: { key: ['sourceHandle', 'targetHandle'] },
 };
 
 /** The roles the SDK's flow model grants, which every pack has and none declares */
