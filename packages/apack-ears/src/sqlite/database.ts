@@ -261,6 +261,7 @@ export class SqliteDatabase implements EarsDatabase {
         this.sql.exec('BEGIN IMMEDIATE');
         try {
           this.checkRevision();
+          const revision = this.schemaPresent ? this.advanceCounter('schemaRevision') : undefined;
           const incumbent = new Set(this.indexBuilds.jobs().map(job => job.generation));
           this.indexBuilds.admit(specs);
           this.indexBuilds.restart(this.search.missingIndexes(this.heldSchema).filter(job => incumbent.has(job.generation)));
@@ -268,9 +269,9 @@ export class SqliteDatabase implements EarsDatabase {
           const state = this.indexBuilds.readState();
           // Other owners may cache value generations. Invalidate them when physical recovery changes the
           // catalog, while preserving the logical data commit identity and the declaration itself.
-          if (this.schemaPresent) this.putMeta('schemaRevision', this.heldRevision + 1);
+          if (revision !== undefined) this.putMeta('schemaRevision', revision);
           this.commitWrite();
-          if (this.schemaPresent) this.heldRevision++;
+          if (revision !== undefined) this.heldRevision = revision;
           this.indexBuilds.acceptState(state);
         } catch (error) {
           if (this.sql.inTransaction) {
@@ -457,6 +458,14 @@ export class SqliteDatabase implements EarsDatabase {
       name,
       this.pack(value),
     ]);
+  }
+  /** Imported metadata may reach the representable boundary; never round commit/schema identities. */
+  private advanceCounter(name: 'commit' | 'schemaRevision'): number {
+    const current: unknown = this.meta(name) ?? 0;
+    if (typeof current !== 'number' || !Number.isSafeInteger(current) || current < 0)
+      fail('CORRUPT', `Invalid ${name} counter`);
+    if (current === Number.MAX_SAFE_INTEGER) fail('NUMBERS_EXHAUSTED', `${name} counter exhausted`);
+    return current + 1;
   }
   private next(name: string): number {
     const n = Number(this.meta(name) ?? 1);
@@ -1245,7 +1254,7 @@ export class SqliteDatabase implements EarsDatabase {
   finish(unit: SqliteUnit, commit: boolean): Changes {
     if (this.active !== unit) fail("CLOSED", "This unit has ended");
     try {
-      const sequence = this.sequence + (commit ? 1 : 0);
+      const sequence = commit ? this.advanceCounter("commit") : this.sequence;
       const changes = unit.changesForCommit();
       const result = { sequence, touched: this.touched(changes) };
       if (commit) {
@@ -1322,6 +1331,7 @@ export class SqliteDatabase implements EarsDatabase {
     this.sql.exec("BEGIN IMMEDIATE");
     try {
       this.checkRevision();
+      const revision = this.advanceCounter("schemaRevision"), sequence = this.advanceCounter("commit");
       // Incumbent-dependent refusals belong under writer ownership: another handle can issue its first short
       // code between the earlier structural checks and BEGIN IMMEDIATE without changing the schema revision.
       for (const [type, def] of Object.entries(next.types) as Array<[string, Data]>) {
@@ -1343,13 +1353,13 @@ export class SqliteDatabase implements EarsDatabase {
       this.indexBuilds.admit(this.indexSpecs(next));
       this.search.ensure(next);
       this.putMeta("schema", next);
-      this.putMeta("schemaRevision", this.heldRevision + 1);
-      this.putMeta("commit", this.sequence + 1);
+      this.putMeta("schemaRevision", revision);
+      this.putMeta("commit", sequence);
       const indexState = this.indexBuilds.readState();
       this.commitWrite();
       this.heldSchema = next;
       this.schemaPresent = true;
-      this.heldRevision++;
+      this.heldRevision = revision;
       this.indexBuilds.acceptState(indexState);
       this.indexBuilds.wake();
       return report;
@@ -1375,6 +1385,7 @@ export class SqliteDatabase implements EarsDatabase {
     this.sql.exec('BEGIN IMMEDIATE');
     try {
       this.checkRevision();
+      const revision = this.advanceCounter('schemaRevision');
       if(options.repairNative){this.indexBuilds.assertNativeMaintenanceOwnership();repairNativeVectors(this);}
       // Explicit offline maintenance rebuilds generationless membership in this same atomic admission.
       // SQLite owns the scan and insertion; the callback only decodes one authoritative array at a time.
@@ -1389,10 +1400,10 @@ export class SqliteDatabase implements EarsDatabase {
           [job.type, job.name]);
       this.search.ensure(this.heldSchema);
       this.sql.exec('DELETE FROM embedding_search');
-      this.putMeta('schemaRevision', this.heldRevision + 1);
+      this.putMeta('schemaRevision', revision);
       const state = this.indexBuilds.readState();
       this.commitWrite();
-      this.heldRevision++;
+      this.heldRevision = revision;
       this.indexBuilds.acceptState(state);
       this.indexBuilds.wake();
       for (const type of new Set(jobs.map(job => job.type))) this.indexesChanged(type);
@@ -1484,7 +1495,7 @@ export class SqliteDatabase implements EarsDatabase {
           fail("UNSUPPORTED", "Unknown SQLite load");
       }
       // Unchecked import deliberately permits invalid data, just as the existing admin API does.
-      this.putMeta("commit", this.sequence + 1);
+      this.putMeta("commit", this.advanceCounter("commit"));
       this.commitWrite();
       this.indexBuilds.committed(unit.changes);
       this.active = undefined;

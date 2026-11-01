@@ -269,6 +269,13 @@ if (mode === 'verify') {
   const cosineCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-cosine.spec.ts') ? file.assertionResults : []);
   requirePassingCases(cosineCases, [1, 3, 7, 8, 127, 128, 1536].map(dimensions =>
     `canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (${dimensions} dimensions)`), 'Canonical cosine numerical compatibility');
+  const counterCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/commit-outcomes.spec.ts') ? file.assertionResults : []);
+  requirePassingCases(counterCases, [
+    'SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes',
+    'SQLite commit outcome handling rolls back schema when the commit identity is exhausted',
+    'SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted',
+    'SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it',
+  ], 'Commit and schema counter exhaustion');
   const trainingCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts') ? file.assertionResults : []);
   requirePassingCases(trainingCases, requiredTrainingCases, 'Native worker ownership, corruption and retry');
   const graphAlgorithmCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/graph-algorithms.spec.ts') ? file.assertionResults : []);

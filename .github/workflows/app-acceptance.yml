@@ -787,6 +787,10 @@ jobs:
             const report=JSON.parse(readFileSync(`.temp/sqlite-api/${backend}-contracts.json`,'utf8'));
             const cases=report.testResults.flatMap(file=>file.assertionResults);
             const required=[...shared,...(backend==='sqlite'?[
+              'SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes',
+              'SQLite commit outcome handling rolls back schema when the commit identity is exhausted',
+              'SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted',
+              'SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it',
               'restored logical stores audits unchecked duplicate edge identities and invalid keyed info without repairing them',
               'native text pipeline scopes uses posting estimates without reevaluating the candidate prefix and still scopes actual matches',
               'hybrid winner highlights formats only final lexical winners while preserving global fusion scores, list highlights and scoped mixed-type answers',

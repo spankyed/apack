@@ -25,6 +25,55 @@ function lostAcknowledgement(db: SqliteDatabase, applied: boolean) {
 }
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite commit outcome handling', () => {
+  it('commits the last representable identity then refuses further writes without data or watch changes', async () => {
+    const { db, e } = open();
+    db.run('INSERT OR REPLACE INTO meta VALUES (?,?)', ['commit', db.pack(Number.MAX_SAFE_INTEGER - 1)]);
+    e.create('Row', { id: 'Row-last' });
+    expect(db.sequence).toBe(Number.MAX_SAFE_INTEGER);
+    const seen: string[][] = [], watch = e.watch(() => e.query('Row').ids(), ids => seen.push([...ids]));
+    try {
+      await e.admin.watchesSettled();
+      expect(() => e.create('Row', { id: 'Row-refused' })).toThrow(expect.objectContaining({ code: 'NUMBERS_EXHAUSTED' }));
+      expect(db.sql.inTransaction).toBe(false);
+      expect(db.sequence).toBe(Number.MAX_SAFE_INTEGER);
+      expect(e.query('Row').ids()).toEqual(['Row-last']);
+      await e.admin.watchesSettled(); expect(seen).toEqual([['Row-last']]);
+    } finally { watch.stop(); }
+  });
+
+  it.each(['schema', 'bulkLoad'] as const)('rolls back %s when the commit identity is exhausted', operation => {
+    const { db, e } = open(); e.create('Row', { id: 'Row-before' });
+    db.run('INSERT OR REPLACE INTO meta VALUES (?,?)', ['commit', db.pack(Number.MAX_SAFE_INTEGER)]);
+    const before = db.schema, jobs = db.indexBuilds.jobs();
+    expect(() => operation === 'schema'
+      ? e.admin.declare({ ...schema, types: { Added: { required: [] } } })
+      : db.bulkLoad([{ load: 'entity', id: 'Row-refused', fields: { title: 'candidate' } }]))
+      .toThrow(expect.objectContaining({ code: 'NUMBERS_EXHAUSTED' }));
+    expect(db.sql.inTransaction).toBe(false); expect(db.sequence).toBe(Number.MAX_SAFE_INTEGER);
+    expect(db.schema).toEqual(before); expect(db.indexBuilds.jobs()).toEqual(jobs);
+    expect(e.query('Row').ids()).toEqual(['Row-before']);
+    db.close(); const reopened = open(db.path);
+    expect(reopened.db.schema).toEqual(before); expect(reopened.db.sequence).toBe(Number.MAX_SAFE_INTEGER);
+    expect(reopened.e.query('Row').ids()).toEqual(['Row-before']);
+  });
+
+  it('admits the last schema revision then refuses declaration and rebuild without rounding it', () => {
+    const original = open(); original.e.create('Row', { id: 'Row-before' });
+    original.db.run('INSERT OR REPLACE INTO meta VALUES (?,?)', ['schemaRevision', original.db.pack(Number.MAX_SAFE_INTEGER - 1)]);
+    original.db.close();
+    const { db, e } = open(original.db.path);
+    e.admin.declare({ ...schema, types: { Added: { required: [] } } });
+    const before = db.schema, sequence = db.sequence, jobs = db.indexBuilds.jobs();
+    const revision = () => db.unpack(db.get('SELECT value FROM meta WHERE key=?', ['schemaRevision'])!.value);
+    expect(revision()).toBe(Number.MAX_SAFE_INTEGER);
+    expect(() => e.admin.declare({ ...schema, types: { More: { required: [] } } }))
+      .toThrow(expect.objectContaining({ code: 'NUMBERS_EXHAUSTED' }));
+    expect(() => db.rebuildIndexes()).toThrow(expect.objectContaining({ code: 'NUMBERS_EXHAUSTED' }));
+    expect(db.sql.inTransaction).toBe(false); expect(revision()).toBe(Number.MAX_SAFE_INTEGER);
+    expect(db.schema).toEqual(before); expect(db.sequence).toBe(sequence);
+    expect(db.indexBuilds.jobs()).toEqual(jobs); expect(e.query('Row').ids()).toEqual(['Row-before']);
+  });
+
   it.each([false, true])('does not invent a committed/refused answer after an ended commit error (applied: %s)', async applied => {
     const { db, e } = open(); e.create('Row', { id: 'Row-before' });
     const sequence = db.sequence, seen: string[][] = [], watch = e.watch(() => e.query('Row').ids(), ids => seen.push([...ids]));
