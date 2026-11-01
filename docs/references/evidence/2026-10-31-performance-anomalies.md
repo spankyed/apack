@@ -229,3 +229,20 @@ pass the earlier broad run or prove its environmental cause. The
 Final source review found no additional material defect in the window discovery, seed isolation,
 shutdown grace or private runtime publication paths. Combined committed-input validation and strict
 CI remain required before merge.
+
+
+## Combined-check orchestration correction
+
+The first clean combined candidate (`cbf8b85487`) passed prerequisites, application builds, all
+typechecks, lint, external-pack contracts/fork, the 541-file host unit pool (204.5 s) and pack unit
+pool (108.6 s). Its integration pool was actively running when `session:check` killed the **whole
+chain at 900 seconds**. That wrapper classified the complete strict repository chain as one install
+scenario, although an individual complete integration pool already has a declared 7,200-second
+acceptance ceiling. This is an outer orchestration failure, not an integration-test result.
+
+The wrapper now selects the existing acceptance class for the complete chain. No timeout class
+value, test deadline, inner step ceiling or idle watchdog changed. The interrupted combined run
+remains failed and retained at `integration-7yQ9fb`; a clean combined check must finish before merge.
+
+The corrected session workflow passes its existing eleven integration cases, including setup failure,
+validation refusal and source/candidate drift checks. Focused correctness lint also passes.
