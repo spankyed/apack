@@ -2992,6 +2992,16 @@ after the restart ([unsaved state across a reconnect](../../archive/plans/reconn
 indexed and a `.noindex` parent invalidates its prebuilt pack, whose recorded inputs carry absolute paths ("Compiler
 startup input changed"), so the indexed phase of that run tested nothing. The finding rests on the four pairs above.
 
+**It reaches the main checkout too, under a cold chain** (2026-10-31): `test:external-pack:app` failed on the
+teardown timeout in three of five cold `npm run chain -- --no-native` runs on this Mac (10 cores), with every test
+passing — three apps and the default fork's lifecycle in one run — each time while `test:integration` and
+`test:packaged-authoring:author` ran beside it; every run with `test:integration` cached passed. The failed workers'
+data dirs were left behind, and their `main.log`s end in ordinary traffic with nothing logged on the way out. The
+fixture now ends Electron itself once `will-quit` has fired for a data dir it made and is about to delete
+(`packages/apack-testing/CLAUDE.md`, Teardown), so what is waited for is the app's own quit and the API child's exit,
+not Chromium's profile writes. A dir the caller gave (`E2E_DATA_DIR`, which the default fork's restart uses) still
+waits for them.
+
 ### Versioned override reproducer and launch admission (2026-10-17)
 
 Run `39079991483` on `99c910914` confirms the library-path omission in 22.13 seconds: ordinary Node

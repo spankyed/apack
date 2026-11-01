@@ -169,6 +169,28 @@ function captureOutput(app: ElectronApplication, logFile?: string): void {
   app.process().stderr?.on('data', onData);
 }
 
+const WILL_QUIT_MARKER = '[e2e] will-quit';
+
+/**
+ * Settles once the app's own quit sequence has finished: Electron emits `will-quit` only after
+ * `before-quit` has let it through, which the API server's handler does once the API child has exited.
+ * What Electron does after that is Chromium's shutdown, flushing the profile — slow under load, and the
+ * fixture's to skip for a profile it deletes (the teardown below).
+ */
+async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Promise<void> }> {
+  const child = app.process();
+  const done = new Promise<void>(resolve => {
+    const onData = (data: Buffer) => { if (data.toString().includes(WILL_QUIT_MARKER)) resolve(); };
+    child.stdout?.on('data', onData);
+    child.once('exit', () => resolve());
+  });
+  await app.evaluate(({ app }, marker) => {
+    app.once('will-quit', () => { process.stdout.write(`${marker}\n`); });
+  }, WILL_QUIT_MARKER);
+  // Wrapped, since an async function returning a promise would hand back its settlement instead
+  return { done };
+}
+
 /**
  * Waits for the pack under test to have been loaded and registered by the app's backend.
  *
@@ -487,6 +509,7 @@ export function createTest(options: CreateTestOptions = {}) {
         launchMonotonicStart.set(app, monotonicStart);
         userDataDirs.set(app, userDataDir);
         captureOutput(app, appLogPath(workerInfo));
+        const quitSequence = await watchQuitSequence(app);
         if (process.env.DEBUG_E2E) {
           app.process().once('exit', (code, signal) => console.log('[e2e shutdown] process exited', { code, signal }));
           app.once('close', () => console.log('[e2e shutdown] Playwright application closed'));
@@ -532,8 +555,20 @@ export function createTest(options: CreateTestOptions = {}) {
             });
           }
         }, 5000) : undefined;
-        try { await app.close(); }
-        finally { clearTimeout(inspectShutdown); }
+        try {
+          const closing = app.close();
+          // A data dir this fixture made is deleted below, so Chromium writing its profile is work nobody reads;
+          // a dir the caller gave is relaunched on, so its profile is waited for. A quit sequence that never
+          // finishes still hangs here, into the worker's teardown timeout, without the line below.
+          if (givenDataDir === undefined) {
+            await quitSequence.done;
+            if (app.process().exitCode === null && app.process().signalCode === null) {
+              console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
+              app.process().kill('SIGKILL');
+            }
+          }
+          await closing;
+        } finally { clearTimeout(inspectShutdown); }
         // Electron close must include its API child; otherwise deleting storage races the final writes.
         if (apiPid !== undefined) {
           let alive = true;

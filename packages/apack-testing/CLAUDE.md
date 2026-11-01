@@ -431,6 +431,11 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   ([reconnect without remount](../../docs/archive/plans/reconnect-without-remount.md)). A test that passed through one is
   left alone
 - Per-worker: `electronApp.close()` shuts down Electron. The fixture captures the API pid before close and fails if that child is still alive afterwards; Electron quit must finish API shutdown before fixture-owned data can be cleaned up.
+  For a data dir the fixture made, it waits for Electron's `will-quit` (emitted once the API server's
+  `before-quit` handler has stopped the API) and then kills Electron rather than waiting for Chromium to write
+  a profile it is about to delete: under load those writes held exit past Playwright's 60s worker teardown
+  ([the evidence](../../docs/references/evidence/build-input-snapshot-proof.md#electron-exit-hang-in-linked-worktrees-2026-10-25)).
+  A dir the caller gave (`E2E_DATA_DIR`) is relaunched on, so its close still waits for the profile.
 
 ## API reference
 
