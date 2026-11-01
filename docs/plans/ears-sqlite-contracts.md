@@ -315,3 +315,16 @@ Ordinary workloads install no per-commit observer. Source typecheck, actual none
 commit events and preserved original profile/heartbeat/cgroup data are required before
 interpreting the next trace. Do not change durability, batches or latency budgets from
 a non-reproduction or use an instrumented pass as ordinary acceptance.
+
+### Canonical distance ownership
+
+Exact/final reranking uses sqlite-vec; ANN uses vec1. In the pinned
+[sqlite-vec 0.1.9 source](https://raw.githubusercontent.com/asg017/sqlite-vec/v0.1.9/sqlite-vec.c),
+cosine has a separate scalar-written loop rather than its explicit AVX/NEON distance
+paths; compiler-generated instructions still depend on the build. vec1 already offers
+cosine with its own SIMD paths. Measure existing functions before changing dependencies,
+normalization/storage or writing a new kernel. The capped distance-kernel diagnostic
+compares SQL scans/sorts on identical synthetic inputs, independently checks Float64
+scores, and records actual libraries/debug flags. It does not route production scoring
+or establish a full-query speedup; real corpus, semantics/recall, extreme inputs,
+unsupported-CPU, package and installed qualification remain required for any change.

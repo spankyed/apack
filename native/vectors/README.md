@@ -89,3 +89,12 @@ busy refusal with retained WAL, and require truncation after worker exit. Existi
 malformed-input/repair, cancellation, stale-generation and close/drain cases remain
 required with no skips. These checks prove their specific regimes rather than all
 contention, resource or physical storage failure behavior.
+
+`distance-kernel.mjs` compares the existing sqlite-vec and vec1 cosine SQL functions,
+with one fresh process per generic/dispatch artifact under enforced 2 CPU/6GiB/no swap.
+It uses 1024×256 and 4096×1536 synthetic Float32 fixtures, 16 inputs, warmup and five
+alternating-function rounds, validating selected scores against independent Float64
+cosine within 1e-5 and preserving boundary ties. It records plans, library/debug/source
+hashes and all timings. This isolates warm in-memory SQL/function work; it is not an
+EARS query, provider corpus, storage benchmark or variance/CPU-baseline qualification.
+No production function or build is changed by the diagnostic.

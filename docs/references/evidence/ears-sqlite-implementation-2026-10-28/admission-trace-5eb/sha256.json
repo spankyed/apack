@@ -1,0 +1,13 @@
+{
+  "retention": "explicit inspected metadata allowlist; input payload/logs/host mounts excluded",
+  "decompressedSha256": {
+    "image.txt": "3c479c1269d10f02c2d1cac93b84ef3b7e5f8390fed0e092799535038cdc2df6",
+    "source.txt": "91d3e02f4cbe3fd7b9e24efc7cfdc2cf5be6f225249638d6f5f550e5624f3b30",
+    "limits.json": "a0cc01781ddf4a703b9ebbc4edd30287d5f688976078bd2e8ee856a5182b6c9a",
+    "trials/100000-1.json": "54be98fc8f8db53b8217d992b1fad8b48c9a9781d8b6b6e14ae755801d09b867",
+    "trials/100000-1-runtime.json": "182b56f16f5a79a4945222c46e001b5c7e816b274f61399097a4a2912fdf81ce",
+    "trials/100000-1-runtime.cpuprofile": "bbd5ab6a56d0e87c51832301d8e790570e87e89d6b55799f6e958e8e36b04e78",
+    "trials/matrix.json": "23dddc88df2135c0c7584e75b06b4dac9758b45a68108bc5b591d16d2f004bd5",
+    "trials/source/provenance.filtered.json": "da9f4d5f8387ab5354e2228b791c0314e97eb2c23321d9aff465363df05ba943"
+  }
+}

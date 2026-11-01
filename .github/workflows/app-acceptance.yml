@@ -336,6 +336,19 @@ jobs:
               `keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (${syncs} syncs)`)));
           }
           JS
+      - name: Compare existing cosine functions under bounded synthetic load
+        run: |
+          set -euo pipefail
+          docker pull ubuntu:24.04
+          docker image inspect ubuntu:24.04 --format '{{json .RepoDigests}}' > .temp/vector-dispatch/kernel-image.json
+          kernel_node_binary=$(command -v node)
+          docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+            --user "$(id -u):$(id -g)" --workdir /workspace -e GITHUB_SHA="$GITHUB_SHA" \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" -v "$kernel_node_binary:/runtime/node:ro" \
+            -v "$GITHUB_WORKSPACE/.temp/vector-dispatch:/results" \
+            ubuntu:24.04 /runtime/node --experimental-strip-types native/vectors/distance-kernel.mjs compare \
+            .temp/vector-dispatch/generic/vec1.so .temp/vector-dispatch/dispatch/vec1.so \
+            /results/distance-kernel.json
       - name: Preserve diagnostic source, commands and outcomes
         if: always()
         uses: actions/upload-artifact@v4
@@ -702,7 +715,10 @@ jobs:
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-api/subprocess-inventory.json
           2>&1 | tee .temp/sqlite-api/subprocess-inventory.log
       - name: Typecheck candidate source and contract tests
-        run: npm run typecheck -w @apackdev/ears
+        run: |
+          npm run typecheck -w @apackdev/ears
+          node_modules/.bin/oxlint packages/apack-ears/src/sqlite/database.ts \
+            packages/apack-ears/tests/sqlite/relation-audit.spec.ts native/vectors/distance-kernel.mjs -D correctness
       - name: Focused shared graph, observation and search contracts on both backends
         run: |
           set -o pipefail
