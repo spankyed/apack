@@ -331,13 +331,45 @@ a non-reproduction or use an instrumented pass as ordinary acceptance.
 
 ### Canonical distance ownership
 
-Exact/final reranking uses sqlite-vec; ANN uses vec1. In the pinned
-[sqlite-vec 0.1.9 source](https://raw.githubusercontent.com/asg017/sqlite-vec/v0.1.9/sqlite-vec.c),
-cosine has a separate scalar-written loop rather than its explicit AVX/NEON distance
-paths; compiler-generated instructions still depend on the build. vec1 already offers
-cosine with its own SIMD paths. Measure existing functions before changing dependencies,
-normalization/storage or writing a new kernel. The capped distance-kernel diagnostic
-compares SQL scans/sorts on identical synthetic inputs, independently checks Float64
-scores, and records actual libraries/debug flags. It does not route production scoring
-or establish a full-query speedup; real corpus, semantics/recall, extreme inputs,
-unsupported-CPU, package and installed qualification remain required for any change.
+`src/sqlite/vectors.ts` uses trusted loaded vec1 cosine for exact/final canonical reranking;
+unextended internal fallback stores use sqlite-vec cosine. ANN selection remains vec1-owned.
+Canonical bytes and the safe extreme-magnitude projections are unchanged. The seven independent
+numeric regimes pass on Linux/macOS/Windows. Earlier kernel-only diagnostics compare SQL scans/sorts
+on identical synthetic inputs and independently check Float64 scores; they are not full-query evidence.
+
+The [current-scorer paired corpus](../references/evidence/ears-sqlite-implementation-2026-10-28/paired-scorer-3ba/README.md)
+actually selects vec1 cosine in both Scalar/AVX2 variants. Both meet independent recall/query-p95
+targets, but miss nine/eight heartbeat groups. It establishes no consistent foreground remedy,
+default dispatch promotion or causal speedup across independently trained models/cache states.
+Further kernel/dependency work must justify its effect on complete queries, preserve canonical
+numeric/recall semantics, and requalify unsupported CPUs, ordinary packages and installed runtimes.
+
+## Current adoption assessment
+
+Keep production on elmdb and PR #286 in draft. The candidate demonstrates substantial functional
+coverage, including real pack replacement, storage refusal, units, watches and the source app. It
+has not met the complete adoption gate. The following maps the original goal phases; a passing
+subtest does not complete the phase that contains it.
+
+| Goal phase | Current evidence | Requirement still open |
+| --- | --- | --- |
+| 1: Freeze contracts and integrate | Master `984f1b4aca`, elmdb `f496470`, current contract matrix and passing strict producer at `f61acd3c7d`. | Finish the pinned consumers and reconcile later relevant master changes before final acceptance. |
+| 2: Structured storage and SQL slice | Lossless primary/value and shared model/query contracts have actual source-pinned execution; the focused run at `045a9e76d7` passes host/EARS types and an empty generated API diff. | Final integrated acceptance and matched current-baseline workload/transport/allocation measurements; the existing earlier comparison is not proof of final-source performance. |
+| 3: Declarations, admission and watches | Definite refusal preserves incumbent files/authority; both real-write-unit cases pass on all three platforms. Actual EARS/installed-host mutation controls detect reverting scoped readiness. | Realistic sustained read/write/watch/admission load and complete resource budgets. Ordinary admission retains a 16.39 ms heartbeat miss against 16 ms. |
+| 4: Search and vectors | Frozen English hybrid usefulness is 25/25 with one pinned model; current managed Scalar/AVX2 corpora pass independent recall and query-p95 limits. | Keyword remains 24/25 without waiver. Language/provider/UI/model variance and foreground responsiveness remain unqualified; nine/eight paired heartbeat groups fail. Chunk-skew fallback reaches 91.44 ms heartbeat p99. |
+| 5: Complete app lifecycle | Current schema-admission source passes 33 SQLite source-app cases once, with one packaged-only exclusion and no retries/flakes. Host refusal/rollback/readiness controls pass. | Complete required failure scenarios and representative streaming/browsing/reactive flows, beyond the selected source-app and host witnesses. |
+| 6: Operations and packaging | Current Node/platform refusal, corruption, recovery and native tests have pinned evidence with explicit exclusions. Current packaged Windows/Linux and signed macOS checks are dispatched. | Inspect final packaged/signing results; finish worker/storage fault extremes, busy-writer/long-reader/checkpoint/resource regimes. Process death and injected errors do not certify physical power loss or arbitrary filesystems. |
+| 7: Ownership and adoption | This matrix and the invariant, algorithmic and dependency reviews identify concrete owned costs and failure boundaries. | Full requirement-by-requirement final recommendation after remaining evidence or explicit approved dispositions; no acceptance requirement has been waived. |
+
+The main execution decision is now foreground search ownership. Owner caps, native scoring and
+SIMD do not guarantee a bounded synchronous call when postings, eligibility or one owner's chunks
+grow. An explicit asynchronous app-search path on a worker is proposed, with synchronous methods
+remaining explicit blocking operations, but the user has not approved changing the acceptance path.
+Do not implement that product change or relabel the existing 16 ms failures as passing. If approved,
+qualify snapshot/commit identity, watch invalidation, cancellation, stale replies, queue/resource bounds,
+maintenance/worker shutdown and realistic UI flows before claiming responsiveness. If synchronous
+execution is retained, it must meet the original budgets with measured semantics-preserving changes.
+
+Neither the keyword miss also occurring on native nor the stronger correctness evidence permits
+adoption with unmet requirements. Keep the candidate isolated, preserve current baseline evidence,
+finish the running gates, and resolve the execution decision before presenting a final cutover proposal.
