@@ -1,5 +1,9 @@
 # Performance anomaly findings
 
+Archived after [PR #307](https://github.com/spankyed/apack/pull/307) merged as `f484180b22`
+on November 1, 2026. The user authorized merge while broad checks were still running, with fix-forward.
+The checkpoints below retain their status at the time recorded; final check results are tracked in the PR.
+
 Investigation source `657177c14a`, based on `9bcf4cd9f8`; native source pin
 `1849f6899e3d707ac8e25e7f81fa52b472b2a9a0`, Linux binding SHA-256
 `9c0469d914d90d0ad7763e84378f0f7149855a85420ae2965dcfb4b4eb2f1474`.

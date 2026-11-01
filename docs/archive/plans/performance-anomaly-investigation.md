@@ -1,7 +1,10 @@
 # Performance anomaly investigation
 
-Status: investigation and bounded profiles complete; final startup correction and combined validation in progress. Base `9bcf4cd9f8`; native pin `1849f68`. Continue independently of the active
-thread-opening work and main-checkout validation. Preserve original failures and their source hashes.
+Status: archived after [PR #307](https://github.com/spankyed/apack/pull/307) merged on November 1, 2026
+(`f484180b22`). Implementation and bounded investigation are complete. At the user's direction, merge
+preceded completion of the existing broad checks; any resulting defect is to be fixed forward.
+The recording budget remains failed (+0.8 ms / +7.55%), and the historical 102.914-second setup remains
+unexplained. Neither is represented as resolved by merging. Native pin: `1849f68`.
 
 ## Questions and completion
 
@@ -39,7 +42,7 @@ reviewable changes; use the repository chain and required CI at a stable impleme
 Documentation-only findings reuse existing valid checks. Do not merge new changes without instruction.
 
 
-## Completion disposition
+## Disposition at merge
 
 Read the [finding-by-finding evidence](../references/evidence/2026-10-31-performance-anomalies.md).
 
@@ -57,10 +60,11 @@ Read the [finding-by-finding evidence](../references/evidence/2026-10-31-perform
   This is an isolated publication win, not a whole-startup latency qualification.
 - Historical 102.914-second setup: exact cause remains unestablished. Later passes do not explain it.
 
-Strict CI passed all six jobs on e602e9ad77. The runtime contact correction has a new strict CI checkpoint
-in progress. The earlier local broad chain remains failed, with unchanged compiler deadlines and an
-invalidated host-unit aggregate proof; do not describe it as passing. Both complete compiler files now pass all 16 focused cases under unchanged deadlines. Validate the combined committed branch against current master through
-`session:check` before merging. Finish evidence before that gate and freeze its inputs throughout.
+Strict CI passed all six jobs on e602e9ad77. Focused runtime-publication and session-workflow checks
+also passed. The two complete compiler files passed all 16 cases with unchanged deadlines.
+Further broad checks were still running at merge; their results belong in the PR's final validation
+record. The original failed broad run and interrupted combined run remain failed historical evidence.
 
-The user authorized completion and merge on November 1. Keep the active main checkout untouched.
-No native source changes, workload reductions, timeout increases or acceptance relaxations are authorized.
+The user authorized merge with fix-forward on November 1. Active main-checkout work was left untouched.
+No native source changes, workload reductions, test deadline changes or recording-budget relaxations
+were made. The complete-chain wrapper was corrected to use the already declared acceptance class.
