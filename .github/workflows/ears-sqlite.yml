@@ -109,6 +109,45 @@ jobs:
         run: >-
           npm test -w @apackdev/ears -- --maxWorkers=2 --reporter=default --reporter=json
           --outputFile=../../.temp/sqlite-platform/ears.json 2>&1 | tee .temp/sqlite-platform/ears.log
+      - name: Scoped readiness regression refuses the old global behavior
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          readiness_source=packages/apack-ears/src/sqlite/database.ts
+          readiness_original=$(mktemp "$RUNNER_TEMP/ears-readiness-source-XXXXXX")
+          cp "$readiness_source" "$readiness_original"
+          trap 'cp "$readiness_original" "$readiness_source"; rm -f "$readiness_original"' EXIT
+          python3 - <<'PYCONTROL'
+          from pathlib import Path
+          p = Path('packages/apack-ears/src/sqlite/database.ts')
+          source = p.read_text()
+          call = "return this.indexBuilds.indexesReady('logical', types);"
+          assert source.count(call) == 1
+          p.write_text(source.replace(call, 'return this.indexBuilds.indexesReady();'))
+          PYCONTROL
+          set +e
+          npm test -w @apackdev/ears -- tests/sqlite/index-builds.spec.ts --maxWorkers=2 \
+            -t 'admits a healthy type despite an unrelated failed retained index' \
+            --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/scoped-readiness-negative.json \
+            > .temp/sqlite-platform/scoped-readiness-negative.log 2>&1
+          readiness_status=$?
+          set -e
+          cp "$readiness_original" "$readiness_source"
+          cmp "$readiness_original" "$readiness_source"
+          git diff --exit-code -- "$readiness_source"
+          test "$readiness_status" -ne 0
+          node --input-type=module <<'JSCONTROL'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('.temp/sqlite-platform/scoped-readiness-negative.json', 'utf8'));
+          const cases = report.testResults.flatMap(file => file.assertionResults);
+          const failed = cases.filter(test => test.status === 'failed');
+          assert.equal(report.numFailedTests, 1);
+          assert.equal(report.numPassedTests, 0);
+          assert.equal(failed.length, 1);
+          assert.equal(failed[0].fullName, 'yielding value-index admission admits a healthy type despite an unrelated failed retained index while global readiness still refuses');
+          assert.match(failed[0].failureMessages.join('\n'), /unrelated backfill failure/);
+          JSCONTROL
       - name: Real filesystem full rollback and reuse
         if: runner.os == 'Linux'
         env:

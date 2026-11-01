@@ -168,6 +168,9 @@ if (mode === 'verify') {
   const filesystemFull=platform()==='linux'?report('filesystem-full.json'):null;
   const ears = report('ears.json'), host = report('host.json'), cli = report('cli-maintenance.json'), builtCli = report('logical-cli.json'), profile = report('profile-conversion.json'), profileCrash = report('profile-crash.json');
   const hostCrash = report('host-crash.json');
+  const requiredReadiness = ['pack index readiness ownership waits for its transitive dependencies and common types while excluding unrelated declarations', 'installed runtime acceptance awaits index admission before starting an accepted pack (build failure: false)', 'installed runtime acceptance awaits index admission before starting an accepted pack (build failure: true)', 'waits for accepted reload indexes before hooks or actor restart (failure: false)', 'waits for accepted reload indexes before hooks or actor restart (failure: true)'];
+  const hostReadiness = host.testResults.flatMap(file => file.assertionResults).filter(test => requiredReadiness.includes(test.fullName));
+  requirePassingCases(hostReadiness, requiredReadiness, 'Pack readiness ownership and lifecycle');
   const selected = ears.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/text-limits.spec.ts') ? test.assertionResults : []);
   const privateFiles = host.testResults.flatMap(test => test.name.replaceAll('\\', '/').endsWith('/tests/private-file.spec.ts') ? test.assertionResults : []);
   assert(privateFiles.length >= 9 && privateFiles.every(test => test.status === 'passed'), 'All private-file durability cases must execute');

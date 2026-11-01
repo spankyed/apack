@@ -205,7 +205,7 @@ export interface EarsDatabase {
     // (undocumented)
     durable(): Promise<void>;
     readonly format: string;
-    indexesReady(): Promise<void>;
+    indexesReady(types?: readonly string[]): Promise<void>;
     // (undocumented)
     readonly isOpen: boolean;
     onIndexesChanged?(listener: (changes: Changes) => void): () => void;

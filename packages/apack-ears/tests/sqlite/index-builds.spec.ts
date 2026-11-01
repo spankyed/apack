@@ -149,7 +149,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('yielding value
     await expect(db.indexesReady([])).rejects.toMatchObject({ code: 'CLOSED' });
   });
 
-  it('stops the owner when rollback fails instead of repeatedly scheduling an uncertain transaction', () => {
+  it('stops the owner when rollback fails instead of repeatedly scheduling an uncertain transaction', async () => {
     const db = open(); seed(db); createEarsEngine({ database: db }).admin.setSchema(indexed);
     const run = db.run.bind(db), exec = db.sql.exec.bind(db.sql);
     vi.spyOn(db, 'run').mockImplementation((sql, args) => {
@@ -166,6 +166,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('yielding value
       .toEqual(['injected write failure', 'injected rollback failure']);
     expect(db.indexBuilds.step()).toBe('paused');
     exec('ROLLBACK');
+    await expect(db.indexesReady([])).rejects.toBe(db.indexBuilds.lastError);
   });
 
   it('cancels removed generations and collects them without deleting a replacement generation', () => {

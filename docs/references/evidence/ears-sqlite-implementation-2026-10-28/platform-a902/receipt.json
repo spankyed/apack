@@ -446,5 +446,17 @@
       },
       "relationAuditCasesPassed": 4
     }
-  ]
+  ],
+  "independentAppSmoke": {
+    "source": "a9027400bf051cd301304dc46471c0a2fb8979c9",
+    "originalReportSha256": "c265d88e1852c6e6bd78023089bec3f67182e8fc7f4947933722a4b50504ef1a",
+    "stats": {
+      "expected": 6,
+      "unexpected": 0,
+      "skipped": 0,
+      "flaky": 0,
+      "duration": 15877.782000000001
+    },
+    "scope": "Independent built source-app smoke; app-and-rest still fails the original host keyword judgment"
+  }
 }
