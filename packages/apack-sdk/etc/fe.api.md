@@ -630,6 +630,14 @@ export interface ReadonlyFeSettingsHandle<T> {
 }
 
 // @public
+export interface ReadOnlyTextRenderer {
+    // (undocumented)
+    readonly decorate?: (root: HTMLElement) => void | (() => void);
+    // (undocumented)
+    readonly transformMarkdown?: (source: string) => string;
+}
+
+// @public
 export function readUntypedSurfaceState<TSnapshot, TSelected>(ref: string, selector: (snapshot: TSnapshot) => TSelected): TSelected | undefined;
 
 // @public (undocumented)
@@ -935,6 +943,8 @@ export interface TextEditorExtensions {
     readonly isSuggestionActive?: (state: EditorState) => boolean;
     // (undocumented)
     readonly popups?: Readonly<Record<string, Component>>;
+    // (undocumented)
+    readonly readOnly?: false | ReadOnlyTextRenderer;
 }
 
 // @public

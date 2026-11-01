@@ -688,6 +688,15 @@ The returned list is detached. `onChanged(listener)` observes committed frontend
 an unsubscribe function; reread the projection to distinguish relevant editor changes from unrelated
 pack changes. Discovery and unavailable groups remain in the catalog, separate from these bindings.
 
+Read-only chat messages use `ChatMessageViewer` without constructing an editor when every active
+editor group declares support. Set `readOnly: false` for editing-only groups, or name an exported
+`ReadOnlyTextRenderer` object with `"readOnly": "src/viewer.ts#Viewer"`. An adapter can transform
+Markdown with `transformMarkdown(source): string` and enhance the rendered root with
+`decorate(root): void | (() => void)`. The parser always disables raw HTML. Return cleanup for DOM
+listeners or subscriptions; it runs before replacement and on unmount. Adapters are checked without
+executing them. An absent declaration uses the existing editor viewer; a failing supported adapter
+shows an error instead of silently falling back. Contribution changes rebuild affected viewers.
+
 Open editors follow accepted contribution changes. Popup/predicate-only updates preserve the editor
 and undo history. Extension changes replace its executable editor after retiring the previous popups;
 pending document data, selection and focus survive when the new schema represents them exactly.

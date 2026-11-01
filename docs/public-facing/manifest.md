@@ -598,7 +598,8 @@ Declare these contributions directly under `extensions`, alongside artifacts, he
 
 Within each Tiptap group, `extensions` maps the actual Tiptap name to its exported extension object
 (`path#export`); `popups` maps local popup IDs to Vue modules; `isSuggestionActive` names a function
-export. All paths are pack-root-relative. Discovery reads these declarations without importing their
+export. `readOnly` is false for editing-only behavior or an exported read-only rendering adapter;
+without it, chat keeps the editor viewer. All paths are pack-root-relative. Discovery reads these declarations without importing their
 modules. Build checks exports and runtime admission checks exact member identities and executable
 shapes. Conflicting active extension names are refused with both owners.
 See [Text editor extensions](extensions.md#text-editor-extensions) for the binding contract.

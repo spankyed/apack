@@ -990,6 +990,8 @@ export interface TextEditorExtensionsDeclaration {
     isSuggestionActive?: string;
     // (undocumented)
     popups?: Record<string, string>;
+    // (undocumented)
+    readOnly?: false | string;
 }
 
 // @public
