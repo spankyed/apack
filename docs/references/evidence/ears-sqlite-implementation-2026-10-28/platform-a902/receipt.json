@@ -458,5 +458,23 @@
       "duration": 15877.782000000001
     },
     "scope": "Independent built source-app smoke; app-and-rest still fails the original host keyword judgment"
+  },
+  "strictRunTerminal": {
+    "status": "completed",
+    "conclusion": "failure",
+    "producer": "success",
+    "consumers": {
+      "integration-1": "success",
+      "integration-2": "success",
+      "native-1": "success",
+      "native-2": "success"
+    },
+    "appAndRest": "failure: original keyword judgment; independent build and six Electron smoke cases pass"
+  },
+  "integration1": {
+    "passed": 242,
+    "files": 31,
+    "durationSeconds": 1837.78,
+    "originalLogSha256": "8c04ea8bd0d1446d3b50ba1daab7e5825732b171208eb534ca14ea6292e6ce59"
   }
 }

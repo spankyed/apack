@@ -1,0 +1,391 @@
+{
+  "source": "16378a24db8463584dbe9fd4a1eb1a4d6c57ca48",
+  "run": "41326301171",
+  "storageFormat": "sqlite/1",
+  "stats": {
+    "startTime": "2026-11-01T16:40:11.434Z",
+    "duration": 129571.828,
+    "expected": 33,
+    "skipped": 1,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "refuses API connections and reloads without the run token",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 14957
+        }
+      ]
+    },
+    {
+      "title": "subscribes to the bus again once the API it lost is restarted",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 7885
+        }
+      ]
+    },
+    {
+      "title": "answer the same verb identically",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 85
+        }
+      ]
+    },
+    {
+      "title": "see each other writes, being one app",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 139
+        }
+      ]
+    },
+    {
+      "title": "survive the connection going away, which is what a launch cannot",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 517
+        }
+      ]
+    },
+    {
+      "title": "reads the running app's data and refuses to change it",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 11555
+        }
+      ]
+    },
+    {
+      "title": "a rebuilt built-in pack reloads with the content the rebuild changed",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 3442
+        }
+      ]
+    },
+    {
+      "title": "a surface setting changed in Settings reaches the feature's surface, once",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 950
+        }
+      ]
+    },
+    {
+      "title": "a surface setting changed in Settings is what its canvas reads",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 1166
+        }
+      ]
+    },
+    {
+      "title": "a link to another surface opens it and hands it the events",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 628
+        }
+      ]
+    },
+    {
+      "title": "previews a compiled content directory by its content.json and imports the selected items",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 2365
+        }
+      ]
+    },
+    {
+      "title": "adds, selects and stores API keys without the key strings reaching logs, files or renderer state",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 708
+        }
+      ]
+    },
+    {
+      "title": "repairs invalid persisted settings in the app and starts packs only after reopening",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 15503
+        }
+      ]
+    },
+    {
+      "title": "source SQLite app opens both managed stores with persisted EARS identity",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 34
+        }
+      ]
+    },
+    {
+      "title": "packaged SQLite stores hold their model claims across the real API process",
+      "status": "skipped",
+      "results": [
+        {
+          "status": "skipped",
+          "retry": 0,
+          "duration": 0
+        }
+      ]
+    },
+    {
+      "title": "the code system's file watcher and terminal output reach the code surface",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 2451
+        }
+      ]
+    },
+    {
+      "title": "a reloaded pack's browser surface restores what its system saved, asking as it starts",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 2447
+        }
+      ]
+    },
+    {
+      "title": "app launches without crashing",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 52
+        }
+      ]
+    },
+    {
+      "title": "app reaches connected state",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 27
+        }
+      ]
+    },
+    {
+      "title": "applicationState is accessible with surfaces loaded",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 26
+        }
+      ]
+    },
+    {
+      "title": "runs in an isolated per-worker test data dir",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 32
+        }
+      ]
+    },
+    {
+      "title": "publishes no session, though a test app has a debug port open",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 22
+        }
+      ]
+    },
+    {
+      "title": "a reference in a stored thread message opens its note in another feature",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 1306
+        }
+      ]
+    },
+    {
+      "title": "inspect mode shows the brain's panel beside a surface that has none",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 245
+        }
+      ]
+    },
+    {
+      "title": "host preferences and shortcuts work with default-setup disabled",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 9909
+        }
+      ]
+    },
+    {
+      "title": "the host-only editor preserves saved references without activating default-setup",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 179
+        }
+      ]
+    },
+    {
+      "title": "an open editor follows installed pack activation without losing its draft",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 6132
+        }
+      ]
+    },
+    {
+      "title": "shortcut drafts follow another window and preserve the global flag",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 2692
+        }
+      ]
+    },
+    {
+      "title": "cold Monaco documents follow source-free declarations and share worker libraries",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 4760
+        }
+      ]
+    },
+    {
+      "title": "opens every surface, and every surface's settings, without a renderer error",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 3659
+        }
+      ]
+    },
+    {
+      "title": "an open feature form follows its settings being reset",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 613
+        }
+      ]
+    },
+    {
+      "title": "pops a built-in surface out into its own window, which renders it",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 2348
+        }
+      ]
+    },
+    {
+      "title": "Settings Help searches bundled articles and opens feature help",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 863
+        }
+      ]
+    },
+    {
+      "title": "unavailable help targets explain the problem and return to the index",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 320
+        }
+      ]
+    }
+  ],
+  "originalReportSha256": "cf589afa7c6b691ec3463184269dacdae7b459b1241e6be22aff4c1910cad283",
+  "omitted": "config/stdout/stderr/traces/profiles"
+}
