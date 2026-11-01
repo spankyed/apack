@@ -664,7 +664,7 @@ release/reclamation, competing-writer refusal/reuse and read-only reopen integri
 Each process has a 180-second diagnostic ceiling and no retries; failures remain
 failures and reports are uploaded. This diagnostic ceiling does not replace any
 app/search/foreground gate. Heartbeat is assessed against the unchanged 16-ms
-limit. Runtime qualification is pending. Per-commit samples do not prove transient
+limit. [Actual qualification](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/wal-bd3/README.md) passes both bounded cohorts; their sub-half-second loops do not establish long-duration load. Per-commit samples do not prove transient
 intra-commit peak disk use, engine-only memory, independent trial/device variance
 or physical power-loss safety. The report contains numeric observations and
 provenance, never entity payloads. Production storage behavior is unchanged.
