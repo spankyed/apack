@@ -254,6 +254,8 @@ if (mode === 'verify') {
     file.assertionResults.some(test => test.status === 'passed' &&
       test.fullName.endsWith('recovers a durable training attempt after its process is killed without draining'))),
     'Abrupt owner-process death recovery must execute');
+  const relationIdentityCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/relation-identity.spec.ts') ? file.assertionResults : []);
+  requirePassingCases(relationIdentityCases, ['SQLite relation identity work stops at a matching key and releases its cursor before mutation, refusal and exhaustion'], 'Relation identity cursor ownership');
   const trainingCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts') ? file.assertionResults : []);
   requirePassingCases(trainingCases, requiredTrainingCases, 'Native worker ownership, corruption and retry');
   const graphAlgorithmCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/graph-algorithms.spec.ts') ? file.assertionResults : []);

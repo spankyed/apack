@@ -483,6 +483,17 @@ export class SqliteDatabase implements EarsDatabase {
       fail("UNKNOWN_RELATION_KIND", `Unknown relation kind "${kind}"`);
     return this.heldSchema.relations[kind];
   }
+  private matchingRelation(kind: string, source: string, target: string, fields: readonly string[], info: unknown,
+    exclude = ''): Data | undefined {
+    // Stop at the first matching identity. for-of closes the native cursor on return or decode failure,
+    // before the caller mutates or commits; do not retain every info payload for these endpoints.
+    for (const value of this.statement('SELECT * FROM relations WHERE kind=? AND source=? AND target=? AND id<>? ORDER BY seq')
+      .iterate(kind, source, target, exclude)) {
+      const row = value as Data;
+      if (sameRelationKey(fields, row.info === null ? undefined : this.unpack(row.info), info)) return row;
+    }
+    return undefined;
+  }
   private role(role: string) {
     if (!has(this.heldSchema.roles ?? {}, role))
       fail("UNKNOWN_ROLE", `Unknown role "${role}"`);
@@ -973,15 +984,10 @@ export class SqliteDatabase implements EarsDatabase {
         const def = this.relationDefinition(op.kind);
         // Native optional info treats null as omitted. Keep that contract at the structured boundary too.
         const info = op.info ?? undefined;
-        const matching = this.all(
-          "SELECT * FROM relations WHERE kind=? AND source=? AND target=? ORDER BY seq",
-          [op.kind, op.source, op.target]
-        );
         if (info !== undefined) this.validate(info);
         checkRelationKeyInfo(def.key ?? [], info);
         const weight = relationWeight(!!def.weighted, op.kind, op.weight);
-        const existing = matching.find(r => sameRelationKey(def.key ?? [],
-          r.info === null ? undefined : this.unpack(r.info), info));
+        const existing = this.matchingRelation(op.kind, op.source, op.target, def.key ?? [], info);
         if (existing) {
           const sameInfo = info === undefined || (existing.info !== null &&
             sameStoredValue(this.unpack(existing.info), info));
@@ -1047,9 +1053,7 @@ export class SqliteDatabase implements EarsDatabase {
         checkRelationKeyInfo(key, providedInfo);
         const info = providedInfo === undefined ? r.info : providedInfo;
         if (source !== r.source || target !== r.target || !sameRelationKey(key, r.info, info)) {
-          const duplicate = this.all('SELECT id,info FROM relations WHERE kind=? AND source=? AND target=? AND id<>? ORDER BY seq',
-            [r.kind, source, target, r.id]).find(other => sameRelationKey(key,
-              other.info === null ? undefined : this.unpack(other.info), info));
+          const duplicate = this.matchingRelation(r.kind, source, target, key, info, r.id);
           if (duplicate) fail('DUPLICATE_EDGE', `An edge of ${r.kind} with these ends and key already exists: ${duplicate.id}`);
         }
         if ((source !== r.source || target !== r.target) && source === target)
