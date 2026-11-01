@@ -14,7 +14,7 @@ script = repo / 'packages/apack-ears/bench/sqlite/checkpoint-admission.py'
 sys.path.insert(0, str(script.parent))
 limits = {'cpu.max': '200000 100000', 'memory.max': '6442450944', 'memory.swap.max': '0'}
 provenance = {'commit': 'a' * 40, 'elmdbObservedCommit': 'b' * 40, 'elmdbPinnedCommit': 'b' * 40,
-              'cpuModels': ['controlled'], 'sqliteNative': {'bindings': [{'sha256': 'c' * 64}]}}
+              'cpuModels': ['controlled'], 'sqliteNative': {'bindings': [{'path': '/workspace/node_modules/better-sqlite3/prebuilds/linux-x64.node', 'sha256': 'c' * 64}]}}
 read_text = pathlib.Path.read_text
 for mode in ['ok', 'budget', 'cpu', 'nan', 'policy', 'exit', 'instrumented', 'limits', 'bindings']:
     calls = []
@@ -31,7 +31,7 @@ for mode in ['ok', 'budget', 'cpu', 'nan', 'policy', 'exit', 'instrumented', 'li
                 'maxObservedWalBytes': 16777216, 'maxObservedFilesBytes': 16777216}.items()}
             value = {'checkpointPages': pages, 'checkpointProbe': {'pages': pages, 'qualification': False},
                      'n': 100000, 'syncs': True, 'indexKind': 'value', 'admissionReads': 0, 'writes': 1,
-                     'cpuModels': ['controlled'], 'nativeBindings': [{'sha256': 'c' * 64}],
+                     'cpuModels': ['controlled'], 'nativeBindings': [{'sha256': 'c' * 64}, {'sha256': 'e' * 64}],
                      'batchSamples': [{'ms': 1}], 'samples': {'heartbeatDelays': [1]}, 'budgets': budgets, 'passed': True}
             code = 0
             if mode == 'budget': budgets['heartbeatDelayP99Ms']['actual'] = 17; value['passed'] = False; code = 1

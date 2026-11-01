@@ -48,8 +48,11 @@ def main():
                 assert data['indexKind'] == 'value' and data['admissionReads'] == 0 and data['writes'] > 0
                 assert sorted(data['cpuModels']) == provenance['cpuModels'] and data['cpuModels']
                 assert data['nativeBindings'] and data['batchSamples'] and data['samples']['heartbeatDelays']
-                expected_bindings = {row['sha256'] for row in provenance['sqliteNative']['bindings']}
-                assert all(row['sha256'] in expected_bindings for row in data['nativeBindings'])
+                # The application also loads msgpackr's native helper. Require the matching SQLite
+                # driver's actual binary without pretending provenance's SQLite-only probe loads every addon.
+                expected_bindings = {row['sha256'] for row in provenance['sqliteNative']['bindings']
+                                     if '/better-sqlite3/' in row['path'].replace('\\', '/')}
+                assert expected_bindings and expected_bindings <= {row['sha256'] for row in data['nativeBindings']}
                 budgets = data['budgets']
                 assert set(budgets) == {'admissionMs', 'operationP99Ms', 'lookupP99Ms', 'turnWaitP99Ms',
                                         'heartbeatDelayP99Ms', 'maxObservedWalBytes', 'maxObservedFilesBytes'}
