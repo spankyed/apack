@@ -51,3 +51,20 @@ rebuilds. Permission-sensitive tests require a non-root context. Run focused che
 CI and final correctness review. Record exact provenance, limitations and outcomes; archive when done.
 If the dedicated renderer cannot preserve behavior or meet acceptance, revert production integration
 and report the evidence and obstacles. No stored-data migration is required.
+
+## Initial attribution
+
+The twenty retained `54007b7094` profiles have matching editor/chat source and lockfile. They show
+908.6 MB of 1,719.0 MB sampled allocation under editor-setup ancestry, including 346.6 MB under
+extension option factories. Categories overlap; these are not exclusive or retained-heap figures.
+
+Exact historical bundle offsets resolve `v` to Tiptap's recursive extension-field lookup, `M` to its
+function/value dispatcher, and the sampled options getter to a fresh object built from `addOptions`
+on every access. This is library-level construction work; caching mutable extension instances is
+not a justified application fix. The old zero named Markdown samples do not establish zero parsing
+cost: minified parser frames still require attribution. Raw profiles remain in owned volume
+`apack-linux-work-220c5d355e10`, under
+`.apack/performance/optimization-baseline-54007b7094/detailed-thread-open/thread-open/B/`.
+
+No runtime candidate is implemented or accepted yet. New timing runs await completion of the
+observed competing host-native heap benchmark; no work has been cancelled.
