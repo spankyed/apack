@@ -1,0 +1,39 @@
+# Performance anomaly investigation
+
+Status: in progress. Base `9bcf4cd9f8`; native pin `1849f68`. Continue independently of the active
+thread-opening work and main-checkout validation. Preserve original failures and their source hashes.
+
+## Questions and completion
+
+1. Explain the retained 102.914-second launch by its actual phase, or state exactly what the retained
+   evidence cannot establish. Distinguish fresh processes/profiles from cold filesystem cache. Add only
+   missing lifecycle evidence that is necessary to reproduce the delay; do not claim later warm passes
+   explain it. Fix a demonstrated defect and verify its affected path.
+2. Attribute the model-test deadlines to database opening/closing, writes (including durable units),
+   reference assertions, query verification and watch waiting. Profile the original full 120/40 workloads
+   at fixed seed 20261031 in a disposable runner copy; preserve deadlines and restore its source. Fix
+   demonstrated redundant work without reducing isolation, operations, durability or assertions.
+3. Reanalyse old and final overhead trials by order, drift, CPU/GC and work. Run a narrower same-mode
+   control through the existing suite: one app for search, one closed common seed for startup. Use
+   disabled mode for all 50 scheduled actions/launches, predeclare the first ten as control warmup,
+   and assign the last forty to logical A/B by the existing ABBA order (twenty each). The suite records
+   five warmups plus 45 measured trials; the diagnostic analysis explicitly excludes the next five as
+   its second warmup group. Admit the complete raw run before this fixed regrouping. This is a noise
+   control, never an overhead qualification or a substitute for a failed 5% budget. Keep actual modes
+   in manifests; do not invent recording modes or loosen comparison admission.
+
+## Execution
+
+Use `session/performance-anomalies` in its own worktree, dependencies and Linux work volume. Reuse
+an independent copy of installed dependencies and the previously verified native build; do not copy
+compiler targets across checkouts. One expensive local Docker run at a time, two CPUs, 6 GiB without
+extra swap, 256 MiB shared memory and disk-backed fixtures. Do not cancel existing work.
+
+Start with retained logs and controls. Run focused diagnostic cases before broader qualification;
+name the evidence gap for every further run. Instrumented timings are attribution, not accepted app
+speed measurements. Preserve exact scripts, phase totals, process/resource data and failed captures.
+No timeout increases, workload reductions, tmpfs substitution or speculation-driven runtime changes.
+
+Deliver a finding-by-finding disposition with evidence, fixes and remaining limits. Commit and push
+reviewable changes; use the repository chain and required CI at a stable implementation checkpoint.
+Documentation-only findings reuse existing valid checks. Do not merge new changes without instruction.
