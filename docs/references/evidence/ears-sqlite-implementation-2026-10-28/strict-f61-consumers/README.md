@@ -1,0 +1,9 @@
+# Partial terminal strict-consumer evidence at f61
+
+[Run 41336141230](https://github.com/spankyed/apack/actions/runs/41336141230), source `f61acd3c7db33ffcc6c4f313efbf7a9a9be60173`, has not completed every consumer. This receipt preserves two terminal consumers without extrapolating to the others.
+
+Integration shard 2 passes 580 cases/31 files with one explicit Windows-only dev-server publication exclusion. Its chain reports that an input changed during execution, leaving no reusable success cache stamp. This is passing execution, not a reusable validated cache record; the warning's specific input is not identified in the retained output.
+
+App-and-rest fails at the host unit pool's original 600-second suite ceiling (602 seconds observed, process group killed). Progress records contain 519 queued files/517 ended files; the two unfinished queued files were admitted only near the deadline. The one ended failed file is the retained keyword relevance fixture. This demonstrates ongoing progress near the ceiling, not a particular hung test or a completed unit-suite result. Queued count is not proof that every planned file was collected; no total pass count is inferred. The independent runtime preparation then succeeds and all six built Electron smoke cases pass once, with no exclusions/flakes/retries.
+
+Do not reduce coverage, raise the ceiling, waive the timeout or treat focused passes as completion of this host suite. Inspect final consumer evidence and diagnose aggregate cost/scheduling before choosing the next full qualification. The original public project/file/timing-only progress stream is compressed unchanged with decompressed SHA-256. A derived receipt contains selected counts, unfinished/failed/excluded file names, original log/report hashes and minimal app result fields. Logs, app configuration, profiles, traces and attachments are omitted.

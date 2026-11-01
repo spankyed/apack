@@ -1,0 +1,137 @@
+{
+  "source": "f61acd3c7db33ffcc6c4f313efbf7a9a9be60173",
+  "run": 41336141230,
+  "scope": "partial terminal consumer evidence; other consumers still running",
+  "hostUnit": {
+    "outcome": "suite-timeout",
+    "limitSeconds": 600,
+    "observedSeconds": 602,
+    "queuedRecords": 519,
+    "endedRecords": 517,
+    "unfinishedQueued": [
+      {
+        "event": "queued",
+        "at": "2026-11-01T18:58:36.433Z",
+        "project": "@apackdev/cli",
+        "file": "tests/build/generated-run-inputs.spec.ts"
+      },
+      {
+        "event": "queued",
+        "at": "2026-11-01T18:58:37.339Z",
+        "project": "@apackdev/sdk",
+        "file": "tests/build/generate-entries/destinations.spec.ts"
+      }
+    ],
+    "failedEndedFiles": [
+      {
+        "event": "ended",
+        "at": "2026-11-01T18:58:29.263Z",
+        "project": "@apackdev/ears",
+        "file": "tests/engine/real-search-relevance.spec.ts",
+        "state": "failed",
+        "duration": 344.2735,
+        "collectDuration": 249.1445,
+        "setupDuration": 3.199709000000041,
+        "environmentSetupDuration": 0.47441700000001674,
+        "prepareDuration": 145.12958300000003
+      }
+    ],
+    "skippedEndedFiles": [
+      "tests/sqlite/vector-models.spec.ts",
+      "tests/sqlite/vector-index.spec.ts",
+      "tests/sqlite/vector-audit.spec.ts",
+      "tests/sqlite/vector-training.spec.ts",
+      "tests/sqlite/vector-cosine.spec.ts"
+    ],
+    "originalProgressSha256": "b428224fc470e48eac2d6e43592b8396f5d8615a3ee4d73b2363fcb7ae426a48"
+  },
+  "independentApp": {
+    "originalSha256": "2d938f8fde372c3aae0a0242c3af969e57d4b70f47187b2fd59bbeeabef099d7",
+    "stats": {
+      "startTime": "2026-11-01T19:00:56.791Z",
+      "duration": 19662.245000000003,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "cases": [
+      {
+        "title": "source SQLite app opens both managed stores with persisted EARS identity",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 14656
+          }
+        ]
+      },
+      {
+        "title": "app launches without crashing",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 124
+          }
+        ]
+      },
+      {
+        "title": "app reaches connected state",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 73
+          }
+        ]
+      },
+      {
+        "title": "applicationState is accessible with surfaces loaded",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 140
+          }
+        ]
+      },
+      {
+        "title": "runs in an isolated per-worker test data dir",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 46
+          }
+        ]
+      },
+      {
+        "title": "publishes no session, though a test app has a debug port open",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 54
+          }
+        ]
+      }
+    ]
+  },
+  "integration2": {
+    "passed": 580,
+    "skipped": 1,
+    "failed": 0,
+    "filesPassed": 31,
+    "excluded": "publishes staged output while retained dev servers watch authored files (Windows-only)",
+    "cacheStampValid": false,
+    "cacheWarning": "Step passed, then its inputs changed; no valid successful input/output record",
+    "originalChainLogSha256": "ee6010a5fab14f74c78e01d6c94614deaa824b0ff3fc84914afb893b3e7495bd"
+  }
+}
