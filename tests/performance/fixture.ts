@@ -63,7 +63,7 @@ export function richThreadFixture() {
   const plain = threadFixture()
   const data = { ...plain.data, threads: plain.data.threads.map((thread, t) => ({ ...thread,
     messages: thread.messages.map((message, m) => ({ ...message,
-      text: message.text.trimEnd() + `\n\n## Rich heading\n\n**bold** and *emphasis*\n\n> quoted content\n\n- first\n- second\n\n1. numbered\n2. next\n\n| Name | Value |\n| --- | --- |\n| alpha | beta |\n\n\`\`\`js\nconst value = "safe <text>"\n\`\`\`\n\nRich end ${t}/${m}.`,
+      text: (m % 4 === 0 ? '/plan\n\n' : '') + message.text.trimEnd() + `\n\n## Rich heading\n\n**bold** and *emphasis*\n\n> quoted content\n\n- first\n- second\n\n1. numbered\n2. next\n\n| Name | Value |\n| --- | --- |\n| alpha | beta |\n\n\`\`\`js\nconst value = "safe <text>"\n\`\`\`\n\n[Related thread](apack-ref://thread/Thread-performance-${t})\n\nRich end ${t}/${m}.`,
     })),
   })) }
   return { data, identity: { ...plain.identity, generator: 'rich-populated-threads-v1',

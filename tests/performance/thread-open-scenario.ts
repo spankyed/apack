@@ -52,7 +52,8 @@ export async function threadOpenScenario({ app, appPage, electronApp }: Paramete
                 && new Set(indices).size === 50 && indices.every(value => value >= 50 && value < 100)
                 && shown.every((element, at) => element!.textContent?.includes(expectedBodies[indices[at]! - 50]!));
               if (rich && shown.some((element, at) => !element?.textContent?.includes(`Rich end ${thread}/${indices[at]}.`)
-                || ['h2', 'strong', 'em', 'blockquote', 'ul', 'ol', 'table', 'pre code'].some(selector => !element?.querySelector(selector)))) return false;
+                || ['h2', 'strong', 'em', 'blockquote', 'ul', 'ol', 'table', 'pre code', '.reference-pill'].some(selector => !element?.querySelector(selector))
+                || (indices[at]! % 4 === 0 && !element?.querySelector('.command-segment')))) return false;
               work.expectedTruncatedMessages = 25;
               work.truncatedMessages = shown.filter((element, at) => indices[at]! % 2 === 0
                 && element?.textContent?.includes('Click to view')).length;
