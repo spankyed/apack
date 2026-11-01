@@ -133,5 +133,17 @@
     "cacheStampValid": false,
     "cacheWarning": "Step passed, then its inputs changed; no valid successful input/output record",
     "originalChainLogSha256": "ee6010a5fab14f74c78e01d6c94614deaa824b0ff3fc84914afb893b3e7495bd"
+  },
+  "native2": {
+    "passed": 47,
+    "skipped": 26,
+    "failed": 0,
+    "filesPassed": 7,
+    "filesSkipped": 1,
+    "excludedFile": "packages/apack-cli/tests/build/compiler-pe-libraries.native.spec.ts",
+    "reason": "Windows PE library cases are excluded on this macOS runner",
+    "cacheStampValid": false,
+    "cacheWarning": "Step passed, then its inputs changed; no reusable success cache stamp",
+    "originalChainLogSha256": "85d7850c62c94aeacc41d4e9ca7c1f37cd3d8670a7ecb878947c974f58e597bd"
   }
 }
