@@ -90,7 +90,8 @@ jobs:
           2>&1 | tee .temp/sqlite-platform/api-startup.log
       - name: Current app repository queries on SQLite
         run: >-
-          npm test -w @app/default-setup -- tests/features/threads/be/query-work.spec.ts --maxWorkers=2
+          npm test -w @app/default-setup -- tests/features/threads/be/query-work.spec.ts
+          tests/features/library/be/search-index.spec.ts --maxWorkers=2
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/query-work.json
           2>&1 | tee .temp/sqlite-platform/query-work.log
       - name: Build pinned candidate vector extension

@@ -177,6 +177,7 @@ if (mode === 'verify') {
     sdkContentRuntimeCasesPassed:sdkAll?passedIn(sdkAll,/\/tests\/testing\/content-runtime\.spec\.ts$/):null,
     sdkBackendCasesPassed:passedIn(sdkBackend,/\/tests\/testing\/database-backend\.spec\.ts$/),
     queryWorkCasesPassed:passedIn(queryWork,/\/tests\/features\/threads\/be\/query-work\.spec\.ts$/),
+    libraryIndexCasesPassed:passedIn(queryWork,/\/tests\/features\/library\/be\/search-index\.spec\.ts$/),
     nativeAuditCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-audit\.spec\.ts$/),
     nativeOwnerCasesPassed:passedIn(ears,/\/tests\/sqlite\/vector-owner\.spec\.ts$/),
     nativePackageCasesPassed:passedIn(ears,/\/tests\/sqlite\/native-extension\.spec\.ts$/),
@@ -203,6 +204,7 @@ if (mode === 'verify') {
   assert.equal(result.sdkBackendCasesPassed,2,'Both SDK fixture stores must use SQLite');
   assert.equal(sdkBackend.numFailedTests,0);
   assert.equal(result.queryWorkCasesPassed,5,'All current app repository query contracts must execute on SQLite');
+  assert.equal(result.libraryIndexCasesPassed,4,'All Library embedding/search-index lifecycle cases must execute on SQLite');
   assert.equal(queryWork.numFailedTests,0);
   if(sdkAll){
     assert(sdkAll.numPassedTests>=1320&&sdkAll.numFailedTests===0&&sdkAll.numPendingTests===0,'Complete prepared SDK contracts must execute on SQLite');
