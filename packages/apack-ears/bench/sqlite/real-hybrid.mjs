@@ -154,7 +154,7 @@ try {
       report.nativeAdmission = { ms: performance.now() - admission, heartbeatDelaysMs: pulse.delaysMs };
       save();
     }
-    const training = db.get("SELECT state,samples,model_sha256,extension_sha256 FROM vector_training");
+    const training = db.get("SELECT state,samples,model_sha256,extension_sha256,native_version,worker_sha256 FROM vector_training");
     const required = size > EXACT_VECTOR_CHUNK_LIMIT;
     if (required) assert.equal(training?.state, 'ready');
     else assert.equal(training, undefined);
@@ -165,6 +165,7 @@ try {
     report.exactVectorChunkLimit = EXACT_VECTOR_CHUNK_LIMIT;
   }
   report.resourceSnapshots = { afterAdmission: sampleResources() };
+  report.nativeVectorRuntime = nativeExtension ? db.get('SELECT vec1_info() value').value : null;
   report.sqlite = db.get('SELECT sqlite_version() version').version;
   report.synchronous = db.sql.pragma('synchronous', { simple: true });
   assert.equal(report.synchronous, 2);

@@ -2,9 +2,10 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { cpus, tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const fixtures = [{ name: 'many-small-keys', count: 50000, payloadBytes: 64 }, { name: 'large-infos', count: 10000, payloadBytes: 8192 }];
@@ -92,6 +93,12 @@ function diskSnapshot(root) {
   };
   visit(root); return { totalBytes, spoolBytes };
 }
+function sqliteDriver() {
+  const file = createRequire(import.meta.url).resolve('better-sqlite3/package.json');
+  const metadata = JSON.parse(readFileSync(file, 'utf8'));
+  assert.equal(metadata.name, 'better-sqlite3'); assert(typeof metadata.version === 'string' && metadata.version);
+  return { name: metadata.name, version: metadata.version, directory: realpathSync(dirname(file)) };
+}
 function validateResult(result, fixture, source) {
   const finite = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
   assert(result); assert.equal(result.completed, true); assert.equal(result.source, source);
@@ -100,7 +107,11 @@ function validateResult(result, fixture, source) {
   assert.equal(result.node, process.version); assert.equal(result.platform, 'linux'); assert.equal(result.arch, process.arch);
   assert.deepEqual(result.limits, requiredLimits); assert.deepEqual(result.fixture, fixture);
   assert(Array.isArray(result.cpuModels) && result.cpuModels.length > 0 && result.cpuModels.every(model => typeof model === 'string' && model.trim()));
-  assert(result.nativeBindings.some(binding => /[\\/]better_sqlite3\.node$/.test(binding.path)));
+  const driver = sqliteDriver();
+  assert(result.nativeBindings.some(binding => {
+    const file = realpathSync(binding.path), within = relative(driver.directory, file);
+    return within && within !== '..' && !within.startsWith('..' + sep) && !isAbsolute(within) && file.endsWith('.node');
+  }), 'A loaded native addon must belong to the resolved better-sqlite3 package');
   assert(result.nativeBindings.every(binding => /^[a-f0-9]{64}$/.test(binding.sha256)));
   assert(/^[a-f0-9]{40}$/.test(result.enginePin));
   for (const path of compiledPaths) assert(/^[a-f0-9]{64}$/.test(result.compiledInputs[path]));
@@ -121,7 +132,7 @@ async function parent(output) {
   mkdirSync(dirname(output), { recursive: true });
   const report = { protocol: 'ears-relation-audit-resources/1', completed: false, source: process.env.GITHUB_SHA,
     scope: 'Three fresh processes per synthetic fixture; OFF maintenance only; observed logical disk peaks and cumulative process memory, not app/power-loss qualification',
-    limits: limits(), pollMs: 10, trials: [] };
+    limits: limits(), driver: sqliteDriver(), pollMs: 10, trials: [] };
   const save = () => { writeFileSync(output + '.next', JSON.stringify(report, null, 2) + '\n', { flag: 'wx' }); renameSync(output + '.next', output); };
   save();
   for (const fixture of fixtures) for (let trial = 0; trial < 3; trial++) {

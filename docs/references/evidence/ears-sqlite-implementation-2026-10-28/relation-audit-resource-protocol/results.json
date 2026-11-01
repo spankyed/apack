@@ -7,6 +7,11 @@
       "scratchRemoved": true
     },
     {
+      "mode": "release-layout",
+      "spawned": 6,
+      "scratchRemoved": true
+    },
+    {
       "mode": "bad-exit",
       "spawned": 1,
       "scratchRemoved": true
@@ -43,6 +48,11 @@
     },
     {
       "mode": "sampling-error",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "wrong-owner",
       "spawned": 1,
       "scratchRemoved": true
     },

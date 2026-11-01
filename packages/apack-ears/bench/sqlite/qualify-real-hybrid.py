@@ -89,6 +89,11 @@ def validate(report, size, source, manifest_hash):
     if 'nativeCandidateFloor' in report:
         assert report['nativeCandidateFloor'] in (None, 1024, 2048)
         assert report['nativeCandidateFloor'] is None or report['modelMode'] == 'managed'
+    if 'nativeVectorRuntime' in report:
+        if report['modelMode'] == 'managed':
+            assert isinstance(report['nativeVectorRuntime'], str) and report['nativeVectorRuntime']
+        else:
+            assert report['nativeVectorRuntime'] is None
     if 'modelMode' in report:
         assert report['modelMode'] in {'fallback', 'managed'}
         assert report['nativeModelOwnerStarted'] is (report['modelMode'] == 'managed')
@@ -215,7 +220,7 @@ def main():
     groups = []
     for size in [1000, 10000, 99900]:
         report = json.loads((args.results / f'hybrid-{size}.json').read_text())
-        assert all(key in report for key in ['cpuModels', 'resourceSnapshots', 'reopen']), 'Current runs must record resources, CPU models and three reopen passes'
+        assert all(key in report for key in ['cpuModels', 'resourceSnapshots', 'reopen', 'nativeVectorRuntime']), 'Current runs must record resources, CPU/runtime metadata and three reopen passes'
         groups.extend(validate(report, size, args.source, manifest_hash))
     receipt = {'completed': True, 'protocol': 'ears-real-hybrid-matrix-receipt/1', 'source': args.source,
                'queriesVerified': 1800, 'groups': groups, 'qualification': False,

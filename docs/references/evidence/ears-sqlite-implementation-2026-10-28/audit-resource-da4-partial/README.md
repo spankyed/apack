@@ -1,0 +1,9 @@
+# First resource child succeeds; parent driver witness refuses
+
+[Run 41298970894](https://github.com/spankyed/apack/actions/runs/41298970894), source `da41ac4d0d772e8150726953b3114c7bde3892aa`, is terminal failure. The original keyword judgment remains the only shared-contract failure; all required relation correctness witnesses, source/test types, empty API patch and conversion groups pass. The resource route additionally fails an overly specific native-addon filename assertion.
+
+The first built-package 50k-key child completes successfully under verified 2 CPU/6 GiB/no swap, Node 23.11.1/SQLite 3.53.4, AMD EPYC 7763. It checks all 50,000 relations, unchanged relation bytes/commit and natural exit code 0. Audit time is 1,640.74ms; cumulative maxRSS before/after is 149,004/198,364KiB. The parent observes 62,513,816 logical source/scratch bytes and a 14,110,720-byte spool, beyond its 8MiB cache setting. Scratch is removed. This is one child, not the required complete six-trial resource cohort or a general memory bound.
+
+The actual loaded driver is `/workspace/node_modules/better-sqlite3/prebuilds/linux-x64.node`; the parent wrongly expects the basename better_sqlite3.node. Both are legitimate opaque package layouts. The fix independently resolves the better-sqlite3 package directory/version and requires a loaded .node file within its canonical directory, with binary SHA256, instead of assuming its filename. New protocol controls accept prebuild/release layouts and reject a lookalike external package. Product/runtime code, fixture sizes, three processes per fixture and budgets are unchanged.
+
+The complete original report remains completed=false, with its successful child metrics and parent refusal preserved. No partial cohort is relabeled complete or reused as fresh trials. Complete fixed-source resource execution remains required.

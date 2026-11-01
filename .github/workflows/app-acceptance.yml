@@ -617,6 +617,9 @@ jobs:
           }
           writeFileSync('.temp/sqlite-api/relation-model-witnesses.json',JSON.stringify(summary,null,2)+'\n');
           JS
+      - name: Record the trusted native vector CPU backend
+        if: ${{ !cancelled() && steps.relation_witnesses.outcome == 'success' }}
+        run: node native/vectors/runtime-info.mjs .temp/sqlite-api/vector-runtime-info.json
       - name: High-multiplicity audit resources from the built package
         if: ${{ !cancelled() && steps.relation_witnesses.outcome == 'success' }}
         run: |
