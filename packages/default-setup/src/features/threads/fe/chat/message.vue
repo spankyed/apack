@@ -289,8 +289,8 @@ function checkTruncation() {
 watch(bubbleRef, (el, _prev, onCleanup) => {
   if (!el || !isUser.value) return
   const observer = new ResizeObserver(checkTruncation)
+  // The initial notification measures after layout, avoiding a synchronous read during mount.
   observer.observe(el)
-  checkTruncation()
   onCleanup(() => observer.disconnect())
 }, { immediate: true })
 
