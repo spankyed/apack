@@ -1,0 +1,20 @@
+{
+  "Linux-X64/ears.json": "587a01cb7a13f360517712f0896a6f53c884c54fe7d41a198a4b2b8a19c20a1c",
+  "Linux-X64/sdk-backend.json": "ca5becd3ad02df01e15e842fc4f0e8c7485c2723f5d367fce668232170962c96",
+  "Linux-X64/sdk-all-sqlite.json": "8e435b68d68531390336a4a8310d7d9cc3b87dc1768d6e708e55e19d7c2b2c7b",
+  "Linux-X64/api-startup.json": "f0defd66f3d6512a2111a9eb1b08b8bd12c165c78086323dec9be6b5dc42c618",
+  "Linux-X64/query-work.json": "c1e60fc50f4805b8593997a14b421868d6d8e6b10fe0dba419c683c9e92e35cc",
+  "Linux-X64/host.json": "7a04defaf485f44e34b2173bcd7cc581df16e59fda7217ac2f532e9ec0a1c341",
+  "Linux-X64/host-crash.json": "a7ad47ca7d36823226967c327600ef765f695b04ce356e1ba8c8d3d696cf7d6c",
+  "Linux-X64/cli-maintenance.json": "b8cdbf2a3d6e74bb48ae44277697e0461185ddf1f999cd826a778935a2ceced4",
+  "Linux-X64/logical-cli.json": "6a2bd2a1be9ab5cab01460410e4a1fca6de0fafc17b219af435496f15d873fb6",
+  "Linux-X64/filesystem-full.json": "af30a74eff14a799f750f07d4e920529c7003a3e650f5ad0c0e0da0734036f2f",
+  "Linux-X64/filesystem-readonly.json": "a34e9e28fb820d318add13974233438cadee7fa25fd5a93d974fd006875deea3",
+  "macOS-ARM64/ears.json": "a83fa5ac0034e45df9a6dba05c1b112b40662a595067e3b5c10a4f86f01f297d",
+  "macOS-ARM64/sdk-backend.json": "6e18e14a16d42b66ceb55e309039986ccdb3d7a214dc70df06c6631628243820",
+  "macOS-ARM64/query-work.json": "f6a7ab409716f5ee1d02a54a895c222300d15f603e107c3e7788258f83b90ed5",
+  "macOS-ARM64/host.json": "c21d6d0ca91e97d311ea8afb02d21451b26fb2dd499cf76d10a0a0596befb908",
+  "macOS-ARM64/host-crash.json": "53691aa26c6e5aae4c00ca42fc58bef81277add27bbba8ba45994c49e65e9340",
+  "macOS-ARM64/cli-maintenance.json": "69212009e79535309d299efcebe2629a162c2f14734784ef0f3cc8280d399098",
+  "macOS-ARM64/logical-cli.json": "06c063cf7b3e1254626d6a0f58a0d429050a73306226a2058c4fb579ea0dd067"
+}

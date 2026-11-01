@@ -28,6 +28,8 @@ function open() {
 }
 const malformed: Array<[string, (next: Data) => void]> = [
   ['language', n => { n.$schema = 'wrong'; }],
+  ['array rank map', n => { n.ranks = []; }],
+  ['primitive rank declaration', n => { n.ranks = { popular: null }; }],
   ['unknown root option', n => { n.typo = true; }],
   ['array type map', n => { n.types = []; }],
   ['null type', n => { n.types.Row = null; }],
@@ -65,6 +67,7 @@ const malformed: Array<[string, (next: Data) => void]> = [
   ['blank model', n => { n.types.Row.indexes.embedding = { kind: 'vector', from: ['title'], dims: 3, model: ' ' }; }],
 ];
 const unsupported: Array<[string, (next: Data) => void]> = [
+  ['named rank index', n => { n.ranks = { popular: { types: ['Row'], relations: ['related'] } }; }],
   ['extra-field refusal', n => { n.types.Row.additionalFields = 'refuse'; }],
   ['relation cardinality', n => { n.relations.related.cardinality = 'one-to-one'; }],
   ['relation endpoints', n => { n.relations.related.endpoints = [{ source: 'Row', target: 'Row' }]; }],
@@ -75,6 +78,15 @@ const unsupported: Array<[string, (next: Data) => void]> = [
 ];
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite structural schema admission', () => {
+  it('accepts the empty maintained-rank map serialized by the current native schema', () => {
+    const { db, e } = open();
+    const id = e.create('Row', { title: 'retained', count: 1 }).id();
+    const next = raw(); next.ranks = {};
+    db.setSchema(next);
+    expect((db.schema as Data).ranks).toEqual({});
+    expect(e.getAttr(id, 'title')).toBe('retained');
+  });
+
   it.each([...malformed.map(([name, change]) => ({ name, change, code: 'SCHEMA_INVALID' })),
     ...unsupported.map(([name, change]) => ({ name, change, code: 'UNSUPPORTED' }))])('refuses $name before changing data, layouts, indexes or revision', ({ change, code }) => {
     const { db, e } = open();

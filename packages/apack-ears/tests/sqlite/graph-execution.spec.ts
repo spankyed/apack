@@ -39,7 +39,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite graph e
     expect(adjacency.map(statement => statement.returnedRows)).toEqual([width, 1]);
     expect(explained.statementCount).toBeLessThanOrEqual(24);
     expect(all.mock.calls.some(([sql]) => sql.includes('seed.value parent'))).toBe(false);
-    expect(adjacency.flatMap(statement => statement.plan).some(row => row.detail.includes('relations_source'))).toBe(true);
+    expect(adjacency.flatMap(statement => statement.plan).some(row =>
+      /SEARCH r USING(?: COVERING)? INDEX [^(]+\(source=\?/.test(row.detail))).toBe(true);
     // The synchronous path answer must release its cursor before subsequent transactions.
     expect(() => e.write(root).set('afterPath', true)).not.toThrow();
     expect(e.getAttr(root, 'afterPath')).toBe(true);

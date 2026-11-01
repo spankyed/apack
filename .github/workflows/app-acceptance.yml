@@ -473,6 +473,8 @@ jobs:
           set -o pipefail
           files=(tests/no-module-state.spec.ts tests/watch-causes.spec.ts
                  tests/engine/relations.spec.ts tests/engine/writes.spec.ts tests/engine/graph-similarity.spec.ts
+                 tests/engine/sqlite-operations.spec.ts tests/sqlite/graph-execution.spec.ts
+                 tests/sqlite/elmdb-conversion.spec.ts
                  tests/engine/vector.spec.ts
                  tests/engine/observation.spec.ts tests/engine/search-relevance.spec.ts
                  tests/engine/watch.spec.ts tests/engine/model-based.spec.ts
@@ -520,6 +522,10 @@ jobs:
               'SQLite authoritative attribute layout projects a single-field page in one SQL call and patches a scalar without reading or encoding its large neighbors',
               'SQLite authoritative attribute layout projects each lossless kind with ordered duplicates, absent rows and fresh composite ownership',
               'SQLite authoritative attribute layout reopens existing layouts read-only and diagnoses missing or duplicate authoritative values',
+              'SQLite structural schema admission accepts the empty maintained-rank map serialized by the current native schema',
+              "SQLite structural schema admission refuses 'named rank index' before changing data, layouts, indexes or revision",
+              'SQLite graph execution batches a width-16 frontier and closes an early-return cursor before the next write',
+              'SQLite graph execution batches a width-256 frontier and closes an early-return cursor before the next write',
               ...['obsolete relation unique','duplicate relation key','invalid relation key name','non-map relation key'].map(name=>`SQLite structural schema admission refuses '${name}' before changing data, layouts, indexes or revision`),
             ]:[])];
             for(const name of required) {
@@ -547,6 +553,19 @@ jobs:
             for(const expected of fixture.cases) assert(cases.some(test=>test.fullName.endsWith(expected.name)&&test.status==='passed'),`${backend}: ${expected.name}`);
           }
           JS
+      - name: Build matching producer for copied-profile conversion regression
+        if: ${{ !cancelled() }}
+        working-directory: vendor/elmdb
+        run: cargo build --locked --release -p elmdb-cli
+      - name: Copied-profile conversion and host reopen regression
+        if: ${{ !cancelled() }}
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          node scripts/with-source.mjs node --import tsx tests/scripts/test-sqlite-profile-conversion.ts \
+            vendor/elmdb/target/release/elmdb .temp/sqlite-api/profile-conversion.json \
+            2>&1 | tee .temp/sqlite-api/profile-conversion.log
       - name: Preserve generated reports for review
         if: always()
         uses: actions/upload-artifact@v4

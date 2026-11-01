@@ -25,6 +25,7 @@ export function createSchemaValidator(): (input: unknown) => void {
     ...object({
       $schema: { const: ELMDB_SCHEMA_LANGUAGE }, collation: { type: 'string' },
       types: named('entity'), roles: named('role'), relations: named('relation'),
+      ranks: { type: 'object', additionalProperties: { type: 'object' } },
     }, ['$schema', 'types', 'roles', 'relations']),
     definitions: {
       value: value(false), field: value(true), role: object({ declaredBy }),
@@ -69,6 +70,8 @@ export function createSchemaValidator(): (input: unknown) => void {
       refuse('SCHEMA_INVALID', 'schema', problems.join('; '));
     }
     const schema = input as Data, prefixes = new Set<string>();
+    if (Object.keys(schema.ranks ?? {}).length)
+      refuse('UNSUPPORTED', 'ranks', 'SQLite does not implement named maintained rank indexes');
     const reference = (type: string, path: string) => {
       if (!Object.hasOwn(schema.types, type)) refuse('SCHEMA_INVALID', path, `no such type "${type}"`);
     };

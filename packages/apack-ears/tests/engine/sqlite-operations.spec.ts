@@ -80,7 +80,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === "sqlite")(
       expect(query().out("refs").ids()).toEqual(pairs.map(pair => pair.leaf));
       expect(selects).toBe(1);
       const plan = all("EXPLAIN QUERY PLAN " + selection![0], selection![1]);
-      expect(plan.some(row => String(row.detail).includes("relations_source"))).toBe(true);
+      expect(plan.some(row => /SEARCH r USING(?: COVERING)? INDEX [^(]+\(source=\?/.test(String(row.detail)))).toBe(true);
       selects = 0;
       const edges = query().outEdges("refs");
       expect(edges).toHaveLength(65);

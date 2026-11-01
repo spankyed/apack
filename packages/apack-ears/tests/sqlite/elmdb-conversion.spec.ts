@@ -59,6 +59,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('explicit elmdb
   it('accepts the native canonical null for an absent short-code rule without weakening other schema validation', async () => {
     const nativeSchema = JSON.parse(JSON.stringify(toElmdbSchema({ types: { Note: { required: [] } }, relations: {}, roles: [] })));
     nativeSchema.types.Note.shortCode = null;
+    nativeSchema.ranks = {};
     const f = fixture(dump([{ load: 'entity', id: 'Note-one', fields: { title: 'retained' } }], nativeSchema));
     const converted = await convertElmdbDump(f.input, f.output), db = openDatabase({ path: converted.path, readOnly: true });
     try { expect(createEarsEngine({ database: db }).getAttr('Note-one', 'title')).toBe('retained'); } finally { db.close(); }
