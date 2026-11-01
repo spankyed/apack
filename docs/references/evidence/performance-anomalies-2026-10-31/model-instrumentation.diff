@@ -1,0 +1,103 @@
+diff --git a/packages/apack-ears/tests/engine/model-based.spec.ts b/packages/apack-ears/tests/engine/model-based.spec.ts
+index ae3a47f573..f3edb62327 100644
+--- a/packages/apack-ears/tests/engine/model-based.spec.ts
++++ b/packages/apack-ears/tests/engine/model-based.spec.ts
+@@ -5,23 +5,53 @@
+ // afresh, after every op. A store refusing a commit is no op here, since nothing in front of
+ // elmdb can inject one: elmdb's own model harness covers that (elmdb/crates/elmdb/src/engine/tests/model.rs)
+ import fc from 'fast-check';
+-import { afterAll, expect, it } from 'vitest';
++import { afterAll, afterEach, beforeEach, expect, it } from 'vitest';
+ import { createEarsEngine } from '../../src/index.ts';
+ import { createTemporaryDatabases } from '../../src/lmdb/index.ts';
+ import { INDEXED, KINDS, Model, ROLES, TYPES, applyTo, derivedOf, stateOf, watchedReads, type Op } from '../_harness/model.ts';
+ import { workload } from '../_harness/workload.ts';
+ 
++
++let phases: Record<string, { calls: number; ms: number }> = {};
++let profileStart = performance.now();
++let profileCpu = process.cpuUsage();
++function measured<T>(name: string, fn: () => T): T {
++  const start = performance.now();
++  try { return fn(); } finally {
++    const phase = phases[name] ??= { calls: 0, ms: 0 };
++    phase.calls++; phase.ms += performance.now() - start;
++  }
++}
++async function measuredAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
++  const start = performance.now();
++  try { return await fn(); } finally {
++    const phase = phases[name] ??= { calls: 0, ms: 0 };
++    phase.calls++; phase.ms += performance.now() - start;
++  }
++}
++function observed<T extends object>(port: T, prefix: string): T {
++  return new Proxy(port, { get(target, key) {
++    const value = Reflect.get(target, key, target);
++    return typeof value !== 'function' ? value : (...args: unknown[]) => measured(
++      `${prefix}.${String(key)}${key === 'commit' || key === 'write' ? ':' + String(typeof args.at(-1) === 'boolean' ? args.at(-1) : false) : ''}`,
++      () => { const answer = Reflect.apply(value, target, args); return key === 'begin' ? observed(answer, 'unit') : answer; });
++  } });
++}
++beforeEach(() => { phases = {}; profileStart = performance.now(); profileCpu = process.cpuUsage(); });
++afterEach(context => console.log('APACK_MODEL_PHASES=' + JSON.stringify({ test: context.task.name,
++  elapsedMs: performance.now() - profileStart, cpu: process.cpuUsage(profileCpu), phases })));
++
+ const databases = createTemporaryDatabases();
+ afterAll(() => databases.disposeAll());
+ 
+ /** The engine over the harness's names, every type indexing the field the workload probes */
+ function harnessEngine() {
+-  const { database, dispose } = databases.open({
++  const { database, dispose } = measured('database.open', () => databases.open({
+     types: Object.fromEntries(TYPES.map((type) => [type, { required: [], indexes: [INDEXED] }])),
+     relations: Object.fromEntries(KINDS.map((kind) => [kind, {}])),
+     roles: [...ROLES],
+-  });
+-  return { engine: createEarsEngine({ database }), dispose };
++  }));
++  return { engine: measured('engine.create', () => createEarsEngine({ database: observed(database, 'database') })), dispose: () => measured('database.dispose', dispose) };
+ }
+ 
+ it('refuses, holds and answers what the model does', () => {
+@@ -31,14 +61,14 @@ it('refuses, holds and answers what the model does', () => {
+     try {
+       for (const op of ops) {
+         const where = JSON.stringify(op);
+-        expect(applyTo(engine, op), where).toBe(model.apply(op) !== undefined);
+-        expect(stateOf(engine), where).toEqual(model.state());
+-        expect(derivedOf(engine, model), where).toEqual(model.derived());
++        measured('apply/assert', () => expect(applyTo(engine, op), where).toBe(model.apply(op) !== undefined));
++        measured('state/assert', () => expect(stateOf(engine), where).toEqual(model.state()));
++        measured('derived/assert', () => expect(derivedOf(engine, model), where).toEqual(model.derived()));
+       }
+     } finally {
+       dispose();
+     }
+-  }), { numRuns: 120 });
++  }), { numRuns: 120, seed: 20261031 });
+ });
+ 
+ it('keeps every watch at what its read answers afresh, after every write, whatever wrote', async () => {
+@@ -56,11 +86,11 @@ it('keeps every watch at what its read answers afresh, after every write, whatev
+       }
+       const reads = watchedReads(engine, ops);
+       for (const op of ops) {
+-        applyTo(engine, op);
+-        await engine.admin.watchesSettled();
++        measured('watch.apply', () => applyTo(engine, op));
++        await measuredAsync('watch.settle', () => engine.admin.watchesSettled());
+         for (const [name, read] of Object.entries(reads)) {
+           let fresh: unknown;
+-          try { fresh = read(); } catch (error) { fresh = { threw: String(error) }; }
++          try { fresh = measured('watch.read', read); } catch (error) { fresh = { threw: String(error) }; }
+           expect(latest.get(name), `${name} after ${JSON.stringify(op)}`).toEqual(fresh);
+         }
+       }
+@@ -68,5 +98,5 @@ it('keeps every watch at what its read answers afresh, after every write, whatev
+       for (const stop of stops) stop();
+       dispose();
+     }
+-  }), { numRuns: 40 });
++  }), { numRuns: 40, seed: 20261031 });
+ });

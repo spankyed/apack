@@ -1,0 +1,82 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/model-based.spec.ts --maxWorkers=1 -t refuses, holds
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ❯ tests/engine/model-based.spec.ts (2 tests | 1 failed | 1 skipped) 4429ms
+   × refuses, holds and answers what the model does 473ms
+     → Property failed after 2 tests
+{ seed: 20261031, path: "1:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: [[{"op":"create","id":"Task-1","fields":{}},{"op":"create","id":"Task-2","fields":{}},{"op":"create","id":"Task-3","fields":{}},{"op":"create","id":"Task-4","fields":{}},{"op":"create","id":"Note-1","fields":{}},{"op":"create","id":"Note-2","fields":{}},{"op":"link","id":"Task-1","kind":"refs","target":"Task-1"},{"op":"unit","ops":[{"op":"unit","ops":[{"op":"create","id":"Task-1","fields":{}}],"throws":false,"durable":false}],"throws":false,"durable":false},{"op":"link","id":"Task-1","kind":"refs","target":"Task-1"},{"op":"unlink","id":"Task-1","kind":"refs","target":"Task-1"}]]
+Shrunk 33 time(s)
+Got AssertionError: expected { entities: { …(6) }, edges: [ …(8) ] } to deeply equal { entities: {}, edges: [] }
+    at /work/packages/apack-ears/tests/engine/model-based.spec.ts:54:31
+    at Property.predicate (file:///work/node_modules/fast-check/lib/esm/check/property/Property.js:14:54)
+    at Property.run (file:///work/node_modules/fast-check/lib/esm/check/property/Property.generic.js:46:33)
+    at runIt (file:///work/node_modules/fast-check/lib/esm/check/runner/Runner.js:18:30)
+    at check (file:///work/node_modules/fast-check/lib/esm/check/runner/Runner.js:62:11)
+    at Module.assert (file:///work/node_modules/fast-check/lib/esm/check/runner/Runner.js:65:17)
+    at /work/packages/apack-ears/tests/engine/model-based.spec.ts:50:6
+    at file:///work/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///work/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///work/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+   ↓ keeps every watch at what its read answers afresh, after every write, whatever wrote
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/model-based.spec.ts > refuses, holds and answers what the model does
+Error: Property failed after 2 tests
+{ seed: 20261031, path: "1:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true }
+Counterexample: [[{"op":"create","id":"Task-1","fields":{}},{"op":"create","id":"Task-2","fields":{}},{"op":"create","id":"Task-3","fields":{}},{"op":"create","id":"Task-4","fields":{}},{"op":"create","id":"Note-1","fields":{}},{"op":"create","id":"Note-2","fields":{}},{"op":"link","id":"Task-1","kind":"refs","target":"Task-1"},{"op":"unit","ops":[{"op":"unit","ops":[{"op":"create","id":"Task-1","fields":{}}],"throws":false,"durable":false}],"throws":false,"durable":false},{"op":"link","id":"Task-1","kind":"refs","target":"Task-1"},{"op":"unlink","id":"Task-1","kind":"refs","target":"Task-1"}]]
+Shrunk 33 time(s)
+Got AssertionError: expected { entities: { …(6) }, edges: [ …(8) ] } to deeply equal { entities: {}, edges: [] }
+    at /work/packages/apack-ears/tests/engine/model-based.spec.ts:54:31
+    at Property.predicate (file:///work/node_modules/fast-check/lib/esm/check/property/Property.js:14:54)
+    at Property.run (file:///work/node_modules/fast-check/lib/esm/check/property/Property.generic.js:46:33)
+    at runIt (file:///work/node_modules/fast-check/lib/esm/check/runner/Runner.js:18:30)
+    at check (file:///work/node_modules/fast-check/lib/esm/check/runner/Runner.js:62:11)
+    at Module.assert (file:///work/node_modules/fast-check/lib/esm/check/runner/Runner.js:65:17)
+    at /work/packages/apack-ears/tests/engine/model-based.spec.ts:50:6
+    at file:///work/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///work/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///work/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+
+Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+ ❯ tests/engine/model-based.spec.ts:54:31
+     52|     const model = new Model();
+     53|     try {
+     54|       expect(stateOf(engine)).toEqual(model.state());
+       |                               ^
+     55|       for (const op of ops) {
+     56|         const where = JSON.stringify(op);
+ ❯ Property.predicate ../../node_modules/fast-check/lib/esm/check/property/Property.js:14:54
+ ❯ Property.run ../../node_modules/fast-check/lib/esm/check/property/Property.generic.js:46:33
+ ❯ runIt ../../node_modules/fast-check/lib/esm/check/runner/Runner.js:18:30
+ ❯ check ../../node_modules/fast-check/lib/esm/check/runner/Runner.js:62:11
+ ❯ Module.assert ../../node_modules/fast-check/lib/esm/check/runner/Runner.js:65:17
+ ❯ tests/engine/model-based.spec.ts:50:6
+ ❯ buildError ../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15
+ ❯ throwIfFailed ../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:138:11
+ ❯ reportRunDetails ../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:151:16
+ ❯ Module.assert ../../node_modules/fast-check/lib/esm/check/runner/Runner.js:69:9
+ ❯ tests/engine/model-based.spec.ts:50:6
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 skipped (2)
+   Start at  02:46:21
+   Duration  5.10s (transform 198ms, setup 15ms, collect 312ms, tests 4.43s, environment 0ms, prepare 55ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /work/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /work/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/engine/model-based.spec.ts --maxWorkers=1 -t 'refuses, holds'

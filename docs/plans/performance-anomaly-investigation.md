@@ -1,6 +1,6 @@
 # Performance anomaly investigation
 
-Status: in progress. Base `9bcf4cd9f8`; native pin `1849f68`. Continue independently of the active
+Status: investigation complete; local chain and strict CI pending. Base `9bcf4cd9f8`; native pin `1849f68`. Continue independently of the active
 thread-opening work and main-checkout validation. Preserve original failures and their source hashes.
 
 ## Questions and completion
@@ -37,3 +37,22 @@ No timeout increases, workload reductions, tmpfs substitution or speculation-dri
 Deliver a finding-by-finding disposition with evidence, fixes and remaining limits. Commit and push
 reviewable changes; use the repository chain and required CI at a stable implementation checkpoint.
 Documentation-only findings reuse existing valid checks. Do not merge new changes without instruction.
+
+
+## Current handoff
+
+Read the [finding-by-finding disposition](../references/evidence/2026-10-31-performance-anomalies.md).
+The bounded window-discovery fix is committed as `657177c14a`; the seeded model fixture passed the
+full fixed-seed workloads and isolation counterfactual before application. The original randomized
+120/40 workloads and existing deadlines remain unchanged. Independent setup improved 99.3% in the
+paired probe; this is not an app-speed claim. No native changes are proposed.
+
+The narrow disabled/disabled controls measured +1.44% search and +0.37% startup. A new same-build
+startup recording comparison passed (-1.82%). The new search invocation failed teardown after its
+actions passed; preserve it as failed, with no qualification claim. Historical 102.914-second setup
+attribution and a robust sub-5% short-search overhead bound remain unestablished. Diagnose the retained
+API shutdown refusal before another search qualification, without expanding or relaxing the gate.
+
+The focused EARS typecheck, fixture lint and full Linux model properties passed. The current job is
+`chain --no-native --cores 2`; track it before starting any further broad validation. Commit/push the
+reviewable checkpoint and dispatch required strict CI after it converges. Do not merge.

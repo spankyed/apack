@@ -389,7 +389,7 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 
 ### Worker setup (`electronApp` fixture, shared across tests)
 
-0. **Isolated data dir** — every worker creates a fresh temp dir (`$TMPDIR/apack-e2e-*`) and launches the app with `APACK_USER_DATA_DIR` pointing at it. Nothing leaks between runs, other installed packs never load, and the developer's `apack-test` dir is untouched. The dir is removed after the worker finishes (`E2E_KEEP_DATA=1` keeps it and logs its path). Boot time is unchanged (~1.4–1.9s launch → connected, logged as `[e2e] app connected …`).
+0. **Isolated data dir** — every worker creates a fresh temp dir (`$TMPDIR/apack-e2e-*`) and launches the app with `APACK_USER_DATA_DIR` pointing at it. Nothing leaks between runs, other installed packs never load, and the developer's `apack-test` dir is untouched. The dir is removed after the worker finishes (`E2E_KEEP_DATA=1` keeps it and logs its path). Launch phases are logged as `[e2e.launch]` records with monotonic elapsed time and wall time for log correlation; fresh-profile and returning-profile timings are different conditions.
 
 1. **Pack build/install** (if `PACK_DIR` is set):
    - Parse `apack.json` from `PACK_DIR` → extract pack `id` and `surfaceIds`
