@@ -1,6 +1,6 @@
 # Editor construction and read-only chat rendering
 
-Status: implementation started. Base: master `461f7bf2cb`; #309 is merged.
+Status: profiling complete; renderer implementation and final qualification proceed on `session/editor-construction-performance`. Base: master `461f7bf2cb`; #309 is merged.
 
 ## Delivery
 
@@ -66,5 +66,6 @@ cost: minified parser frames still require attribution. Raw profiles remain in o
 `apack-linux-work-220c5d355e10`, under
 `.apack/performance/optimization-baseline-54007b7094/detailed-thread-open/thread-open/B/`.
 
-No runtime candidate is implemented or accepted yet. New timing runs await completion of the
-observed competing host-native heap benchmark; no work has been cancelled.
+The completed profiling evidence and prototype measurements are in
+[editor construction attribution](../references/evidence/editor-construction-2026-11-01.md).
+Final renderer acceptance is tracked by the implementation branch; no work was cancelled.
