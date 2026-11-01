@@ -1,0 +1,26 @@
+{
+  "source": "2d1307c672fd3b86aaa4f1667d739e337d68031d",
+  "run": 41338576161,
+  "originalSha256": "af8038a4488d8c6a512160bfe03bc5e5a14e9dfb9e9c95098096f202104dc99d",
+  "passed": 4,
+  "failed": 0,
+  "pending": 0,
+  "cases": [
+    {
+      "name": "local preview builds versions previews without changing release metadata",
+      "status": "passed"
+    },
+    {
+      "name": "local preview builds gives the builders one version and identity and disables inherited publishing/signing",
+      "status": "passed"
+    },
+    {
+      "name": "local preview builds isolates channels and rejects incomplete or changed outputs before packaging",
+      "status": "passed"
+    },
+    {
+      "name": "local preview builds names beta release files with characters GitHub preserves, using the staged manifest",
+      "status": "passed"
+    }
+  ]
+}

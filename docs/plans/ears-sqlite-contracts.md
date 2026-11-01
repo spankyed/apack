@@ -96,8 +96,9 @@ It requires actual packaged Electron provenance, native ownership,4097-vector wo
 FTS/regex queries and read-only reopen, plus elmdb/PTY/keyring controls. Its evidence is explicitly
 native/API runtime only: renderer, installer/signature and final app/platform/strict acceptance remain
 separate. [Current-source Linux execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-linux/README.md)
-passes inside Electron 37.2.4 at `2d1307c672`, with four Preview contract passes. Windows and signed
-macOS remain pending. Missing/skipped witnesses refuse; pending execution is not qualification.
+passes inside Electron 37.2.4 at `2d1307c672`, with four Preview contract passes. Matching
+[Windows execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-windows/README.md)
+also passes with four Preview contract cases. Signed macOS remains pending. Missing/skipped witnesses refuse; pending execution is not qualification.
 
 ## Candidate invariant and maintenance review
 
@@ -386,8 +387,7 @@ views cover one row, a 50-row page and the ordered open-task set. It verifies co
 all raw heartbeat samples and each process report, and retains failed/180-second-timeout outcomes
 without retry. Execution is restricted to a disposable 2 CPU/6 GiB/no-swap container.
 
-This is pending execution. It replaces no original acceptance requirement and does not qualify
+The first run is queued at `bd4e6f9506` as workflow 41340220925, after signing was confirmed active. It replaces no original acceptance requirement and does not qualify
 actual renderer/provider/search flows, peak disk/WAL or independent-device variance. The earlier
 five-second Seagate pilot remains historical evidence; its absolute timings are not a matched
-hardware comparison with this new CI cohort. The existing signed-runtime run must be allowed to
-start before queuing another app-acceptance dispatch, so its pending slot is not displaced.
+hardware comparison with this new CI cohort. Preserve the queued workload rather than dispatching another run into the same pending slot.
