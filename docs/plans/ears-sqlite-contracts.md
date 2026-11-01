@@ -287,11 +287,11 @@ reject mixed run/artifact/worker/policy evidence and retain failed recall/heartb
 Keep ordinary artifacts generic; prioritize measured foreground work and qualify a future
 build change independently rather than promoting SIMD from compiler flags or one pair.
 
-The next worker checkpoint holds an actual training read snapshot while 16 foreground
+[Worker checkpoint qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/worker-checkpoint-dcc/README.md) holds an actual training read snapshot while 16 foreground
 writes commit, observes WAL/truncation refusal, then checks release after worker exit,
 under both OFF/FULL modes and both artifacts. It extends actual worker malformed-input,
-cancellation and ownership tests; no production fault hook is added. CI must pass these
-named cases before claiming that specific long-reader regime qualified. This does not
+cancellation and ownership tests; no production fault hook is added. Both artifacts pass all nine named training cases with no skips on Linux. The later
+test-only SQL-interface correction still needs corrected-source qualification. This does not
 replace sustained-load, busy-writer, storage-I/O or power-loss evidence.
 
 Before any promotion, qualify actual unsupported-CPU fallback execution, all native-worker
