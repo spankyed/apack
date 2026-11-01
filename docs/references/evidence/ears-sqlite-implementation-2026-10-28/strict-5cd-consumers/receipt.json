@@ -1,6 +1,6 @@
 {
   "source": "5cde3fc26de94a4e6bc2e5910e425aaa2190b735",
-  "scope": "Completed current-runtime app-and-rest, integration-2 and native-2; integration-1/native-1 remain live. Later CI-only fault/startup/admission recipes are not covered",
+  "scope": "All five current-runtime consumers are terminal. Four integration/native shards pass; app-and-rest retains the keyword failure. Later CI-only fault/startup/admission recipes are not covered.",
   "consumers": [
     {
       "name": "app-and-rest",
@@ -28,6 +28,25 @@
       "passedTests": 47,
       "skippedTests": 26,
       "chainSeconds": 1404.0,
+      "cache": "Inputs changed; no reusable successful stamp"
+    },
+    {
+      "name": "native-1",
+      "endedFiles": 9,
+      "fileStates": {
+        "passed": 8,
+        "skipped": 1
+      },
+      "chainSeconds": 1714.2,
+      "cache": "Inputs changed; no reusable successful stamp"
+    },
+    {
+      "name": "integration-1",
+      "endedFiles": 31,
+      "fileStates": {
+        "passed": 31
+      },
+      "chainSeconds": 1995.5,
       "cache": "Inputs changed; no reusable successful stamp"
     }
   ],
