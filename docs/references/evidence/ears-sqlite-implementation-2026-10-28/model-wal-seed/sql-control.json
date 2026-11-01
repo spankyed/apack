@@ -1,0 +1,16 @@
+{
+  "sqlite": "3.51.0",
+  "scope": "SQLite VACUUM INTO and closed-empty-seed header control; not an attribution of the Windows timeout",
+  "backupHeader": [
+    1,
+    1
+  ],
+  "backupMode": "delete",
+  "preparedHeader": [
+    2,
+    2
+  ],
+  "preparedMode": "wal",
+  "copiedMode": "wal",
+  "copiedRows": 0
+}

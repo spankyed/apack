@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       sqlite_vector_models:
         description: Real corpus vector regime; managed verifies native readiness above the exact-search threshold
@@ -412,6 +412,71 @@ jobs:
           path: .temp/sqlite-relevance
           if-no-files-found: error
           retention-days: 14
+  sqlite-model-windows:
+    if: ${{ inputs.suite == 'sqlite-model-windows' }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+      EARS_EVALUATION_BACKEND: sqlite
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching real model runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-model-windows
+          git rev-parse HEAD > .temp/sqlite-model-windows/source.txt
+          cp vendor/elmdb.rev .temp/sqlite-model-windows/elmdb.rev
+          npm ci
+          npm run packages:build
+          npm run typecheck -w @apackdev/ears
+      - name: Unchanged real SQLite model and watch workloads
+        run: |
+          set -o pipefail
+          npm test -w @apackdev/ears -- tests/engine/model-based.spec.ts --maxWorkers=2 \
+            --reporter=default --reporter=json --outputFile=../../.temp/sqlite-model-windows/report.json \
+            2>&1 | tee .temp/sqlite-model-windows/model.log
+      - name: Require actual backend and both complete model cases
+        if: ${{ !cancelled() }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          const report=JSON.parse(readFileSync('.temp/sqlite-model-windows/report.json','utf8'));
+          const cases=report.testResults.flatMap(file=>file.assertionResults);
+          const required=['runs the model against the selected real backend and independent empty stores',
+            'refuses, holds and answers what the model does',
+            'keeps every watch at what its read answers afresh, after every write, whatever wrote'];
+          assert.equal(cases.length,required.length);
+          for(const name of required)assert(cases.some(test=>test.fullName===name&&test.status==='passed'),name);
+          assert.equal(report.numFailedTests,0);assert.equal(report.numPendingTests,0);
+          const paths=['packages/apack-ears/tests/engine/model-based.spec.ts','packages/apack-ears/tests/_harness/model.ts','packages/apack-ears/tests/_harness/workload.ts','packages/apack-ears/vitest.config.ts','package-lock.json'];
+          writeFileSync('.temp/sqlite-model-windows/receipt.json',JSON.stringify({source:process.env.GITHUB_SHA,
+            node:process.version,platform:process.platform,arch:process.arch,
+            inputs:Object.fromEntries(paths.map(path=>[path,createHash('sha256').update(readFileSync(path)).digest('hex')])),
+            cases:cases.map(test=>({name:test.fullName,status:test.status,durationMs:test.duration})),
+            scope:'Original 120 random and 40 watch workloads; unchanged 30s per-test deadline; isolated Windows verification does not replace full-suite concurrency acceptance'},null,2)+'\n');
+          JS
+      - name: Preserve complete focused model outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-model-windows-${{ github.run_id }}
+          path: .temp/sqlite-model-windows
+          if-no-files-found: error
+          retention-days: 14
   sqlite-api:
     if: ${{ inputs.suite == 'sqlite-api' }}
     runs-on: ubuntu-24.04
@@ -577,7 +642,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   check:
-    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
+    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-model-windows' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
     runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45

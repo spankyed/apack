@@ -10,7 +10,7 @@ import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { toElmdbSchema, type EngineSchema } from '../../src/schema.ts';
 import { createEarsEngine } from '../../src/index.ts';
 import { openDatabase } from '../../src/lmdb/index.ts';
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { INDEXED, KINDS, Model, ROLES, TYPES, applyTo, derivedOf, stateOf, watchedReads, type Op } from '../_harness/model.ts';
@@ -36,7 +36,20 @@ beforeAll(async () => {
     : openDatabase({ path, syncs: false, schema });
   try {
     if (seed instanceof SqliteDatabase) await seed.indexesReady();
-    seed.backup(join(directory, 'seed'));
+    const snapshot = join(directory, 'seed'), sequence = seed.sequence;
+    seed.backup(snapshot);
+    if (seed instanceof SqliteDatabase) {
+      // VACUUM INTO produces a rollback-journal file. Finish WAL setup once, outside every workload.
+      const prepared = new SqliteDatabase({ path: snapshot, syncs: false });
+      try {
+        expect(prepared.get('PRAGMA journal_mode')!.journal_mode).toBe('wal');
+        expect(prepared.get('SELECT count(*) n FROM entities')!.n).toBe(0);
+        expect(prepared.sequence).toBe(sequence);
+      } finally { prepared.close(); }
+      expect([...readFileSync(join(snapshot, 'data.sqlite3')).subarray(18, 20)]).toEqual([2, 2]);
+      expect(existsSync(join(snapshot, 'data.sqlite3-wal'))).toBe(false);
+      expect(existsSync(join(snapshot, 'data.sqlite3-shm'))).toBe(false);
+    }
   } finally { seed.close(); }
 });
 

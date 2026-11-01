@@ -107,7 +107,7 @@ jobs:
         # Independent recovery/CLI checks still need evidence; the final guard preserves this failure.
         continue-on-error: true
         run: >-
-          npm test -w @apackdev/ears -- --reporter=default --reporter=json
+          npm test -w @apackdev/ears -- --maxWorkers=2 --reporter=default --reporter=json
           --outputFile=../../.temp/sqlite-platform/ears.json 2>&1 | tee .temp/sqlite-platform/ears.log
       - name: Real filesystem full rollback and reuse
         if: runner.os == 'Linux'
