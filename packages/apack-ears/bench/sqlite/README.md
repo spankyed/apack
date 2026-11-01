@@ -651,3 +651,20 @@ owners must match exactly; public receipts retain only counts and timings. Upstr
 `vec1ColumnMethod` calls `vec1SeekCsr` for metadata columns, while `vec1Rowid` reads the
 query heap. This source distinction motivates the test, but no runtime cost attribution
 or production projection change is established until actual measurements are inspected.
+
+
+`App acceptance` with `suite=sqlite-wal` runs the matching built candidate in the
+existing disposable Linux storage workload container (2 CPUs, 6 GiB, no swap,
+network disabled). `wal-resources.mjs` runs one fresh process for each ordinary
+reader state: released between reads, or retained across 512 FULL-synchronous
+64-KiB entity writes. It leaves the production 1,000-page auto-checkpoint setting
+in place, records per-commit latency and logical/allocated file sizes, raw
+heartbeat delays and process resources, then verifies blocked truncation,
+release/reclamation, competing-writer refusal/reuse and read-only reopen integrity.
+Each process has a 180-second diagnostic ceiling and no retries; failures remain
+failures and reports are uploaded. This diagnostic ceiling does not replace any
+app/search/foreground gate. Heartbeat is assessed against the unchanged 16-ms
+limit. Runtime qualification is pending. Per-commit samples do not prove transient
+intra-commit peak disk use, engine-only memory, independent trial/device variance
+or physical power-loss safety. The report contains numeric observations and
+provenance, never entity payloads. Production storage behavior is unchanged.
