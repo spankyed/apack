@@ -105,3 +105,22 @@ Strict run `41346844647` stopped at a stale generated manifest schema; regenerat
 the new read-only adapter declaration. The schema check now passes. Final browser parity and the
 complete acceptance sequence run under `editor-renderer-final-copy-v2`; no prototype percentage
 certifies this source. Required final strict CI follows the stable browser result.
+
+## Delivery checkpoint — 2026-11-01
+
+Implementation is pushed in PR #311; attribution is the independent documentation PR #310.
+Final application source at `d7e63c7678` passed plain/rich latency, sampled allocation, streaming and
+exact browser selection/Markdown clipboard comparisons. Later code changes are a test lint fix and
+benchmark foregrounding (`b7b7af330f`), with no change to application rendering. The final standard
+recording-overhead confirmation passed at +0.60%; the preceding +5.38% foregrounded result remains
+a failed qualification, separately retained. Cross-container runs are not pooled.
+
+[Final evidence](../references/evidence/read-only-chat-renderer-2026-11-01.md) records exact metrics,
+all rejected/failed attempts, limits and reproduction commands. No speculative recorder optimization
+was retained: its measured saving was insignificant. The focused API boot probe passed without a
+runtime fix after one app-startup failure.
+
+All local required checks are complete. Strict run `41351118556` has passed producer, app and both
+integration jobs; native shards are still running. Final-code strict run `41352291011` is queued
+behind it; no jobs were cancelled. Next: inspect/fix any material CI failures, wait for all six final
+jobs, record final review/checks, archive this plan and mark #311 ready. No automatic merge.
