@@ -1,0 +1,40 @@
+{
+  "source": "0cc749e7f3446fb64991a559afd12d7d0b40995b",
+  "workerCompleted": true,
+  "scope": "Native worker open-time header read EIO; not mid-training or complete resource/power-loss qualification",
+  "reports": {
+    "sqlite-contracts.json": {
+      "originalSha256": "1fca85a298020f0e3e23dc346cadb42f8cfb9cb94667f46b55c57f36bbe20614",
+      "passed": 454,
+      "failed": 1,
+      "excluded": 0,
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    "elmdb-contracts.json": {
+      "originalSha256": "34953f44a055d29b4ad83561e6d0e602f94db0983ab18f7b4e5fc5766ec63545",
+      "passed": 263,
+      "failed": 1,
+      "excluded": 191,
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    "pack-readiness.json": {
+      "originalSha256": "76cf7c202e6dd058b444c8ea245d099762c3f7b2f6bf0db6a70f42c32cfdbb19",
+      "passed": 114,
+      "failed": 0,
+      "excluded": 0,
+      "failures": []
+    },
+    "subprocess-inventory.json": {
+      "originalSha256": "72b581a40a90665dea8d1fc81f23584356958ce255db6c32bf60bec18d6acadc",
+      "passed": 78,
+      "failed": 0,
+      "excluded": 0,
+      "failures": []
+    }
+  },
+  "apiDiffBytes": 0
+}
