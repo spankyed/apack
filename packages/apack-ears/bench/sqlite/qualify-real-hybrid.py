@@ -75,6 +75,8 @@ def validate(report, size, source, manifest_hash):
     assert report['synchronous'] == 2 and finite(report['loadMs'])
     if 'limits' in report:
         assert report['limits'] == {'cpu.max': '200000 100000', 'memory.max': '6442450944', 'memory.swap.max': '0'}
+    if 'canonicalCosine' in report:
+        assert report['canonicalCosine'] == ('vec1_cos_distance' if report['nativeExtensionSha256'] else 'vec_distance_cosine')
     if 'vectorRecallReference' in report:
         assert report['vectorRecallReference'] == 'independent-float64-canonical-f32'
         for key in ['oracleSha256', 'oracleRecipeSha256']:

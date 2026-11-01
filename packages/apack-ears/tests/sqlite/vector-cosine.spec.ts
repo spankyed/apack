@@ -1,5 +1,5 @@
-// Compatibility qualification for an existing-function optimization; production scoring is unchanged.
-import { afterEach, describe, expect, it } from 'vitest';
+// Public fallback and trusted native scoring must preserve finite canonical cosine semantics.
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import { SqliteDatabase } from '../../src/sqlite/database.ts';
 
 const held: Array<{ db: SqliteDatabase; path: string }> = [];
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const { db, path } of held.splice(0)) {
     try { db.close(); } finally { rmSync(path, { recursive: true, force: true }); }
   }
@@ -44,11 +45,21 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite' && !!process.env
         e.embed(pending.chunks.map(chunk => ({ ...chunk, model: pending.model, vector: vectors[ids.indexOf(chunk.id)]! })));
         const canonical = db.all('SELECT * FROM embedding_values ORDER BY id'), sequence = db.sequence;
         expect(db.nativeVectorExtension).toBeUndefined();
+        const calls = vi.spyOn(db, 'all');
         const queries = [vectors[0]!, vectors[3]!, rounded(base[2]!), rounded(base[8]!)];
         const fallback = queries.map(query => e.query('Row').near(query, { k: 64 }).hits());
         expect(db.nativeVectorExtension).toBeUndefined();
+        const fallbackSql = calls.mock.calls.map(([sql]) => sql).filter(sql => sql.includes('vec_distance_cosine'));
+        expect(fallbackSql.length).toBeGreaterThanOrEqual(queries.length);
         db.loadNativeVectors(process.env.EARS_VEC1_EXTENSION!);
         for (const [ordinal, query] of queries.entries()) {
+          calls.mockClear();
+          const nativeHits = e.query('Row').near(query, { k: 64 }).hits();
+          const scoring = calls.mock.calls.map(([sql]) => sql).filter(sql => sql.includes('_cos_distance') || sql.includes('vec_distance_cosine'));
+          expect(scoring.length).toBeGreaterThan(0);
+          expect(scoring.every(sql => sql.includes('vec1_cos_distance') && !sql.includes('vec_distance_cosine'))).toBe(true);
+          expect(nativeHits).toHaveLength(vectors.length);
+          const publicNative = new Map(nativeHits.map(hit => [hit.id, hit.score]));
           const magnitude = Math.sqrt(query.reduce((sum, value) => sum + value ** 2, 0));
           const normalized = Buffer.from(Float32Array.from(query, value => value / magnitude).buffer);
           const scored = db.all(`SELECT v.entity_id id,
@@ -62,6 +73,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite' && !!process.env
             expect(Number.isFinite(candidate)).toBe(true);
             expect(Math.abs(hit.score - expected)).toBeLessThanOrEqual(1e-5);
             expect(Math.abs(candidate - expected)).toBeLessThanOrEqual(1e-5);
+            expect(Number.isFinite(publicNative.get(hit.id))).toBe(true);
+            expect(Math.abs(publicNative.get(hit.id)! - expected)).toBeLessThanOrEqual(1e-5);
           }
           // Numerical ties may exchange order; every distinctly better owner must remain ahead.
           const sorted = [...scored].sort((a, b) => b.score - a.score);

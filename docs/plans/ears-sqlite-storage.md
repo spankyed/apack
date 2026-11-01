@@ -236,6 +236,8 @@ Readiness currently waits on the entire database's active generation catalog. Qu
 unrelated failed retained index while another pack starts: avoiding unnecessary global availability failures
 belongs to complete live-pack admission, not a completed consequence of the new async startup boundary.
 
+Canonical cosine scoring uses the already loaded, application-owned vec1 kernel when that connection has one, and sqlite-vec otherwise. Both consume the same canonical/safe derived direction and the same normalized query; primary bytes, membership filters, owner aggregation, ANN budgets and tie-breaking policy stay unchanged. This deliberately permits existing Float32 kernel rounding differences, rather than requiring bitwise score identity across kernels. Independent Float64 compatibility at 1–1536 dimensions, magnitude extremes and odd lengths is required through public fallback/native reads; supported-platform and real-corpus recall/responsiveness gates still apply. The initial matched synthetic scan diagnostic is an optimization lead, not a full-query performance claim.
+
 ## Search usefulness contract checkpoint
 
 The shared `tests/fixtures/search-relevance.json` corpus records useful-result expectations before tuning.

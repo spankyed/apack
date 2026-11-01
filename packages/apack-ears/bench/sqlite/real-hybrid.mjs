@@ -139,6 +139,7 @@ try {
     Row: { required: [], search: { fields: { title: 3, body: 1 } },
       embed: { from: ['title', 'body'], model: 'public-fixture', dims: dimensions, chunk: 'whole' } },
   }, relations: {}, roles: [] }) });
+  report.canonicalCosine = db.nativeVectorExtension ? 'vec1_cos_distance' : 'vec_distance_cosine';
   if (nativeExtension) assert(prepareEmptyNativeVectorCursor(db));
   let e = createEarsEngine({ database: db });
   const started = performance.now();
@@ -272,9 +273,10 @@ try {
   report.diagnostics = cohorts.map(cohort => {
     const explained = cohort.query().hybrid(diagnostic.text, diagnostic.embedding, { fuzzy: false, k: 10 }).explain();
     assert.equal(explained.backend, 'sqlite');
+    assert(explained.statements.some(statement => statement.sql.includes(report.canonicalCosine + '(')));
     return { cohort: cohort.name, statementCount: explained.statementCount,
       statements: explained.statements.map(statement => ({ sqlSha256: sha(statement.sql),
-        distanceScoring: statement.sql.includes('vec_distance_cosine'), returnedRows: statement.returnedRows,
+        distanceScoring: /\b(?:vec_distance_cosine|vec1_cos_distance)\(/.test(statement.sql), returnedRows: statement.returnedRows,
         ms: statement.ms, plan: statement.plan })) };
   });
   // Run after main timings: a sampled parameter diagnostic cannot qualify full-corpus recall.

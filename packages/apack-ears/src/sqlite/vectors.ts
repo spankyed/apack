@@ -42,11 +42,14 @@ export class SqliteVectors {
   search(scope: SqliteEntityScope | null, type: string, name: string, generation: number,
     dimensions: number, vector: number[], k: number, exclude?: string): Array<Record<string, any>> {
     const query = normalized(encodeEmbeddingVector(vector, dimensions)).bytes;
+    // Reuse the connection's trusted vec1 kernel when available; fallback stores load only sqlite-vec.
+    // Both score the same safe canonical projections. Candidate policy and byte ownership stay separate.
+    const cosine = this.db.nativeVectorExtension ? 'vec1_cos_distance' : 'vec_distance_cosine';
     const eligible = `c.type=? AND c.index_name=? AND c.generation=? AND c.embedding_id IS NOT NULL
       AND ${scope === null ? 'e.trashed=0' : `c.entity_id IN (${scope.sql})`} AND c.entity_id!=?`;
     const bindings = [type, name, generation, ...(scope?.parameters ?? []), exclude ?? ''];
     const exact = () => this.db.all(`SELECT c.entity_id id,
-      1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score FROM chunks c
+      1-min(${cosine}(coalesce(p.normalized,v.embedding),?)) score FROM chunks c
       JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
       LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE ${eligible}
       GROUP BY c.entity_id ORDER BY score DESC,e.seq LIMIT ?`, [query, ...bindings, k]);
@@ -68,7 +71,7 @@ export class SqliteVectors {
       WHERE ${probeEligible} LIMIT ${EXACT_VECTOR_CHUNK_LIMIT + 1}),
       total AS MATERIALIZED (SELECT count(*) n FROM eligible),
       ranked AS MATERIALIZED (
-        SELECT c.id,1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score,c.seq
+        SELECT c.id,1-min(${cosine}(coalesce(p.normalized,v.embedding),?)) score,c.seq
         FROM total t CROSS JOIN eligible c JOIN embedding_values v ON v.id=c.embedding_id
         LEFT JOIN embedding_search p ON p.embedding_id=v.id WHERE t.n<=${EXACT_VECTOR_CHUNK_LIMIT}
         GROUP BY c.id ORDER BY score DESC,c.seq LIMIT ?)
@@ -80,7 +83,7 @@ export class SqliteVectors {
       // Native selection already applied scope, trash and exclusion in this read snapshot. Reuse its
       // bounded owners; only current generation/chunk membership needs checking during exact reranking.
       const rows=this.db.all(`SELECT c.entity_id id,
-        1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score
+        1-min(${cosine}(coalesce(p.normalized,v.embedding),?)) score
         FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
         LEFT JOIN embedding_search p ON p.embedding_id=v.id
         WHERE c.entity_id IN (SELECT id FROM entities WHERE seq IN (SELECT value FROM json_each(?)))
@@ -94,7 +97,7 @@ export class SqliteVectors {
       SELECT c.entity_id FROM chunks c JOIN embedding_search p ON p.embedding_id=c.embedding_id
       JOIN entities e ON e.id=c.entity_id WHERE ${eligible}
       GROUP BY c.entity_id ORDER BY min(vec_distance_hamming(vec_bit(p.bits),vec_quantize_binary(?))),e.seq LIMIT ${NATIVE_VECTOR_OWNER_TARGET}
-      ) SELECT c.entity_id id,1-min(vec_distance_cosine(coalesce(p.normalized,v.embedding),?)) score
+      ) SELECT c.entity_id id,1-min(${cosine}(coalesce(p.normalized,v.embedding),?)) score
       FROM chunks c JOIN embedding_values v ON v.id=c.embedding_id JOIN entities e ON e.id=c.entity_id
       LEFT JOIN embedding_search p ON p.embedding_id=v.id
       WHERE c.type=? AND c.index_name=? AND c.generation=? AND c.embedding_id IS NOT NULL
