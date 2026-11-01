@@ -12,10 +12,10 @@ The current CLI qualifier requires resource and CPU metadata, checks all three p
 python3 docs/references/evidence/ears-sqlite-implementation-2026-10-28/corpus-resource-protocol/control.py
 ```
 
-Two valid current/historical shapes pass; nine missing/malformed/nonfinite/misattributed shapes refuse. This checks the protocol, not actual runtime resource behavior. Current actual-run snapshots remain pending.
+Two valid current/historical shapes pass; nine missing/malformed/nonfinite/misattributed shapes refuse. This checks the protocol, not actual runtime resource behavior. [Actual cd4 snapshots](../corpus-cd4/README.md) now pass validation and retain failed heartbeat results.
 
 ## Sampled read-only reopening
 
 The next harness source also closes and drains its writer/model owner, then performs three independent read-only opens. On each pass, the same eighteen preselected cohort/family/query combinations (three scopes, two query families, ordinals 0/37/99) must reproduce warm IDs and scores. Private reference answers stay in memory and never enter reports. Each pass records close/drain and open time, all query latency/heartbeat samples and a process/file snapshot. All reopen work occurs after the original warm-query and diagnostic snapshots, preserving their measurement boundary.
 
-This is 54 sampled reopen queries, not three repetitions of the full 600-query workload. OS page cache is uncontrolled; no cold-disk or complete cold/reopen/model-variance acceptance is claimed. The CLI requires three complete passes on future runs; the already-running ed7 corpus source predates this addition. Pure controls accept the complete shape and refuse nine missing-pass/case, answer-parity, returned-count, invalid-query or nonfinite timing shapes. Actual runtime execution remains pending.
+This is 54 sampled reopen queries, not three repetitions of the full 600-query workload. OS page cache is uncontrolled; no cold-disk or complete cold/reopen/model-variance acceptance is claimed. The CLI requires three complete passes on future runs; the already-running ed7 corpus source predates this addition. Pure controls accept the complete shape and refuse nine missing-pass/case, answer-parity, returned-count, invalid-query or nonfinite timing shapes. [Actual cd4 execution](../corpus-cd4/README.md) now completes all three sampled passes at each size; reopened heartbeat still misses the target at larger sizes.
