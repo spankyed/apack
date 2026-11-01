@@ -34,6 +34,8 @@ console.log(JSON.stringify({driverPackage,driverVersion:require(driverPackage).v
 """
 sqlite_native=json.loads(subprocess.check_output(['node','--experimental-strip-types','--input-type=module','-e',node_probe],cwd=repo,text=True))
 bindings=list((engine/'crates/elmdb-node').glob('*.node'))+[pathlib.Path(path) for path in sqlite_native['files']]
+cpu_info = pathlib.Path('/proc/cpuinfo')
+cpu_models = sorted({line.partition(':')[2].strip() for line in cpu_info.read_text().splitlines() if line.startswith('model name')}) if cpu_info.exists() else []
 provenance = {
     'commit': subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),
     'status': subprocess.check_output(['git','status','--short'],cwd=repo,text=True),
@@ -41,7 +43,7 @@ provenance = {
     'runtimeSha256': {str(path.relative_to(repo)):hashlib.sha256(path.read_bytes()).hexdigest() for path in runtime_files if path.is_file()},
     'execution': 'built-package',
     'sqliteNative': sqlite_native,
-    'platform': platform.platform(), 'machine': platform.machine(),
+    'platform': platform.platform(), 'machine': platform.machine(), 'cpuModels': cpu_models,
     'node': subprocess.check_output(['node','--version'],cwd=repo,text=True).strip(),
     'elmdbPinnedCommit': (repo/'vendor/elmdb.rev').read_text().strip(),
     'elmdbObservedCommit': observed_engine.stdout.strip() if observed_engine.returncode==0 else None,
