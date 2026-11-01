@@ -1,13 +1,20 @@
 // What every `apack db` command shares: the data dir it targets, and opening its database offline
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { resolveAppEnvironment, APP_ENVS, type AppEnvironment, type AppEnv } from '@apackdev/sdk/env';
-import { findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
+import { configuredDatabaseFormat, findRunningApp, holdDatabaseWriteLock, openAppDatabase, type AppDatabase } from '@apackdev/host/database';
 import { consoleEars, type ConsoleScope } from '@apackdev/sdk/database-console';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { cliDirs } from '../../app/pack-host';
 import { resolveStoredProfile } from '../../app/profiles';
 import { defaultDataEnv } from '../../utils';
+
+/** Resolve output aliases even when the final path does not exist yet. */
+export function realDestination(file: string): string {
+  if (fs.existsSync(file)) return fs.realpathSync(file);
+  return path.join(realDestination(path.dirname(file)), path.basename(file));
+}
 
 /** Where a command's lines go: results on stdout, what it targets and warnings on stderr */
 export interface DbIo {
@@ -64,6 +71,8 @@ export function parseDbArgs<O extends NonNullable<ParseArgsConfig['options']>>(a
     : profile !== undefined ? resolveStoredProfile(cliDirs(), profile)
     : undefined;
   const context = resolveAppEnvironment({ env, ...(userDataDir !== undefined && { userDataDir }) });
+  // Candidate isolation is checked before commands reserve backup paths or take a profile write lock.
+  configuredDatabaseFormat(context.userDataDir);
   const target: DbTarget = {
     env, userDataDir: context.userDataDir, apiPortFile: context.apiPortFile, named: named.length === 1,
     ...(schemaFrom !== undefined && { schemaFrom: path.resolve(schemaFrom) }),
@@ -134,21 +143,31 @@ const reason = (error: unknown) => (errorMessage(error));
  * Runs `use` with the database and closes it after, whatever happens. Closing syncs what the command committed to
  * disk, so a failure there is reported — but never in place of what the command hit first.
  */
-export async function withDatabase<T>(db: AppDatabase, use: () => Promise<T> | T): Promise<T> {
+export async function withDatabase<T>(db: Pick<AppDatabase, 'close'>, use: () => Promise<T> | T): Promise<T> {
   let result: T;
-  let failure: unknown;
+  let failed = false, failure: unknown;
   try {
     result = await use();
   } catch (error) {
-    failure = error;
+    failed = true; failure = error;
   }
   try {
     db.close();
   } catch (closeFailure) {
-    if (failure === undefined) throw closeFailure;
-    throw new Error(`${reason(failure)}\n  The database also failed to close: ${reason(closeFailure)}`, { cause: failure });
+    if (!failed) throw closeFailure;
+    const original = failure as {
+      code?: unknown; recoveryPath?: unknown; destinationPath?: unknown; publishedPath?: unknown; dataInstalled?: unknown;
+    } | null | undefined;
+    throw Object.assign(new AggregateError([failure, closeFailure],
+      `${reason(failure)}\n  The database also failed to close: ${reason(closeFailure)}`, { cause: failure }), {
+      ...(typeof original?.code === 'string' && { code: original.code }),
+      ...(typeof original?.recoveryPath === 'string' && { recoveryPath: original.recoveryPath }),
+      ...(typeof original?.destinationPath === 'string' && { destinationPath: original.destinationPath }),
+      ...(typeof original?.publishedPath === 'string' && { publishedPath: original.publishedPath }),
+      ...(typeof original?.dataInstalled === 'boolean' && { dataInstalled: original.dataInstalled }),
+    });
   }
-  if (failure !== undefined) throw failure;
+  if (failed) throw failure;
   return result!;
 }
 

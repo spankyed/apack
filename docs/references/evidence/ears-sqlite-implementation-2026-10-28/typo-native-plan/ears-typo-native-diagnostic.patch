@@ -1,0 +1,47 @@
+--- preregistered-typo-cost.mjs
++++ native-diagnostic.mjs
+@@ -20,7 +20,7 @@
+ const summary = samples => { const sorted = [...samples].sort((a, b) => a - b); return { count: sorted.length,
+   p50: sorted[Math.floor(sorted.length * .5)], p99: sorted[Math.floor(sorted.length * .99)], max: sorted.at(-1) }; };
+ try {
+-  for (const n of [1000, 10000, 100000]) {
++  for (const n of [10000]) {
+     const root = mkdtempSync(join(tmpdir(), 'ears-typo-cost-')), profile = { n, queries: {}, heartbeats: [] };
+     report.profiles.push(profile);
+     let db, heartbeat;
+@@ -80,6 +80,35 @@
+         try { query(); } finally { db.all = original; }
+         state.observedCalls = calls;
+       }
++      profile.nativeDiagnostic = {};
++      const table = db.all("SELECT name FROM sqlite_schema WHERE type='table'").map(row => row.name).find(name => /^fts_[a-f0-9]{24}$/.test(name));
++      assert(table);
++      for (const [name, text] of [['broad', 'sharedword'], ['maxToken', 'abcdefghijklmnopqrstuvwxyz01234x']]) {
++        const originalAll = db.all.bind(db); let captured;
++        db.all = (sql, args) => { const rows = originalAll(sql, args); if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) captured = {sql, args, rows}; return rows; };
++        try { e.query('Row').search(text).limit(10).ids(); } finally { db.all = originalAll; }
++        assert(captured && typeof captured.args[0] === 'string');
++        const full = captured.args[0], alternatives = [...full.matchAll(/\(body : "[^"]*" OR aliases : "[^"]*"\)/g)].map(match => match[0]);
++        assert(alternatives.length > 1);
++        const probe = `SELECT alternative.value FROM json_each(?) alternative WHERE EXISTS (SELECT 1 FROM ${table} WHERE ${table} MATCH alternative.value)`;
++        const input = JSON.stringify(alternatives), begin = performance.now();
++        const present = db.sql.prepare(probe).all(input).map(row => row.value), probeMs = performance.now() - begin;
++        assert.equal(present.length, 1, 'Counterfactual must preserve the only matching alternative');
++        const state = { full, present, generatedAlternatives: alternatives.length, probeMs,
++          probePlan: db.sql.prepare('EXPLAIN QUERY PLAN '+probe).all(input), samples: [] };
++        profile.nativeDiagnostic[name] = state;
++        const count = db.sql.prepare(`SELECT count(*) n FROM ${table} WHERE ${table} MATCH ?`), scored = db.sql.prepare(captured.sql);
++        for (const label of ['full','pruned','pruned','full']) {
++          const match = label === 'full' ? full : present.join(' OR '), args = [match, ...captured.args.slice(1)];
++          for (let ordinal = 0; ordinal < 10; ordinal++) {
++            await new Promise(resolve => setImmediate(resolve));
++            let begin = performance.now(); const matches = count.get(match).n, countMs = performance.now() - begin;
++            begin = performance.now(); const rows = scored.all(...args), scoredMs = performance.now() - begin;
++            assert.equal(matches, name === 'broad' ? n : 1); assert.deepEqual(rows,captured.rows);
++            state.samples.push({label,ordinal,countMs,scoredMs,matches});
++          }
++        }
++      }
+       await new Promise(resolve => setTimeout(resolve, 16)); heartbeat.stop(); heartbeat = undefined;
+       profile.filesAfterQueries = files(); profile.memoryAfterQueries = process.memoryUsage();
+       profile.resourceUsage = process.resourceUsage(); profile.sqlite = db.get('SELECT sqlite_version() version').version;

@@ -1,0 +1,26 @@
+{
+  "source": "15757f6df1e84982583d823af722c12a0e6d27cf",
+  "context": {
+    "env": "test",
+    "appName": "apack-test",
+    "userDataDir": "/tmp/ears-converted-api-7j0jure5/native-source",
+    "appDir": "/tmp/ears-converted-api-7j0jure5/native-source/apack",
+    "packsDir": "/tmp/ears-converted-api-7j0jure5/native-source/apack/packs",
+    "installedPacksFile": "/tmp/ears-converted-api-7j0jure5/native-source/apack/installed-packs.json",
+    "apiPortFile": "/tmp/ears-converted-api-7j0jure5/native-source/apack/api-port",
+    "apiTokenFile": "/tmp/ears-converted-api-7j0jure5/native-source/apack/api-token",
+    "urlScheme": "apack"
+  },
+  "paths": {
+    "lmdb": "/tmp/ears-converted-api-7j0jure5/native-source/apack/ears-db",
+    "runHistory": "/tmp/ears-converted-api-7j0jure5/native-source/apack/run-history",
+    "secretsFile": "/tmp/ears-converted-api-7j0jure5/native-source/apack/secrets.json",
+    "media": "/tmp/ears-converted-api-7j0jure5/native-source/apack/media"
+  },
+  "hashes": {
+    "primary": "4f3a64804fabfc6c37c729d851f3d49030a736a7b32e045a5f0bbf109f6a85ae",
+    "runs": "944aa0d2873686fe08689d3dbf0918fa89b4231b487f40b08d938216604b62fe",
+    "media": "2f36a18044fe854573fe6b8f0ca00cf19e31a929c8cd0724e647a714f4c5e935"
+  },
+  "shippedIntegritySha256": "473804d74e64a568b6004bb1e3289084e33556fd53a423e2bc5746e0e5c43e08"
+}

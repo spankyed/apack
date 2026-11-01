@@ -1,0 +1,5 @@
+# Windows full EARS contracts and explicit skip disposition
+
+[Strict run 41231483821](https://github.com/spankyed/apack/actions/runs/41231483821), Windows x64 job 124626441102 at e45d03d82f: 839 tests pass, one fails, five skip. The sole failure is the unchanged generated-files overview top-five relevance judgment. Cross-type like/watch and earlier recovery/global-fusion/highlight regressions pass.
+
+Four skips concern POSIX FIFOs and do not establish Windows filesystem-object protection. The fifth skips killed-process index-cursor recovery because of POSIX signal reporting. That skip is removed at 6df9dca005 using abrupt-termination witnesses and platform-specific exit reporting; actual Windows execution is still required. This remains a failed job, not full platform/operational or adoption qualification. It predates the bounded hybrid policy, dependency declaration and later crash test. The summary publishes verified numeric metadata and owned test names only; raw reports remain in CI artifacts/private download.

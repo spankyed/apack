@@ -1,0 +1,58 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/statement-cache.spec.ts -t evicts old query shapes
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/statement-cache.spec.ts (6 tests | 1 failed | 5 skipped) 98ms
+   × SQLite statement cache resource policy > evicts old query shapes while retaining frequently reused statements 98ms
+     → expected Statement{ reader: true, …(4) } to be Statement{ reader: true, …(4) } // Object.is equality
+
+If it should pass with deep equality, replace "toBe" with "toStrictEqual"
+
+Expected: Statement{ reader: true, …(4) }
+Received: serializes to the same string
+
+   ↓ SQLite statement cache resource policy > also limits retained SQL text by UTF-8 bytes, independently of entry count
+   ↓ SQLite statement cache resource policy > executes oversized SQL without retaining it or flushing an existing hot statement
+   ↓ SQLite statement cache resource policy > keeps real EARS answers correct while dynamic field predicates churn the cache
+   ↓ SQLite statement cache resource policy > owns caches per connection, including when another connection closes
+   ↓ SQLite statement cache resource policy > releases all owned cache references on close and refuses even cached SQL afterwards
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/statement-cache.spec.ts > SQLite statement cache resource policy > evicts old query shapes while retaining frequently reused statements
+AssertionError: expected Statement{ reader: true, …(4) } to be Statement{ reader: true, …(4) } // Object.is equality
+
+If it should pass with deep equality, replace "toBe" with "toStrictEqual"
+
+Expected: Statement{ reader: true, …(4) }
+Received: serializes to the same string
+
+
+[2mCompared values have no visual difference.[22m
+
+ ❯ tests/sqlite/statement-cache.spec.ts:23:36
+     21|     const cold = db.statement(coldSql), hot = db.statement(hotSql);
+     22|     for (let i = 0; i < 600; i++) {
+     23|       expect(db.statement(hotSql)).toBe(hot);
+       |                                    ^
+     24|       expect(db.statement(`SELECT ? answer /* shape-${i} */`).get(i)).…
+     25|       expect(owned(db).size).toBeLessThanOrEqual(256);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  14:34:56
+   Duration  460ms (transform 173ms, setup 12ms, collect 235ms, tests 98ms, environment 0ms, prepare 40ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/statement-cache.spec.ts -t 'evicts old query shapes'

@@ -1,0 +1,41 @@
+import os,pathlib,subprocess,json
+r=pathlib.Path('/metrics');o=pathlib.Path('/results');env=os.environ|{'EARS_EVALUATION_BACKEND':'sqlite'}
+def run(name,args):
+ p=subprocess.run(args,cwd=r,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(o/(name+'.txt')).write_text(p.stdout);return p
+args=['npm','test','-w','@apackdev/ears','--','tests/sqlite/search-recovery.spec.ts','tests/sqlite/trigrams.spec.ts','tests/engine/search.spec.ts','tests/engine/vector.spec.ts','tests/sqlite/schema-validation.spec.ts']
+for name,command in [('types',['npm','run','typecheck','-w','@apackdev/ears']),('focused',args)]:
+ p=run(name,command);assert p.returncode==0,(name,p.stdout)
+paths={n:r/('packages/apack-ears/src/sqlite/'+n+'.ts') for n in ['database','search']};original={n:p.read_text() for n,p in paths.items()}
+mutations=[
+ ('readonly','database','this.search.validateStructures(this.heldSchema);','','trigram table'),
+ ('rebuild','database','this.repairSearch(this.search.ensure(this.heldSchema), this.heldSchema);','this.search.ensure(this.heldSchema);','trigram table'),
+ ('stale','search','for (const group of missing) if (group.reset) this.db.sql.exec(group.reset);','','stale external-content'),
+ ('hash','database',"this.run('DELETE FROM text_meta WHERE entity_id IN (SELECT id FROM entities WHERE type=?)', [type]);",'','text table'),
+ ('projection','database','this.hydrate(page as Array<{ id: string; type: string }>, fields)','this.hydrate(page as Array<{ id: string; type: string }>)','pages only affected'),
+ ('atomic','database',None,None,'rolls back recreated tables'),
+ ('healthy-open','database',"this.readOnly || !this.search.needsRepair(this.heldSchema)",'this.readOnly','opens healthy storage'),
+]
+try:
+ for name,file,before,after,pattern in mutations:
+  s=original[file]
+  if before is None:
+   a=s.index("        this.sql.exec('BEGIN IMMEDIATE');");b=s.index('      this.indexBuilds',a)
+   part=s[a:b].replace("        this.sql.exec('BEGIN IMMEDIATE');",'').replace("          this.sql.exec('COMMIT');",'');s=s[:a]+part+s[b:]
+  else:
+   assert before in s,name;s=s.replace(before,after)
+  paths[file].write_text(s)
+  p=run('negative-'+name,['npm','test','-w','@apackdev/ears','--','tests/sqlite/search-recovery.spec.ts','-t',pattern]);assert p.returncode!=0 and 'FAIL ' in p.stdout,(name,p.stdout)
+  paths[file].write_text(original[file])
+finally:
+ for file,p in paths.items():p.write_text(original[file])
+p=run('restored',args);assert p.returncode==0,p.stdout
+p=run('all-sqlite',['npm','test','-w','@apackdev/ears','--','--reporter=json','--outputFile=/results/sqlite.json']);assert p.returncode==0,p.stdout
+v=json.loads((o/'sqlite.json').read_text());print(json.dumps({'passed':v['numPassedTests'],'failed':v['numFailedTests']}))
+for name,command in [
+ ('packages-build',['npm','run','packages:build']),
+ ('api',['npm','run','api:check','-w','@apackdev/ears']),
+ ('build-inputs',['npm','test','-w','@app/repo-checks','--','tests/chain-inputs.spec.ts']),
+ ('lint',['npm','run','lint:check']),
+ ('specifiers',['npm','run','check:specifiers']),
+]:
+ p=run(name,command);assert p.returncode==0,(name,p.stdout)

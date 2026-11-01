@@ -1,0 +1,15 @@
+
+> @apackdev/sdk@0.1.0 test
+> vitest run tests/testing/database-backend.spec.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=/results/sdk-elmdb.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-sdk
+
+ ✓ tests/testing/database-backend.spec.ts (2 tests) 19ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  23:51:49
+   Duration  603ms (transform 337ms, setup 12ms, collect 456ms, tests 19ms, environment 0ms, prepare 38ms)
+
+JSON report written to /results/sdk-elmdb.json

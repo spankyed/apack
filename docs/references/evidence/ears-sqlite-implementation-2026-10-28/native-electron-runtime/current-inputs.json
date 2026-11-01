@@ -1,0 +1,6 @@
+{
+  ".github/workflows/app-acceptance.yml": "26d06948e03b31056412c10d56f942b085e63953eea6a660c9fd908130a8635c",
+  "build/prod/smoke-native.mjs": "00d372ba06bb31d2133398fd9865f899513afd8ef07327b849e76e52969eea41",
+  "tests/e2e/app-integration/sqlite-storage.spec.ts": "c70df6bb90aa42448d86f3faf2afa21eeea239a004ad4e58fa8adcf5e5896968",
+  "tests/packs/bundled-ui-pack/tests/e2e/scribbles.spec.ts": "82131d0e841d79d25d7e9bc7b377ae7329355651e4fc92c8ba60baed4dd83265"
+}

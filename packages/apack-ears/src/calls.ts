@@ -77,7 +77,9 @@ const STACK_DEPTH = 40;
 const ENGINE_FRAME = /\/(?:apack-ears|@apackdev\/ears)\/(?:src|dist)\//;
 
 function filePath(location: string): string {
-  return location.startsWith('file://') ? decodeURIComponent(new URL(location).pathname) : location;
+  const path = location.startsWith('file://') ? decodeURIComponent(new URL(location).pathname) : location;
+  // Filtering and shortening use path components, including for Windows frames from source loaders.
+  return path.replaceAll('\\', '/');
 }
 
 /** `file:line` of each frame in a V8 stack, the frame's location without its column */

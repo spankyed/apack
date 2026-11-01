@@ -7,6 +7,8 @@ import { defineConfig } from 'vitest/config';
 // One project, as every host config is: the host pool runs this package as the project its workspace names, and
 // a `projects` list here would be ignored there. The package has no integration half.
 export default defineConfig({
+  resolve: { conditions: ['@apackdev/source'] },
+  ssr: { resolve: { conditions: ['@apackdev/source'] } },
   test: {
     testTimeout: 30_000,
     hookTimeout: 30_000,

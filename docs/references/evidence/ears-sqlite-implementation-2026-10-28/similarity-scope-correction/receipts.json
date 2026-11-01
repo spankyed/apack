@@ -1,0 +1,82 @@
+{
+  "ears-check-similarity-corrected.py": {
+    "sha256": "53e1d89d34151bb7d6d268103c9424295c9f2c481dc25fab2cc62777a6ed7812",
+    "bytes": 2808
+  },
+  "ears-check-similarity-corrected.json": {
+    "sha256": "ff17b30edfd4d31069fd1bda559aa058710c95be4f4f276232d0db9d38a5be48",
+    "bytes": 222
+  },
+  "ears-similar-corrected-live-both-adamicAdar.json": {
+    "sha256": "c1eef47a0ec6f42b456f612b5461035af1d7b80cd941c1ab47e3faf118097299",
+    "bytes": 2366
+  },
+  "ears-similar-corrected-live-both-jaccard.json": {
+    "sha256": "b89615cc882c19df6b737eccd1b8954f49695c038ab2b36d49d39639efb4b49b",
+    "bytes": 2392
+  },
+  "ears-similar-corrected-live-in-adamicAdar.json": {
+    "sha256": "c66c9b4c600357d01d7d95f5b2250fca193ab3b45f29052943de3f3398c8ca2e",
+    "bytes": 1704
+  },
+  "ears-similar-corrected-live-in-jaccard.json": {
+    "sha256": "d80ae41b730e3b1d83cda010d1e66b7d57e2a8bf34a24c857e57ad509b334f2c",
+    "bytes": 1730
+  },
+  "ears-similar-corrected-live-out-adamicAdar.json": {
+    "sha256": "432bf31c009f6a41dcd83e288eece473ab6bedaacfd9f7fa4d2bb981b08d1b29",
+    "bytes": 1704
+  },
+  "ears-similar-corrected-live-out-jaccard.json": {
+    "sha256": "9579f5b275676139d09032cccf98ff9cd79c1486b24db17ca7d38588e2d30c4a",
+    "bytes": 1730
+  },
+  "ears-similar-corrected-trashed-both-adamicAdar.json": {
+    "sha256": "fb6824cbc781c01b894593f8836c33fb067e86a9957cbc12013486b99b0a0c7f",
+    "bytes": 2289
+  },
+  "ears-similar-corrected-trashed-both-jaccard.json": {
+    "sha256": "ae8fed58b2c39a2b932849e82e5219e581256bb6d19ea62ee772b5ec2bf10d9c",
+    "bytes": 2315
+  },
+  "ears-similar-corrected-trashed-in-adamicAdar.json": {
+    "sha256": "67e7f774a808790986cf4cc449a9714800b8b6ed96888ec272cea39ac9bc48c9",
+    "bytes": 1657
+  },
+  "ears-similar-corrected-trashed-in-jaccard.json": {
+    "sha256": "f4e30e3a3a19b870b1e066dfbbd06c4d2f0ee06db21dff8c270a5b93d66e848e",
+    "bytes": 1683
+  },
+  "ears-similar-corrected-trashed-out-adamicAdar.json": {
+    "sha256": "48c70357c579d06221846f098dc9493200a80c590261ea389860e4aa4c96d670",
+    "bytes": 1657
+  },
+  "ears-similar-corrected-trashed-out-jaccard.json": {
+    "sha256": "3e83931f74df70fb89630f609d12d600949fed7023eb30b8cf481a2368f5b5d2",
+    "bytes": 1683
+  },
+  "ears-similar-corrected-withTrashed-both-adamicAdar.json": {
+    "sha256": "fb6824cbc781c01b894593f8836c33fb067e86a9957cbc12013486b99b0a0c7f",
+    "bytes": 2289
+  },
+  "ears-similar-corrected-withTrashed-both-jaccard.json": {
+    "sha256": "ae8fed58b2c39a2b932849e82e5219e581256bb6d19ea62ee772b5ec2bf10d9c",
+    "bytes": 2315
+  },
+  "ears-similar-corrected-withTrashed-in-adamicAdar.json": {
+    "sha256": "67e7f774a808790986cf4cc449a9714800b8b6ed96888ec272cea39ac9bc48c9",
+    "bytes": 1657
+  },
+  "ears-similar-corrected-withTrashed-in-jaccard.json": {
+    "sha256": "f4e30e3a3a19b870b1e066dfbbd06c4d2f0ee06db21dff8c270a5b93d66e848e",
+    "bytes": 1683
+  },
+  "ears-similar-corrected-withTrashed-out-adamicAdar.json": {
+    "sha256": "48c70357c579d06221846f098dc9493200a80c590261ea389860e4aa4c96d670",
+    "bytes": 1657
+  },
+  "ears-similar-corrected-withTrashed-out-jaccard.json": {
+    "sha256": "3e83931f74df70fb89630f609d12d600949fed7023eb30b8cf481a2368f5b5d2",
+    "bytes": 1683
+  }
+}

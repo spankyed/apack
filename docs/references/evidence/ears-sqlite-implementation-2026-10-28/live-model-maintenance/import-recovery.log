@@ -1,0 +1,13 @@
+(node:19) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@apackdev/host| tests/backup/import-transaction.spec.ts (8 tests | 6 skipped) 66ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 6 skipped (8)
+   Start at  10:57:31
+   Duration  3.48s (transform 1.93s, setup 14ms, collect 2.97s, tests 66ms, environment 0ms, prepare 195ms)
+
+JSON report written to /results/import-recovery.json

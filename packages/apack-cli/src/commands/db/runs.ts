@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import type { EARS } from '@apackdev/ears';
 import { _createRunHistory, type RunNode, type RunNodeId } from '@apackdev/sdk/services';
-import { findRunningApp, openRunHistory } from '@apackdev/host/database';
+import { configuredDatabaseFormat, findRunningApp, openRunHistory } from '@apackdev/host/database';
 import { toJSON } from './output';
 import { parseDbArgs, TARGET_USAGE, type DbIo } from './target';
 
@@ -48,7 +48,7 @@ export async function dbRuns(args: string[], io: DbIo): Promise<void> {
 
   // History is read, never changed, so this works while the app runs. Read-only data.mdb still requires
   // writable reader registration in lock.mdb.
-  const runs = openRunHistory(dir, { readOnly: true });
+  const runs = openRunHistory(dir, { readOnly: true, storageFormat: configuredDatabaseFormat(target.userDataDir) });
   try {
     const history = _createRunHistory(runs.engine);
     if (typeof values.run === 'string') {

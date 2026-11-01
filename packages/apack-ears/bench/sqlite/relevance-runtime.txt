@@ -1,0 +1,8 @@
+# Disposable local inference only. No runtime/model dependencies are added to apack.
+# Install with --no-deps; the tokenizer's file-only API does not import its optional Hub client.
+onnxruntime==1.31.1
+tokenizers==0.23.3
+numpy==2.5.4
+flatbuffers==25.12.19
+packaging==26.3
+protobuf==7.36.2

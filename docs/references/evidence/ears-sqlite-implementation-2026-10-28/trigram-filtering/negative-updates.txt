@@ -1,0 +1,53 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/trigrams.spec.ts -t keeps changed fields
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/trigrams.spec.ts (7 tests | 1 failed | 6 skipped) 133ms
+   ↓ SQLite exact trigram filtering > uses FTS5 for a selective literal, preserves duplicates and avoids whole-row hydration
+   ↓ SQLite exact trigram filtering > matches individual strings, Unicode folding and short/NUL literals without crossing element boundaries
+   × SQLite exact trigram filtering > keeps changed fields, units, unchecked repairs, deletes and read-only reopen consistent 133ms
+     → expected [ 'Row-bd6e0e1b63f34e124168' ] to deeply equal []
+   ↓ SQLite exact trigram filtering > releases every compiled regex on success and failures, including a later invalid pattern
+   ↓ SQLite exact trigram filtering > handles empty/set-based inputs and refuses direct typed missing indexes
+   ↓ SQLite exact trigram filtering > notifies watches on committed text and declaration changes, with no aborted answer
+   ↓ SQLite exact trigram filtering > agrees with the native backend across literal and regex corpora
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/trigrams.spec.ts > SQLite exact trigram filtering > keeps changed fields, units, unchecked repairs, deletes and read-only reopen consistent
+AssertionError: expected [ 'Row-bd6e0e1b63f34e124168' ] to deeply equal []
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [][39m
+[31m+ [[39m
+[31m+   "Row-bd6e0e1b63f34e124168",[39m
+[31m+ ][39m
+
+ ❯ tests/sqlite/trigrams.spec.ts:69:52
+     67|     expect(e.query('Row').containing('aborted').ids()).toEqual([]);
+     68|     e.admin.bulkLoadAttr(id, 'text', ['new marker', 'second']);
+     69|     expect(e.query('Row').containing('old').ids()).toEqual([]);
+       |                                                    ^
+     70|     expect(e.query('Row').containing('new marker').ids()).toEqual([id]…
+     71|     const before = db.all("SELECT sql FROM sqlite_schema WHERE type='t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  16:36:00
+   Duration  815ms (transform 328ms, setup 36ms, collect 437ms, tests 133ms, environment 0ms, prepare 50ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/trigrams.spec.ts -t 'keeps changed fields'

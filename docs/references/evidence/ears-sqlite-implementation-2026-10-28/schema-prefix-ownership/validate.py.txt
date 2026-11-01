@@ -1,0 +1,15 @@
+import os,pathlib,subprocess
+r=pathlib.Path('/metrics');o=pathlib.Path('/results');env=os.environ|{'EARS_EVALUATION_BACKEND':'sqlite'}
+def run(name,args):
+ p=subprocess.run(args,cwd=r,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(o/(name+'.txt')).write_text(p.stdout);return p
+p=run('types',['npm','run','typecheck','-w','@apackdev/ears']);assert p.returncode==0,p.stdout
+args=['npm','test','-w','@apackdev/ears','--','tests/sqlite/schema-admission.spec.ts','tests/sqlite/index-builds.spec.ts','tests/engine/sqlite-operations.spec.ts']
+p=run('focused',args);assert p.returncode==0,p.stdout
+f=r/'packages/apack-ears/src/sqlite/database.ts';s=f.read_text()
+a=s.index('      // Incumbent-dependent refusals');b=s.index('      for (const [type, definition]',a)
+block=s[a:b];check=block[block.index('      for (const [type, def]'):]
+mutant=s[:a]+s[b:];at=mutant.index('    this.sql.exec("BEGIN IMMEDIATE");',mutant.index('  setSchema('));mutant=mutant[:at]+check+mutant[at:]
+try:
+ f.write_text(mutant);p=run('negative-pretransaction-check',['npm','test','-w','@apackdev/ears','--','tests/sqlite/schema-admission.spec.ts']);assert p.returncode!=0 and 'AssertionError' in p.stdout,p.stdout
+finally:f.write_text(s)
+p=run('restored',args);assert p.returncode==0,p.stdout

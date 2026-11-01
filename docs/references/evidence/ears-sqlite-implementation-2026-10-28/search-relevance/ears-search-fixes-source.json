@@ -1,0 +1,8 @@
+{
+  "base": "882e03734eec83529ab053f30e9bb464f3308bc7",
+  "changedFiles": [
+    "packages/apack-ears/src/sqlite/search.ts",
+    "packages/apack-ears/tests/fixtures/search-relevance.json"
+  ],
+  "sha256": "c5b9547dd0f5a128714f05bf73909830a1055406b0af6bc0da0c9daaa56961b1"
+}

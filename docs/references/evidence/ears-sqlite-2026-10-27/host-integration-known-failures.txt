@@ -1,0 +1,81 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/sqlite-evaluation/packages/apack-host
+
+ ✓ tests/database/open-app-database.spec.ts (14 tests) 187ms
+ ❯ tests/backup/import.spec.ts (5 tests | 4 failed) 297ms
+   × restores the incumbent when installing the imported data fails 116ms
+     → expected [Function] to throw error including 'candidate refused' but got 'The backup\'s lmdb folder is missing …'
+   × preserves the recovery error and a durable copy when import and restoring both fail 58ms
+     → expected Error: The backup's lmdb folder is missin… to be an instance of AggregateError
+   ✓ refuses invalid settings before entering replacement or touching the live database 41ms
+   × installs the validated copy even when the original backup is removed after preflight 39ms
+     → The backup's lmdb folder is missing or has no data.mdb
+   × restores live data and the absence of media when accepting the imported data fails 42ms
+     → expected [Function] to throw error including 'refused' but got 'The backup\'s lmdb folder is missing …'
+ ✓ tests/backup/import-transaction.spec.ts (3 tests) 142ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/backup/import.spec.ts > restores the incumbent when installing the imported data fails
+AssertionError: expected [Function] to throw error including 'candidate refused' but got 'The backup\'s lmdb folder is missing …'
+
+Expected: "candidate refused"
+Received: "The backup's lmdb folder is missing or has no data.mdb"
+
+ ❯ tests/backup/import.spec.ts:73:3
+     71|   const service = appData(f);
+     72|   vi.spyOn(f.database, 'replaceWith').mockImplementationOnce(() => { t…
+     73|   await expect(service.importBackup(f.backup)).rejects.toThrow('candid…
+       |   ^
+     74|   expect(f.notes.query('Note').ids()).toEqual(['Note-current']);
+     75|   expect(fs.existsSync(f.media)).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/backup/import.spec.ts > preserves the recovery error and a durable copy when import and restoring both fail
+AssertionError: expected Error: The backup's lmdb folder is missin… to be an instance of AggregateError
+ ❯ tests/backup/import.spec.ts:85:19
+     83|   let failure: unknown;
+     84|   try { await service.importBackup(f.backup); } catch (error) { failur…
+     85|   expect(failure).toBeInstanceOf(AggregateError);
+       |                   ^
+     86|   const rollback = (failure as AggregateError).message.split('retained…
+     87|   retained.push(path.dirname(rollback));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/backup/import.spec.ts > installs the validated copy even when the original backup is removed after preflight
+Error: The backup's lmdb folder is missing or has no data.mdb
+ ❯ readBackup src/backup/index.ts:294:42
+    292|   // A listed database whose folder isn't there was empty when the bac…
+    293|   const databases = listed.filter((name) => !missingDatabases.includes…
+    294|   if (!databases.includes('lmdb')) throw new Error(`The backup's lmdb …
+       |                                          ^
+    295|
+    296|   // Whether a backup can be restored is the files' answer, not the me…
+ ❯ importDatabase src/backup/index.ts:151:18
+ ❯ tests/backup/import.spec.ts:104:3
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/backup/import.spec.ts > restores live data and the absence of media when accepting the imported data fails
+AssertionError: expected [Function] to throw error including 'refused' but got 'The backup\'s lmdb folder is missing …'
+
+Expected: "refused"
+Received: "The backup's lmdb folder is missing or has no data.mdb"
+
+ ❯ tests/backup/import.spec.ts:115:3
+    113|   const { backup, database, notes, media } = await fixture();
+    114|   const accept = vi.fn(async () => { expect(notes.query('Note').ids())…
+    115|   await expect(importDatabase({ lmdb: databaseBackupStore(database) },…
+       |   ^
+    116|   expect(accept).toHaveBeenCalled();
+    117|   expect(notes.query('Note').ids()).toEqual(['Note-current']);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  4 failed | 18 passed (22)
+   Start at  22:22:58
+   Duration  4.57s (transform 1.22s, setup 14ms, collect 3.34s, tests 626ms, environment 0ms, prepare 173ms)

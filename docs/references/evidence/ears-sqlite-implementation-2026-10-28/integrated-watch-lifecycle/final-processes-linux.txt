@@ -1,0 +1,17 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/watch-lifecycle.spec.ts
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (4 tests) 3152ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  816ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  1087ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (unawaited)  992ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  11:03:06
+   Duration  4.03s (transform 412ms, setup 20ms, collect 499ms, tests 3.15s, environment 0ms, prepare 63ms)
+

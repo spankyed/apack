@@ -1,0 +1,58 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/vector.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/engine/vector.spec.ts (17 tests | 1 failed) 133ms
+   ✓ vector search > refuses zero cosine embeddings and queries without changing pending work 25ms
+   ✓ vector search > refuses negative zero cosine embeddings and queries without changing pending work 5ms
+   ✓ vector search > refuses Float32 underflow to zero cosine embeddings and queries without changing pending work 5ms
+   ✓ vector search > refuses positive Float32 overflow cosine embeddings and queries without changing pending work 5ms
+   ✓ vector search > refuses negative Float32 overflow cosine embeddings and queries without changing pending work 4ms
+   ✓ vector search > refuses NaN cosine embeddings and queries without changing pending work 5ms
+   ✓ vector search > refuses infinity cosine embeddings and queries without changing pending work 4ms
+   ✓ vector search > refuses wrong dimensions cosine embeddings and queries without changing pending work 4ms
+   ✓ vector search > refuses another model or invalid vector before answering an obsolete chunk stale 4ms
+   ✓ vector search > rolls back the whole embedding batch and publishes no watch result on invalid input 29ms
+   ✓ vector search > holds a written entity pending until its vectors are stored, and again when its text changes 6ms
+   ✓ vector search > refuses a vector whose chunk changed since it was pending, leaving the chunk pending under its new text 6ms
+   ✓ vector search > counts a vector for an entity deleted since it was pending as stale, and stores the rest of the batch 4ms
+   ✓ vector search > ranks the nearest first, combines with the steps before it, and finds more like an entity 6ms
+   × vector search > ranks own embeddings in a unit and restores them across nested and outer rollback 9ms
+     → expected [Function] to throw error including 'rollback outer embeddings' but got 'expected [ \'Note-mvth890d1whv29dd4cc…'
+   ✓ vector search > merges the text and vector rankings on a fixed corpus: what both find ranks above what one finds first 6ms
+   ✓ vector search > refuses the vector steps on a type with no vector index, and names the types holding one 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/vector.spec.ts > vector search > ranks own embeddings in a unit and restores them across nested and outer rollback
+AssertionError: expected [Function] to throw error including 'rollback outer embeddings' but got 'expected [ \'Note-mvth890d1whv29dd4cc…'
+
+Expected: [32m"rollback outer embeddings"[39m
+Received: [31m"expected [ 'Note-mvth890d1whv29dd4ccmi' ] to deeply equal [ 'Note-mvth890d2r4b67mcf4zrb' ]"[39m
+
+ ❯ tests/engine/vector.spec.ts:151:9
+    149|       expect(nearest()).toEqual([first]);
+    150|       throw new Error('rollback outer embeddings');
+    151|     })).toThrow('rollback outer embeddings');
+       |         ^
+    152|     expect(nearest()).toEqual([first]);
+    153|     expect(e.lastCommit()).toBe(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  11:45:19
+   Duration  594ms (transform 233ms, setup 12ms, collect 322ms, tests 133ms, environment 0ms, prepare 43ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/engine/vector.spec.ts

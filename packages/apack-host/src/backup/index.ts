@@ -1,8 +1,12 @@
+export { publishBackupDirectory } from './publication.ts';
+export { exportLogicalDatabase } from './logical.ts';
+export { listImportRecoveries, restoreImportRecovery, type ImportRecovery } from './restore.ts';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
 import { createEarsEngine, type Ears, type EarsDatabase, type EarsEngine } from '@apackdev/ears';
-import { DATABASE_FORMAT, openDatabase } from '@apackdev/ears/lmdb';
+import { backupStorage, databaseStorage } from '../database/storage.ts';
+import { prepareImportRecovery } from './recovery.ts';
 import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 
 const logger = createLogger('database:backup');
@@ -24,11 +28,15 @@ const defaultLog: BackupLog = {
 
 /** A store a backup copies from and an import puts back into: the database, or the run history's record store */
 export interface BackupStore {
+  /** The destination format; a different source format requires explicit conversion on a copy. */
+  readonly format: string;
   readonly path: string;
   /** The store's own copy of one moment of itself into `targetDir` */
   copyTo(targetDir: string): Promise<void>;
   /** Replaces the store's contents with those of the copy at `dir`, in one unit, while it stays open */
   replaceWith(dir: string): void;
+  /** Stop same-process writers while incumbent copies, replacement and rollback settle. */
+  withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T>;
 }
 
 /**
@@ -38,8 +46,13 @@ export interface BackupStore {
 export function databaseBackupStore(database: EarsDatabase, engine?: EarsEngine): BackupStore {
   return {
     path: database.path,
+    format: database.format,
     copyTo: async (targetDir) => database.backup(targetDir),
     replaceWith: (dir) => (engine ? engine.admin.replaceWith(dir) : database.replaceWith(dir)),
+    withExclusiveWrites: operation => database.withExclusiveWrites(() => {
+      const storage=databaseStorage(database.format);
+      return storage.withBackgroundPaused?storage.withBackgroundPaused(database,operation):operation();
+    }),
   };
 }
 
@@ -47,23 +60,27 @@ export function databaseBackupStore(database: EarsDatabase, engine?: EarsEngine)
  * A backup's database folders, each a store of the app's: the storage format this version writes it in, and how a
  * backup's copy of it is checked — opened read-only, so one in a format this version can't read is refused, and closed
  */
-const DATABASES = {
-  lmdb: { format: DATABASE_FORMAT, check: (dir: string) => openDatabase({ path: dir, readOnly: true }).close() },
-  runHistory: { format: DATABASE_FORMAT, check: checkRunHistory },
-} as const;
+const DATABASES = { lmdb: true, runHistory: true } as const;
 
 export type DatabaseName = keyof typeof DATABASES;
 
-/** Opens a backup's run history, refusing a database that holds no run nodes' type: the app's own, copied there */
-function checkRunHistory(dir: string): void {
-  const database = openDatabase({ path: dir, readOnly: true });
+/** Opens the selected files, checking the run history's own declaration before accepting it. */
+function openBackupDatabase(dir: string, name: DatabaseName): EarsDatabase {
+  const storage = backupStorage(dir);
+  if (!storage) throw new Error(`${dir} has no supported database data file`);
+  const database = storage.open({ path: dir, readOnly: true });
   try {
-    const types = (database.schema as { types?: Record<string, unknown> } | null)?.types ?? {};
-    if (!Object.prototype.hasOwnProperty.call(types, 'RunNode')) {
-      throw new Error(`${dir} is a database, but not a run history: its schema declares no RunNode`);
+    if (name === 'runHistory') {
+      const types = (database.schema as { types?: Record<string, unknown> } | null)?.types ?? {};
+      if (!Object.prototype.hasOwnProperty.call(types, 'RunNode')) {
+        throw new Error(`${dir} is a database, but not a run history: its schema declares no RunNode`);
+      }
     }
-  } finally {
-    database.close();
+    return database;
+  } catch (error) {
+    try { database.close(); }
+    catch (closeError) { throw new AggregateError([error, closeError], `Checking ${dir} failed and its database could not close`); }
+    throw error;
   }
 }
 export const isKnownDatabase = (name: string): name is DatabaseName => Object.hasOwn(DATABASES, name);
@@ -85,6 +102,10 @@ export async function exportDatabase(
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const fullBackupPath = path.join(targetPath, name || `apack-backup-${timestamp}`);
 
+  for (const name of databases) {
+    const store = stores[name];
+    if (store) databaseStorage(store.format);
+  }
   await fs.ensureDir(fullBackupPath);
 
   let includesMedia = false;
@@ -101,7 +122,7 @@ export async function exportDatabase(
     // What wrote it, for the refusal message and for reading a backup folder by eye. Provenance only: whether a
     // backup restores is settled by opening its databases (readBackup), never by what this says.
     ...(appVersion !== undefined && { appVersion }),
-    storageFormats: Object.fromEntries(databases.map((name) => [name, DATABASES[name].format])),
+    storageFormats: Object.fromEntries(databases.flatMap(name => stores[name] ? [[name, stores[name]!.format]] : [])),
   });
 
   for (const dbName of databases) {
@@ -123,32 +144,39 @@ export async function exportDatabase(
 
 export type DatabaseImportResult = Pick<BackupContents, 'databases' | 'missingDatabases' | 'unknownEntityTypes'>;
 
+export interface DatabaseImportOptions {
+  skipUnknownDatabases?: boolean;
+  entityTypes?: Iterable<string>;
+  log?: BackupLog;
+  validate?: (ears: Ears) => void;
+  /** Hydrate and accept the installed data before the rollback copy can be removed. */
+  accept?: (result: DatabaseImportResult) => Promise<void>;
+  /** Reload the previous data after a refused installation has been restored. */
+  restored?: () => Promise<void>;
+  /** Runs only after the candidate validates; the app uses this to suspend and refresh settings. */
+  withReplacement?: (replace: () => Promise<DatabaseImportResult>) => Promise<DatabaseImportResult>;
+}
+
 /** Keep previous files until both installation and the caller's acceptance succeed. */
-export async function importDatabase(
-  stores: BackupStores,
-  backupPath: string,
-  mediaPath: string,
-  { skipUnknownDatabases = false, entityTypes = [], log = defaultLog, validate, accept, restored, withReplacement = replace => replace() }:
-    {
-      skipUnknownDatabases?: boolean; entityTypes?: Iterable<string>; log?: BackupLog;
-      validate?: (ears: Ears) => void;
-      /** Hydrate and accept the installed data before the rollback copy can be removed. */
-      accept?: (result: DatabaseImportResult) => Promise<void>;
-      /** Reload the previous data after a refused installation has been restored. */
-      restored?: () => Promise<void>;
-      /** Runs only after the candidate validates; the app uses this to suspend and refresh settings. */
-      withReplacement?: (replace: () => Promise<DatabaseImportResult>) => Promise<DatabaseImportResult>;
-    } = {},
-): Promise<DatabaseImportResult> {
+export function importDatabase(stores: BackupStores, backupPath: string, mediaPath: string,
+  options: DatabaseImportOptions = {}): Promise<DatabaseImportResult> {
+  return importBackup(stores, backupPath, mediaPath, options, readBackup);
+}
+
+async function importBackup(stores: BackupStores, backupPath: string, mediaPath: string,
+  { skipUnknownDatabases = false, entityTypes = [], log = defaultLog, validate, accept, restored, withReplacement = replace => replace() }: DatabaseImportOptions,
+  inspect: typeof readBackup): Promise<DatabaseImportResult> {
   const temporary = await fs.mkdtemp(path.join(path.dirname(stores.lmdb.path), '.apack-import-'));
   const candidate = path.join(temporary, 'candidate');
   const rollback = path.join(temporary, 'rollback');
   let preserveRollback = false;
+  let recoveryReady=false,installed=false;
   try {
     await fs.copy(backupPath, candidate);
     let contents: BackupContents;
     try {
-      contents = readBackup(candidate, entityTypes, validate);
+      contents = inspect(candidate, entityTypes, validate,
+        Object.fromEntries(Object.entries(stores).map(([name, store]) => [name, store.format])));
     } catch (error) {
       if (error instanceof Error && error.message.includes(candidate)) {
         throw new Error(error.message.replaceAll(candidate, backupPath), { cause: error });
@@ -167,11 +195,13 @@ export async function importDatabase(
       const store = stores[name];
       return store ? [{ name, store }] : [];
     });
-    return await withReplacement(async () => {
+    const replace = async () => {
       for (const { name, store } of restoring) await store.copyTo(path.join(rollback, name));
       const candidateMedia = path.join(candidate, 'media');
       const hasMedia = await fs.pathExists(candidateMedia);
       if (hasMedia && await fs.pathExists(mediaPath)) await fs.copy(mediaPath, path.join(rollback, 'media'));
+      prepareImportRecovery(temporary, restoring.map(({ name, store }) => ({ name, path: store.path, format: store.format })), hasMedia ? mediaPath : undefined);
+      recoveryReady=true;
       try {
         // Each store takes the backup's contents in one unit, open all the while: a reader sees the old or the new
         for (const { name, store } of restoring) {
@@ -185,9 +215,15 @@ export async function importDatabase(
         }
         const result = { databases, missingDatabases, unknownEntityTypes };
         await accept?.(result);
+        installed=true;
         log.info('Import completed');
         return result;
       } catch (error) {
+        if ((error as { code?: unknown })?.code === 'COMMIT_UNKNOWN') {
+          preserveRollback = true;
+          throw Object.assign(new Error(`Import outcome is unknown; do not retry before recovery. Previous data is retained at ${rollback}`, { cause: error }),
+            { code: 'COMMIT_UNKNOWN', recoveryPath: rollback });
+        }
         try {
           for (const { name, store } of restoring) store.replaceWith(path.join(rollback, name));
           if (hasMedia) {
@@ -195,17 +231,90 @@ export async function importDatabase(
             const previousMedia = path.join(rollback, 'media');
             if (await fs.pathExists(previousMedia)) await fs.copy(previousMedia, mediaPath);
           }
-          await restored?.();
+          await restored?.();installed=false;
         } catch (restoreError) {
           preserveRollback = true;
-          throw new AggregateError([error, restoreError], `Import and rollback failed; previous data is retained at ${rollback}`);
+          throw Object.assign(new AggregateError([error, restoreError], `Import and rollback failed; previous data is retained at ${rollback}`, { cause: error }),
+            { code: (restoreError as { code?: unknown })?.code === 'COMMIT_UNKNOWN' ? 'COMMIT_UNKNOWN' : 'RECOVERY_REQUIRED', recoveryPath: rollback });
         }
         throw error;
       }
-    });
+    };
+    const paused = restoring.reduceRight<() => Promise<DatabaseImportResult>>((operation, { store }) => () => store.withExclusiveWrites(operation), replace);
+    try{return await withReplacement(async()=>{
+      try{return await paused();}
+      catch(error) {
+        if(recoveryReady&&(error as {backgroundRecoveryFailed?:boolean})?.backgroundRecoveryFailed) {
+          preserveRollback=true;
+          throw Object.assign(new AggregateError([error],`Background recovery failed after import maintenance; previous data is retained at ${rollback}`,{cause:error}),
+            {code:(error as {code?:unknown})?.code==='COMMIT_UNKNOWN'?'COMMIT_UNKNOWN':'RECOVERY_REQUIRED',recoveryPath:rollback,dataInstalled:installed});
+        }
+        throw error;
+      }
+    });}
+    catch(error) {
+      if(recoveryReady&&installed&&!preserveRollback) {
+        preserveRollback=true;
+        throw Object.assign(new AggregateError([error],`Acceptance cleanup failed after import; previous data is retained at ${rollback}`,{cause:error}),
+          {code:(error as {code?:unknown})?.code==='COMMIT_UNKNOWN'?'COMMIT_UNKNOWN':'RECOVERY_REQUIRED',recoveryPath:rollback,dataInstalled:installed});
+      }
+      throw error;
+    }
   } finally {
     if (!preserveRollback) await fs.remove(temporary);
   }
+}
+
+export type LogicalDatabaseArchives = Partial<Record<DatabaseName, string>>;
+
+/** Stage and inspect logical archives without replacing any live data; media remains separately owned. */
+export function readLogicalBackup(stores: BackupStores, archives: LogicalDatabaseArchives,
+  entityTypes: Iterable<string> = [], validate?: (ears: Ears) => void): Promise<BackupContents> {
+  return withLogicalBackup(stores, archives, (candidate, names) => Promise.resolve(readSelectedBackup(candidate, entityTypes, validate,
+    Object.fromEntries(Object.entries(stores).map(([name, store]) => [name, store.format])), names)));
+}
+
+/** Stage every selected logical archive before entering the ordinary protected import coordinator.
+ * Logical archives do not own media; this operation preserves the incumbent media directory.
+ */
+export function importLogicalDatabase(stores: BackupStores, archives: LogicalDatabaseArchives,
+  mediaPath: string, options: DatabaseImportOptions = {}): Promise<DatabaseImportResult> {
+  return withLogicalBackup(stores, archives, (candidate, names) => importBackup(stores, candidate, mediaPath, options,
+    (dir, types, validate, formats) => readSelectedBackup(dir, types, validate, formats, names)));
+}
+
+async function withLogicalBackup<T>(stores: BackupStores, archives: LogicalDatabaseArchives,
+  use: (candidate: string, names: DatabaseName[]) => Promise<T>): Promise<T> {
+  const entries = Object.entries(archives).map(([name, file]) => {
+    if (!isKnownDatabase(name) || typeof file !== 'string') throw new Error(`Invalid logical archive selection: ${name}`);
+    const store = stores[name];
+    if (!store) throw new Error(`No destination database for ${name}`);
+    const storage = databaseStorage(store.format);
+    if (!storage.stageLogicalSnapshot) throw new Error(`Logical import is not implemented for ${storage.format}`);
+    return { name, file, store, stage: storage.stageLogicalSnapshot };
+  });
+  if (!entries.length) throw new Error('Select at least one logical archive');
+  const root = await fs.mkdtemp(path.join(path.dirname(stores.lmdb.path), '.apack-logical-import-'));
+  let result: T | undefined, failed = false, failure: unknown;
+  try {
+    const candidate = path.join(root, 'candidate');
+    await fs.mkdir(candidate, { mode: 0o700 });
+    for (const entry of entries) {
+      const staged = await entry.stage(fs.createReadStream(entry.file), path.join(root, 'stage-' + entry.name));
+      await fs.rename(staged.path, path.join(candidate, entry.name));
+    }
+    const names = entries.map(entry => entry.name);
+    await fs.writeJson(path.join(candidate, 'metadata.json'), { databases: names, includesMedia: false,
+      storageFormats: Object.fromEntries(entries.map(entry => [entry.name,entry.store.format])) });
+    result = await use(candidate, names);
+  } catch (error) { failed = true; failure = error; }
+  try { await fs.remove(root); }
+  catch (cleanup) {
+    throw Object.assign(new AggregateError(failed ? [failure, cleanup] : [cleanup], 'Logical import staging cleanup failed', { cause: failed ? failure : cleanup }),
+      { code: (failure as {code?: unknown})?.code, recoveryPath: (failure as {recoveryPath?: unknown})?.recoveryPath });
+  }
+  if (failed) throw failure;
+  return result!;
 }
 
 export async function readBackupSummary(backupPath: string) {
@@ -274,7 +383,13 @@ export interface BackupContents {
  * wrong. `entityTypes` are the types to count, and any type the backup holds that isn't among them comes back as
  * `unknownEntityTypes`.
  */
-export function readBackup(dir: string, entityTypes: Iterable<string> = [], validate?: (ears: Ears) => void): BackupContents {
+export function readBackup(dir: string, entityTypes: Iterable<string> = [], validate?: (ears: Ears) => void,
+  expectedFormats: Partial<Record<DatabaseName, string>> = {}): BackupContents {
+  return readSelectedBackup(dir, entityTypes, validate, expectedFormats, ['lmdb']);
+}
+
+function readSelectedBackup(dir: string, entityTypes: Iterable<string> = [], validate: ((ears: Ears) => void) | undefined,
+  expectedFormats: Partial<Record<DatabaseName, string>> = {}, required: readonly DatabaseName[]): BackupContents {
   const metadataFile = path.join(dir, 'metadata.json');
   if (!fs.existsSync(metadataFile)) throw new Error(`${dir} isn't a backup: it has no metadata.json`);
   let metadata: { timestamp?: unknown; databases?: unknown; appVersion?: unknown; storageFormats?: unknown };
@@ -287,11 +402,19 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   const appVersion = typeof metadata.appVersion === 'string' ? metadata.appVersion : undefined;
   const unknownDatabases = metadata.databases.filter((name) => !isKnownDatabase(String(name))).map(String);
   const listed = metadata.databases.filter((name) => isKnownDatabase(String(name))) as DatabaseName[];
-  const missingDatabases = listed.filter((name) => !fs.existsSync(path.join(dir, name, 'data.mdb')));
-  if (!listed.includes('lmdb')) throw new Error("The backup doesn't include the database (lmdb)");
+  const missingDatabases = listed.filter((name) => !backupStorage(path.join(dir, name)));
+  for (const name of required) if (!listed.includes(name)) throw new Error(`The backup doesn't include the database (${name})`);
   // A listed database whose folder isn't there was empty when the backup was made, and the import skips it too
   const databases = listed.filter((name) => !missingDatabases.includes(name));
-  if (!databases.includes('lmdb')) throw new Error(`The backup's lmdb folder is missing or has no data.mdb`);
+  for (const name of required) if (!databases.includes(name)) throw new Error(`The backup's ${name} folder is missing or has no supported database data file`);
+
+  for (const name of databases) {
+    const expected = expectedFormats[name];
+    if (expected === undefined) continue;
+    databaseStorage(expected);
+    const source = backupStorage(path.join(dir, name))!;
+    if (source.format !== expected) throw new Error(`Cannot import ${name} in ${source.format} into ${expected}; convert an explicit copy first`);
+  }
 
   // Whether a backup can be restored is the files' answer, not the metadata's: a backup whose databases open is
   // restorable whatever metadata.json claims. What it recorded about its origin goes into the message, no more.
@@ -305,13 +428,15 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
   };
   // Every database the import would put in place, so one this version can't read is found before anything is
   // replaced, not when the store opens the new files again
-  for (const name of databases) refusing(() => DATABASES[name].check(path.join(dir, name)));
-  const database = refusing(() => openDatabase({ path: path.join(dir, 'lmdb'), readOnly: true }));
+  for (const name of databases) {
+    if (name !== 'lmdb') refusing(() => openBackupDatabase(path.join(dir, name), name).close());
+  }
+  const database = databases.includes('lmdb') ? refusing(() => openBackupDatabase(path.join(dir, 'lmdb'), 'lmdb')) : undefined;
   try {
     // An engine over the backup's files, held to the schema they hold, since what a backup holds is what is being asked
-    const engine = createEarsEngine({ database });
-    validate?.(engine);
-    const perType = new Map(Object.entries(engine.admin.countEntities()));
+    const engine = database ? createEarsEngine({ database }) : undefined;
+    if (engine) validate?.(engine);
+    const perType = new Map(Object.entries(engine?.admin.countEntities() ?? {}));
     const known = new Set(entityTypes);
     const counts = [...known].sort()
       .flatMap((type) => (perType.has(type) ? [[type, perType.get(type)!] as [string, number]] : []));
@@ -331,7 +456,7 @@ export function readBackup(dir: string, entityTypes: Iterable<string> = [], vali
       counts,
     };
   } finally {
-    database.close();
+    database?.close();
   }
 }
 

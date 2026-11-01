@@ -1,0 +1,106 @@
+{
+  "qualification": false,
+  "source": "ad2cd0eab5",
+  "n": 10000,
+  "mode": "off",
+  "node": "v23.11.1",
+  "constraints": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "driverSha256": "bbae23f14908141a9155567b750a34ddf88765829ffa05f25cc087dd9e09255d",
+  "entries": {
+    "@apackdev/ears": "file:///metrics/packages/apack-ears/dist/index.js",
+    "@apackdev/ears/sqlite": "file:///metrics/packages/apack-ears/dist/sqlite/index.js"
+  },
+  "seedMs": 1103.171416,
+  "pragmas": {
+    "synchronous": {
+      "synchronous": 0
+    },
+    "journal": {
+      "journal_mode": "wal"
+    }
+  },
+  "membersBeforeDamage": 58750,
+  "damagedMembers": 10000,
+  "before": {
+    "files": {
+      "data.sqlite3": 45187072,
+      "data.sqlite3-shm": 32768,
+      "data.sqlite3-wal": 5430192
+    },
+    "memory": {
+      "rss": 172486656,
+      "heapTotal": 33308672,
+      "heapUsed": 22142504,
+      "external": 2562072,
+      "arrayBuffers": 51261
+    },
+    "pages": {
+      "page_count": 11032
+    },
+    "freePages": {
+      "freelist_count": 0
+    }
+  },
+  "membershipSqlMs": 112.281925,
+  "totalRepairMs": 124.309526,
+  "after": {
+    "files": {
+      "data.sqlite3": 45187072,
+      "data.sqlite3-shm": 32768,
+      "data.sqlite3-wal": 5430192
+    },
+    "memory": {
+      "rss": 177336320,
+      "heapTotal": 50085888,
+      "heapUsed": 27761144,
+      "external": 2745346,
+      "arrayBuffers": 256823
+    },
+    "pages": {
+      "page_count": 11032
+    },
+    "freePages": {
+      "freelist_count": 82
+    }
+  },
+  "membersAfterRepair": 58750,
+  "checks": {
+    "membership": true,
+    "selective": true,
+    "primary": true,
+    "commitIdentity": true,
+    "staleHandle": true
+  },
+  "native": [
+    {
+      "path": "/metrics/node_modules/msgpackr-extract/build/Release/extract.node",
+      "sha256": "e3540164422742dc5c3e24501d674dd8dfcd5012ab94caa731bff316463c2395"
+    },
+    {
+      "path": "/metrics/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+      "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+    }
+  ],
+  "resources": {
+    "userCPUTime": 1393280,
+    "systemCPUTime": 483487,
+    "maxRSS": 175488,
+    "sharedMemorySize": 0,
+    "unsharedDataSize": 0,
+    "unsharedStackSize": 0,
+    "minorPageFault": 12321,
+    "majorPageFault": 0,
+    "swappedOut": 0,
+    "fsRead": 0,
+    "fsWrite": 110936,
+    "ipcSent": 0,
+    "ipcReceived": 0,
+    "signalsCount": 0,
+    "voluntaryContextSwitches": 1613,
+    "involuntaryContextSwitches": 100
+  }
+}

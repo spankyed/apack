@@ -1,0 +1,42 @@
+[
+  {
+    "file": "ears-sqlite-api-41228681137/.temp/sqlite-api/elmdb-contracts.json",
+    "bytes": 33711,
+    "sha256": "c068e7dd4dc37473009ea218bfd766a4977fb5e18e2c9a0a2f33538f5a4391ab"
+  },
+  {
+    "file": "ears-sqlite-api-41228681137/.temp/sqlite-api/elmdb.rev",
+    "bytes": 41,
+    "sha256": "c0c37c221beb7e95dfc06ad787c90759465af6e89061e85589ac44fd43486381"
+  },
+  {
+    "file": "ears-sqlite-api-41228681137/.temp/sqlite-api/graph-report.json",
+    "bytes": 725,
+    "sha256": "a65ce75a7bdd030feca0343bba74bcf00bce30cf9c6bca2d1cd22191cf560bcc"
+  },
+  {
+    "file": "ears-sqlite-api-41228681137/.temp/sqlite-api/lost-ack/report.json",
+    "bytes": 11894,
+    "sha256": "8b039b838c54219507c8617964b76de1c08dbe638f2da24c3f02f216dc2f20b7"
+  },
+  {
+    "file": "ears-sqlite-api-41228681137/.temp/sqlite-api/reports.patch",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "file": "ears-sqlite-api-41228681137/.temp/sqlite-api/source.txt",
+    "bytes": 41,
+    "sha256": "73dd1ae370c3b39ef07a02ab816e4a5a4365ea955ed1b9a755b6b0e3dc43767e"
+  },
+  {
+    "file": "ears-sqlite-api-41228681137/.temp/sqlite-api/sqlite-contracts.json",
+    "bytes": 33659,
+    "sha256": "40c69c8b7a59586fa0124ee4bc40b383156326676200c569d290a23218d8b0ed"
+  },
+  {
+    "file": "ears-sqlite-api-41228681137/.temp/sqlite-api/subprocess-inventory.json",
+    "bytes": 5166,
+    "sha256": "31ec670d0f2fc4409ec8b62a4d31eda094d15fd772216c1b502a482e9b131c64"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "source": "4badec03bf998cabd8264a63028454f1918a3f0a",
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "modeDenial": true
+}

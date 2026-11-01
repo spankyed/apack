@@ -1,0 +1,74 @@
+[
+  {
+    "file": "Linux-X64/verification.json",
+    "sha256": "95a906859f7b461bae0e7d2e0755f5d042c12acfadeda9e686a026b1ebbc7a0d"
+  },
+  {
+    "file": "Linux-X64/runtime.json",
+    "sha256": "6f4299fddd92c4788b880ea5cb837304dad84c0951dcc2bf12369efb803c581a"
+  },
+  {
+    "file": "Linux-X64/ears.json",
+    "sha256": "98c85aa3d7c25bbc09200f7a335d254324cb078abc93d819b6900bd15a95715c"
+  },
+  {
+    "file": "Linux-X64/host.json",
+    "sha256": "1c4d61efd5bca22788d63c93c6c53f2f030c413da125a57d5c3904247ec9647b"
+  },
+  {
+    "file": "Linux-X64/native-membership.json",
+    "sha256": "9fa40b1438c9ccd77b17b6deb6a80c180926d682df8ecd70c0735435b7bfb0bd"
+  },
+  {
+    "file": "Linux-X64/native-generation/provenance.json",
+    "sha256": "3674cae11650c8b902033673001ceaeb9e4eb347361f0b850b246ec84557065f"
+  },
+  {
+    "file": "macOS-ARM64/verification.json",
+    "sha256": "7f29508f079007cc0794e288f70fd917a743dc8b2b7bb3967d8dd62790c00ff9"
+  },
+  {
+    "file": "macOS-ARM64/runtime.json",
+    "sha256": "2b20dc3d19cd65f80c4cba075c590272defb9dc6f5834a8fa27bf826f3bd06bd"
+  },
+  {
+    "file": "macOS-ARM64/ears.json",
+    "sha256": "57ca1d82e974a4747c3e1b749288420671390b4e458eff849d751e57bb5182ba"
+  },
+  {
+    "file": "macOS-ARM64/host.json",
+    "sha256": "0176c7b2156be0b55015b2f192671a1d76dde9085a13389fa977215b088245a4"
+  },
+  {
+    "file": "macOS-ARM64/native-membership.json",
+    "sha256": "fe013eef8f4a6cbbf7eac779909b7ac27462a377816dcde90438b622f53cfa46"
+  },
+  {
+    "file": "macOS-ARM64/native-generation/provenance.json",
+    "sha256": "649fd25747074c9d381617bba03064f48be1be145af82068be90593bb86083c9"
+  },
+  {
+    "file": "Windows-X64/verification.json",
+    "sha256": "afe7acd7c76f2bd11037c5b0e218cb6ca89a702cdc74b0dc107b546bb4bc2bb6"
+  },
+  {
+    "file": "Windows-X64/runtime.json",
+    "sha256": "bf3369639a186e661437e9787dbed6a4cd6bc2935e77af2fc066f15be6669023"
+  },
+  {
+    "file": "Windows-X64/ears.json",
+    "sha256": "4aca456db00fdeeb6c1611f58f8e506ab9741dc4df97c8bd13371f9d773f2752"
+  },
+  {
+    "file": "Windows-X64/host.json",
+    "sha256": "27a1a5c9180847e3858324c158e11e9553dec2c33d440ecaf064c6a49a58543f"
+  },
+  {
+    "file": "Windows-X64/native-membership.json",
+    "sha256": "055ee9b8c3f9e329a79398926176d4ba28bd2529f743fe9513ef932ac0137241"
+  },
+  {
+    "file": "Windows-X64/native-generation/provenance.json",
+    "sha256": "010bdb6ae0fb8d2c2cc669bc35107345b50e22f7053c7a69f23f12f60d4e41d1"
+  }
+]

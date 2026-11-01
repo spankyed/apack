@@ -1,0 +1,4 @@
+warning: Cargo.toml: unused manifest key: package.wasm-opt
+warning: `rregex` (manifest) generated 1 warning
+   Compiling rregex v1.10.0 (/build/source)
+    Finished `release` profile [optimized] target(s) in 0.84s

@@ -57,8 +57,7 @@ const externalOrigin = (id: string, name: string) => ({ declarationRevision: 'fi
 describe('createHostRuntime', () => {
   it('refuses overlapping resets and imports before either can touch the store', async () => {
     const { runHistory, reset, finish } = blockedHistory();
-    const store = { reset: vi.fn() } as unknown as EarsDatabase;
-    const engine = newEngine();
+    const { database: store, engine } = _openTestDatabase({ entityTypes: [...entityTypes] });
     // The app's database is emptied through the engine reading it, so the engine's watches hear of it
     const clear = vi.spyOn(engine.admin, 'clear').mockImplementation(() => {});
     const runtime = createHostRuntime({ runHistory, database: store, engine, transport: { rootEvents: testRootEvents },
@@ -78,8 +77,7 @@ describe('createHostRuntime', () => {
 
   it('excludes pack operations while app data is replaced, and refuses to replace it under one', async () => {
     const { runHistory, finish } = blockedHistory();
-    const store = { reset: vi.fn() } as unknown as EarsDatabase;
-    const engine = newEngine();
+    const { database: store, engine } = _openTestDatabase({ entityTypes: [...entityTypes] });
     const clear = vi.spyOn(engine.admin, 'clear').mockImplementation(() => {});
     const packs = createNativePackTestRegistry();
     const runtime = createHostRuntime({ runHistory, database: store, engine, transport: { rootEvents: testRootEvents },
@@ -198,14 +196,14 @@ describe('createHostRuntime', () => {
 });
 
 describe('startPacks', () => {
-  it("runs no pack migration or apply when the app's migrations failed", () => {
+  it("runs no pack migration or apply when the app's migrations failed", async () => {
     order.length = 0;
     appMigrations.succeed = false;
     const packs = createNativePackTestRegistry();
     packs.registerPack({ id: 'late-written-pack' });
     packs.registerPack({ id: 'late-pack' }, externalOrigin('late-pack', 'Late'));
     try {
-      startPacks(packs);
+      await startPacks(packs);
     } finally {
       appMigrations.succeed = true;
       packs.unregisterPack('late-written-pack');

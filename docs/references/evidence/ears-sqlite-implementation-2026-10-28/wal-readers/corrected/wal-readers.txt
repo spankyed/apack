@@ -1,0 +1,15 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/wal-readers.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/wal-readers.spec.ts (1 test) 1488ms
+   ✓ SQLite retained readers > keeps a pinned snapshot while writes grow WAL, then permits truncation after release  1488ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  11:49:12
+   Duration  1.90s (transform 202ms, setup 12ms, collect 277ms, tests 1.49s, environment 0ms, prepare 40ms)
+

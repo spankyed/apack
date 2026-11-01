@@ -1,0 +1,8 @@
+{
+  "base": "b69140ef4351a196f23e7cb50fbd2432cc2f2ed9",
+  "changedFiles": [
+    "packages/apack-ears/tests/engine/vector.spec.ts"
+  ],
+  "sha256": "af4096de6d5504a20670944a95cfdce38759bdef18731ea78534487ce7836191",
+  "purpose": "Shared vector contract tests against unchanged native and SQLite implementations before correction"
+}

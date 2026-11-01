@@ -1,0 +1,17 @@
+{
+  "source": "32d88574daf67267ae11b165c8563ac7c7a3d1f0",
+  "run": 41254213388,
+  "completed": true,
+  "passed": 5,
+  "failed": 0,
+  "skipped": 0,
+  "hookDeadlineMs": 240000,
+  "setupPhasesMs": {
+    "deep-pack": 29540,
+    "left-pack": 20012,
+    "right-pack": 27903,
+    "app-pack": 24442
+  },
+  "originalStrictRun": 41251408078,
+  "scope": "One selected integration fixture; does not qualify concurrent full-shard execution"
+}

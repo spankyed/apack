@@ -1,0 +1,32 @@
+{
+  "source": "ab148afb550245d80cc2f11e5e4c604d6a4315ae",
+  "earsPassed": 603,
+  "sqliteCasesPassed": 294,
+  "selectedTextPassed": 16,
+  "selectedTextTotal": 16,
+  "maintenanceCasesPassed": 9,
+  "logicalCommandCasesPassed": 8,
+  "logicalCrashCasesPassed": 2,
+  "builtLogicalChecks": 5,
+  "profileConversionChecks": 5,
+  "convertedApi": {
+    "source": "ab148afb550245d80cc2f11e5e4c604d6a4315ae",
+    "nativeBaselineBoots": 1,
+    "sqliteBoots": 2,
+    "livePackUpdates": 3,
+    "postRestartDataRetained": true,
+    "nativeSourceUnchanged": true,
+    "historyRetained": true,
+    "settingsRetained": true,
+    "mediaRetained": true,
+    "environmentDiagnostics": {
+      "missingOptionalCodexExecutable": true
+    }
+  },
+  "nativeDumpCasesPassed": 7,
+  "logicalSnapshotCasesPassed": 5,
+  "logicalHostCasesPassed": 10,
+  "logicalHostSkipped": [],
+  "hostPassed": 135,
+  "recoveryCasesPassed": 34
+}

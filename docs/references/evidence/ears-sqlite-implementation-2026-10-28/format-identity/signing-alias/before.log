@@ -1,0 +1,38 @@
+
+ RUN  v3.2.7 /electron/packages/repo-checks
+
+ ❯ tests/native-signing.spec.ts (10 tests | 1 failed | 9 skipped) 11ms
+   ↓ native manifest signing before outer app sealing > preserves signing options and finalizes signed library bytes before the outer seal
+   × native manifest signing before outer app sealing > recognizes the outer app through an aliased caller path when the signer supplies canonical paths 10ms
+     → Signer did not finalize native provenance before sealing the app
+   ↓ native manifest signing before outer app sealing > retains signer defaults when no per-file callback was supplied
+   ↓ native manifest signing before outer app sealing > refuses mismatched unsigned input before invoking the signer
+   ↓ native manifest signing before outer app sealing > does not bless a failed inner signature or a concurrently changed manifest
+   ↓ native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+   ↓ native manifest signing before outer app sealing > refuses a preexisting valid signature when the library was skipped in this signing pass
+   ↓ native manifest signing before outer app sealing > fails if the signer skips the outer-app callback
+   ↓ native manifest signing before outer app sealing > derives architecture from the app executable and refuses unsupported universal builds
+   ↓ native manifest signing before outer app sealing > refuses native-library symlinks that escape the packaged app
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/native-signing.spec.ts > native manifest signing before outer app sealing > recognizes the outer app through an aliased caller path when the signer supplies canonical paths
+Error: Signer did not finalize native provenance before sealing the app
+ ❯ Module.signMacApplication ../../scripts/lib/native-signing.mjs:70:29
+     68|         return perFile ?? {};
+     69|       } });
+     70|       if (!finalized) throw new Error('Signer did not finalize native …
+       |                             ^
+     71|       return;
+     72|     } catch (error) {
+ ❯ tests/native-signing.spec.ts:68:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  17:51:38
+   Duration  862ms (transform 257ms, setup 76ms, collect 200ms, tests 11ms, environment 0ms, prepare 222ms)
+
+JSON report written to /results/before.json

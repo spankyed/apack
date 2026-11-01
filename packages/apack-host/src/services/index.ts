@@ -41,6 +41,7 @@ export interface HostRuntimeOptions {
 export function createHostRuntime({ transport, appVersion, database, runHistory, engine, packs, countCalls, performance }: HostRuntimeOptions): HostRuntime {
   const settings = createSettingsService(createSettingsStore({
     ears: () => engine,
+    observe: operation => database.withoutWriteAuthority(() => runHistory.database.withoutWriteAuthority(operation)),
     catalog: packs.settingsCatalog,
     onCatalogChanged: packs.onCatalogChanged,
   }));

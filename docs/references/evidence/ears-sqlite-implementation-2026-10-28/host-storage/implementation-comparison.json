@@ -1,0 +1,6 @@
+{
+  "fullHostCheckCommit": "1d7b7a993062947cf305ba2010a50c7aff64f702",
+  "settingsAssertionCommit": "b8231cb73481e34a730b37978f49dde10f93deec",
+  "changedImplementationFilesSinceFullHostCheck": [],
+  "scope": "all captured EARS and host src .ts files; only settings test inputs/assertions changed afterwards"
+}

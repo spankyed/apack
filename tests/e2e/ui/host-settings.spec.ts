@@ -10,6 +10,36 @@ import { test as base, expect } from '@apackdev/testing';
 
 // A separate worker boots with a real disabled-pack record. No runtime facade, form or setting is mocked.
 const test = base.extend<{}, { hostOnlyData: string }>({
+  appPage: async ({ appPage }, use, testInfo) => {
+    const navigation: Array<{ at: number; type: string; url?: string; main?: boolean }> = [];
+    const record = (type: string) => { if (navigation.length < 64) navigation.push({ at: Date.now(), type, url: appPage.url() }); };
+    const navigated = (frame: ReturnType<typeof appPage.mainFrame>) => {
+      if (navigation.length < 64) navigation.push({ at: Date.now(), type: 'framenavigated', url: frame.url(), main: frame === appPage.mainFrame() });
+    };
+    const loaded = () => record('load'), domReady = () => record('domcontentloaded');
+    const closed = () => record('close'), crashed = () => record('crash');
+    let setupFailed = false;
+    appPage.on('framenavigated', navigated); appPage.on('load', loaded); appPage.on('domcontentloaded', domReady);
+    appPage.on('close', closed); appPage.on('crash', crashed);
+    try {
+      // The base fixture observes connected application state. These cases also inject components
+      // imperatively, so finish the initial document load before retaining handles across async imports.
+      await appPage.waitForLoadState('load');
+      await use(appPage);
+    } catch (error) {
+      setupFailed = true;
+      throw error;
+    } finally {
+      appPage.off('framenavigated', navigated); appPage.off('load', loaded); appPage.off('domcontentloaded', domReady);
+      appPage.off('close', closed); appPage.off('crash', crashed);
+      if (setupFailed || testInfo.status !== testInfo.expectedStatus) {
+        try {
+          await testInfo.attach('host-settings-page-lifecycle.json', { contentType: 'application/json',
+            body: Buffer.from(JSON.stringify({ navigation, closed: appPage.isClosed(), url: appPage.url() }, null, 2)) });
+        } catch (diagnosticError) { console.warn('Could not capture host settings page lifecycle', diagnosticError); }
+      }
+    }
+  },
   // oxlint-disable-next-line no-empty-pattern -- Playwright requires destructured fixture dependencies.
   hostOnlyData: [async ({}, use) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-host-settings-'));
@@ -80,7 +110,7 @@ test('the host-only editor preserves saved references without activating default
   }
 });
 
-test('an open editor follows installed pack activation without losing its draft', async ({ app, appPage }) => {
+test('an open editor follows installed pack activation without losing its draft', async ({ app, appPage }, testInfo) => {
   expect((await app.getContext()).surfaceIds.some(id => id.startsWith('default-setup/'))).toBe(false);
   const mounted = await appPage.evaluateHandle(async () => {
     const { createApp } = await import('vue');
@@ -91,8 +121,43 @@ test('an open editor follows installed pack activation without losing its draft'
     const component = createApp(TiptapEditor, { mode: 'editor', modelValue: '/not-a-command [Saved memo](apack-ref://memo/Memo-live)',
       'onUpdate:modelValue': (value: string) => { updates.push(value); } });
     const exposed = component.mount(root) as unknown as { editor: Editor | undefined };
-    return { component, root, exposed, updates };
+    // Observe the lifecycle without replacing its loader, events or editor behavior.
+    const shell = (window as unknown as { applicationState: import('xstate').AnyActorRef }).applicationState;
+    const events: Array<{ at: number; type: string; packId?: string }> = [];
+    const subscription = shell.system.inspect(inspection => {
+      if (inspection.type !== '@xstate.event') return;
+      const { event } = inspection;
+      if (['PACK_ACTIVATED', 'LOAD_PACK_FRONTENDS', 'PACK_FRONTEND_LOADED', 'PACK_FRONTENDS_SETTLED',
+        'PACK_SURFACES_UNLOADED', 'SYSTEM_ERROR'].includes(event.type)) {
+        events.push({ at: Date.now(), type: event.type,
+          packId: typeof event.packId === 'string' ? event.packId : undefined });
+      }
+    });
+    const resources: Array<{ name: string; start: number; end: number; duration: number }> = [];
+    const recordResources = (entries: PerformanceEntry[]) => {
+      for (const entry of entries) if (entry.name.startsWith('pack://default-setup/')) {
+        resources.push({ name: entry.name, start: performance.timeOrigin + entry.startTime,
+          end: performance.timeOrigin + entry.startTime + entry.duration, duration: entry.duration });
+      }
+    };
+    const observer = new PerformanceObserver(list => recordResources(list.getEntries()));
+    observer.observe({ type: 'resource' });
+    const timeline = () => {
+      recordResources(observer.takeRecords());
+      const context = shell.getSnapshot().context;
+      return { events, resources, at: Date.now(), packLoadRunning: context.packLoadRunning,
+        packLoadQueued: context.packLoadQueued, acceptedPackRuntimes: context.acceptedPackRuntimes };
+    };
+    const dispose = () => { subscription.unsubscribe(); observer.disconnect(); component.unmount(); root.remove(); };
+    return { exposed, updates, timeline, dispose };
   });
+  const activationSamples: Array<{ at: number; extensions: string[] | null }> = [];
+  const observesSuggestion = async () => {
+    const extensions = await mounted.evaluate(({ exposed }) => exposed.editor?.extensionManager.extensions
+      .map(extension => extension.name) ?? null);
+    activationSamples.push({ at: Date.now(), extensions });
+    return extensions?.includes('referenceSuggestion') ?? false;
+  };
   const toggle = () => appPage.evaluate(async () => {
     const { untypedSendToSystem } = await import('@apackdev/sdk/events');
     untypedSendToSystem('host/packs', { type: 'TOGGLE_PACK_ENABLED', packId: 'default-setup' });
@@ -106,8 +171,7 @@ test('an open editor follows installed pack activation without losing its draft'
       return { document: editor.getJSON(), selection: editor.state.selection.toJSON(), count: updates.length };
     });
     await toggle();
-    await expect.poll(() => mounted.evaluate(({ exposed }) => exposed.editor?.extensionManager.extensions
-      .some(extension => extension.name === 'referenceSuggestion') ?? false)).toBe(true);
+    await expect.poll(observesSuggestion).toBe(true);
     expect(await mounted.evaluate(({ exposed, updates }) => ({ document: exposed.editor!.getJSON(),
       selection: exposed.editor!.state.selection.toJSON(), count: updates.length }))).toEqual(initial);
     await toggle();
@@ -116,8 +180,29 @@ test('an open editor follows installed pack activation without losing its draft'
     expect(await mounted.evaluate(({ exposed, updates }) => ({ document: exposed.editor!.getJSON(),
       selection: exposed.editor!.state.selection.toJSON(), count: updates.length }))).toEqual(initial);
     await expect(appPage.locator('#live-contribution-editor .reference-pill')).toHaveText('Saved memo');
+  } catch (error) {
+    // Keep the original five-second predicate and failure. The accepted frontend bindings distinguish
+    // a late pack load from a failed editor replacement; backend surfaces alone cannot establish that.
+    try {
+      const contributions = await appPage.evaluate(async () => {
+        const { textEditorExtensionsRegistry } = await import('@apackdev/sdk/fe');
+        return textEditorExtensionsRegistry.getAll().map(group => ({ packId: group.packId,
+          groupId: group.groupId, extensions: Object.keys(group.binding.extensions ?? {}) }));
+      });
+      await testInfo.attach('editor-activation.json', { contentType: 'application/json',
+        body: Buffer.from(JSON.stringify({ activationSamples, contributions, app: await app.getContext() }, null, 2)) });
+    } catch (diagnosticError) {
+      console.warn('Could not capture editor activation diagnostics', diagnosticError);
+    }
+    throw error;
   } finally {
-    await mounted.evaluate(({ component, root }) => { component.unmount(); root.remove(); });
+    try {
+      await testInfo.attach('editor-activation-timeline.json', { contentType: 'application/json',
+        body: Buffer.from(JSON.stringify(await mounted.evaluate(({ timeline }) => timeline()), null, 2)) });
+    } catch (diagnosticError) {
+      console.warn('Could not capture editor activation timeline', diagnosticError);
+    }
+    await mounted.evaluate(({ dispose }) => dispose());
     await mounted.dispose();
     if ((await app.getContext()).surfaceIds.some(id => id.startsWith('default-setup/'))) {
       await toggle();

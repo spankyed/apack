@@ -1,0 +1,14 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/vector-models.spec.ts (26 tests | 23 skipped) 4290ms
+   ✓ durable native model admission > keeps native candidates available to owners and peer readers during pending and failed physical refresh  3112ms
+   ✓ durable native model admission > resumes an interrupted private projection after reopening without sacrificing the incumbent  604ms
+   ✓ durable native model admission > admits public refresh durably without holding write exclusion through background training  572ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 23 skipped (26)
+   Start at  09:50:58
+   Duration  6.22s (transform 960ms, setup 85ms, collect 1.51s, tests 4.29s, environment 0ms, prepare 195ms)
+
+JSON report written to /results/physical-positive-model.json

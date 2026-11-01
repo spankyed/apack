@@ -29,6 +29,7 @@ export default defineConfig({
      */
     projects: [
       'packages/apack-cli/vitest.integration.config.ts',
+      'packages/apack-host/vitest.integration.config.ts',
       'packages/repo-checks/vitest.integration.config.ts',
       'packages/publish-checks/vitest.integration.config.ts',
     ],

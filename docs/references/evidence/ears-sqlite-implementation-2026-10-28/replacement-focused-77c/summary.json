@@ -1,0 +1,79 @@
+{
+  "source": "77cbd28f38e121d93583fd62a6d95d00daee0454",
+  "run": 41255361459,
+  "overall": "failed retained text relevance only",
+  "sqlite": {
+    "passed": 244,
+    "failed": 1,
+    "skipped": 0
+  },
+  "elmdb": {
+    "passed": 195,
+    "failed": 1,
+    "sqliteOnlySkipped": 49
+  },
+  "replacementAndCommitCases": [
+    {
+      "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: false)",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: true)",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (SQLITE_BUSY)",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (undefined)",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling refuses replacement before commit when closing its source fails",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: false)",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: true)",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: false)",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: true)",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling captures fallible watch changes before committing",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for schema",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for bulkLoad",
+      "status": "passed"
+    },
+    {
+      "name": "SQLite commit outcome handling stops a background commit without replaying it or writing a false failure marker",
+      "status": "passed"
+    }
+  ],
+  "apiReportPatchBytes": 0,
+  "nativeRouting": {
+    "passed": 1,
+    "unselected": 35
+  },
+  "inventoryPassed": 78,
+  "walModes": {
+    "lostAckRecordsPassed": 5,
+    "syncErrorRecordsPassed": 5
+  }
+}

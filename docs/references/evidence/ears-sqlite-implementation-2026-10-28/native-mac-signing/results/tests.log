@@ -1,0 +1,27 @@
+
+ RUN  v3.2.7 /electron/packages/repo-checks
+
+ ✓ tests/preview-build.spec.ts (4 tests) 51ms
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > preserves signing options and finalizes signed library bytes before the outer seal
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"cd92f8800c9c79b45607c7913ced16860593ab0c1fed8e4b71a620150bf044e7"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"838a5b0cf4136ff02fb1dd84af12d155719f0f9d3ef08f153c25c60a0101c80d"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"8dba90ed4d526cc2cd9d7676595b7e87ba75c65cd88ae6a9f4a39a817fe6d941"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"131053f1c17dbf7122d0a8fad4e3c94543661fe3dfb7b6d2df1ddefb617ac761"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"a94239971ad8ac29b9375f0a19f6ebc50154f3fc5a21a74cad8958cf408194df"}
+
+ ✓ tests/native-signing.spec.ts (8 tests) 20ms
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Start at  14:06:11
+   Duration  375ms (transform 74ms, setup 12ms, collect 72ms, tests 71ms, environment 0ms, prepare 75ms)
+
+JSON report written to /results/tests.json

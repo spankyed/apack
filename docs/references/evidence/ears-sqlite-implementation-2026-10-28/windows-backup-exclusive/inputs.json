@@ -1,0 +1,26 @@
+{
+  "parent": "8d1a166c191815d999da197d13efcbe1aed2d7da",
+  "productInputsSha256": {
+    "packages/apack-host/src/backup/publication.ts": "c2fe427088a8292702026c18ed2ff1068896db890c326b22d0625b497bd9bd5f",
+    "packages/apack-host/src/backup/index.ts": "3a2f0e51b7978e5d6ee7c6f7030e18d4258128212fef64c95a6812f8a2389682",
+    "packages/apack-cli/src/commands/db/backup.ts": "72b107cd75041ed7844ff62750c767ea168fccccd04997515dc801c0968f3f3e",
+    "packages/apack-cli/tests/commands/sqlite-profile.spec.ts": "81ac5d4724300969ac85d37e3c93293eede9c956ec01121245eb8319e425e350"
+  },
+  "nativePin": "2441af4658d961f547c7094cd041c2ac246668c5",
+  "local": {
+    "platformCli": {
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0
+    },
+    "focusedCli": {
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    "changedLint": "pass",
+    "hostTypes512MiB": "pass",
+    "cliTypes512MiB": "heap exhaustion; pending larger disposable run",
+    "normalPackageBuild": "pending next disposable build/CI"
+  }
+}

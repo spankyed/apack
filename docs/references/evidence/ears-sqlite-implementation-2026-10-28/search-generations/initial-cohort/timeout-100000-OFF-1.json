@@ -1,0 +1,11 @@
+{
+  "status": "timed_out",
+  "n": 100000,
+  "syncs": false,
+  "trial": 1,
+  "safetyTimeoutSeconds": 240,
+  "partialStdoutRetained": false,
+  "stageUnknown": true,
+  "laterTrialsNotRun": true,
+  "scope": "The subprocess timeout ended the cohort before the final metrics report; neither a completed latency budget result nor the failing stage is known."
+}

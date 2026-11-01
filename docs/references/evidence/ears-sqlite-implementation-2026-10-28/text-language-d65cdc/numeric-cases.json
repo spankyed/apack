@@ -1,0 +1,868 @@
+{
+  "protocol": "ears-text-language-diagnostic/1",
+  "completed": true,
+  "qualification": false,
+  "source": "d65cdc8bd571ea3b4cf490f985f854d02badc2c4",
+  "fixtureSha256": "29d79b6060b21ca68d3bb5dd491cc2e3cfff36a11c2f10b28d6df62c9acc3527",
+  "node": "v23.11.1",
+  "containsPayload": false,
+  "scope": "Fixed English public guide corpus; compare no stemming with explicit English stemming. Not a waiver or production configuration decision.",
+  "groups": [
+    {
+      "backend": "elmdb",
+      "stem": "none",
+      "fields": {
+        "name": 3,
+        "body": 1
+      },
+      "completed": true,
+      "cases": [
+        {
+          "ordinal": 0,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.17015200000003
+        },
+        {
+          "ordinal": 1,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.4684029999999666
+        },
+        {
+          "ordinal": 2,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.49563399999999547
+        },
+        {
+          "ordinal": 3,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.4705579999999827
+        },
+        {
+          "ordinal": 4,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.5901410000000169
+        },
+        {
+          "ordinal": 5,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.29514099999994414
+        },
+        {
+          "ordinal": 6,
+          "returned": 5,
+          "matchedRelevant": false,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.8035689999999249
+        },
+        {
+          "ordinal": 7,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.24573900000007143
+        },
+        {
+          "ordinal": 8,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.47559799999999086
+        },
+        {
+          "ordinal": 9,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.4459709999999859
+        },
+        {
+          "ordinal": 10,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.710474999999974
+        },
+        {
+          "ordinal": 11,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.30789500000003045
+        },
+        {
+          "ordinal": 12,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.6196860000000015
+        },
+        {
+          "ordinal": 13,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.6199760000000651
+        },
+        {
+          "ordinal": 14,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.2814449999999624
+        },
+        {
+          "ordinal": 15,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.3764419999999973
+        },
+        {
+          "ordinal": 16,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.22311600000000453
+        },
+        {
+          "ordinal": 17,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.3935340000000451
+        },
+        {
+          "ordinal": 18,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.2996090000000322
+        },
+        {
+          "ordinal": 19,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.2140789999999697
+        },
+        {
+          "ordinal": 20,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.388418999999999
+        },
+        {
+          "ordinal": 21,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": true,
+          "highlightPassed": true,
+          "ms": 0.5785590000000411
+        },
+        {
+          "ordinal": 22,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.27389000000005126
+        },
+        {
+          "ordinal": 23,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.23988700000006702
+        },
+        {
+          "ordinal": 24,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.20244700000000648
+        }
+      ],
+      "passed": 24,
+      "failed": 1,
+      "databaseScratchRemoved": true
+    },
+    {
+      "backend": "elmdb",
+      "stem": "en",
+      "fields": {
+        "name": 3,
+        "body": 1
+      },
+      "completed": true,
+      "cases": [
+        {
+          "ordinal": 0,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.9279209999999694
+        },
+        {
+          "ordinal": 1,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.4093440000000328
+        },
+        {
+          "ordinal": 2,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.2659360000000106
+        },
+        {
+          "ordinal": 3,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.327590999999984
+        },
+        {
+          "ordinal": 4,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.6413009999999986
+        },
+        {
+          "ordinal": 5,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.28948000000002594
+        },
+        {
+          "ordinal": 6,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.3763270000000603
+        },
+        {
+          "ordinal": 7,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.24007800000003954
+        },
+        {
+          "ordinal": 8,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.5273829999999862
+        },
+        {
+          "ordinal": 9,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.6874720000000707
+        },
+        {
+          "ordinal": 10,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.9283709999999701
+        },
+        {
+          "ordinal": 11,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.2846710000001167
+        },
+        {
+          "ordinal": 12,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.47035700000014913
+        },
+        {
+          "ordinal": 13,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.6501729999999952
+        },
+        {
+          "ordinal": 14,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.3831649999999627
+        },
+        {
+          "ordinal": 15,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.37857499999995525
+        },
+        {
+          "ordinal": 16,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.3156890000000203
+        },
+        {
+          "ordinal": 17,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.421636000000035
+        },
+        {
+          "ordinal": 18,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.1379719999999907
+        },
+        {
+          "ordinal": 19,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.2499159999999847
+        },
+        {
+          "ordinal": 20,
+          "returned": 0,
+          "matchedRelevant": false,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.4832619999999679
+        },
+        {
+          "ordinal": 21,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": true,
+          "highlightPassed": true,
+          "ms": 0.4740239999998721
+        },
+        {
+          "ordinal": 22,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.30135200000017903
+        },
+        {
+          "ordinal": 23,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.3472469999999248
+        },
+        {
+          "ordinal": 24,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.24553800000012416
+        }
+      ],
+      "passed": 24,
+      "failed": 1,
+      "databaseScratchRemoved": true
+    },
+    {
+      "backend": "sqlite",
+      "stem": "none",
+      "fields": {
+        "name": 3,
+        "body": 1
+      },
+      "completed": true,
+      "cases": [
+        {
+          "ordinal": 0,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 11.060416000000032
+        },
+        {
+          "ordinal": 1,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 6.726934999999912
+        },
+        {
+          "ordinal": 2,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.3876080000000002
+        },
+        {
+          "ordinal": 3,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 2.3014519999999266
+        },
+        {
+          "ordinal": 4,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 6.487417999999934
+        },
+        {
+          "ordinal": 5,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.4585389999999734
+        },
+        {
+          "ordinal": 6,
+          "returned": 5,
+          "matchedRelevant": false,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.853807000000188
+        },
+        {
+          "ordinal": 7,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.272854000000052
+        },
+        {
+          "ordinal": 8,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.848686999999927
+        },
+        {
+          "ordinal": 9,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.686134000000038
+        },
+        {
+          "ordinal": 10,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 2.478072000000111
+        },
+        {
+          "ordinal": 11,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.3171460000000934
+        },
+        {
+          "ordinal": 12,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.132773000000043
+        },
+        {
+          "ordinal": 13,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 2.613684999999805
+        },
+        {
+          "ordinal": 14,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.8513030000001436
+        },
+        {
+          "ordinal": 15,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.5635360000001128
+        },
+        {
+          "ordinal": 16,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.0884499999999662
+        },
+        {
+          "ordinal": 17,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.7918509999999515
+        },
+        {
+          "ordinal": 18,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 4.454396999999972
+        },
+        {
+          "ordinal": 19,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.3061860000000252
+        },
+        {
+          "ordinal": 20,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 17.757636000000048
+        },
+        {
+          "ordinal": 21,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": true,
+          "highlightPassed": true,
+          "ms": 1.199737000000141
+        },
+        {
+          "ordinal": 22,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.3324139999999716
+        },
+        {
+          "ordinal": 23,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.7238549999999577
+        },
+        {
+          "ordinal": 24,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.910378000000037
+        }
+      ],
+      "passed": 24,
+      "failed": 1,
+      "databaseScratchRemoved": true
+    },
+    {
+      "backend": "sqlite",
+      "stem": "en",
+      "fields": {
+        "name": 3,
+        "body": 1
+      },
+      "completed": true,
+      "cases": [
+        {
+          "ordinal": 0,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 15.437347999999929
+        },
+        {
+          "ordinal": 1,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 4.068817999999965
+        },
+        {
+          "ordinal": 2,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.2363550000000032
+        },
+        {
+          "ordinal": 3,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.744752999999946
+        },
+        {
+          "ordinal": 4,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 7.550520000000006
+        },
+        {
+          "ordinal": 5,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.424366000000191
+        },
+        {
+          "ordinal": 6,
+          "returned": 5,
+          "matchedRelevant": false,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.9381939999998394
+        },
+        {
+          "ordinal": 7,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.3057450000001154
+        },
+        {
+          "ordinal": 8,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 4.586664000000155
+        },
+        {
+          "ordinal": 9,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.663001000000122
+        },
+        {
+          "ordinal": 10,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 2.4532050000000254
+        },
+        {
+          "ordinal": 11,
+          "returned": 2,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.223702000000003
+        },
+        {
+          "ordinal": 12,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.117093000000068
+        },
+        {
+          "ordinal": 13,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 2.5105610000000524
+        },
+        {
+          "ordinal": 14,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.7816629999999805
+        },
+        {
+          "ordinal": 15,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.6951010000000224
+        },
+        {
+          "ordinal": 16,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.0337680000000091
+        },
+        {
+          "ordinal": 17,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.9884179999999105
+        },
+        {
+          "ordinal": 18,
+          "returned": 5,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 7.064364000000069
+        },
+        {
+          "ordinal": 19,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.1649029999998675
+        },
+        {
+          "ordinal": 20,
+          "returned": 4,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 9.556792000000087
+        },
+        {
+          "ordinal": 21,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": true,
+          "highlightPassed": true,
+          "ms": 0.9651599999999689
+        },
+        {
+          "ordinal": 22,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 3.0113960000001043
+        },
+        {
+          "ordinal": 23,
+          "returned": 3,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 1.926531999999952
+        },
+        {
+          "ordinal": 24,
+          "returned": 1,
+          "matchedRelevant": true,
+          "highlightExpected": false,
+          "highlightPassed": true,
+          "ms": 0.908053000000109
+        }
+      ],
+      "passed": 24,
+      "failed": 1,
+      "databaseScratchRemoved": true
+    }
+  ]
+}

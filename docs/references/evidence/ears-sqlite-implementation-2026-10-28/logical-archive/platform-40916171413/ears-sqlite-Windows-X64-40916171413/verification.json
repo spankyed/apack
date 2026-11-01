@@ -1,0 +1,25 @@
+{
+  "source": "a6d0753ea3bcf13a173395b40204b7e31c24a765",
+  "earsPassed": 602,
+  "sqliteCasesPassed": 293,
+  "selectedTextPassed": 16,
+  "selectedTextTotal": 16,
+  "maintenanceCasesPassed": 9,
+  "logicalCommandCasesPassed": 8,
+  "logicalCrashCasesPassed": 2,
+  "builtLogicalChecks": 5,
+  "profileConversionChecks": 5,
+  "profileCrashCases": 5,
+  "convertedApi": null,
+  "nativeDumpCasesPassed": 7,
+  "logicalSnapshotCasesPassed": 5,
+  "logicalHostCasesPassed": 9,
+  "logicalHostSkipped": [
+    {
+      "name": "reports a published but unsynchronized directory truthfully and retains its complete archive",
+      "status": "skipped"
+    }
+  ],
+  "hostPassed": 122,
+  "recoveryCasesPassed": 33
+}

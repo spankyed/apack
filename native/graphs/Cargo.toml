@@ -1,0 +1,13 @@
+[package]
+name = "ears-graph"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+leiden-rs = { version = "=0.8.1", default-features = false }
+wasm-bindgen = "=0.2.105"
+getrandom = { version = "=0.3.4", features = ["wasm_js"] }

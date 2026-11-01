@@ -1,0 +1,85 @@
+import pathlib, subprocess, time, json, os, shutil, tarfile
+r=pathlib.Path('/metrics');o=pathlib.Path('/results');r.mkdir()
+with tarfile.open('/source.tar') as t:
+ source=t.pax_headers.get('comment')
+ assert source and len(source)==40
+ os.environ['EARS_TEST_SOURCE']=source
+ t.extractall(r)
+# Archive source is exact; these guards also inspect Git's tracked/ignored path classification.
+subprocess.run(['git','init','-q',str(r)],check=True)
+subprocess.run(['git','-C',str(r),'add','-f','.'],check=True)
+subprocess.run(['git','-C',str(r),'-c','user.name=SQLite diagnostic','-c','user.email=diagnostic@localhost','commit','-qm','Exact tracked source archive for isolated checks'],check=True)
+(o/'source.json').write_text(json.dumps({'source':os.environ['EARS_TEST_SOURCE'],'gitMetadata':'synthetic repository for tracked/ignored file guards; no source edits'},indent=2)+'\n')
+
+shutil.copytree('/seed/node_modules',r/'node_modules',symlinks=True)
+for p in pathlib.Path('/seed/packages').glob('*/node_modules'):
+ d=r/'packages'/p.parent.name/'node_modules'
+ if d.parent.exists():shutil.copytree(p,d,symlinks=True)
+p=r/'vendor/elmdb'
+if p.is_symlink():p.unlink()
+elif p.exists():shutil.rmtree(p)
+p.symlink_to('/engine')
+p=r/'node_modules/elmdb'
+if p.is_symlink():p.unlink()
+elif p.exists():shutil.rmtree(p)
+p.symlink_to('/engine/crates/elmdb-node')
+os.chdir(r)
+limits={name:pathlib.Path('/sys/fs/cgroup',name).read_text().strip() for name in ('cpu.max','memory.max','memory.swap.max')}
+assert limits=={'cpu.max':'200000 100000','memory.max':'6442450944','memory.swap.max':'0'}
+(o/'limits.json').write_text(json.dumps(limits,indent=2)+'\n')
+probe=r/'permission-denial-probe';probe.mkdir();(probe/'file').write_text('probe');probe.chmod(0)
+try:
+ try:list(probe.iterdir())
+ except PermissionError:pass
+ else:raise AssertionError('Container privileges bypass mode denial; cannot qualify permission tests')
+finally:probe.chmod(0o700);shutil.rmtree(probe)
+(o/'permission-preflight.json').write_text(json.dumps({'uid':os.getuid(),'modeDenial':True,'capEff':next(line.strip() for line in pathlib.Path('/proc/self/status').read_text().splitlines() if line.startswith('CapEff:'))},indent=2)+'\n')
+
+results=[]
+def run(label,args,limit):
+ start=time.monotonic()
+ with (o/(label+'.txt')).open('w') as f:
+  try:
+   p=subprocess.run(args,stdout=f,stderr=subprocess.STDOUT,timeout=limit)
+   v={'label':label,'exitCode':p.returncode,'seconds':time.monotonic()-start}
+  except subprocess.TimeoutExpired:v={'label':label,'timeoutSeconds':limit,'seconds':time.monotonic()-start}
+ results.append(v);(o/'results.json').write_text(json.dumps(results,indent=2)+'\n');print(json.dumps(v),flush=True)
+lock=(r/'package-lock.json').read_bytes()
+run('dependencies',['npm','install','--ignore-scripts','--no-audit','--no-fund'],120)
+assert results[-1].get('exitCode') == 0
+assert (r/'package-lock.json').read_bytes() == lock
+run('packages-build',['npm','run','packages:build'],180)
+assert results[-1].get('exitCode') == 0, 'package setup failed; stop before diagnosing types'
+
+
+
+def check(name,args,env=None,negative=False,timeout=180):
+ start=time.monotonic()
+ with (o/(name+'.txt')).open('w') as f:
+  p=subprocess.run(args,cwd=r,env=os.environ|(env or {}),stdout=f,stderr=subprocess.STDOUT,timeout=timeout)
+ results.append({'label':name,'args':args,'exitCode':p.returncode,'seconds':time.monotonic()-start})
+ (o/'results.json').write_text(json.dumps(results,indent=2)+'\n')
+ print(name,p.returncode,round(time.monotonic()-start,3),flush=True)
+ assert (p.returncode!=0 if negative else p.returncode==0),(o/(name+'.txt')).read_text()[-16000:]
+
+
+
+
+
+check('compile-original',['cc','-O3','-DNDEBUG','-Werror=implicit-function-declaration','-shared','-fPIC','-I/seed/node_modules/better-sqlite3/deps/sqlite3','/assets/vec1.c','-lm','-o','/metrics/vec1.so'])
+check('ears-types',['npm','run','typecheck','-w','@apackdev/ears'])
+check('native-admission',['npm','test','-w','@apackdev/ears','--','tests/sqlite/vector-index.spec.ts','--maxWorkers=1','--reporter=default','--reporter=json','--outputFile=/results/native-admission.json'],env={'EARS_EVALUATION_BACKEND':'sqlite','EARS_VEC1_EXTENSION':'/metrics/vec1.so'})
+mutations=[
+ ('write-capture','WHEN OLD.generation=${gen} OR NEW.generation=${gen} BEGIN','WHEN 0 BEGIN','captures foreground changes'),
+ ('trash-capture','WHEN OLD.trashed!=NEW.trashed BEGIN','WHEN 0 BEGIN','keeps nested/outer rollback'),
+ ('batch-bound','ORDER BY v.id LIMIT ?','ORDER BY v.id LIMIT (?*100000)','captures foreground changes'),
+ ('readiness',"INSERT INTO vector_indexes VALUES (?,'building',0,?)","INSERT INTO vector_indexes VALUES (?,'ready',0,?)",'captures foreground changes')]
+path=r/'packages/apack-ears/src/sqlite/vector-index.ts'
+for name,before,after,test in mutations:
+ original=path.read_text();assert original.count(before)==1
+ try:
+  path.write_text(original.replace(before,after))
+  check('mutation-'+name,['npm','test','-w','@apackdev/ears','--','tests/sqlite/vector-index.spec.ts','-t',test,'--maxWorkers=1'],env={'EARS_EVALUATION_BACKEND':'sqlite','EARS_VEC1_EXTENSION':'/metrics/vec1.so'},negative=True)
+  assert 'AssertionError' in (o/('mutation-'+name+'.txt')).read_text()
+ finally:path.write_text(original)
+subprocess.run(['git','diff','--exit-code'],check=True)

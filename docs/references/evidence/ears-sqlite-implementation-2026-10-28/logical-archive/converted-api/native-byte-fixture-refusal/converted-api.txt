@@ -1,0 +1,29 @@
+Traceback (most recent call last):
+  File "/metrics/tests/scripts/test-sqlite-converted-api.py", line 119, in <module>
+    run('inspect-native-baseline', ['node', '--import', 'tsx', '--conditions=@apackdev/source', helper, 'source-inspect', str(out / 'native-inspection.json')], source_env)
+  File "/metrics/tests/scripts/test-sqlite-converted-api.py", line 46, in run
+    raise RuntimeError((out / (label + '.log')).read_text()[-16000:])
+RuntimeError: node:internal/modules/run_main:104
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
++ Buffer(3) [Uint8Array] [
+- Uint8Array(3) [
+    0,
+    255,
+    42
+  ]
+
+    at <anonymous> (/metrics/tests/scripts/_support/sqlite-converted-api.mjs:78:91) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: Buffer(3) [Uint8Array] [ 0, 255, 42 ],
+  expected: Uint8Array(3) [ 0, 255, 42 ],
+  operator: 'deepStrictEqual'
+}
+
+Node.js v23.11.1
+

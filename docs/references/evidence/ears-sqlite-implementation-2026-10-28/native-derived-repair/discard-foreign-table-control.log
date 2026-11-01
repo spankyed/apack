@@ -1,0 +1,63 @@
+(node:296) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ❯ |@apackdev/ears| tests/sqlite/vector-audit.spec.ts (25 tests | 1 failed | 24 skipped) 301ms
+   ↓ native projection maintenance > audits model identity, canonical vectors, owner visibility and triggers without modifying the source
+   ↓ native projection maintenance > reports missing-row drift independently of intact native pages
+   ↓ native projection maintenance > reports owner drift independently of intact native pages
+   ↓ native projection maintenance > reports model-hash drift independently of intact native pages
+   ↓ native projection maintenance > reports trigger drift independently of intact native pages
+   ↓ native projection maintenance > reports native page membership damage through the extension integrity method
+   ↓ native projection maintenance > reports a native table whose catalog ownership has been lost
+   ↓ native projection maintenance > allows an incomplete private projection but detects missing rows behind its committed cursor
+   ↓ native projection maintenance > rebuilds offline under the native claim and retires invalidated models without changing canonical data
+   ↓ native projection maintenance > repairs missing-trigger from canonical data under explicit rebuild
+   ↓ native projection maintenance > repairs missing-table from canonical data under explicit rebuild
+   ↓ native projection maintenance > repairs missing-model from canonical data under explicit rebuild
+   ↓ native projection maintenance > repairs corrupt-model from canonical data under explicit rebuild
+   ↓ native projection maintenance > repairs missing-shadow from canonical data under explicit rebuild
+   ↓ native projection maintenance > repairs damaged-pages from canonical data under explicit rebuild
+   ↓ native projection maintenance > repairs orphan-catalog from canonical data under explicit rebuild
+   ↓ native projection maintenance > repairs missing-catalog from canonical data under explicit rebuild
+   ↓ native projection maintenance > repairs wrong-shadow-schema from canonical data under explicit rebuild
+   ↓ native projection maintenance > rolls back repair and logical admission together when the commit is refused
+   ↓ native projection maintenance > does not classify a native integrity I/O error as permission to discard the model
+   × native projection maintenance > refuses an unrecognized table in the native namespace without deleting its rows 300ms
+     → promise resolved "undefined" instead of rejecting
+   ↓ native projection maintenance > rolls back a native DROP when later cleanup reports an I/O failure
+   ↓ native projection maintenance > quarantines an unacknowledged committed repair and recovers its persisted state only after reopen
+   ↓ native projection maintenance > refuses an unsafe catalog identity without discarding native storage
+   ↓ native projection maintenance > refuses rebuild while an independent handle owns native work before admitting any generation
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@apackdev/ears| tests/sqlite/vector-audit.spec.ts > native projection maintenance > refuses an unrecognized table in the native namespace without deleting its rows
+AssertionError: promise resolved "undefined" instead of rejecting
+
+[32m- Expected:[39m
+Error {
+  "message": "rejected promise",
+}
+
+[31m+ Received:[39m
+undefined
+
+ ❯ tests/sqlite/vector-audit.spec.ts:100:36
+     98|   it('refuses an unrecognized table in the native namespace without de…
+     99|     const {db}=await fixture();db.sql.exec('CREATE TABLE ann_999999(pa…
+    100|     await expect(rebuildIndexes(db)).rejects.toMatchObject({code:'CORR…
+       |                                    ^
+    101|     expect(db.get('SELECT payload FROM ann_999999')).toEqual({payload:…
+    102|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 24 skipped (25)
+   Start at  12:22:12
+   Duration  2.30s (transform 1.13s, setup 86ms, collect 1.60s, tests 301ms, environment 0ms, prepare 117ms)
+
+JSON report written to /results/discard-foreign-table-control.json

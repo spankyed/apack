@@ -1,0 +1,9 @@
+{
+  "run": 41066985563,
+  "head": "ff16d3b9467ee3f0c115ac3bc60d1798651d7c31",
+  "job": 124100869756,
+  "rawLogSha256": "2605876c5915873bdd61944f1a74e21bae355a8259c5396d70e9a61369a6e35e",
+  "retainedLog": "Trailing whitespace normalized for Git; original private log retained outside checkout",
+  "conclusion": "failure",
+  "failedStep": "Build unsigned installed Preview"
+}

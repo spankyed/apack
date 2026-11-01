@@ -365,6 +365,26 @@ describe('graph algorithms', () => {
     expect(e.query.ids([a, b]).strongComponents('refs')).toEqual([[a], [b]]);
   });
 
+  it('keeps graph node order, deduplicates seeds and reacts to edges and trash changes', async () => {
+    const [a, b, c] = [task('a'), task('b'), task('c')];
+    expect(e.query.ids([c, a, c, b]).weakComponents('refs')).toEqual([[c], [a], [b]]);
+    const read = () => [e.query('Task').strongComponents('refs'), e.query('Task').rank('refs').limit(1).ids()];
+    const seen: ReturnType<typeof read>[] = [], watch = e.watch(read, value => seen.push(value));
+    try {
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a], [b], [c]], [a]]);
+      e.write(a).link('refs', b); e.write(b).link('refs', a); e.write(c).link('refs', b);
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a, b], [c]], [b]]);
+      e.write(b).trash();
+      await e.admin.watchesSettled();
+      expect(seen.at(-1)).toEqual([[[a], [c]], [a]]);
+      expect(e.query.withTrashed('Task').strongComponents('refs')).toEqual([[a, b], [c]]);
+      expect(e.query('Task').rank('refs', { seeds: [a, a] }).hits())
+        .toEqual(e.query('Task').rank('refs', { seeds: [a] }).hits());
+    } finally { watch.stop(); }
+  });
+
   it('communities splits the query where its edges thin, the same each time', () => {
     // Two triangles, joined by one edge
     const [a, b, c, x, y, z] = ['a', 'b', 'c', 'x', 'y', 'z'].map(task);
@@ -383,7 +403,12 @@ describe('graph algorithms', () => {
     expect(e.query('Task').topological('blocks').ids()).toEqual([x, a, b, c, d]);
     expect(e.query('Task').topological('blocks', { direction: 'in' }).ids()).toEqual([b, c, d, a, x]);
     expect(e.query('Task').topological('blocks').limit(2).ids()).toEqual([x, a]);
-    expect(e.query('Task').topological('blocks').explain().stages[1]).toMatchObject({ stage: 'topological', nodes: 5, edges: 5, cycles: 1 });
+    const explained = e.query('Task').topological('blocks').explain();
+    if (explained.backend === 'elmdb') expect(explained.stages[1]).toMatchObject({ stage: 'topological', nodes: 5, edges: 5, cycles: 1 });
+    else {
+      expect(explained.ids).toEqual([x, a, b, c, d]);
+      expect(explained.statements.some(statement => statement.sql.includes('edges AS MATERIALIZED'))).toBe(true);
+    }
     expect(() => e.query('Task').topological('blocks', { direction: 'both' as never }).ids()).toThrow(expect.objectContaining({ code: 'BATCH_INVALID' }));
   });
 
@@ -399,15 +424,27 @@ describe('graph algorithms', () => {
     expect(adamicAdar.map((h) => h.id)).toEqual([x, y]);
     expect(adamicAdar[1]!.score).toBeCloseTo(1 / Math.log(3), 12);
     expect(e.query('Task').similar('Task-gone' as never, 'refs').ids()).toEqual([]);
-    expect(e.query('Task').similar(to, 'refs').explain().stages[1]).toMatchObject({ stage: 'similar', neighbours: 2, candidates: 2 });
+    const explained = e.query('Task').similar(to, 'refs').explain();
+    if (explained.backend === 'elmdb') expect(explained.stages[1]).toMatchObject({ stage: 'similar', neighbours: 2, candidates: 2 });
+    else {
+      expect(explained.ids).toEqual([x, y]);
+      expect(explained.statements.some(statement => statement.sql.includes('ours_raw AS'))).toBe(true);
+    }
   });
 
   it('explain reports the graph a rank built and the rounds it ran', () => {
     const [a, b] = [task('a'), task('b')];
     e.write(a).link('refs', b);
-    const { stages } = e.query('Task').rank('refs').explain();
-    expect(stages[1]).toMatchObject({ stage: 'rank', nodes: 2, edges: 1, converged: true });
-    expect(stages[1]!.iterations).toBeGreaterThan(1);
+    const explanation = e.query('Task').rank('refs').explain();
+    if (explanation.backend === 'elmdb') {
+      expect(explanation.stages[1]).toMatchObject({ stage: 'rank', nodes: 2, edges: 1, converged: true });
+      expect(explanation.stages[1]!.iterations).toBeGreaterThan(1);
+    } else {
+      expect(explanation.ids).toEqual([b, a]);
+      const projection = explanation.statements.find(statement => statement.sql.includes('edges AS MATERIALIZED'));
+      expect(projection?.returnedRows).toBe(1);
+      expect(projection?.plan.some(step => step.detail.includes('relations') || step.detail.includes('SEARCH r'))).toBe(true);
+    }
   });
 });
 
@@ -459,6 +496,50 @@ describe('roles', () => {
     expect(e.getRoles(b)).toEqual([]);
     expect(e.getRow(b)).not.toHaveProperty('role');
   });
+});
+
+
+it('updates cross-type graph watches when a destination is trashed or restored', async () => {
+  const root = e.create('Project').id(), leaf = task('destination');
+  e.write(root).link('refs', leaf);
+  const read = () => [
+    e.query('Project').out('refs').ids(),
+    e.query('Project').descendants('refs').ids(),
+    e.query('Project').linkedTo('refs', leaf).ids(),
+    e.query('Project').linkedWith(leaf).ids(),
+    e.query('Project').linkedTo('refs').ids(),
+  ];
+  const seen: ReturnType<typeof read>[] = [];
+  const watch = e.watch(read, value => seen.push(value));
+  try {
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[leaf], [leaf], [root], [root], [root]]);
+    e.write(leaf).trash();
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[], [], [root], [root], []]);
+    e.write(leaf).restore();
+    await e.admin.watchesSettled();
+    expect(seen.at(-1)).toEqual([[leaf], [leaf], [root], [root], [root]]);
+    expect(seen).toHaveLength(3);
+  } finally { watch.stop(); }
+});
+
+
+it('walks each source in the requested kind order, then relation insertion order', () => {
+  const [a, b, c, d] = [task('a'), task('b'), task('c'), task('d')];
+  e.write(a).link('refs', b).link('blocks', c).link('blocks', d);
+  expect(e.query.ids(a).out(['blocks', 'refs']).ids()).toEqual([c, d, b]);
+  expect(e.query.ids(a).descendants(['blocks', 'refs']).ids()).toEqual([c, d, b]);
+});
+
+
+it('matches an explicit relation end even when unchecked data has no entity at that end', () => {
+  const root = e.create('Project').id(), missing = 'Task-missing';
+  e.admin.addRelation(root, 'refs', missing);
+  expect(e.query('Project').linkedTo('refs', missing).ids()).toEqual([root]);
+  expect(e.query('Project').linkedWith(missing).ids()).toEqual([root]);
+  expect(e.query('Project').linkedTo('refs').ids()).toEqual([]);
+  expect(e.query('Project').out('refs').ids()).toEqual([]);
 });
 
 describe('weighted kinds', () => {
@@ -526,6 +607,28 @@ describe('weighted kinds', () => {
     expect(e.findRelations({ kind: 'mentions' }).map((r) => [r.id, r.weight])).toEqual([[one, 1]]);
   });
 
+  it('settles rank watches after committed weight changes and rolls back nested weight edits', async () => {
+    e = weighted();
+    const [a, b, c] = [task('a'), task('b'), task('c')];
+    e.write(a).link('refers', b, { weight: 9 }).link('refers', c);
+    const relation = e.findRelations({ target: b })[0]!;
+    const read = () => e.query('Task').rank('refers', { seeds: [a] }).hits();
+    const seen: ReturnType<typeof read>[] = [];
+    const watch = e.watch(read, result => seen.push(result));
+    try {
+      await e.admin.watchesSettled(); const before = read();
+      expect(() => e.transact(() => {
+        e.updateRelation(relation.id, { weight: 0 });
+        expect(read().find(hit => hit.id === b)!.score).toBe(0);
+        throw Error('rollback weight');
+      })).toThrow('rollback weight');
+      await e.admin.watchesSettled(); expect(read()).toEqual(before); expect(seen).toEqual([before]);
+      e.updateRelation(relation.id, { weight: 0 }); await e.admin.watchesSettled();
+      expect(seen).toEqual([before, read()]);
+      expect(read().find(hit => hit.id === b)!.score).toBe(0);
+    } finally { watch.stop(); }
+  });
+
   it('rank walks and teleports by weight unless told not to, and EXPLAIN reports the weight it read', () => {
     e = weighted();
     const [a, b, c] = [task('a'), task('b'), task('c')];
@@ -541,9 +644,18 @@ describe('weighted kinds', () => {
     for (const weight of [0, -1]) {
       expect(() => e.query('Task').rank('refers', { seeds: [{ id: a, weight }] }).ids(), String(weight)).toThrow(expect.objectContaining({ code: 'BATCH_INVALID' }));
     }
-    const [, stage] = e.query('Task').rank('refers').explain().stages;
-    expect(stage).toMatchObject({ stage: 'rank', nodes: 3, edges: 2, weight: 10 });
-    expect(e.query('Task').rank('refers', { weights: false }).explain().stages[1]).not.toHaveProperty('weight');
+    const explanation = e.query('Task').rank('refers').explain();
+    const unweighted = e.query('Task').rank('refers', { weights: false }).explain();
+    if (explanation.backend === 'elmdb' && unweighted.backend === 'elmdb') {
+      expect(explanation.stages[1]).toMatchObject({ stage: 'rank', nodes: 3, edges: 2, weight: 10 });
+      expect(unweighted.stages[1]).not.toHaveProperty('weight');
+    } else {
+      expect(explanation.backend).toBe('sqlite'); expect(unweighted.backend).toBe('sqlite');
+      if (explanation.backend === 'sqlite' && unweighted.backend === 'sqlite') {
+        expect(explanation.statements.some(statement => statement.sql.includes('r.weight'))).toBe(true);
+        expect(unweighted.statements.some(statement => statement.sql.includes('r.weight'))).toBe(false);
+      }
+    }
   });
 
   it('communities count each edge by its weight unless told not to', () => {

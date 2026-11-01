@@ -1,0 +1,98 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run --maxWorkers=2 --reporter=default --reporter=json --outputFile=/results/ears.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/search-builds.spec.ts (20 tests) 3164ms
+   ✓ shared background search generations > recovers a search cursor committed by a process killed before readiness  496ms
+   ✓ shared background search generations > lets background-only work exit but keeps an explicit readiness wait alive until complete  657ms
+ ✓ tests/sqlite/text-limits.spec.ts (16 tests) 1435ms
+ ✓ tests/sqlite/search-recovery.spec.ts (40 tests) 5434ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed before its commit  519ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed after its commit  417ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text owner index in a private background generation  313ms
+ ✓ tests/engine/search.spec.ts (11 tests) 643ms
+ ✓ tests/sqlite/vector-index.spec.ts (5 tests) 352ms
+ ✓ tests/sqlite/vector-models.spec.ts (7 tests) 3670ms
+   ✓ durable native model admission > uses the shared scheduler to train, project and publish readiness without logical commits  338ms
+   ✓ durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility  1194ms
+   ✓ durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions  1281ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 2010ms
+ ✓ tests/engine/watch-schedule.spec.ts (12 tests) 655ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 2721ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  400ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  400ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  381ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  359ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 2649ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 3539ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 2442ms
+ ✓ tests/engine/model-based.spec.ts (2 tests) 18313ms
+   ✓ refuses, holds and answers what the model does  4744ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  13568ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 1246ms
+ ✓ tests/sqlite/text-documents.spec.ts (10 tests) 1314ms
+   ✓ source-string FTS documents > bounds native owner masks without truncating either the masked or fallback answer  638ms
+ ✓ tests/sqlite/query-cost.spec.ts (18 tests) 1119ms
+ ✓ tests/sqlite/index-builds.spec.ts (9 tests) 1044ms
+   ✓ yielding value-index admission > resumes a committed batch cursor after a real killed process  393ms
+ ✓ tests/sqlite/trigrams.spec.ts (7 tests) 701ms
+ ✓ tests/sqlite/text-typos.spec.ts (20 tests) 1506ms
+ ✓ tests/sqlite/logical-restore.spec.ts (10 tests) 3090ms
+   ✓ restored logical stores > reopens an audited real store preserving raw values, vectors, order and counters  477ms
+   ✓ restored logical stores > replaces a populated incumbent without re-encoding restored cells or losing dormant embeddings  438ms
+   ✓ restored logical stores > keeps mismatched restored vectors primary but pending until current content is embedded  341ms
+   ✓ restored logical stores > preserves an existing destination and keeps the verified spool reusable after an IO refusal  401ms
+ ✓ tests/sqlite/values.spec.ts (10 tests) 395ms
+ ✓ tests/sqlite/embeddings.spec.ts (9 tests) 618ms
+ ✓ tests/sqlite/schema-validation.spec.ts (49 tests) 2047ms
+ ✓ tests/sqlite/vector-execution.spec.ts (3 tests) 1587ms
+   ✓ native vector execution > bounds exact reranking by candidate owners, filters before K and reads unit/savepoint changes  1066ms
+   ✓ native vector execution > audits missing or corrupt projections and rebuilds without changing primary bytes or commit identity  458ms
+ ✓ tests/sqlite/vector-training.spec.ts (5 tests) 1033ms
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 816ms
+   ✓ logical snapshot traversal > preserves raw cells, schema/counters, live/trash ordering, relations and embeddings  455ms
+ ✓ tests/sqlite/elmdb-conversion.spec.ts (7 tests) 2823ms
+   ✓ explicit elmdb dump conversion > reopens an audited store, retains typed values, trash/order/relations/counters and leaves input unchanged  432ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late truncated failure  431ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late trailing failure  828ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late count failure  522ms
+   ✓ explicit elmdb dump conversion > refuses precision loss and malformed loads rather than silently changing primary data  320ms
+ ✓ tests/sqlite/commit-outcomes.spec.ts (8 tests) 551ms
+ ✓ tests/engine/calls.spec.ts (9 tests) 522ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 355ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 247ms
+ ✓ tests/engine/vector.spec.ts (18 tests) 982ms
+ ✓ tests/sqlite/logical-stage.spec.ts (7 tests) 896ms
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 15ms
+ ✓ tests/sqlite/regex.spec.ts (11 tests) 521ms
+ ✓ tests/sqlite/transaction-failures.spec.ts (4 tests) 312ms
+ ✓ tests/sqlite/statement-cache.spec.ts (6 tests) 526ms
+ ✓ tests/sqlite/logical-snapshot.spec.ts (5 tests) 1201ms
+   ✓ app-only logical snapshot API > returns only a closed audited child store, preserves the source and removes its ingestion spool  555ms
+   ✓ app-only logical snapshot API > removes its container and retains the input error before any store can be published  451ms
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (4 tests) 1308ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  466ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  359ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (unawaited)  365ms
+ ✓ tests/engine/query-values.spec.ts (5 tests) 345ms
+ ✓ tests/engines.spec.ts (4 tests) 319ms
+ ✓ tests/engine/storage-port.spec.ts (3 tests) 202ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 157ms
+ ✓ tests/engine/maintenance.spec.ts (5 tests) 342ms
+ ✓ tests/sqlite/wal-readers.spec.ts (1 test) 165ms
+ ✓ tests/sqlite/schema-admission.spec.ts (2 tests) 197ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 118ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+ ✓ tests/engine/search-relevance.spec.ts (32 tests) 117ms
+ ✓ tests/sqlite/source-node.spec.ts (1 test) 326ms
+   ✓ opens the app-only storage entry with plain Node source conditions and owned regex assets  325ms
+
+ Test Files  50 passed (50)
+      Tests  624 passed (624)
+   Start at  23:18:01
+   Duration  43.94s (transform 909ms, setup 83ms, collect 5.02s, tests 76.09s, environment 5ms, prepare 2.34s)
+
+JSON report written to /results/ears.json

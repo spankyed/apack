@@ -1,0 +1,52 @@
+{
+  "image": "apack-linux-test:74d4b8cfe839",
+  "versions": {
+    "node": "23.11.1",
+    "acorn": "8.14.1",
+    "ada": "3.2.1",
+    "amaro": "0.4.1",
+    "ares": "1.34.5",
+    "brotli": "1.1.0",
+    "cjs_module_lexer": "2.1.0",
+    "cldr": "46.0",
+    "icu": "76.1",
+    "llhttp": "9.2.1",
+    "modules": "131",
+    "napi": "10",
+    "nbytes": "0.1.1",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.64.0",
+    "openssl": "3.0.16",
+    "simdjson": "3.12.2",
+    "simdutf": "6.0.3",
+    "sqlite": "3.49.1",
+    "tz": "2025a",
+    "undici": "6.21.2",
+    "unicode": "16.0",
+    "uv": "1.50.0",
+    "uvwasi": "0.0.21",
+    "v8": "12.9.202.28-node.14",
+    "zlib": "1.3.0.1-motley-788cb3c",
+    "zstd": "1.5.6"
+  },
+  "platform": "linux",
+  "arch": "arm64",
+  "kernel": "6.17.8-orbstack-00308-g8f9c941121b1",
+  "driver": "13.0.3",
+  "sqlite": {
+    "version": "3.53.4"
+  },
+  "nativePin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+  "manifest": {
+    "format": 1,
+    "platform": "linux",
+    "arch": "arm64",
+    "upstream": "814fd8ef4d42d6567f1613a66f556c8194764d06",
+    "sourceSha256": "5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b",
+    "patchSha256": "33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923",
+    "headersPackage": "13.0.3",
+    "extensionSha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d"
+  },
+  "vectorLibrarySha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d",
+  "note": "Read-only runtime receipt; the qualifying runs used two CPU/six GiB/no swap, as recorded in the harness."
+}

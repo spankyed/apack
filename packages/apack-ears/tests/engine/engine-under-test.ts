@@ -1,8 +1,13 @@
 // The engine the contract specs run against: an elmdb database in a temporary directory of its own, with no syncs
 // (D10), closed and removed when the test file ends. The specs only reach it through this file.
 import { afterAll } from 'vitest';
-import { createEarsEngine, type EARSRuntimeDeps, type EarsDatabase, type EarsEngine, type RelationRules, type RowRules } from '../../src/index.ts';
+import { createEarsEngine, type EARSRuntimeDeps, type EarsDatabase, type EarsEngine, type EngineSchema, type RelationRules, type RowRules } from '../../src/index.ts';
 import { createTemporaryDatabases } from '../../src/lmdb/index.ts';
+import { SqliteDatabase } from '../../src/sqlite/database.ts';
+import { toElmdbSchema } from '../../src/schema.ts';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export interface EngineUnderTestOptions {
   types: Iterable<string>;
@@ -19,16 +24,30 @@ export interface EngineUnderTestOptions {
   freeze?: boolean;
 }
 
+const temporary: Array<{database: SqliteDatabase; path: string}> = [];
+afterAll(() => { for (const held of temporary) { held.database.close(); rmSync(held.path,{recursive:true,force:true}); } });
 const databases = createTemporaryDatabases();
 afterAll(() => databases.disposeAll());
 
 export function freshEngine({ types, relationKinds, roles, rowRules = {}, relationRules = {}, warn, wrap, freeze }: EngineUnderTestOptions): EarsEngine {
-  const { database } = databases.open({
+  const schema = {
     types: Object.fromEntries([...types].map((type) => [type, rowRules[type] ?? { required: [] }])),
     relations: Object.fromEntries([...relationKinds].map((kind) => [kind, relationRules[kind] ?? {}])),
     roles: [...roles],
-  });
+  };
+  const database = openTestDatabase(schema);
   return createEarsEngine({ database: wrap ? wrap(database) : database, warn, freeze });
 }
 
 export type EngineUnderTest = EarsEngine;
+
+/** The same backend selection for connection-level contracts that do not construct an engine. */
+export function openTestDatabase(schema: EngineSchema): EarsDatabase {
+  if (process.env.EARS_EVALUATION_BACKEND === 'sqlite') {
+    const path = mkdtempSync(join(tmpdir(), 'ears-sqlite-evaluation-'));
+    const database = new SqliteDatabase({ path, schema: toElmdbSchema(schema), syncs: false });
+    temporary.push({ database, path });
+    return database;
+  }
+  return databases.open(schema).database;
+}

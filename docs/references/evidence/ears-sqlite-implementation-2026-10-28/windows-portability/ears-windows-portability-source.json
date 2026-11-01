@@ -1,0 +1,9 @@
+{
+  "base": "2f7de63221e56b83bec036d1f32069d132167734",
+  "changedFiles": [
+    "packages/apack-ears/tests/engine/calls.spec.ts",
+    "packages/apack-ears/tests/sqlite/search-builds.spec.ts",
+    ".gitattributes"
+  ],
+  "sha256": "e9e330544ec644e8fd44905da25f862f202785f0c971d78f0bbb51cd62d25b97"
+}

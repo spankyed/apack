@@ -1,0 +1,20 @@
+{
+  "Linux-X64/verification.json": "6571cde89f9a4d741cc45c54fc016fefc05ee3aa86d827f0dbe91586060ade1a",
+  "Linux-X64/ears.json": "8b2b90702ee0121798effdfa88157139c928291f0db6149d447749658464e03b",
+  "Linux-X64/host.json": "cbeac176e5b99bd9e175754bde60d82bce7253317a3a68ba46d9fd8b2536a96e",
+  "Linux-X64/runtime.json": "9d83bb1d8b3a7c03e233fa289d2fbc6dc5991ce0a65b21d10c9955a8f98f0d29",
+  "Linux-X64/native-membership.json": "68cca0e943f3021293861e39c85e06b27fdfb3873e6e184c2eddd31fb14cce79",
+  "Linux-X64/native-generation/provenance.json": "3a40a5ccc9eb08d807b55af0d337d04d3a741944969b7e2ed48981f95046ad8d",
+  "macOS-ARM64/verification.json": "02993e86e1bb521baa1e594c83d8c6e3752380d39957a1fddef8eafc230890ff",
+  "macOS-ARM64/ears.json": "18be9f19c962b6a692626266b7881bbda9e4d704df43aeb85678dabbea6d72b0",
+  "macOS-ARM64/host.json": "03cc98146ad7e2b9921226eba89e9fac23e6e723b7d59d54a717f6fd843b9d24",
+  "macOS-ARM64/runtime.json": "fa2392c7ad473d6e2a3fa4e7be43666953b34569a0f40d1b0687b312d9249b15",
+  "macOS-ARM64/native-membership.json": "551a0b5ec061dd8441f851b82e53b9688b46a41d9013ae6eed4dcb191e574791",
+  "macOS-ARM64/native-generation/provenance.json": "2c7570396c68b79430e3c45fba0e9d3ff2841953078e7ae6796d7b99f13b5723",
+  "Windows-X64/verification.json": "2571b1440f538f3c94015e8230328271369f64dcbb74685054aad80b4a80c9e9",
+  "Windows-X64/ears.json": "7108d036273b113f19f0cd9582de770c8a9e3b062ad7ab5de76b5c09d4ad271c",
+  "Windows-X64/host.json": "0c57713e96fdf1a3e67a685982482778b420c9a256d82aca4081d7a50cbe4afc",
+  "Windows-X64/runtime.json": "0db2ccf0cecaa3aadbd4f8087a8aa0654f4f31e9b9863e294aef717aa3998903",
+  "Windows-X64/native-membership.json": "2fab03b4e03fd4dc6b39caa7accfff9d2c2c99a3f28acc1ac9fb2c739f2c343f",
+  "Windows-X64/native-generation/provenance.json": "527c7d43d61757f8306cf906c32004f67ee278966a30dfa74a66d7be7691e0ec"
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "file": "activation-client.log.gz",
+    "sha256": "25f1c3ab295bbba31ef2856c1d353b42181cbef26c89d71417e3c6192439419f",
+    "storedSha256": "f9adc765a4ffa9df1208a02cd5beb266fed8e71f15fd96c54bae81322e094169"
+  },
+  {
+    "file": "activation.json.gz",
+    "sha256": "7f6d593cf58ae0884d0b506db58686d397f04182ab9bbdc512a3d83628328f2b",
+    "storedSha256": "f3b765c11f90f2dcb827edd51fabe62595b7d0e7832c2e1f52665aec8daaa9d4"
+  },
+  {
+    "file": "new-api.log.gz",
+    "sha256": "ce9f5c28bc311fbb461c3041a1e8d5e48342c7bcde740330b140fdf4693021cc",
+    "storedSha256": "2ea41eb249884c79790e40ccb9761df4edb58d6c7b87411caeda29f63b28fdc6"
+  },
+  {
+    "file": "new-hook.json.gz",
+    "sha256": "3029e5bad34c51d2a4796e1da319da331ee142a822811150acac0569261e4315",
+    "storedSha256": "6fbb16484885aa9086adbc60dd4aab633846b7495b48d4bb56c6e376c6731428"
+  },
+  {
+    "file": "old-api.log.gz",
+    "sha256": "31dd1e65ff505737c5cc8c008104ecb3b6a8a0a9adc335ebf638d174f9f64ff0",
+    "storedSha256": "d96bf683b8f7b06c05ca3200457197b12d806522d3a5059862c85884016f8430"
+  },
+  {
+    "file": "run.json.gz",
+    "sha256": "3cf43b87b1be1059cf9040a13c4f34a1100e9e8046b900844a1a37d862a76be8",
+    "storedSha256": "bd1cf985ed763762ac9eec503b60a7711fcb2cd947776c726e20490271fdcfd4"
+  },
+  {
+    "file": "recipes/ears-activation-startup-controls.py.gz",
+    "sha256": "5f6b8087a72a45b86ab60bdb59e77273caee6c01a0f4982e552d773dd4bd01a3",
+    "storedSha256": "ae07868881dc207d2e3e00eabfb07aefc9a86956f0bc5e7a8eac15e221f412ec"
+  },
+  {
+    "file": "recipes/ears-run-activation-startup.py.gz",
+    "sha256": "34106e1cec3f78ba3c521022f2580332641a36662b8bd33eabc5330fba95b060",
+    "storedSha256": "8be25c96e1707c42eec689f0bebbabf2d5fb4cf6fb59683b445e50330edd94f1"
+  },
+  {
+    "file": "recipes/ears-wait-activation-startup.py.gz",
+    "sha256": "0635012c32e207ec99f991b4185b46797c745fa51d9620d59db7921ceb69acea",
+    "storedSha256": "50a7906f0f367899ea8d67fa15fc749c4ade8361a8c1936502a6f71ec49fcb40"
+  },
+  {
+    "file": "recipes/ears-activation-hook.mjs.gz",
+    "sha256": "54184a94f9b7804a6225626544d04c765ea0b54b460a246e98f7ef4731c296fe",
+    "storedSha256": "665cf05554f6151ad72dd9b542ba628ac27c6915d2a9f40022150e0270645ef9"
+  },
+  {
+    "file": "recipes/ears-activation-cpu-hook.mjs.gz",
+    "sha256": "25485cdc63b352c5e22213dd05784c1ba54dfc7cec7d2fba43c0522249f26287",
+    "storedSha256": "f08792243a33cab308cee6ab1c361905cb1577454c7947a02fd7fd2527377f30"
+  },
+  {
+    "file": "recipes/ears-activation-client.mjs.gz",
+    "sha256": "5dfa6af633a3af9a98cd08f1b2be00aecffc97633e6bc20195c4ccc446071141",
+    "storedSha256": "99def174f03f2ba8a0600077b7f603514999da430909c70313eb2329b10ce712"
+  }
+]

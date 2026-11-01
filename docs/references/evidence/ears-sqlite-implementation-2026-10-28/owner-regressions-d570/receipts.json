@@ -1,0 +1,58 @@
+{
+  "fixed-tests.json": {
+    "sha256": "0e333bf73b397504dccf6a2d2cd41cc52d5596d0b990a256efecb46ebe755125",
+    "bytes": 12850
+  },
+  "fixed-test.log": {
+    "sha256": "8edd25ad39cbc036f2094f59e157ce64161682ca27190cd8820c7a150fcb1d0d",
+    "bytes": 638
+  },
+  "fixed-inputs.json": {
+    "sha256": "08b3e3e996be5defef155def94f69ba1e0871f7c7e2b01c22049748f7d5022dc",
+    "bytes": 213199
+  },
+  "fixed-run.json": {
+    "sha256": "038933674fc7b5a3d3023262994f0837592a7582d4c0fddef4dfa5a3459715c4",
+    "bytes": 183
+  },
+  "fixed-host-launch.json": {
+    "sha256": "0ba44b459ec45f75995168ccf1bdad94a629c3833db3104c024dd7bc2ca6c565",
+    "bytes": 1069
+  },
+  "fixed-ears-sqlite-owner-regressions-run.py": {
+    "sha256": "d7d6dd19e99fd0d7b35e81382cf058403ead6af84c13c849a6eb0cabccd9663c",
+    "bytes": 1247
+  },
+  "fixed-ears-run-sqlite-owner-regressions.py": {
+    "sha256": "e69dfd13fd21f10e1932a182c964554dd31bf00364f1fb4cdc5c315c47f9c854",
+    "bytes": 3062
+  },
+  "mutation-tests.json": {
+    "sha256": "ebc096da92cb7f0e540ab81c580d4e77bc708792176c18e54c213725f0c62f31",
+    "bytes": 13066
+  },
+  "mutation-test.log": {
+    "sha256": "a06962be38233b49e1f3f130137e4f32ea6c351df984ea4b357d88cd6a66a621",
+    "bytes": 5910
+  },
+  "mutation-inputs.json": {
+    "sha256": "f64b3a6d1dcd78aadafb55942c7c852eded40f4ca959a36f413aa48636fcfe69",
+    "bytes": 213199
+  },
+  "mutation-run.json": {
+    "sha256": "5d7034e598a7ea9d22fa375e9dfc0966be6b82abba732f57486f8b2b5d53d5d4",
+    "bytes": 211
+  },
+  "mutation-host-launch.json": {
+    "sha256": "d585d383e6f850ffc7d87465a8a767acfd37fc96d3a9ea6aeab4f1a2e37eee50",
+    "bytes": 1062
+  },
+  "mutation-ears-sqlite-owner-regressions-mutation-run.py": {
+    "sha256": "4394780507c64635ae58a3bd093ccdef7476770abab94eb242a0b25bd1eda2e4",
+    "bytes": 1708
+  },
+  "mutation-ears-run-sqlite-owner-regressions-mutation.py": {
+    "sha256": "b5700394685ae3d3a7ba07c9ccfa6206d3acc5c837de4d1cbd89f5015bb17091",
+    "bytes": 3064
+  }
+}

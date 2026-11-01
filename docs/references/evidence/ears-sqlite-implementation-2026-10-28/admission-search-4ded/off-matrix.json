@@ -1,0 +1,256 @@
+{
+  "protocol": "ears-admission-trials/1",
+  "completed": true,
+  "qualification": false,
+  "trials": 3,
+  "sizes": [
+    10000,
+    100000
+  ],
+  "durable": false,
+  "kind": "search",
+  "records": [
+    {
+      "trial": 1,
+      "size": 10000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 4.8942550000001575,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.43617300000005343,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.7837060000001657,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 3.419114999998783,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 4.5190849999999045,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 10.542019999999866,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4293072,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 19784144,
+          "limit": 41255840
+        }
+      }
+    },
+    {
+      "trial": 1,
+      "size": 100000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 5.381132000000434,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.3383709999980056,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.673039000001154,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 4.1023380000006,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 6.585167000001093,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 11.716354999996838,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 5669152,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 161268000,
+          "limit": 208899424
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "size": 100000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 5.343762999998944,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.5085739999994985,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.6674679999996442,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 4.666388999998162,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 8.543326999999408,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 12.394592000004195,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 5887512,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 161486360,
+          "limit": 208899424
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "size": 10000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 5.231303000000025,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.3471169999997983,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.8359400000008463,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 2.3238890000002357,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 3.3244119999999384,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 9.618836999999985,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4375472,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 19866544,
+          "limit": 41255840
+        }
+      }
+    },
+    {
+      "trial": 3,
+      "size": 10000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 5.4072929999999815,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.33233899999981986,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.6881149999999252,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 2.104884000000311,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 3.8864290000001347,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 8.670773000000281,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4375472,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 19866544,
+          "limit": 41255840
+        }
+      }
+    },
+    {
+      "trial": 3,
+      "size": 100000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 5.411130000000412,
+          "limit": 100
+        },
+        "searchLookupP99Ms": {
+          "actual": 0.3191349999997328,
+          "limit": 16
+        },
+        "operationP99Ms": {
+          "actual": 1.6219719999935478,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 4.5405449999962,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 6.500289999996312,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 11.881208999999217,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 5899872,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 161498720,
+          "limit": 208899424
+        }
+      }
+    }
+  ],
+  "scope": "Fresh-process synthetic admission; resource limits belong to the enclosing runner",
+  "passed": true
+}

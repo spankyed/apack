@@ -1,0 +1,4 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+{"node":"v23.11.1","platform":"win32","release":"10.0.26100","scriptSha256":"8fa37e2ae74e11cb2fadb977c2b960bf6220473d24e5364b0111b027f40c07d2","selfKill":{"status":1,"signal":null,"stdout":"cursor-ready\n","stderr":""},"parentKill":{"killed":true,"status":null,"signal":"SIGKILL","witness":"cursor-ready"}}

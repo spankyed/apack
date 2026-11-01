@@ -1,0 +1,50 @@
+[
+  {
+    "trial": 1,
+    "format": "sqlite/1",
+    "readySeconds": 1.9031879560000107,
+    "exitCode": 0,
+    "rpc": {
+      "trial": 1,
+      "seeded": true,
+      "appStatePresent": true,
+      "loaded": [
+        "default-setup"
+      ],
+      "view": {
+        "firstCommit": 4,
+        "changedCommit": 5,
+        "label": "updated through real pack",
+        "updates": 2
+      },
+      "settingsLeaseOpenedAndClosed": true
+    },
+    "environmentDiagnostics": {
+      "missingOptionalCodexExecutable": true
+    }
+  },
+  {
+    "trial": 2,
+    "format": "sqlite/1",
+    "readySeconds": 1.9066301529999805,
+    "exitCode": 0,
+    "rpc": {
+      "trial": 2,
+      "seeded": true,
+      "appStatePresent": true,
+      "loaded": [
+        "default-setup"
+      ],
+      "view": {
+        "firstCommit": 5,
+        "changedCommit": 6,
+        "label": "updated after API restart",
+        "updates": 2
+      },
+      "settingsLeaseOpenedAndClosed": true
+    },
+    "environmentDiagnostics": {
+      "missingOptionalCodexExecutable": true
+    }
+  }
+]

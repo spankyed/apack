@@ -1,0 +1,56 @@
+[
+  {
+    "file": "installed-app.json.gz",
+    "originalBytes": 10074,
+    "originalSha256": "b91a7c5263623a65b50ee7f4b1645de52a5cb82fb4b6c9d6869a7f9295132bf5",
+    "storedSha256": "0d23894fca907eef80214e78376565494f8f9307a3ce7ea538e314b5a5f4b900"
+  },
+  {
+    "file": "typecheck.log.gz",
+    "originalBytes": 0,
+    "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "storedSha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+  },
+  {
+    "file": "installed-signed-native.log.gz",
+    "originalBytes": 2318,
+    "originalSha256": "684fb904fc4d01a50cf547f1d3b06440b4727525eff3822880e268824e59ecef",
+    "storedSha256": "3826f7fa986fefa7d098c58c880e197afecbc8780743cdffe61ec10f69d80977"
+  },
+  {
+    "file": "installed-signing.log.gz",
+    "originalBytes": 1434,
+    "originalSha256": "33c96a9042ce2c61168b8a87599d44dbb92b6e7cf5bef5dd0a6a6ace1f396e8c",
+    "storedSha256": "801f717534ce82787ed5093b50cbd34a02bb2225d0cddf114444efbbb3db4940"
+  },
+  {
+    "file": "installed-native.log.gz",
+    "originalBytes": 2318,
+    "originalSha256": "5199ce65bd043a5cd75a251deff6b9d75e7f94d96a48bb77fa7ca4e2135b854a",
+    "storedSha256": "f930d818e4a3fed34795398c3d8fd61fc5ebaba70ab3c988f58632e01a550a4c"
+  },
+  {
+    "file": "verification.json.gz",
+    "originalBytes": 271,
+    "originalSha256": "28ed5337d7c387b04739653a0776099f0d61b5bc9ba97e83bacba5abc07134bb",
+    "storedSha256": "792ccfa62ed715c7753c77f88e5a977ca77efa0e4154f2c2c12e1f234f4cae7e"
+  },
+  {
+    "file": "installed-build.log.gz",
+    "originalBytes": 10480,
+    "originalSha256": "74b205b0cf182848b2856aaf5ee0626fc920ee188b654a16901ec5bbf865ff25",
+    "storedSha256": "770d8228f61c10397c1fc40bcacb800f79bd417aff1e94307ac16eb38f2f6593"
+  },
+  {
+    "file": "ears-installed-49d-41144824212-current.json.gz",
+    "originalBytes": 6347,
+    "originalSha256": "75f14957854e6c66911b640abe451a211a6de6d23ef6782f1339c502b7122ec5",
+    "storedSha256": "b0c04aa618325ed2772b29b03eb2d1956d98763c3b985c9911c2f6ed17a0c9a1"
+  },
+  {
+    "file": "ears-installed-49d-41144824212.log.gz",
+    "originalBytes": 71666,
+    "originalSha256": "5d267d101b6b7662e1680d837b671b58f23e02d88371a7e56248b3c1db56217f",
+    "storedSha256": "96d53341eae7226f827e154c7e29f7575bbec9f8b3be61b7385089ef8322419a"
+  }
+]

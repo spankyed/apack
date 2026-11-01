@@ -1,0 +1,16 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/query-cost.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/query-cost.spec.ts (16 tests) 2319ms
+   ✓ SQLite ordering work > orders rank without loading unrelated bodies or issuing per-entity SQL  539ms
+   ✓ SQLite ordering work > orders sortText without loading unrelated bodies or issuing per-entity SQL  380ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  13:38:43
+   Duration  3.59s (transform 605ms, setup 48ms, collect 769ms, tests 2.32s, environment 0ms, prepare 79ms)
+

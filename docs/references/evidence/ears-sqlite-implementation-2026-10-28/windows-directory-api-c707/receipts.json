@@ -1,0 +1,12 @@
+[
+  {
+    "file": "report.json.gz",
+    "sha256": "23bf6408da62f06868a620adbb06f35fed2e4a48a687ae040e991da4e4801737",
+    "storedSha256": "216f26d97bb90efb74762ebfe104218387de808176daffd0951e02c1ecba5d00"
+  },
+  {
+    "file": "workflow.json.gz",
+    "sha256": "3ef530be922c46e0da132fb27701298c380834bf583c3f1a47e8bdba6c861e14",
+    "storedSha256": "433743b78526a769fb1f879f8ebb9592e414f202e9d41bb94d135b42c6478284"
+  }
+]

@@ -5,11 +5,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import elmdb, { type Schema } from 'elmdb';
+import { adaptDatabase, type BinaryDatabase } from './adapter.ts';
 import type { EarsDatabase } from '../database.ts';
 import { toElmdbSchema, type EngineSchema } from '../schema.ts';
 
 /** The storage format an elmdb database is in, as a backup records it: provenance, since opening is what decides */
-export const DATABASE_FORMAT = 'elmdb/1';
+export { DATABASE_FORMAT } from './format.ts';
 
 export interface DatabaseOptions {
   /** The database's directory, created unless `readOnly` */
@@ -27,12 +28,12 @@ export interface DatabaseOptions {
 
 /** Opens the elmdb database at `path` for an engine (`createEarsEngine({ database })`) */
 export function openDatabase({ path: dir, schema, readOnly, syncs }: DatabaseOptions): EarsDatabase {
-  return elmdb.Database.open(dir, {
+  return adaptDatabase(elmdb.Database.open(dir, {
     ...(readOnly && { readOnly }),
     // elmdb checks the schema whole, naming every problem
     ...(schema && { schema: toElmdbSchema(schema) as Schema }),
     ...(syncs === false && { syncs }),
-  }) as unknown as EarsDatabase;
+  }) as unknown as BinaryDatabase);
 }
 
 /** Databases opened in temporary directories, each removed when it is disposed or the process exits */

@@ -1,0 +1,463 @@
+{
+  "run": 41238461001,
+  "source": "b04e91fba5f36980bb27b3f00734734ce3802aed",
+  "prefixes": [
+    {
+      "size": 1000,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "maxRssKiB": 320884,
+      "nativeModel": null,
+      "nativeModelRequired": false,
+      "nativeModelReady": false,
+      "nativeModelOwnerStarted": true,
+      "exactVectorChunkLimit": 4096,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "oracleSha256": "f5aba7a09c62d9f57a40aed154cb9c147753f10ae5601c4e438539f432af96ff",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "oracleScalarChecks": [
+        {
+          "size": 1000,
+          "cohort": "all-live",
+          "query": 0,
+          "scalar": 0.26787009910066867,
+          "matrix": 0.2678700991006686
+        },
+        {
+          "size": 1000,
+          "cohort": "all-live",
+          "query": 37,
+          "scalar": 0.4380750725311739,
+          "matrix": 0.43807507253117384
+        },
+        {
+          "size": 1000,
+          "cohort": "all-live",
+          "query": 99,
+          "scalar": 0.40064265651637737,
+          "matrix": 0.4006426565163776
+        },
+        {
+          "size": 1000,
+          "cohort": "all-live",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 1000,
+          "cohort": "all-live",
+          "query": 137,
+          "scalar": 1,
+          "matrix": 1.0000000000000002
+        },
+        {
+          "size": 1000,
+          "cohort": "all-live",
+          "query": 199,
+          "scalar": 1,
+          "matrix": 1.0000000000000002
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-10-percent",
+          "query": 0,
+          "scalar": 0.24667173426590694,
+          "matrix": 0.24667173426590694
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-10-percent",
+          "query": 37,
+          "scalar": 0.4380750725311739,
+          "matrix": 0.43807507253117384
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-10-percent",
+          "query": 99,
+          "scalar": 0.3288423755562028,
+          "matrix": 0.3288423755562029
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-10-percent",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-10-percent",
+          "query": 137,
+          "scalar": 1,
+          "matrix": 1.0000000000000002
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-10-percent",
+          "query": 199,
+          "scalar": 1,
+          "matrix": 1.0000000000000002
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-1-percent",
+          "query": 0,
+          "scalar": 0.15558678471529283,
+          "matrix": 0.15558678471529283
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-1-percent",
+          "query": 37,
+          "scalar": 0.17622096675581106,
+          "matrix": 0.17622096675581114
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-1-percent",
+          "query": 99,
+          "scalar": 0.2610991245727181,
+          "matrix": 0.2610991245727181
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-1-percent",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-1-percent",
+          "query": 137,
+          "scalar": 0.16609596460964304,
+          "matrix": 0.16609596460964313
+        },
+        {
+          "size": 1000,
+          "cohort": "candidate-1-percent",
+          "query": 199,
+          "scalar": 0.22666744847477596,
+          "matrix": 0.22666744847477588
+        }
+      ],
+      "databaseScratchRemoved": true,
+      "rawReportSha256": "18af29bfe73127084059aef2b0660ed0716bfd2a26c7a9c87a76ef2646353efa",
+      "admissionMs": 14.741485000000011,
+      "admissionHeartbeatP99Ms": 11.309141000000182
+    },
+    {
+      "size": 10000,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "maxRssKiB": 503804,
+      "nativeModel": {
+        "state": "ready",
+        "samples": 10000,
+        "model_sha256": "bf9797d306f2a29c0c45ce74c8414532ccbdbbf5408dc5112f34ec749367195f",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "nativeModelRequired": true,
+      "nativeModelReady": true,
+      "nativeModelOwnerStarted": true,
+      "exactVectorChunkLimit": 4096,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "oracleSha256": "f5aba7a09c62d9f57a40aed154cb9c147753f10ae5601c4e438539f432af96ff",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "oracleScalarChecks": [
+        {
+          "size": 10000,
+          "cohort": "all-live",
+          "query": 0,
+          "scalar": 0.44681026482678293,
+          "matrix": 0.446810264826783
+        },
+        {
+          "size": 10000,
+          "cohort": "all-live",
+          "query": 37,
+          "scalar": 0.44010381396435244,
+          "matrix": 0.4401038139643525
+        },
+        {
+          "size": 10000,
+          "cohort": "all-live",
+          "query": 99,
+          "scalar": 0.4250240320186589,
+          "matrix": 0.4250240320186591
+        },
+        {
+          "size": 10000,
+          "cohort": "all-live",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 10000,
+          "cohort": "all-live",
+          "query": 137,
+          "scalar": 1,
+          "matrix": 1.0000000000000004
+        },
+        {
+          "size": 10000,
+          "cohort": "all-live",
+          "query": 199,
+          "scalar": 1,
+          "matrix": 0.9999999999999998
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-10-percent",
+          "query": 0,
+          "scalar": 0.42129278252267555,
+          "matrix": 0.42129278252267544
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-10-percent",
+          "query": 37,
+          "scalar": 0.4380750725311739,
+          "matrix": 0.43807507253117384
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-10-percent",
+          "query": 99,
+          "scalar": 0.37577574132543773,
+          "matrix": 0.3757757413254378
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-10-percent",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-10-percent",
+          "query": 137,
+          "scalar": 1,
+          "matrix": 1.0000000000000004
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-10-percent",
+          "query": 199,
+          "scalar": 1,
+          "matrix": 0.9999999999999998
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-1-percent",
+          "query": 0,
+          "scalar": 0.2718239482638864,
+          "matrix": 0.27182394826388623
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-1-percent",
+          "query": 37,
+          "scalar": 0.2546372282901063,
+          "matrix": 0.2546372282901064
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-1-percent",
+          "query": 99,
+          "scalar": 0.2610991245727181,
+          "matrix": 0.2610991245727181
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-1-percent",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-1-percent",
+          "query": 137,
+          "scalar": 1,
+          "matrix": 1.0000000000000004
+        },
+        {
+          "size": 10000,
+          "cohort": "candidate-1-percent",
+          "query": 199,
+          "scalar": 1,
+          "matrix": 0.9999999999999998
+        }
+      ],
+      "databaseScratchRemoved": true,
+      "rawReportSha256": "e0c5cc886a7779b6c72068c8f6839e563a3c3c649a8ae7a05d493bdf2f87513f",
+      "admissionMs": 9687.860252999999,
+      "admissionHeartbeatP99Ms": 6.982512000000497
+    },
+    {
+      "size": 99900,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "maxRssKiB": 1526368,
+      "nativeModel": {
+        "state": "ready",
+        "samples": 20000,
+        "model_sha256": "6b6405f260fede1c41f4af21d9aefaee9f1f1809ade5f8ca565369fc1d5afe1b",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "nativeModelRequired": true,
+      "nativeModelReady": true,
+      "nativeModelOwnerStarted": true,
+      "exactVectorChunkLimit": 4096,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "oracleSha256": "f5aba7a09c62d9f57a40aed154cb9c147753f10ae5601c4e438539f432af96ff",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "oracleScalarChecks": [
+        {
+          "size": 99900,
+          "cohort": "all-live",
+          "query": 0,
+          "scalar": 0.5423708343402377,
+          "matrix": 0.5423708343402379
+        },
+        {
+          "size": 99900,
+          "cohort": "all-live",
+          "query": 37,
+          "scalar": 0.5097643454680827,
+          "matrix": 0.5097643454680827
+        },
+        {
+          "size": 99900,
+          "cohort": "all-live",
+          "query": 99,
+          "scalar": 0.4410241588132364,
+          "matrix": 0.4410241588132366
+        },
+        {
+          "size": 99900,
+          "cohort": "all-live",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 99900,
+          "cohort": "all-live",
+          "query": 137,
+          "scalar": 1,
+          "matrix": 0.9999999999999999
+        },
+        {
+          "size": 99900,
+          "cohort": "all-live",
+          "query": 199,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-10-percent",
+          "query": 0,
+          "scalar": 0.4893679593469615,
+          "matrix": 0.4893679593469615
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-10-percent",
+          "query": 37,
+          "scalar": 0.4447678515679319,
+          "matrix": 0.44476785156793197
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-10-percent",
+          "query": 99,
+          "scalar": 0.37577574132543773,
+          "matrix": 0.3757757413254378
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-10-percent",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-10-percent",
+          "query": 137,
+          "scalar": 0.40325313336483926,
+          "matrix": 0.40325313336483903
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-10-percent",
+          "query": 199,
+          "scalar": 0.4783530820779171,
+          "matrix": 0.47835308207791705
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-1-percent",
+          "query": 0,
+          "scalar": 0.313145975759673,
+          "matrix": 0.31314597575967323
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-1-percent",
+          "query": 37,
+          "scalar": 0.39263473294059725,
+          "matrix": 0.39263473294059725
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-1-percent",
+          "query": 99,
+          "scalar": 0.34463218106310445,
+          "matrix": 0.34463218106310434
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-1-percent",
+          "query": 100,
+          "scalar": 1,
+          "matrix": 1
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-1-percent",
+          "query": 137,
+          "scalar": 0.39153693859257965,
+          "matrix": 0.39153693859257954
+        },
+        {
+          "size": 99900,
+          "cohort": "candidate-1-percent",
+          "query": 199,
+          "scalar": 0.3741119404141787,
+          "matrix": 0.37411194041417856
+        }
+      ],
+      "databaseScratchRemoved": true,
+      "rawReportSha256": "3adb37b2399b7b158b97f266b90df88e8072335f4d5691e58cfffd68434ea972",
+      "admissionMs": 44176.561265,
+      "admissionHeartbeatP99Ms": 19.560826000000816
+    }
+  ]
+}

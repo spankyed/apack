@@ -1,0 +1,15 @@
+{
+  "trial": 2,
+  "seeded": true,
+  "appStatePresent": true,
+  "loaded": [
+    "default-setup"
+  ],
+  "view": {
+    "firstCommit": 5,
+    "changedCommit": 6,
+    "label": "updated after API restart",
+    "updates": 2
+  },
+  "settingsLeaseOpenedAndClosed": true
+}

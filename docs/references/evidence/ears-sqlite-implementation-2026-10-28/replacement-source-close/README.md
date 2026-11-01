@@ -1,0 +1,9 @@
+# Replacement source-close outcome boundary
+
+Review after strict source `729867e787` found `replaceWith()` closing its read-only source in an unconditional `finally`, after committing its destination. A close error could therefore hide a `COMMIT_UNKNOWN` or appear after an acknowledged successful destination commit without notifying the engine. This is a real error-ordering hole, not a claim that an observed filesystem incident reproduced it.
+
+The correction finishes all source reads and closes that source before destination commit. A close refusal now aborts the destination transaction. On earlier operation failure, remaining source cleanup preserves the original failure as aggregate cause and retains its code, including an original thrown `undefined`; there is no fallible source close after destination commit.
+
+Four pure Node controls execute the actual extracted method with controlled source/transaction adapters. All fixed controls pass and the baseline at `32d88574da` exposes each defect. The controls identify ordering/error preservation only, not real SQLite rollback, durability, watches or resource cleanup. Changed TypeScript parses, but no host compiler or native database is built or loaded.
+
+Actual driver regressions in `tests/sqlite/commit-outcomes.spec.ts` cover source-close refusal with unchanged destination sequence/data/watches, combined primary/cleanup failures (including `undefined`), and lost acknowledgements with both committed and rolled-back data observed on fresh reopen. The existing focused CI cohort now includes that file. [Matching-source real-driver execution](../replacement-focused-77c/README.md) now passes all 13 commit-outcome cases at 77cbd28f38, including the new replacement regressions. The complete selected gate still fails the retained text relevance judgment; all original gates and deadlines remain required.

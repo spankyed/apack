@@ -1,0 +1,7 @@
+import pathlib,subprocess,json,hashlib
+r=pathlib.Path('/metrics');o=pathlib.Path('/results')
+files=list((r/'packages/apack-ears/src').rglob('*.ts'))+list((r/'packages/apack-host/src').rglob('*.ts'))+[r/'packages/apack-host/tests/backup/storage.spec.ts']
+(o/'source-sha256.json').write_text(json.dumps({str(p.relative_to(r)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},indent=2)+'\n')
+p=subprocess.run(['npm','test','-w','@apackdev/host','--','tests/backup/storage.spec.ts','-t','refreshes the accepted settings'],cwd=r,capture_output=True,text=True,timeout=60)
+(o/'settings-refresh.txt').write_text(p.stdout+p.stderr);print('settings-refresh',p.returncode,flush=True)
+assert p.returncode==0,p.stdout+p.stderr

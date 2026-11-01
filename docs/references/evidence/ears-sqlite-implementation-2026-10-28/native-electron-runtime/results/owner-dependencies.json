@@ -1,0 +1,17 @@
+{
+  "copiedWorkspaceOwners": [
+    "apack-ears",
+    "apack-host",
+    "api",
+    "apack-cli",
+    "apack-sdk",
+    "apack-testing",
+    "apack-ui",
+    "default-setup",
+    "main",
+    "preload",
+    "renderer",
+    "typescript-floor"
+  ],
+  "reason": "Preserve actual owner-specific versions; root Ajv6 is not the Ajv8 dependency EARS/SDK declare"
+}

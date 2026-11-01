@@ -1,0 +1,133 @@
+--- a/vec1.c
++++ b/vec1.c
+@@ -5783,6 +5783,7 @@
+ struct Vec1Filter {
+   char vop;                       /* VEC1_OP_XXX value */
+   int iMeta;                      /* Index of meta-value column on LHS of op */
++  int bSortedIntegerIn;           /* All-integer IN operands sorted by value */
+   int eType;                      /* Type of RHS value (SQLITE_INTEGER etc.) */
+   i64 iVal;                       /* Value for integer, size in bytes for T/B */
+   double fVal;                    /* Value for float type */
+@@ -7347,6 +7348,12 @@
+ */
+ #define COMPARE(a, b) ((a)==(b) ? 0 : ((a)>(b) ? +1 : -1))
+ 
++static int vec1IntegerFilterCompare(const void *a, const void *b){
++  const Vec1Filter *pa = (const Vec1Filter*)a;
++  const Vec1Filter *pb = (const Vec1Filter*)b;
++  return COMPARE(pa->iVal, pb->iVal);
++}
++
+ /*
+ ** Return 0 if the meta value passes the filter, or 1 if it is excluded
+ ** by the filter. This is the slow path that can do any operator for
+@@ -7357,6 +7364,22 @@
+ 
+   if( pFilter->vop==VEC1_OP_IN ){
+     int ii;
++    if( pFilter->bSortedIntegerIn ){
++      i64 lo = 0, hi = pFilter->iVal;
++      if( pMeta->eType!=SQLITE_INTEGER && pMeta->eType!=SQLITE_FLOAT ){
++        return 1;
++      }
++      while( lo<hi ){
++        i64 mid = lo + (hi-lo)/2;
++        i64 rhs = pFilter[mid+1].iVal;
++        int order = pMeta->eType==SQLITE_INTEGER
++            ? COMPARE(rhs, pMeta->iVal)
++            : COMPARE((double)rhs, pMeta->fVal);
++        if( order==0 ) return 0;
++        if( order<0 ) lo = mid+1; else hi = mid;
++      }
++      return 1;
++    }
+     for(ii=0; ii<pFilter->iVal; ii++){
+       if( vec1MetaValueFilter(&pFilter[ii+1], pMeta)==0 ) return 0;
+     }
+@@ -7957,6 +7980,10 @@
+   );
+ }
+ 
++static int vec1IntegerCompare(const void *a, const void *b){
++  return COMPARE(*(const int*)a, *(const int*)b);
++}
++
+ /*
+ ** Buffer pMeta contains an nEntry entry meta-value list in either
+ ** 1BYTEINT (if szInt==1) or 4BYTEINT (if szInt==4) format. This function 
+@@ -7981,6 +8008,28 @@
+     int rval = 0;
+     u8 op = 0;
+ 
++    /* Integer RHS entries are already sorted and owned by this query. Search
++    ** them directly instead of narrowing/copying the entire list per block.
++    ** Mixed operands retain the upstream conversion path below. */
++    if( pFilter->bSortedIntegerIn ){
++      const u8 *a = &pMeta->a[VEC1_META_SZHDR];
++      int ii;
++      for(ii=0; ii<nEntry; ii++){
++        i64 lo = 0, hi = pFilter->iVal;
++        i64 v = szInt==1 ? (i64)a[ii] : (i64)(int)vec1GetU32(&a[ii*sizeof_u32]);
++        i64 nullValue = szInt==1 ? VEC1_META_1BYTENULL : VEC1_META_4BYTENULL;
++        if( pBitmask->a[ii/8] & (1 << (ii%8)) ) continue;
++        while( lo<hi ){
++          i64 mid = lo + (hi-lo)/2;
++          if( pFilter[mid+1].iVal<v ) lo = mid+1; else hi = mid;
++        }
++        if( v==nullValue || lo==pFilter->iVal || pFilter[lo+1].iVal!=v ){
++          pBitmask->a[ii/8] |= (1 << (ii%8));
++        }
++      }
++      return SQLITE_OK;
++    }
++
+     rc = vec1FilterToIntOp(pFilter,
+         (szInt==4 ? VEC1_META_4BYTEMIN : 0), 
+         (szInt==4 ? VEC1_META_4BYTEMAX : 254),
+@@ -7991,6 +8040,27 @@
+       if( op==0 ){
+         /* No entries will match. Set the "filtered-out" bit for all rows. */
+         memset(pBitmask->a, 0xFF, pBitmask->n);
++      }else if( op==VEC1_OP_IN && rval>=8 ){
++        const u8 *a = &pMeta->a[VEC1_META_SZHDR];
++        int ii;
++        /* Conversion preserves an already sorted integer RHS. Mixed RHS
++        ** types still use the upstream numeric conversion before sorting. */
++        if( !pFilter->bSortedIntegerIn ){
++          qsort(aRval, (size_t)rval, sizeof(int), vec1IntegerCompare);
++        }
++        for(ii=0; ii<nEntry; ii++){
++          int lo = 0, hi = rval;
++          int v;
++          if( pBitmask->a[ii/8] & (1 << (ii%8)) ) continue;
++          v = szInt==1 ? (int)a[ii] : (int)vec1GetU32(&a[ii*sizeof_u32]);
++          while( lo<hi ){
++            int mid = lo + (hi-lo)/2;
++            if( aRval[mid]<v ) lo = mid+1; else hi = mid;
++          }
++          if( lo==rval || aRval[lo]!=v ){
++            pBitmask->a[ii/8] |= (1 << (ii%8));
++          }
++        }
+       }else if( szInt==4 ){
+         const int *a = (const int*)&pMeta->a[VEC1_META_SZHDR];
+         vec1MetaFilterScan4ByteArray(a, pBitmask->a, nEntry, rval, aRval, op);
+@@ -9060,6 +9130,18 @@
+             pFilter->iVal++;
+           }
+           if( rc==SQLITE_DONE ) rc = SQLITE_OK;
++          if( rc==SQLITE_OK && pFilter->iVal>=8 ){
++            i64 jj;
++            int allInteger = 1;
++            for(jj=1; jj<=pFilter->iVal; jj++){
++              if( pFilter[jj].eType!=SQLITE_INTEGER ) allInteger = 0;
++            }
++            if( allInteger ){
++              qsort(&pFilter[1], (size_t)pFilter->iVal,
++                  sizeof(Vec1Filter), vec1IntegerFilterCompare);
++              pFilter->bSortedIntegerIn = 1;
++            }
++          }
+ 
+         }else if( c==VEC1_OP_NOTNULL ){
+           pFilter->eType = SQLITE_BLOB;

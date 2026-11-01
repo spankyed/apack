@@ -1,0 +1,51 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/vector-index.spec.ts tests/sqlite/vector-training.spec.ts tests/sqlite/vector-models.spec.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=/results/native-admission.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/vector-models.spec.ts (7 tests | 1 failed) 3284ms
+   ✓ durable native model admission > uses the shared scheduler to train, project and publish readiness without logical commits 291ms
+   ✓ durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility  1055ms
+   × durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions 1103ms
+     → expected 'Row-6fc01f3188a2a3453efb' to be 'Row-000734d8c8fd864440aa' // Object.is equality
+   ✓ durable native model admission > retains a completed model when its result transaction rolls back before acknowledgement 172ms
+   ✓ durable native model admission > recovers abandoned attempts and resumes committed model work after reopening 235ms
+   ✓ durable native model admission > persists failure and supports explicit retry after additional primary embeddings 199ms
+   ✓ durable native model admission > enforces one owner and drains workers before allowing file close and a new owner 229ms
+ ✓ tests/sqlite/vector-index.spec.ts (5 tests) 348ms
+ ✓ tests/sqlite/vector-training.spec.ts (5 tests) 788ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/vector-models.spec.ts > durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions
+AssertionError: expected 'Row-6fc01f3188a2a3453efb' to be 'Row-000734d8c8fd864440aa' // Object.is equality
+
+Expected: [32m"Row-[7m000734d8c8fd864440aa[27m"[39m
+Received: [31m"Row-[7m6fc01f3188a2a3453efb[27m"[39m
+
+ ❯ tests/sqlite/vector-models.spec.ts:97:23
+     95|     native.mockClear();
+     96|     const scoped=e.query('Row').limit(4500).near(vector,{k:3}).ids();
+     97|     expect(scoped[0]).toBe(first);expect(scoped).not.toContain(repeate…
+       |                       ^
+     98|     expect(native).toHaveBeenCalled();expect(native.mock.calls.every(c…
+     99|     expect(e.query('Row').like(first,{k:2}).ids()).toEqual([repeated,t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 16 passed (17)
+   Start at  23:22:33
+   Duration  5.18s (transform 248ms, setup 16ms, collect 432ms, tests 4.42s, environment 0ms, prepare 106ms)
+
+JSON report written to /results/native-admission.json
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/vector-index.spec.ts tests/sqlite/vector-training.spec.ts tests/sqlite/vector-models.spec.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=/results/native-admission.json

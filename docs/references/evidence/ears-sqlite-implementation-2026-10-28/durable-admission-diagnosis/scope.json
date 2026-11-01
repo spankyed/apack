@@ -1,0 +1,17 @@
+{
+  "scope": "Diagnosis only; unchanged candidate 6c29f083f3; 10k fixture, 53 watches, synchronous durable units. No qualification claim or target change.",
+  "runtime": {
+    "image": "apack-linux-test:74d4b8cfe839",
+    "cpus": 2,
+    "memoryGiB": 6,
+    "network": "none",
+    "profiles": "fresh /tmp directory per process, removed at exit"
+  },
+  "ordering": "SQLite controls and admission alternated for three trials; native controls ran afterward under the same checkout lock. Native results are environment controls, not balanced head-to-head rankings.",
+  "findings": [
+    "SQLite foreground write COMMIT accounts for most of measured write latency, even with no background build. BEGIN IMMEDIATE timing is small.",
+    "Both backends exceed the original 16 ms durable operation target on this host. Conditions differ greatly from the earlier retained cohort; do not replace or erase its failure.",
+    "The timer metric times setImmediate between foreground operations. It observes background stalls but omits blocking inside the foreground operation itself. Add independent heartbeat measurement before claiming event-loop responsiveness.",
+    "The original SQLite binding filter missed the generic prebuild filename. Supplement probes the same unchanged dependency tree afterward; future reports should capture all loaded .node files."
+  ]
+}

@@ -1,0 +1,15 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/sqlite-evaluation/packages/repo-checks
+
+ ✓ tests/spec-placement.spec.ts (17 tests) 1664ms
+   ✓ a spec about the published packages lives in @app/publish-checks > there are some, so this check is not vacuous  300ms
+   ✓ a spec does not reach into another package > leaves none of them doing it  901ms
+ ✓ tests/chain-inputs.spec.ts (61 tests) 2889ms
+   ✓ a step declares the modules its script imports > leaves nothing its script imports undeclared  445ms
+ ✓ tests/suite-reads.spec.ts (4 tests) 2944ms
+   ✓ a suite declares what its specs read > finds the suites and their specs, so the rule below is not walking an empty tree  2933ms
+
+ Test Files  3 passed (3)
+      Tests  82 passed (82)
+   Start at  22:56:58
+   Duration  10.44s (transform 524ms, setup 18ms, collect 2.07s, tests 7.50s, environment 0ms, prepare 212ms)

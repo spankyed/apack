@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/sqlite-operations.spec.ts
+
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+
+ ✓ tests/engine/sqlite-operations.spec.ts (16 tests) 2099ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  01:52:56
+   Duration  2.47s (transform 129ms, setup 11ms, collect 158ms, tests 2.10s, environment 0ms, prepare 58ms)
+

@@ -1,0 +1,442 @@
+
+> @apackdev/sdk@0.1.0 test
+> vitest run --maxWorkers=2 --reporter=default --reporter=json --outputFile=/results/sdk-all-sqlite.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-sdk
+
+ ✓ tests/content/format-applier.spec.ts (51 tests) 3597ms
+ ✓ tests/build/generate-entries/modules.spec.ts (44 tests) 12916ms
+   ✓ a diamond dependency > accepts one ancestor's entity arriving through both sides  620ms
+   ✓ generated imports > inspects a js system module without executing it  380ms
+   ✓ generated imports > inspects a mjs system module without executing it  343ms
+   ✓ generated imports > checks the system conventional export without executing its module  520ms
+   ✓ generated imports > checks the form conventional export without executing its module  502ms
+   ✓ generated imports > checks the compiler conventional export without executing its module  470ms
+   ✓ generated imports > checks the applier conventional export without executing its module  426ms
+   ✓ generated imports > keeps dots in extensionless names and normalizes backslashes  368ms
+   ✓ generated EARS facade > registers the fields each of its shaped entities requires, read off the shape, for the engine's runtime check  389ms
+   ✓ generated EARS facade > types each field from its shape, as the database holds it, and holds what it can't map as anything  493ms
+   ✓ generated EARS facade > numbers an entity with the prefix its manifest entry declares, and types its rows' code from it  476ms
+   ✓ generated EARS facade > refuses a shape that declares shortCode, which the engine writes and the entry types  812ms
+   ✓ generated EARS facade > refuses a shape requiring a field the database holds no name for, and takes it optional  900ms
+   ✓ generated EARS facade > indexes the fields an entity's entry declares, and refuses one its shape doesn't  801ms
+   ✓ generated EARS facade > declares the trigram index's fields, and refuses one its shape doesn't  707ms
+   ✓ generated EARS facade > names the declared entities and passes them to the typed helpers, with the writes  373ms
+   ✓ generated appliers > uses a dependency's format settings for an entry naming it  360ms
+   ✓ generated appliers > registers the pack's content writers by entity type  368ms
+ ✓ tests/build/generate-entries/entries.spec.ts (44 tests) 8498ms
+   ✓ preserves JSX module paths after validating their exports  550ms
+   ✓ generated frontend entry > checks editor predicates and popup modules before generating bindings  624ms
+   ✓ generates routed and lazy panes, named state, custom icons and fallback predicates without evaluating them  378ms
+   ✓ checks step component exports and callable layouts without executing their modules  746ms
+ ✓ tests/build/manifest-schema.spec.ts (62 tests) 231ms
+ ✓ tests/build/flow-compiler.spec.ts (49 tests) 13ms
+ ✓ tests/build/generate-entries/shapes.spec.ts (45 tests) 13356ms
+   ✓ generated entity shapes > names a dependency missing required type PackEntityShapes  651ms
+   ✓ generated entity shapes > names a dependency missing required type PackStepNodes  326ms
+   ✓ generated entity shapes > names a dependency missing required type PackSurfaceEvents  303ms
+   ✓ generated entity shapes > names a dependency missing required type PackGroupSettings  312ms
+   ✓ generated entity shapes > refuses a non-type or unresolved capability without emitting fake typing: export type PackEntityShapes = unknown;  331ms
+   ✓ generated entity shapes > requires surface state when a frontend consumer actually imports it  846ms
+   ✓ generated entity shapes > imports own shapes under aliases and dependency shapes from their facade types  406ms
+   ✓ generated entity shapes > reads Node rows as the step node types of the pack and its dependencies, NodeBase when none define any  515ms
+   ✓ generated entity shapes > fails when a declared shape type is not exported  476ms
+   ✓ generated entity shapes > accepts a shape exported by name from a list  404ms
+   ✓ feature-owned entity declarations > checks type exports without executing their module and keeps null entities untyped  824ms
+   ✓ generated feature settings > embeds declarative defaults without importing or executing a settings module  484ms
+   ✓ generated repositories > fails on a repository export that does not exist  410ms
+   ✓ generated services > accepts a service object re-exported from another module, a barrel or a multi-line export list  852ms
+   ✓ generated services > fails on a target without an export, a missing file or export, and an export that isn't a service object  1662ms
+ ✓ tests/build/content-compiler.spec.ts (24 tests) 138ms
+ ✓ tests/build/generate-entries/events.spec.ts (29 tests) 6660ms
+   ✓ preserves quoted event names in both static data and generated runtime literals  578ms
+   ✓ captures endpoint contracts without executing modules or publishing internal events  301ms
+   ✓ generated events > records in the pack entry what each own surface receives: its system's events and its declared inbox  389ms
+   ✓ generated system sends > names the pack's own systems by feature id and its dependencies' as <dependency>/<feature>  346ms
+stdout | tests/repositories/repositories.spec.ts > flowRepository > imports compiled flows with the root role, their nodes, edges and related actions
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m4[39m,
+  roleCount: [33m2[39m,
+  flowIds: [ [32m'Flow-root-flow-hth19o'[39m ]
+}
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > changes a node's related action only when the update names it
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m4[39m,
+  roleCount: [33m2[39m,
+  flowIds: [ [32m'Flow-root-flow-hth19o'[39m ]
+}
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > keeps the root flow unless deleting it is allowed, then removes its nodes and relations
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m4[39m,
+  roleCount: [33m2[39m,
+  flowIds: [ [32m'Flow-root-flow-hth19o'[39m ]
+}
+[flows-repository] Deleted flow and all its contents { flowId: [32m'Flow-root-flow-hth19o'[39m, deletedNodes: [33m2[39m }
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > importing a flow again > refuses a file linking from something it does not write, before changing anything
+[flows-repository] Imported DSL flows {
+  entityCount: [33m4[39m,
+  relationCount: [33m7[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > importing a flow again > changes nothing when the file is the same
+[flows-repository] Imported DSL flows {
+  entityCount: [33m4[39m,
+  relationCount: [33m7[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+[flows-repository] Imported DSL flows {
+  entityCount: [33m4[39m,
+  relationCount: [33m7[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > importing a flow again > removes a dropped node with its edges, and keeps the ids of what stays
+[flows-repository] Imported DSL flows {
+  entityCount: [33m4[39m,
+  relationCount: [33m7[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m4[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > importing a flow again > keeps what points into the flow and its nodes, and the fields the file does not declare
+[flows-repository] Imported DSL flows {
+  entityCount: [33m4[39m,
+  relationCount: [33m7[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m4[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > importing a flow again > keeps a step's node when its type changes, but none of the old type's fields
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m4[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > importing a flow again > keeps the root role when the file does not say root, and grants it when it does
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m4[39m,
+  roleCount: [33m2[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+[flows-repository] Imported DSL flows {
+  entityCount: [33m4[39m,
+  relationCount: [33m7[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+
+stdout | tests/repositories/repositories.spec.ts > flowRepository > importing a flow again > leaves everything as it was when the import throws part way
+[flows-repository] Imported DSL flows {
+  entityCount: [33m4[39m,
+  relationCount: [33m7[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-19koz'[39m ]
+}
+
+ ✓ tests/repositories/repositories.spec.ts (21 tests) 1323ms
+ ✓ tests/build/flow-round-trip.spec.ts (35 tests) 1819ms
+stdout | tests/content/flow-applier.spec.ts > flow applier > records the flow, a part per node, and the wiring
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > moves only `edges` when the wiring changes
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > reports a node the user added, and one they removed
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > records parts that agree with the database it just wrote
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > records the same parts for the same content, applied twice
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > leaves a deleted flow deleted when the last apply wrote it
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+[flows-repository] Deleted flow and all its contents { flowId: [32m'Flow-demo-flow-ppg6np'[39m, deletedNodes: [33m2[39m }
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > writes a deleted flow again for an import with no record
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+[flows-repository] Deleted flow and all its contents { flowId: [32m'Flow-demo-flow-ppg6np'[39m, deletedNodes: [33m2[39m }
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > names the parts of an edited flow a newer version would have replaced
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > records no decision for a `theirs` flows entry the user edited
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > keeps a flow whose new version fails to validate
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > removes a flow the content no longer declares, unless the user edited it
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+[flows-repository] Deleted flow and all its contents { flowId: [32m'Flow-demo-flow-ppg6np'[39m, deletedNodes: [33m2[39m }
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+stdout | tests/content/flow-applier.spec.ts > flow applier > keeps the short code of a flow it deletes only to write again, rather than numbering it anew
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+[flows-repository] Deleted flow and all its contents { flowId: [32m'Flow-demo-flow-ppg6np'[39m, deletedNodes: [33m2[39m }
+[flows-repository] Imported DSL flows {
+  entityCount: [33m3[39m,
+  relationCount: [33m3[39m,
+  roleCount: [33m1[39m,
+  flowIds: [ [32m'Flow-demo-flow-ppg6np'[39m ]
+}
+
+ ✓ tests/content/flow-applier.spec.ts (14 tests) 920ms
+ ✓ tests/fe/surface-state.spec.ts (16 tests) 7ms
+ ✓ tests/build/declared-type-of.spec.ts (25 tests) 1008ms
+ ✓ tests/testing/fake-inference.spec.ts (22 tests) 277ms
+ ✓ tests/runtime/unbound.spec.ts (10 tests) 19ms
+ ✓ tests/fe/settings.spec.ts (16 tests) 10ms
+ ✓ tests/build/validate-pack-sources.spec.ts (18 tests) 18ms
+ ✓ tests/build/snapshot.spec.ts (41 tests) 30ms
+ ✓ tests/database-console/database-console.spec.ts (16 tests) 1169ms
+ ✓ tests/framework/define-system-actions.spec.ts (14 tests) 5ms
+ ✓ tests/events/calls.spec.ts (17 tests) 4ms
+ ✓ tests/fe/reference-reader.spec.ts (20 tests) 8ms
+ ✓ tests/content/merge.spec.ts (26 tests) 4ms
+ ✓ tests/framework/settings-definition.spec.ts (30 tests) 240ms
+ ✓ tests/fe/step-reader.spec.ts (22 tests) 8ms
+ ✓ tests/build/provenance.spec.ts (20 tests) 4ms
+ ✓ tests/logger/report-error.spec.ts (8 tests) 80ms
+ ✓ tests/fe/surface-send-scope.spec.ts (6 tests) 13ms
+ ✓ tests/steps/result-truncator.spec.ts (16 tests) 6ms
+ ✓ tests/runtime/bound-transport.spec.ts (7 tests) 7ms
+ ✓ tests/utils/redact.spec.ts (17 tests) 12ms
+ ✓ tests/events/typed-sends.spec.ts (9 tests) 2ms
+ ✓ tests/build/generate-entries/references.spec.ts (13 tests) 1922ms
+   ✓ declarative references > discovers literal metadata and generates checked bindings without executing the module  580ms
+   ✓ declarative references > accepts a dependency category and refuses a conflicting type owner  459ms
+   ✓ declarative references > retains an ancestor owner through a diamond and refuses unrelated ancestors  375ms
+ ✓ tests/testing/test-host.spec.ts (11 tests) 267ms
+ ✓ tests/build/flow-dsl-validator.spec.ts (13 tests) 5ms
+ ✓ tests/services/emitter.spec.ts (8 tests) 4ms
+ ✓ tests/steps/catalog.spec.ts (15 tests) 850ms
+ ✓ tests/build/manifest-editor.spec.ts (11 tests) 30ms
+ ✓ tests/fe/views.spec.ts (6 tests) 11ms
+ ✓ tests/framework/service-consumption.spec.ts (16 tests) 18ms
+ ✓ tests/testing/pack-fixture.spec.ts (9 tests) 8ms
+ ✓ tests/build/generate-entries/compiles.spec.ts (14 tests) 44455ms
+   ✓ generated sends compile > for feature ids that match generated names, beside a dependency with the same feature ids  7186ms
+   ✓ generated sends compile > for a pack without systems, sending to its dependencies'  4545ms
+   ✓ generated sends compile > to a dependency's surfaces and a host surface, with the events their owner declares  3018ms
+   ✓ generated settings compile > derives pack group values from schemas, preserving enums, optional fields and local references  3180ms
+   ✓ generated settings compile > pairs schema-derived paths and values in backend accessors and custom forms  3075ms
+   ✓ emits settings modules that compile with unused-import checking for a pack without settings  2814ms
+   ✓ allows feature services to create settings handles during module initialization  2391ms
+   ✓ runs generated frontend settings through its entry binding without ambient host administration  2733ms
+   ✓ generates owner-writable and dependency-readonly handles for both settings owners  2904ms
+   ✓ preserves prototype-like entity wires in generated registrations and typed/untyped EARS  3950ms
+   ✓ keeps retained backend service roots retired across rebind and failed cleanup  2605ms
+   ✓ typechecks only consumed host APIs and directly owned dependency service members  2880ms
+   ✓ generated views compile > type useView and fromView by each feature's declaration: its names, its arguments and its result  2959ms
+ ✓ tests/env/app-context.spec.ts (13 tests) 6ms
+ ✓ tests/ids/resolve-name.spec.ts (12 tests) 4ms
+ ✓ tests/build/no-phantom-contract.spec.ts (10 tests) 58ms
+ ✓ tests/framework/declaration-record.spec.ts (11 tests) 13ms
+ ✓ tests/build/help.spec.ts (13 tests) 79ms
+ ✓ tests/build/content/resolve.spec.ts (6 tests) 4ms
+ ✓ tests/steps/utils.spec.ts (20 tests) 21ms
+ ✓ tests/utils/paths.spec.ts (7 tests) 5ms
+ ✓ tests/utils/applier-registry.spec.ts (4 tests) 6ms
+ ↓ tests/testing/content-runtime.spec.ts (1 test | 1 skipped)
+ ✓ tests/events/define-events.spec.ts (5 tests) 3ms
+ ✓ tests/framework/native-declarations.spec.ts (4 tests) 424ms
+   ✓ native declaration admission > bundles the public framework validator for the browser without Node tooling or pack modules  412ms
+ ✓ tests/services/embeddings.spec.ts (3 tests) 127ms
+ ✓ tests/build/settings-types.spec.ts (3 tests) 647ms
+   ✓ settings type generation > uses the requested name and preserves optionality, nullability, enums, records, arrays and local references  632ms
+ ✓ tests/testing/test-packs.spec.ts (4 tests) 3ms
+ ✓ tests/build/compilers/documents.spec.ts (3 tests) 20ms
+ ✓ tests/services/secrets-rules.spec.ts (6 tests) 4ms
+ ✓ tests/build/declaration-records.spec.ts (5 tests) 14ms
+ ✓ tests/build/settings-declarations.spec.ts (18 tests) 154ms
+ ✓ tests/build/content-references.spec.ts (2 tests) 8ms
+ ✓ tests/build/generate-entries/migrations.spec.ts (5 tests) 1823ms
+   ✓ binds the declared target/description and the checked function without reading module metadata  665ms
+   ✓ refuses missing hook and migration exports before activation  450ms
+   ✓ refuses noncallable hook and migration exports before activation  458ms
+ ✓ tests/build/no-pack-content-specifics.spec.ts (1 test) 7ms
+ ✓ tests/content/preview.spec.ts (3 tests) 9ms
+ ✓ tests/fe/reference-catalog.spec.ts (2 tests) 3ms
+ ✓ tests/fe/view-actor.spec.ts (2 tests) 5ms
+ ✓ tests/build/dependency-source.spec.ts (33 tests) 14ms
+ ✓ tests/fe/open-surface.spec.ts (5 tests) 11ms
+ ✓ tests/fe/shell-envelope-parity.spec.ts (2 tests) 2ms
+ ✓ tests/build/shipped-settings.spec.ts (18 tests) 329ms
+ ✓ tests/ears/bound-ears.spec.ts (2 tests) 203ms
+stderr | tests/fe/surface-scope.spec.ts > useSurface > throws outside any surface
+[Vue warn]: Unhandled error during execution of render function 
+  at <Anonymous> 
+  at <App>
+
+stderr | tests/fe/surface-scope.spec.ts > SurfaceScope > refuses a surface that is not running, and a name that is not a ref
+[Vue warn]: Unhandled error during execution of setup function 
+  at <SurfaceScope surface="memo-pack/memoz" > 
+  at <App>
+
+stderr | tests/fe/surface-scope.spec.ts > SurfaceScope > refuses a surface that is not running, and a name that is not a ref
+[Vue warn]: Unhandled error during execution of setup function 
+  at <SurfaceScope surface="memos" > 
+  at <App>
+
+ ✓ tests/fe/surface-scope.spec.ts (3 tests) 60ms
+ ✓ tests/build/relation-declarations.spec.ts (15 tests) 13ms
+ ✓ tests/fe/settings-draft.spec.ts (4 tests) 5ms
+ ✓ tests/steps/merge.spec.ts (5 tests) 3ms
+ ✓ tests/fe/view-writes.spec.ts (6 tests) 3ms
+ ✓ tests/fe/dsl-reader.spec.ts (1 test) 4ms
+ ✓ tests/runtime/bound-redaction.spec.ts (3 tests) 2ms
+ ✓ tests/testing/serialisation-matrix.spec.ts (21 tests) 5ms
+ ✓ tests/build/diagnostics.spec.ts (3 tests) 8ms
+ ✓ tests/build/surface-declarations.spec.ts (8 tests) 11ms
+ ✓ tests/build/compile-engine.spec.ts (2 tests) 257ms
+ ✓ tests/fe/use-shell.spec.ts (2 tests) 3ms
+ ✓ tests/services/settings-handle.spec.ts (4 tests) 4ms
+ ✓ tests/services/secrets-client.spec.ts (2 tests) 3ms
+ ✓ tests/utils/secret-matcher-reach.spec.ts (2 tests) 4ms
+ ✓ tests/events/envelope.spec.ts (4 tests) 2ms
+ ✓ tests/build/generate-entries/destinations.spec.ts (4 tests) 1037ms
+   ✓ materializes SDK, own and dependency destinations as deterministic data  561ms
+ ✓ tests/fe/open-link.spec.ts (2 tests) 3ms
+ ✓ tests/framework/pack-settings.spec.ts (9 tests) 75ms
+ ✓ tests/build/declaration-revision.spec.ts (2 tests) 47ms
+ ✓ tests/fe/reference-link.spec.ts (20 tests) 4ms
+ ✓ tests/utils/deep-merge.spec.ts (3 tests) 2ms
+ ✓ tests/framework/module-reference.spec.ts (7 tests) 4ms
+ ✓ tests/ids/feature-ref.spec.ts (2 tests) 2ms
+ ✓ tests/build/code-literals.spec.ts (2 tests) 2ms
+ ✓ tests/build/module-configuration.spec.ts (2 tests) 571ms
+   ✓ allows entry-driven type inspection when configured include paths are empty  460ms
+ ✓ tests/framework/declaration-binding.spec.ts (9 tests) 2ms
+ ✓ tests/testing/population.spec.ts (4 tests) 2ms
+ ✓ tests/build/content-index.spec.ts (6 tests) 6ms
+ ✓ tests/framework/short-code-types.spec.ts (2 tests) 2ms
+ ✓ tests/events/event-types.spec.ts (2 tests) 2ms
+ ✓ tests/framework/pack-system.spec.ts (1 test) 2ms
+ ✓ tests/services/models.spec.ts (7 tests) 2ms
+ ✓ tests/events/qualified-maps.spec.ts (2 tests) 1ms
+ ✓ tests/fe/navigation.spec.ts (1 test) 1ms
+ ✓ tests/runtime/internals-entry.spec.ts (1 test) 2ms
+ ✓ tests/utils/cron.spec.ts (2 tests) 2ms
+ ✓ tests/utils/escape-html.spec.ts (2 tests) 2ms
+ ✓ tests/testing/database-backend.spec.ts (2 tests) 170ms
+ ✓ tests/utils/compare-versions.spec.ts (5 tests) 29ms
+ ✓ tests/fe/surface-draft.spec.ts (2 tests) 22ms
+ ✓ tests/fe/surface-scope-lifetime.spec.ts (1 test) 17ms
+
+ Test Files  113 passed | 1 skipped (114)
+      Tests  1319 passed | 1 skipped (1320)
+   Start at  23:56:19
+   Duration  72.93s (transform 2.21s, setup 171ms, collect 21.84s, tests 106.37s, environment 417ms, prepare 5.77s)
+
+JSON report written to /results/sdk-all-sqlite.json

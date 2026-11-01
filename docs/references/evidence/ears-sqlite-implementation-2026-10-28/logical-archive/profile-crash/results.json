@@ -1,0 +1,70 @@
+[
+  {
+    "label": "dependencies",
+    "exitCode": 0,
+    "seconds": 1.8359268370113568
+  },
+  {
+    "label": "packages-build",
+    "exitCode": 0,
+    "seconds": 29.18665843400231
+  },
+  {
+    "label": "profile-crash-types",
+    "args": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "--noEmit",
+      "--target",
+      "ES2022",
+      "--module",
+      "nodenext",
+      "--moduleResolution",
+      "nodenext",
+      "--skipLibCheck",
+      "--strict",
+      "--types",
+      "node",
+      "--allowImportingTsExtensions",
+      "--customConditions",
+      "@apackdev/source",
+      "tests/scripts/test-sqlite-profile-crash.ts"
+    ],
+    "exitCode": 0,
+    "seconds": 4.573995227998239
+  },
+  {
+    "label": "profile-crash",
+    "args": [
+      "node",
+      "--conditions=@apackdev/source",
+      "--import",
+      "tsx",
+      "tests/scripts/test-sqlite-profile-crash.ts",
+      "/native-target/release/elmdb",
+      "/results/profile-crash.json"
+    ],
+    "exitCode": 0,
+    "seconds": 12.313312797996332
+  },
+  {
+    "label": "lint",
+    "args": [
+      "npm",
+      "run",
+      "lint:check"
+    ],
+    "exitCode": 0,
+    "seconds": 2.674930070992559
+  },
+  {
+    "label": "specifiers",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.446935624990147
+  }
+]

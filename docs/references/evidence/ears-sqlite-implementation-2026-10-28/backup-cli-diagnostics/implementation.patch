@@ -1,0 +1,53 @@
+diff --git a/packages/apack-cli/src/commands/db/backup.ts b/packages/apack-cli/src/commands/db/backup.ts
+index 857b68af70..359cdffd9c 100644
+--- a/packages/apack-cli/src/commands/db/backup.ts
++++ b/packages/apack-cli/src/commands/db/backup.ts
+@@ -4,6 +4,7 @@ import * as path from 'node:path';
+ import { findRunningApp, holdDatabaseWriteLock, openRunHistory } from '@apackdev/host/database';
+ import { databaseBackupStore, exportDatabase, publishBackupDirectory } from '@apackdev/host/backup';
+ import { readHostCompatibility } from '@apackdev/host/packs';
++import { errorMessage } from '@apackdev/sdk/utils/pure';
+ import { openTarget, parseDbArgs, realDestination, TARGET_USAGE, withDatabase, type DbIo } from './target';
+ 
+ export const BACKUP_USAGE = [
+@@ -59,10 +60,10 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
+   if (failures.length) {
+     const original = failures[0] as { code?: unknown; destinationPath?: unknown } | null | undefined;
+     // Preserve uncertain publication metadata even when owned staging or lock cleanup also fails.
+-    throw Object.assign(new AggregateError(failures, 'Backup failed; any published destination is retained', { cause: failures[0] }), {
++    throw Object.assign(new AggregateError(failures, `Backup to ${destination} failed: ${failures.map(errorMessage).join('\n  Also failed: ')}${published ? `\n  Published backup retained at ${destination}` : ''}`, { cause: failures[0] }), {
+       ...(typeof original?.code === 'string' && { code: original.code }),
+       ...(typeof original?.destinationPath === 'string' && { destinationPath: original.destinationPath }),
+-      ...(published && { publishedPath: destination }),
++      ...(published ? { publishedPath: destination } : {}),
+     });
+   }
+ }
+diff --git a/packages/apack-cli/tests/commands/sqlite-profile.spec.ts b/packages/apack-cli/tests/commands/sqlite-profile.spec.ts
+index a4bddfc204..f1f2ec3cb7 100644
+--- a/packages/apack-cli/tests/commands/sqlite-profile.spec.ts
++++ b/packages/apack-cli/tests/commands/sqlite-profile.spec.ts
+@@ -129,6 +129,7 @@ it('preserves uncertain backup publication and cleanup errors while releasing th
+   const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
+   expect(failure).toBeInstanceOf(AggregateError);
+   expect(failure).toMatchObject({ code: 'PUBLICATION_UNKNOWN', destinationPath: destination, cause: publication, errors: [publication, cleanup] });
++  expect(failure.message).toContain(destination); expect(failure.message).toContain(publication.message); expect(failure.message).toContain(cleanup.message);
+   expect(findDatabaseWriter(f.dir)).toBeNull();
+   expect(fs.existsSync(destination)).toBe(false);
+   expect(fs.readdirSync(f.root).filter(name => name.startsWith('.apack-backup-'))).toHaveLength(1);
+@@ -144,6 +145,7 @@ it('reports the retained published backup when staging cleanup fails and release
+   syncBuiltinESMExports();
+   const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
+   expect(failure).toMatchObject({ publishedPath: destination, cause: cleanup, errors: [cleanup] });
++  expect(failure.message).toContain(`Published backup retained at ${destination}`); expect(failure.message).toContain(cleanup.message);
+   expect(findDatabaseWriter(f.dir)).toBeNull();
+   expect(JSON.parse((await command(['backup', 'verify', destination, '--json'])).out).valid).toBe(true);
+ });
+@@ -161,6 +163,7 @@ it('preserves uncertain backup publication when releasing the write lock also fa
+   vi.spyOn(backups, 'publishBackupDirectory').mockImplementation(() => { throw publication; });
+   const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
+   expect(failure).toMatchObject({ code: 'PUBLICATION_UNKNOWN', destinationPath: destination, cause: publication, errors: [publication, cleanup] });
++  expect(failure.message).toContain(destination); expect(failure.message).toContain(publication.message); expect(failure.message).toContain(cleanup.message);
+   expect(findDatabaseWriter(f.dir)).toBeNull();
+   expect(fs.readdirSync(f.root).some(name => name.startsWith('.apack-backup-'))).toBe(false);
+ });

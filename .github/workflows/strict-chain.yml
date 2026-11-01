@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# Shared SDK/engine contracts use SQLite. Boot selection belongs to isolated app-launch steps;
+# unit/integration fixtures also exercise explicit native stores and default-profile refusals.
+# Native extension-specific coverage additionally runs in ears-sqlite.yml on all supported hosts.
+env:
+  EARS_EVALUATION_BACKEND: sqlite
+
 concurrency:
   group: strict-chain-${{ github.ref }}
   cancel-in-progress: false
@@ -28,10 +34,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/node-runtime
         with:
           node-version: 23.11.1
-          cache: npm
       - name: Record source and platform
         run: |
           git rev-parse HEAD
@@ -89,10 +94,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/node-runtime
         with:
           node-version: 23.11.1
-          cache: npm
       - name: Record source
         run: git rev-parse HEAD
       - uses: ./.github/actions/elmdb
@@ -116,6 +120,29 @@ jobs:
           args=(--strict --all --cores 2 --job "$APACK_STRICT_JOB")
           if [[ -n "$APACK_STRICT_SHARD" ]]; then args+=(--shard "$APACK_STRICT_SHARD"); fi
           npm run chain -- "${args[@]}" | tee "$RUNNER_TEMP/strict-chain.log"
+      - name: Isolated source SQLite app smoke and storage witness
+        # This independent witness must still run after a contract failure; that failed step retains job failure.
+        if: ${{ !cancelled() && matrix.name == 'app-and-rest' }}
+        env:
+          APACK_STORAGE_FORMAT: sqlite/1
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/tests/results/strict-sqlite-app.json
+        run: |
+          node scripts/with-source.mjs playwright test tests/e2e/smoke tests/e2e/app-integration/sqlite-source-storage.spec.ts --workers=1 --retries=0 --reporter=line,json
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const result = JSON.parse(readFileSync('.apack/tests/results/strict-sqlite-app.json', 'utf8'));
+          assert.equal(result.stats.expected, 6);
+          for (const key of ['skipped', 'unexpected', 'flaky']) assert.equal(result.stats[key], 0);
+          const specs = suite => [...(suite.specs ?? []), ...(suite.suites ?? []).flatMap(specs)];
+          const actual = specs(result);
+          assert(actual.some(spec => spec.title === 'source SQLite app opens both managed stores with persisted EARS identity'));
+          for (const spec of actual) for (const test of spec.tests) {
+            assert.equal(test.results.length, 1);
+            assert.equal(test.results[0].status, 'passed');
+            assert.equal(test.results[0].retry, 0);
+          }
+          JS
       - name: Retain validation evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -126,3 +153,10 @@ jobs:
             ${{ runner.temp }}/strict-chain.log
             ${{ runner.temp }}/strict-spec-progress.*.jsonl
             node_modules/.cache/apack-chain/runs/
+            .apack/tests/results/
+            tests/packs/*/.apack/tests/results/
+
+  sqlite-candidate:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ears-sqlite.yml

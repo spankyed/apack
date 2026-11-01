@@ -1,0 +1,15 @@
+{
+  "source": "1860dd2eb141fc1d3f3b8b5d3e7b0a7a5f2fe332",
+  "sourceTree": "exact Git archive; synthetic Git metadata only for tracked/ignored source checks",
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "truthSha256": "ca6356a0cf0059ba87e5f628e9ae0a32260adf146617acb498c880cdf9442545",
+  "order": [
+    "original",
+    "patched"
+  ],
+  "comparison": "same app, corpus, settings and limits; independent full lifecycle/model training, not a paired same-model membership-only timing"
+}

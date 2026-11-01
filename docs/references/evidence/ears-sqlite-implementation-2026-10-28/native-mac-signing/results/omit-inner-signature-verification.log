@@ -1,0 +1,91 @@
+
+ RUN  v3.2.7 /electron/packages/repo-checks
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > preserves signing options and finalizes signed library bytes before the outer seal
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"cd92f8800c9c79b45607c7913ced16860593ab0c1fed8e4b71a620150bf044e7"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > does not bless a failed inner signature or a concurrently changed manifest
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"838a5b0cf4136ff02fb1dd84af12d155719f0f9d3ef08f153c25c60a0101c80d"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"8dba90ed4d526cc2cd9d7676595b7e87ba75c65cd88ae6a9f4a39a817fe6d941"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"131053f1c17dbf7122d0a8fad4e3c94543661fe3dfb7b6d2df1ddefb617ac761"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"a94239971ad8ac29b9375f0a19f6ebc50154f3fc5a21a74cad8958cf408194df"}
+
+ ❯ tests/native-signing.spec.ts (8 tests | 2 failed) 28ms
+   × native manifest signing before outer app sealing > preserves signing options and finalizes signed library bytes before the outer seal 13ms
+     → expected { format: 1, platform: 'darwin', …(3) } to deeply equal { format: 1, platform: 'darwin', …(3) }
+   ✓ native manifest signing before outer app sealing > refuses mismatched unsigned input before invoking the signer 2ms
+   × native manifest signing before outer app sealing > does not bless a failed inner signature or a concurrently changed manifest 3ms
+     → promise resolved "undefined" instead of rejecting
+   ✓ native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time 3ms
+   ✓ native manifest signing before outer app sealing > refuses a preexisting valid signature when the library was skipped in this signing pass 2ms
+   ✓ native manifest signing before outer app sealing > fails if the signer skips the outer-app callback 1ms
+   ✓ native manifest signing before outer app sealing > derives architecture from the app executable and refuses unsupported universal builds 1ms
+   ✓ native manifest signing before outer app sealing > refuses native-library symlinks that escape the packaged app 2ms
+ ✓ tests/preview-build.spec.ts (4 tests) 47ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/native-signing.spec.ts > native manifest signing before outer app sealing > preserves signing options and finalizes signed library bytes before the outer seal
+AssertionError: expected { format: 1, platform: 'darwin', …(3) } to deeply equal { format: 1, platform: 'darwin', …(3) }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "arch": "arm64",[22m
+[32m-   "extensionSha256": "3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960",[39m
+[31m+   "extensionSha256": "cd92f8800c9c79b45607c7913ced16860593ab0c1fed8e4b71a620150bf044e7",[39m
+[2m    "format": 1,[22m
+[2m    "platform": "darwin",[22m
+[2m    "upstream": "retained upstream",[22m
+[2m  }[22m
+
+ ❯ tests/native-signing.spec.ts:46:26
+     44|       expect(options).toMatchObject({ identity: 'identity hash', keych…
+     45|       options.optionsForFile(library);
+     46|       expect(manifest()).toEqual(original);
+       |                          ^
+     47|       fs.appendFileSync(library, ' signed');
+     48|       expect(options.optionsForFile(app)).toEqual({ entitlements: '/en…
+ ❯ Module.signMacApplication ../../build/prod/sign-mac.mjs:44:22
+ ❯ tests/native-signing.spec.ts:55:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/native-signing.spec.ts > native manifest signing before outer app sealing > does not bless a failed inner signature or a concurrently changed manifest
+AssertionError: promise resolved "undefined" instead of rejecting
+
+[32m- Expected:[39m
+Error {
+  "message": "rejected promise",
+}
+
+[31m+ Received:[39m
+undefined
+
+ ❯ tests/native-signing.spec.ts:73:45
+     71|     });
+     72|     mocks.sign.mockImplementation(async options => { options.optionsFo…
+     73|     await expect(signMacApplication({ app })).rejects.toThrow(/Inner s…
+       |                                             ^
+     74|     expect(fs.readFileSync(manifestFile, 'utf8')).toBe(original);
+     75|     mocks.exec.mockReturnValue('arm64');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 10 passed (12)
+   Start at  14:06:15
+   Duration  379ms (transform 68ms, setup 14ms, collect 73ms, tests 75ms, environment 0ms, prepare 73ms)
+
+JSON report written to /results/omit-inner-signature-verification.json

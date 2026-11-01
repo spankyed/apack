@@ -1,0 +1,182 @@
+{
+  "source": "897b609e0186f22a9d188ad3f7a64674749b631d",
+  "queries": 2700,
+  "identicalOrderedAnswerPairsPerAlternative": 900,
+  "minimumMeanRecall": {
+    "baseline": 0.9740000000000002,
+    "projection": 0.9740000000000002,
+    "sql": 0.9740000000000002
+  },
+  "independentProcessMaxRssKiB": {
+    "baseline": 189800,
+    "projection": 206892,
+    "sql": 215408
+  },
+  "cohorts": [
+    {
+      "size": 1000,
+      "scopePercent": 100,
+      "observations": {
+        "baseline": {
+          "medianMs": 6.170295499999156,
+          "heartbeatP99Ms": 8.473411999999371
+        },
+        "projection": {
+          "medianMs": 6.356111999999939,
+          "heartbeatP99Ms": 9.393364999999903
+        },
+        "sql": {
+          "medianMs": 6.125317500000051,
+          "heartbeatP99Ms": 8.85781699999984
+        }
+      }
+    },
+    {
+      "size": 1000,
+      "scopePercent": 10,
+      "observations": {
+        "baseline": {
+          "medianMs": 7.273986999999579,
+          "heartbeatP99Ms": 8.697454999999536
+        },
+        "projection": {
+          "medianMs": 7.227308999999877,
+          "heartbeatP99Ms": 9.893953999999667
+        },
+        "sql": {
+          "medianMs": 7.047077500000114,
+          "heartbeatP99Ms": 8.775648999999703
+        }
+      }
+    },
+    {
+      "size": 1000,
+      "scopePercent": 1,
+      "observations": {
+        "baseline": {
+          "medianMs": 1.777173499998753,
+          "heartbeatP99Ms": 3.200267000000167
+        },
+        "projection": {
+          "medianMs": 1.800332500000195,
+          "heartbeatP99Ms": 5.097192000000177
+        },
+        "sql": {
+          "medianMs": 1.6674144999999498,
+          "heartbeatP99Ms": 2.939751999999771
+        }
+      }
+    },
+    {
+      "size": 10000,
+      "scopePercent": 100,
+      "observations": {
+        "baseline": {
+          "medianMs": 39.160634499999105,
+          "heartbeatP99Ms": 57.353689999999915
+        },
+        "projection": {
+          "medianMs": 39.09557799999993,
+          "heartbeatP99Ms": 56.31080099999963
+        },
+        "sql": {
+          "medianMs": 37.53974849999986,
+          "heartbeatP99Ms": 40.535501000000295
+        }
+      }
+    },
+    {
+      "size": 10000,
+      "scopePercent": 10,
+      "observations": {
+        "baseline": {
+          "medianMs": 14.218869000000268,
+          "heartbeatP99Ms": 15.897232999999687
+        },
+        "projection": {
+          "medianMs": 15.526296999999431,
+          "heartbeatP99Ms": 33.80855200000042
+        },
+        "sql": {
+          "medianMs": 13.729256000000078,
+          "heartbeatP99Ms": 15.506599000000278
+        }
+      }
+    },
+    {
+      "size": 10000,
+      "scopePercent": 1,
+      "observations": {
+        "baseline": {
+          "medianMs": 3.2101164999985485,
+          "heartbeatP99Ms": 4.956607000000076
+        },
+        "projection": {
+          "medianMs": 3.767416499999854,
+          "heartbeatP99Ms": 29.94142499999907
+        },
+        "sql": {
+          "medianMs": 2.4445480000003954,
+          "heartbeatP99Ms": 4.415143000000171
+        }
+      }
+    },
+    {
+      "size": 99900,
+      "scopePercent": 100,
+      "observations": {
+        "baseline": {
+          "medianMs": 19.5012229999993,
+          "heartbeatP99Ms": 24.38022500000079
+        },
+        "projection": {
+          "medianMs": 25.504448500000763,
+          "heartbeatP99Ms": 69.9176179999995
+        },
+        "sql": {
+          "medianMs": 17.939760499999466,
+          "heartbeatP99Ms": 20.330652000000555
+        }
+      }
+    },
+    {
+      "size": 99900,
+      "scopePercent": 10,
+      "observations": {
+        "baseline": {
+          "medianMs": 50.86370100000204,
+          "heartbeatP99Ms": 89.03085599999758
+        },
+        "projection": {
+          "medianMs": 63.24828199999865,
+          "heartbeatP99Ms": 119.62720900000022
+        },
+        "sql": {
+          "medianMs": 47.10931249999976,
+          "heartbeatP99Ms": 50.7862810000006
+        }
+      }
+    },
+    {
+      "size": 99900,
+      "scopePercent": 1,
+      "observations": {
+        "baseline": {
+          "medianMs": 12.232781000000614,
+          "heartbeatP99Ms": 78.315085000002
+        },
+        "projection": {
+          "medianMs": 10.74616050000077,
+          "heartbeatP99Ms": 12.410647999997309
+        },
+        "sql": {
+          "medianMs": 11.15776900000128,
+          "heartbeatP99Ms": 12.955112999999983
+        }
+      }
+    }
+  ],
+  "resourcePauses": 0,
+  "promoted": false,
+  "wholeGoalAcceptance": false
+}

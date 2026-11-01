@@ -1,0 +1,67 @@
+[
+  {
+    "file": "Linux-X64/query-work.json.gz",
+    "originalSha256": "5dc686c45e38758dbd1033f28e25d06fbc6d5e0b863dcf5069e36bd96dec35bb",
+    "gzipSha256": "dc735880a49a3aea53db85244a8016b927754217c584321ad34024313c63035c"
+  },
+  {
+    "file": "Linux-X64/sdk-backend.json.gz",
+    "originalSha256": "10554cdef6112bbdc301c9009741c583ee69a5048a1f9811a8ae3b1112c11102",
+    "gzipSha256": "a290992ef7faf5929dc90ccbf0f5331a0c05a8fffa3af856b42785601e0de79f"
+  },
+  {
+    "file": "Linux-X64/ears.json.gz",
+    "originalSha256": "c5e6b0a397430542de5275d58858ea4714cb8f8af579b6eccfcade7853868cd2",
+    "gzipSha256": "c3c692206d24d112a041308e2c7f14ad122bfe11c187aeaaa9a755b6e5a36050"
+  },
+  {
+    "file": "Linux-X64/host.json.gz",
+    "originalSha256": "ac295cdacf658305d34cbf46d6866aa75fe901938156fc172b898b8251daea02",
+    "gzipSha256": "427a2cb41b1aeb9aa35821e5c6f3a0afc712017660e447317ac654548bb234d5"
+  },
+  {
+    "file": "Linux-X64/sdk-all-sqlite.json.gz",
+    "originalSha256": "c843bd6b0e1bc1198cbcc77de3846c3498107551f10d6d650797a1c7fc1de84b",
+    "gzipSha256": "d679de13f30e756da03b90447583c99198750f7261aa72ed87db240578ef5b1a"
+  },
+  {
+    "file": "macOS-ARM64/query-work.json.gz",
+    "originalSha256": "8c66eed46b4a624bbdb8b5d38a660e21d127d3a9dc08ec69f199f947ffb53d5e",
+    "gzipSha256": "95a49fd0025125611effa01611bf14377a548bfd9a5d4e62541cd4c968a4c535"
+  },
+  {
+    "file": "macOS-ARM64/sdk-backend.json.gz",
+    "originalSha256": "4ba326cfc9645fc3400ef0203d3af64fd52fbf5a1e72f9d39b9865634515a6a3",
+    "gzipSha256": "71ecc003080aa5f948890fd872e062d7d6853a9cef1d6b9d8dbef2d0c9328163"
+  },
+  {
+    "file": "macOS-ARM64/ears.json.gz",
+    "originalSha256": "f4b8272ba75ef6548f9bce4d1ac09d3e0cc1af00c02eff73e8da847cb99d9441",
+    "gzipSha256": "619c311c77195eff8aa1b88f8126b109a91d5285b22494e848f1997952bd996a"
+  },
+  {
+    "file": "macOS-ARM64/host.json.gz",
+    "originalSha256": "03f02b85bcaa6c646ae06caa5750c258ff03dd4176b045c1aece318756b0a6c9",
+    "gzipSha256": "49269f4cd227f228a8f471d58a5ed2dbb20f6e5f1e72bae5ae4b12e33bfee449"
+  },
+  {
+    "file": "Windows-X64/query-work.json.gz",
+    "originalSha256": "272fb445055405d35cc2d923ae67fdad3310f5d9d6dae810a1cd63b003861610",
+    "gzipSha256": "31333b1b57ae70a24749483322acf7012c8b0dc890d289297e660459c2b9c77f"
+  },
+  {
+    "file": "Windows-X64/sdk-backend.json.gz",
+    "originalSha256": "5397a39a75f5ae0c41a1a9a148fef653044e59453d652fb1aab94e16fffb46a4",
+    "gzipSha256": "26a19bbe041bbf4b6cf6a09b050d0799d01e2dfd1f2391714476cb2a702c006f"
+  },
+  {
+    "file": "Windows-X64/ears.json.gz",
+    "originalSha256": "fcd00f8fb6414b957e3ce68239b2f0d12f2a6c3f30055d2e23152cfd199453ec",
+    "gzipSha256": "11b0edc47199c76b583afd22e50f0980a069a357a391149cf2c7b490d90bdbe1"
+  },
+  {
+    "file": "Windows-X64/host.json.gz",
+    "originalSha256": "11d7160d1ed2250b152a708bb4340b64fd9b5c1a9a4bbca693b2bd962022df0c",
+    "gzipSha256": "abc4dcd1cbfd8f5a4c2b3dbf4890797e77130c9a0fa2f8cf4625a8fdc48c06e3"
+  }
+]

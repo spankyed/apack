@@ -1,0 +1,9 @@
+import pathlib,subprocess,hashlib,json,shutil
+r=pathlib.Path('/metrics');o=pathlib.Path('/results')
+shutil.copyfile('/probe.ts',r/'lookup-probe.ts')
+files=list((r/'packages/apack-ears/src').rglob('*.ts'))+[r/'lookup-probe.ts']
+(o/'source-sha256.json').write_text(json.dumps({str(p.relative_to(r)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},indent=2)+'\n')
+p=subprocess.run(['node','--import','tsx','lookup-probe.ts'],cwd=r,capture_output=True,text=True,timeout=120)
+(o/'probe.stdout').write_text(p.stdout);(o/'probe.stderr').write_text(p.stderr)
+print('probe',p.returncode,flush=True)
+assert p.returncode==0,p.stderr

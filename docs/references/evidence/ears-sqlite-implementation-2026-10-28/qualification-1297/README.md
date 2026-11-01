@@ -1,0 +1,5 @@
+# All-platform logical archive barriers at1297cb1cc9
+
+App acceptance41189469298 is terminal success on exact source1297cb1cc9dac6a5728e68a88b4a7377233f8599. Actual downloaded reports verify all ten logical archive host cases on Linux x64, macOS arm64 and Windows x64, with no logical-host skips. In particular Windows now executes the published-but-unsynchronized archive case, which retains the complete archive and reports NOT_DURABLE. Host totals are206/206/193; all six existing private-file cases pass everywhere. Linux also passes1322SDK cases and four actual ENOSPC cases. EARS totals remain766/766/761 with the five previously named Windows EARS exclusions, plus735membership controls on every host.
+
+Compressed original host/verification reports and raw-byte hash receipts are retained. This input predates e5d94550e3's private-file short-write fix and two new regressions: it cannot qualify those eight-case requirements. The restricted-token ACL probe, installed runtimes, physical power loss, final strict/app gates and remaining goal acceptance remain separate. No arbitrary filesystem certification is claimed.

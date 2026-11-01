@@ -1,0 +1,78 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+ ✓ tests/backup/recovery.spec.ts (41 tests) 8039ms
+   ✓ restores both sqlite/1 stores and media, preserves forensic copies, and never replays completed recovery  425ms
+   ✓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'complete'  301ms
+   ✓ excludes writable sqlite/1 handles from physical recovery until close  332ms
+stderr | tests/services/run-history.spec.ts > the run history on disk > drops a node whose parent it does not hold, and ignores a write to one it does not hold
+[run-history] Dropped run node RunNode-0mvv2g1ib0000: its parent RunNode-missing isn't in the run history
+
+stderr | tests/services/run-history.spec.ts > the run history of the test runtime > drops a node whose parent it does not hold, and ignores a write to one it does not hold
+[run-history] Dropped run node RunNode-0mvv2g1ks0000: its parent RunNode-missing isn't in the run history
+
+stdout | tests/services/run-history.spec.ts > the app's run history > removes a session that ended past the retention period, with everything it ran
+[run-history] Removed 1 run(s) older than 30 days
+
+stderr | tests/services/run-history.spec.ts > the app's run history > moves files it cannot read aside and starts a new history, rather than keeping the app from starting
+[run-history] The run history at /tmp/run-history-Riq5cW/case-H4bTPG/run-history couldn't be opened (/tmp/run-history-Riq5cW/case-H4bTPG/run-history/data.mdb isn't a file this LMDB reads: MDB_INVALID: File is not an LMDB file. Files lmdb-js wrote are in its own LMDB data version, which elmdb doesn't read; re-create the database with elmdb): it was moved to /tmp/run-history-Riq5cW/case-H4bTPG/run-history.unreadable-2026-10-30T14-27-01-900Z, and a new one started
+
+ ✓ tests/services/run-history.spec.ts (22 tests) 399ms
+stderr | tests/database/storage.spec.ts > quarantines corrupt elmdb/1 history while an unrelated primary handle stays open
+[run-history] The run history at /tmp/apack-sqlite-profile-8KIpA1/runs couldn't be opened (/tmp/apack-sqlite-profile-8KIpA1/runs/data.mdb isn't a file this LMDB reads: MDB_INVALID: File is not an LMDB file. Files lmdb-js wrote are in its own LMDB data version, which elmdb doesn't read; re-create the database with elmdb): it was moved to /tmp/apack-sqlite-profile-8KIpA1/runs.unreadable-2026-10-30T14-27-03-682Z, and a new one started
+
+ ❯ tests/database/storage.spec.ts (22 tests | 1 failed) 1840ms
+   ✓ keeps elmdb as the normal default 1ms
+   ✓ refuses unknown boot formats 1ms
+   ✓ requires explicit absolute candidate storage (undefined) 0ms
+   ✓ requires explicit absolute candidate storage (relative/profile) 0ms
+   ✓ refuses the default production profile without opening it 0ms
+   ✓ refuses the default beta profile without opening it 0ms
+   ✓ refuses the default preview profile without opening it 0ms
+   ✓ refuses the default development profile without opening it 0ms
+   ✓ refuses the default test profile without opening it 1ms
+   ✓ selects both real stores and preserves the profile when selection is omitted on reopen 286ms
+   ✓ uses the explicitly supplied CLI profile for the isolation check 1ms
+   ✓ refuses children of a default profile and symlink aliases without creating their targets 1ms
+   ✓ blocks writable recovery opens without salvaging either elmdb/1 store 50ms
+   ✓ blocks writable recovery opens without salvaging either sqlite/1 store  306ms
+   ✓ routes explicit SQLite rebuild through maintenance ownership and waits for readiness 54ms
+   ✓ refuses unreadable run history without replacement when maintenance disables salvage 7ms
+   ✓ starts optional models on managed SQLite stores and releases both owners on shutdown 292ms
+   ✓ does not start native services for forensic SQLite readers or the normal elmdb backend 98ms
+   ✓ quarantines corrupt elmdb/1 history while an unrelated primary handle stays open 78ms
+   × quarantines corrupt sqlite/1 history while an unrelated primary handle stays open 115ms
+     → file is not a database
+   ✓ refuses elmdb/1 history quarantine while a managed reader still holds the directory 86ms
+   ✓ refuses sqlite/1 history quarantine while a managed reader still holds the directory  461ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/database/storage.spec.ts > quarantines corrupt sqlite/1 history while an unrelated primary handle stays open
+SqliteError: file is not a database
+ ❯ Database.prepare ../../node_modules/better-sqlite3/lib/methods/wrappers.js:5:21
+ ❯ SqliteDatabase.statement ../apack-ears/src/sqlite/database.ts:320:28
+    318|     let statement = this.statements.get(sql);
+    319|     if (!statement) {
+    320|       statement = this.sql.prepare(sql);
+       |                            ^
+    321|       this.statements.set(sql, statement);
+    322|     }
+ ❯ SqliteDatabase.get ../apack-ears/src/sqlite/database.ts:333:39
+ ❯ SqliteEmbeddings.initialize ../apack-ears/src/sqlite/embeddings.ts:33:28
+ ❯ new SqliteDatabase ../apack-ears/src/sqlite/database.ts:156:23
+ ❯ openDatabase ../apack-ears/src/sqlite/index.ts:34:10
+ ❯ Object.open src/database/storage.ts:39:10
+ ❯ src/database/open.ts:73:94
+ ❯ openProfileDatabase src/database/recovery-lock.ts:69:22
+ ❯ open src/database/open.ts:73:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 84 passed (85)
+   Start at  14:26:50
+   Duration  13.41s (transform 893ms, setup 16ms, collect 2.76s, tests 10.28s, environment 0ms, prepare 120ms)
+
+JSON report written to /results/focused.json

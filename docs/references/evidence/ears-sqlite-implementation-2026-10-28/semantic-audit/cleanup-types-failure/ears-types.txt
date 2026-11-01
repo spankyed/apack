@@ -1,0 +1,15 @@
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+tests/sqlite/search-recovery.spec.ts(176,11): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+tests/sqlite/search-recovery.spec.ts(177,26): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+tests/sqlite/search-recovery.spec.ts(180,18): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+tests/sqlite/search-recovery.spec.ts(180,39): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 2
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c tsc --noEmit

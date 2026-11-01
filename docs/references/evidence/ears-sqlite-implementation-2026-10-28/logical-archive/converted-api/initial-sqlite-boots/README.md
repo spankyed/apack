@@ -1,0 +1,1 @@
+15757f6df1: two actual converted SQLite API boots/live updates pass, without a real native API boot control. Raw logs already show the missing optional Codex executable; do not claim all pack features healthy.

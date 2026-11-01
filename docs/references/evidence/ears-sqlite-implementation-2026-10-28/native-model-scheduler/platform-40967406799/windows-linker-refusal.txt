@@ -1,0 +1,5 @@
+2026-10-29T22:45:21.8783459Z [36;1mif ($linker -match '[\\/]Git[\\/]usr[\\/]bin[\\/]') { throw "Git's link.exe must not shadow the MSVC linker" }[0m
+2026-10-29T22:45:22.2176882Z Rust linker: C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\bin\HostX64\x64\link.exe C:\Program Files\Git\usr\bin\link.exe
+2026-10-29T22:45:22.3530323Z [31;1m[0m[36;1m[36;1m   4 | [0m … bin[\\/]') { [36;1mthrow "Git's link.exe must not shadow the MSVC linker"[0m }[0m
+2026-10-29T22:45:22.3531205Z [31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mGit's link.exe must not shadow the MSVC linker[0m
+2026-10-29T22:45:22.3914347Z ##[error]Process completed with exit code 1.

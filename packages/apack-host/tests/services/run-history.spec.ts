@@ -212,7 +212,7 @@ describe('the app\'s run history', () => {
     try {
       // The process has it open already: a refusal of this open, not of what the files hold
       expect(() => openRunHistory(dir)).toThrow(expect.objectContaining({ code: 'ALREADY_OPEN' }));
-      expect(fs.readdirSync(path.dirname(dir))).toEqual(['run-history']);
+      expect(fs.readdirSync(path.dirname(dir)).sort()).toEqual(['db-readers', 'run-history']);
     } finally {
       held.database.close();
     }

@@ -1,0 +1,61 @@
+
+ RUN  v3.2.7 /electron/packages/repo-checks
+
+ ✓ tests/preview-build.spec.ts (4 tests) 48ms
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > preserves signing options and finalizes signed library bytes before the outer seal
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"cd92f8800c9c79b45607c7913ced16860593ab0c1fed8e4b71a620150bf044e7"}
+
+stdout | tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3ff51d4b87598e0a232fbdd94087bae74414fcd20b4dff425281dd91fbdf3960","signedSha256":"838a5b0cf4136ff02fb1dd84af12d155719f0f9d3ef08f153c25c60a0101c80d"}
+
+ ❯ tests/native-signing.spec.ts (8 tests | 2 failed) 26ms
+   × native manifest signing before outer app sealing > preserves signing options and finalizes signed library bytes before the outer seal 9ms
+     → Native provenance changed while signing
+   ✓ native manifest signing before outer app sealing > refuses mismatched unsigned input before invoking the signer 3ms
+   ✓ native manifest signing before outer app sealing > does not bless a failed inner signature or a concurrently changed manifest 4ms
+   × native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time 3ms
+     → Native provenance changed while signing
+   ✓ native manifest signing before outer app sealing > refuses a preexisting valid signature when the library was skipped in this signing pass 1ms
+   ✓ native manifest signing before outer app sealing > fails if the signer skips the outer-app callback 1ms
+   ✓ native manifest signing before outer app sealing > derives architecture from the app executable and refuses unsupported universal builds 1ms
+   ✓ native manifest signing before outer app sealing > refuses native-library symlinks that escape the packaged app 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/native-signing.spec.ts > native manifest signing before outer app sealing > preserves signing options and finalizes signed library bytes before the outer seal
+Error: Native provenance changed while signing
+ ❯ Object.optionsForFile ../../build/prod/sign-mac.mjs:50:19
+     48|           if (!signedLibrary) throw new Error('Signer skipped the nati…
+     49|           if (fs.readFileSync(manifestFile, 'utf8') !== expectedManife…
+     50|             throw new Error('Native provenance changed while signing');
+       |                   ^
+     51|           }
+     52|           execFileSync('/usr/bin/codesign', ['--verify', '--strict', l…
+ ❯ tests/native-signing.spec.ts:48:22
+ ❯ Module.signMacApplication ../../build/prod/sign-mac.mjs:44:22
+ ❯ tests/native-signing.spec.ts:55:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/native-signing.spec.ts > native manifest signing before outer app sealing > retries signing after an outer-seal failure and hashes the newly signed bytes each time
+Error: Native provenance changed while signing
+ ❯ Object.optionsForFile ../../build/prod/sign-mac.mjs:50:19
+     48|           if (!signedLibrary) throw new Error('Signer skipped the nati…
+     49|           if (fs.readFileSync(manifestFile, 'utf8') !== expectedManife…
+     50|             throw new Error('Native provenance changed while signing');
+       |                   ^
+     51|           }
+     52|           execFileSync('/usr/bin/codesign', ['--verify', '--strict', l…
+ ❯ tests/native-signing.spec.ts:89:15
+ ❯ Module.signMacApplication ../../build/prod/sign-mac.mjs:44:22
+ ❯ tests/native-signing.spec.ts:93:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 10 passed (12)
+   Start at  14:06:14
+   Duration  362ms (transform 67ms, setup 13ms, collect 64ms, tests 74ms, environment 0ms, prepare 71ms)
+
+JSON report written to /results/omit-manifest-publication.json

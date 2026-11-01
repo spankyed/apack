@@ -1,0 +1,12 @@
+[
+  {
+    "label": "electron-native-model",
+    "args": [
+      "/electron/node_modules/electron/dist/electron",
+      "/probe.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 2.428401138022309,
+    "binarySha256": "7340e0d72cdd6d45074d012a25a435147f747c2f59893b91d678cc6993bec1a5"
+  }
+]

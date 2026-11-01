@@ -1,0 +1,12 @@
+[
+  {
+    "label": "dependencies",
+    "exitCode": 0,
+    "seconds": 1.9950063449941808
+  },
+  {
+    "label": "packages-build",
+    "exitCode": 1,
+    "seconds": 2.689405084005557
+  }
+]

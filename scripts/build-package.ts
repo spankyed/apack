@@ -46,6 +46,33 @@ async function main(): Promise<void> {
     { stdio: 'inherit' },
   );
 
+  if (pkg.name === '@apackdev/ears') {
+    // Native code is built only by package production, never by opening a database. Keep compiler
+    // intermediates/absolute command provenance outside the published tree.
+    const graphBuild = path.join(pkgDir, '.temp', 'native-graphs');
+    fs.rmSync(graphBuild, { recursive: true, force: true });
+    execFileSync(process.execPath, [path.join(repoRoot, 'native', 'graphs', 'build.mjs'), graphBuild], { stdio: 'inherit' });
+    const graphDestination = path.join(stagedDir, 'sqlite', 'graph');
+    fs.mkdirSync(graphDestination, { recursive: true });
+    for (const file of ['ears_graph.js', 'ears_graph_bg.wasm', 'manifest.json', 'LICENSES.txt', 'package.json'])
+      fs.copyFileSync(path.join(graphBuild, file), path.join(graphDestination, file));
+    const nativeBuild = path.join(pkgDir, '.temp', 'native-vectors');
+    fs.rmSync(nativeBuild, { recursive: true, force: true });
+    execFileSync(process.execPath, [path.join(repoRoot, 'native', 'vectors', 'build.mjs'), nativeBuild], { stdio: 'inherit' });
+    const provenance = JSON.parse(fs.readFileSync(path.join(nativeBuild, 'provenance.json'), 'utf8'));
+    const destination = path.join(stagedDir, 'sqlite', 'native', `${process.platform}-${process.arch}`);
+    fs.mkdirSync(destination, { recursive: true });
+    fs.copyFileSync(provenance.extension, path.join(destination, path.basename(provenance.extension)));
+    fs.writeFileSync(path.join(destination, 'manifest.json'), JSON.stringify({
+      format: 1, platform: provenance.platform, arch: provenance.arch,
+      upstream: provenance.upstream.commit, sourceSha256: provenance.sourceSha256,
+      patchSha256: provenance.patchSha256, headersPackage: provenance.headersPackage,
+      extensionSha256: provenance.extensionSha256,
+    }, null, 2) + '\n');
+    const upstream = fs.readFileSync(path.join(repoRoot, 'native', 'vectors', 'upstream.c'), 'utf8');
+    fs.writeFileSync(path.join(destination, 'LICENSE'), upstream.slice(0, upstream.indexOf('*/') + 2) + '\n');
+  }
+
   // Hand-written declarations ship as source
   for (const file of walk(srcDir).filter((f) => f.endsWith('.d.ts'))) {
     const dest = path.join(stagedDir, path.relative(srcDir, file));

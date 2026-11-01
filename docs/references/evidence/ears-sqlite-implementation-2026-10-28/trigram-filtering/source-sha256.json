@@ -1,0 +1,11 @@
+{
+  "packages/apack-ears/src/sqlite/database.ts": "b4946916153d1661e6d6a698e26b748d6695069a9ea20244a8ca18bacfd5006b",
+  "packages/apack-ears/src/sqlite/query.ts": "10bf5dba0da5587fc52b2e9080f47ee438445c7fa0e249a8b0c4c9de5fab8fdc",
+  "packages/apack-ears/src/sqlite/regex.ts": "08146eebdc82a3efcd77fa580445b928e1481c8e753ad16c5185a1dbdc65ecb1",
+  "packages/apack-ears/src/sqlite/search.ts": "a2b8671a47ea5d61963781c960b366694dcb02363ff99971768a11c9a4e95b89",
+  "packages/apack-ears/src/sqlite/trigrams.ts": "e9b20cda68b605c43e4e2af33f2c758124299fd9b20613459e2f2a6e089cdc33",
+  "packages/apack-ears/tests/sqlite/trigrams.spec.ts": "353def011a07c667ac5b0d4c373f157a84d769519301767253581d90390578b1",
+  "packages/apack-ears/vendor/rregex/extensions.rs": "d2519a65ca9d4bf159d2889332c6eee911f62e48719da5d5e0591a5d69d13aa2",
+  "packages/apack-ears/vendor/rregex/rregex.cjs": "5a8b72e18f1f25df12ec19499168be74caaa4a2476c6c098283887b5718d3e1a",
+  "packages/apack-ears/vendor/rregex/rregex_bg.wasm": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525"
+}

@@ -3,16 +3,22 @@ import { engine } from './helpers.ts';
 import type { EarsOperation, EarsOperationResult } from '../../src/index.ts';
 
 describe('operation observation', () => {
-  it('observes encoded byte counts and stops without changing call counting', () => {
-    const e = engine();
+  it('observes actual transport byte counts and stops without changing call counting', () => {
+    let format = '';
+    const e = engine({ wrap(database) { format = database.format; return database; } });
     const operations: EarsOperation[] = [];
     const results: EarsOperationResult[] = [];
     const stop = e.admin.observe({ start(op) { operations.push(op); return result => { results.push(result); }; } });
     e.query('Task').ids();
     expect(operations).toMatchObject([{ kind: 'read', ops: 1, watch: false, inUnit: false }]);
     expect(results[0]).toMatchObject({ outcome: 'ok' });
-    expect(results[0]!.requestBytes).toBeGreaterThan(0);
-    expect(results[0]!.responseBytes).toBeGreaterThan(0);
+    if (format === 'elmdb/1') {
+      expect(results[0]!.requestBytes).toBeGreaterThan(0);
+      expect(results[0]!.responseBytes).toBeGreaterThan(0);
+    } else {
+      expect(results[0]!.requestBytes).toBe(0);
+      expect(results[0]!.responseBytes).toBe(0);
+    }
     expect(e.admin.calls.report().counting).toBe(false);
     stop(); stop();
     e.query('Task').ids();
@@ -47,7 +53,7 @@ describe('operation observation', () => {
   it('reports a committed durability failure without disguising it as a refused write', () => {
     const e = engine({ wrap: database => new Proxy(database, {
       get(target, key) {
-        if (key === 'write') return (batch: Uint8Array, durable?: boolean) => {
+        if (key === 'write') return (batch: Parameters<import('../../src/database.ts').EarsDatabase['write']>[0], durable?: boolean) => {
           target.write(batch, durable);
           throw Object.assign(new Error('sync failed'), { code: 'NOT_DURABLE' });
         };

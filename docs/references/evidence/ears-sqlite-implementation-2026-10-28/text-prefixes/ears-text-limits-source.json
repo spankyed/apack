@@ -1,0 +1,11 @@
+{
+  "base": "7be59bc2c176f7c2d54e756e00939e6d17eab020",
+  "changedFiles": [
+    "packages/apack-ears/src/sqlite/query.ts",
+    "packages/apack-ears/src/sqlite/search.ts",
+    "packages/apack-ears/src/sqlite/text.ts",
+    "packages/apack-ears/tests/engine/search.spec.ts",
+    "packages/apack-ears/tests/sqlite/text-limits.spec.ts"
+  ],
+  "sha256": "1641b560dc194b7993de1a7e0d70501f687f8ab9217027aa38de31afee54f10b"
+}

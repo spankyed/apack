@@ -1,0 +1,18 @@
+
+> @apackdev/cli@0.1.0 pretest
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @apackdev/cli@0.1.0 test
+> vitest run tests/commands/db-rebuild.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-cli
+
+ ✓ tests/commands/db-rebuild.spec.ts (9 tests) 1245ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  12:29:04
+   Duration  3.01s (transform 871ms, setup 8ms, collect 1.47s, tests 1.25s, environment 0ms, prepare 35ms)
+

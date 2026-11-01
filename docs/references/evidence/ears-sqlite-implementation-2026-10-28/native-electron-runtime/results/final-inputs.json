@@ -1,0 +1,47 @@
+{
+  "base": "3333361c3cfe65ea2eddadf29d3f5c893e132177",
+  "inputs": {
+    ".github/workflows/app-acceptance.yml": "c7ea1d997cefaf8a9d39a6033e4a7b91acf2669b40e43408207ea4c774ca6820",
+    "build/prod/smoke-native.mjs": "00d372ba06bb31d2133398fd9865f899513afd8ef07327b849e76e52969eea41",
+    "tests/e2e/CLAUDE.md": "2b159c11d5312a51e5dfc576fe473814723cbbf2b5adb84aeb40a91310efd74d",
+    "tests/packs/bundled-ui-pack/tests/e2e/scribbles.spec.ts": "82131d0e841d79d25d7e9bc7b377ae7329355651e4fc92c8ba60baed4dd83265",
+    "tests/e2e/app-integration/sqlite-storage.spec.ts": "c70df6bb90aa42448d86f3faf2afa21eeea239a004ad4e58fa8adcf5e5896968"
+  },
+  "checks": [
+    {
+      "label": "app-e2e-types",
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tests/tsconfig.json",
+        "--noEmit"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "bundled-editor-types",
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tests/packs/bundled-ui-pack/tsconfig.json",
+        "--noEmit"
+      ],
+      "exitCode": 0
+    },
+    {
+      "label": "changed-lint",
+      "args": [
+        "node",
+        "node_modules/oxlint/bin/oxlint",
+        "build/prod/smoke-native.mjs",
+        "tests/e2e/app-integration/sqlite-storage.spec.ts",
+        "tests/packs/bundled-ui-pack/tests/e2e/scribbles.spec.ts",
+        "-D",
+        "correctness"
+      ],
+      "exitCode": 0
+    }
+  ]
+}

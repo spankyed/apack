@@ -1,0 +1,50 @@
+{
+  "ears-installed-Linux-X64-41206483232--ears-installed-build--source.txt": {
+    "sha256": "20d24f0f5ce10ac55183306608257815f020ec1aa10a1a0c7d2a13d1d6b1a137",
+    "bytes": 41
+  },
+  "ears-installed-Linux-X64-41206483232--ears-installed-build--preview-tests.json": {
+    "sha256": "c0d8b141ef8fcc9c51a913926f555c44bd30193c52e51ce6fb1cb6615a149303",
+    "bytes": 1944
+  },
+  "ears-installed-Linux-X64-41206483232--ears-installed-build--build.log": {
+    "sha256": "5a7bd3207abf645557ec53ba9bd5a801f35930d3db7c81762552b7eb8807c5da",
+    "bytes": 12831
+  },
+  "ears-installed-Linux-X64-41206483232--ears-installed-platform--report.json": {
+    "sha256": "243e722f9c6d26107b2bf238e115d12b96b94db5ae44884a0324efc1fbf8c394",
+    "bytes": 3018
+  },
+  "ears-installed-Linux-X64-41206483232--ears-installed-platform--native.log": {
+    "sha256": "91d4d9b4c80ddcff8b6e3abffe2a02d03594b1e716e209d44f118867b2778d33",
+    "bytes": 2428
+  },
+  "ears-installed-Windows-X64-41206483232--ears-installed-build--source.txt": {
+    "sha256": "20d24f0f5ce10ac55183306608257815f020ec1aa10a1a0c7d2a13d1d6b1a137",
+    "bytes": 41
+  },
+  "ears-installed-Windows-X64-41206483232--ears-installed-build--preview-tests.json": {
+    "sha256": "0d7038d5a757c0cd30302bc5186d2e4155dd73bce9c4ad936de9a96ad4045107",
+    "bytes": 1922
+  },
+  "ears-installed-Windows-X64-41206483232--ears-installed-build--build.log": {
+    "sha256": "3cae14abecf80c6f4f9a65f8dd97fd7f167c393ef3d2412204d12fd5677bf439",
+    "bytes": 12872
+  },
+  "ears-installed-Windows-X64-41206483232--ears-installed-platform--report.json": {
+    "sha256": "e10e27fd6537f6ce7b55b68bb90de832782e91dc516b052bab24226c4a4a56c3",
+    "bytes": 3042
+  },
+  "ears-installed-Windows-X64-41206483232--ears-installed-platform--native.log": {
+    "sha256": "a128d0c85bdd5a90fff8b61ad2c6cecaff8dac8a088068659f4663abc650005f",
+    "bytes": 2524
+  },
+  "run-metadata.json": {
+    "sha256": "ea2c45a86adf54ee7a426dec30d332f9bc71229f40197c4b5308120e30ad1b0c",
+    "bytes": 6808
+  },
+  "frozen-source-cleanup.json": {
+    "sha256": "9b53622a00673166253ed3661fbbf3bf05e16f2b7b0cd3402b4bedc697d3b720",
+    "bytes": 403
+  }
+}

@@ -1,0 +1,1 @@
+Verified 19 local Markdown link targets in all four edited documents. External SQLite documentation link was opened and inspected separately.

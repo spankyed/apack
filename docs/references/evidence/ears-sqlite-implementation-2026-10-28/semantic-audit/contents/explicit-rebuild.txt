@@ -1,0 +1,19 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/search-recovery.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/search-recovery.spec.ts (26 tests) 7958ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ad in a private background generation  356ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text table in a private background generation  653ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text documents in a private background generation  627ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text owner index in a private background generation  1654ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text metadata in a private background generation  2340ms
+
+ Test Files  1 passed (1)
+      Tests  26 passed (26)
+   Start at  12:10:29
+   Duration  8.36s (transform 197ms, setup 12ms, collect 267ms, tests 7.96s, environment 0ms, prepare 39ms)
+

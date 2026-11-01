@@ -1,0 +1,25 @@
+
+> @apackdev/cli@0.1.0 pretest
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @apackdev/cli@0.1.0 test
+> vitest run tests/commands/db-logical.spec.ts tests/commands/backup.spec.ts tests/commands/db-rebuild.spec.ts tests/commands/db-output.spec.ts tests/commands/spawn-lock.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-cli
+
+ ✓ tests/commands/db-logical.spec.ts (8 tests) 3771ms
+   ✓ routes real dump/load commands, validates dry run, restores primary bytes and preserves media  1292ms
+   ✓ dumps and loads history alone without replacing or advancing primary  664ms
+   ✓ validates both selected inputs before replacing primary or history  1592ms
+ ✓ tests/commands/spawn-lock.spec.ts (9 tests) 51ms
+ ✓ tests/commands/db-rebuild.spec.ts (9 tests) 1237ms
+ ✓ tests/commands/backup.spec.ts (1 test) 188ms
+ ✓ tests/commands/db-output.spec.ts (18 tests) 5ms
+
+ Test Files  5 passed (5)
+      Tests  45 passed (45)
+   Start at  14:56:03
+   Duration  8.92s (transform 1.08s, setup 20ms, collect 2.93s, tests 5.25s, environment 0ms, prepare 179ms)
+

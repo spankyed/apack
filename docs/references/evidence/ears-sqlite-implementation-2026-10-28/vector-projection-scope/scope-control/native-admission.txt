@@ -1,0 +1,20 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/vector-index.spec.ts tests/sqlite/vector-training.spec.ts tests/sqlite/vector-models.spec.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=/results/native-admission.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/vector-models.spec.ts (7 tests) 3864ms
+   ✓ durable native model admission > uses the shared scheduler to train, project and publish readiness without logical commits  1127ms
+   ✓ durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility  966ms
+   ✓ durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions  1026ms
+ ✓ tests/sqlite/vector-index.spec.ts (5 tests) 314ms
+ ✓ tests/sqlite/vector-training.spec.ts (5 tests) 780ms
+
+ Test Files  3 passed (3)
+      Tests  17 passed (17)
+   Start at  23:31:13
+   Duration  5.70s (transform 234ms, setup 14ms, collect 426ms, tests 4.96s, environment 0ms, prepare 107ms)
+
+JSON report written to /results/native-admission.json

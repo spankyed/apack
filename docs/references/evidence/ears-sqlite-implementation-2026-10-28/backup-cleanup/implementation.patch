@@ -1,0 +1,137 @@
+diff --git a/.github/scripts/ears-sqlite-platform.mjs b/.github/scripts/ears-sqlite-platform.mjs
+index e6e22027fe..1cca9b90d7 100644
+--- a/.github/scripts/ears-sqlite-platform.mjs
++++ b/.github/scripts/ears-sqlite-platform.mjs
+@@ -107,7 +107,10 @@ const requiredBackupPublicationCases = [
+   "refuses a backup destination raced by a empty directory without replacing it",
+   "refuses a backup destination raced by a populated directory without replacing it",
+   "refuses a backup destination raced by a dangling symlink without replacing it",
+-  "publishes a backup whose path contains shell metacharacters as literal data"
++  "publishes a backup whose path contains shell metacharacters as literal data",
++  "preserves uncertain backup publication and cleanup errors while releasing the write lock",
++  "reports the retained published backup when staging cleanup fails and releases the write lock",
++  "preserves uncertain backup publication when releasing the write lock also fails"
+ ];
+ 
+ const evidence = resolve('.temp/sqlite-platform'), mode = process.argv[2];
+diff --git a/packages/apack-cli/src/commands/db/backup.ts b/packages/apack-cli/src/commands/db/backup.ts
+index 1903abfb90..857b68af70 100644
+--- a/packages/apack-cli/src/commands/db/backup.ts
++++ b/packages/apack-cli/src/commands/db/backup.ts
+@@ -24,7 +24,8 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
+   }
+   if (fs.existsSync(destination)) throw new Error(`Backup destination already exists: ${destination}`);
+   const lock = holdDatabaseWriteLock(target.userDataDir, 'apack db backup');
+-  let stage: string | undefined;
++  let stage: string | undefined, published = false;
++  const failures: unknown[] = [];
+   try {
+     if (findRunningApp(target)) throw new Error('Quit the app before taking a full offline backup.');
+     const db = await openTarget(target, { write: false, command: 'backup' }, io);
+@@ -46,11 +47,22 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
+       verifyBackup(backup);
+       fs.chmodSync(backup, 0o700);
+       publishBackupDirectory(backup, destination);
++      published = true;
+     });
+     io.out(destination);
+-  } finally {
+-    try {
+-      if (stage) fs.rmSync(stage, { recursive: true, force: true });
+-    } finally { lock.release(); }
++  } catch (error) { failures.push(error); }
++  try { if (stage) fs.rmSync(stage, { recursive: true, force: true }); }
++  catch (error) { failures.push(error); }
++  try { lock.release(); }
++  catch (error) { failures.push(error); }
++  if (failures.length === 1 && !published) throw failures[0];
++  if (failures.length) {
++    const original = failures[0] as { code?: unknown; destinationPath?: unknown } | null | undefined;
++    // Preserve uncertain publication metadata even when owned staging or lock cleanup also fails.
++    throw Object.assign(new AggregateError(failures, 'Backup failed; any published destination is retained', { cause: failures[0] }), {
++      ...(typeof original?.code === 'string' && { code: original.code }),
++      ...(typeof original?.destinationPath === 'string' && { destinationPath: original.destinationPath }),
++      ...(published && { publishedPath: destination }),
++    });
+   }
+ }
+diff --git a/packages/apack-cli/tests/commands/sqlite-profile.spec.ts b/packages/apack-cli/tests/commands/sqlite-profile.spec.ts
+index 044c858b6c..a4bddfc204 100644
+--- a/packages/apack-cli/tests/commands/sqlite-profile.spec.ts
++++ b/packages/apack-cli/tests/commands/sqlite-profile.spec.ts
+@@ -1,8 +1,11 @@
+ import * as fs from 'node:fs';
++import mutableFs from 'node:fs';
++import { syncBuiltinESMExports } from 'node:module';
+ import * as os from 'node:os';
+ import * as path from 'node:path';
+ import { afterEach, expect, it, vi } from 'vitest';
+ import * as backups from '@apackdev/host/backup';
++import * as databases from '@apackdev/host/database';
+ import { DATABASE_FORMAT } from '@apackdev/ears/sqlite';
+ import { _appDataPaths } from '@apackdev/sdk/utils';
+ import { appDataDirFor, _appDirOf } from '@apackdev/sdk/env';
+@@ -11,7 +14,7 @@ import { db } from '../../src/commands/db';
+ import { parseDbArgs } from '../../src/commands/db/target';
+ 
+ const roots: string[] = [];
+-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
++afterEach(() => { vi.restoreAllMocks(); syncBuiltinESMExports(); vi.unstubAllEnvs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+ function fixture() {
+   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-cli-sqlite-')); roots.push(root);
+   const dir = path.join(root, 'profile'), paths = _appDataPaths(dir);
+@@ -110,3 +113,54 @@ it('publishes a backup whose path contains shell metacharacters as literal data'
+   await command(['backup', '--data-dir', f.dir, '--out', destination]);
+   expect(JSON.parse((await command(['backup', 'verify', destination, '--json'])).out).valid).toBe(true);
+ });
++
++
++it('preserves uncertain backup publication and cleanup errors while releasing the write lock', async () => {
++  const f = fixture(), destination = path.join(f.root, 'backup');
++  const publication = Object.assign(new Error('publication outcome is unknown'), { code: 'PUBLICATION_UNKNOWN', destinationPath: destination });
++  const cleanup = Object.assign(new Error('staging cleanup failed'), { code: 'EIO' });
++  vi.spyOn(backups, 'publishBackupDirectory').mockImplementation(() => { throw publication; });
++  const remove = mutableFs.rmSync;
++  vi.spyOn(mutableFs, 'rmSync').mockImplementation((file, options) => {
++    if (path.dirname(String(file)) === f.root && path.basename(String(file)).startsWith('.apack-backup-')) throw cleanup;
++    return remove(file, options);
++  });
++  syncBuiltinESMExports();
++  const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
++  expect(failure).toBeInstanceOf(AggregateError);
++  expect(failure).toMatchObject({ code: 'PUBLICATION_UNKNOWN', destinationPath: destination, cause: publication, errors: [publication, cleanup] });
++  expect(findDatabaseWriter(f.dir)).toBeNull();
++  expect(fs.existsSync(destination)).toBe(false);
++  expect(fs.readdirSync(f.root).filter(name => name.startsWith('.apack-backup-'))).toHaveLength(1);
++});
++
++it('reports the retained published backup when staging cleanup fails and releases the write lock', async () => {
++  const f = fixture(), destination = path.join(f.root, 'backup'), cleanup = new Error('staging cleanup failed');
++  const remove = mutableFs.rmSync;
++  vi.spyOn(mutableFs, 'rmSync').mockImplementation((file, options) => {
++    if (path.dirname(String(file)) === f.root && path.basename(String(file)).startsWith('.apack-backup-')) throw cleanup;
++    return remove(file, options);
++  });
++  syncBuiltinESMExports();
++  const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
++  expect(failure).toMatchObject({ publishedPath: destination, cause: cleanup, errors: [cleanup] });
++  expect(findDatabaseWriter(f.dir)).toBeNull();
++  expect(JSON.parse((await command(['backup', 'verify', destination, '--json'])).out).valid).toBe(true);
++});
++
++
++it('preserves uncertain backup publication when releasing the write lock also fails', async () => {
++  const f = fixture(), destination = path.join(f.root, 'backup');
++  const publication = Object.assign(new Error('publication outcome is unknown'), { code: 'PUBLICATION_UNKNOWN', destinationPath: destination });
++  const cleanup = new Error('write lock release failed');
++  const hold = databases.holdDatabaseWriteLock;
++  vi.spyOn(databases, 'holdDatabaseWriteLock').mockImplementation((...args) => {
++    const lock = hold(...args);
++    return { release() { lock.release(); throw cleanup; } };
++  });
++  vi.spyOn(backups, 'publishBackupDirectory').mockImplementation(() => { throw publication; });
++  const failure = await command(['backup', '--data-dir', f.dir, '--out', destination]).then(() => undefined, error => error);
++  expect(failure).toMatchObject({ code: 'PUBLICATION_UNKNOWN', destinationPath: destination, cause: publication, errors: [publication, cleanup] });
++  expect(findDatabaseWriter(f.dir)).toBeNull();
++  expect(fs.readdirSync(f.root).some(name => name.startsWith('.apack-backup-'))).toBe(false);
++});

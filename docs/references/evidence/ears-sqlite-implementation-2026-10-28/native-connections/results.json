@@ -1,0 +1,178 @@
+[
+  {
+    "name": "models",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "--outputFile=/results/models.json"
+    ],
+    "exitCode": 0,
+    "seconds": 13.981919220008422
+  },
+  {
+    "name": "reject-missing-connection-load",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "-t",
+      "loads trusted native candidates on independent",
+      "--outputFile=/results/missing-connection-load.json"
+    ],
+    "exitCode": 1,
+    "seconds": 2.127300110005308
+  },
+  {
+    "name": "reject-missing-audit-loader",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "-t",
+      "retains the trusted connection loader",
+      "--outputFile=/results/missing-audit-loader.json"
+    ],
+    "exitCode": 1,
+    "seconds": 2.475585139996838
+  },
+  {
+    "name": "all-ears",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/all-ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 49.3598306789936
+  },
+  {
+    "name": "types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.406507892999798
+  },
+  {
+    "name": "boundaries",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.613323251018301
+  },
+  {
+    "name": "api-update",
+    "args": [
+      "npm",
+      "run",
+      "api:update",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 1,
+    "seconds": 3.086162924009841
+  },
+  {
+    "name": "package-build",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 28.8368937119958
+  },
+  {
+    "name": "api-update",
+    "args": [
+      "npm",
+      "run",
+      "api:update",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.5300160959886853
+  },
+  {
+    "name": "api-check",
+    "args": [
+      "npm",
+      "run",
+      "api:check",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.4656758600031026
+  },
+  {
+    "name": "lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/sqlite/database.ts",
+      "packages/apack-ears/src/sqlite/index-builds.ts",
+      "packages/apack-ears/src/sqlite/search.ts",
+      "packages/apack-ears/src/sqlite/vector-admission.ts",
+      "packages/apack-ears/src/sqlite/vector-index.ts",
+      "packages/apack-ears/src/sqlite/vector-models.ts",
+      "packages/apack-ears/src/sqlite/vector-policy.ts",
+      "packages/apack-ears/src/sqlite/vector-training.ts",
+      "packages/apack-ears/src/sqlite/vectors.ts",
+      "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "scripts/linux-runner.ts",
+      "packages/apack-ears/src/sqlite/vector-cursor.ts",
+      "packages/apack-ears/tests/sqlite/logical-snapshot.spec.ts",
+      "packages/apack-ears/src/sqlite/audit.ts",
+      "packages/apack-ears/src/sqlite/index.ts",
+      "packages/apack-ears/src/sqlite/logical-export.ts",
+      "packages/apack-ears/src/sqlite/vector-candidates.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.03895655999076553
+  }
+]

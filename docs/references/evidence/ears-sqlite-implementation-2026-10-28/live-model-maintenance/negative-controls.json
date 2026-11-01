@@ -1,0 +1,22 @@
+[
+  {
+    "control": "epoch-invalidation",
+    "exitCode": 1,
+    "failedTests": 1
+  },
+  {
+    "control": "unknown-commit-cleanup",
+    "exitCode": 1,
+    "failedTests": 1
+  },
+  {
+    "control": "offline-ownership",
+    "exitCode": 1,
+    "failedTests": 1
+  },
+  {
+    "control": "recovery-retention",
+    "exitCode": 1,
+    "failedTests": 1
+  }
+]

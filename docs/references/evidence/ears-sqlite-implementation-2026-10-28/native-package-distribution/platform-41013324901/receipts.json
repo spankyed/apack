@@ -1,0 +1,127 @@
+[
+  {
+    "file": "Linux-X64/verification.json.gz",
+    "sha256": "017779430dad624203490a868ff62c26bf8d3b20fee18cf4e44b021c8a14c608",
+    "originalSha256": "258e7946ed66d269d54618f3315dee56a807844b2cdb5890225d99b2e2534fa9"
+  },
+  {
+    "file": "Linux-X64/native-generation-provenance.json.gz",
+    "sha256": "ef8a0f569a688cecc08429d42752b96b77b9395e7ca2b2df5b863ad5648c26ac",
+    "originalSha256": "5a149b19018498257c179d584e2b72e3d10ede122c8d7826befe5ba308de2704"
+  },
+  {
+    "file": "Linux-X64/native-membership.json.gz",
+    "sha256": "3b7a0421fd970db5f86da55f38cdfc92ecad5684a294fea7fda5c5958dca60e0",
+    "originalSha256": "1be938b60d339d07f3c4fb42ca8c3766bc0c98885eede4e7427f7fac35bdccdf"
+  },
+  {
+    "file": "Linux-X64/ears.json.gz",
+    "sha256": "eb0bf7cca56866a0a75244dca7c2520a543bcea37386bcccb8775a1cf1a99ffa",
+    "originalSha256": "bc8a81dc42c9bb7fb1a01b1555baefbfcac8d2ff048f0453a449cd61269abc02"
+  },
+  {
+    "file": "Linux-X64/host.json.gz",
+    "sha256": "50198cefbe8d02a281a9ac669fc39631879e61bd876d81194851fff08155a570",
+    "originalSha256": "b12d39e6e640619a761ef2e8bb9cbb7dd7dbe54cf0f42f9c75d9ce4ab980460d"
+  },
+  {
+    "file": "Linux-X64/query-work.json.gz",
+    "sha256": "8f66f1e1c69402493e937008559c86f9428e1953a8a447ad2ea663c922615a89",
+    "originalSha256": "21ac2ad0436fc88a9ea90a84f6c7b7f3f32dcd420ac101dd1f1aa904ca731069"
+  },
+  {
+    "file": "Linux-X64/sdk-backend.json.gz",
+    "sha256": "4651327369c0d7949c83c7b633ece094987e76b0758616ba91f5cb29fea2bec3",
+    "originalSha256": "06bc2b5cf07aa9d3f5bf35156acd681c5a14ae0d8b2569462a503b414a99bbe7"
+  },
+  {
+    "file": "Linux-X64/sdk-all-sqlite.json.gz",
+    "sha256": "d8462e4be9688cf9252830e08ca64a8fbf35fe0d4d3d62b2952ce956aaf96e87",
+    "originalSha256": "6e50cd9a48959fd09083d7e8e5d06c4645d1b98fa4d7a4ee93a513bbe1792276"
+  },
+  {
+    "file": "Linux-X64/package-build-coverage.json.gz",
+    "sha256": "f9a05c778de9e46bd1d0554c0524a60df74d5f85ef41d16582d6458fdaf158b7",
+    "originalSha256": "6dc7632cfe00ee836799cc17da0c076c4d1594c0ec30d4534cd99a317a8e6f1f"
+  },
+  {
+    "file": "Linux-X64/package-types.log.gz",
+    "sha256": "9058bb81cc1d2acff7e254b31fcf99d3e776c60b7e2c7893b3cc108e0986fd73",
+    "originalSha256": "ebe1e51104e1f235df81cf34ee77c5aa8d873002127614613ed64e91b3d523c9"
+  },
+  {
+    "file": "Linux-X64/converted-api-verification.json.gz",
+    "sha256": "ce860d10933445f74d76fb3cdce67615c050e8bafff350b0fc91cdd351178fb5",
+    "originalSha256": "3c7587d1aa55729f2a7eaad097f7dca43d8ea6bbd216862b85a4eae807d8b790"
+  },
+  {
+    "file": "macOS-ARM64/verification.json.gz",
+    "sha256": "c77dc09148b774a72b38112e859d356661f55eec94427c7f8c63fc29d582f229",
+    "originalSha256": "fb9a9eff9620b81cb1b6010c6b4841e3ba49216c8ad0ab09c20e51e46d34e8c2"
+  },
+  {
+    "file": "macOS-ARM64/native-generation-provenance.json.gz",
+    "sha256": "187a4a1c9b1f4ab7bfaeba27d8fd3cb72af46d5f583697b414b961db5c14a0d4",
+    "originalSha256": "aa251df26c923b1cdfd81d41ef800d017ddca75c3510e9a0ac5185ac1f76f832"
+  },
+  {
+    "file": "macOS-ARM64/native-membership.json.gz",
+    "sha256": "eb53ff3d9c6838a5420b79b3e94b00190d5ad493c0858bb722da56af01229d6e",
+    "originalSha256": "a9f1c155d88ead993cc13a2616a6f5a8dd2a57fc38d95bbd88dc3e4ada647968"
+  },
+  {
+    "file": "macOS-ARM64/ears.json.gz",
+    "sha256": "a4f1490cd3345f449021a9fd91a1757679e1f782f385ee050b2198c052bf98cb",
+    "originalSha256": "4e091ed6c8d4f66c7bbe430258d96a39c7098c4ce01ce12a0a4d7d2958d06256"
+  },
+  {
+    "file": "macOS-ARM64/host.json.gz",
+    "sha256": "7d3b638051188eef0932fb25a7e4b293415b838faef693a2e2566f296813576a",
+    "originalSha256": "ecc0a1fdae83e39ae4fa997d775628698f975a8f14c739568428a1bf69266224"
+  },
+  {
+    "file": "macOS-ARM64/query-work.json.gz",
+    "sha256": "9e1b8e1429cb9f4b85a1f8081d35589342176dfcb8027d4d1db09e728651304b",
+    "originalSha256": "2a33c3f4d1fec96e65123c01bb3458c21a5380a863b8d78ccd3a983ee33cf1c2"
+  },
+  {
+    "file": "macOS-ARM64/sdk-backend.json.gz",
+    "sha256": "4f297b38c2d04d156b74443868781cd8a6e5906aa8b9a63e960961461af0acad",
+    "originalSha256": "2bfbe47352b4ebeb0fa45ef639e67d72014fb305a3368bc33b97a550d1d89025"
+  },
+  {
+    "file": "Windows-X64/verification.json.gz",
+    "sha256": "fb4a8cd1dfb856581a50512f7f0d8a472a1c0812f1246efd194bc19067c26dfe",
+    "originalSha256": "c63bafa544da9ba77783a5fee47c96b08c8607f7036232f510243f721f805060"
+  },
+  {
+    "file": "Windows-X64/native-generation-provenance.json.gz",
+    "sha256": "3b53982be27dd27504f3caca6e288b11ad5f2e276a489f4efc4d98edd41d267e",
+    "originalSha256": "9a1c9b7130183987af6db0b3f7541e61036f665c91c7db67e815e39d9b2a6221"
+  },
+  {
+    "file": "Windows-X64/native-membership.json.gz",
+    "sha256": "0ea4c5a3c20c057d346bd86579709e612c65b64e13c914a830a4d35113979bfb",
+    "originalSha256": "e6217181577fd04eb9a3f08d40c276483380aeed956da0a7372e1bac0a4faa78"
+  },
+  {
+    "file": "Windows-X64/ears.json.gz",
+    "sha256": "bd169a350d5b28806d7f1129ba531861af54e618f17eb1cd6635f4a7d7ee6f8e",
+    "originalSha256": "49049a727d4085e1f14be7ea965df9e6631ce04d63ec5d84e387c05973f02d04"
+  },
+  {
+    "file": "Windows-X64/host.json.gz",
+    "sha256": "c3464d35d67e654c9a1cccdf404ebf95b45e2375b4a7a5eaf0e9f33633894612",
+    "originalSha256": "7c67aef952afdb34beb16e6148156b7cf880cb63b6162b6e72602be27d780574"
+  },
+  {
+    "file": "Windows-X64/query-work.json.gz",
+    "sha256": "075b4d1ef360868a286e2dfb79c759eaf87d74fc73a82c8ccaf378c0b5aac405",
+    "originalSha256": "38990548e789c9290c0f531460fed1b28100da8518434d43aa1786fbab7e6b77"
+  },
+  {
+    "file": "Windows-X64/sdk-backend.json.gz",
+    "sha256": "3f29a01f70b27d3eec9f5f945e69de014415da4ffd3e29140556acb37b81e103",
+    "originalSha256": "7add405d91d130906422fd2bffabc42d8f44596108af23843791d0a4f86be94a"
+  }
+]

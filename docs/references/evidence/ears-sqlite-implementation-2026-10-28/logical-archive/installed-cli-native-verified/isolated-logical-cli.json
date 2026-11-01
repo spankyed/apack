@@ -1,0 +1,374 @@
+{
+  "source": "baddd6f1dce82d54a244622b83d8396391d83aec",
+  "qualification": "Small isolated npm-tarball CLI with native install scripts; not signed apps, Electron, power loss or large-profile acceptance",
+  "node": "v23.11.1",
+  "cli": {
+    "path": "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/cli/bin/apack.mjs",
+    "sha256": "f91511b7b380421b47823e6b948087e50346abfe5de8d5ff7c0e88ca1dc63591"
+  },
+  "bundle": {
+    "path": "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/cli/dist/cli.js",
+    "sha256": "c49ab78e00d9cf2bc65f206b4be9a18d0d22d59ebab429a5037b09bae1eca069"
+  },
+  "entries": {
+    "@apackdev/ears": "file:///tmp/ears-installed-mjoqjixj/node_modules/@apackdev/ears/dist/index.js",
+    "@apackdev/ears/sqlite": "file:///tmp/ears-installed-mjoqjixj/node_modules/@apackdev/ears/dist/sqlite/index.js",
+    "@apackdev/sdk/utils": "file:///tmp/ears-installed-mjoqjixj/node_modules/@apackdev/sdk/dist/utils/index.js"
+  },
+  "calls": [
+    {
+      "args": [
+        "--help"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "Usage: apack db <command> [options]\n\nThe app's database, read and changed while apack is closed. Commands that change it refuse while apack runs\non the data dir; reads warn that it is running, and read what it has committed.\n\nCommands:\n  query <code>          Run read-only query code (the Database console's)\n  exec <code>           Run transaction code\n  repl [--write]        Run console code line by line\n  script <file>         Run a script file against the database (it imports what it likes)\n  inspect [<id>]        An entity's relations, or relation counts per entity type\n  runs [--run <id>]     The flow runs in the run history, or one run's whole tree\n  backup --out <dir>    Full database and media backup to a new directory\n  backup verify <dir>   Check backup readability and completeness\n  recover               Inspect interrupted imports; explicitly restore retained incumbents\n  rebuild [--force]     Rebuild SQLite candidate derived indexes from primary data\n  audit [--json]        Inspect SQLite candidate primary values and derived indexes\n  export --out <dir>    Each entity type's entities to a file\n  dump --primary <file> Lossless SQLite logical archives (--runs may also be named)\n  load --primary <file> Validate logical archives; --force replaces selected stores\n  import <backup-dir>   Replace the database with a backup (lists the change; --force makes it)\n  reset                 Delete all data, as Reset Database does (lists it; --force deletes)\n  clear-settings        Destroy the Settings rows, so defaults come back (lists them; --force destroys)\n\nEvery command takes one of these; a command that changes the database says which data dir it means, and a command\nthat only reads takes the production app's data without being told:\n  --data-dir <path>      A data dir, a copy of the user's for example\n  --profile <name>       Built-in or custom stored profile\n  --schema-from <path>   Packs to read entity types from, for a data dir that publishes none: a snapshot,\n                         a pack directory, or a directory of them (an app, a checkout)\n\napack db <command> --help shows a command's options.\n",
+      "stderr": "",
+      "ms": 829.6572139999998
+    },
+    {
+      "args": [
+        "dump",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-7PUn9b/runs.ears"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "primary: /tmp/ears-built-logical-cli-7PUn9b/primary.ears\nruns: /tmp/ears-built-logical-cli-7PUn9b/runs.ears\n",
+      "stderr": "Database: /tmp/ears-built-logical-cli-7PUn9b/profile (offline)\nWarning: /tmp/ears-built-logical-cli-7PUn9b/profile has no packs installed in /tmp/ears-built-logical-cli-7PUn9b/profile/apack/packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\n",
+      "ms": 1087.927276
+    },
+    {
+      "args": [
+        "load",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-7PUn9b/runs.ears"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "Validated logical archives: primary, runs. Media is preserved.\nDry run: nothing was changed. Run again with --force to replace selected stores.\n",
+      "stderr": "Database: /tmp/ears-built-logical-cli-7PUn9b/profile (offline)\nWarning: /tmp/ears-built-logical-cli-7PUn9b/profile has no packs installed in /tmp/ears-built-logical-cli-7PUn9b/profile/apack/packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\nTypes absent from installed packs: Row (1)\n",
+      "ms": 1850.0414680000004
+    },
+    {
+      "args": [
+        "load",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-7PUn9b/truncated.ears",
+        "--force"
+      ],
+      "expected": 1,
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "Database: /tmp/ears-built-logical-cli-7PUn9b/profile (offline)\nWarning: /tmp/ears-built-logical-cli-7PUn9b/profile has no packs installed in /tmp/ears-built-logical-cli-7PUn9b/profile/apack/packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\nTruncated logical archive\n",
+      "ms": 1484.9054379999998
+    },
+    {
+      "args": [
+        "load",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-7PUn9b/runs.ears",
+        "--force"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "Validated logical archives: primary, runs. Media is preserved.\nLoaded logical archives.\n",
+      "stderr": "Database: /tmp/ears-built-logical-cli-7PUn9b/profile (offline)\nWarning: /tmp/ears-built-logical-cli-7PUn9b/profile has no packs installed in /tmp/ears-built-logical-cli-7PUn9b/profile/apack/packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\nThe backup holds entities of types no installed pack declares\nImported lmdb\nImported runHistory\nImport completed\n",
+      "ms": 2207.4409750000004
+    },
+    {
+      "args": [
+        "dump",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears"
+      ],
+      "expected": 1,
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "Archive target exists: /tmp/ears-built-logical-cli-7PUn9b/primary.ears\n",
+      "ms": 781.7314129999995
+    }
+  ],
+  "checks": [
+    "built dump both stores",
+    "built dry run preserves both commits and values",
+    "built late input refusal preserves both stores",
+    "built populated restore preserves bytes, embeddings and monotonic commit",
+    "built overwrite refusal preserves both archives"
+  ],
+  "regexAssets": [
+    {
+      "path": "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/ears/vendor/rregex/rregex.cjs",
+      "sha256": "5a8b72e18f1f25df12ec19499168be74caaa4a2476c6c098283887b5718d3e1a"
+    },
+    {
+      "path": "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/ears/vendor/rregex/rregex_bg.wasm",
+      "sha256": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525"
+    }
+  ],
+  "sqlite": {
+    "version": "3.53.4"
+  },
+  "archiveHashes": {
+    "primary": "c27ec341397d80652678fe6ed2e234726dbf5f1cf2fb39b60f095491ed910f83",
+    "runs": "ef401b69ba47c01e02fd250c1533de6450137404e723b734a5ebbc191948c768"
+  },
+  "runtimeReceipts": [
+    {
+      "argv": [
+        "/usr/local/bin/node",
+        "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/cli/bin/apack.mjs",
+        "db",
+        "--help"
+      ],
+      "node": "v23.11.1",
+      "nodeOptions": "",
+      "bindings": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/elmdb/elmdb.linux-arm64-gnu.node",
+          "sha256": "ded0c7259b8dc7e0d8f5d92950efd9020bd7a06f1ae5009ece1f6f50646155c1"
+        }
+      ],
+      "extensionLoads": []
+    },
+    {
+      "argv": [
+        "/usr/local/bin/node",
+        "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/cli/bin/apack.mjs",
+        "db",
+        "dump",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-7PUn9b/runs.ears"
+      ],
+      "node": "v23.11.1",
+      "nodeOptions": "",
+      "bindings": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/elmdb/elmdb.linux-arm64-gnu.node",
+          "sha256": "ded0c7259b8dc7e0d8f5d92950efd9020bd7a06f1ae5009ece1f6f50646155c1"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+          "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+        }
+      ],
+      "extensionLoads": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        }
+      ]
+    },
+    {
+      "argv": [
+        "/usr/local/bin/node",
+        "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/cli/bin/apack.mjs",
+        "db",
+        "load",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-7PUn9b/runs.ears"
+      ],
+      "node": "v23.11.1",
+      "nodeOptions": "",
+      "bindings": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/elmdb/elmdb.linux-arm64-gnu.node",
+          "sha256": "ded0c7259b8dc7e0d8f5d92950efd9020bd7a06f1ae5009ece1f6f50646155c1"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+          "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+        }
+      ],
+      "extensionLoads": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        }
+      ]
+    },
+    {
+      "argv": [
+        "/usr/local/bin/node",
+        "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/cli/bin/apack.mjs",
+        "db",
+        "load",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-7PUn9b/truncated.ears",
+        "--force"
+      ],
+      "node": "v23.11.1",
+      "nodeOptions": "",
+      "bindings": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/elmdb/elmdb.linux-arm64-gnu.node",
+          "sha256": "ded0c7259b8dc7e0d8f5d92950efd9020bd7a06f1ae5009ece1f6f50646155c1"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+          "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+        }
+      ],
+      "extensionLoads": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        }
+      ]
+    },
+    {
+      "argv": [
+        "/usr/local/bin/node",
+        "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/cli/bin/apack.mjs",
+        "db",
+        "load",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears",
+        "--runs",
+        "/tmp/ears-built-logical-cli-7PUn9b/runs.ears",
+        "--force"
+      ],
+      "node": "v23.11.1",
+      "nodeOptions": "",
+      "bindings": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/elmdb/elmdb.linux-arm64-gnu.node",
+          "sha256": "ded0c7259b8dc7e0d8f5d92950efd9020bd7a06f1ae5009ece1f6f50646155c1"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+          "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+        }
+      ],
+      "extensionLoads": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        },
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/sqlite-vec-linux-arm64/vec0.so",
+          "sha256": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+        }
+      ]
+    },
+    {
+      "argv": [
+        "/usr/local/bin/node",
+        "/tmp/ears-installed-mjoqjixj/node_modules/@apackdev/cli/bin/apack.mjs",
+        "db",
+        "dump",
+        "--data-dir",
+        "/tmp/ears-built-logical-cli-7PUn9b/profile",
+        "--primary",
+        "/tmp/ears-built-logical-cli-7PUn9b/primary.ears"
+      ],
+      "node": "v23.11.1",
+      "nodeOptions": "",
+      "bindings": [
+        {
+          "path": "/tmp/ears-installed-mjoqjixj/node_modules/elmdb/elmdb.linux-arm64-gnu.node",
+          "sha256": "ded0c7259b8dc7e0d8f5d92950efd9020bd7a06f1ae5009ece1f6f50646155c1"
+        }
+      ],
+      "extensionLoads": []
+    }
+  ]
+}

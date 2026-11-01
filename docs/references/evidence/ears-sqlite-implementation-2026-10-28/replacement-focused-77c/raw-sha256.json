@@ -1,0 +1,34 @@
+{
+  "sqlite-contracts.json": {
+    "bytes": 79682,
+    "sha256": "e049b50f7c84019576710d3f7af33d988d296cd1f777ab420d9ebb44766ad758"
+  },
+  "elmdb-contracts.json": {
+    "bytes": 78332,
+    "sha256": "043c174bd2905642c4a25b141b9441b9e9e75c8d870e7e6ec6a7b495ad59d2fd"
+  },
+  "native-routing.json": {
+    "bytes": 12834,
+    "sha256": "eb03a9374ffa389a7070eca60229c4301cf20ffc522b2c3fa63b6f87de981798"
+  },
+  "graph-report.json": {
+    "bytes": 725,
+    "sha256": "ed24e134aa61ccf2bf80a68d7ac7513380e44f0fac4369e55bfb3b2c2cae78c4"
+  },
+  "subprocess-inventory.json": {
+    "bytes": 23474,
+    "sha256": "b0a8eccb99c055b148d9f30bedcaba8c6aeecfc65359bc2ce37c3936253f5faf"
+  },
+  "lost-ack/report.json": {
+    "bytes": 12318,
+    "sha256": "8c2e015b4a15b163087e26f78aa4acfdd723f6a25c872fd3dafa2562f2633679"
+  },
+  "sync-error-no-close/report.json": {
+    "bytes": 14092,
+    "sha256": "4e259c326d0f5cbe0dc1a8c146262d8865b562eb542e3fae7fa864b365a03cdd"
+  },
+  "reports.patch": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

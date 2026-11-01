@@ -1,6 +1,6 @@
-// The lint gate's one exclusion, and whether anything holds it there.
+// The lint gate's scaffold-template exclusion, and whether anything holds it there.
 //
-// `lint:check` lints `packages/` since 8549f81a5, with a single exclusion: the CLI's scaffold templates. Their
+// `lint:check` excludes scaffold templates and generated vendor code. The templates'
 // parameter names are what a pack author reads when they open their first action, so `params`, `services`, `z`
 // and `flowId` are documentation there rather than unused bindings.
 //

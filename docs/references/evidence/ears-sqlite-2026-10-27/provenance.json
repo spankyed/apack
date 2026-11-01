@@ -1,0 +1,20 @@
+{
+  "apackBase": "58381456752b18f8522b45d50020cac2e4c332fa",
+  "elmdbBase": "9359949910d06087c6a21a7af1cbcdc00e200615",
+  "elmdbAddonSha256": "8ada39399a39e1671c188bd3d310c0509b358d72502fce5da6b277af29ee8f14",
+  "node": "23.11.1",
+  "sqlite": "3.53.4",
+  "better-sqlite3": "13.0.3",
+  "sqlite-vec": "0.1.9",
+  "host": {
+    "cpu": "Apple M1 Pro",
+    "ramBytes": 34359738368,
+    "os": "Darwin 25.3.0",
+    "arch": "arm64"
+  },
+  "durablePolicy": {
+    "sqlite": "WAL, synchronous=FULL, fullfsync=ON, checkpoint_fullfsync=ON",
+    "elmdb": "syncs enabled, transact durable=true, LMDB macOS F_FULLFSYNC"
+  },
+  "scope": "Local warm-cache synthetic API feasibility; not production cutover or filesystem certification"
+}

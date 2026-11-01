@@ -1,0 +1,95 @@
+{
+  "_id": "65c1486e65086cabf48071f2",
+  "id": "Qdrant/dbpedia-entities-openai3-text-embedding-3-small-1536-100K",
+  "author": "Qdrant",
+  "sha": "0d5fd00fbc5a9c0c836d70cd409f7e461255e572",
+  "lastModified": "2024-02-05T20:45:19.000Z",
+  "private": false,
+  "gated": false,
+  "disabled": false,
+  "tags": [
+    "size_categories:100K<n<1M",
+    "format:parquet",
+    "modality:text",
+    "modality:timeseries",
+    "library:datasets",
+    "library:dask",
+    "library:mlcroissant",
+    "library:polars",
+    "region:us"
+  ],
+  "downloads": 490,
+  "likes": 8,
+  "cardData": {
+    "dataset_info": {
+      "features": [
+        {
+          "name": "_id",
+          "dtype": "string"
+        },
+        {
+          "name": "title",
+          "dtype": "string"
+        },
+        {
+          "name": "text",
+          "dtype": "string"
+        },
+        {
+          "name": "openai",
+          "sequence": "float32"
+        },
+        {
+          "name": "combined_text",
+          "dtype": "string"
+        },
+        {
+          "name": "text-embedding-3-small-1536-embedding",
+          "sequence": "float64"
+        }
+      ],
+      "splits": [
+        {
+          "name": "train",
+          "num_bytes": 1917922142,
+          "num_examples": 100000
+        }
+      ],
+      "download_size": 1650651517,
+      "dataset_size": 1917922142
+    },
+    "configs": [
+      {
+        "config_name": "default",
+        "data_files": [
+          {
+            "split": "train",
+            "path": "data/train-*"
+          }
+        ]
+      }
+    ]
+  },
+  "siblings": [
+    {
+      "rfilename": ".gitattributes"
+    },
+    {
+      "rfilename": "README.md"
+    },
+    {
+      "rfilename": "data/train-00000-of-00004.parquet"
+    },
+    {
+      "rfilename": "data/train-00001-of-00004.parquet"
+    },
+    {
+      "rfilename": "data/train-00002-of-00004.parquet"
+    },
+    {
+      "rfilename": "data/train-00003-of-00004.parquet"
+    }
+  ],
+  "createdAt": "2024-02-05T20:43:26.000Z",
+  "usedStorage": 3631948157
+}

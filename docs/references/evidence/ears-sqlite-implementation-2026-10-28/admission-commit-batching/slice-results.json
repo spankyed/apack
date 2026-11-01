@@ -1,0 +1,99 @@
+[
+  {
+    "label": "reject-unsliced-page",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+      "-t",
+      "stops inside a partial page",
+      "--outputFile=/results/unsliced-control.json"
+    ],
+    "exitCode": 1,
+    "seconds": 3.080541392992018
+  },
+  {
+    "label": "all-ears-sliced",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/all-ears-sliced.json"
+    ],
+    "exitCode": 0,
+    "seconds": 54.610929367976496
+  },
+  {
+    "label": "ears-slice-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 4.221192458004225
+  },
+  {
+    "label": "slice-lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/sqlite/vector-index.ts",
+      "packages/apack-ears/src/sqlite/vector-models.ts",
+      "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.07785612501902506
+  },
+  {
+    "label": "sliced-auto-1000",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "/metrics/packages/apack-ears/bench/sqlite/checkpoint-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "1000",
+      "/results/sliced-auto-1000.json",
+      "native-diagnose"
+    ],
+    "exitCode": 0,
+    "seconds": 1.8551938140008133
+  },
+  {
+    "label": "sliced-auto-99900",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "/metrics/packages/apack-ears/bench/sqlite/checkpoint-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "/results/sliced-auto-99900.json",
+      "native-diagnose"
+    ],
+    "exitCode": 0,
+    "seconds": 66.84243515599519
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "source": "34c612ab84d176a1ae4107dbc815892470694181",
+  "earsPassed": 539,
+  "sqliteCasesPassed": 230,
+  "selectedTextPassed": 16,
+  "selectedTextTotal": 16,
+  "maintenanceCasesPassed": 9,
+  "hostPassed": 98,
+  "recoveryCasesPassed": 34
+}

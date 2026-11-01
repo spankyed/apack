@@ -1,0 +1,56 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ✓ tests/sqlite/file-ownership.spec.ts (42 tests) 28869ms
+   ✓ SQLite file ownership > refuses symlink at data.sqlite3 before opening (readOnly=false)  1080ms
+   ✓ SQLite file ownership > refuses hard link at data.sqlite3 before opening (readOnly=false)  911ms
+   ✓ SQLite file ownership > refuses directory at data.sqlite3 before opening (readOnly=false)  889ms
+   ✓ SQLite file ownership > refuses symlink at data.sqlite3-wal before opening (readOnly=false)  887ms
+   ✓ SQLite file ownership > refuses hard link at data.sqlite3-wal before opening (readOnly=false)  795ms
+   ✓ SQLite file ownership > refuses directory at data.sqlite3-wal before opening (readOnly=false)  918ms
+   ✓ SQLite file ownership > refuses symlink at data.sqlite3-shm before opening (readOnly=false)  789ms
+   ✓ SQLite file ownership > refuses hard link at data.sqlite3-shm before opening (readOnly=false)  826ms
+   ✓ SQLite file ownership > refuses directory at data.sqlite3-shm before opening (readOnly=false)  886ms
+   ✓ SQLite file ownership > refuses symlink at data.sqlite3-journal before opening (readOnly=false)  807ms
+   ✓ SQLite file ownership > refuses hard link at data.sqlite3-journal before opening (readOnly=false)  898ms
+   ✓ SQLite file ownership > refuses directory at data.sqlite3-journal before opening (readOnly=false)  785ms
+   ✓ SQLite file ownership > refuses symlink at data.sqlite3 before opening (readOnly=true)  917ms
+   ✓ SQLite file ownership > refuses hard link at data.sqlite3 before opening (readOnly=true)  791ms
+   ✓ SQLite file ownership > refuses directory at data.sqlite3 before opening (readOnly=true)  890ms
+   ✓ SQLite file ownership > refuses symlink at data.sqlite3-wal before opening (readOnly=true)  801ms
+   ✓ SQLite file ownership > refuses hard link at data.sqlite3-wal before opening (readOnly=true)  795ms
+   ✓ SQLite file ownership > refuses directory at data.sqlite3-wal before opening (readOnly=true)  831ms
+   ✓ SQLite file ownership > refuses symlink at data.sqlite3-shm before opening (readOnly=true)  801ms
+   ✓ SQLite file ownership > refuses hard link at data.sqlite3-shm before opening (readOnly=true)  839ms
+   ✓ SQLite file ownership > refuses directory at data.sqlite3-shm before opening (readOnly=true)  793ms
+   ✓ SQLite file ownership > refuses symlink at data.sqlite3-journal before opening (readOnly=true)  967ms
+   ✓ SQLite file ownership > refuses hard link at data.sqlite3-journal before opening (readOnly=true)  816ms
+   ✓ SQLite file ownership > refuses directory at data.sqlite3-journal before opening (readOnly=true)  978ms
+   ✓ SQLite file ownership > refuses a FIFO at data.sqlite3 without blocking the native opener  1239ms
+   ✓ SQLite file ownership > refuses a FIFO at data.sqlite3-wal without blocking the native opener  1072ms
+   ✓ SQLite file ownership > refuses a FIFO at data.sqlite3-shm without blocking the native opener  1133ms
+   ✓ SQLite file ownership > refuses a FIFO at data.sqlite3-journal without blocking the native opener  1161ms
+   ✓ SQLite file ownership > refuses an occupied backup namespace at data.sqlite3  818ms
+   ✓ SQLite file ownership > refuses an occupied backup namespace at data.sqlite3-wal  904ms
+   ✓ SQLite file ownership > refuses an occupied backup namespace at data.sqlite3-shm  802ms
+   ✓ SQLite file ownership > refuses an occupied backup namespace at data.sqlite3-journal  961ms
+ ✓ tests/sqlite/database-identity.spec.ts (19 tests) 12982ms
+   ✓ SQLite database identity > refuses an owned-looking database with application_id=0 without repairing its identity  1237ms
+   ✓ SQLite database identity > refuses an owned-looking database with application_id=305419896 without repairing its identity  806ms
+   ✓ SQLite database identity > refuses an owned-looking database with user_version=0 without repairing its identity  904ms
+   ✓ SQLite database identity > refuses an owned-looking database with user_version=2 without repairing its identity  810ms
+   ✓ SQLite database identity > refuses missing authoritative meta without recreating it  1089ms
+   ✓ SQLite database identity > refuses missing authoritative entities without recreating it  1227ms
+   ✓ SQLite database identity > refuses missing authoritative relations without recreating it  1089ms
+   ✓ SQLite database identity > refuses missing authoritative embedding_values without recreating it  1016ms
+   ✓ SQLite database identity > refuses missing authoritative value_types without recreating it  1166ms
+   ✓ SQLite database identity > refuses missing authoritative value_fields without recreating it  1005ms
+   ✓ SQLite database identity > refuses missing authoritative value_overflow without recreating it  1097ms
+   ✓ SQLite database identity > refuses missing authoritative admitted type values without recreating it  1027ms
+
+ Test Files  2 passed (2)
+      Tests  61 passed (61)
+   Start at  19:28:55
+   Duration  44.00s (transform 1.01s, setup 16ms, collect 1.43s, tests 41.85s, environment 0ms, prepare 363ms)
+
+JSON report written to /results/focused.json

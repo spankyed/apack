@@ -1,0 +1,17 @@
+AssertionError [ERR_ASSERTION]: Packaged runtime resolved a dependency outside the app: /usr/local/bin/node
+    at insideApp (/electron/.temp/packaged-sqlite-probe.cjs:12:3)
+    at main (/electron/.temp/packaged-sqlite-probe.cjs:19:3)
+    at Object.<anonymous> (/electron/.temp/packaged-sqlite-probe.cjs:71:1)
+    at Module._compile (node:internal/modules/cjs/loader:1738:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1904:10)
+    at Module.load (node:internal/modules/cjs/loader:1472:32)
+    at Module._load (node:internal/modules/cjs/loader:1289:12)
+    at c._load (node:electron/js2c/node_init:2:18013)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:242:24) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '=='
+}

@@ -6,7 +6,7 @@ import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost, type HostRuntime } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
-import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
+import { assertNoDatabaseWriter, databaseStorage, startDatabaseBackground, closeDatabases, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
@@ -87,7 +87,7 @@ function bootReading(): string {
   const mb = (bytes: number) => `${(bytes / 2 ** 20).toFixed(1)} MB`;
   let onDisk: string;
   try {
-    onDisk = mb(statSync(path.join(_getLmdbPath(), 'data.mdb')).size);
+    onDisk = appDatabase ? mb(statSync(path.join(appDatabase.path, databaseStorage(appDatabase.format).dataFile)).size) : 'unknown';
   } catch {
     onDisk = 'unknown';
   }
@@ -99,6 +99,7 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   let runtime: HostRuntime;
   const packs = createPackRegistry({
     nativeDeclarations: [hostDeclaration],
+    indexesReady: () => database.indexesReady(),
     installedPacksDir: () => resolveAppEnvironment().packsDir,
     appPackSourcesDir: () => process.env.SHIPPED_PACKS_DIR,
     settingsForPack: (packId) => runtime.services.settings.forPack(packId),
@@ -109,16 +110,26 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
     // A where that filters thousands of rows for want of an index is a developer's to fix, so only development says so
     ...(resolveAppEnvironment().env === 'development' && { warn: (message: string) => logger.warn(message) }),
   });
-  const runHistory = openRunHistory(_getRunHistoryPath());
-  const env = resolveAppEnvironment().env;
-  appPerformance = performance ?? (env === 'development' || env === 'test' ? createNodePerformanceController() : undefined);
-  appPerformance?.attach(engine, 'app');
-  appPerformance?.attach(runHistory.engine, 'runHistory');
-  runtime = createHostRuntime({
-    database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs,
-    performance: appPerformance?.execution,
-    countCalls: resolveAppEnvironment().env === 'development',
-  });
+  let runHistory: RunsDatabase | undefined;
+  try {
+    runHistory = openRunHistory(_getRunHistoryPath());
+    const env = resolveAppEnvironment().env;
+    appPerformance = performance ?? (env === 'development' || env === 'test' ? createNodePerformanceController() : undefined);
+    appPerformance?.attach(engine, 'app');
+    appPerformance?.attach(runHistory.engine, 'runHistory');
+    runtime = createHostRuntime({
+      database, runHistory, engine, transport: { rootEvents }, appVersion: APP_VERSION, packs,
+      performance: appPerformance?.execution,
+      countCalls: resolveAppEnvironment().env === 'development',
+    });
+  } catch (error) {
+    const failures: unknown[] = [error];
+    for (const store of [database, runHistory?.database]) {
+      try { store?.close(); } catch (closeError) { failures.push(closeError); }
+    }
+    if (failures.length > 1) throw new AggregateError(failures, 'Opening app storage failed and cleanup also failed', { cause: error });
+    throw error;
+  }
   bindHost(runtime);
   printLogEvents();
   appPacks = packs;
@@ -164,7 +175,18 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   assertNoDatabaseWriter(appContext.userDataDir);
 
   // The app's data: the engine reads and writes it from here on
-  const { engine, packs } = openAppStore(performance);
+  const { database, runHistory, engine, packs } = openAppStore(performance);
+  try {
+    const startup=await Promise.allSettled([startDatabaseBackground(database),startDatabaseBackground(runHistory.database)]);
+    const failures=startup.flatMap(result=>result.status==='rejected'?[result.reason]:[]);
+    if(failures.length===1)throw failures[0];
+    if(failures.length>1)throw new AggregateError(failures,'Starting database background services failed',{cause:failures[0]});
+    await Promise.all([database.indexesReady(),runHistory.database.indexesReady()]);
+  } catch(error) {
+    try{await closeDatabases([database,runHistory.database]);}
+    catch(cleanup){throw new AggregateError([error,cleanup],'Database startup and cleanup failed',{cause:error});}
+    throw error;
+  }
 
   // Packs require workspace @apackdev/* packages at runtime: from a checkout they must get source,
   // not a stale dist (main starts the API with the condition; manual boots must pass it). The
@@ -218,6 +240,8 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
 
   // Recovery starts only host actors; no executable external pack is imported.
   const loadedPacks = observeIndexAdmission(appPerformance, () => recoveringSettings ? [] : loadAppPacks(packs).loaded);
+  // Runtime registration can admit new index definitions. Lifecycle hooks and migrations read only after readiness.
+  await database.indexesReady();
 
   console.log(`[app] apack v${APP_VERSION} startupId=${process.env.APACK_STARTUP_ID ?? 'unknown'}`);
 
@@ -231,7 +255,7 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   logger.info(bootReading());
 
   // ── Start the packs: each one's onInit, the migrations (the app's, then external packs'), the content
-  if (!recoveringSettings) startPacks(packs);
+  if (!recoveringSettings) await startPacks(packs);
 
   // ── Start backend actor ──────────────────────────────────────────────
   backendActor = createActor(createAppBus(packs, appClaims), {

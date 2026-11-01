@@ -12,6 +12,7 @@ import { appDatabase, appPacks, appRunHistory, backendActor } from '../runtime/i
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
+import { closeDatabases } from '@apackdev/host/database';
 import type { ApiEndpoint } from '@apackdev/host/process-liveness';
 import { API_HOST, API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 
@@ -153,9 +154,11 @@ export function createWebSocketServer() {
     experimental_encoder: jsonSafeEncoder,
   });
 
+  let hooksRun=false;
+  const runShutdownHooks=()=>{if(!hooksRun){hooksRun=true;appPacks?.runShutdownHooks();}};
   // Safety net: always kill terminal processes before the API process exits
   process.on('exit', () => {
-    appPacks?.runShutdownHooks();
+    runShutdownHooks();
     // Every write committed as it returned; closing syncs what the last group commit hadn't, so the machine failing
     // after exit loses nothing either
     try {
@@ -174,15 +177,23 @@ export function createWebSocketServer() {
     }
   });
 
-  // Setup graceful shutdown
+  // Signal shutdown can await workers; the synchronous exit hook is only the final safety net.
+  let shutdown:Promise<void>|undefined;
   process.on('SIGTERM', () => {
-    // Stop XState actor system first (triggers exit actions like terminal cleanup)
-    backendActor?.stop();
-    handler.broadcastReconnectNotification();
-    wss.close();
-    httpServer.close();
-    // Exit explicitly so the 'exit' handler fires before Electron force-kills us
-    process.exit(0);
+    shutdown??=(async()=>{
+      try {
+        backendActor?.stop();
+        handler.broadcastReconnectNotification();
+        wss.close();httpServer.close();
+        runShutdownHooks();
+      } finally {
+        await closeDatabases([appDatabase,appRunHistory?.database]);
+      }
+      process.exit(0);
+    })().catch(error=>{
+      console.error('[backend] Graceful database shutdown failed',error);
+      process.exit(1);
+    });
   });
 
   // The parent died (Electron crashed, or was killed): its end of the IPC channel closed, so this process is

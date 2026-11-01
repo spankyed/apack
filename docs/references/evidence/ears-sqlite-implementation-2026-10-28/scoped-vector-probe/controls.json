@@ -1,0 +1,103 @@
+{
+  "scope": "Actual old/new SqliteVectors.search with Python SQLite 3.53.0 metadata and controlled distance/native-routing functions; not packaged native distance or performance qualification",
+  "results": [
+    {
+      "version": "old",
+      "case": "large",
+      "visits": 10000,
+      "cosines": 0,
+      "eligible": 4097,
+      "returned": null
+    },
+    {
+      "version": "old",
+      "case": "excluded-large",
+      "visits": 10000,
+      "cosines": 0,
+      "eligible": 4097,
+      "returned": null
+    },
+    {
+      "version": "old",
+      "case": "limited",
+      "visits": 20,
+      "cosines": 20,
+      "eligible": 20,
+      "returned": 10
+    },
+    {
+      "version": "old",
+      "case": "duplicates",
+      "visits": 0,
+      "cosines": 3,
+      "eligible": 3,
+      "returned": 3
+    },
+    {
+      "version": "old",
+      "case": "limited-duplicates",
+      "visits": 0,
+      "cosines": 2,
+      "eligible": 2,
+      "returned": 2
+    },
+    {
+      "version": "old",
+      "case": "empty",
+      "visits": 0,
+      "cosines": 0,
+      "eligible": 0,
+      "returned": 0
+    },
+    {
+      "version": "streamed",
+      "case": "large",
+      "visits": 4097,
+      "cosines": 0,
+      "eligible": 4097,
+      "returned": null
+    },
+    {
+      "version": "streamed",
+      "case": "excluded-large",
+      "visits": 4098,
+      "cosines": 0,
+      "eligible": 4097,
+      "returned": null
+    },
+    {
+      "version": "streamed",
+      "case": "limited",
+      "visits": 20,
+      "cosines": 20,
+      "eligible": 20,
+      "returned": 10
+    },
+    {
+      "version": "streamed",
+      "case": "duplicates",
+      "visits": 0,
+      "cosines": 3,
+      "eligible": 3,
+      "returned": 3
+    },
+    {
+      "version": "streamed",
+      "case": "limited-duplicates",
+      "visits": 0,
+      "cosines": 2,
+      "eligible": 2,
+      "returned": 2
+    },
+    {
+      "version": "streamed",
+      "case": "empty",
+      "visits": 0,
+      "cosines": 0,
+      "eligible": 0,
+      "returned": 0
+    }
+  ],
+  "sourceFileSha256": "9d607a362996b87958b1f44f77894f86405abd79c0c29531e1197589b6e34555",
+  "baseline": "77cbd28f38e121d93583fd62a6d95d00daee0454"
+}
