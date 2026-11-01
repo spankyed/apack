@@ -1,0 +1,5 @@
+# Counter/scorer platform qualification at a902
+
+The three platform jobs in [strict run 41322492680](https://github.com/spankyed/apack/actions/runs/41322492680) completed on `a9027400bf051cd301304dc46471c0a2fb8979c9`. Linux/macOS have 916 passes, one failure and no exclusions each; Windows has 912 passes, one failure and four FIFO exclusions. The sole failure on each is the retained generated-metadata ownership keyword judgment. All nineteen commit-outcome cases and all seven public cosine regimes pass on each platform. The corrected exact-name gates reach their retained relevance refusal; they no longer fail on the quoted nil/numeric-text titles.
+
+`receipt.json` derives only counts, selected case identities/statuses and original report hashes. It omits raw logs, stdout, profiles and database/corpus payload. These are actual runtime reports, not a replay. Full strict consumers were still live when this receipt was recorded. This source predates scoped live-pack readiness and does not qualify that change. No keyword or platform waiver is implied.

@@ -1,0 +1,381 @@
+{
+  "run": "41322492680",
+  "source": "a9027400bf051cd301304dc46471c0a2fb8979c9",
+  "scope": "Completed platform jobs only; remaining strict consumers were live at inspection",
+  "platforms": [
+    {
+      "platform": "Linux-X64",
+      "originalEarsSha256": "1cc12fa0224838f25cad85135ba17967b2529c43341334ec4a107e3dff1a33a2",
+      "originalVerificationSha256": "89508d07726f435f52468b8e00b3096b6cfb9581a1e1b646d8e6942efff0a7da",
+      "counts": {
+        "numPassedTests": 916,
+        "numFailedTests": 1,
+        "numPendingTests": 0
+      },
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ],
+      "skipped": [],
+      "counterCases": [
+        {
+          "name": "SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back schema when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (SQLITE_BUSY)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (undefined)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses replacement before commit when closing its source fails",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling captures fallible watch changes before committing",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for schema",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling stops a background commit without replaying it or writing a false failure marker",
+          "status": "passed"
+        }
+      ],
+      "cosineCases": [
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (1 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (3 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (7 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (8 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (127 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (128 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (1536 dimensions)",
+          "status": "passed"
+        }
+      ],
+      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9"
+    },
+    {
+      "platform": "macOS-ARM64",
+      "originalEarsSha256": "b6921cd92d7c4018a0c68532be4450b90ff0ec8fcaf3eb9f699fc2987bb7d626",
+      "originalVerificationSha256": "ed0b314dc302a4b26fc61ae74eb533c77a913ce8f2c26a59fa406405906ed234",
+      "counts": {
+        "numPassedTests": 916,
+        "numFailedTests": 1,
+        "numPendingTests": 0
+      },
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ],
+      "skipped": [],
+      "counterCases": [
+        {
+          "name": "SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back schema when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (SQLITE_BUSY)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (undefined)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses replacement before commit when closing its source fails",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling captures fallible watch changes before committing",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for schema",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling stops a background commit without replaying it or writing a false failure marker",
+          "status": "passed"
+        }
+      ],
+      "cosineCases": [
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (1 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (3 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (7 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (8 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (127 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (128 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (1536 dimensions)",
+          "status": "passed"
+        }
+      ],
+      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9"
+    },
+    {
+      "platform": "Windows-X64",
+      "originalEarsSha256": "f94ed74dc92841e8282800a32e11bc13a430aa5bda748ce08190117a35d156b4",
+      "originalVerificationSha256": "1ecc128f9f5c2bbb2588b5d3669b0d2f19a05fdd556e96d3741feadd1dc57c4e",
+      "counts": {
+        "numPassedTests": 912,
+        "numFailedTests": 1,
+        "numPendingTests": 4
+      },
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ],
+      "skipped": [
+        "SQLite file ownership refuses a FIFO at data.sqlite3 without blocking the native opener",
+        "SQLite file ownership refuses a FIFO at data.sqlite3-wal without blocking the native opener",
+        "SQLite file ownership refuses a FIFO at data.sqlite3-shm without blocking the native opener",
+        "SQLite file ownership refuses a FIFO at data.sqlite3-journal without blocking the native opener"
+      ],
+      "counterCases": [
+        {
+          "name": "SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back schema when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (SQLITE_BUSY)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (undefined)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses replacement before commit when closing its source fails",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling captures fallible watch changes before committing",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for schema",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling stops a background commit without replaying it or writing a false failure marker",
+          "status": "passed"
+        }
+      ],
+      "cosineCases": [
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (1 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (3 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (7 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (8 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (127 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (128 dimensions)",
+          "status": "passed"
+        },
+        {
+          "name": "canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (1536 dimensions)",
+          "status": "passed"
+        }
+      ],
+      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9"
+    }
+  ]
+}
