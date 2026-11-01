@@ -7,3 +7,11 @@ The original prepared harness imported source through tsx and loaded both adapte
 From repo root, `python3 docs/references/evidence/ears-sqlite-implementation-2026-10-28/benchmark-protocol-20261101/runner-controls.py` exercises the actual runner through controlled child-process results without any native workload. Both six-process alternation cohorts pass. Timeout, process failure, invalid JSON, nonfinite/missing timing, missing native bindings, wrong durability, source execution, mismatched native pin and reused output are refused; partial failure output and existing sentinels survive. Shell syntax and YAML OFF/FULL matrix parse controls also pass. These controls do not prove actual native build/execution or benchmark outcomes; matching CI remains required after focused contracts converge.
 
 Remeasurement additionally records available Linux CPU model names. The original 470 receipt records architecture/kernel but not CPU model, so a cross-run absolute timing delta alone cannot isolate the code change from runner hardware. Compare within-run matched backend ratios and preserve this limitation; fewer driver calls are independently testable but do not prove a latency improvement.
+
+The later admission setup exposed an obsolete --trials 0 metadata caller after the backend
+runner began requiring positive trials. Shared runtime_provenance.py now captures metadata
+without executing trials or creating acceptance matrices. Admission explicitly records source
+execution and metadataOnly; matched backend trials still require built-package execution and
+positive counts. Updated pure controls retain all prior negative cases, refuse zero trials,
+and verify that admission metadata creates no backend workload/matrix. Actual native capture
+and the full admission workload still require disposable CI.

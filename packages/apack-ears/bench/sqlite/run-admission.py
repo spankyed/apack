@@ -5,6 +5,7 @@ import math
 import os
 import pathlib
 import subprocess
+from runtime_provenance import capture_runtime_provenance
 
 
 def positive(value):
@@ -31,9 +32,14 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     subprocess.run(['node', '--experimental-strip-types', '--test',
                     'packages/apack-ears/bench/sqlite/load-metrics.check.ts'], cwd=repo, check=True)
-    subprocess.run(['python3', 'packages/apack-ears/bench/sqlite/run-bench.py',
-                    str(args.output / 'source'), '--trials', '0'] +
-                   (['--durable'] if args.durable else []), cwd=repo, check=True)
+    source_directory = args.output / 'source'
+    source_directory.mkdir()
+    provenance = capture_runtime_provenance(repo, 'source')
+    provenance.update({'metadataOnly': True, 'durable': args.durable,
+                       'scope': 'Admission source/runtime fingerprints only; no benchmark trials or workload acceptance'})
+    (source_directory / 'provenance.json').write_text(json.dumps(provenance, indent=2) + '\n')
+    if provenance['elmdbObservedCommit'] != provenance['elmdbPinnedCommit']:
+        raise RuntimeError('Observed elmdb source does not match the recorded pin')
     records = []
     summary = {'protocol': 'ears-admission-trials/1', 'completed': False, 'qualification': False,
                'trials': args.trials, 'sizes': args.sizes, 'durable': args.durable, 'instrumented': args.trace,
