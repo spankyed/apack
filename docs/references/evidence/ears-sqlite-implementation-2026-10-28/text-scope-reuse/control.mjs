@@ -25,7 +25,7 @@ try {
   const code=stripTypeScriptTypes(source).replace(/^import .*;\n/gm,'').replace('export class SqliteText','class SqliteText');
   vm.runInContext(code+'\nglobalThis.Text=SqliteText;',context);
   let visits=0;
-  const db={all:(sql,args)=>{const r=rpc('all',sql,args);visits+=r.visits;return r.value;},get:(sql,args)=>{const r=rpc('get',sql,args);visits+=r.visits;return r.value;}};
+  const db={all:(sql,args)=>{const r=rpc('all',sql,args);visits+=r.visits;return r.value;},get:(sql,args)=>{const r=rpc('get',sql,args);visits+=r.visits;return r.value;},fieldSource:()=>"SELECT id,'num' kind,seq value FROM entities"};
   const text=new context.Text(db),job={definition:{fields:{body:{weight:1}}}};
   const results=[];
   for(const query of ['needle','needle alpha','needle OR beta','needle -banned','body:needle alpha','"needle alpha"','needle alph','needle alpha OR beta -banned']) {
@@ -38,6 +38,14 @@ try {
   }
   for(const within of [null,{sql:'SELECT value id FROM json_each(?)',parameters:['[]']}])
    results.push({query:'empty-or-global',scope:within===null?'global':'empty',answer:JSON.parse(JSON.stringify(text.search(job,within,'needle alpha',{fuzzy:false},true,5)))});
+  for(const limit of [undefined,0,5]) {
+   for(const hits of [false,true]) {
+    const parameterScope={sql:'SELECT value id FROM json_each(?) WHERE value != ?',parameters:[JSON.stringify(selected),'Row-0']};
+    results.push({query:'parameter-order-recency',limit:limit??'unlimited',hits,answer:JSON.parse(JSON.stringify(text.search(job,parameterScope,'needle alpha -banned',{
+     fuzzy:false,recency:{field:'created',halfLife:10,now:50}
+    },hits,limit)))});
+   }
+  }
   cases.push({variant,results});
  }
  assert.deepEqual(cases[0].results.map(({visits,...r})=>r),cases[1].results.map(({visits,...r})=>r));
