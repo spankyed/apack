@@ -1,0 +1,7 @@
+   ✓ SQLite file ownership > refuses an occupied backup namespace at data.sqlite3-journal  588ms
+ ❯ tests/engine/model-based.spec.ts (3 tests | 1 failed) 54316ms
+   ✓ runs the model against the selected real backend and independent empty stores 204ms
+   × refuses, holds and answers what the model does 32575ms
+     → Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  21324ms
