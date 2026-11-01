@@ -14,6 +14,10 @@ const n = Number(process.argv[2] ?? 10000);
 const durable = process.argv.includes('--durable');
 const search = process.argv.includes('--search');
 const diagnostic = process.argv.includes('--diagnostic');
+const checkpointArgument = process.argv.find(value => value.startsWith('--checkpoint-pages='));
+const checkpointProbe = checkpointArgument === undefined ? undefined : Number(checkpointArgument.split('=')[1]);
+assert(checkpointProbe === undefined || ([128, 1000].includes(checkpointProbe) && durable && !search && !diagnostic),
+  'Checkpoint control requires uninstrumented FULL value admission at 128 or 1000 pages');
 const cpuModels = [...new Set(cpus().map(cpu => cpu.model))];
 const noQueryWatches = process.argv.includes('--no-query-watches');
 assert(!noQueryWatches || diagnostic, 'The watch control is diagnostic only');
@@ -33,6 +37,10 @@ const schema: EngineSchema = { types: { Row: { required: ['slug'], fields: {
 } } }, relations: {}, roles: [] };
 const path = mkdtempSync(join(tmpdir(), 'ears-admission-load-'));
 const db = new SqliteDatabase({ path, schema: toElmdbSchema(schema), syncs: durable });
+// Benchmark-only policy control; ordinary runs retain the connection's production default.
+if (checkpointProbe !== undefined) db.sql.exec(`PRAGMA wal_autocheckpoint=${checkpointProbe}`);
+const checkpointPages = Number(db.get('PRAGMA wal_autocheckpoint')!.wal_autocheckpoint);
+if (checkpointProbe !== undefined) assert.equal(checkpointPages, checkpointProbe);
 const e = createEarsEngine({ database: db });
 const commitWrite = db.commitWrite;
 const id = (i: number) => `Row-${i}` as EARS.EntityId;
@@ -176,7 +184,7 @@ try {
     maxObservedFilesBytes: { actual: maxObservedBytes, limit: total(before) * 2 + 16 * 1024 * 1024 },
   };
   const passed = Object.values(budgets).every(budget => budget.actual <= budget.limit);
-  console.log(JSON.stringify({ ...(diagnostic ? { diagnostic: { noQueryWatches, spans, heartbeatSamples, qualification: false } } : {}), n, indexKind: search ? 'text/vector/trigram' : 'value', admissionReads, searchLookups, indexingErrors, node: process.version, platform: process.platform, arch: process.arch, cpuModels, syncs: durable,
+  console.log(JSON.stringify({ checkpointPages, ...(checkpointProbe === undefined ? {} : { checkpointProbe: { pages: checkpointProbe, qualification: false } }), ...(diagnostic ? { diagnostic: { noQueryWatches, spans, heartbeatSamples, qualification: false } } : {}), n, indexKind: search ? 'text/vector/trigram' : 'value', admissionReads, searchLookups, indexingErrors, node: process.version, platform: process.platform, arch: process.arch, cpuModels, syncs: durable,
     sqlite: db.get('SELECT sqlite_version() version')!.version, admissionMs, buildMs, gcMs, writes,
     operationMs: summary(operations), lookupMs: summary(lookup), turnWaitMs: summary(turnWaits), heartbeatIntervalMs: heartbeat.intervalMs, heartbeatDelayMs: summary(heartbeat.delaysMs), batchSamples, nativeBindings,
     samples: { operations, lookup, turnWaits, heartbeatDelays: heartbeat.delaysMs }, files: { before, afterBuild, afterGc }, maxObservedBytes, maxObservedWal,

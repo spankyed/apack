@@ -23,6 +23,10 @@ on:
         type: choice
         options: [production, '1024', '2048']
         default: production
+      sqlite_admission_checkpoint_probe:
+        description: Alternate 1000/128-page checkpoints on 100k FULL value admission; diagnostic only
+        type: boolean
+        default: false
       sqlite_admission_trace:
         description: Instrument only one 100k FULL value trial; diagnostic, not latency acceptance
         type: boolean
@@ -54,6 +58,10 @@ on:
       sqlite_native_candidate_floor:
         type: string
         default: production
+      sqlite_admission_checkpoint_probe:
+        description: Alternate 1000/128-page checkpoints on 100k FULL value admission; diagnostic only
+        type: boolean
+        default: false
       sqlite_admission_trace:
         description: Instrument only one 100k FULL value trial; diagnostic, not latency acceptance
         type: boolean
@@ -133,7 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.sqlite_admission_trace && '[{"kind":"value","durability":"full"}]' || '[{"kind":"value","durability":"off"},{"kind":"value","durability":"full"},{"kind":"search","durability":"off"},{"kind":"search","durability":"full"}]') }}
+        include: ${{ fromJSON((inputs.sqlite_admission_trace || inputs.sqlite_admission_checkpoint_probe) && '[{"kind":"value","durability":"full"}]' || '[{"kind":"value","durability":"off"},{"kind":"value","durability":"full"},{"kind":"search","durability":"off"},{"kind":"search","durability":"full"}]') }}
     env:
       CARGO_BUILD_JOBS: 2
       npm_config_jobs: 2
@@ -158,6 +166,7 @@ jobs:
           ADMISSION_KIND: ${{ matrix.kind }}
           ADMISSION_DURABILITY: ${{ matrix.durability }}
           ADMISSION_TRACE: ${{ inputs.sqlite_admission_trace }}
+          ADMISSION_CHECKPOINT_PROBE: ${{ inputs.sqlite_admission_checkpoint_probe }}
         run: |
           set -euo pipefail
           mkdir -p .temp/sqlite-admission
@@ -173,7 +182,7 @@ jobs:
           if [ "$ADMISSION_DURABILITY" = full ]; then arguments+=(--durable); fi
           docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
             --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
-            -e GITHUB_SHA="$GITHUB_SHA" -e ADMISSION_TRACE="$ADMISSION_TRACE" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -e GITHUB_SHA="$GITHUB_SHA" -e ADMISSION_TRACE="$ADMISSION_TRACE" -e ADMISSION_CHECKPOINT_PROBE="$ADMISSION_CHECKPOINT_PROBE" -v "$GITHUB_WORKSPACE:/workspace:ro" \
             -v "$admission_node_binary:/runtime/node:ro" \
             -v "$GITHUB_WORKSPACE/.temp/sqlite-admission:/results" \
             ears-admission-runtime bash .github/scripts/ears-admission-run.sh "${arguments[@]}"

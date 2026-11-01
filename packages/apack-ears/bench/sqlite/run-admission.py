@@ -74,6 +74,7 @@ def main():
                 record['returncode'] = result.returncode
                 try:
                     report = json.loads(result.stdout)
+                    assert 'checkpointProbe' not in report, 'Checkpoint control is not ordinary acceptance'
                     assert report['n'] == n and report['syncs'] is args.durable
                     assert report['indexKind'] == ('text/vector/trigram' if args.search else 'value')
                     assert report['admissionReads'] == 0 and report['writes'] > 0
