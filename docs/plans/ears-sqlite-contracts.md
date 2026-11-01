@@ -250,7 +250,7 @@ ranking or SQL posting work.
 The new actual-driver witness compares original component ranks/canonical highlights,
 checks mixed-type limited scopes and vector-only/absent results, and observes that every
 returned highlighted row belongs to a final lexical winner. This is prepared source;
-current live paired corpus/strict runs predate it. Require targeted type/API/semantic
+the recorded paired corpus/strict checkpoint sources predate it. Require targeted type/API/semantic
 qualification and new resource/heartbeat measurements before any performance claim.
 
 ### Native CPU backend investigation
@@ -276,12 +276,16 @@ compared hidden transformed-space BQ distance to an absolute cosine tolerance. C
 checks retain those approximate deltas separately and keep the original canonical 1e-5
 bound. No product score, original recall or heartbeat criterion changes.
 
-Paired corpus run 41303652459 at `b9f05c894a` is live: same acquired inputs, run identity,
-CPU, limits and source, original candidate policy and full reference checks per variant.
+[Paired corpus run 41303652459](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-pair-b9/README.md)
+at `b9f05c894a` completes with same acquired inputs, run identity, CPU, limits/source and
+matching worker/foreground artifacts. Both builds pass original query/reference/recall
+and query-p95 checks but fail all six 99.9k and both 10k all-live heartbeat groups.
+There is no consistent query win. Single 99.9k model admission is 47.437s/12.988s;
+independent models and uncontrolled OS cache preclude a causal speedup/variance claim.
 [Seventeen protocol controls](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-pair-protocol/README.md)
 reject mixed run/artifact/worker/policy evidence and retain failed recall/heartbeat outcomes.
-Models train independently and OS cache is uncontrolled; one pair cannot establish a
-causal speedup or model-variance acceptance. Ordinary package defaults are unchanged.
+Keep ordinary artifacts generic; prioritize measured foreground work and qualify a future
+build change independently rather than promoting SIMD from compiler flags or one pair.
 
 The next worker checkpoint holds an actual training read snapshot while 16 foreground
 writes commit, observes WAL/truncation refusal, then checks release after worker exit,
