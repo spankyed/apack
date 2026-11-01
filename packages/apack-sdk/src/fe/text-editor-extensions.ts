@@ -12,7 +12,14 @@ export interface BlockItem {
   command: (e: Editor) => void
 }
 
+/** A read-only message renderer owns each returned DOM cleanup until replacement/unmount. */
+export interface ReadOnlyTextRenderer {
+  readonly transformMarkdown?: (source: string) => string
+  readonly decorate?: (root: HTMLElement) => void | (() => void)
+}
+
 export interface TextEditorExtensions {
+  readonly readOnly?: false | ReadOnlyTextRenderer
   readonly extensions?: Readonly<Record<string, AnyExtension>>
   readonly popups?: Readonly<Record<string, Component>>
   readonly isSuggestionActive?: (state: EditorState) => boolean

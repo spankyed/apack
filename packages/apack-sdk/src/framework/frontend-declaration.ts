@@ -1,5 +1,6 @@
 /** Editor contribution identities and targets; implementations remain frontend bindings. */
 export interface TextEditorExtensionsDeclaration {
+  readOnly?: false | string;
   extensions?: Record<string, string>;
   popups?: Record<string, string>;
   isSuggestionActive?: string;

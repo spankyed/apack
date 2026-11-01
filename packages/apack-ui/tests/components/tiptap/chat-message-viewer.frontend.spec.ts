@@ -1,0 +1,68 @@
+// @vitest-environment jsdom
+import { afterEach, expect, it, vi } from 'vitest'
+import { createApp, h, nextTick, ref, type App } from 'vue'
+import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing'
+import type { TextEditorExtensionsBinding } from '@apackdev/sdk/fe'
+import ChatMessageViewer from '../../../src/components/tiptap/ChatMessageViewer.vue'
+
+vi.mock('../../../src/components/tiptap/TiptapEditor.vue', () => ({ default: {
+  props: ['modelValue'], setup: (props: { modelValue: string }) => () => h('div', { 'data-editor-fallback': '' }, props.modelValue),
+} }))
+
+let app: App | undefined
+afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime() })
+function fixture(initial: TextEditorExtensionsBinding[] = []) {
+  let groups = initial
+  const listeners = new Set<() => void>()
+  startFeTestRuntime({ packs: { textEditor: () => groups,
+    onChanged(callback: () => void) { listeners.add(callback); return () => { listeners.delete(callback) } },
+  } as never })
+  const source = ref('**first**')
+  const root = document.createElement('div')
+  document.body.appendChild(root)
+  app = createApp({ render: () => h(ChatMessageViewer, { modelValue: source.value }) })
+  app.mount(root)
+  return { root, source, listeners, async publish(next: TextEditorExtensionsBinding[]) {
+    groups = next; for (const listener of listeners) listener(); await nextTick(); await nextTick()
+  } }
+}
+
+it('updates supported messages and disposes adapters on replacement and unmount', async () => {
+  const cleanup = vi.fn()
+  const decorate = vi.fn((root: HTMLElement) => { root.dataset.enhanced = 'yes'; return cleanup })
+  const f = fixture([{ packId: 'pack', groupId: 'group', binding: { readOnly: { decorate } } }])
+  await nextTick()
+  expect(f.root.querySelector('strong')?.textContent).toBe('first')
+  expect(f.root.querySelector('[data-enhanced="yes"]')).not.toBeNull()
+  f.source.value = '**second**'; await nextTick(); await nextTick()
+  expect(f.root.querySelector('strong')?.textContent).toBe('second')
+  expect(cleanup).toHaveBeenCalledOnce()
+  await f.publish([])
+  expect(cleanup).toHaveBeenCalledTimes(2)
+  app!.unmount(); app = undefined
+  expect(f.listeners.size).toBe(0)
+})
+
+it('uses the editor for unknown contributions and returns to the supported path after removal', async () => {
+  const f = fixture([{ packId: 'unknown', groupId: 'group', binding: {} }])
+  await nextTick()
+  expect(f.root.querySelector('[data-editor-fallback]')?.textContent).toBe('**first**')
+  await f.publish([])
+  expect(f.root.querySelector('[data-editor-fallback]')).toBeNull()
+  expect(f.root.querySelector('strong')?.textContent).toBe('first')
+})
+
+it('shows a failed supported renderer and recovers after its contribution is replaced', async () => {
+  const cleanup = vi.fn()
+  const f = fixture([
+    { packId: 'first', groupId: 'group', binding: { readOnly: { decorate: () => cleanup } } },
+    { packId: 'bad', groupId: 'group', binding: { readOnly: { decorate: () => { throw Error('refused') } } } },
+  ])
+  await nextTick()
+  expect(f.root.querySelector('[role="status"]')?.textContent).toContain('could not be displayed')
+  expect(f.root.querySelector('[data-editor-fallback]')).toBeNull()
+  expect(cleanup).toHaveBeenCalledOnce()
+  await f.publish([])
+  expect(f.root.querySelector('[role="status"]')).toBeNull()
+  expect(f.root.querySelector('strong')?.textContent).toBe('first')
+})

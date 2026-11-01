@@ -163,7 +163,7 @@
 
         <!-- Message content -->
         <div class="leading-relaxed text-[15px]">
-          <TiptapEditor mode="viewer" variant="chat" :model-value="message.text" />
+          <ChatMessageViewer :model-value="message.text" />
         </div>
 
         <!-- Other block types (approval, choice, etc.) render BELOW text -->
@@ -220,7 +220,7 @@ import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
-import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
+import ChatMessageViewer from '@apackdev/ui/components/tiptap/ChatMessageViewer'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 

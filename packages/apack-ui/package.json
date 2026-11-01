@@ -104,6 +104,11 @@
       "types": "./dist/components/node-styles.d.ts",
       "default": "./dist/components/node-styles.js"
     },
+    "./components/tiptap/ChatMessageViewer": {
+      "@apackdev/source": "./src/components/tiptap/ChatMessageViewer.ts",
+      "types": "./dist/components/tiptap/ChatMessageViewer.d.ts",
+      "default": "./dist/components/tiptap/ChatMessageViewer.js"
+    },
     "./components/tiptap/TiptapEditor": {
       "@apackdev/source": "./src/components/tiptap/TiptapEditor.ts",
       "types": "./dist/components/tiptap/TiptapEditor.d.ts",
@@ -423,6 +428,7 @@
     "@tiptap/extension-task-list": "^3.32.0",
     "highlight.js": "^11.11.1",
     "lowlight": "^3.3.0",
+    "markdown-it": "^14.3.3",
     "prosemirror-markdown": "^1.13.9",
     "tiptap-markdown": "^0.9.0"
   },
@@ -431,6 +437,7 @@
     "provenance": true
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "vitest": "^3.2.7"
   }
 }

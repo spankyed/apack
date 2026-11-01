@@ -68,3 +68,27 @@ cost: minified parser frames still require attribution. Raw profiles remain in o
 
 No runtime candidate is implemented or accepted yet. New timing runs await completion of the
 observed competing host-native heap benchmark; no work has been cancelled.
+
+## Renderer design
+
+The supported chat path parses Markdown once into detached DOM, enhances it with owned viewer
+helpers, then replaces the displayed fragment. It constructs no editor/state/view. Keep existing
+CSS classes and navigation/image behavior. Each component owns its parser and DOM cleanup; failed
+adapter setup tears down the candidate fragment and displays the existing error UI. Contributions
+are checked before choosing this path; unknown capabilities use the existing viewer for the whole
+message. Registry changes invalidate rendering and dispose old callbacks before replacing DOM.
+
+Expose `readOnly: false | ReadOnlyTextRenderer` on text-editor groups. The adapter has optional
+`transformMarkdown(source): string` and `decorate(root): void | (() => void)`. The first runs before
+the viewer's HTML-disabled parser; the second owns DOM enhancements and returns cleanup. This keeps
+the parser library out of SDK contracts while supporting contributed syntax and behavior. Missing
+capabilities mean unsupported, not editing-only. Declare false or an exported adapter in manifests,
+including code generation, target discovery and declaration/binding validation. Built-in suggestions
+are editing-only; command highlighting and reference pills have explicit read-only adapters.
+
+Markdown code is escaped by the parser; code highlighting uses DOM/text nodes, never untrusted HTML.
+Links/images use the parser's URL validation and existing interaction handlers. Code-copy buttons
+and reference rendering share helpers with the existing editor. No mutable extension object or
+parser is cached across messages. Extract existing application Markdown rules first, then implement
+the viewer and migrate built-ins together. No small cache candidate is justified merely by the
+upstream option-getter allocation profile; avoid modifying or forking Tiptap internals.

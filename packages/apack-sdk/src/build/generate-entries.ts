@@ -1179,6 +1179,7 @@ ${contractCheck}`;
     const contributions = Object.entries(frontend.textEditor ?? {}).map(([id, contribution]) => {
       const label = `extensions.textEditor.${id}`;
       const parts: string[] = [];
+      if (contribution.readOnly !== undefined) parts.push(`readOnly: ${contribution.readOnly === false ? 'false' : editorBinding(`${label}.readOnly`, contribution.readOnly)}`);
       if (contribution.extensions) parts.push(`extensions: { ${Object.entries(contribution.extensions).map(([name, target]) =>
         `${propertyKey(name)}: ${editorBinding(`${label}.extensions.${name}`, target)}`).join(', ')} }`);
       if (contribution.popups) parts.push(`popups: { ${Object.entries(contribution.popups).map(([name, target]) => {

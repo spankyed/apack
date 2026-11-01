@@ -14,7 +14,7 @@ const REGISTRATION_KEYS = {
 const FEATURE_KEYS = { surface: true, settingsForm: true, designation: true, default: true, references: true } satisfies Record<keyof PackFEFeature, true>;
 const SURFACE_KEYS = { label: true, state: true, icon: true, canvas: true, panel: true, chat: true,
   isPinned: true, hotkeys: true, options: true, fallbackPanel: true } satisfies Record<keyof SurfaceDefinition, true>;
-const TIPTAP_KEYS = { extensions: true, popups: true, isSuggestionActive: true } satisfies Record<keyof TextEditorExtensions, true>;
+const TIPTAP_KEYS = { readOnly: true, extensions: true, popups: true, isSuggestionActive: true } satisfies Record<keyof TextEditorExtensions, true>;
 const optionalKeys = (actual: unknown, keys: string[]) => sameKeys(actual === undefined ? {} : actual, keys);
 const isComponent = (value: unknown) => typeof value === 'function' || isPlainObject(value);
 
@@ -174,6 +174,13 @@ export function frontendBindingProblem(manifest: DeclarationData<Pick<PackManife
     const contribution = (registration.textEditor as Record<string, unknown>)[id];
     const at = `textEditor.${id}`;
     if (!isPlainObject(contribution) || Object.keys(contribution).some(key => !hasOwn(TIPTAP_KEYS, key))) return problem(at);
+    if (declaration.readOnly === false) {
+      if (contribution.readOnly !== false) return problem(`${at}.readOnly`);
+    } else if (declaration.readOnly !== undefined) {
+      const adapter = contribution.readOnly;
+      if (!isPlainObject(adapter) || Object.keys(adapter).some(key => !['transformMarkdown', 'decorate'].includes(key))
+        || Object.values(adapter).some(value => value !== undefined && typeof value !== 'function')) return problem(`${at}.readOnly`);
+    } else if (contribution.readOnly !== undefined) return problem(`${at}.readOnly`);
     if (!optionalKeys(contribution.extensions, Object.keys(declaration.extensions ?? {}))) return problem(`${at}.extensions`);
     for (const [name, binding] of Object.entries((contribution.extensions ?? {}) as Record<string, unknown>)) {
       if (!binding || typeof binding !== 'object' || !('name' in binding) || binding.name !== name

@@ -25,3 +25,29 @@ export const CommandViewerDecoration = Extension.create({
     ]
   },
 })
+
+/** The same command segment, rendered without a ProseMirror decoration set. */
+export const ReadOnlyCommandDecoration = {
+  decorate(root: HTMLElement) {
+    const match = root.textContent?.match(/^\/[\w-]+/)
+    if (!match) return
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+    const first = walker.nextNode()
+    if (!first) return
+    let last = first
+    let remaining = match[0].length
+    while (remaining > (last.textContent?.length ?? 0)) {
+      remaining -= last.textContent?.length ?? 0
+      const next = walker.nextNode()
+      if (!next) return
+      last = next
+    }
+    const range = document.createRange()
+    range.setStart(first, 0)
+    range.setEnd(last, remaining)
+    const span = document.createElement('span')
+    span.className = 'command-segment'
+    span.appendChild(range.extractContents())
+    range.insertNode(span)
+  },
+}
