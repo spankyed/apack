@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       sqlite_vector_models:
         description: Real corpus vector regime; managed verifies native readiness above the exact-search threshold
@@ -233,6 +233,79 @@ jobs:
         with:
           name: ears-sqlite-bench-${{ matrix.durability }}-${{ github.run_id }}
           path: .temp/sqlite-bench
+          if-no-files-found: error
+          retention-days: 14
+  sqlite-vector-dispatch:
+    if: ${{ inputs.suite == 'sqlite-vector-dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching driver and compile diagnostic artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          npm ci
+          mkdir -p .temp/vector-dispatch
+          git rev-parse HEAD > .temp/vector-dispatch/source.txt
+          node native/vectors/build.mjs .temp/vector-dispatch/generic
+          node native/vectors/dispatch-build.mjs .temp/vector-dispatch/generic .temp/vector-dispatch/dispatch
+      - name: Verify actual selected backend and independent membership contracts
+        run: |
+          set -euo pipefail
+          for variant in generic dispatch; do
+            node native/vectors/membership-test.mjs ".temp/vector-dispatch/$variant/vec1.so" ".temp/vector-dispatch/$variant-membership.json"
+          done
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { cpus } from 'node:os';
+          import Database from 'better-sqlite3';
+          const flags = new Set((readFileSync('/proc/cpuinfo', 'utf8').match(/^flags\s*:\s*(.+)$/m)?.[1] ?? '').split(/\s+/));
+          const report = { completed: false, source: process.env.GITHUB_SHA, node: process.version,
+            cpuModels: [...new Set(cpus().map(cpu => cpu.model))], avx2Exposed: flags.has('avx2'), variants: [],
+            scope: 'Build/runtime/membership diagnostic only; no latency, recall or unsupported-CPU qualification' };
+          try {
+            for (const variant of ['generic', 'dispatch']) {
+              const file = `.temp/vector-dispatch/${variant}/vec1.so`;
+              const db = new Database(':memory:');
+              try {
+                db.loadExtension(file);
+                const runtime = db.prepare('SELECT vec1_info() value').get().value;
+                report.variants.push({ variant, runtime, sha256: createHash('sha256').update(readFileSync(file)).digest('hex') });
+                assert(runtime.includes(variant === 'dispatch' && report.avx2Exposed ? '(AVX2,' : '(Scalar,'));
+                const membership = JSON.parse(readFileSync(`.temp/vector-dispatch/${variant}-membership.json`, 'utf8'));
+                assert.equal(membership.completed, true);
+                assert.equal(membership.groups.length, 15);
+                assert.equal(membership.groups.reduce((n, group) => n + group.checks, 0), 735);
+              } finally { db.close(); }
+            }
+            report.completed = true;
+          } catch (error) {
+            report.failure = { message: error?.message ?? String(error), stack: error?.stack };
+            throw error;
+          } finally {
+            writeFileSync('.temp/vector-dispatch/runtime.json', JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
+          }
+          JS
+      - name: Preserve diagnostic source, commands and outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-vector-dispatch-${{ github.run_id }}
+          path: .temp/vector-dispatch
           if-no-files-found: error
           retention-days: 14
   sqlite-corpus:
@@ -674,7 +747,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   check:
-    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-model-windows' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
+    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-model-windows' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'sqlite-vector-dispatch' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
     runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45

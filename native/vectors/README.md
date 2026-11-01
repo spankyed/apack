@@ -65,3 +65,20 @@ For an upstream upgrade, review the changed filtering/operand-ownership code, re
 the patch, update source/patch provenance, rerun membership and complete EARS tests,
 then all platform, frozen recall/performance and installed-artifact checks. Do not
 silently fall back to unpatched code or treat a benchmark-only patch as the build.
+
+## Isolated runtime-dispatch investigation
+
+`app-acceptance` suite `sqlite-vector-dispatch` builds the unchanged generic artifact,
+then `dispatch-build.mjs` compiles the same checked patched C into upstream's two-object
+Linux/x64 runtime-dispatch library. The AVX2 object explicitly disables FMA; the baseline
+object owns upstream CPU/OS feature admission. This diagnostic does not alter ordinary
+package production, published manifests, model policy or the supported CPU baseline.
+Both artifacts must pass all 735 independent membership comparisons; the runtime report
+records actual Scalar/AVX2 selection and hashes, preserving failures. Compilation happens
+in disposable CI. No diagnostic library is substituted into the application.
+
+A passing trial establishes build/loading/membership compatibility on its actual runner,
+not latency, recall, cross-backend trained-model compatibility, non-AVX fallback execution,
+Windows/macOS packaging or installed/signing acceptance. Those are required before any
+promotion. Next compare paired frozen corpus runs with verified actual backend selection
+and unchanged candidate/recall/heartbeat criteria; never infer a speedup from compiler flags.

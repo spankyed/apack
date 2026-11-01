@@ -240,4 +240,12 @@ These findings do not authorize deferring requirements or expanding the product 
 
 The pinned vec1 source has explicit AVX2/NEON paths and an upstream `VEC1SIMD=SCALAR/AVX2` multi-object runtime-dispatch entry point. The current x64 recipe compiles one generic `-O3` or `/O2` object without requesting AVX2. That suggests the explicit x64 fast path is unused on ordinary baseline compilers; it is a source inference, not a measured explanation of the heartbeat failure. Existing corpus receipts did not record vec1_info, so CPU model metadata alone cannot establish the selected backend.
 
-The next focused run adds a metadata-only probe of the trusted packaged extension and exposed instruction flags; future corpus reports retain current runtime and training-worker versions. Before changing probes/recall policy, investigate upstream portable runtime dispatch with a real scalar fallback, CPU/OS feature admission (including FMA requirements where relevant), cross-backend model/file compatibility, all native membership/semantic/fault contracts, package provenance/signing and independent recall/resource measurements. No local-machine-only compiler flag, hardware-baseline increase or SIMD speed claim is approved by this finding. No SIMD build/runtime change has been made.
+The next focused run adds a metadata-only probe of the trusted packaged extension and exposed instruction flags; future corpus reports retain current runtime and training-worker versions. Before changing probes/recall policy, investigate upstream portable runtime dispatch with a real scalar fallback, CPU/OS feature admission (including FMA requirements where relevant), cross-backend model/file compatibility, all native membership/semantic/fault contracts, package provenance/signing and independent recall/resource measurements. No local-machine-only compiler flag, hardware-baseline increase or SIMD speed claim is approved by this finding. No ordinary-package SIMD build/runtime change has been made.
+
+The isolated `sqlite-vector-dispatch` CI suite now prepares that first build/loading check:
+`native/vectors/dispatch-build.mjs` uses the exact checked patched source, upstream's
+scalar/AVX2 objects and GNU/Clang AVX2 without FMA. Both the unchanged generic library
+and diagnostic library must pass all 735 independent membership comparisons and report
+their actual runtime backend. This does not substitute an artifact into package production.
+Its receipt must precede paired corpus/model compatibility, unsupported-CPU fallback,
+cross-platform and installed qualification; build success alone cannot close responsiveness.
