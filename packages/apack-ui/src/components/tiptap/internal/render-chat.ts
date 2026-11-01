@@ -2,6 +2,7 @@ import type MarkdownIt from 'markdown-it'
 import type { ReadOnlyTextRenderer } from '@apackdev/sdk/fe'
 import { createCodeCopyButton } from './code-copy-button.ts'
 import { highlightCode } from './code-highlighting.ts'
+import { normalizeChatBlocks } from './chat-blocks.ts'
 
 /** A candidate fragment is fully prepared before publication; every enhancement owns cleanup. */
 export function renderChat(parser: MarkdownIt, source: string, adapters: readonly ReadOnlyTextRenderer[]) {
@@ -21,17 +22,7 @@ export function renderChat(parser: MarkdownIt, source: string, adapters: readonl
       if (typeof source !== 'string') throw new TypeError('Read-only Markdown transform must return a string')
     }
     root.innerHTML = parser.render(source)
-    for (const cell of root.querySelectorAll('th,td')) {
-      const paragraph = document.createElement('p')
-      paragraph.append(...cell.childNodes)
-      cell.appendChild(paragraph)
-    }
-    for (const table of root.querySelectorAll('table')) {
-      const wrapper = document.createElement('div')
-      wrapper.className = 'tableWrapper'
-      table.replaceWith(wrapper)
-      wrapper.appendChild(table)
-    }
+    normalizeChatBlocks(root)
     for (const code of root.querySelectorAll<HTMLElement>('pre > code')) {
       code.textContent = (code.textContent ?? '').replace(/\n$/, '')
       highlightCode(code)

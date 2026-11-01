@@ -25,13 +25,26 @@ const problem = ref(false)
 const parser = createChatMarkdownParser()
 const logger = createLogger('chat-viewer')
 let dispose: (() => void) | undefined
-const stop = textEditorExtensionsRegistry.onChanged(() => { groups.value = textEditorExtensionsRegistry.getAll() })
+const stop = textEditorExtensionsRegistry.onChanged(() => {
+  const next = textEditorExtensionsRegistry.getAll()
+  const effective = (values: TextEditorExtensionsBinding[]) => values.filter(group => group.binding.readOnly !== false)
+  const before = effective(groups.value)
+  const after = effective(next)
+  const unchanged = before.length === after.length && before.every((group, index) => {
+    const other = after[index]!
+    const left = group.binding.readOnly
+    const right = other.binding.readOnly
+    return group.packId === other.packId && group.groupId === other.groupId && (left === right
+      || (left && right && left.decorate === right.decorate && left.transformMarkdown === right.transformMarkdown))
+  })
+  if (!unchanged) groups.value = next
+})
 watch(groups, values => { unsupported.value = values.some(group => group.binding.readOnly === undefined) }, { immediate: true, flush: 'sync' })
 watch([() => props.modelValue, groups, content], () => {
   release()
   if (unsupported.value || !content.value) return
   try {
-    const adapters = groups.value.flatMap(group => group.binding.readOnly ? [group.binding.readOnly as ReadOnlyTextRenderer] : [])
+    const adapters: ReadOnlyTextRenderer[] = groups.value.flatMap(group => group.binding.readOnly ? [group.binding.readOnly] : [])
     const rendered = renderChat(parser, props.modelValue, adapters)
     rendered.root.className = 'ProseMirror'
     rendered.root.contentEditable = 'false'
@@ -39,7 +52,11 @@ watch([() => props.modelValue, groups, content], () => {
     content.value.replaceChildren(rendered.root)
     dispose = rendered.dispose
     problem.value = false
-  } catch (error) { problem.value = true; logger.error('Read-only message rendering failed', { error }) }
+  } catch (error) {
+    content.value?.replaceChildren()
+    problem.value = true
+    logger.error('Read-only message rendering failed', { error })
+  }
 }, { flush: 'post', immediate: true })
 function onClick(event: MouseEvent) {
   createViewerClickHandler({ imageClick: src => emit('imageClick', src), openLink: props.openViewerLink })(undefined, event)

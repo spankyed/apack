@@ -53,3 +53,13 @@ it('ignores clipboard completion after disposal', async () => {
   await Promise.resolve()
   expect(button.classList.contains('is-copied')).toBe(false)
 })
+
+it('copies the original code text rather than highlighting markup', async () => {
+  const write = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator', { clipboard: { writeText: write } })
+  const rendered = renderChat(createChatMarkdownParser(), '```js\nconst x = "<tag>"\n```', [])
+  rendered.root.querySelector('button')!.click()
+  expect(write).toHaveBeenCalledWith('const x = "<tag>"')
+  await Promise.resolve()
+  rendered.dispose()
+})

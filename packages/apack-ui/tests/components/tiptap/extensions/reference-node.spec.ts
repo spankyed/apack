@@ -3,7 +3,7 @@ import { JSDOM } from 'jsdom';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
-import { ReferenceNode } from '../../../../src/components/tiptap/extensions/reference-node.ts';
+import { ReferenceNode, ReadOnlyReferences } from '../../../../src/components/tiptap/extensions/reference-node.ts';
 
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
 import { resolveName } from '@apackdev/sdk/ids';
@@ -172,4 +172,26 @@ it('keeps ordinary web/mail links separate from internal references', () => {
   expect(attrs(opened)).toEqual([]);
   expect(opened.getHTML()).toContain('https://example.com/a');
   expect(opened.getHTML()).toContain('mailto:hello@example.com');
+});
+
+
+it('preserves read-only reference navigation and metadata updates, then releases all callbacks', () => {
+  const root = document.createElement('div');
+  root.innerHTML = '<p><a href="apack-ref://thread/Thread-one">Saved thread</a></p>';
+  const cleanup = ReadOnlyReferences.decorate!(root);
+  const pill = root.querySelector('.reference-pill')!;
+  const label = pill.querySelector('.reference-pill-label')!.firstChild;
+  try {
+    pill.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(send).toHaveBeenCalledWith({ type: 'OPEN_ENTITY', id: 'Thread-one' });
+    entries = entries.map(entry => entry.packId === 'thread-pack' ? { ...entry, declaration: { ...entry.declaration,
+      types: { thread: { ...entry.declaration.types.thread, svgElements: [['path', { d: 'M2 4h8' }]] } } } } : entry);
+    for (const listener of [...listeners]) listener();
+    expect(pill.querySelector('path')?.getAttribute('d')).toBe('M2 4h8');
+    expect(pill.querySelector('.reference-pill-label')!.firstChild).toBe(label);
+  } finally { if (typeof cleanup === 'function') cleanup(); }
+  send.mockClear();
+  pill.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  expect(send).not.toHaveBeenCalled();
+  expect(listeners.size).toBe(0);
 });

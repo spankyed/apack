@@ -66,3 +66,11 @@ it('shows a failed supported renderer and recovers after its contribution is rep
   expect(f.root.querySelector('[role="status"]')).toBeNull()
   expect(f.root.querySelector('strong')?.textContent).toBe('first')
 })
+
+it('keeps the displayed DOM and selection target for unrelated editing-only contributions', async () => {
+  const f = fixture([])
+  await nextTick()
+  const strong = f.root.querySelector('strong')
+  await f.publish([{ packId: 'editing', groupId: 'suggestions', binding: { readOnly: false } }])
+  expect(f.root.querySelector('strong')).toBe(strong)
+})

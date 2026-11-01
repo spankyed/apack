@@ -44,7 +44,7 @@ export function createReferencePill(initial: ReferencePillTarget, editable = () 
     label.textContent = target.label
   }
   update(initial)
-  const stop = onReferenceDeclarationsChanged(() => update(target))
+  const stop = onReferenceDeclarationsChanged(() => { icon.replaceChildren(createIconSvg(target.type)) })
   const click = (event: MouseEvent) => {
     if (editable() && !event.metaKey && !event.ctrlKey) return
     if (typeof target.id === 'string' && target.id.includes('-')) openEntity(target.id as EARS.EntityId)

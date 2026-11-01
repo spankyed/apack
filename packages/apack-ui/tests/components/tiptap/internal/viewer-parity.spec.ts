@@ -37,3 +37,27 @@ it('preserves inline image behavior against the existing chat viewer', () => {
   const pair = compare('before ![alt](https://example.com/image.png) after')
   expect(pair.candidate.querySelectorAll('img').length).toBe(pair.baseline.querySelectorAll('img').length)
 })
+
+it('preserves the empty-message line box used before a reply starts streaming', () => {
+  const pair = compare('')
+  expect(pair.candidate.querySelector('p')?.innerHTML).toBe(pair.baseline.querySelector('p')?.innerHTML)
+})
+it('preserves nested tight-list paragraph structure', () => {
+  const pair = compare('- first\n  - nested\n- second')
+  const shape = (root: HTMLElement) => ({
+    tight: [...root.querySelectorAll('ul')].map(list => list.getAttribute('data-tight')),
+    paragraphs: [...root.querySelectorAll('li > p')].map(paragraph => paragraph.textContent?.trim()),
+  })
+  expect(shape(pair.candidate)).toEqual(shape(pair.baseline))
+})
+
+it('preserves links introduced by streamed content updates', () => {
+  const pair = compare('starting reply')
+  const source = 'See [example](https://example.com) for details. '
+  editors[editors.length - 1]!.commands.setContent(source)
+  const updated = renderChat(createChatMarkdownParser(), source, [])
+  cleanups.push(updated.dispose)
+  const links = (root: HTMLElement) => [...root.querySelectorAll('a')].map(link => link.getAttribute('href'))
+  expect(links(pair.baseline)).toEqual(['https://example.com'])
+  expect(links(updated.root)).toEqual(links(pair.baseline))
+})
