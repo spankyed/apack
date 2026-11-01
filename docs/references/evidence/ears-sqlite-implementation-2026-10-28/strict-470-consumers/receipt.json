@@ -1,6 +1,6 @@
 {
   "source": "4701bd839df1cf32e39e674b02fa285904f80a7f",
-  "scope": "Completed host and integration-2 only; remaining strict consumers are separate live gates; predates hit projection corrections",
+  "scope": "Completed host, integration-2 and both native shards; integration-1 remains live at collection; predates projected-hit corrections",
   "consumers": [
     {
       "name": "app-and-rest",
@@ -16,6 +16,28 @@
       "name": "integration-2",
       "endedFiles": 31,
       "failedModules": []
+    },
+    {
+      "name": "native-1",
+      "endedFiles": 9,
+      "passedFiles": 8,
+      "skippedFiles": 1,
+      "passedTests": 26,
+      "skippedTests": 2,
+      "chainSeconds": 1596.5,
+      "failedModules": [],
+      "cache": "Inputs changed; no reusable successful stamp"
+    },
+    {
+      "name": "native-2",
+      "endedFiles": 8,
+      "passedFiles": 7,
+      "skippedFiles": 1,
+      "passedTests": 47,
+      "skippedTests": 26,
+      "chainSeconds": 1296.8,
+      "failedModules": [],
+      "cache": "Inputs changed; no reusable successful stamp"
     }
   ],
   "independentApp": {
