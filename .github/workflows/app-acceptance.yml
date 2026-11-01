@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-watch, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       sqlite_vector_models:
         description: Real corpus vector regime; managed verifies native readiness above the exact-search threshold
@@ -195,6 +195,51 @@ jobs:
           path: .temp/sqlite-admission
           if-no-files-found: error
           retention-days: 14
+  sqlite-watch:
+    if: ${{ inputs.suite == 'sqlite-watch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching sustained workload
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm ci
+          npm run packages:build
+          npm run typecheck -w @apackdev/ears
+      - name: Repeated matched durable write-watch trials
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-watch
+          docker build -t ears-watch-runtime - <<'DOCKER'
+          FROM ubuntu:24.04
+          RUN apt-get update && apt-get install -y --no-install-recommends python3 libstdc++6 && rm -rf /var/lib/apt/lists/*
+          DOCKER
+          docker image inspect ears-watch-runtime --format '{{.Id}}' > .temp/sqlite-watch/image.txt
+          watch_node_binary=$(command -v node)
+          docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+            --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
+            -e GITHUB_SHA="$GITHUB_SHA" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$watch_node_binary:/runtime/node:ro" -v "$GITHUB_WORKSPACE/.temp/sqlite-watch:/results" \
+            ears-watch-runtime python3 packages/apack-ears/bench/sqlite/run-watch.py /results/trials
+      - name: Preserve every sustained workload outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-watch-${{ github.run_id }}
+          path: .temp/sqlite-watch
+          if-no-files-found: error
   sqlite-bench:
     if: ${{ inputs.suite == 'sqlite-bench' }}
     runs-on: ubuntu-24.04
@@ -916,7 +961,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   check:
-    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-model-windows' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'sqlite-vector-dispatch' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
+    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-watch' && inputs.suite != 'sqlite-model-windows' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'sqlite-vector-dispatch' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
     runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45

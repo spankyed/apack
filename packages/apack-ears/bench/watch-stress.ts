@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { loadedNativeBindings, startHeartbeat } from './sqlite/load-metrics.ts';
 import type { EARS as EarsTypes } from '../src/index.ts';
 
 type Id = EarsTypes.EntityId;
@@ -92,6 +93,7 @@ try {
   await engine.admin.watchesSettled();
 
   const delay = monitorEventLoopDelay({ resolution: 1 });
+  const heartbeat = startHeartbeat(1);
   measuring = true;
   delay.enable();
   const cpu = process.cpuUsage();
@@ -120,6 +122,7 @@ try {
   await engine.admin.watchesSettled();
   const settledMs = performance.now() - started - writing;
   delay.disable();
+  heartbeat.stop();
   const used = process.cpuUsage(cpu);
   measuring = false;
 
@@ -134,6 +137,12 @@ try {
   console.log(JSON.stringify({
     date: new Date().toISOString(),
     backend: BACKEND,
+    execution: 'built-package',
+    taskCount: TASKS,
+    requestedSeconds: SECONDS,
+    viewMode: VIEW_MODE,
+    nativeBindings: loadedNativeBindings(),
+    heartbeatDelaysMs: heartbeat.delaysMs,
     acknowledgment: ACKNOWLEDGMENT,
     durabilityComparison: ACKNOWLEDGMENT === 'durable' ? 'Each mutation uses a durable unit on both backends'
       : 'Backend defaults differ: elmdb group sync versus SQLite FULL per commit; not matched durable acknowledgments',

@@ -375,3 +375,19 @@ execution is retained, it must meet the original budgets with measured semantics
 Neither the keyword miss also occurring on native nor the stronger correctness evidence permits
 adoption with unmet requirements. Keep the candidate isolated, preserve current baseline evidence,
 finish the running gates, and resolve the execution decision before presenting a final cutover proposal.
+
+### Sustained write/watch requalification
+
+The existing built-package `bench/watch-stress.ts` now records loaded native hashes and an
+independent deadline heartbeat, including a final blocking operation. The `sqlite-watch` CI suite
+runs three fresh-process 60-second trials for each backend with views open/closed, alternating
+backend/mode order and using matched durable units on both engines. Each store has 20,000 tasks;
+views cover one row, a 50-row page and the ordered open-task set. It verifies convergence, records
+all raw heartbeat samples and each process report, and retains failed/180-second-timeout outcomes
+without retry. Execution is restricted to a disposable 2 CPU/6 GiB/no-swap container.
+
+This is pending execution. It replaces no original acceptance requirement and does not qualify
+actual renderer/provider/search flows, peak disk/WAL or independent-device variance. The earlier
+five-second Seagate pilot remains historical evidence; its absolute timings are not a matched
+hardware comparison with this new CI cohort. The existing signed-runtime run must be allowed to
+start before queuing another app-acceptance dispatch, so its pending slot is not displaced.
