@@ -249,3 +249,13 @@ and diagnostic library must pass all 735 independent membership comparisons and 
 their actual runtime backend. This does not substitute an artifact into package production.
 Its receipt must precede paired corpus/model compatibility, unsupported-CPU fallback,
 cross-platform and installed qualification; build success alone cannot close responsiveness.
+
+The first cross-model diagnostic rejects hidden BQ ANN distance equality; its
+[original failure](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-model-03e/README.md)
+is preserved. The corrected probe distinguishes approximate native selection distances
+from canonical cosine, retains approximate deltas, and keeps the canonical 1e-5 check
+against independent Float64 accumulation. No production score or recall criterion changes.
+A corpus-only `sqlite_vector_backend=paired-dispatch` mode is prepared: same acquired
+inputs/CPU/limits/source, original candidate policy, independently trained models and
+full reference checks per variant. Model/cache variance is explicitly uncontrolled; one
+pair cannot establish a causal speedup or full model-variance acceptance.

@@ -13,6 +13,11 @@ on:
         type: choice
         options: [fallback, managed]
         default: fallback
+      sqlite_vector_backend:
+        description: Corpus-only paired upstream dispatch diagnostic; ordinary artifacts remain generic
+        type: choice
+        options: [packaged, paired-dispatch]
+        default: packaged
       sqlite_native_candidate_floor:
         description: Corpus-only diagnostic override; production keeps the current native candidate policy
         type: choice
@@ -43,6 +48,9 @@ on:
       sqlite_vector_models:
         type: string
         default: fallback
+      sqlite_vector_backend:
+        type: string
+        default: packaged
       sqlite_native_candidate_floor:
         type: string
         default: production
@@ -316,7 +324,11 @@ jobs:
   sqlite-corpus:
     if: ${{ inputs.suite == 'sqlite-corpus' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.sqlite_vector_backend == 'paired-dispatch' && 60 || 30 }}
+    env:
+      SQLITE_VECTOR_BACKEND: ${{ inputs.sqlite_vector_backend || 'packaged' }}
+      SQLITE_VECTOR_MODE: ${{ inputs.sqlite_vector_models }}
+      SQLITE_NATIVE_CANDIDATE_FLOOR: ${{ inputs.sqlite_native_candidate_floor }}
     defaults:
       run:
         shell: bash
@@ -332,8 +344,26 @@ jobs:
           CARGO_BUILD_JOBS: 2
           npm_config_jobs: 2
         run: |
+          set -euo pipefail
+          case "$SQLITE_VECTOR_BACKEND" in
+            packaged) ;;
+            paired-dispatch)
+              test "$SQLITE_VECTOR_MODE" = managed
+              test "$SQLITE_NATIVE_CANDIDATE_FLOOR" = production
+              ;;
+            *) exit 1 ;;
+          esac
           npm ci
           npm run packages:build
+          if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then
+            mkdir -p .temp/sqlite-corpus/native-build
+            node native/vectors/build.mjs .temp/sqlite-corpus/native-build/generic
+            node native/vectors/dispatch-build.mjs .temp/sqlite-corpus/native-build/generic .temp/sqlite-corpus/native-build/dispatch
+            node native/vectors/membership-test.mjs .temp/sqlite-corpus/native-build/dispatch/vec1.so .temp/sqlite-corpus/dispatch-membership.json
+            node native/vectors/dispatch-model-test.mjs compare \
+              .temp/sqlite-corpus/native-build/generic/vec1.so .temp/sqlite-corpus/native-build/dispatch/vec1.so \
+              .temp/sqlite-corpus/cross-backend-models.json
+          fi
       - name: Query routing and replacement outcome safeguards
         env:
           EARS_EVALUATION_BACKEND: sqlite
@@ -399,25 +429,58 @@ jobs:
           docker pull ubuntu:24.04
           docker image inspect ubuntu:24.04 --format '{{json .RepoDigests}}' > .temp/sqlite-corpus/node-image.json
           mkdir -p "$private_fixture/runtime"
+          variants=(packaged)
+          if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then variants=(generic dispatch); fi
+          if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then
+            for variant in "${variants[@]}"; do
+              mkdir -p ".temp/sqlite-corpus/$variant"
+              cp .temp/sqlite-corpus/corpus-manifest.json ".temp/sqlite-corpus/$variant/corpus-manifest.json"
+            done
+          fi
           for size in 1000 10000 99900; do
-            docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
-              --user "$(id -u):$(id -g)" --workdir /workspace \
-              -e GITHUB_SHA="$GITHUB_SHA" -e TMPDIR=/private/runtime \
-              -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 \
-              -v "$GITHUB_WORKSPACE:/workspace:ro" -v "$hybrid_node_binary:/runtime/node:ro" \
-              -v "$private_fixture:/private" -v "$GITHUB_WORKSPACE/.temp/sqlite-corpus:/results" \
-              ubuntu:24.04 /runtime/node --import tsx packages/apack-ears/bench/sqlite/real-hybrid.mjs \
-              /private/corpus "/results/hybrid-$size.json" "$size" "$SQLITE_VECTOR_MODE" "$SQLITE_NATIVE_CANDIDATE_FLOOR"
+            # Reverse the middle pair; cache/model variance remains explicitly uncontrolled.
+            if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then
+              variants=(generic dispatch)
+              if test "$size" = 10000; then variants=(dispatch generic); fi
+            fi
+            for variant in "${variants[@]}"; do
+              extension=packaged
+              result_path=/results
+              if test "$variant" != packaged; then result_path=/results/$variant; fi
+              if test "$variant" = dispatch; then extension=/workspace/.temp/sqlite-corpus/native-build/dispatch; fi
+              docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+                --user "$(id -u):$(id -g)" --workdir /workspace \
+                -e GITHUB_SHA="$GITHUB_SHA" -e TMPDIR=/private/runtime \
+                -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 \
+                -v "$GITHUB_WORKSPACE:/workspace:ro" -v "$hybrid_node_binary:/runtime/node:ro" \
+                -v "$private_fixture:/private" -v "$GITHUB_WORKSPACE/.temp/sqlite-corpus:/results" \
+                ubuntu:24.04 /runtime/node --import tsx packages/apack-ears/bench/sqlite/real-hybrid.mjs \
+                /private/corpus "$result_path/hybrid-$size.json" "$size" "$SQLITE_VECTOR_MODE" "$SQLITE_NATIVE_CANDIDATE_FLOOR" "$extension"
+            done
           done
-          python3 packages/apack-ears/bench/sqlite/qualify-real-hybrid.py --results .temp/sqlite-corpus \
-            --source "$GITHUB_SHA" --output .temp/sqlite-corpus/hybrid-matrix.json
+          qualification_status=0
+          for variant in "${variants[@]}"; do
+            result_directory=.temp/sqlite-corpus
+            if test "$variant" != packaged; then result_directory=$result_directory/$variant; fi
+            python3 packages/apack-ears/bench/sqlite/qualify-real-hybrid.py --results "$result_directory" \
+              --source "$GITHUB_SHA" --output "$result_directory/hybrid-matrix.json" || qualification_status=1
+          done
+          if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then
+            python3 packages/apack-ears/bench/sqlite/compare-vector-builds.py --results .temp/sqlite-corpus \
+              --source "$GITHUB_SHA" --output .temp/sqlite-corpus/vector-build-comparison.json || qualification_status=1
+          fi
+          exit "$qualification_status"
 
       - name: Retain metadata receipts only
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ears-sqlite-corpus-${{ github.run_id }}
-          path: .temp/sqlite-corpus
+          path: |
+            .temp/sqlite-corpus
+            !.temp/sqlite-corpus/native-build/**/*.c
+            !.temp/sqlite-corpus/native-build/**/*.o
+            !.temp/sqlite-corpus/native-build/**/*.so
           if-no-files-found: error
           retention-days: 14
   sqlite-relevance:

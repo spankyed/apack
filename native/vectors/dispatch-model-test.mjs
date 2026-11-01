@@ -14,16 +14,28 @@ const self = fileURLToPath(import.meta.url);
 const vector = (dimensions, i) => Buffer.from(Float32Array.from({ length: dimensions },
   (_, j) => Math.sin((i + 1) * (j + 1) * 1.71) + Math.cos((i + 3) * (j + 1) * .19)).buffer);
 const queries = (db, dimensions) => {
-  const samples = [];
+  const samples = []; let maximumOracleError = 0;
+  const cosine = (left, right) => {
+    const a = new Float32Array(left.buffer, left.byteOffset, dimensions);
+    const b = new Float32Array(right.buffer, right.byteOffset, dimensions);
+    let dot = 0, aa = 0, bb = 0;
+    for (let i = 0; i < dimensions; i++) { dot += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i]; }
+    return 1 - dot / Math.sqrt(aa * bb);
+  };
+  const canonical = Array.from({ length: 512 }, (_, i) => vector(dimensions, i));
   for (const query of [0, 17, 511, 981]) for (const scope of ['all', 'active', 'sparse']) {
     const where = scope === 'active' ? ' WHERE active=1' : scope === 'sparse' ? ' WHERE owner IN (1,17,39,41,63,127,255,511)' : '';
-    const rows = db.prepare('SELECT rowid,distance FROM corpus(?,?)' + where + ' ORDER BY rowid').all(
-      vector(dimensions, query), JSON.stringify({ K: 512, nprobe: 100 }));
+    const input = vector(dimensions, query);
+    const rows = db.prepare('SELECT rowid,distance approximateDistance,vec1_cos_distance(v,?) canonicalDistance FROM corpus(?,?)' + where + ' ORDER BY rowid').all(
+      input, input, JSON.stringify({ K: 512, nprobe: 100 }));
     assert.equal(rows.length, scope === 'all' ? 512 : scope === 'active' ? 256 : 8);
-    assert(rows.every(row => Number.isSafeInteger(row.rowid) && Number.isFinite(row.distance)));
+    assert(rows.every(row => Number.isSafeInteger(row.rowid) && Number.isFinite(row.approximateDistance) && Number.isFinite(row.canonicalDistance)));
+    for (const row of rows) maximumOracleError = Math.max(maximumOracleError,
+      Math.abs(row.canonicalDistance - cosine(input, canonical[row.rowid - 1])));
+    assert(maximumOracleError <= 1e-5, 'Canonical cosine must match independent Float64 accumulation');
     samples.push({ query, scope, rows });
   }
-  return samples;
+  return { samples, maximumOracleError };
 };
 if (mode === 'write' || mode === 'read') {
   const [extension, file, dimensionsArgument, expectedFile, output] = args;
@@ -52,21 +64,34 @@ if (mode === 'write' || mode === 'read') {
       db.prepare("INSERT INTO corpus(cmd,arg) VALUES('rebuild',?)").run(model);
       const put = db.prepare('INSERT INTO corpus(rowid,v,owner,active) VALUES(?,?,?,?)');
       db.transaction(() => { for (let i = 0; i < 512; i++) put.run(i + 1, vector(dimensions, i), BigInt(i), BigInt(i % 2)); })();
-      writeFileSync(expectedFile, JSON.stringify(queries(db, dimensions)), { flag: 'wx' });
+      const answer = queries(db, dimensions); report.maximumOracleError = answer.maximumOracleError;
+      writeFileSync(expectedFile, JSON.stringify(answer.samples), { flag: 'wx' });
     } else {
-      const expected = JSON.parse(readFileSync(expectedFile, 'utf8')), actual = queries(db, dimensions);
+      const expected = JSON.parse(readFileSync(expectedFile, 'utf8')), answer = queries(db, dimensions), actual = answer.samples;
+      report.maximumOracleError = answer.maximumOracleError;
       assert.equal(actual.length, 12); assert.equal(expected.length, 12);
-      let maximumDistanceDifference = 0;
+      let maximumDistanceDifference = 0, maximumCanonicalDistanceDifference = 0, worstApproximate;
       for (let i = 0; i < actual.length; i++) {
         assert.equal(actual[i].query, expected[i].query); assert.equal(actual[i].scope, expected[i].scope);
         assert.equal(actual[i].rows.length, expected[i].rows.length);
         for (let j = 0; j < actual[i].rows.length; j++) {
           const a = actual[i].rows[j], b = expected[i].rows[j]; assert.equal(a.rowid, b.rowid);
-          maximumDistanceDifference = Math.max(maximumDistanceDifference, Math.abs(a.distance - b.distance));
+          const difference = Math.abs(a.approximateDistance - b.approximateDistance);
+          if (difference > maximumDistanceDifference) {
+            maximumDistanceDifference = difference;
+            worstApproximate = { query: actual[i].query, scope: actual[i].scope, rowid: a.rowid,
+              writer: b.approximateDistance, reader: a.approximateDistance };
+          }
+          maximumCanonicalDistanceDifference = Math.max(maximumCanonicalDistanceDifference,
+            Math.abs(a.canonicalDistance - b.canonicalDistance));
         }
       }
-      report.maximumDistanceDifference = maximumDistanceDifference;
-      assert(maximumDistanceDifference <= 1e-5, 'Cross-backend distances must remain within explicit float tolerance');
+      report.maximumApproximateDistanceDifference = maximumDistanceDifference;
+      report.worstApproximate = worstApproximate ?? null;
+      report.maximumCanonicalDistanceDifference = maximumCanonicalDistanceDifference;
+      // EARS uses ANN owners only; hidden BQ distance is an approximate transformed-space value.
+      // Canonical cosine remains separately checked, with the original explicit tolerance.
+      assert(maximumCanonicalDistanceDifference <= 1e-5, 'Canonical cross-backend cosine must remain within explicit float tolerance');
       report.queriesChecked = actual.length;
     }
     db.close(); db = undefined;

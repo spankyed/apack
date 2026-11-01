@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { closeSync, createReadStream, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { cpus, tmpdir } from 'node:os';
 import { createEarsEngine } from '../../src/index.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
@@ -17,8 +17,8 @@ import { SqliteVectorIndex } from '../../src/sqlite/vector-index.ts';
 import { EXACT_VECTOR_CHUNK_LIMIT } from '../../src/sqlite/vector-policy.ts';
 import { compareNativeProbes } from './native-probe-diagnostic.mjs';
 
-const [root, output, sizeArg = '1000', modelMode = 'fallback', candidateFloorArg = 'production'] = process.argv.slice(2);
-assert(root && output && !existsSync(output));
+const [root, output, sizeArg = '1000', modelMode = 'fallback', candidateFloorArg = 'production', diagnosticBuild = 'packaged', ...extra] = process.argv.slice(2);
+assert(root && output && !existsSync(output) && extra.length === 0);
 assert(['fallback', 'managed'].includes(modelMode));
 assert(['production', '1024', '2048'].includes(candidateFloorArg));
 assert(candidateFloorArg === 'production' || modelMode === 'managed');
@@ -30,12 +30,28 @@ const ordinaryCandidates = SqliteVectorIndex.prototype.candidates;
 if (nativeCandidateFloor) SqliteVectorIndex.prototype.candidates = function (generation, vector, limit, ...rest) {
   return ordinaryCandidates.call(this, generation, vector, Math.max(limit, activeCandidateFloor ?? 0), ...rest);
 };
-const nativeExtension = modelMode === 'managed' ? resolveNativeVectorExtension() : undefined;
+const sha = bytes => createHash('sha256').update(bytes).digest('hex');
+let nativeExtension = modelMode === 'managed' ? resolveNativeVectorExtension() : undefined;
+let nativeDiagnostic = null;
+if (diagnosticBuild !== 'packaged') {
+  assert.equal(modelMode, 'managed'); assert.equal(candidateFloorArg, 'production');
+  assert(isAbsolute(diagnosticBuild), 'Diagnostic code path must be explicitly supplied by the benchmark owner');
+  const bytes = readFileSync(join(diagnosticBuild, 'provenance.json')), provenance = JSON.parse(bytes);
+  assert.equal(provenance.completed, true); assert.equal(provenance.source, process.env.GITHUB_SHA);
+  assert.equal(provenance.platform, 'linux'); assert.equal(provenance.arch, 'x64');
+  assert.equal(provenance.baseline.sourceSha256, '04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a');
+  assert.equal(sha(readFileSync(join(diagnosticBuild, 'vec1.c'))), provenance.baseline.sourceSha256);
+  assert.equal(sha(readFileSync(nativeExtension)), provenance.baseline.extensionSha256,
+    'Diagnostic baseline must match this run’s actual packaged artifact');
+  nativeExtension = join(diagnosticBuild, 'vec1.so');
+  assert.equal(sha(readFileSync(nativeExtension)), provenance.extensionSha256);
+  nativeDiagnostic = { kind: 'upstream-x64-runtime-dispatch', provenanceSha256: sha(bytes),
+    baselineExtensionSha256: provenance.baseline.extensionSha256 };
+}
 assert.equal(process.platform, 'linux');
 const limits = Object.fromEntries(['cpu.max', 'memory.max', 'memory.swap.max'].map(name =>
   [name, readFileSync('/sys/fs/cgroup/' + name, 'utf8').trim()]));
 assert.deepEqual(limits, { 'cpu.max': '200000 100000', 'memory.max': '6442450944', 'memory.swap.max': '0' });
-const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const manifestBytes = readFileSync(join(root, 'manifest.json')), manifest = JSON.parse(manifestBytes);
 assert.equal(manifest.revision, '0d5fd00fbc5a9c0c836d70cd409f7e461255e572');
 const size = Number(sizeArg), dimensions = 1536, width = dimensions * 4;
@@ -93,6 +109,7 @@ const vector = (buffer, row) => Array.from(new Float32Array(buffer.buffer, buffe
 const report = { protocol: 'ears-private-real-hybrid/1', completed: false, qualification: false,
   source: process.env.GITHUB_SHA, limits, cpuModels: [...new Set(cpus().map(cpu => cpu.model))], vectorRecallReference: 'independent-float64-canonical-f32', oracleSha256: sha(truthBytes), oracleRecipeSha256: truth.recipeSha256, oracleScalarChecks: truth.scalarChecks.filter(row => row.size === size), node: process.version, arch: process.arch, manifestSha256: sha(manifestBytes), size, queries: 200, queryFamilies: { heldOut: 100, lexicalControls: 100 },
   scope: 'Selected real paired prefix; exact fusion correctness and warm timings, not relevance judgments or resource qualification',
+  nativeDiagnostic, nativeExtensionSha256: nativeExtension ? sha(readFileSync(nativeExtension)) : null,
   containsPayload: false, fusionPolicy: 'global-vector-window-max-40-4k', fusionVectorDepth: 40, vectorPolicy: 'adaptive-native-owner-pool', nativeOwnerTargets: { through32: 256, through40: 1024, through64: 2048 }, fallbackOwnerTarget: 256, nativeModelOwnerStarted: false, modelMode, nativeCandidateFloor, matchedCandidateWidths, timing: 'Warm query after independent reference reads; 2CPU/6GiB/no-swap disposable container', samples: [] };
 writeFileSync(output, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
 const save = () => {
