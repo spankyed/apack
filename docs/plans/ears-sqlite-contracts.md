@@ -404,9 +404,9 @@ requested persisted markers, with SQLite application/format headers checked and 
 A focused tooling control covers requested-versus-actual mismatch, mixed stores, foreign identity and
 non-disposable profiles. Existing full raw-run/capture admission remains intact.
 
-The first real app-flow run is live at `50cf9d6980` as workflow 41341760226; execution is unproven. It characterizes one warmed process per backend/scenario on one macOS
+[The first real app-flow run](../references/evidence/ears-sqlite-implementation-2026-10-28/app-flows-50c/README.md) completes at `50cf9d6980`: 120 measured actions plus 30 warmups pass full capture admission across both backends. Script/test types and actual store-provenance controls pass. Native/SQLite medians are 430.20/546.55 ms thread opening, 16.15/27.70 ms search and 786.10/847.20 ms streaming completion. Default durability differs, so these are not matched durable-acknowledgment algorithm comparisons. It characterizes one warmed process per backend/scenario on one macOS
 runner; its actual machine metadata remains visible. It does not replace bounded Linux/corpus/physical
-failure or independent-device requirements, and no timing budget is redefined. Preserve the pending app-flow slot; `sqlite-watch` is now active.
+failure or independent-device requirements, and no timing budget is redefined. Both earlier runs are terminal; the ordering-focused run at `126d5a9dff` now owns the active slot. These app-flow results precede that correction.
 
 ### Known-type numeric ordering
 
