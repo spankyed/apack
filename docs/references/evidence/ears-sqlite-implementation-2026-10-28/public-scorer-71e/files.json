@@ -1,0 +1,14 @@
+{
+  "generic-training.json": {
+    "sha256": "0ccb5aadd385c832587a47b519097b9fb73c8fd9ab0a8e54edffb586de92fe71",
+    "bytes": 6854
+  },
+  "dispatch-training.json": {
+    "sha256": "745cb7106c3d0916ac2b23208a29732052563bc2cfc817addb753aaaf129e950",
+    "bytes": 6845
+  },
+  "runtime.json": {
+    "sha256": "717d2d0b42b902ef116c381f33b06d7861c3a2d792d8d298c2ca454944140441",
+    "bytes": 674
+  }
+}
