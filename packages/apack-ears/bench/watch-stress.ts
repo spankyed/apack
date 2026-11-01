@@ -17,6 +17,8 @@ type Id = EarsTypes.EntityId;
 const DIST = '../dist/index.js';
 const BACKEND = process.argv[4] ?? 'elmdb';
 const ACKNOWLEDGMENT = process.argv[5] ?? 'default';
+const SCHEMA_MODE = process.argv[6] ?? 'stable';
+if (!['stable', 'admission'].includes(SCHEMA_MODE)) throw new Error('Expected stable or admission schema mode');
 if (!['elmdb', 'sqlite'].includes(BACKEND)) throw new Error('Expected elmdb or sqlite backend');
 if (!['default', 'durable'].includes(ACKNOWLEDGMENT)) throw new Error('Expected default or durable acknowledgment');
 const DIST_DATABASE = BACKEND === 'sqlite' ? '../dist/sqlite/index.js' : '../dist/lmdb/index.js';
@@ -27,6 +29,7 @@ const SECONDS = Number(process.argv[2] ?? 5);
 const VIEW_MODE = process.argv[3] ?? 'views';
 if (!['views', 'none'].includes(VIEW_MODE)) throw new Error('Expected views or none');
 const NO_VIEWS = VIEW_MODE === 'none';
+if (SCHEMA_MODE === 'admission' && NO_VIEWS) throw new Error('Admission comparison requires live views');
 const TASKS = Number(process.env.EARS_WATCH_TASKS ?? 20_000);
 if (!Number.isFinite(SECONDS) || SECONDS <= 0 || !Number.isSafeInteger(TASKS) || TASKS < 120)
   throw new Error('Expected positive seconds and at least 120 tasks');
@@ -99,6 +102,11 @@ try {
   const cpu = process.cpuUsage();
   const started = performance.now();
   let commits = 0;
+  let writingFinished = false;
+  let admission: { startedAfterMutation: number; startOffsetMs: number; heartbeatDelaysMs: number[]; declarationMs?: number;
+    readyAfterMs?: number; foregroundWritesWhilePending?: number; readyDuringWriting?: boolean; lookupVerified?: boolean } | undefined;
+  let admissionReady: Promise<void> | undefined;
+  let admissionFailure: unknown;
   const acknowledgmentMs: number[] = [];
   await new Promise<void>((resolve) => {
     const step = () => {
@@ -114,17 +122,44 @@ try {
       acknowledgmentMs.push(performance.now() - at);
       committedAt.set(engine.lastCommit(), performance.now());
       commits++;
+      if (SCHEMA_MODE === 'admission' && commits === 500) {
+        const admittingAt = performance.now();
+        const admissionPulse = startHeartbeat(1);
+        admission = { startedAfterMutation: commits, startOffsetMs: admittingAt - started, heartbeatDelaysMs: admissionPulse.delaysMs };
+        // Use ordinary live declaration, not a private builder: both engines must keep their
+        // existing status index and admit rank while foreground durable units/views continue.
+        try { engine.admin.setSchema({ types: { Task: { required: [], indexes: ['status', 'rank'] } }, relations: {}, roles: [] }); }
+        catch (error) { admissionPulse.stop(); throw error; }
+        admission.declarationMs = performance.now() - admittingAt;
+        admissionReady = database.indexesReady(['Task']).then(() => {
+          admissionPulse.stop();
+          admission!.readyAfterMs = performance.now() - admittingAt;
+          admission!.foregroundWritesWhilePending = commits - admission!.startedAfterMutation;
+          admission!.readyDuringWriting = !writingFinished;
+        }, error => { admissionPulse.stop(); admissionFailure = error; });
+      }
       setImmediate(step);
     };
     setImmediate(step);
   });
   const writing = performance.now() - started;
+  writingFinished = true;
+  if (SCHEMA_MODE === 'admission' && !admissionReady) throw new Error('The declared admission phase never started');
+  if (admissionReady) await admissionReady;
+  if (admissionFailure) throw admissionFailure;
   await engine.admin.watchesSettled();
   const settledMs = performance.now() - started - writing;
   delay.disable();
   heartbeat.stop();
   const used = process.cpuUsage(cpu);
   measuring = false;
+
+  if (admission) {
+    const expected = hot[(commits - 1) % HOT]!;
+    if (JSON.stringify(engine.query('Task').where('rank', -commits).ids()) !== JSON.stringify([expected]))
+      throw new Error('The admitted rank lookup missed the latest foreground mutation');
+    admission.lookupVerified = true;
+  }
 
   // Every view's last delivery is what its read answers now: a view converges
   const converged = NO_VIEWS || (Object.keys(views) as Name[]).every((name) => JSON.stringify(stats[name].last) === JSON.stringify(views[name]()));
@@ -141,6 +176,8 @@ try {
     taskCount: TASKS,
     requestedSeconds: SECONDS,
     viewMode: VIEW_MODE,
+    schemaMode: SCHEMA_MODE,
+    ...(admission && { admission, schemaAcknowledgment: 'Ordinary declaration follows each backend default; foreground mutations use the selected acknowledgment policy' }),
     nativeBindings: loadedNativeBindings(),
     heartbeatDelaysMs: heartbeat.delaysMs,
     acknowledgment: ACKNOWLEDGMENT,

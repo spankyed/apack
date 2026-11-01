@@ -3,6 +3,7 @@ import argparse, hashlib, json, math, os, pathlib, subprocess, time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('output', type=pathlib.Path)
+parser.add_argument('--admission', action='store_true')
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=False)
 repo = pathlib.Path(__file__).resolve().parents[4]
@@ -12,9 +13,9 @@ assert limits == {'cpu.max': '200000 100000', 'memory.max': '6442450944', 'memor
 source = os.environ['GITHUB_SHA']
 assert len(source) == 40 and all(char in '0123456789abcdef' for char in source)
 compiled = ['index.js', 'engine.js', 'lmdb/index.js', 'sqlite/index.js', 'sqlite/database.js', 'sqlite/query.js']
-report = {'protocol': 'ears-sustained-write-watch/1', 'source': source, 'completed': False,
+report = {'protocol': 'ears-sustained-admission-watch/1' if args.admission else 'ears-sustained-write-watch/1', 'source': source, 'completed': False,
           'qualification': False, 'limits': limits, 'seconds': 60, 'tasks': 20000, 'trials': 3,
-          'acknowledgment': 'durable', 'heartbeatLimitMs': 16,
+          'acknowledgment': 'durable', 'heartbeatLimitMs': 16, 'schemaMode': 'admission' if args.admission else 'stable',
           'scope': 'Synthetic sustained built-package write/watch comparison; not renderer/search/provider or complete app resource qualification',
           'enginePin': (repo / 'vendor/elmdb.rev').read_text().strip(),
           'compiledInputs': {name: hashlib.sha256((repo / 'packages/apack-ears/dist' / name).read_bytes()).hexdigest() for name in compiled},
@@ -27,7 +28,7 @@ def finite(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
 save()
 for trial in range(1, 4):
-    for mode in (['none', 'views'] if trial % 2 else ['views', 'none']):
+    for mode in (['views'] if args.admission else ['none', 'views'] if trial % 2 else ['views', 'none']):
         for backend in (['sqlite', 'elmdb'] if trial % 2 else ['elmdb', 'sqlite']):
             name = f'{trial}-{mode}-{backend}'
             record = {'trial': trial, 'mode': mode, 'backend': backend, 'completed': False}
@@ -36,7 +37,7 @@ for trial in range(1, 4):
             started = time.monotonic()
             try:
                 result = subprocess.run(['node', '--experimental-strip-types', 'packages/apack-ears/bench/watch-stress.ts',
-                                         '60', mode, backend, 'durable'], cwd=repo,
+                                         '60', mode, backend, 'durable', 'admission' if args.admission else 'stable'], cwd=repo,
                                         env={**os.environ, 'EARS_WATCH_TASKS': '20000'},
                                         text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180)
                 (args.output / (name + '.stdout')).write_text(result.stdout)
@@ -48,6 +49,20 @@ for trial in range(1, 4):
                 assert value['execution'] == 'built-package' and value['taskCount'] == 20000
                 assert value['requestedSeconds'] == 60 and value['viewMode'] == mode
                 assert value['converged'] is True
+                assert value['schemaMode'] == report['schemaMode']
+                if args.admission:
+                    phase = value['admission']
+                    assert phase['startedAfterMutation'] == 500 and phase['lookupVerified'] is True
+                    assert finite(phase['startOffsetMs']) and finite(phase['declarationMs']) and finite(phase['readyAfterMs'])
+                    assert phase['readyAfterMs'] >= phase['declarationMs']
+                    assert type(phase['foregroundWritesWhilePending']) is int and phase['foregroundWritesWhilePending'] >= 0
+                    assert type(phase['readyDuringWriting']) is bool
+                    phase_beats = phase['heartbeatDelaysMs']
+                    assert isinstance(phase_beats, list) and all(finite(beat) for beat in phase_beats)
+                    phase_p99 = sorted(phase_beats)[math.ceil(len(phase_beats) * .99) - 1] if phase_beats else None
+                    phase['heartbeatP99Ms'] = phase_p99
+                    phase['heartbeatWithinLimit'] = phase_p99 <= 16 if phase_p99 is not None else None
+                    record['admission'] = phase
                 assert finite(value['commitsPerSecond']) and value['commitsPerSecond'] > 0
                 assert finite(value['settledMs']) and finite(value['acknowledgmentMs']['p95'])
                 bindings = value['nativeBindings']

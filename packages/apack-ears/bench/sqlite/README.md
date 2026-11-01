@@ -682,3 +682,17 @@ compiled hashes and numeric outcomes, never stored payloads. Actual execution is
 pending. This does not identify a mid-training phase, test device failure/power
 loss, or cover every worker I/O/resource extreme. No production fault hook or
 storage policy changes.
+
+
+`sqlite-admission-watch` reuses the sustained built-package runner with three fresh
+60-second trials per backend, alternating engine order under the same two-CPU/
+6-GiB/no-swap limits. It holds all three live views and starts ordinary rank-index
+declaration after the 500th durable mutation of a 20k-task store. Reports retain
+declaration/readiness duration, foreground writes while admission is pending,
+readiness-before-writer-stop, whole-run and admission-phase raw heartbeats and final lookup/view convergence. A separate phase heartbeat includes a final synchronous declaration stall, so a short phase cannot be diluted into a 60-second percentile; sub-millisecond phases may have no heartbeat sample and are not counted as passing samples.
+A synchronous or too-fast admission can record zero concurrent writes; that is an
+observation, not invented overlap. Foreground mutations use matched durable units,
+while schema acknowledgment follows each backend’s ordinary default. Original
+16-ms responsiveness limits and failures remain. The recipe is not executed yet;
+it is not representative app/provider, independent-device or complete resource
+qualification. The existing steady-state recipe remains a separate protocol.
