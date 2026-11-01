@@ -14,6 +14,8 @@ import { resetTestData } from '@apackdev/sdk/testing';
 import { _bindEars } from '@apackdev/sdk/ears';
 import { DatabaseSync } from 'node:sqlite';
 import { openDatabaseStore } from '../../../src/database/index.ts';
+import { openDatabase as openSqlite } from '@apackdev/ears/sqlite';
+import { createEarsEngine } from '@apackdev/ears';
 import { registry } from './test-host.ts';
 import { appliedContent, appState } from '../../../src/app-state/index.ts';
 
@@ -177,7 +179,7 @@ describe('installed runtime acceptance', () => {
     }
   });
 
-  it('restores files and preserves generated settings authority after late binding refusal', async () => {
+  it.each(['binding', 'schema'])('restores files and preserves generated settings authority after %s refusal', async refusal => {
     const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
     const id = 'binding-pack';
     const source = path.join(tmpDir, 'source');
@@ -198,6 +200,7 @@ describe('installed runtime acceptance', () => {
       },
     };
     const isolated = createNativePackTestRegistry({ settingsForPack: () => settings });
+    const { database } = openDatabaseStore({ path: path.join(tmpDir, 'admission-store'), storageFormat: 'sqlite/1', schema: isolated });
     const generated = _createPackServices();
     const handle = generated.settingsHandle({ kind: 'app' });
     const registration = { ...loaded.registration, bindServices: generated.bindServices };
@@ -208,10 +211,21 @@ describe('installed runtime acceptance', () => {
     const bus = { send: vi.fn() };
     try {
       writeManifest(source, { id, name: id, version: '2.0.0' });
-      writeBuild(source, id, '{}, bindServices() { throw new Error("late binding refused"); }');
-      await expect(installPackFromLocal(source, packsDir(), { accept: candidate => {
+      writeBuild(source, id, refusal === 'binding'
+        ? '{}, bindServices() { throw new Error("late binding refused"); }'
+        : '{}, bindServices() { return () => {}; }');
+      if (refusal === 'schema') {
+        // A real peer commits another declaration, making this store's handle stale.
+        // Its next schema admission must refuse before replacing runtime authority.
+        const peer = openSqlite({ path: database.path });
+        try { createEarsEngine({ database: peer }).admin.declare({ types: { PeerMarker: { required: [] } }, relations: {}, roles: [] }); }
+        finally { peer.close(); }
+      }
+      const update = installPackFromLocal(source, packsDir(), { accept: candidate => {
         acceptInstalledPack(isolated, candidate.id, bus as never);
-      } })).rejects.toThrow('late binding refused');
+      } });
+      if (refusal === 'schema') await expect(update).rejects.toMatchObject({ code: 'SCHEMA_CHANGED' });
+      else await expect(update).rejects.toThrow('late binding refused');
       expect(readPackBuild(installed.dir)).toEqual(previousBuild);
       const restored = loadSingleExternalPack(registry, installed.dir);
       expect(restored).not.toHaveProperty('problem');
@@ -226,6 +240,9 @@ describe('installed runtime acceptance', () => {
       expect(bus.send).not.toHaveBeenCalled();
       expect(isolated.loadProblem(id)).toBeUndefined();
     } finally {
+      database.close();
+      // Join any incorrectly scheduled retirement even when this regression fails.
+      for (const [event] of bus.send.mock.calls) event.afterStop?.();
       if (isolated.getPackRegistration(id)) isolated.unregisterPack(id);
     }
     expect(listeners.size).toBe(0);
