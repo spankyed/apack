@@ -1,0 +1,26 @@
+{
+  "linux-ears.json": {
+    "sha256": "34ebd6d5b68adb3322b3203e094ceec8ce59fd96f09bcbf0aca62a0cdcdd66f1",
+    "bytes": 304450
+  },
+  "linux-verification.json": {
+    "sha256": "32c1324ca4b54b4109343da7e801323efcd01b09e0e686d8522150065d1687a1",
+    "bytes": 1756
+  },
+  "macos-ears.json": {
+    "sha256": "a6ddb91d1fc075785a4daea25bb25b4726bb4f45b71adf64c3c2677767cf3a49",
+    "bytes": 304507
+  },
+  "macos-verification.json": {
+    "sha256": "b1142c2988459954d082bde8e50377beddf6ff6a935e23f3cc80281739b753f0",
+    "bytes": 1387
+  },
+  "windows-ears.json": {
+    "sha256": "c317a6768211600668e89bc096283380439b5a2a1a4617733b818075b5e720a5",
+    "bytes": 303094
+  },
+  "windows-verification.json": {
+    "sha256": "a77650af7f45c6d1427529e37b0ce155901d6db0671580354d6904d4a522d277",
+    "bytes": 1387
+  }
+}
