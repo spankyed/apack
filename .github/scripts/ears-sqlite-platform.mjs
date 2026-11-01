@@ -182,6 +182,8 @@ if (mode === 'verify') {
     'waits for accepted reload indexes before hooks or actor restart (failure: true)',
     'installed runtime acceptance restores files and preserves generated settings authority after binding refusal',
     'installed runtime acceptance restores files and preserves generated settings authority after schema refusal',
+    'installed runtime acceptance refuses registration inside a real write unit without losing staged writes (elmdb/1)',
+    'installed runtime acceptance refuses registration inside a real write unit without losing staged writes (sqlite/1)',
   ];
   const hostReadiness = host.testResults.flatMap(file => file.assertionResults).filter(test => requiredReadiness.includes(test.fullName));
   requirePassingCases(hostReadiness, requiredReadiness, 'Pack readiness ownership and lifecycle');

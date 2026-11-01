@@ -785,7 +785,9 @@ jobs:
           assert.equal(packReadiness.numFailedTests,0,'Pack readiness/admission contracts must pass before model qualification');
           const packCases=packReadiness.testResults.flatMap(file=>file.assertionResults);
           for(const name of ['installed runtime acceptance restores files and preserves generated settings authority after binding refusal',
-            'installed runtime acceptance restores files and preserves generated settings authority after schema refusal']) {
+            'installed runtime acceptance restores files and preserves generated settings authority after schema refusal',
+            'installed runtime acceptance refuses registration inside a real write unit without losing staged writes (elmdb/1)',
+            'installed runtime acceptance refuses registration inside a real write unit without losing staged writes (sqlite/1)']) {
             const found=packCases.filter(test=>test.fullName===name);
             assert.equal(found.length,1,`Missing or duplicate pack admission witness: ${name}`);
             assert.equal(found[0].status,'passed',name);
