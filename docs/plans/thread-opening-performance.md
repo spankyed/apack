@@ -1,6 +1,6 @@
 # Thread-opening performance
 
-Status: approved for execution, 2026-10-31. Baseline code: merged master `8e2d334e2b`;
+Status: paused at the user’s request after completed Docker preparation, 2026-10-31. Baseline code: merged master `8e2d334e2b`;
 native pin `1849f6899e3d707ac8e25e7f81fa52b472b2a9a0`.
 
 ## Outcome and scope
@@ -86,3 +86,40 @@ initial notification and the existing update checks. The predicted opportunity i
 pre-editor reads (442 ms of the old profile's truncation ancestry, about 22 ms per captured action).
 Only an unprofiled comparison can establish the actual saving. Verify controls are settled at the
 stronger completion boundary and after paint; reject a result that merely shifts required work.
+
+## Paused checkpoint
+
+- Worktree: `/private/tmp/apack-performance-optimization.noindex`; branch
+  `session/thread-opening-performance`. Runtime candidate commit: `35da6ecab3`.
+- No Docker job remains running. Both preparation runs completed; nothing was cancelled.
+- The frozen independent app baseline is in owned volume `apack-linux-work-2bd9183070f1`, at
+  `/work/.apack/performance/thread-baseline-8b6e43317e`. It still has original commit `8b6e43317e`
+  and the **old readiness checker**. Its dependencies and generated output are independent copies.
+- The stronger readiness baseline is committed at `15f695db2e`: it changes the test contract and
+  metadata, not the application. Scripts/E2E type checks and focused lint passed. A pure admission
+  check proves old/new runtime readiness contracts cannot be compared.
+- Candidate 1 (`35da6ecab3`) removes only the synchronous `checkTruncation()` at observer
+  registration. Observer and update checks remain. **It has not been benchmarked or accepted.**
+- Native execution uses `APACK_LINUX_ELMDB_ROOT=/private/tmp/apack-performance-elmdb-1849f68`.
+  Keep the existing image, work volume and compiler outputs; do not copy compiler targets.
+- One stale derived `src/__generated__/ears.ts` in the host worktree was repeatedly overwriting
+  Linux's current generated source. It has been refreshed from the main checkout, whose generator
+  inputs are identical; this is ignored derived source, not a runtime API change.
+
+Resume by updating the baseline checkout **only to `15f695db2e`** (fetch that commit from `/work`,
+then detach there), so it retains original runtime behavior with the same stricter harness as the
+candidate. Keep its root/path and installed outputs. Then build the candidate via the maintained
+graph, run a two-trial contract comparison, and run the twenty-trial disabled-recording comparison
+with `scripts/compare-performance-revisions.ts`. Verify all fifty bodies and 25 truncation controls
+in both revisions, apply the unchanged 5%/20 ms acceptance, and retain rejected results.
+
+Owned ignored helpers are under `.apack/`: `prepare-thread-baseline.sh`,
+`prepare-thread-comparison.sh`, `run-thread-ready-probe.sh`, `thread-probe.config.ts`,
+`thread-ready-probe.config.ts`, `thread-probes/`, and `analyze-thread-phases.mjs`. The comparison
+script still needs the explicit baseline checkout update above; it currently prepares the old
+baseline and runs diagnostics only. No accepted paired timing run or new PR exists yet.
+
+Raw reports: volume paths `thread-investigation-8b6e43317e/` and
+`thread-ready-8b6e43317e/` under `.apack/performance`. Host summaries/logs: relative to
+`/private/tmp/`, `apack-thread-phase-attribution.json`, `apack-thread-baseline-phase-counts.json`,
+`apack-thread-baseline-preparation.log`, and `apack-thread-comparison-preparation.log`.
