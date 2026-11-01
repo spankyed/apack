@@ -251,9 +251,10 @@ new value becomes visible after the read. It adds no production fault hook.
 
 The new actual-driver witness compares original component ranks/canonical highlights,
 checks mixed-type limited scopes and vector-only/absent results, and observes that every
-returned highlighted row belongs to a final lexical winner. This is prepared source;
-the recorded paired corpus/strict checkpoint sources predate it. Require targeted type/API/semantic
-qualification and new resource/heartbeat measurements before any performance claim.
+returned highlighted row belongs to a final lexical winner. The [8ee Linux type/API/actual-driver check](../references/evidence/ears-sqlite-implementation-2026-10-28/hybrid-highlights-8ee/README.md)
+passes the original formatting/score/metadata witness; the additional independent-writer
+witness and fresh corpus/final integration checks remain required. The recorded paired
+corpus/strict checkpoints predate this runtime and establish no performance improvement.
 
 ### Native CPU backend investigation
 
