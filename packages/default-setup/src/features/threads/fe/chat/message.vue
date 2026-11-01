@@ -214,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, onUpdated, watch } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
 import InteractionContainer from './interactions/InteractionContainer.vue'
@@ -289,13 +289,12 @@ function checkTruncation() {
 watch(bubbleRef, (el, _prev, onCleanup) => {
   if (!el || !isUser.value) return
   const observer = new ResizeObserver(checkTruncation)
-  // The initial notification measures after layout, avoiding a synchronous read during mount.
   observer.observe(el)
+  checkTruncation()
   onCleanup(() => observer.disconnect())
 }, { immediate: true })
 
-// Delivered message rows are replaced; local truncation renders need no second measurement.
-watch(() => props.message, checkTruncation, { flush: 'post' })
+onUpdated(checkTruncation)
 
 const revertMenuItems = [
   {

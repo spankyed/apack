@@ -1,6 +1,6 @@
 # Thread-opening performance
 
-Status: resumed after rebase onto master `984f1b4aca`, 2026-11-01.
+Status: bounded investigation complete; both runtime candidates rejected. Final harness checks pending, 2026-11-01. Base: master `984f1b4aca`.
 Native pin: `f496470679a7bd9764398108b20f62a73333c701`.
 
 ## Outcome and scope
@@ -154,3 +154,27 @@ size stays fixed; ResizeObserver continues to cover layout, image/font changes a
 Local truncation-state rendering no longer requests another synchronous measurement. Compare
 against the same original baseline and retain the same minimum gain and correctness requirements.
 This is the second and final localized candidate.
+
+## Final runtime disposition
+
+Candidate 2's first full comparison failed during baseline Electron setup, before Playwright
+attachment. Preserve `thread-candidate2-e921d42427/qualification/` as invalid setup evidence, not a
+latency result. One unchanged retry completed all forty measured actions: baseline median
+512.35 ms, candidate 600.00 ms (+87.65 ms, +17.11%). Candidate 2 is rejected. Its diagnostic
+reduced bubble reads to fifty per action (twenty-five at readiness), with all fifty editors and
+25 controls present at and after readiness. Counts alone did not establish a latency saving.
+
+Both runtime candidates are reverted; `message.vue` is byte-identical to master. No streaming
+implementation is affected, so a streaming regression comparison would compare identical runtime
+code and is unnecessary. The useful deliverable is the stricter completion contract, which fixes
+the observed 24/25-controls readiness gap, plus retained negative evidence. Final thread recording
+overhead is being requalified under that contract; historical overhead is not its certificate.
+Do not retry either rejected candidate to obtain a favorable timing, or exceed the two-candidate
+bound by adding another prototype. The repeated setup failure remains a harness limitation: its
+root cause was not established and no deadlines or assertions were changed.
+
+New-pin Linux binding SHA-256: `176e439110468bf2855b836a50d5a0ce7e7c0cdbfd43215eeef2b202546cc463`.
+Raw comparisons remain in owned volume `apack-linux-work-2bd9183070f1` under
+`.apack/performance/thread-resumed-4d3a7f6356/` and
+`.apack/performance/thread-candidate2-e921d42427/`; diagnostic records use
+`thread-ready-e7629acd08/` and `thread-ready-e921d42427/`.
