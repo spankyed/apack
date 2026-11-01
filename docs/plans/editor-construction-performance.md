@@ -1,6 +1,6 @@
 # Editor construction and read-only chat rendering
 
-Status: implementation started. Base: master `461f7bf2cb`; #309 is merged.
+Status: implementation complete; final qualification in progress. Base: master `461f7bf2cb`; #309 is merged.
 
 ## Delivery
 
@@ -66,8 +66,8 @@ cost: minified parser frames still require attribution. Raw profiles remain in o
 `apack-linux-work-220c5d355e10`, under
 `.apack/performance/optimization-baseline-54007b7094/detailed-thread-open/thread-open/B/`.
 
-No runtime candidate is implemented or accepted yet. New timing runs await completion of the
-observed competing host-native heap benchmark; no work has been cancelled.
+No small runtime cache candidate was justified. The dedicated renderer prototype passed the
+latency/allocation thresholds; final-source qualification is tracked below. No work was cancelled.
 
 ## Renderer design
 
@@ -92,3 +92,16 @@ and reference rendering share helpers with the existing editor. No mutable exten
 parser is cached across messages. Extract existing application Markdown rules first, then implement
 the viewer and migrate built-ins together. No small cache candidate is justified merely by the
 upstream option-getter allocation profile; avoid modifying or forking Tiptap internals.
+
+## Final qualification checkpoint
+
+Source `150d30378c` adds real Markdown clipboard parity. Selection diagnostics exposed two missing
+reference boundary markers; the baseline also copies Markdown rather than browser plain text.
+The viewer now uses the existing serializer only on copy, in a temporary detached editor that is
+always destroyed. Rendering still constructs no editor/schema/state/view. Focused UI tests cover
+full rich, partial marked, code and reference copies; all 42 UI cases and UI type checking pass.
+
+Strict run `41346844647` stopped at a stale generated manifest schema; regenerating it added only
+the new read-only adapter declaration. The schema check now passes. Final browser parity and the
+complete acceptance sequence run under `editor-renderer-final-copy-v2`; no prototype percentage
+certifies this source. Required final strict CI follows the stable browser result.
