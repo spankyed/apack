@@ -461,7 +461,8 @@ export class SqliteDatabase implements EarsDatabase {
   }
   /** Imported metadata may reach the representable boundary; never round commit/schema identities. */
   private advanceCounter(name: 'commit' | 'schemaRevision'): number {
-    const current: unknown = this.meta(name) ?? 0;
+    const stored: unknown = this.meta(name);
+    const current = stored === undefined ? 0 : stored;
     if (typeof current !== 'number' || !Number.isSafeInteger(current) || current < 0)
       return fail('CORRUPT', `Invalid ${name} counter`);
     if (current === Number.MAX_SAFE_INTEGER) return fail('NUMBERS_EXHAUSTED', `${name} counter exhausted`);

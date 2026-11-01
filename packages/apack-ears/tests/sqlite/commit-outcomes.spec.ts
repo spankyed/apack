@@ -41,6 +41,19 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite commit 
     } finally { watch.stop(); }
   });
 
+  it.each([{ name: 'null', value: null }, { name: 'numeric text', value: '7' }])(
+    'refuses malformed commit metadata without overwriting it ($name)', ({ value }) => {
+      const { db, e } = open(); e.create('Row', { id: 'Row-before' });
+      db.run('INSERT OR REPLACE INTO meta VALUES (?,?)', ['commit', db.pack(value)]);
+      const original = db.get('SELECT value FROM meta WHERE key=?', ['commit'])!.value;
+      expect(() => e.create('Row', { id: 'Row-refused' }))
+        .toThrow(expect.objectContaining({ code: 'CORRUPT' }));
+      expect(db.sql.inTransaction).toBe(false);
+      expect(e.query('Row').ids()).toEqual(['Row-before']);
+      expect(db.get('SELECT value FROM meta WHERE key=?', ['commit'])!.value).toEqual(original);
+    }
+  );
+
   it.each(['schema', 'bulkLoad'] as const)('rolls back %s when the commit identity is exhausted', operation => {
     const { db, e } = open(); e.create('Row', { id: 'Row-before' });
     db.run('INSERT OR REPLACE INTO meta VALUES (?,?)', ['commit', db.pack(Number.MAX_SAFE_INTEGER)]);

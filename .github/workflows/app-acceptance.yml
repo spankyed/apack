@@ -787,6 +787,8 @@ jobs:
             const report=JSON.parse(readFileSync(`.temp/sqlite-api/${backend}-contracts.json`,'utf8'));
             const cases=report.testResults.flatMap(file=>file.assertionResults);
             const required=[...shared,...(backend==='sqlite'?[
+              'SQLite commit outcome handling refuses malformed commit metadata without overwriting it (null)',
+              'SQLite commit outcome handling refuses malformed commit metadata without overwriting it (numeric text)',
               'SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes',
               'SQLite commit outcome handling rolls back schema when the commit identity is exhausted',
               'SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted',
