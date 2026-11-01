@@ -96,13 +96,30 @@ describe('links', () => {
     const readInfo = () => e.getRelation(first)?.info as { handle: Uint8Array; label: string };
     expect([...readInfo().handle]).toEqual([1]);
     expect(readInfo().label).toBe('updated');
-    for (const info of [null, 1, 'key', [1], new Uint8Array([1])]) {
+    for (const info of [1, 'key', [1], new Uint8Array([1])]) {
       expect(() => e.write(a).link('refs', b, { info })).toThrow(expect.objectContaining({ code: 'FIELD_TYPE' }));
       expect(() => e.updateRelation(first, { info })).toThrow(expect.objectContaining({ code: 'FIELD_TYPE' }));
     }
     expect(e.findRelations()).toHaveLength(5);
     expect([...readInfo().handle]).toEqual([1]);
     expect(readInfo().label).toBe('updated');
+  });
+
+  it('treats null optional relation info as omitted, preserving an existing keyed value', () => {
+    e = engine({ relationRules: { refs: { key: ['handle'] } } });
+    const [a, b] = [task('A'), task('B')];
+    e.write(a).link('refs', b, { info: { handle: 1, label: 'kept' } });
+    const first = e.findRelations()[0].id;
+    e.updateRelation(first, { info: null });
+    expect(e.getRelation(first)?.info).toEqual({ handle: 1, label: 'kept' });
+    e.write(a).link('refs', b, { info: null });
+    const absent = e.findRelations()[1].id;
+    expect(e.getRelation(absent)?.info).toBeUndefined();
+    e.write(a).link('refs', b).link('refs', b, { info: { handle: null, label: 'null key' } });
+    e.write(a).link('refs', b, { info: null });
+    expect(e.findRelations()).toHaveLength(2);
+    expect(e.getRelation(absent)?.info).toEqual({ handle: null, label: 'null key' });
+    expect(e.getRelation(first)?.info).toEqual({ handle: 1, label: 'kept' });
   });
 
   it('refuses options it does not know, which is info passed where the options go', () => {

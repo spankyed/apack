@@ -194,3 +194,9 @@ registrations while Map iteration is forbidden. Actual focused da1636c9ea also p
 subscriber tests on both adapters. Final-source broad and resource qualification remain required. This improves subscription selection only:
 coarse per-type tags may still select many watches, and their rerun cost remains measured by the
 original scheduler/foreground budgets. No responsiveness pass is inferred from the complexity fix.
+
+## Relation-key rebase qualification
+
+Master 984f / elmdb f496 identifies edges by kind, ends and declared info key fields. SQLite now follows relink replacement, omitted-field preservation, map/list/byte key equality and DUPLICATE_EDGE update refusal, and audits unchecked collisions without repairing them. Normal optional relation `info: null` follows native `Option<Value>` decoding and means omitted; nested `{key: null}` remains a key value. Raw imported scalar keyed info is diagnosed by audit. Between lookups use `(source,kind,target,seq)`.
+
+The [091 focused receipt](../references/evidence/ears-sqlite-implementation-2026-10-28/relation-focused-091/README.md) identifies a model coverage gap: previous harnesses opened elmdb even under SQLite selection. Those reports do not establish SQLite model behavior. Current source selects and witnesses the real backend while preserving master's independent bootstrap-copy setup; its SQLite random/watch workloads need fresh driver qualification. No model acceptance is inferred from a green native run or an environment variable alone.

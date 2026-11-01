@@ -960,21 +960,23 @@ export class SqliteDatabase implements EarsDatabase {
       }
       case "link": {
         const def = this.relationDefinition(op.kind);
+        // Native optional info treats null as omitted. Keep that contract at the structured boundary too.
+        const info = op.info ?? undefined;
         const matching = this.all(
           "SELECT * FROM relations WHERE kind=? AND source=? AND target=? ORDER BY seq",
           [op.kind, op.source, op.target]
         );
-        checkRelationKeyInfo(def.key ?? [], op.info);
+        checkRelationKeyInfo(def.key ?? [], info);
         const weight = relationWeight(!!def.weighted, op.kind, op.weight);
         const existing = matching.find(r => sameRelationKey(def.key ?? [],
-          r.info === null ? undefined : this.unpack(r.info), op.info));
+          r.info === null ? undefined : this.unpack(r.info), info));
         if (existing) {
-          const sameInfo = op.info === undefined || (existing.info !== null &&
-            sameStoredValue(this.unpack(existing.info), op.info));
+          const sameInfo = info === undefined || (existing.info !== null &&
+            sameStoredValue(this.unpack(existing.info), info));
           const sameWeight = op.weight === undefined ||
             (existing.weight === null ? 1 : this.unpack(existing.weight)) === (weight ?? 1);
           if (!sameInfo || !sameWeight)
-            this.mutate({ op: 'updateRelation', relation: existing.id, info: op.info, weight: op.weight }, now, changes);
+            this.mutate({ op: 'updateRelation', relation: existing.id, info: info, weight: op.weight }, now, changes);
           return { kind: 'relation', id: existing.id, linked: false };
         }
         if (op.source === op.target) fail('SELF_LINK', 'A self link is refused');
@@ -987,7 +989,7 @@ export class SqliteDatabase implements EarsDatabase {
           op.source,
           op.target,
           this.next("seq"),
-          op.info === undefined ? null : this.pack(op.info),
+          info === undefined ? null : this.pack(info),
           weight === undefined ? null : this.pack(weight),
         ]);
         changes.add(`relation:${id}`);
@@ -1028,8 +1030,9 @@ export class SqliteDatabase implements EarsDatabase {
           target = op.target ?? r.target;
         const definition = this.relationDefinition(r.kind);
         const key = definition.key ?? [];
-        checkRelationKeyInfo(key, op.info);
-        const info = op.info === undefined ? r.info : op.info;
+        const providedInfo = op.info ?? undefined;
+        checkRelationKeyInfo(key, providedInfo);
+        const info = providedInfo === undefined ? r.info : providedInfo;
         if (source !== r.source || target !== r.target || !sameRelationKey(key, r.info, info)) {
           const duplicate = this.all('SELECT id,info FROM relations WHERE kind=? AND source=? AND target=? AND id<>? ORDER BY seq',
             [r.kind, source, target, r.id]).find(other => sameRelationKey(key,
@@ -1050,11 +1053,11 @@ export class SqliteDatabase implements EarsDatabase {
           source,
           target,
           source !== r.source || target !== r.target ? this.next('seq') : this.get('SELECT seq FROM relations WHERE id=?', [r.id])!.seq,
-          op.info === undefined
+          providedInfo === undefined
             ? r.info === null
               ? null
               : this.pack(r.info)
-            : this.pack(op.info),
+            : this.pack(providedInfo),
           op.weight === undefined ? weight : weight === undefined ? null : this.pack(weight),
           r.id,
         ]);

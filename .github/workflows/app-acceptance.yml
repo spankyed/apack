@@ -465,6 +465,8 @@ jobs:
           npm test -w @app/repo-checks -- tests/subprocess-inventory.spec.ts tests/chain-inputs.spec.ts --maxWorkers 2
           --reporter=default --reporter=json --outputFile=../../.temp/sqlite-api/subprocess-inventory.json
           2>&1 | tee .temp/sqlite-api/subprocess-inventory.log
+      - name: Typecheck candidate source and contract tests
+        run: npm run typecheck -w @apackdev/ears
       - name: Focused shared graph, observation and search contracts on both backends
         run: |
           set -o pipefail
@@ -492,6 +494,38 @@ jobs:
             fi
           done
           exit "$failed"
+      - name: Require real backend model and relation key witnesses
+        if: ${{ !cancelled() }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const summary=[];
+          const shared=[
+            'runs the model against the selected real backend and independent empty stores',
+            'links treats null optional relation info as omitted, preserving an existing keyed value',
+            'links keeps keyed bytes, lists and own map fields distinct, and refuses scalar keyed info atomically',
+            'links a keyed kind joins two ends by one edge per value of its key, a field the info lacks being null',
+          ];
+          for(const backend of ['elmdb','sqlite']) {
+            const report=JSON.parse(readFileSync(`.temp/sqlite-api/${backend}-contracts.json`,'utf8'));
+            const cases=report.testResults.flatMap(file=>file.assertionResults);
+            const required=[...shared,...(backend==='sqlite'?[
+              'restored logical stores audits unchecked duplicate edge identities and invalid keyed info without repairing them',
+              ...['obsolete relation unique','duplicate relation key','invalid relation key name','non-map relation key'].map(name=>`SQLite structural schema admission refuses '${name}' before changing data, layouts, indexes or revision`),
+            ]:[])];
+            for(const name of required) {
+              const found=cases.filter(test=>test.fullName===name);
+              assert.equal(found.length,1,`${backend}: missing or duplicated witness: ${name}`);
+              assert.equal(found[0].status,'passed',`${backend}: ${name}`);
+            }
+            const model=report.testResults.filter(file=>file.name.replaceAll('\\','/').endsWith('/tests/engine/model-based.spec.ts')).flatMap(file=>file.assertionResults);
+            assert(model.length>=3,`${backend}: model cases must execute`);
+            for(const test of model)assert.equal(test.status,'passed',`${backend}: ${test.fullName}`);
+            summary.push({backend,required,modelCases:model.map(test=>test.fullName),passed:true});
+          }
+          writeFileSync('.temp/sqlite-api/relation-model-witnesses.json',JSON.stringify(summary,null,2)+'\n');
+          JS
       - name: Require all declared real-content relevance judgments
         run: |
           node --input-type=module <<'JS'
