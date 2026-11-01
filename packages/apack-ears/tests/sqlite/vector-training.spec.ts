@@ -65,6 +65,26 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(db.sequence).toBe(sequence+1);
   });
 
+  it.each([1, 4])('refuses a malformed derived vector in the real worker and retries after repair (%i bytes)', async bytes => {
+    const { db, trainer, job } = fixture(), sequence = db.sequence;
+    const canonical = db.all('SELECT * FROM embedding_values ORDER BY id');
+    const row = canonical[0]!;
+    // Corrupt only the rebuildable projection. The real SQLite/native aggregate must report failure;
+    // no worker message, SQL method or extension error is mocked in this case.
+    db.run('UPDATE embedding_search SET normalized=? WHERE embedding_id=?', [Buffer.alloc(bytes), row.id]);
+    await expect(trainer.train(job)).rejects.toMatchObject({ code: 'SQLITE_ERROR' });
+    expect(db.sequence).toBe(sequence);
+    expect(db.all('SELECT * FROM embedding_values ORDER BY id')).toEqual(canonical);
+    expect(db.get("SELECT 1 FROM sqlite_schema WHERE type='table' AND name GLOB 'ann_[0-9]*'")).toBeUndefined();
+    // Rebuild that projection from its authoritative bytes, then reuse the drained trainer.
+    db.search.vectors.put(row.id, row.embedding, row.dims);
+    const result = await trainer.train(job);
+    expect(result.samples).toBe(512);
+    expect(result.modelSha256).toBe(createHash('sha256').update(result.model).digest('hex'));
+    expect(db.sequence).toBe(sequence);
+    expect(db.all('SELECT * FROM embedding_values ORDER BY id')).toEqual(canonical);
+  });
+
   it('rejects stale work after declaration changes without installing it',async()=>{
     const {db,e,trainer,job}=fixture();
     const gate=control.gate=new SharedArrayBuffer(8);

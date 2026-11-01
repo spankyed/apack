@@ -18,6 +18,8 @@ function requirePassingCases(cases, required, label) {
   for (const name of required) assert.equal(named.get(name)?.status, 'passed', `${label}: required case must execute: ${name}`);
   for (const test of cases) assert.equal(test.status, 'passed', `${label}: selected case must pass: ${test.fullName}`);
 }
+const requiredWorkerCorruptionCases = [1, 4].map(bytes =>
+  `native vector training ownership refuses a malformed derived vector in the real worker and retries after repair (${bytes} bytes)`);
 const requiredLibraryIndexCases = [
   "the library search index indexes a folder's documents and its subfolders', pending until embedded, then searches them",
   "the library search index leaves out excluded subfolders and documents outside the folder",
@@ -247,6 +249,8 @@ if (mode === 'verify') {
     file.assertionResults.some(test => test.status === 'passed' &&
       test.fullName.endsWith('recovers a durable training attempt after its process is killed without draining'))),
     'Abrupt owner-process death recovery must execute');
+  const trainingCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts') ? file.assertionResults : []);
+  requirePassingCases(trainingCases, requiredWorkerCorruptionCases, 'Native worker corruption and retry');
   const graphAlgorithmCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/graph-algorithms.spec.ts') ? file.assertionResults : []);
   requirePassingCases(graphAlgorithmCases, requiredGraphAlgorithmCases, 'Graph algorithms');
   assert.equal(passedIn(ears, /\/tests\/sqlite\/community-core\.spec\.ts$/), 5,
