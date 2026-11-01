@@ -459,8 +459,10 @@ jobs:
           const required=['runs the model against the selected real backend and independent empty stores',
             'refuses, holds and answers what the model does',
             'keeps every watch at what its read answers afresh, after every write, whatever wrote'];
-          assert.equal(cases.length,required.length);
+          assert(cases.length>=required.length);
+          assert.equal(new Set(cases.map(test=>test.fullName)).size,cases.length);
           for(const name of required)assert(cases.some(test=>test.fullName===name&&test.status==='passed'),name);
+          for(const test of cases)assert.equal(test.status,'passed',test.fullName);
           assert.equal(report.numFailedTests,0);assert.equal(report.numPendingTests,0);
           const paths=['packages/apack-ears/tests/engine/model-based.spec.ts','packages/apack-ears/tests/_harness/model.ts','packages/apack-ears/tests/_harness/workload.ts','packages/apack-ears/vitest.config.ts','package-lock.json'];
           writeFileSync('.temp/sqlite-model-windows/receipt.json',JSON.stringify({source:process.env.GITHUB_SHA,

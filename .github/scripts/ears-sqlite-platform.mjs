@@ -18,6 +18,12 @@ function requirePassingCases(cases, required, label) {
   for (const name of required) assert.equal(named.get(name)?.status, 'passed', `${label}: required case must execute: ${name}`);
   for (const test of cases) assert.equal(test.status, 'passed', `${label}: selected case must pass: ${test.fullName}`);
 }
+const requiredLibraryIndexCases = [
+  "the library search index indexes a folder's documents and its subfolders', pending until embedded, then searches them",
+  "the library search index leaves out excluded subfolders and documents outside the folder",
+  "the library search index holds an edited document's chunk pending, and finds it by its new text once embedded",
+  "the library search index splits a list into a chunk per item under a separate rule"
+];
 const requiredGraphAlgorithmCases = [
   "SQLite graph algorithms refuses malformed and coerced weighted seeds even when their entity is outside the graph",
   "SQLite graph algorithms handles a long directed chain and cycle without recursive stack growth",
@@ -204,7 +210,8 @@ if (mode === 'verify') {
   assert.equal(result.sdkBackendCasesPassed,2,'Both SDK fixture stores must use SQLite');
   assert.equal(sdkBackend.numFailedTests,0);
   assert.equal(result.queryWorkCasesPassed,5,'All current app repository query contracts must execute on SQLite');
-  assert.equal(result.libraryIndexCasesPassed,4,'All Library embedding/search-index lifecycle cases must execute on SQLite');
+  const libraryIndexCases=queryWork.testResults.flatMap(file=>/\/tests\/features\/library\/be\/search-index\.spec\.ts$/.test(file.name.replaceAll('\\','/'))?file.assertionResults:[]);
+  requirePassingCases(libraryIndexCases,requiredLibraryIndexCases,'Library embedding/search-index lifecycle');
   assert.equal(queryWork.numFailedTests,0);
   if(sdkAll){
     assert(sdkAll.numPassedTests>=1320&&sdkAll.numFailedTests===0&&sdkAll.numPendingTests===0,'Complete prepared SDK contracts must execute on SQLite');
