@@ -18,8 +18,14 @@ function requirePassingCases(cases, required, label) {
   for (const name of required) assert.equal(named.get(name)?.status, 'passed', `${label}: required case must execute: ${name}`);
   for (const test of cases) assert.equal(test.status, 'passed', `${label}: selected case must pass: ${test.fullName}`);
 }
-const requiredWorkerCorruptionCases = [1, 4].map(bytes =>
-  `native vector training ownership refuses a malformed derived vector in the real worker and retries after repair (${bytes} bytes)`);
+const requiredTrainingCases = [
+  'yields the foreground, preserves logical commits and returns an installable identified model',
+  'rejects stale work after declaration changes without installing it',
+  'serializes workers, drains cancellation and permits a fresh attempt',
+  'rejects close and drains the worker before fixture cleanup',
+  'refuses foreground transaction ownership and insufficient input without poisoning the database',
+  ...[1, 8].map(bytes => `refuses a malformed derived vector in the real worker and retries after repair (${bytes} bytes)`),
+].map(title => `native vector training ownership ${title}`);
 const requiredLibraryIndexCases = [
   "the library search index indexes a folder's documents and its subfolders', pending until embedded, then searches them",
   "the library search index leaves out excluded subfolders and documents outside the folder",
@@ -243,14 +249,13 @@ if (mode === 'verify') {
   assert.equal(result.nativeOwnerCasesPassed,3,'All cross-process native service ownership cases must execute');
   assert.equal(result.nativePackageCasesPassed,5,'All ordinary package loading/integrity cases must execute');
   assert.equal(result.nativeGenerationCasesPassed,10,'All native generation lifecycle cases must execute');
-  assert.equal(result.nativeTrainingCasesPassed,5,'All native worker ownership cases must execute');
   assert.equal(result.nativeModelCasesPassed,36,'All durable native model admission cases must execute');
   assert(ears.testResults.some(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-models.spec.ts') &&
     file.assertionResults.some(test => test.status === 'passed' &&
       test.fullName.endsWith('recovers a durable training attempt after its process is killed without draining'))),
     'Abrupt owner-process death recovery must execute');
   const trainingCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts') ? file.assertionResults : []);
-  requirePassingCases(trainingCases, requiredWorkerCorruptionCases, 'Native worker corruption and retry');
+  requirePassingCases(trainingCases, requiredTrainingCases, 'Native worker ownership, corruption and retry');
   const graphAlgorithmCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/graph-algorithms.spec.ts') ? file.assertionResults : []);
   requirePassingCases(graphAlgorithmCases, requiredGraphAlgorithmCases, 'Graph algorithms');
   assert.equal(passedIn(ears, /\/tests\/sqlite\/community-core\.spec\.ts$/), 5,

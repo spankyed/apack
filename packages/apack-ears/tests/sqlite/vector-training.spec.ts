@@ -65,7 +65,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(db.sequence).toBe(sequence+1);
   });
 
-  it.each([1, 4])('refuses a malformed derived vector in the real worker and retries after repair (%i bytes)', async bytes => {
+  it.each([1, 8])('refuses a malformed derived vector in the real worker and retries after repair (%i bytes)', async bytes => {
     const { db, trainer, job } = fixture(), sequence = db.sequence;
     const canonical = db.all('SELECT * FROM embedding_values ORDER BY id');
     const row = canonical[0]!;

@@ -204,7 +204,7 @@ Use `/private/tmp/ears-sqlite-query-integration`, detached HEAD published to `se
 
 ### Live validation and next closing checks
 
-- New actual-worker corruption tests inject one-byte and wrong-dimension derived normalized vectors, require native SQL refusal without canonical/commit/index mutation, repair from canonical bytes and retry the drained trainer. Both named cases are required in the next full platform receipt. They are source-only and not executed yet; broader worker I/O/storage/resource fault acceptance remains open. Current corpus source and measurement inputs are unchanged.
+- New actual-worker corruption tests inject one-byte and valid-sized two-dimension derived normalized vectors into a 128-dimension generation, require native SQL refusal without canonical/commit/index mutation, repair from canonical bytes and retry the drained trainer. All seven training cases are named requirements in the next full platform receipt, replacing the stale exact-five count. They are source-only and not executed yet; broader worker I/O/storage/resource fault acceptance remains open. Current corpus source and measurement inputs are unchanged.
 
 - Managed corpus run [41293093217](https://github.com/spankyed/apack/actions/runs/41293093217), source `cd4aaa8bfa`, is live with the corrected streaming safeguard and three sampled reopen passes. It retains production ANN settings, all original 1,800 reference cases and 16ms/100ms/200ms budgets. Observe this handle; preserve complete safeguards, timing/recall/resource/reopen and cleanup receipts before further dispatch. New preflight/reopen execution is not yet qualified.
 
