@@ -39,7 +39,8 @@ export async function createWarmScenario<F extends { identity: PerformanceManife
   await appPage.evaluate(installViewCompletion);
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
   const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups: 5, cache: 'warm-process',
-    runtime: { ...runtime, performancePolicy: performanceExecutionPolicy(comparison) } });
+    runtime: { ...runtime, performancePolicy: performanceExecutionPolicy(comparison),
+      ...(scenario === 'thread-open' && { threadReadiness: 'full-bodies-and-user-truncation-v1' }) } });
   const journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
   const directory = mkdtempSync(path.join(tmpdir(), 'apack-performance-fixture-'));
   return {

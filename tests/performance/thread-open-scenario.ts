@@ -49,7 +49,11 @@ export async function threadOpenScenario({ app, appPage, electronApp }: Paramete
                 && shown.every(element => element && element.getClientRects().length > 0)
                 && new Set(indices).size === 50 && indices.every(value => value >= 50 && value < 100)
                 && shown.every((element, at) => element!.textContent?.includes(expectedBodies[indices[at]! - 50]!));
-              if (!readyPage || fault === 'missing-completion') return false;
+              work.expectedTruncatedMessages = 25;
+              work.truncatedMessages = shown.filter((element, at) => indices[at]! % 2 === 0
+                && element?.textContent?.includes('Click to view')).length;
+              // These fixture users all overflow: the first usable page includes their collapse controls.
+              if (!readyPage || work.truncatedMessages !== work.expectedTruncatedMessages || fault === 'missing-completion') return false;
               const ready = action.within(() => recording.begin('app.view.ready', {
                 'app.generation': lastDelivery?.subscription ?? 'disabled', 'app.delivery': lastDelivery?.delivery ?? 0,
                 'app.commit': lastDelivery?.commit ?? 0, 'app.result_count': context.chatMessageIds.length,

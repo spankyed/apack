@@ -58,3 +58,31 @@ documentation-only edits do not require another broad run. Finish with a correct
 review, fix material findings, and deliver a committed/pushed PR with compact source-qualified
 measurements, exact provenance, limitations and required strict CI. Keep raw reports/probes in the
 owned ignored report volume. No merge is included in this work.
+
+## Initial findings and comparison contract
+
+The earlier twenty detailed renderer captures are reusable for attribution: the lockfile, Tiptap
+source and chat source are identical between `54007b7094` and this baseline. Their 17.05 seconds
+of elapsed sampling include program/idle/GC. Application truncation ancestors account for 988 ms;
+the 1,722 ms in `getClientRects` belong to the readiness checker. Those are not application-widget
+measurements. Editor setup ancestors contain 908.6 MB of the 1,719.0 MB allocation sample; phase
+ancestry can overlap and is not retained heap.
+
+A diagnostic-only seven-action run produced fifty message editor roots per action and exactly
+25 bubble reads before editor DOM existed. Total bubble reads ranged from 76 to 100. A second
+probe found the existing completion boundary consistently had only 24/25 user truncation controls;
+the remaining control could arrive after completion. Raw records remain in the owned report volume
+under `thread-investigation-8b6e43317e/` and `thread-ready-8b6e43317e/`. These are contract probes,
+not timing qualifications.
+
+Before changing runtime behavior, strengthen thread completion to require all 25 long user bubbles'
+controls as well as fifty complete bodies. Declare runtime contract
+`threadReadiness=full-bodies-and-user-truncation-v1`; existing manifest compatibility compares the
+entire runtime record, so older readiness protocols cannot be pooled with it. Both revisions in the
+performance comparison must use this stricter contract. Trial counts and deadlines stay unchanged.
+
+Candidate 1 removes the synchronous measurement at observer registration, retaining the observer's
+initial notification and the existing update checks. The predicted opportunity is the redundant
+pre-editor reads (442 ms of the old profile's truncation ancestry, about 22 ms per captured action).
+Only an unprofiled comparison can establish the actual saving. Verify controls are settled at the
+stronger completion boundary and after paint; reject a result that merely shifts required work.
