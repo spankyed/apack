@@ -1,0 +1,42 @@
+{
+  "protocol": "ears-real-filesystem-readonly/1",
+  "source": "a9027400bf051cd301304dc46471c0a2fb8979c9",
+  "completed": true,
+  "qualification": false,
+  "scope": "CI-host Linux read-only bind mount, independent live WAL reader; not arbitrary filesystem or power-loss certification",
+  "filesystem": {
+    "options": "ro,relatime",
+    "filesystem": "ext4",
+    "kernelWriteError": "EROFS"
+  },
+  "reader": {
+    "phase": "pinned",
+    "count": 1,
+    "filesystem": {
+      "options": "ro,relatime",
+      "filesystem": "ext4",
+      "kernelWriteError": "EROFS"
+    },
+    "applicationWriteError": "READ_ONLY",
+    "driverWriteError": "SQLITE_READONLY"
+  },
+  "writerCount": 17,
+  "walBytesWhilePinned": 1355512,
+  "blockedCheckpoint": {
+    "busy": 1,
+    "log": 329,
+    "checkpointed": 0
+  },
+  "released": {
+    "phase": "released",
+    "retainedCount": 1,
+    "currentCount": 17
+  },
+  "readerExited": true,
+  "finalCheckpoint": {
+    "busy": 0,
+    "log": 0,
+    "checkpointed": 0
+  },
+  "walBytesAfterRelease": 0
+}

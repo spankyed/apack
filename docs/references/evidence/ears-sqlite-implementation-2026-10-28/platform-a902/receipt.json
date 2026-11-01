@@ -124,7 +124,30 @@
           "status": "passed"
         }
       ],
-      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9"
+      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9",
+      "independentModelCases": [
+        {
+          "name": "runs the model against the selected real backend and independent empty stores",
+          "status": "passed"
+        },
+        {
+          "name": "refuses, holds and answers what the model does",
+          "status": "passed"
+        },
+        {
+          "name": "keeps every watch at what its read answers afresh, after every write, whatever wrote",
+          "status": "passed"
+        }
+      ],
+      "selectedVerification": {
+        "libraryIndexCasesPassed": 4,
+        "queryWorkCasesPassed": 5,
+        "profileConversionChecks": 5,
+        "nativeTrainingCasesPassed": 9,
+        "nativeModelCasesPassed": 36,
+        "databaseIdentityCasesPassed": 19
+      },
+      "relationAuditCasesPassed": 4
     },
     {
       "platform": "macOS-ARM64",
@@ -247,7 +270,30 @@
           "status": "passed"
         }
       ],
-      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9"
+      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9",
+      "independentModelCases": [
+        {
+          "name": "runs the model against the selected real backend and independent empty stores",
+          "status": "passed"
+        },
+        {
+          "name": "refuses, holds and answers what the model does",
+          "status": "passed"
+        },
+        {
+          "name": "keeps every watch at what its read answers afresh, after every write, whatever wrote",
+          "status": "passed"
+        }
+      ],
+      "selectedVerification": {
+        "libraryIndexCasesPassed": 4,
+        "queryWorkCasesPassed": 5,
+        "profileConversionChecks": 5,
+        "nativeTrainingCasesPassed": 9,
+        "nativeModelCasesPassed": 36,
+        "databaseIdentityCasesPassed": 19
+      },
+      "relationAuditCasesPassed": 4
     },
     {
       "platform": "Windows-X64",
@@ -375,7 +421,30 @@
           "status": "passed"
         }
       ],
-      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9"
+      "verificationSource": "a9027400bf051cd301304dc46471c0a2fb8979c9",
+      "independentModelCases": [
+        {
+          "name": "runs the model against the selected real backend and independent empty stores",
+          "status": "passed"
+        },
+        {
+          "name": "refuses, holds and answers what the model does",
+          "status": "passed"
+        },
+        {
+          "name": "keeps every watch at what its read answers afresh, after every write, whatever wrote",
+          "status": "passed"
+        }
+      ],
+      "selectedVerification": {
+        "libraryIndexCasesPassed": 4,
+        "queryWorkCasesPassed": 5,
+        "profileConversionChecks": 5,
+        "nativeTrainingCasesPassed": 9,
+        "nativeModelCasesPassed": 36,
+        "databaseIdentityCasesPassed": 19
+      },
+      "relationAuditCasesPassed": 4
     }
   ]
 }
