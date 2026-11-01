@@ -86,8 +86,8 @@ export interface EarsDatabase {
   withExclusiveWrites<T>(operation: () => Promise<T>): Promise<T>;
   /** Observers must not inherit a maintenance caller's authority to mutate a database. */
   withoutWriteAuthority<T>(operation: () => T): T;
-  /** Resolves when declared logical index generations are ready; optional model training has its own wait. Call outside write units; rejects if indexing cannot complete. */
-  indexesReady(): Promise<void>;
+  /** Resolves when declared logical index generations are ready; optional types scope admission to those owners. Scoped waits reject superseded generations. Optional model training has its own wait. Call outside write units; rejects if indexing cannot complete. */
+  indexesReady(types?: readonly string[]): Promise<void>;
   /** Backend visibility changes after a derived generation commits; no new logical commit is invented. */
   onIndexesChanged?(listener: (changes: Changes) => void): () => void;
   /** Terminal background shutdown before close/removal. Once begun, new writes refuse until reopen. */

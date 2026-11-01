@@ -473,6 +473,7 @@ it.each([false, true])('waits for accepted reload indexes before hooks or actor 
     { lifecycle: { onInit: 'init.ts#onInit' } });
   const pending = reloadPackById(registry, PACK_ID, bus as never);
   try {
+    expect(readiness).toHaveBeenCalledWith(PACK_ID);
     expect(fs.existsSync(marker)).toBe(false);
     expect(shutdown).not.toHaveBeenCalled();
     expect(bus.send.mock.calls.map(([event]) => event.type)).not.toContain('RELOAD_PACK');

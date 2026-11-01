@@ -232,9 +232,14 @@ refuse connection reuse while allowing explicit close/reopen. Actual Linux tmpfs
 allocator control preserve SQLITE_FULL, incumbent data/sequence/watch state and recovery after capacity returns.
 These controls do not settle arbitrary COMMIT IOERR ambiguity or physical durability; those retain phase 6 scope.
 
-Readiness currently waits on the entire database's active generation catalog. Qualification must also cover an
-unrelated failed retained index while another pack starts: avoiding unnecessary global availability failures
-belongs to complete live-pack admission, not a completed consequence of the new async startup boundary.
+Global readiness waits on the entire active generation catalog for boot/reset/whole-store maintenance.
+Single-pack activation and reload instead include that pack's entity types, its transitive dependency declarations
+(including admitted declarations without a running runtime), and common SDK/host types. Unrelated retained
+failures remain visible to global waits without blocking the scoped admission. The database snapshots scoped
+generation identities and rejects `CANCELLED` when they retire or change while waiting, rather than silently
+accepting a replacement. Closed/stale/open-unit/fatal-owner refusals still apply, including empty scopes.
+Real-store unrelated-failure and generation-replacement regressions plus registry ownership and actual lifecycle
+forwarding checks are implemented; disposable CI and complete integrated live-pack qualification remain pending.
 
 Canonical cosine scoring uses the already loaded, application-owned vec1 kernel when that connection has one, and sqlite-vec otherwise. Both consume the same canonical/safe derived direction and the same normalized query; primary bytes, membership filters, owner aggregation, ANN budgets and tie-breaking policy stay unchanged. This deliberately permits existing Float32 kernel rounding differences, rather than requiring bitwise score identity across kernels. Independent Float64 compatibility at 1–1536 dimensions, magnitude extremes and odd lengths is required through public fallback/native reads; supported-platform and real-corpus recall/responsiveness gates still apply. The initial matched synthetic scan diagnostic is an optimization lead, not a full-query performance claim.
 

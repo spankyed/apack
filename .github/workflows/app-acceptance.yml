@@ -733,6 +733,12 @@ jobs:
           npm run typecheck -w @apackdev/ears
           node_modules/.bin/oxlint packages/apack-ears/src/sqlite/database.ts \
             packages/apack-ears/tests/sqlite/relation-audit.spec.ts native/vectors/distance-kernel.mjs -D correctness
+      - name: Scoped pack readiness and lifecycle contracts
+        run: >-
+          npm test -w @apackdev/host -- tests/packs/registration.spec.ts
+          tests/packs/runtime/lifecycle.spec.ts tests/packs/runtime/reload.spec.ts
+          --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.temp/sqlite-api/pack-readiness.json
+          2>&1 | tee .temp/sqlite-api/pack-readiness.log
       - name: Focused shared graph, observation and search contracts on both backends
         run: |
           set -o pipefail
@@ -787,6 +793,9 @@ jobs:
             const report=JSON.parse(readFileSync(`.temp/sqlite-api/${backend}-contracts.json`,'utf8'));
             const cases=report.testResults.flatMap(file=>file.assertionResults);
             const required=[...shared,...(backend==='sqlite'?[
+              'yielding value-index admission admits a healthy type despite an unrelated failed retained index while global readiness still refuses',
+              'yielding value-index admission rejects scoped readiness when its admitted generation is retired instead of accepting its replacement',
+              'yielding value-index admission keeps closed and open-unit refusals even for an empty readiness scope',
               "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
               "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
               'SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes',

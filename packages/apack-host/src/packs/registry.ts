@@ -218,7 +218,7 @@ export interface PackRegistry extends PackRegistryView {
    */
   onRegistrationChanged(listener: (packId: string) => void): () => void;
   /** Wait for declared indexes before lifecycle hooks, migrations or actors read them. */
-  indexesReady(): Promise<void>;
+  indexesReady(packId?: string): Promise<void>;
   /**
    * Notes why an installed pack isn't running: the loader skipped it, or its registration was refused. The Packs
    * view shows it in place of the pack's enabled state. Cleared when the pack registers or is torn down.
@@ -372,7 +372,7 @@ function buildContributionTables(packs: Iterable<AdmittedPackContributions>) {
 /** A new, empty registry */
 export interface PackRegistryOptions {
   /** Composition supplies the owning database's readiness; declaration-only registries have no build work. */
-  indexesReady?: () => Promise<void>;
+  indexesReady?: (types?: readonly string[]) => Promise<void>;
   /** Native data is admitted before executable registration and survives runtime unload. */
   nativeDeclarations?: readonly import('@apackdev/sdk/framework').NativePackDeclaration[];
   /**
@@ -815,7 +815,24 @@ export function createPackRegistry({ indexesReady = () => Promise.resolve(), ins
     }),
     registerContentRuntime,
     unregisterPack,
-    indexesReady,
+    indexesReady(packId) {
+      if (packId === undefined) return indexesReady();
+      if (!registrations.has(packId)) return Promise.reject(new Error(`Pack "${packId}" is not registered`));
+      const snapshot = catalog.getSnapshot();
+      const types = new Set<string>(RESERVED_ENTITIES);
+      const seen = new Set<string>();
+      const visit = (id: string): void => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        const registration = registrations.get(id);
+        const declaration = snapshot.native.find(pack => pack.id === id)
+          ?? snapshot.packs.find(pack => pack.snapshot.manifest.id === id)?.snapshot.manifest;
+        for (const type of Object.values(registration?.ears?.entities ?? (declaration ? _packEntityTypes(declaration) : {}))) types.add(type);
+        for (const dependency of Object.keys(registration?.dependencies ?? declaration?.dependencies ?? {})) visit(dependency);
+      };
+      visit(packId);
+      return indexesReady([...types]);
+    },
     onRegistrationChanged(listener) {
       registrationListeners.add(listener);
       return () => { registrationListeners.delete(listener); };

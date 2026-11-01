@@ -48,7 +48,7 @@ async function reloadPack(
   fresh.register(!!previous);
 
   try {
-    await registry.indexesReady();
+    await registry.indexesReady(packId);
   } catch (error) {
     // Registration is already accepted. Keep its files, but do not start actors on incomplete indexes.
     registry.runShutdownHooksForKey(packId);

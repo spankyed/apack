@@ -50,7 +50,7 @@ export class SqliteIndexBuilds {
   private nativeMaintenanceRelease?:()=>void;
   private preferGC = false;
   private readonly retries = new Set<number>();
-  private readonly waiters = new Set<{ completion: 'logical' | 'native'; resolve(): void; reject(error: unknown): void }>();
+  private readonly waiters = new Set<{ completion: 'logical' | 'native'; types?: ReadonlySet<string>; generations?: ReadonlySet<number>; resolve(): void; reject(error: unknown): void }>();
   lastError?: unknown;
   readonly batchRows = 32;
   readonly sliceMs = 4;
@@ -233,34 +233,45 @@ export class SqliteIndexBuilds {
     this.reload(); this.wake();
   }
   /** Wait only for active generations, not retirement. An explicit wait keeps the owning timer alive. */
-  indexesReady(completion: 'logical' | 'native' = 'logical'): Promise<void> {
+  indexesReady(completion: 'logical' | 'native' = 'logical', types?: readonly string[]): Promise<void> {
     try {
       if (!this.db.isOpen) fail('CLOSED', 'The database is closed');
       this.checkRevision();
       if (!this.canRun()) fail('UNIT_OPEN', 'Commit or abort the open unit before waiting for indexes');
       if(completion==='native'&&!this.vectorModels)fail('BACKGROUND_OWNER_REQUIRED','Start native model ownership before waiting for models');
       if(completion==='native'&&this.vectorModels?.isPaused)fail('BACKGROUND_PAUSED','Native model maintenance is in progress');
-      const unfinished = this.jobs().filter(job => job.state !== 'ready');
+      const scope = types === undefined ? undefined : new Set(types);
+      const jobs = this.jobs().filter(job => !scope || scope.has(job.type));
+      const generations = scope && new Set(jobs.map(job => job.generation));
+      const unfinished = jobs.filter(job => job.state !== 'ready');
       this.checkRevision();
       const modelFailure=completion==='native'?this.vectorModels?.failure():undefined;if(modelFailure)throw modelFailure;
+      this.assertRunning();
       if (!unfinished.length&&(completion==='logical'||!this.vectorModels?.hasWork())) return Promise.resolve();
-      if (this.stopped) throw this.lastError ?? Object.assign(new Error('Index scheduler is stopped'), { code: 'CLOSED' });
       const failed = unfinished.find(job => job.state === 'failed' && !this.retries.has(job.generation));
       if (failed) fail('INDEX_FAILED', String(failed.error));
       if (this.db.readOnly) fail('INDEX_BUILDING', 'A writable owner must finish indexing');
       this.pending = true;
-      return new Promise<void>((resolve, reject) => { this.waiters.add({ completion, resolve, reject }); this.wake(); if (this.waiters.size) { this.timer?.ref(); this.retry?.ref(); } });
+      return new Promise<void>((resolve, reject) => { this.waiters.add({ completion, types: scope, generations, resolve, reject }); this.wake(); if (this.waiters.size) { this.timer?.ref(); this.retry?.ref(); } });
     } catch (error) { return Promise.reject(error); }
   }
   private settle(): void {
     if (!this.waiters.size) return;
     try {
-      const unfinished = this.jobs().filter(job => job.state !== 'ready');
-      const failed = unfinished.find(job => job.state === 'failed' && !this.retries.has(job.generation));
+      const jobs = this.jobs();
       const needsNative=[...this.waiters].some(waiter=>waiter.completion==='native');
       const modelFailure=needsNative?this.vectorModels?.failure():undefined;
       const nativePending=needsNative&&this.vectorModels?.hasWork();
       for(const waiter of this.waiters) {
+        const selected = jobs.filter(job => !waiter.types || waiter.types.has(job.type));
+        const generations = waiter.generations;
+        if (generations && (selected.length !== generations.size || selected.some(job => !generations.has(job.generation)))) {
+          waiter.reject(Object.assign(new Error('Index generations changed while awaiting readiness'), { code: 'CANCELLED' }));
+          this.waiters.delete(waiter);
+          continue;
+        }
+        const unfinished = selected.filter(job => job.state !== 'ready');
+        const failed = unfinished.find(job => job.state === 'failed' && !this.retries.has(job.generation));
         const problem=failed?Object.assign(new Error(String(failed.error)),{code:'INDEX_FAILED'}):waiter.completion==='native'?modelFailure:undefined;
         if(problem)waiter.reject(problem);
         else if(unfinished.length||(waiter.completion==='native'&&nativePending))continue;

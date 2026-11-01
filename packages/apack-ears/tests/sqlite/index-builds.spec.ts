@@ -110,6 +110,45 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('yielding value
     expect(createEarsEngine({ database: reopened }).query('Row').where('slug', 'slug-149').ids()).toEqual(['Row-149']);
   });
 
+  it('admits a healthy type despite an unrelated failed retained index while global readiness still refuses', async () => {
+    const db = open(); seed(db);
+    const e = createEarsEngine({ database: db });
+    e.admin.setSchema(indexed);
+    const read = vi.spyOn(db.values, 'read').mockImplementationOnce(() => { throw new Error('unrelated backfill failure'); });
+    await expect(db.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+    read.mockRestore();
+    expect(status(db).state).toBe('failed');
+    e.admin.setSchema({ ...indexed, types: { ...indexed.types, Healthy: { required: [] } } });
+    e.create('Healthy', { id: 'Healthy-1', slug: 'healthy' });
+    e.admin.setSchema({ ...indexed, types: { ...indexed.types, Healthy: { required: [], indexes: ['slug'] } } });
+    await expect(db.indexesReady(['Healthy'])).resolves.toBeUndefined();
+    expect(db.indexBuilds.statuses().find(index => index.type === 'Healthy' && index.field === 'slug')?.state).toBe('ready');
+    expect(e.query('Healthy').where('slug', 'healthy').ids()).toEqual(['Healthy-1']);
+    await expect(db.indexesReady(['Row'])).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+    await expect(db.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+    expect(status(db).state).toBe('failed');
+  });
+
+  it('rejects scoped readiness when its admitted generation is retired instead of accepting its replacement', async () => {
+    const db = open(); seed(db);
+    const e = createEarsEngine({ database: db }); e.admin.setSchema(indexed);
+    const waiting = expect(db.indexesReady(['Row'])).rejects.toMatchObject({ code: 'CANCELLED' });
+    e.admin.setSchema(schema);
+    e.admin.setSchema(indexed);
+    await waiting;
+    await expect(db.indexesReady(['Row'])).resolves.toBeUndefined();
+    expect(status(db).state).toBe('ready');
+  });
+
+  it('keeps closed and open-unit refusals even for an empty readiness scope', async () => {
+    const db = open();
+    const unit = db.begin();
+    await expect(db.indexesReady([])).rejects.toMatchObject({ code: 'UNIT_OPEN' });
+    unit.abort();
+    db.close();
+    await expect(db.indexesReady([])).rejects.toMatchObject({ code: 'CLOSED' });
+  });
+
   it('stops the owner when rollback fails instead of repeatedly scheduling an uncertain transaction', () => {
     const db = open(); seed(db); createEarsEngine({ database: db }).admin.setSchema(indexed);
     const run = db.run.bind(db), exec = db.sql.exec.bind(db.sql);

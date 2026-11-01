@@ -269,6 +269,8 @@ if (mode === 'verify') {
   const cosineCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-cosine.spec.ts') ? file.assertionResults : []);
   requirePassingCases(cosineCases, [1, 3, 7, 8, 127, 128, 1536].map(dimensions =>
     `canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (${dimensions} dimensions)`), 'Canonical cosine numerical compatibility');
+  const scopedReadiness = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/index-builds.spec.ts') ? file.assertionResults : []);
+  requirePassingCases(scopedReadiness, ['yielding value-index admission admits a healthy type despite an unrelated failed retained index while global readiness still refuses', 'yielding value-index admission rejects scoped readiness when its admitted generation is retired instead of accepting its replacement', 'yielding value-index admission keeps closed and open-unit refusals even for an empty readiness scope'], 'Scoped index readiness');
   const counterCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/commit-outcomes.spec.ts') ? file.assertionResults : []);
   requirePassingCases(counterCases, [
     "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",

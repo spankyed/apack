@@ -153,7 +153,7 @@ async function startAcceptedPack(
   if (previousSystemIds) registry.runShutdownHooksForKey(packId);
   if (lifecycle?.onShutdown) registry.registerShutdownHook(lifecycle.onShutdown, packId);
   try {
-    await registry.indexesReady();
+    await registry.indexesReady(packId);
     registry.refreshCatalog(resolveAppEnvironment().packsDir);
     lifecycle?.onInit?.();
     runPackMigrations(registry.packMigrationTargets('pack', [packId]));

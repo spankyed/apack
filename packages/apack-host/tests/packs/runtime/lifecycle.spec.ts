@@ -76,7 +76,9 @@ describe('installed runtime acceptance', () => {
     writeBuild(source, id, '{}, lifecycle: { onInit() { require("node:fs").writeFileSync(' + JSON.stringify(marker) + ', "initialized"); } }');
     const installed = await installPackFromLocal(source, packsDir());
     const bus = { send: vi.fn() };
+    const readiness = vi.spyOn(isolated, 'indexesReady');
     const started = activatePack(isolated, id, bus as never);
+    expect(readiness).toHaveBeenCalledWith(id);
     expect(isolated.getPackRegistration(id)).not.toBeNull();
     expect(fs.existsSync(marker)).toBe(false);
     expect(bus.send).not.toHaveBeenCalled();

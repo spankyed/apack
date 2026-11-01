@@ -468,3 +468,30 @@ describe('registered settings authority', () => {
     expect(packs.settingsCatalog().features).not.toHaveProperty('invalid-pack/widget');
   });
 });
+
+
+describe('pack index readiness ownership', () => {
+  it('waits for its transitive dependencies and common types while excluding unrelated declarations', async () => {
+    const readiness = vi.fn(async (_types?: readonly string[]) => {});
+    const packs = createNativePackTestRegistry({ indexesReady: readiness });
+    const pack = (id: string, type: string, dependencies?: Record<string, string>): PackRegistration => ({
+      id, dependencies, ears: { entities: { [type]: type }, relKinds: {}, roles: {} },
+    });
+    packs.registerPack(pack('leaf-pack', 'Leaf'));
+    packs.registerPack(pack('owner-pack', 'Owner', { 'leaf-pack': '*' }));
+    packs.registerPack(pack('consumer-pack', 'Consumer', { 'owner-pack': '*' }));
+    packs.registerPack(pack('unrelated-pack', 'Unrelated'));
+    await packs.indexesReady('consumer-pack');
+    expect(readiness).toHaveBeenCalledOnce();
+    const scope = readiness.mock.calls[0]![0]!;
+    expect(scope).toEqual(expect.arrayContaining(['Consumer', 'Owner', 'Leaf', ...Object.values(SDK_ENTITIES), ...HOST_ENTITY_TYPES]));
+    expect(scope).not.toContain('Unrelated');
+    const failure = Object.assign(new Error('dependency index failed'), { code: 'INDEX_FAILED' });
+    readiness.mockRejectedValueOnce(failure);
+    await expect(packs.indexesReady('consumer-pack')).rejects.toBe(failure);
+    await packs.indexesReady();
+    expect(readiness.mock.calls[2]).toEqual([]);
+    await expect(packs.indexesReady('missing-pack')).rejects.toThrow('not registered');
+    expect(readiness).toHaveBeenCalledTimes(3);
+  });
+});

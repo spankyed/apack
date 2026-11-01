@@ -1307,7 +1307,7 @@ export class SqliteDatabase implements EarsDatabase {
     }
     return indexes;
   }
-  indexesReady(): Promise<void> { return this.indexBuilds.indexesReady(); }
+  indexesReady(types?: readonly string[]): Promise<void> { return this.indexBuilds.indexesReady('logical', types); }
   nativeModelsReady(): Promise<void> { return this.indexBuilds.indexesReady('native'); }
   onIndexesChanged(listener: (changes: Changes) => void): () => void {
     this.indexListeners.add(listener); return () => { this.indexListeners.delete(listener); };
