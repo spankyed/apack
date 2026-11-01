@@ -263,7 +263,7 @@ jobs:
           set -euo pipefail
           mkdir -p .temp/sqlite-corpus
           git rev-parse HEAD > .temp/sqlite-corpus/source.txt
-          npm test -w @apackdev/ears -- tests/sqlite/vector-execution.spec.ts tests/sqlite/commit-outcomes.spec.ts \
+          npm test -w @apackdev/ears -- tests/sqlite/vector-execution.spec.ts tests/sqlite/commit-outcomes.spec.ts tests/sqlite/text-scope.spec.ts \
             --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.temp/sqlite-corpus/safeguards.json \
             2>&1 | tee .temp/sqlite-corpus/safeguards.log
           node --input-type=module <<'JS'
@@ -271,13 +271,14 @@ jobs:
           import { readFileSync } from 'node:fs';
           const report = JSON.parse(readFileSync('.temp/sqlite-corpus/safeguards.json', 'utf8'));
           assert.equal(report.numFailedTests, 0); assert.equal(report.numPendingTests, 0);
-          for (const name of ['vector-execution.spec.ts', 'commit-outcomes.spec.ts']) {
+          for (const name of ['vector-execution.spec.ts', 'commit-outcomes.spec.ts', 'text-scope.spec.ts']) {
             const file = report.testResults.find(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/' + name));
             assert(file?.assertionResults.length > 0, `Required safeguard file must execute: ${name}`);
             for (const test of file.assertionResults) assert.equal(test.status, 'passed', test.fullName);
           }
           const names = report.testResults.flatMap(file => file.assertionResults.map(test => test.fullName));
           for (const title of [
+            'uses posting estimates without reevaluating the candidate prefix and still scopes actual matches',
             'stops a streaming eligibility scope at the chunk threshold and keeps limited, duplicate and empty scopes exact',
             'refuses replacement before commit when closing its source fails',
           ]) assert(names.some(name => name.endsWith(title)), `Required safeguard must be collected: ${title}`);
