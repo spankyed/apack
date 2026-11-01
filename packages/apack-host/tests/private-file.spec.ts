@@ -27,7 +27,7 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-const { writePrivateFile } = await import('../src/private-file.ts');
+const { writePrivateFile, writePrivateRuntimeFile } = await import('../src/private-file.ts');
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -145,5 +145,23 @@ describe('writePrivateFile', () => {
     expect(error.cause).toMatchObject({ code: 'EXDEV' });
     expect(error.errors).toEqual([error.cause, cleanup]);
     expect(fs.readFileSync(file, 'utf8')).toBe('incumbent');
+  });
+});
+
+// Runtime contact records must retain atomicity and privacy without blocking on durability.
+describe('writePrivateRuntimeFile', () => {
+  it('publishes complete private bytes without syncing and preserves the incumbent on refusal', () => {
+    const dir = tempDir(), file = path.join(dir, 'api-token');
+    const sync = vi.spyOn(fs, 'fsyncSync').mockImplementation(() => { throw new Error('unexpected sync'); });
+    const contents = 'é🙂 token';
+    writePrivateRuntimeFile(file, contents);
+    expect(fs.readFileSync(file, 'utf8')).toBe(contents);
+    if (platform !== 'win32') expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    renameFailures.code = 'EXDEV';
+    renameFailures.count = 1;
+    expect(() => writePrivateRuntimeFile(file, 'replacement')).toThrow('EXDEV');
+    expect(fs.readFileSync(file, 'utf8')).toBe(contents);
+    expect(fs.readdirSync(dir)).toEqual(['api-token']);
+    expect(sync).not.toHaveBeenCalled();
   });
 });

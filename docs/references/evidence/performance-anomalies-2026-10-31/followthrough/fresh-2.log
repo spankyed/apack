@@ -1,0 +1,12 @@
+
+Running 1 test using 1 worker
+
+[e2e.launch] {"phase":"requested","elapsedMs":0.04145899999957692,"at":1793508605642}
+[e2e.launch] {"phase":"process-attached","elapsedMs":516.753839,"at":1793508606159,"pid":743}
+[e2e.launch] {"phase":"application-state-present","elapsedMs":15415.207056,"at":1793508621057,"pid":743}
+[e2e.launch] {"phase":"viewport-ready","elapsedMs":15420.350793000001,"at":1793508621063,"pid":743}
+[e2e.launch] {"phase":"connected","elapsedMs":17469.260133,"at":1793508623111,"pid":743}
+  ✓  1 .apack/fresh-startup-profile.spec.ts:22:1 › profile a fresh owned launch through connected shell and UI flush (19.4s)
+[e2e] quit sequence finished; ending Electron without its profile writes
+
+  1 passed (23.2s)

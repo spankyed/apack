@@ -41,7 +41,17 @@ function syncDirectory(dir: string): void {
   }
 }
 
+/** Atomically publish private data and persist it across a crash. */
 export function writePrivateFile(filePath: string, contents: string): void {
+  installPrivateFile(filePath, contents, true);
+}
+
+/** Publish reconstructable live-process metadata atomically, without requesting crash durability. */
+export function writePrivateRuntimeFile(filePath: string, contents: string): void {
+  installPrivateFile(filePath, contents, false);
+}
+
+function installPrivateFile(filePath: string, contents: string, durable: boolean): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
   // Unique per write, so concurrent writers never share one
@@ -56,7 +66,7 @@ export function writePrivateFile(filePath: string, contents: string): void {
         if (written < 1) throw Object.assign(new Error('Private file write made no progress'), { code: 'EIO' });
         offset += written;
       }
-      fs.fsyncSync(fd);
+      if (durable) fs.fsyncSync(fd);
     } finally {
       fs.closeSync(fd);
     }
@@ -66,6 +76,7 @@ export function writePrivateFile(filePath: string, contents: string): void {
     catch (cleanup) { throw new AggregateError([error, cleanup], 'Private file installation and temporary cleanup failed', { cause: error }); }
     throw error;
   }
+  if (!durable) return;
   try { syncDirectory(dir); }
   catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);

@@ -152,3 +152,53 @@ a quiet host before another local application run; do not count unexecuted probe
 
 Query, schema, durability and recording contracts are unchanged. The runtime shutdown correction
 changes when exit confirmation begins, and still requires the API child to be gone before quit.
+
+
+## Final lifecycle and recording checkpoint
+
+Strict CI passed all six jobs on `e602e9ad77` ([run 41271153309](https://github.com/spankyed/apack/actions/runs/41271153309)).
+On that source, the two maintained shared-app smoke cases passed with exactly one sequence of five
+launch phases. A real-app probe blocking the main event loop during quit for 6.5 seconds also passed
+with the original shutdown deadlines. The real disabled/lightweight search comparison completed all
+correctness checks and teardown and was strictly admitted: **10.6 → 11.4 ms, +0.8 ms / +7.55%**.
+It **fails the original 5% recording budget**. Admission is not a timing pass; no passing repeat was
+selected. Raw comparison, execution journal and logs are in [followthrough](performance-anomalies-2026-10-31/followthrough/).
+
+The failed producer attempt left a pack-build lock belonging to an absent container. With the
+session volume exclusively locked, its exact PID, machine and token were checked before removing
+only that stale build lock. The subsequent default-pack build passed in 124.4 seconds, under the
+unchanged 600-second ceiling. This establishes the subsequent lock wait, not the cause of the
+original preparation timeout or historical 102.914-second application setup.
+
+## Bounded recording-cost profile
+
+The maintained full search corpus ran in detailed mode (5 warmups, 20 measured actions), followed
+by three independent fresh-profile startup diagnostics. All completed; CPU/allocation capture
+stopped through owner teardown, not its duration cap. The
+[summary and analysis](performance-anomalies-2026-10-31/followthrough/profile-summary.json) retain
+the method limits. Backend search samples were dominated by idle time (1,583 ms), inspector calls
+(959 ms), and GC (829 ms); renderer samples by program/GC and layout work. These are aggregate
+sampled times across twenty detailed captures, including profiling machinery, not the cost of
+lightweight recording. They do not isolate the 0.8 ms difference or justify a recorder rewrite.
+No speculative codec or allocation change is proposed.
+
+Keep the original 5% failure visible alongside its absolute cost. Any replacement policy needs
+predeclared action-specific absolute and relative budgets, calibrated against same-mode noise and
+user-visible latency before new measurements. Do not choose a threshold just above this result.
+Independent lifecycle fixes can merge without claiming recording is within budget.
+
+## Fresh-profile startup attribution
+
+The three detailed launches reached the connected thread surface in **19.086, 17.489 and 17.726 s**.
+These are fresh profiles and processes, not cold filesystem caches or unprofiled qualification.
+Backend index admission took 0.932–1.320 s. Native file-copy samples and filesystem flushes were
+substantial; parent stacks identify `publishApiFiles` through the private writer for the flushes.
+This accounts for a measured current startup cost, not the historical 103-second event. Renderer
+capture begins after earlier module bootstrap and cannot account for the whole launch.
+
+The endpoint and token describe the current process, are removed at exit, and are regenerated on
+each run. A focused correction adds `writePrivateRuntimeFile`: it retains unique 0600 temporaries,
+complete byte writes, atomic rename, Windows retries and refusal cleanup, without requesting file
+or directory durability. Only API contact files use it. Durable secret and dev-session writes keep
+the existing sync and NOT_DURABLE contracts. A balanced paired writer benchmark and fresh app
+validation are pending; detailed startup figures are not their unprofiled baseline.

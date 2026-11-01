@@ -1,0 +1,365 @@
+{
+  "format": 2,
+  "status": "passed",
+  "measured": 20,
+  "records": [
+    {
+      "file": "trial-0.json",
+      "sha256": "0fe314152bc67aaac9fd672c47d15e6fc0cfdfbf3f04a3931ad9f7ecdb2b9241",
+      "bytes": 52577,
+      "sample": {
+        "scenario": "search",
+        "index": 0,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 20.199999999254942,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-1.json",
+      "sha256": "3b3e06a9ecc8c0893cd1dad02e27e0b126280da84f7b9ebafbbf2210833745bc",
+      "bytes": 39972,
+      "sample": {
+        "scenario": "search",
+        "index": 1,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 14,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-2.json",
+      "sha256": "eac9305ed9fe102d7ead3ac4de5e9513e296700ff9c80fc51c12b02717097bd6",
+      "bytes": 30461,
+      "sample": {
+        "scenario": "search",
+        "index": 2,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 13,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-3.json",
+      "sha256": "fbf0eef0ae34db5711998d71e37e10494ddd0dcfdfd9c46e248e33a08ccfe0ef",
+      "bytes": 44311,
+      "sample": {
+        "scenario": "search",
+        "index": 3,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 14.5,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-4.json",
+      "sha256": "719be19fa913d3b7b53906c72633da43f4eba4d38e329a485758152012149c69",
+      "bytes": 47899,
+      "sample": {
+        "scenario": "search",
+        "index": 4,
+        "warmup": true,
+        "outcome": "passed",
+        "durationMs": 14.700000001117587,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-5.json",
+      "sha256": "765094548ad8f16cca835fd65afdb549fe7e8a661fbd6c5c0680b533c7ce0237",
+      "bytes": 54354,
+      "sample": {
+        "scenario": "search",
+        "index": 5,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 13.600000001490116,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-6.json",
+      "sha256": "2b2e26c9661c475cafb585081576589a71e256881a67a107d7b4a3e416de555e",
+      "bytes": 50478,
+      "sample": {
+        "scenario": "search",
+        "index": 6,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 14.100000001490116,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-7.json",
+      "sha256": "b61870f5bd16871843895795bbf61a65775ae0ce7badb202a00b2db222444520",
+      "bytes": 45040,
+      "sample": {
+        "scenario": "search",
+        "index": 7,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 13,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-8.json",
+      "sha256": "f5dc8976526732296b342293d3a40a4f78a3cf08575b9b4115e83b468f446fad",
+      "bytes": 31576,
+      "sample": {
+        "scenario": "search",
+        "index": 8,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 12.5,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-9.json",
+      "sha256": "b23454aa5007a029816ac3b6dd5793a64cbbeb55c0ec74b00ff23500b2cbacbe",
+      "bytes": 55541,
+      "sample": {
+        "scenario": "search",
+        "index": 9,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 13.399999998509884,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-10.json",
+      "sha256": "b1347905a3a4c4a027376d4bb7b8cf345b3cd0f40c6842eb5da0cc78a2389393",
+      "bytes": 44886,
+      "sample": {
+        "scenario": "search",
+        "index": 10,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 15.800000000745058,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-11.json",
+      "sha256": "ec03aaf51a7852dc70bf54d0d26aa075f30a7a9a619228d4121b8945eb1d02be",
+      "bytes": 34817,
+      "sample": {
+        "scenario": "search",
+        "index": 11,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 18.40000000037253,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-12.json",
+      "sha256": "c2a91f01890bce8a3601e02b82cd3bdfbfef2d859b3269d691026aca24b1f934",
+      "bytes": 44070,
+      "sample": {
+        "scenario": "search",
+        "index": 12,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 18.40000000037253,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-13.json",
+      "sha256": "ee88b6c7ba6ea2d59432215217613680237ebf9ba88aaa3fcdee9cdf20cee33a",
+      "bytes": 37997,
+      "sample": {
+        "scenario": "search",
+        "index": 13,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 15.400000000372529,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-14.json",
+      "sha256": "523067ebfb3ae49a2f92a9e1682cc10b544c45efca62d174aaba3505dd68b9d9",
+      "bytes": 39114,
+      "sample": {
+        "scenario": "search",
+        "index": 14,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 16.5,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-15.json",
+      "sha256": "c088dbf8bc046807bc252364c3ffd7117b9e6d75aa6bb8985f3a601cea3ecf85",
+      "bytes": 40742,
+      "sample": {
+        "scenario": "search",
+        "index": 15,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 16.09999999962747,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-16.json",
+      "sha256": "59edb2eabc812408650c3d9fa310d56d500f5c804bb45f1bf6fc27ec70cd64fc",
+      "bytes": 29691,
+      "sample": {
+        "scenario": "search",
+        "index": 16,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 16.59999999962747,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-17.json",
+      "sha256": "19927b8573dcbbeabc47639271386173b7ff3d1494f6b110fcfeb07c6f080aa8",
+      "bytes": 41966,
+      "sample": {
+        "scenario": "search",
+        "index": 17,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 18.799999998882413,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-18.json",
+      "sha256": "b34b153a38304a356f3e5bb2220347d5d5c9e8b0969fbf7d709bfc9206e10c49",
+      "bytes": 52457,
+      "sample": {
+        "scenario": "search",
+        "index": 18,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 17.5,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-19.json",
+      "sha256": "74812b895dbee386be357e948b0f7fc27fb35479add97136168ec3a3baf020ff",
+      "bytes": 42830,
+      "sample": {
+        "scenario": "search",
+        "index": 19,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 16.90000000037253,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-20.json",
+      "sha256": "7054613a4587902b2ba261c3845e909c21eaf7fdee22b5887bc171e85b0f02bc",
+      "bytes": 35048,
+      "sample": {
+        "scenario": "search",
+        "index": 20,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 15.599999999627471,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-21.json",
+      "sha256": "705a48dfe7aadeb5361f1c04ed7b260f2fd3ac2260fcc78d539b49686c718b0e",
+      "bytes": 37233,
+      "sample": {
+        "scenario": "search",
+        "index": 21,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 15.799999998882413,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-22.json",
+      "sha256": "44d21983f235c4583fa527756cae8679012d72bec085d96514d344cdc623d485",
+      "bytes": 47416,
+      "sample": {
+        "scenario": "search",
+        "index": 22,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 16.299999998882413,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-23.json",
+      "sha256": "d799cfeece3884dd8ce985a633c2560441c08c8d315e9cd7819b1e26fc9fc70c",
+      "bytes": 27929,
+      "sample": {
+        "scenario": "search",
+        "index": 23,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 17,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    },
+    {
+      "file": "trial-24.json",
+      "sha256": "69eb29cf285ce393935c0de15bfd446d67f1f05173d54b36c92205233a06def9",
+      "bytes": 62076,
+      "sample": {
+        "scenario": "search",
+        "index": 24,
+        "warmup": false,
+        "outcome": "passed",
+        "durationMs": 42.19999999925494,
+        "correct": true,
+        "completion": "view-ready"
+      }
+    }
+  ],
+  "summary": {
+    "measured": 20,
+    "passed": 20,
+    "unsuccessful": 0,
+    "medianMs": 16.199999999254942,
+    "minMs": 12.5,
+    "maxMs": 42.19999999925494
+  }
+}

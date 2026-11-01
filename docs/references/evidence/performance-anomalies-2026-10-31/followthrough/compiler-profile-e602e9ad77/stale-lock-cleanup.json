@@ -1,0 +1,12 @@
+{
+  "file": "/work/packages/default-setup/.apack/build.lock",
+  "held": {
+    "pid": 494,
+    "machine": "27620393cb6a",
+    "what": "apack pack build",
+    "since": "2026-11-01T03:42:48.826Z",
+    "token": "99cd4087133ca13d68ddd61e1608da27"
+  },
+  "oldContainerConfirmedAbsent": true,
+  "at": "2026-11-01T04:13:37.320Z"
+}
