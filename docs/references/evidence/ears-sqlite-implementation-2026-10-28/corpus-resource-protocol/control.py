@@ -41,3 +41,34 @@ for mutate in mutations:
     else:
         raise AssertionError('Invalid resource receipt accepted')
 print('Two valid current/historical shapes accepted; nine malformed or misattributed resource receipts refused.')
+
+reopen = {'reopen': {'passes': [{
+    'pass': iteration, 'openMs': 1, 'closeAndDrainMs': 2,
+    'resources': copy.deepcopy(snapshot),
+    'samples': [{'cohort': cohort, 'family': family, 'query': query,
+                 'ms': 1, 'heartbeatDelaysMs': [2], 'returned': 10, 'matchesWarm': True}
+                for cohort in module.COHORTS for family in module.FAMILIES for query in [0, 37, 99]]
+} for iteration in range(3)]}}
+module.validate_reopen(reopen, 10000)
+module.validate_reopen({}, 10000)
+mutations = [
+    lambda r: r['reopen']['passes'].pop(),
+    lambda r: r['reopen']['passes'][1].update({'pass': 0}),
+    lambda r: r['reopen']['passes'][0].update(openMs=float('nan')),
+    lambda r: r['reopen']['passes'][0]['samples'].pop(),
+    lambda r: r['reopen']['passes'][0]['samples'][0].update(matchesWarm=False),
+    lambda r: r['reopen']['passes'][0]['samples'][0].update(returned=9),
+    lambda r: r['reopen']['passes'][0]['samples'][0].update(ms=-1),
+    lambda r: r['reopen']['passes'][0]['samples'][0].update(heartbeatDelaysMs=[float('inf')]),
+    lambda r: r['reopen']['passes'][0]['samples'][0].update(query=12),
+]
+for mutate in mutations:
+    candidate = copy.deepcopy(reopen)
+    mutate(candidate)
+    try:
+        module.validate_reopen(candidate, 10000)
+    except (AssertionError, KeyError):
+        pass
+    else:
+        raise AssertionError('Invalid reopen receipt accepted')
+print('Complete three-pass reopen shape accepted; nine incomplete, mismatched or nonfinite reopen receipts refused.')

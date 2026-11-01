@@ -18,6 +18,24 @@ def percentile(values, fraction):
     return sorted(values)[max(0, math.ceil(len(values) * fraction) - 1)] if values else None
 
 
+def validate_reopen(report, size):
+    if 'reopen' not in report:
+        return
+    passes = report['reopen']['passes']
+    assert len(passes) == 3 and [row['pass'] for row in passes] == [0, 1, 2]
+    expected = {(cohort, family, query) for cohort in COHORTS for family in FAMILIES for query in [0, 37, 99]}
+    for row in passes:
+        assert finite(row['openMs']) and finite(row['closeAndDrainMs'])
+        samples = row['samples']
+        assert len(samples) == len(expected)
+        assert {(s['cohort'], s['family'], s['query']) for s in samples} == expected
+        for sample in samples:
+            assert sample['matchesWarm'] is True
+            assert sample['returned'] == min(10, math.ceil(size / COHORTS[sample['cohort']]))
+            assert finite(sample['ms']) and all(finite(delay) for delay in sample['heartbeatDelaysMs'])
+        assert finite(row['resources']['usage']['maxRSS']) and row['resources']['usage']['maxRSS'] > 0
+
+
 def validate_resource_snapshots(report):
     if 'cpuModels' in report:
         assert isinstance(report['cpuModels'], list) and report['cpuModels']
@@ -47,6 +65,7 @@ def validate_resource_snapshots(report):
 
 def validate(report, size, source, manifest_hash):
     validate_resource_snapshots(report)
+    validate_reopen(report, size)
     assert report['protocol'] == 'ears-private-real-hybrid/1'
     assert report['completed'] is True and report['databaseScratchRemoved'] is True
     assert report['qualification'] is False and report['containsPayload'] is False
@@ -196,7 +215,7 @@ def main():
     groups = []
     for size in [1000, 10000, 99900]:
         report = json.loads((args.results / f'hybrid-{size}.json').read_text())
-        assert 'cpuModels' in report and 'resourceSnapshots' in report, 'Current runs must record phase resources and CPU models'
+        assert all(key in report for key in ['cpuModels', 'resourceSnapshots', 'reopen']), 'Current runs must record resources, CPU models and three reopen passes'
         groups.extend(validate(report, size, args.source, manifest_hash))
     receipt = {'completed': True, 'protocol': 'ears-real-hybrid-matrix-receipt/1', 'source': args.source,
                'queriesVerified': 1800, 'groups': groups, 'qualification': False,

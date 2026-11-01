@@ -123,7 +123,7 @@ try {
       embed: { from: ['title', 'body'], model: 'public-fixture', dims: dimensions, chunk: 'whole' } },
   }, relations: {}, roles: [] }) });
   if (nativeExtension) assert(prepareEmptyNativeVectorCursor(db));
-  const e = createEarsEngine({ database: db });
+  let e = createEarsEngine({ database: db });
   const started = performance.now();
   for (let offset = 0; offset < size; offset += 64) e.transact(() => {
     for (let i = offset; i < Math.min(size, offset + 64); i++) {
@@ -185,6 +185,7 @@ try {
     inputs.push({ family: 'corpus-lexical-control', ordinal: q, text: tokens.slice(0, 3).join(' '),
       embedding: vector(vectors, ordinal), anchor: `Row-${ordinal}` });
   }
+  const reopenOrdinals = [0, 37, 99], reopenAnswers = new Map();
   for (const cohort of cohorts) for (const input of inputs) {
     const { text, embedding } = input, options = { fuzzy: false };
     const textIds = cohort.query().search(text, options).ids();
@@ -237,6 +238,8 @@ try {
     assert.deepEqual(actual.map(hit => hit.id), expected.map(([id]) => id));
     actual.forEach((hit, i) => assert(Math.abs(hit.score - expected[i][1]) < 1e-12));
     assert.equal(new Set(actual.map(hit => hit.id)).size, actual.length);
+    if (reopenOrdinals.includes(input.ordinal)) reopenAnswers.set(`${cohort.name}/${input.family}/${input.ordinal}`,
+      actual.map(hit => ({ id: hit.id, score: hit.score })));
     const fullRankingIds = new Set(fullRanking.map(([id]) => id));
     const fullRankingOverlapAt10 = actual.filter(hit => fullRankingIds.has(hit.id)).length / fullRanking.length;
     report.samples.push({ cohort: cohort.name, family: input.family, query: input.ordinal, ms, vectorRecall, ...(candidateWidths ? { candidateWidths } : {}), fullRankingOverlapAt10, heartbeatDelaysMs: pulse.delaysMs, textMatches: textIds.length, vectorMatches: vectorIds.length, returned: actual.length });
@@ -295,6 +298,38 @@ try {
   report.nodeSha256 = sha(readFileSync(process.execPath));
   report.nativeBindings = loadedNativeBindings([getLoadablePath(), ...(nativeExtension ? [nativeExtension] : [])]);
   report.resourceSnapshots.afterDiagnostics = sampleResources();
+  // Close the owner before independent read-only opens. OS page cache is deliberately uncontrolled:
+  // this measures reopen behavior, not cold-disk latency or a repeated full 600-query qualification.
+  report.reopen = { scope: 'Three read-only reopen passes, OS cache uncontrolled; sampled warm-answer parity', passes: [] };
+  for (let pass = 0; pass < 3; pass++) {
+    let at = performance.now();
+    await db.drainBackground(); db.close();
+    const closeAndDrainMs = performance.now() - at;
+    at = performance.now();
+    db = new SqliteDatabase({ path: directory, readOnly: true, nativeVectorExtension: nativeExtension });
+    e = createEarsEngine({ database: db });
+    const openMs = performance.now() - at;
+    assert.equal(db.readOnly, true);
+    assert.equal(db.get('SELECT count(*) n FROM entities').n, size);
+    const result = { pass, closeAndDrainMs, openMs, samples: [] };
+    report.reopen.passes.push(result);
+    for (const cohort of cohorts) for (const input of inputs.filter(input => reopenOrdinals.includes(input.ordinal))) {
+      const pulse = startHeartbeat(1), started = performance.now();
+      let actual, ms;
+      try {
+        actual = cohort.query().hybrid(input.text, input.embedding, { fuzzy: false, k: 10 }).hits();
+        ms = performance.now() - started;
+      } finally { pulse.stop(); }
+      const expected = reopenAnswers.get(`${cohort.name}/${input.family}/${input.ordinal}`);
+      assert.deepEqual(actual.map(hit => hit.id), expected.map(hit => hit.id));
+      actual.forEach((hit, index) => assert(Math.abs(hit.score - expected[index].score) < 1e-12));
+      result.samples.push({ cohort: cohort.name, family: input.family, query: input.ordinal, ms,
+        heartbeatDelaysMs: pulse.delaysMs, returned: actual.length, matchesWarm: true });
+    }
+    result.resources = sampleResources();
+    save();
+  }
+  reopenAnswers.clear();
   report.completed = true;
 } finally {
   try {
