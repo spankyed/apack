@@ -46,9 +46,6 @@ watch([() => props.modelValue, groups, content], () => {
   try {
     const adapters: ReadOnlyTextRenderer[] = groups.value.flatMap(group => group.binding.readOnly ? [group.binding.readOnly] : [])
     const rendered = renderChat(parser, props.modelValue, adapters)
-    rendered.root.className = 'ProseMirror'
-    rendered.root.contentEditable = 'false'
-    rendered.root.style.whiteSpace = 'normal'
     content.value.replaceChildren(rendered.root)
     dispose = rendered.dispose
     problem.value = false

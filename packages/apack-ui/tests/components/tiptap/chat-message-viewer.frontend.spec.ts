@@ -29,11 +29,11 @@ function fixture(initial: TextEditorExtensionsBinding[] = []) {
 
 it('updates supported messages and disposes adapters on replacement and unmount', async () => {
   const cleanup = vi.fn()
-  const decorate = vi.fn((root: HTMLElement) => { root.dataset.enhanced = 'yes'; return cleanup })
+  const decorate = vi.fn((root: HTMLElement) => { root.dataset.enhanced = 'yes'; root.classList.add('custom-message'); return cleanup })
   const f = fixture([{ packId: 'pack', groupId: 'group', binding: { readOnly: { decorate } } }])
   await nextTick()
   expect(f.root.querySelector('strong')?.textContent).toBe('first')
-  expect(f.root.querySelector('[data-enhanced="yes"]')).not.toBeNull()
+  expect(f.root.querySelector('[data-enhanced="yes"].custom-message.ProseMirror')).not.toBeNull()
   f.source.value = '**second**'; await nextTick(); await nextTick()
   expect(f.root.querySelector('strong')?.textContent).toBe('second')
   expect(cleanup).toHaveBeenCalledOnce()

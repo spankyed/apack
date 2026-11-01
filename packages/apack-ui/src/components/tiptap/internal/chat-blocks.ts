@@ -18,7 +18,9 @@ export function normalizeChatBlocks(root: HTMLElement): void {
   }
   for (const item of root.querySelectorAll('li')) {
     let paragraph: HTMLParagraphElement | undefined
-    for (const child of [...item.childNodes]) {
+    // Moving nodes changes the live child list.
+    const children = Array.from(item.childNodes)
+    for (const child of children) {
       if (child.nodeType === 1 && blocks.has((child as Element).tagName)) { paragraph = undefined; continue }
       if (!paragraph && !child.textContent?.trim()) { child.remove(); continue }
       if (!paragraph) { paragraph = document.createElement('p'); item.insertBefore(paragraph, child) }

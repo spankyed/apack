@@ -7,6 +7,9 @@ import { normalizeChatBlocks } from './chat-blocks.ts'
 /** A candidate fragment is fully prepared before publication; every enhancement owns cleanup. */
 export function renderChat(parser: MarkdownIt, source: string, adapters: readonly ReadOnlyTextRenderer[]) {
   const root = document.createElement('div')
+  root.className = 'ProseMirror'
+  root.contentEditable = 'false'
+  root.style.whiteSpace = 'normal'
   const cleanups: Array<() => void> = []
   const dispose = () => {
     const errors: unknown[] = []
