@@ -75,8 +75,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
       for (let i = 0; i < 16; i++) e.create('Row', { title: `foreground-${i}` });
       expect(db.sequence).toBe(sequence + 16);
       expect(e.query('Row').count()).toBe(528);
-      expect(db.sql.pragma('busy_timeout', { simple: true })).toBe(0);
-      const checkpoint = db.sql.pragma('wal_checkpoint(TRUNCATE)')[0] as { busy: number };
+      expect(db.get('PRAGMA busy_timeout')!.timeout).toBe(0);
+      const checkpoint = db.get('PRAGMA wal_checkpoint(TRUNCATE)')!;
       expect(checkpoint.busy).toBe(1);
       expect(statSync(join(path, 'data.sqlite3-wal')).size).toBeGreaterThan(0);
     } finally { release(gate); control.gate = undefined; }
@@ -85,7 +85,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!process.env.EAR
     expect(model.sourceCommitHex).toBe(sourceCommit);
     expect(db.sequence).toBe(sequence + 16);
     expect(e.query('Row').count()).toBe(528);
-    expect(db.sql.pragma('wal_checkpoint(TRUNCATE)')).toEqual([{ busy: 0, log: 0, checkpointed: 0 }]);
+    expect(db.all('PRAGMA wal_checkpoint(TRUNCATE)')).toEqual([{ busy: 0, log: 0, checkpointed: 0 }]);
     expect(statSync(join(path, 'data.sqlite3-wal')).size).toBe(0);
   });
 
