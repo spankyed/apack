@@ -156,7 +156,7 @@ export class SqliteValues {
     for (const member of members) this.sql.run('INSERT OR IGNORE INTO value_members VALUES (?,?,?,?)', [id, field, member.kind, member.value]);
   }
 
-  /** Fetches a projected page in two crossings. The caller holds one read snapshot across both statements. */
+  /** A single-field projection joins its overflow cell in one crossing; wider pages use two in one snapshot. */
   read(layout: SqliteValueLayout, ids: readonly string[], requested?: readonly string[]): Array<Record<string, unknown> | undefined> {
     if (!ids.length) return [];
     const names = requested === undefined ? [...layout.fields.keys()] : [...new Set(requested)];
@@ -165,13 +165,18 @@ export class SqliteValues {
       return field === undefined ? [] : [field];
     });
     const columns = selected.flatMap(field => [`v.k${field}`, `v.v${field}`]);
-    const input = JSON.stringify(ids);
-    const rows = this.sql.all(`SELECT v.entity_id${columns.length ? ',' + columns.join(',') : ''}
-      FROM json_each(?) seed JOIN ${layout.table} v ON v.entity_id=seed.value ORDER BY seed.key`, [input]);
-    const overflow = this.sql.all(`SELECT o.entity_id,o.field,o.kind,o.value FROM value_overflow o
+    const input = JSON.stringify(ids), singleField = requested !== undefined && names.length === 1;
+    const rows = this.sql.all(`SELECT v.entity_id${columns.length ? ',' + columns.join(',') : ''}${singleField ?
+      ',o.field overflow_field,o.kind overflow_kind,o.value overflow_value' : ''}
+      FROM json_each(?) seed JOIN ${layout.table} v ON v.entity_id=seed.value${singleField ?
+        ' LEFT JOIN value_overflow o ON o.entity_id=v.entity_id AND o.field=?' : ''} ORDER BY seed.key`,
+      [input, ...(singleField ? [names[0]!] : [])]);
+    const native = new Map(rows.map(row => [String(row.entity_id), row]));
+    const overflow = singleField ? [...native.values()].flatMap(row => row.overflow_field === null ? [] : [{
+      entity_id: row.entity_id, field: row.overflow_field, kind: row.overflow_kind, value: row.overflow_value,
+    }]) : this.sql.all(`SELECT o.entity_id,o.field,o.kind,o.value FROM value_overflow o
       WHERE o.entity_id IN (SELECT value FROM json_each(?))${requested === undefined ? '' :
         ' AND o.field IN (SELECT value FROM json_each(?))'}`, [input, ...(requested === undefined ? [] : [JSON.stringify(names)])]);
-    const native = new Map(rows.map(row => [String(row.entity_id), row]));
     const extra = new Map<string, Record<string, unknown>[]>();
     for (const row of overflow) {
       const id = String(row.entity_id), held = extra.get(id) ?? [];

@@ -478,6 +478,7 @@ jobs:
                  tests/engine/watch.spec.ts tests/engine/model-based.spec.ts
                  tests/sqlite/index-builds.spec.ts
                  tests/sqlite/schema-validation.spec.ts
+                 tests/sqlite/values.spec.ts
                  tests/sqlite/vector-execution.spec.ts
                  tests/sqlite/vector-candidates.spec.ts
                  tests/sqlite/text-scope.spec.ts
@@ -513,6 +514,9 @@ jobs:
             const cases=report.testResults.flatMap(file=>file.assertionResults);
             const required=[...shared,...(backend==='sqlite'?[
               'restored logical stores audits unchecked duplicate edge identities and invalid keyed info without repairing them',
+              'SQLite authoritative attribute layout projects a single-field page in one SQL call and patches a scalar without reading or encoding its large neighbors',
+              'SQLite authoritative attribute layout projects each lossless kind with ordered duplicates, absent rows and fresh composite ownership',
+              'SQLite authoritative attribute layout reopens existing layouts read-only and diagnoses missing or duplicate authoritative values',
               ...['obsolete relation unique','duplicate relation key','invalid relation key name','non-map relation key'].map(name=>`SQLite structural schema admission refuses '${name}' before changing data, layouts, indexes or revision`),
             ]:[])];
             for(const name of required) {

@@ -36,6 +36,25 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite authori
     expect(repeated[0]!.bytes).not.toBe(repeated[1]!.bytes);
   });
 
+  it('projects each lossless kind with ordered duplicates, absent rows and fresh composite ownership', () => {
+    const { values } = setup();
+    const fields = Object.fromEntries([['nil', null], ['flag', false], ['zero', 0], ['negative', -0],
+      ['text', 'hello'], ['body', 'x'.repeat(1024)], ['at', new Date(1234)], ['bytes', new Uint8Array([0, 255])],
+      ['array', [null, false, 0]], ['object', { nested: [1] }], ['__proto__', { own: true }], ['flexible', 'outside']]);
+    const layout = values.declare('Note', Object.keys(fields).filter(name => name !== 'flexible'));
+    values.set(layout, 'Note-one', fields);
+    for (const field of [...Object.keys(fields), 'absent', 'id', 'entityType']) {
+      const input = ['Note-missing', 'Note-one', 'Note-one'];
+      const rows = values.read(layout, input, [field]);
+      const expected = Object.fromEntries([['id', 'Note-one'], ['entityType', 'Note'],
+        ...(Object.hasOwn(fields, field) ? [[field, fields[field]]] : [])]);
+      expect(rows).toEqual([undefined, expected, expected]);
+      if (['array', 'object', '__proto__', 'bytes', 'at'].includes(field))
+        expect(rows[1]![field]).not.toBe(rows[2]![field]);
+      if (field === 'negative') expect(Object.is(rows[1]!.negative, -0)).toBe(true);
+    }
+  });
+
   it('allocates physical names without case-folding logical type or field names', () => {
     const { values } = setup();
     const lower = values.declare('Note', ['fooBar', 'foobar', '__proto__']);
@@ -88,7 +107,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite authori
     expect(Object.hasOwn(values.read(after, ['Note-a'])[0]!, 'newField')).toBe(false);
   });
 
-  it('projects a page in two SQL calls and patches a scalar without reading or encoding its large neighbors', () => {
+  it('projects a single-field page in one SQL call and patches a scalar without reading or encoding its large neighbors', () => {
     const { db, values, codec } = setup();
     const layout = values.declare('Message', ['rank', 'body', 'data']);
     for (let i = 0; i < 50; i++) values.set(layout, `Message-${i}`,
@@ -103,9 +122,9 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite authori
     expect(reads).toBe(0);
     expect(encodes).toBe(0);
     const page = values.read(layout, Array.from({ length: 50 }, (_, i) => `Message-${i}`), ['rank']);
-    expect(reads).toBe(2);
+    expect(reads).toBeLessThanOrEqual(1);
     expect(decodes).toBe(0);
-    expect(page[0]).toEqual({ id: 'Message-0', entityType: 'Message', rank: 99 });
+    expect(page).toEqual(Array.from({ length: 50 }, (_, i) => ({ id: `Message-${i}`, entityType: 'Message', rank: i === 0 ? 99 : i })));
     expect(values.read(layout, ['Message-0'])[0]!.body).toBe('body'.repeat(4096));
   });
 
@@ -129,11 +148,13 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite authori
     const ro = new SqliteDatabase({ path: db.path, readOnly: true });
     try {
       const reopened = new SqliteValues(ro, { encode: v => ro.pack(v), decode: v => ro.unpack(v) as unknown });
-      expect(reopened.read(reopened.layout('Note')!, ['Note-a'])[0]!.rank).toBe(1);
+      expect(reopened.read(reopened.layout('Note')!, ['Note-a'], ['rank'])[0]!.rank).toBe(1);
     } finally { ro.close(); }
     db.run('INSERT INTO value_overflow VALUES (?,?,?,?)', ['Note-a', 'rank', 'num', 2]);
+    expect(() => values.read(layout, ['Note-a'], ['rank'])).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
     expect(() => values.read(layout, ['Note-a'])).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
     db.run('DELETE FROM value_overflow WHERE entity_id=?', ['Note-a']);
+    expect(() => values.read(layout, ['Note-a'], ['body'])).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
     expect(() => values.read(layout, ['Note-a'])).toThrow(expect.objectContaining({ code: 'CORRUPT' }));
   });
 
