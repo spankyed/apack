@@ -17,7 +17,7 @@ it('renders rich content safely with highlighted code text and copy controls', (
   expect(rendered.root.querySelector('strong')?.textContent).toBe('bold')
   expect(rendered.root.querySelector('script')).toBeNull()
   expect(rendered.root.querySelector('img')).toBeNull()
-  expect(rendered.root.querySelector('code')?.textContent).toBe('const x = "<img onerror=x>"\n')
+  expect(rendered.root.querySelector('code')?.textContent).toBe('const x = "<img onerror=x>"')
   expect(rendered.root.querySelector('code .hljs-keyword')?.textContent).toBe('const')
   expect(rendered.root.querySelector('button')?.getAttribute('aria-label')).toBe('Copy code')
   rendered.dispose()

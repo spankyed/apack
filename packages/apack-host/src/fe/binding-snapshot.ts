@@ -17,6 +17,7 @@ export function captureFrontendBindings(registration: PackFERegistration, declar
     if (!isPlainObject(surface)) return [id, surface];
     const value = { ...surface };
     if (isPlainObject(value.extensions)) value.extensions = Object.freeze({ ...value.extensions });
+    if (isPlainObject(value.readOnly)) value.readOnly = Object.freeze({ ...value.readOnly });
     if (isPlainObject(value.popups)) value.popups = Object.freeze({ ...value.popups });
     return [id, Object.freeze(value)];
   }));

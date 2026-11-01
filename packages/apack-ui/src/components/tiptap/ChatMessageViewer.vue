@@ -35,6 +35,7 @@ watch([() => props.modelValue, groups, content], () => {
     const rendered = renderChat(parser, props.modelValue, adapters)
     rendered.root.className = 'ProseMirror'
     rendered.root.contentEditable = 'false'
+    rendered.root.style.whiteSpace = 'normal'
     content.value.replaceChildren(rendered.root)
     dispose = rendered.dispose
     problem.value = false

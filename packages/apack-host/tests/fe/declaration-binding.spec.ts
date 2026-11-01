@@ -270,3 +270,17 @@ it('matches declared read-only capabilities and refuses missing, foreign or non-
   expect(frontendBindingProblem(editorOnly, valid)).toContain('readOnly');
   expect(frontendBindingProblem({ id: 'viewer-pack', extensions: { textEditor: { viewer: {} } } }, valid)).toContain('readOnly');
 });
+
+
+it('captures read-only adapter callbacks before a caller can mutate the registered object', () => {
+  const registry = createNativeFrontendTestRegistry([{ id: 'viewer', textEditor: {
+    messages: { readOnly: 'native/viewer.ts#Viewer' },
+  } }]);
+  const decorate = vi.fn();
+  const adapter = { decorate };
+  registry.registerFixture({ id: 'viewer', textEditor: { messages: { readOnly: adapter } } });
+  adapter.decorate = vi.fn();
+  const captured = registry.textEditor()[0].binding.readOnly;
+  expect(captured && captured.decorate).toBe(decorate);
+  expect(Object.isFrozen(captured)).toBe(true);
+});
