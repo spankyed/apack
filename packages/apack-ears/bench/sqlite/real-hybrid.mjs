@@ -1,7 +1,7 @@
 // Private paired-corpus correctness probe. Reports never contain source text, IDs or vectors.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { closeSync, createReadStream, existsSync, mkdtempSync, openSync, readFileSync, readSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, createReadStream, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, readSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { cpus, tmpdir } from 'node:os';
@@ -101,6 +101,22 @@ const save = () => {
 };
 const directory = mkdtempSync(join(tmpdir(), 'ears-real-hybrid-'));
 let db;
+// Sample outside timed queries. These are whole-process cumulative peaks and file-size snapshots,
+// not per-query allocations, peak disk use, allocated blocks or an isolated engine memory cost.
+const sampleResources = () => {
+  const files = { mainBytes: 0, walBytes: 0, shmBytes: 0, otherBytes: 0, totalBytes: 0 };
+  const visit = path => { for (const entry of readdirSync(path, { withFileTypes: true })) {
+    const full = join(path, entry.name);
+    if (entry.isDirectory()) { visit(full); continue; }
+    assert(entry.isFile(), 'Owned benchmark directory must contain ordinary files');
+    const bytes = statSync(full).size;
+    const category = entry.name === 'data.sqlite3' ? 'mainBytes' :
+      entry.name.endsWith('-wal') ? 'walBytes' : entry.name.endsWith('-shm') ? 'shmBytes' : 'otherBytes';
+    files[category] += bytes; files.totalBytes += bytes;
+  } };
+  visit(directory);
+  return { memory: process.memoryUsage(), usage: process.resourceUsage(), files };
+};
 try {
   db = new SqliteDatabase({ path: directory, syncs: true, nativeVectorExtension: nativeExtension, schema: toElmdbSchema({ types: {
     Row: { required: [], search: { fields: { title: 3, body: 1 } },
@@ -148,6 +164,7 @@ try {
     report.nativeModelReady = required;
     report.exactVectorChunkLimit = EXACT_VECTOR_CHUNK_LIMIT;
   }
+  report.resourceSnapshots = { afterAdmission: sampleResources() };
   report.sqlite = db.get('SELECT sqlite_version() version').version;
   report.synchronous = db.sql.pragma('synchronous', { simple: true });
   assert.equal(report.synchronous, 2);
@@ -225,6 +242,10 @@ try {
     report.samples.push({ cohort: cohort.name, family: input.family, query: input.ordinal, ms, vectorRecall, ...(candidateWidths ? { candidateWidths } : {}), fullRankingOverlapAt10, heartbeatDelaysMs: pulse.delaysMs, textMatches: textIds.length, vectorMatches: vectorIds.length, returned: actual.length });
     if (report.samples.length % 25 === 0) save();
   }
+  report.resourceSnapshots.afterQueriesAndReferences = sampleResources();
+  report.maxRssKiB = report.resourceSnapshots.afterQueriesAndReferences.usage.maxRSS;
+  report.memoryAfterQueries = report.resourceSnapshots.afterQueriesAndReferences.memory;
+  save();
   // Separate actual-plan pass; no bindings, query text, returned IDs or vectors enter the receipt.
   const diagnostic = inputs.find(input => input.family === 'corpus-lexical-control');
   report.diagnostics = cohorts.map(cohort => {
@@ -273,8 +294,7 @@ try {
   }
   report.nodeSha256 = sha(readFileSync(process.execPath));
   report.nativeBindings = loadedNativeBindings([getLoadablePath(), ...(nativeExtension ? [nativeExtension] : [])]);
-  report.maxRssKiB = process.resourceUsage().maxRSS;
-  report.memoryAfterQueries = process.memoryUsage();
+  report.resourceSnapshots.afterDiagnostics = sampleResources();
   report.completed = true;
 } finally {
   try {

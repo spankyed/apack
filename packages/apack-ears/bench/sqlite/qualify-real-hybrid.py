@@ -18,7 +18,35 @@ def percentile(values, fraction):
     return sorted(values)[max(0, math.ceil(len(values) * fraction) - 1)] if values else None
 
 
+def validate_resource_snapshots(report):
+    if 'cpuModels' in report:
+        assert isinstance(report['cpuModels'], list) and report['cpuModels']
+        assert all(isinstance(model, str) and model.strip() for model in report['cpuModels'])
+    if 'resourceSnapshots' not in report:
+        return
+    snapshots = report['resourceSnapshots']
+    assert set(snapshots) == {'afterAdmission', 'afterQueriesAndReferences', 'afterDiagnostics'}
+    peaks = []
+    for snapshot in snapshots.values():
+        assert set(snapshot) == {'memory', 'usage', 'files'}
+        memory, usage, files = snapshot['memory'], snapshot['usage'], snapshot['files']
+        assert all(finite(memory[key]) for key in ['rss', 'heapTotal', 'heapUsed', 'external', 'arrayBuffers'])
+        assert memory['rss'] > 0 and memory['heapTotal'] >= memory['heapUsed']
+        assert all(finite(usage[key]) for key in ['maxRSS', 'userCPUTime', 'systemCPUTime'])
+        assert usage['maxRSS'] > 0
+        assert set(files) == {'mainBytes', 'walBytes', 'shmBytes', 'otherBytes', 'totalBytes'}
+        assert all(type(value) is int and value >= 0 for value in files.values())
+        assert files['mainBytes'] > 0
+        assert files['totalBytes'] == sum(value for key, value in files.items() if key != 'totalBytes')
+    for name in ['afterAdmission', 'afterQueriesAndReferences', 'afterDiagnostics']:
+        peaks.append(snapshots[name]['usage']['maxRSS'])
+    assert peaks == sorted(peaks)
+    assert report['maxRssKiB'] == snapshots['afterQueriesAndReferences']['usage']['maxRSS']
+    assert report['memoryAfterQueries'] == snapshots['afterQueriesAndReferences']['memory']
+
+
 def validate(report, size, source, manifest_hash):
+    validate_resource_snapshots(report)
     assert report['protocol'] == 'ears-private-real-hybrid/1'
     assert report['completed'] is True and report['databaseScratchRemoved'] is True
     assert report['qualification'] is False and report['containsPayload'] is False
@@ -168,6 +196,7 @@ def main():
     groups = []
     for size in [1000, 10000, 99900]:
         report = json.loads((args.results / f'hybrid-{size}.json').read_text())
+        assert 'cpuModels' in report and 'resourceSnapshots' in report, 'Current runs must record phase resources and CPU models'
         groups.extend(validate(report, size, args.source, manifest_hash))
     receipt = {'completed': True, 'protocol': 'ears-real-hybrid-matrix-receipt/1', 'source': args.source,
                'queriesVerified': 1800, 'groups': groups, 'qualification': False,
