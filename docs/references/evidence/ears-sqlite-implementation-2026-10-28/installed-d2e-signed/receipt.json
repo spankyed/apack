@@ -1,0 +1,171 @@
+{
+  "source": "d2e6f5f74e40f04af29b81d0054035c94125902d",
+  "run": "https://github.com/spankyed/apack/actions/runs/41353996620",
+  "scope": "Private test-signed hardened-runtime Preview and six installed cases; no timestamp/notarization, distribution, performance or complete adoption qualification",
+  "signingStep": "success",
+  "temporaryKeychainCleanupStep": "success",
+  "cleanupScope": "Workflow command/step outcome; no certificate/keychain identity or raw signing log is published",
+  "originalAppReportSha256": "cd3cf3da652866d659c33e6f4c40150ebc5021af25098375634c3fdf5a465dd9",
+  "originalPostSignNativeLogSha256": "02e59ba8a40f9f82ab2ed8d89d6ac9a7f11c2b7108869b071d9a19020178f5b3",
+  "stats": {
+    "startTime": "2026-11-01T22:28:16.567Z",
+    "duration": 14982.212,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "name": "app-integration/sqlite-storage.spec.ts > packaged SQLite stores hold their model claims across the real API process",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 10020
+        }
+      ]
+    },
+    {
+      "name": "smoke/smoke.spec.ts > app launches without crashing",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 25
+        }
+      ]
+    },
+    {
+      "name": "smoke/smoke.spec.ts > app reaches connected state",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 27
+        }
+      ]
+    },
+    {
+      "name": "smoke/smoke.spec.ts > applicationState is accessible with surfaces loaded",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 18
+        }
+      ]
+    },
+    {
+      "name": "smoke/smoke.spec.ts > runs in an isolated per-worker test data dir",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 50
+        }
+      ]
+    },
+    {
+      "name": "smoke/smoke.spec.ts > publishes no session, though a test app has a debug port open",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 28
+        }
+      ]
+    }
+  ],
+  "native": {
+    "versions": {
+      "node": "22.17.1",
+      "acorn": "8.14.1",
+      "ada": "2.9.2",
+      "amaro": "0.4.1",
+      "ares": "1.34.5",
+      "brotli": "1.0.9",
+      "cjs_module_lexer": "2.1.0",
+      "cldr": "44.1",
+      "icu": "74.2",
+      "llhttp": "9.3.0",
+      "modules": "136",
+      "napi": "10",
+      "nbytes": "0.1.1",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.64.0",
+      "openssl": "0.0.0",
+      "simdjson": "3.12.3",
+      "simdutf": "7.0.0",
+      "sqlite": "3.50.0",
+      "tz": "2025b",
+      "undici": "6.21.2",
+      "unicode": "15.1",
+      "uv": "1.51.0",
+      "uvwasi": "0.0.21",
+      "v8": "13.8.258.26-electron.0",
+      "zlib": "1.3.1",
+      "zstd": "1.5.8",
+      "electron": "37.2.4",
+      "chrome": "138.0.7204.157"
+    },
+    "platform": "darwin",
+    "arch": "arm64",
+    "addons": [
+      {
+        "file": "node_modules/elmdb/elmdb.darwin-arm64.node",
+        "sha256": "ec23b30c340dfd7b87b30ec189d816639e1055fb3db6dc3e31565794edd88e89"
+      },
+      {
+        "file": "node_modules/@msgpackr-extract/msgpackr-extract-darwin-arm64/node.napi.glibc.node",
+        "sha256": "d73f6bcc6775bfe4497061e22afa4eea3cf1e58f60607cdbb10f7ec86a10e9fb"
+      },
+      {
+        "file": "node_modules/better-sqlite3/prebuilds/darwin-arm64.node",
+        "sha256": "6955619a7f8855d90d2137b74ee0cfc6f937c948174be018da5315b908c15155"
+      },
+      {
+        "file": "node_modules/fs-native-extensions/prebuilds/darwin-arm64/fs-native-extensions.node",
+        "sha256": "e7317e25b8eeaea787d8e7e5b2217e6ed68ee349ae93ac425f81c28cf7b33dc0"
+      },
+      {
+        "file": "node_modules/node-pty/build/Release/pty.node",
+        "sha256": "9e62bafde1a508f9028f41d5f8a053579744037011a3ddbf215226cd22d773db"
+      },
+      {
+        "file": "node_modules/@napi-rs/keyring-darwin-arm64/keyring.darwin-arm64.node",
+        "sha256": "bfbcf1666e68b0d2ad9cb45f0201ee12b1ffe0dc773b1a5605b203ad22ef30f0"
+      }
+    ]
+  },
+  "sqlite": {
+    "entry": "node_modules/@apackdev/ears/dist/sqlite/index.js",
+    "driverVersion": "13.0.3",
+    "sqliteVersion": "3.53.4",
+    "nativeManifest": {
+      "format": 1,
+      "platform": "darwin",
+      "arch": "arm64",
+      "upstream": "814fd8ef4d42d6567f1613a66f556c8194764d06",
+      "sourceSha256": "04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a",
+      "patchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+      "headersPackage": "13.0.3",
+      "extensionSha256": "5818e81526a71bb3d6a477db05eb93a7b101d1d5a333d7211a1273a0ec86bb4b"
+    },
+    "graphManifest": {
+      "format": 1,
+      "leidenVersion": "0.8.1",
+      "toolchain": "1.99.1",
+      "bindgenVersion": "0.2.105",
+      "sourceSha256": "540011397304601fea362342a273728d9f3c6539ebc06370562bb72c1a75e2de",
+      "loaderSha256": "51dca864da108c2491474c92d888cadc0697966e40ad623f7cb185cd0ed43b0f",
+      "wasmSha256": "83e0de2bd7d3df8e8956733dba3584d5ab5d155e92ae68591b33cb5b9c0023d5"
+    }
+  }
+}
