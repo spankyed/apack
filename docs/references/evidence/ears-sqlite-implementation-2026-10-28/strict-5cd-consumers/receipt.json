@@ -1,6 +1,6 @@
 {
   "source": "5cde3fc26de94a4e6bc2e5910e425aaa2190b735",
-  "scope": "Completed current-runtime app-and-rest and integration-2; other three consumers remain live. Later CI-only fault/startup/admission recipes are not covered",
+  "scope": "Completed current-runtime app-and-rest, integration-2 and native-2; integration-1/native-1 remain live. Later CI-only fault/startup/admission recipes are not covered",
   "consumers": [
     {
       "name": "app-and-rest",
@@ -18,6 +18,16 @@
       "passedTests": 580,
       "skippedTests": 1,
       "chainSeconds": 1241.4,
+      "cache": "Inputs changed; no reusable successful stamp"
+    },
+    {
+      "name": "native-2",
+      "endedFiles": 8,
+      "passedFiles": 7,
+      "skippedFiles": 1,
+      "passedTests": 47,
+      "skippedTests": 26,
+      "chainSeconds": 1404.0,
       "cache": "Inputs changed; no reusable successful stamp"
     }
   ],
