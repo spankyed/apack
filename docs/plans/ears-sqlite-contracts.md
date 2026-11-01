@@ -1,6 +1,6 @@
 # EARS backend contracts for SQLite
 
-Current integrated app master is `984f1b4aca6d99719a323ec779808def5b2d1c9b`; the pinned native engine
+Current integrated app master is `461f7bf2cb9f52b968957a423744168740bf37a7`; the pinned native engine
 is `f496470679a7bd9764398108b20f62a73333c701`. The current goal records subsequent relation-key and canonical-schema qualification; the weighted receipt below retains its original source. [Focused weighted execution](../references/evidence/ears-sqlite-implementation-2026-10-28/weighted-focused-4ded/README.md) verifies the new shared weight contracts and lossless logical paths, with only retained text relevance failing. This does not qualify final platform, performance or app acceptance. Earlier [native integration evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-2441-integration/README.md)
 and comparisons retain their original `2441af4658` pin.
 The [SQLite goal](../goals/goal-ears-sqlite.md#current-handoff) owns current candidate source, qualification
@@ -41,7 +41,7 @@ Paths in the test column are relative to `packages/apack-ears/tests/` unless pre
 
 ## Integration boundaries
 
-The current integrated base is app master `984f1b4aca6d99719a323ec779808def5b2d1c9b` with native engine/binding
+The current integrated base is app master `461f7bf2cb9f52b968957a423744168740bf37a7` with native engine/binding
 `f496470679a7bd9764398108b20f62a73333c701`; the EARS adapter uses the structured relation
 direction protocol. App `05490e387a` with native `7b484b0834720d6d7b4fb89270d4ac02a6f42c1d`, and native
 `2441af4658`, belong to earlier checkpoints. Earlier integration
@@ -85,22 +85,22 @@ SQLite applies the omission per changed value rather than serializing a structur
 
 The shipping targets in `electron-builder.mjs` are macOS arm64, Windows x64 and Linux x64.
 Local Linux arm64 is a validation environment, not an additional shipping target. The recorded
-master rebase preserves the previous package trees; the integrated master is `984f1b4aca6d99719a323ec779808def5b2d1c9b`, with native pin
+master rebase preserves the previous package trees; the integrated master is `461f7bf2cb9f52b968957a423744168740bf37a7`, with native pin
 `f496470679a7bd9764398108b20f62a73333c701`. Earlier package trees remain historical evidence.
-Three-host Node/backend passes do not prove packaged Electron loading. Existing signed installed
-macOS arm64 evidence predates the latest runtime inputs and needs final requalification.
+Three-host Node/backend passes do not prove packaged Electron loading. Current packaged and signed installed evidence covers the projected-hit runtime corrections; later CI-only probe recipes do not change those runtime inputs.
 
 The new `installed-platform` dispatcher builds the normal unsigned Preview on Windows x64 and
 Linux x64, then calls the existing `build/prod/smoke-native.mjs` against its unpacked resources.
 It requires actual packaged Electron provenance, native ownership,4097-vector worker model admission,
 FTS/regex queries and read-only reopen, plus elmdb/PTY/keyring controls. Its evidence is explicitly
 native/API runtime only: renderer, installer/signature and final app/platform/strict acceptance remain
-separate. [Current-source Linux execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-linux/README.md)
-passes inside Electron 37.2.4 at `2d1307c672`, with four Preview contract passes. Matching
-[Windows execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-windows/README.md)
-also passes with four Preview contract cases. [Signed macOS installed execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-signed/README.md)
-also passes all six selected installed cases, post-sign native smoke and deep strict verification.
-This private test signing has no timestamp/notarization and does not certify distribution. Missing/skipped witnesses refuse; pending execution is not qualification.
+separate. [Current Linux/Windows qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-b7b/README.md)
+at `b7bfb36671` passes both packaged native runtimes and all four Preview contract cases per platform.
+[Current signed macOS qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d2e-signed/README.md)
+at `d2e6f5f74e` passes deep/strict signature verification, post-sign native smoke and all six installed cases once.
+These checkpoints include the projected-hit runtime corrections; their later differences are CI/evidence inputs.
+Private signing has no timestamp/notarization and does not certify distribution. Missing/skipped witnesses refuse;
+Node-only checks do not establish packaged execution, and these passing installed cases do not establish performance acceptance.
 
 ## Candidate invariant and maintenance review
 
@@ -358,12 +358,12 @@ subtest does not complete the phase that contains it.
 
 | Goal phase | Current evidence | Requirement still open |
 | --- | --- | --- |
-| 1: Freeze contracts and integrate | Rebased master `461f7bf2cb`, unchanged elmdb `f496470`, current contract matrix. The prior f61 producer and all four integration/native consumers pass with documented platform exclusions and changed-input cache warnings. | The complete prior host pool finishes in 504.7 seconds under its unchanged 600-second ceiling with only the retained keyword failure; all four integration/native consumers pass. Complete [current-runtime strict/platform 41351404379](https://github.com/spankyed/apack/actions/runs/41351404379), including projected-hit corrections. Source integration is not acceptance. |
+| 1: Freeze contracts and integrate | Rebased master `461f7bf2cb`, unchanged elmdb `f496470`, current contract matrix. [Current strict receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-5cd-consumers/README.md) include all four passing integration/native consumers, with documented platform exclusions and changed-input/no-cache-stamp warnings. Host completes all 612 files in 304.7 seconds under its unchanged 600-second ceiling, with 7,010 passes, the retained keyword failure and 95 exclusions. | The keyword failure stops later dependent chain gates; a passing consumer or source integration does not establish complete strict acceptance. Reconcile relevant future master/runtime inputs deliberately. |
 | 2: Structured storage and SQL slice | [Combined projected-hit qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/projection-a4a/README.md) at a4a passes all 29 cost cases, source/test types, zero API diff and both actual source-reversion controls. Final hit projection now batches selective reads instead of issuing per-hit SQL. Shared SQLite/native pass 454/263 cases with only the retained keyword failure. | Complete current-runtime strict/platform/installed acceptance and remaining matched workload/transport/allocation requirements. Narrow cost proof and earlier timing comparisons are not final-source universal performance claims. |
-| 3: Declarations, admission and watches | Definite refusal preserves incumbent files/authority; both real-write-unit cases pass on all three platforms. Actual EARS/installed-host mutation controls detect reverting scoped readiness. All twelve sustained durable write/watch cohorts converge at bd4; SQLite heartbeat p99 passes 16 ms in those six cohorts. | Inspect numeric-order-corrected sustained remeasurement [41345726834](https://github.com/spankyed/apack/actions/runs/41345726834), qualify concurrent admission/app/resource regimes and preserve maximum stalls. Ordinary admission retains a 16.39 ms heartbeat miss against 16 ms. |
+| 3: Declarations, admission and watches | Definite refusal preserves incumbent files/authority; real-write-unit cases pass on all three platforms. Actual EARS/installed-host mutation controls detect reverting scoped readiness. [Current sustained measurement](../references/evidence/ears-sqlite-implementation-2026-10-28/sustained-1cf/README.md) has twelve converged durable cohorts and a real ordering-cost reversion control. SQLite open-view heartbeat p99 misses 16 ms in two of three cohorts. | Concurrent admission/watch [41357469774](https://github.com/spankyed/apack/actions/runs/41357469774) remains live; inspect its actual outcomes, then qualify remaining app/resource regimes. Ordinary admission retains a 16.39 ms heartbeat miss against 16 ms. Cross-run variance precludes a universal speedup claim. |
 | 4: Search and vectors | Frozen English hybrid usefulness is 25/25 with one pinned model; current managed Scalar/AVX2 corpora pass independent recall and query-p95 limits. | Keyword remains 24/25 without waiver. Language/provider/UI/model variance and foreground responsiveness remain unqualified; nine/eight paired heartbeat groups fail. Chunk-skew fallback reaches 91.44 ms heartbeat p99. |
 | 5: Complete app lifecycle | [Current-runtime source-app qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-5cd/README.md) at 5cd passes all 33 cases once, one packaged-only exclusion, no retries/flakes. Host refusal/rollback/readiness controls pass. The new graph-hit projected-field watch case passes on both engines, with actual reversion failure on SQLite. The earlier 50c real-flow baseline admits all 120 measured actions and 30 warmups across both stores. | Finish remaining failure scenarios, cold/reopen/update and provider/device/resource variance. The single warm native-first macOS flow comparison uses different default durability and predates later runtime corrections; it does not establish engine-only effects or all resource budgets. |
-| 6: Operations and packaging | Node/platform refusal, corruption, recovery and native tests have pinned evidence with explicit exclusions. Packaged Windows/Linux and private signed macOS checks pass at 2d, before the numeric-order correction and rebase. | Qualify final-source installed/signing behavior; inspect [bounded WAL/contention run 41346500465](https://github.com/spankyed/apack/actions/runs/41346500465), then finish worker/storage fault extremes and remaining resource regimes. Private signing is not notarized distribution; process death and injected errors do not certify physical power loss or arbitrary filesystems. |
+| 6: Operations and packaging | [Current three-platform checks](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-5cd/README.md), [packaged Windows/Linux](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-b7b/README.md) and [private signed macOS](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d2e-signed/README.md) cover current runtime corrections. [Bounded WAL/contention](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-bd3/README.md) verifies retained-reader growth, writer refusal/reuse and reclamation, with sub-second loops. | Corrected worker read-fault/API [41358564039](https://github.com/spankyed/apack/actions/runs/41358564039) is pending; prior compile/error-expectation failures remain preserved. Finish remaining worker/storage fault and long-duration/device/resource regimes. Private signing is not notarized distribution; process death and injected errors do not certify physical power loss or arbitrary filesystems. |
 | 7: Ownership and adoption | This matrix and the invariant, algorithmic and dependency reviews identify concrete owned costs and failure boundaries. | Full requirement-by-requirement final recommendation after remaining evidence or explicit approved dispositions; no acceptance requirement has been waived. |
 
 The main execution decision is now foreground search ownership. Owner caps, native scoring and
