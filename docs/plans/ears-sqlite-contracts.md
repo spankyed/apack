@@ -245,7 +245,9 @@ read snapshot. It retains RRF scores; vector-only winners keep empty text metada
 second read does not reevaluate the original candidate pipeline. Multiple types, prior
 limits, recency time, list/phrase boundaries and marker collision retries remain semantic
 requirements. The work reduction concerns formatting/transferred bodies, not bounded total
-ranking or SQL posting work.
+ranking or SQL posting work. A real independent-writer regression also commits a body change between
+ranking and detail retrieval, requires original-snapshot output, and confirms the
+new value becomes visible after the read. It adds no production fault hook.
 
 The new actual-driver witness compares original component ranks/canonical highlights,
 checks mixed-type limited scopes and vector-only/absent results, and observes that every

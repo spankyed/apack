@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -68,4 +68,47 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('hybrid winner 
       }
     } finally { db.all = all; db.close(); rmSync(path, { recursive: true, force: true }); }
   });
+
+  it('keeps deferred text details in the ranking snapshot when an independent writer commits between phases', async () => {
+    const path = mkdtempSync(join(tmpdir(), 'ears-hybrid-highlight-snapshot-'));
+    const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema({ types: {
+      Row: { required: [], search: { fields: { body: 1 } }, embed: { from: ['title'], model: 'fixture', dims: 2 } },
+    }, relations: {}, roles: [] }) });
+    let peer: SqliteDatabase | undefined, restore: (() => void) | undefined;
+    const text = db.search.text.bind(db.search);
+    const original = 'needle original', updated = 'committed through independent writer';
+    try {
+      const e = createEarsEngine({ database: db });
+      e.create('Row', { id: 'Row-first', title: 'first', body: original });
+      e.create('Row', { id: 'Row-other', title: 'other', body: 'unrelated' });
+      await db.indexesReady();
+      const pending = e.pendingEmbeddings('Row', { limit: 10 });
+      e.embed(pending.chunks.map(chunk => ({ ...chunk, model: pending.model,
+        vector: chunk.id === 'Row-first' ? [1, 0] : [-1, 0] })));
+      const query = () => e.query('Row').hybrid('needle', [1, 0], { fuzzy: false, k: 1 }).hits({ highlights: true });
+      const expected = query();
+      expect(expected.map(hit => hit.id)).toEqual(['Row-first']);
+      expect(expected[0]!.terms).toContain('needle');
+      peer = new SqliteDatabase({ path, syncs: false });
+      const writer = createEarsEngine({ database: peer });
+      let committed = false;
+      const observation = vi.spyOn(db.search, 'text').mockImplementation((scope, type, query, options, wantHits, limit) => {
+        const answer = text(scope, type, query, options, wantHits, limit);
+        if (!wantHits && !committed) {
+          writer.write('Row-first').set('body', updated);
+          committed = true;
+        }
+        return answer;
+      });
+      restore = () => observation.mockRestore();
+      expect(query()).toEqual(expected);
+      expect(committed).toBe(true);
+      expect(writer.getRow('Row-first')!.body).toBe(updated);
+      expect(e.getRow('Row-first')!.body).toBe(updated);
+    } finally {
+      restore?.();
+      db.close(); peer?.close(); rmSync(path, { recursive: true, force: true });
+    }
+  });
+
 });
