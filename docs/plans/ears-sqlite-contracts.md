@@ -418,6 +418,11 @@ Mixed/unknown scopes still discover actual types. Existing inline/overflow cost 
 absence of the redundant discovery, and a traversal control distinguishes a narrowed destination type
 from seed/mixed types. The focused disposable suite now collects the cost file.
 
-This correction is syntax-checked only; types/runtime/negative-control execution and remeasurement
-remain required. No speedup is inferred from reducing one scan. Preserve the live app-flow run before
-queuing focused qualification, then measure the relevant ordered workload on the corrected source.
+[Focused qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/ordering-126/README.md)
+passes all 28 cost cases and 114 host cases at `126d5a9dff`, source/test types and an empty API diff.
+Only the retained keyword judgment fails. A later disposable Linux source-mutation control must
+restore the old discovery call, require the intended cost assertion to fail, and restore source bytes
+before repeated workload measurement. Its child trees use the maintained bounded process owner.
+The new metadata gate rejects twelve missing/skipped/duplicate/replaced witness controls against
+the original passing report. Source-mutation execution and remeasurement remain unproven; no
+speedup is inferred from reducing one scan. Final platform/app qualification remains separate.

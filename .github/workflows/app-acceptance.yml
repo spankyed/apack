@@ -218,6 +218,8 @@ jobs:
           npm ci
           npm run packages:build
           npm run typecheck -w @apackdev/ears
+      - name: Prove numeric ordering rejects the previous discovery cost
+        run: node --import tsx .github/scripts/ears-numeric-order-control.mjs
       - name: Repeated matched durable write-watch trials
         run: |
           set -euo pipefail
@@ -850,6 +852,17 @@ jobs:
           for(const backend of ['elmdb','sqlite']) {
             const report=JSON.parse(readFileSync(`.temp/sqlite-api/${backend}-contracts.json`,'utf8'));
             const cases=report.testResults.flatMap(file=>file.assertionResults);
+            if(backend==='sqlite') {
+              const files=report.testResults.filter(file=>file.name.replaceAll('\\','/').endsWith('/tests/sqlite/query-cost.spec.ts'));
+              assert.equal(files.length,1,'The full query-cost file must execute once');
+              const costs=files[0].assertionResults;
+              assert(costs.length>=28&&new Set(costs.map(test=>test.fullName)).size===costs.length,'All unique cost cases must execute');
+              for(const test of costs)assert.equal(test.status,'passed',test.fullName);
+              for(const name of ['SQLite ordering work uses keyed sort-value reads for a single type (inline)',
+                'SQLite ordering work uses keyed sort-value reads for a single type (overflow)',
+                'SQLite ordering work uses a traversed single type without leaking a seed type into mixed or untyped ordering'])
+                assert.equal(costs.filter(test=>test.fullName===name).length,1,`Missing cost witness: ${name}`);
+            }
             const required=[...shared,...(backend==='sqlite'?[
               'yielding value-index admission admits a healthy type despite an unrelated failed retained index while global readiness still refuses',
               'yielding value-index admission rejects scoped readiness when its admitted generation is retired instead of accepting its replacement',
