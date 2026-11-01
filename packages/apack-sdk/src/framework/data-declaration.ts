@@ -41,11 +41,11 @@ export interface PackRelationDeclaration {
   /** A link that would close a cycle through this kind is refused (`CYCLE`): a tree, a folder hierarchy */
   readonly acyclic?: boolean;
   /**
-   * At most one edge of this kind from an entity to another; linking the pair again replaces the edge's info and
-   * weight. On by default for a `weighted` kind, so a link sets an edge's weight rather than adding an edge;
-   * `false` keeps parallel edges, whose weights a `rank` adds
+   * The info fields that, with its two ends, identify an edge, a field the info doesn't hold being null. Without one,
+   * two entities are joined by one edge of the kind at most; with one, by one for each value of its fields, whose
+   * weights a `rank` adds. A link to an identity an edge holds updates that edge's info and weight
    */
-  readonly unique?: boolean;
+  readonly key?: readonly string[];
   /** Each edge carries a weight, 1 unless a link gives another, which `rank` and `communities` read */
   readonly weighted?: boolean;
 }
@@ -181,12 +181,9 @@ export function _packWeightedKinds(declaration: PackDataDeclarations): Record<st
 /** @internal What each of the pack's relation kinds that declares a rule holds its edges to, by wire name */
 export function _packRelationRules(declaration: PackDataDeclarations): Record<string, RelationRules> {
   const rules: Record<string, RelationRules> = {};
-  for (const [wire, { acyclic, unique, weighted }] of Object.entries(declaration.data?.relations ?? {})) {
-    // A weighted kind is unique unless it says otherwise: a link sets an edge's weight, the common case, rather than
-    // adding a second edge beside it
-    const isUnique = unique ?? weighted ?? false;
-    if (acyclic || isUnique || weighted) {
-      rules[wire] = { ...(acyclic && { acyclic }), ...(isUnique && { unique: true }), ...(weighted && { weighted }) };
+  for (const [wire, { acyclic, key, weighted }] of Object.entries(declaration.data?.relations ?? {})) {
+    if (acyclic || key?.length || weighted) {
+      rules[wire] = { ...(acyclic && { acyclic }), ...(key?.length && { key }), ...(weighted && { weighted }) };
     }
   }
   return rules;

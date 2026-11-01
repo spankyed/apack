@@ -536,7 +536,7 @@ export interface PackRegistration {
 // @public
 export interface PackRelationDeclaration {
     readonly acyclic?: boolean;
-    readonly unique?: boolean;
+    readonly key?: readonly string[];
     readonly weighted?: boolean;
 }
 

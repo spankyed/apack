@@ -81,8 +81,9 @@ WRITE API (create / upsert / write):
   Relations (chainable):
     .link(EARS.RelKind.CONTAINS, targetId)         add relation
     .link(kind, targetId, { info })                add relation carrying info
-                                                   (a kind declared unique keeps one edge to a target,
-                                                   and one declared acyclic refuses a cycle: CYCLE)
+                                                   (an entity has one edge of a kind to a target, which linking
+                                                   again updates, unless the kind declares a key in its info;
+                                                   one declared acyclic refuses a cycle: CYCLE)
     .unlink(kind, targetId?)                       remove relations of a kind (to one target)
     .unlinkAll()                                   remove every relation from this entity
 
