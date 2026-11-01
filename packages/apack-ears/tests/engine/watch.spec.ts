@@ -41,7 +41,8 @@ describe('watch', () => {
     e.write(b).set('title', 'renamed destination');
     await settled();
     expect(w.errors).toEqual([]);
-    expect(w.last()?.map(hit => hit.row)).toEqual([{ id: b, title: 'renamed destination' }]);
+    expect(w.last()?.map(hit => hit.row), 'Projected hit rows must refresh after a row-only commit')
+      .toEqual([{ id: b, title: 'renamed destination' }]);
     expect(w.last()![0]!.score).toBe(score);
     expect(w.seen.at(-1)!.commit).toBe(e.lastCommit());
   });

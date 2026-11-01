@@ -23,7 +23,7 @@ const controls = [
     title: 'refreshes graph-ranked hit projections when only a returned field changes',
     fullName: 'watch refreshes graph-ranked hit projections when only a returned field changes',
     needle: 'if (projected) for (const id of projected.keys()) db.trackKey(`entity:${id}`);', replacement: '',
-    failure: 'renamed destination' },
+    failure: 'Projected hit rows must refresh after a row-only commit' },
 ];
 async function run(control, stage) {
   const name = control.name + '-' + stage;
