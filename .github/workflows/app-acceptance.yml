@@ -161,6 +161,7 @@ jobs:
           npm ci
           npm run packages:build
           npm run typecheck -w @apackdev/ears
+          npm run typecheck:host
       - name: Admission trials or explicit runtime diagnostic under enforced limits
         env:
           ADMISSION_KIND: ${{ matrix.kind }}

@@ -11,6 +11,9 @@ import * as os from 'node:os';
 import type { SurfaceDefinition } from '@apackdev/sdk/fe';
 
 import { resetTestData } from '@apackdev/sdk/testing';
+import { _bindEars } from '@apackdev/sdk/ears';
+import { DatabaseSync } from 'node:sqlite';
+import { openDatabaseStore } from '../../../src/database/index.ts';
 import { registry } from './test-host.ts';
 import { appliedContent, appState } from '../../../src/app-state/index.ts';
 
@@ -90,6 +93,45 @@ describe('installed runtime acceptance', () => {
       expect(isolated.getPackRegistration(id)).toBeNull();
       expect(isolated.loadProblem(id)).toContain('index build failed');
     } else isolated.unregisterPack(id);
+  });
+
+  it('activates an installed pack against real SQLite despite an unrelated failed retained index', async () => {
+    const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
+    const { activatePack } = await import('../../../src/packs/runtime/lifecycle.ts');
+    const isolated = createNativePackTestRegistry({ indexesReady: types => database.indexesReady(types) });
+    isolated.registerPack({ id: 'retained-pack', ears: { entities: { Retained: 'Retained' }, relKinds: {}, roles: {} } });
+    const { database, engine } = openDatabaseStore({
+      path: path.join(tmpDir, 'sqlite-store'), storageFormat: 'sqlite/1', schema: isolated,
+    });
+    const previous = _bindEars(engine);
+    try {
+      engine.create('Retained', { id: 'Retained-1', slug: 'still-readable' });
+      isolated.unregisterPack('retained-pack');
+      engine.admin.declare({ types: { Retained: { required: [], indexes: ['slug'] } }, relations: {}, roles: [] });
+      const sequence = engine.lastCommit();
+      // Inject a valid persisted derived-failure state through an independent SQLite connection.
+      // Canonical data/schema/commit identity stay intact; the EARS regression covers the real backfill fault.
+      const fault = new DatabaseSync(path.join(database.path, 'data.sqlite3'));
+      try {
+        expect(fault.prepare("UPDATE index_builds SET state='failed',error='retained backfill failure' WHERE type='Retained' AND kind='value' AND name='slug'").run().changes).toBe(1);
+      } finally { fault.close(); }
+      expect(engine.lastCommit()).toBe(sequence);
+      await expect(database.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+      const id = 'healthy-live-pack', source = path.join(tmpDir, 'healthy-source'), marker = path.join(tmpDir, 'healthy-initialized');
+      writeManifest(source, { id, name: id, version: '1.0.0', lifecycle: { onInit: 'init.ts#onInit' } });
+      writeBuild(source, id, '{}, lifecycle: { onInit() { const ids = require("@apackdev/sdk/ears").untypedQuery("Retained").ids(); require("node:fs").writeFileSync(' + JSON.stringify(marker) + ', JSON.stringify(ids)); } }');
+      await installPackFromLocal(source, packsDir());
+      const bus = { send: vi.fn() };
+      expect(await activatePack(isolated, id, bus as never), isolated.loadProblem(id)).toBe(true);
+      expect(JSON.parse(fs.readFileSync(marker, 'utf8'))).toEqual(['Retained-1']);
+      expect(isolated.getPackRegistration(id)).not.toBeNull();
+      expect(isolated.loadProblem(id)).toBeUndefined();
+      expect(engine.query('Retained').where('slug', 'still-readable').ids()).toEqual(['Retained-1']);
+      await expect(database.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+    } finally {
+      _bindEars(previous);
+      database.close();
+    }
   });
 
   it.each([false, true])('restarts or stops both old and new system ids after acceptance (init failure: %s)', async fails => {

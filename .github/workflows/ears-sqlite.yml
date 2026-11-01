@@ -131,11 +131,17 @@ jobs:
             --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/scoped-readiness-negative.json \
             > .temp/sqlite-platform/scoped-readiness-negative.log 2>&1
           readiness_status=$?
+          npm test -w @apackdev/host -- tests/packs/runtime/lifecycle.spec.ts --maxWorkers=2 \
+            -t 'activates an installed pack against real SQLite despite an unrelated failed retained index' \
+            --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/pack-readiness-negative.json \
+            > .temp/sqlite-platform/pack-readiness-negative.log 2>&1
+          host_readiness_status=$?
           set -e
           cp "$readiness_original" "$readiness_source"
           cmp "$readiness_original" "$readiness_source"
           git diff --exit-code -- "$readiness_source"
           test "$readiness_status" -ne 0
+          test "$host_readiness_status" -ne 0
           node --input-type=module <<'JSCONTROL'
           import assert from 'node:assert/strict';
           import { readFileSync } from 'node:fs';
@@ -147,6 +153,13 @@ jobs:
           assert.equal(failed.length, 1);
           assert.equal(failed[0].fullName, 'yielding value-index admission admits a healthy type despite an unrelated failed retained index while global readiness still refuses');
           assert.match(failed[0].failureMessages.join('\n'), /unrelated backfill failure/);
+          const host = JSON.parse(readFileSync('.temp/sqlite-platform/pack-readiness-negative.json', 'utf8'));
+          const hostFailed = host.testResults.flatMap(file => file.assertionResults).filter(test => test.status === 'failed');
+          assert.equal(host.numFailedTests, 1);
+          assert.equal(host.numPassedTests, 0);
+          assert.equal(hostFailed.length, 1);
+          assert.equal(hostFailed[0].fullName, 'installed runtime acceptance activates an installed pack against real SQLite despite an unrelated failed retained index');
+          assert.match(hostFailed[0].failureMessages.join('\n'), /retained backfill failure/);
           JSCONTROL
       - name: Real filesystem full rollback and reuse
         if: runner.os == 'Linux'
