@@ -394,9 +394,9 @@ JSON or accidentally normalize the persisted data. Logical field names replace p
 The records cover schema/application metadata and counters, ordered entity identities (live and trashed),
 every logical field, relations with their identity/order/info, and stored embeddings with complete
 entity/index/chunk/content-hash/model/dimension identity and Float32 bytes. Preserve reusable embeddings
-independently of derived generation numbers. The current coupling between embeddings and generation-owned
-chunks needs an explicit restore path; the currently unsupported unchecked embedding load must not silently
-lose vectors during conversion. Media, packs and secrets remain separately owned by the host backup format.
+independently of derived generation numbers. Primary `embedding_values` now owns those bytes; generation-owned
+chunks reference them. Unchecked embedding load and logical staging/restore preserve full identities, including
+dormant reusable vectors, without making a derived generation authoritative. Media, packs and secrets remain separately owned by the host backup format.
 
 Snapshot the source to a private directory first. Stream from that immutable copy in small entity batches,
 using bounded native slot pages and an overflow cursor so output backpressure never pins a live app reader.
@@ -462,14 +462,16 @@ backfill cursor. Trash changes update that owner's native rows in the same trans
 Canonical bytes stay in `embedding_values`; native rows are derived. Readiness publishes
 after backfill, without a logical data commit. A nonempty group cannot be dropped through
 the retirement operation. Candidate queries apply owner scopes before K. When a model owner is attached and ready,
-EARS expands its chunk budget from 256 to at most 4096 until at least 256 distinct owners
-are available, then reranks all current canonical chunks for those owners with stable
-entity-sequence ties. Too few native owners retain the ordinary owner-level fallback.
+EARS requests 256 distinct owners through K=32, 1024 through K=40, and 2048 through K=64.
+Duplicate-chunk expansion grows the native page up to 4096 chunks until that target is supplied;
+all returned distinct owners are retained, then every current canonical chunk for those owners is
+reranked with stable entity-sequence ties. Too few native owners retain the ordinary owner-level fallback.
 Small scopes (at most 4096 eligible chunks), K above 64 and unsupported dimensions remain exact.
-The new unqualified candidate allows bounded routing through K=64, within the existing 256-owner
-pool, so the default hybrid window of 40 can use it. The real hybrid probe checks recall at
-10, 40 and 64 against complete exact rankings, separately for every scope/query family. This is internal candidate
-routing; these rules alone establish neither performance/recall acceptance nor product adoption.
+The native page cap does not bound canonical reranking work: one selected owner may have many chunks.
+Phase-4/7 resource qualification must cover that skew as well as one-chunk-per-owner corpora.
+[The current managed corpus](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b99/README.md)
+passes mean recall at 10/40/64 against independent Float64 truth in each scope/family, but still misses eight
+heartbeat groups. This is neither complete fallback/model-state qualification nor product adoption.
 
 The [lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-generation-admission/README.md)
 covers actual EARS mutation/rollback, bounded admission, a read-only compacted backup
@@ -813,7 +815,7 @@ and launches its actual executable against an isolated SQLite profile. An app-in
 both managed stores to contain SQLite files and retain their native model claims across the real API process.
 The report guard refuses a missing or skipped witness. This complements source-based authoring tests;
 it does not certify signing or all required architectures. [Component evidence and limits](../references/evidence/ears-sqlite-implementation-2026-10-28/native-electron-runtime/README.md)
-retain runtime hashes, fixture corrections and negative controls. Installed CI execution remains pending.
+retain runtime hashes, fixture corrections and negative controls. [Actual packaged Windows/Linux module probes](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-platform-dcbb/README.md) pass at their recorded source; they do not launch the renderer or certify an installer. Current-source installed execution remains required.
 
 
 ### macOS signing and final native hashes
@@ -826,7 +828,7 @@ changed manifests, escaping paths and unsupported universal layouts. Signing nev
 The `installed-signed` app acceptance suite exercises the same hook using the existing CI Developer ID
 certificate on a disposable Preview, verifies strict bundle integrity, then runs the full native smoke and
 SQLite app lifecycle. No release or notarization occurs. [Ordering/fault evidence and cold-build fix](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
-record the 12 passing isolated tests and three safeguard controls; actual macOS CI execution remains required.
+record the 12 isolated tests and three safeguard controls. [Actual signed macOS installed execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-49d/README.md) passes at 49d, with six app cases and native smoke before/after signing. This predates the current runtime, so exact-current signing/distribution qualification remains required.
 Preview and production now let the ordinary pack build generate entries after preparing SDK dependencies.
 
 
@@ -1020,4 +1022,4 @@ The complete uninstrumented workload and original budgets remain required after 
 
 Current-master integration carries a nullable MessagePack weight BLOB alongside relation info. Absence represents the default weight 1; ordinary writes canonicalize explicit 1 to absence and -0 to 0, validate the declared weighted kind and range 0 through 2^960, and include supplied weight in relink identity. Unique relinks replace only supplied parts. Unchecked loads retain primary bytes independently of the current declaration. A temporarily unweighted kind ignores its stored weight without deleting it.
 
-Logical export, staging, restore and transactional replacement carry the weight bytes. Audit/export/restore reject invalid numerical weights. Rank validates positive seed weights, adds repeated seeds and distributes each outgoing share by its effective edge weight; an outgoing weight sum of zero is dangling. Communities pass the effective weights to the owned Leiden core, whose wrapper admits zero. SQL explain reports actual weight projections rather than invented native graph counters. New shared rollback/watch and dormant-weight logical round-trip cases remain unqualified until disposable CI executes them.
+Logical export, staging, restore and transactional replacement carry the weight bytes. Audit/export/restore reject invalid numerical weights. Rank validates positive seed weights, adds repeated seeds and distributes each outgoing share by its effective edge weight; an outgoing weight sum of zero is dangling. Communities pass the effective weights to the owned Leiden core, whose wrapper admits zero. SQL explain reports actual weight projections rather than invented native graph counters. Shared rollback/watch and dormant-weight logical round-trip cases pass in [focused weighted qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/weighted-focused-4ded/README.md) and the [6135 platform suites](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-613/README.md). These precede the counter guard and do not establish final-source performance, packaging or broader storage-fault acceptance.

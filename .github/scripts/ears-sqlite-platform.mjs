@@ -271,8 +271,8 @@ if (mode === 'verify') {
     `canonical cosine compatibility matches independent cosine across fallback projections and finite Float32 magnitudes (${dimensions} dimensions)`), 'Canonical cosine numerical compatibility');
   const counterCases = ears.testResults.flatMap(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/commit-outcomes.spec.ts') ? file.assertionResults : []);
   requirePassingCases(counterCases, [
-    'SQLite commit outcome handling refuses malformed commit metadata without overwriting it (null)',
-    'SQLite commit outcome handling refuses malformed commit metadata without overwriting it (numeric text)',
+    "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
+    "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
     'SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes',
     'SQLite commit outcome handling rolls back schema when the commit identity is exhausted',
     'SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted',
