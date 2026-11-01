@@ -143,7 +143,7 @@ function pruneStamps(): void {
 const wrote = (step: ChainStep): string[] =>
   (step.outputs ?? []).map((target) => path.join(REPO_ROOT, target));
 
-type Result = { step: string; ms: number; code: number; output: string; timedOut?: true };
+type Result = { step: string; ms: number; code: number; output: string; timedOut?: true; stalled?: true };
 
 /**
  * What moved under a step's inputs since its last successful run, against that run's own stamp.
@@ -215,9 +215,11 @@ async function run(step: string, timeout: TimeoutClass, force: readonly string[]
   const direct = force.length === 0 ? args : [...args, '--', ...force];
   // A step whose suites cannot run on this Mac runs the same npm command in the Linux test container
   const withForce = inLinuxContainer(step) ? ['run', 'test:linux', '--', 'npm', ...direct] : direct;
-  // Explicit feedback limits may shorten the declared work class's ceiling.
-  const { code, output, ms, timedOut } = await boundedSpawn('npm', withForce, timeoutMsFor(timeout), { env });
-  const result = { step, ms, code, output, timedOut };
+  // Explicit feedback limits may shorten the declared work class's ceiling. A step in the container does its
+  // work in the VM, where its process tree here cannot see it, so only the ceiling bounds it.
+  const { code, output, ms, timedOut, stalled } = await boundedSpawn('npm', withForce, timeoutMsFor(timeout),
+    { env, ...(withForce === direct ? {} : { idleMs: false as const }) });
+  const result = { step, ms, code, output, timedOut, stalled };
   // Here rather than where a step's result is read, because this is the one place a step's bytes exist and
   // every caller passes through it. Written as the step ends, so a run that is interrupted keeps what finished.
   evidence?.keep(step, result);
@@ -593,7 +595,7 @@ async function main(): Promise<void> {
   if (failed) {
     const step = steps.find((s) => s.name === failed.step)!;
     const why = failed.timedOut
-      ? timedOutBecause({ what: step.name, timeout: step.timeout, seconds: recorded.get(step.name) })
+      ? timedOutBecause({ what: step.name, timeout: step.timeout, seconds: recorded.get(step.name), stalled: failed.stalled })
       : `${step.name} failed (exit ${failed.code})${howLong(recorded.get(step.name), failed.ms, budget)}`;
     console.log(`\n${'='.repeat(72)}\n${why}\n${'='.repeat(72)}\n${failed.output}`);
     const left = evidence?.keepFiles(step.name, keptOnFailure(step)) ?? [];

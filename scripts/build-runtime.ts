@@ -63,7 +63,7 @@ const budgetFrom = (cores: string | undefined): number =>
 
 const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
-interface Outcome { readonly ms: number; readonly code: number; readonly output: string; readonly timedOut?: true }
+interface Outcome { readonly ms: number; readonly code: number; readonly output: string; readonly timedOut?: true; readonly stalled?: true }
 
 const done = new Map<string, Outcome>();
 
@@ -97,7 +97,7 @@ const failed = RUNTIME_BUILD_LEGS.filter((leg) => (done.get(leg.name)?.code ?? 0
 for (const leg of failed) {
   const outcome = done.get(leg.name)!;
   const why = outcome.timedOut === true
-    ? timedOutBecause({ what: leg.name, timeout: BUILD_TIMEOUT })
+    ? timedOutBecause({ what: leg.name, timeout: BUILD_TIMEOUT, stalled: outcome.stalled })
     : `${leg.name} failed (exit ${outcome.code})`;
   process.stderr.write(`\n${'─'.repeat(72)}\n${why}\n${'─'.repeat(72)}\n${outcome.output}\n`);
 }

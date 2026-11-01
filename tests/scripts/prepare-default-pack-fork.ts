@@ -13,12 +13,15 @@ const source = path.join(root, 'packages/default-setup');
 const output = path.join(root, 'node_modules/.cache/apack-fixtures/default-fork');
 const remedy = 'Run npm run test:external-pack:fork to prepare the default fork.';
 
+// Shares of the bound on `test:external-pack:fork`, the step that runs this, so the phases fit inside it by
+// construction. Each is a ceiling for a phase that spins: one that stops working is ended sooner, as stalled.
+const FORK_STEP_MS = timeoutMsFor('scenario');
 export const DEFAULT_FORK_BUDGET_MS = {
-  build: timeoutMsFor('suite'),
+  build: 0.5 * FORK_STEP_MS,
   // Two input replays plus archive staging/verification.
-  archive: 3 * timeoutMsFor('quick'),
+  archive: 0.3 * FORK_STEP_MS,
   // Package freshness, source copying, final verification and removal of owned temporary trees.
-  housekeeping: 2 * timeoutMsFor('quick'),
+  housekeeping: 0.2 * FORK_STEP_MS,
 } as const;
 
 function shippedRevision(): string {

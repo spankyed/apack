@@ -156,6 +156,9 @@ goal requires them; cite actual results, not an assumption that all CI runs or n
 
 **CI may fail a check, never a clock.** Every kill deadline is a declared class rather than a multiple of a
 measurement (`scripts/lib/step-timeouts.ts`), and what a step costs is a reading of the machine it ran on.
+A deadline is a ceiling for a tree that spins; what ends a stuck one is `boundedSpawn`'s watchdog, which kills a
+process tree that has gone `IDLE_MS` without CPU or output, so a step slowed by a busy machine is never killed for it.
+`APACK_WATCHDOG=off` turns it off for a run and everything the run starts.
 **Do not gate any of this on `process.env.CI`**: a CI-gated refusal never fires. The condition is the
 machine, which is a fact a run can check.
 
