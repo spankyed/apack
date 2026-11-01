@@ -792,6 +792,17 @@ jobs:
           npm run typecheck -w @apackdev/ears
           node_modules/.bin/oxlint packages/apack-ears/src/sqlite/database.ts \
             packages/apack-ears/tests/sqlite/relation-audit.spec.ts native/vectors/distance-kernel.mjs -D correctness
+      - name: Real native worker read error refuses publication and permits retry
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-api/worker-read-fault
+          cc -shared -fPIC -O2 -Wall -Wextra -Werror packages/apack-ears/bench/sqlite/worker-read-fault.c \
+            -o .temp/sqlite-api/worker-read-fault/worker-read-fault.so
+          native_extension=$(node --import tsx --input-type=module -e "import {resolveNativeVectorExtension} from './packages/apack-ears/src/sqlite/native-extension.ts'; console.log(resolveNativeVectorExtension())")
+          EARS_VEC1_EXTENSION="$native_extension" node --import tsx scripts/bounded.ts scenario env \
+            LD_PRELOAD="$PWD/.temp/sqlite-api/worker-read-fault/worker-read-fault.so" \
+            node --experimental-strip-types packages/apack-ears/bench/sqlite/worker-read-fault.mjs \
+            .temp/sqlite-api/worker-read-fault/report.json
       - name: Hit projection regressions reject the previous execution and dependency paths
         run: node --import tsx .github/scripts/ears-hit-projection-control.mjs
       - name: Scoped pack readiness and lifecycle contracts

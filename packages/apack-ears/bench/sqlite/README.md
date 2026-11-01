@@ -668,3 +668,17 @@ limit. Runtime qualification is pending. Per-commit samples do not prove transie
 intra-commit peak disk use, engine-only memory, independent trial/device variance
 or physical power-loss safety. The report contains numeric observations and
 provenance, never entity payloads. Production storage behavior is unchanged.
+
+
+The focused `sqlite-api` job also builds the test-only `worker-read-fault.c` preload
+in disposable Linux x64 CI, then runs `worker-read-fault.mjs` over matching built
+packages and the trusted native vector extension. It injects one actual EIO into
+a database `pread` on a non-main thread, matching the owned store descriptor and
+recording a syscall witness. The scenario must reject worker training, preserve
+commit/canonical bytes without publishing a model, drain, remove the arm and
+train successfully on retry while the foreground remains writable. The existing
+`scenario` timeout class owns the process tree. Reports retain native/preload/
+compiled hashes and numeric outcomes, never stored payloads. Actual execution is
+pending. This does not identify a mid-training phase, test device failure/power
+loss, or cover every worker I/O/resource extreme. No production fault hook or
+storage policy changes.
