@@ -236,6 +236,23 @@ Source review identifies these boundaries; measured receipts remain source-speci
 These findings do not authorize deferring requirements or expanding the product into a permanent dual backend. They guide the remaining implementation, measurements and final adoption recommendation.
 
 
+### Hybrid highlight admission
+
+Hybrid fusion requires the complete lexical ranking but only final lexical winners need
+body text, aliases, terms and highlight ranges. The candidate now ranks without details,
+selects the same RRF winners, then fetches details by those winner identities in the same
+read snapshot. It retains RRF scores; vector-only winners keep empty text metadata. The
+second read does not reevaluate the original candidate pipeline. Multiple types, prior
+limits, recency time, list/phrase boundaries and marker collision retries remain semantic
+requirements. The work reduction concerns formatting/transferred bodies, not bounded total
+ranking or SQL posting work.
+
+The new actual-driver witness compares original component ranks/canonical highlights,
+checks mixed-type limited scopes and vector-only/absent results, and observes that every
+returned highlighted row belongs to a final lexical winner. This is prepared source;
+current live paired corpus/strict runs predate it. Require targeted type/API/semantic
+qualification and new resource/heartbeat measurements before any performance claim.
+
 ### Native CPU backend investigation
 
 The pinned vec1 source provides explicit AVX2/NEON paths and upstream two-object runtime

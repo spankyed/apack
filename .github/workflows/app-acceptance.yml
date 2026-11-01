@@ -394,7 +394,7 @@ jobs:
           set -euo pipefail
           mkdir -p .temp/sqlite-corpus
           git rev-parse HEAD > .temp/sqlite-corpus/source.txt
-          npm test -w @apackdev/ears -- tests/sqlite/vector-execution.spec.ts tests/sqlite/commit-outcomes.spec.ts tests/sqlite/text-scope.spec.ts \
+          npm test -w @apackdev/ears -- tests/sqlite/vector-execution.spec.ts tests/sqlite/commit-outcomes.spec.ts tests/sqlite/text-scope.spec.ts tests/sqlite/hybrid-highlights.spec.ts \
             --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.temp/sqlite-corpus/safeguards.json \
             2>&1 | tee .temp/sqlite-corpus/safeguards.log
           node --input-type=module <<'JS'
@@ -402,7 +402,7 @@ jobs:
           import { readFileSync } from 'node:fs';
           const report = JSON.parse(readFileSync('.temp/sqlite-corpus/safeguards.json', 'utf8'));
           assert.equal(report.numFailedTests, 0); assert.equal(report.numPendingTests, 0);
-          for (const name of ['vector-execution.spec.ts', 'commit-outcomes.spec.ts', 'text-scope.spec.ts']) {
+          for (const name of ['vector-execution.spec.ts', 'commit-outcomes.spec.ts', 'text-scope.spec.ts', 'hybrid-highlights.spec.ts']) {
             const file = report.testResults.find(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/' + name));
             assert(file?.assertionResults.length > 0, `Required safeguard file must execute: ${name}`);
             for (const test of file.assertionResults) assert.equal(test.status, 'passed', test.fullName);
@@ -716,6 +716,7 @@ jobs:
                  tests/sqlite/vector-execution.spec.ts
                  tests/sqlite/vector-candidates.spec.ts
                  tests/sqlite/text-scope.spec.ts
+                 tests/sqlite/hybrid-highlights.spec.ts
                  tests/sqlite/relation-identity.spec.ts
                  tests/sqlite/relation-audit.spec.ts
                  tests/sqlite/read-tracking.spec.ts
@@ -755,6 +756,7 @@ jobs:
             const required=[...shared,...(backend==='sqlite'?[
               'restored logical stores audits unchecked duplicate edge identities and invalid keyed info without repairing them',
               'native text pipeline scopes uses posting estimates without reevaluating the candidate prefix and still scopes actual matches',
+              'hybrid winner highlights formats only final lexical winners while preserving global fusion scores, list highlights and scoped mixed-type answers',
               'SQLite relation identity work stops at a matching key and releases its cursor before mutation, refusal and exhaustion',
               'SQLite relation audit grouping groups distinct keys on disk and compares only colliding fingerprints without changing source data',
               'SQLite relation audit grouping checks existing equality after forced fingerprint collisions instead of inventing duplicates',

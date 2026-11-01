@@ -425,7 +425,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         const searchOptions = options?.recency && options.recency.halfLife > 0 && options.recency.now === undefined ?
           { ...options, recency: { ...options.recency, now: Date.now() } } : options;
         let hits: Data[] = [];
-        const fusionText: Data[] = [], fusionVector: Data[] = [];
+        const fusionText: Data[] = [], fusionVector: Data[] = [], hybridTextTypes: string[] = [];
         for (const type of searchedTypes) {
           const available = Object.values(schema.types[type]?.indexes ?? {}).map((d: any) => d.kind);
           // A selected set may contain unrelated types. Each hybrid leg searches the types that
@@ -452,12 +452,13 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
           else if (step.step === "like")
             hits.push(...db.search.vector(searchScope, type, reference!, step.k ?? 10, step.id));
           else {
+            if (textAvailable) hybridTextTypes.push(type);
             const text = textAvailable ? db.search.text(
                 searchScope,
                 type,
                 step.query,
                 searchOptions,
-                plan.terminal.answer === "hits"
+                false
               ) : [],
               vector = vectorAvailable ? db.search.vector(
                 searchScope,
@@ -484,6 +485,23 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         }
         hits.sort((a, b) => b.score - a.score);
         if (step.step !== 'search') hits = hits.slice(0, step.k ?? 10);
+        if (step.step === 'hybrid' && plan.terminal.answer === 'hits' && hits.length) {
+          // Fusion needs the complete text ranking, but only final lexical winners need bodies,
+          // aliases and formatted highlights. Reuse winner identities in this same read snapshot.
+          const wanted = new Set(hits.map(hit => hit.id));
+          const lexical = fusionText.filter(hit => wanted.has(hit.id)).map(hit => hit.id);
+          if (lexical.length) {
+            const winnerScope = { sql: 'SELECT value id FROM json_each(?)', parameters: [JSON.stringify(lexical)] };
+            const details = new Map<string, Data>();
+            for (const type of hybridTextTypes) for (const hit of db.search.text(winnerScope, type, step.query, searchOptions, true))
+              details.set(hit.id, hit);
+            for (const id of lexical) if (!details.has(id)) fail('CORRUPT', 'Hybrid text winner changed within its read snapshot');
+            for (const hit of hits) {
+              const detail = details.get(hit.id);
+              if (detail) { hit.terms = detail.terms; hit.highlights = detail.highlights; }
+            }
+          }
+        }
         searchHits = new Map(hits.map((h) => [h.id, h]));
         restart(hits.map((h) => h.id));
         break;
