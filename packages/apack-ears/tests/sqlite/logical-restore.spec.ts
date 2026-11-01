@@ -118,6 +118,27 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('restored logic
     await expect(restoreLogicalStage(f.spool, f.destination, { syncs: false })).rejects.toThrow();
     expect(existsSync(f.destination)).toBe(false); expect(f.e.query('Row').count()).toBe(1);
   });
+  it('audits unchecked duplicate edge identities and invalid keyed info without repairing them', async () => {
+    const f = fixture();
+    const original = f.db.get('SELECT * FROM relations')!;
+    f.db.bulkLoad([{ load: 'relation', id: 'Relation-duplicate', kind: 'edge', source: 'Row-one', target: 'Row-two', info: { another: true } }]);
+    let report = await auditSqliteDatabase(f.db);
+    expect(report.ok).toBe(false);
+    expect(report.issues.some(issue => issue.includes('duplicate relation identity'))).toBe(true);
+    expect(f.db.all('SELECT id FROM relations')).toHaveLength(2);
+    const next = f.db.schema as any;
+    next.relations.edge.key = ['raw'];
+    f.db.setSchema(next);
+    // Different key values make both existing edges valid; a schema change does not rewrite them.
+    expect((await auditSqliteDatabase(f.db)).ok).toBe(true);
+    f.db.run('UPDATE relations SET info=? WHERE id=?', [f.db.pack(3), original.id]);
+    report = await auditSqliteDatabase(f.db);
+    expect(report.ok).toBe(false);
+    expect(report.issues.some(issue => issue.includes('keyed relation info is not a map'))).toBe(true);
+    expect(report.issues.some(issue => issue.includes('duplicate relation identity'))).toBe(true);
+    expect(f.db.unpack(f.db.get('SELECT info FROM relations WHERE id=?', [original.id])!.info)).toBe(3);
+  });
+
   it('reports a sequence shared by an entity and relation in a physical-store audit', async () => {
     const f = fixture();
     f.db.run("UPDATE relations SET seq=(SELECT seq FROM entities WHERE id='Row-one')");

@@ -205,6 +205,7 @@ export class SqliteDatabase implements EarsDatabase {
           CREATE INDEX IF NOT EXISTS relations_source ON relations(source,kind,seq);
           CREATE INDEX IF NOT EXISTS relations_target ON relations(target,kind,seq);
           CREATE INDEX IF NOT EXISTS relations_kind ON relations(kind,seq);
+          CREATE INDEX IF NOT EXISTS relations_between ON relations(source,kind,target,seq);
           CREATE TABLE IF NOT EXISTS field_index(entity_id TEXT NOT NULL, type TEXT NOT NULL, field TEXT NOT NULL,
             value TEXT NOT NULL, seq INTEGER NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(entity_id,field,value,generation));
           CREATE INDEX IF NOT EXISTS field_lookup ON field_index(type,field,generation,value,seq);
@@ -1035,7 +1036,8 @@ export class SqliteDatabase implements EarsDatabase {
               other.info === null ? undefined : this.unpack(other.info), info));
           if (duplicate) fail('DUPLICATE_EDGE', `An edge of ${r.kind} with these ends and key already exists: ${duplicate.id}`);
         }
-        if (source === target) fail("SELF_LINK", "A self link is refused");
+        if ((source !== r.source || target !== r.target) && source === target)
+          fail("SELF_LINK", "A self link is refused");
         if (
           this.relationDefinition(r.kind).acyclic &&
           (source !== r.source || target !== r.target) &&

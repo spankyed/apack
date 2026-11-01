@@ -1,3 +1,4 @@
+import { checkRelationKeyInfo, sameRelationKey } from './relation-identity.ts';
 import { validRelationWeight } from './relation-weights.ts';
 // Offline semantic comparison runs on private snapshots; it never repairs the incumbent being audited.
 import { createHash } from 'node:crypto';
@@ -53,14 +54,36 @@ function primaryData(db: SqliteDatabase, report: SqliteAuditReport, issue: (mess
     page.push(row); if (page.length === 128) decode();
   }
   if (page.length) decode();
-  for (const value of db.statement(`SELECT r.id,r.seq,r.info,r.weight,s.id source_id,t.id target_id FROM relations r
+  const definitions = (db.schema as { relations?: Record<string, { key?: string[] }> } | null)?.relations ?? {};
+  for (const value of db.statement(`SELECT r.id,r.kind,r.source,r.target,r.seq,r.info,r.weight,s.id source_id,t.id target_id FROM relations r
     LEFT JOIN entities s ON s.id=r.source LEFT JOIN entities t ON t.id=r.target ORDER BY r.seq`).iterate()) {
-    const row = value as { id: string; seq: number; info: Uint8Array | null; weight: Uint8Array | null; source_id: string | null; target_id: string | null };
+    const row = value as { id: string; kind: string; source: string; target: string; seq: number; info: Uint8Array | null; weight: Uint8Array | null; source_id: string | null; target_id: string | null };
     report.checkedRelations++;
     if (typeof row.id !== 'string' || !row.id.startsWith('Relation-') || row.id === 'Relation-' ||
         !Number.isSafeInteger(row.seq) || row.seq < 1) issue(`${row.id}: invalid primary relation identity`);
     if (row.source_id === null || row.target_id === null) issue(`${row.id}: relation endpoint is missing`);
-    if (row.info !== null) try { db.unpack(row.info); } catch { issue(`${row.id}: relation info cannot be decoded`); }
+    let info: unknown, readable = true;
+    try { info = row.info === null ? undefined : db.unpack(row.info); }
+    catch { readable = false; issue(`${row.id}: relation info cannot be decoded`); }
+    const definition = definitions[row.kind];
+    if (readable && definition) {
+      const fields = definition.key ?? [];
+      try { checkRelationKeyInfo(fields, info); }
+      catch { issue(`${row.id}: keyed relation info is not a map`); }
+      // The between index bounds each scan to these ends. Stream prior identities rather than retaining
+      // the whole graph; unchecked imports and changed declarations can introduce collisions.
+      for (const entry of db.statement(`SELECT id,info FROM relations WHERE source=? AND kind=? AND target=?
+        AND seq<=? AND id<>? ORDER BY seq`).iterate(row.source, row.kind, row.target, row.seq, row.id)) {
+        const other = entry as { id: string; info: Uint8Array | null };
+        let held: unknown;
+        try { held = other.info === null ? undefined : db.unpack(other.info); }
+        catch { continue; } // The primary traversal reports its decoding error separately.
+        if (sameRelationKey(fields, info, held)) {
+          issue(`${row.id}, ${other.id}: duplicate relation identity`);
+          break;
+        }
+      }
+    }
     if (row.weight !== null) try { if (!validRelationWeight(db.unpack(row.weight))) issue(`${row.id}: invalid relation weight`); } catch { issue(`${row.id}: relation weight cannot be decoded`); }
   }
   for (const value of db.statement('SELECT e.id entity,r.id relation FROM entities e JOIN relations r ON r.seq=e.seq').iterate()) {
