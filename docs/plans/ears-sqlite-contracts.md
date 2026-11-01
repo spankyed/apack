@@ -302,3 +302,16 @@ semantic/fault contracts, independent recall/resource/responsiveness/model varia
 cross-platform packaging, provenance/signing and installed app behavior. No host-only
 compiler flag, hardware-baseline increase or SIMD speed claim follows from source/build
 success. The full unmet requirements remain owned by the implementation goal.
+
+### FULL admission stall attribution
+
+The ordinary 4ded FULL value cohort still fails heartbeat in five of six trials;
+the df0 inspector/GC/cgroup diagnostic does not reproduce those outliers. CPU names
+were absent from those admission receipts. New reports retain CPU identity, and only
+the explicit diagnostic wraps the public write-commit method with monotonic wall spans.
+This narrows an observed stall to COMMIT versus other background/foreground work; it
+does not isolate fsync, exclusive CPU, host scheduling or physical device causes.
+Ordinary workloads install no per-commit observer. Source typecheck, actual nonempty
+commit events and preserved original profile/heartbeat/cgroup data are required before
+interpreting the next trace. Do not change durability, batches or latency budgets from
+a non-reproduction or use an instrumented pass as ordinary acceptance.

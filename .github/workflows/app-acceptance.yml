@@ -152,6 +152,7 @@ jobs:
         run: |
           npm ci
           npm run packages:build
+          npm run typecheck -w @apackdev/ears
       - name: Admission trials or explicit runtime diagnostic under enforced limits
         env:
           ADMISSION_KIND: ${{ matrix.kind }}
@@ -412,6 +413,8 @@ jobs:
             'uses posting estimates without reevaluating the candidate prefix and still scopes actual matches',
             'stops a streaming eligibility scope at the chunk threshold and keeps limited, duplicate and empty scopes exact',
             'refuses replacement before commit when closing its source fails',
+            'formats only final lexical winners while preserving global fusion scores, list highlights and scoped mixed-type answers',
+            'keeps deferred text details in the ranking snapshot when an independent writer commits between phases',
           ]) assert(names.some(name => name.endsWith(title)), `Required safeguard must be collected: ${title}`);
           JS
       - name: Acquire and verify the full private paired corpus

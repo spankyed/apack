@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { getLoadablePath } from 'sqlite-vec';
 import { loadedNativeBindings, startHeartbeat } from './load-metrics.ts';
 import { mkdtempSync, readdirSync, rmSync, statSync, writeSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { cpus, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEarsEngine, type EARS, type EngineSchema } from '../../src/index.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
@@ -14,6 +14,7 @@ const n = Number(process.argv[2] ?? 10000);
 const durable = process.argv.includes('--durable');
 const search = process.argv.includes('--search');
 const diagnostic = process.argv.includes('--diagnostic');
+const cpuModels = [...new Set(cpus().map(cpu => cpu.model))];
 const noQueryWatches = process.argv.includes('--no-query-watches');
 assert(!noQueryWatches || diagnostic, 'The watch control is diagnostic only');
 const spans: Array<{ kind: string; phase: string; start: number; end: number }> = [];
@@ -33,6 +34,7 @@ const schema: EngineSchema = { types: { Row: { required: ['slug'], fields: {
 const path = mkdtempSync(join(tmpdir(), 'ears-admission-load-'));
 const db = new SqliteDatabase({ path, schema: toElmdbSchema(schema), syncs: durable });
 const e = createEarsEngine({ database: db });
+const commitWrite = db.commitWrite;
 const id = (i: number) => `Row-${i}` as EARS.EntityId;
 const turn = () => new Promise<void>(resolve => setImmediate(resolve));
 const quantile = (values: readonly number[], q: number) => {
@@ -69,6 +71,9 @@ try {
   await e.admin.watchesSettled();
   const before = files();
   if (runtimeTracePrefix) runtimeTrace = await (await import('./admission-runtime.ts')).startAdmissionTrace(runtimeTracePrefix);
+  // Commit timing is opt-in and includes the whole synchronous SQLite COMMIT call, not exclusive fsync.
+  // Ordinary latency cohorts keep their original method and contain no per-commit observer.
+  if (diagnostic) db.commitWrite = () => measured('write-commit', () => commitWrite.call(db));
   let maxObservedBytes = total(before), maxObservedWal = before['data.sqlite3-wal'] ?? 0;
   const batchSamples: Array<{ phase: string; outcome: string; ms: number }> = [];
   phase = 'build';
@@ -171,7 +176,7 @@ try {
     maxObservedFilesBytes: { actual: maxObservedBytes, limit: total(before) * 2 + 16 * 1024 * 1024 },
   };
   const passed = Object.values(budgets).every(budget => budget.actual <= budget.limit);
-  console.log(JSON.stringify({ ...(diagnostic ? { diagnostic: { noQueryWatches, spans, heartbeatSamples, qualification: false } } : {}), n, indexKind: search ? 'text/vector/trigram' : 'value', admissionReads, searchLookups, indexingErrors, node: process.version, platform: process.platform, arch: process.arch, syncs: durable,
+  console.log(JSON.stringify({ ...(diagnostic ? { diagnostic: { noQueryWatches, spans, heartbeatSamples, qualification: false } } : {}), n, indexKind: search ? 'text/vector/trigram' : 'value', admissionReads, searchLookups, indexingErrors, node: process.version, platform: process.platform, arch: process.arch, cpuModels, syncs: durable,
     sqlite: db.get('SELECT sqlite_version() version')!.version, admissionMs, buildMs, gcMs, writes,
     operationMs: summary(operations), lookupMs: summary(lookup), turnWaitMs: summary(turnWaits), heartbeatIntervalMs: heartbeat.intervalMs, heartbeatDelayMs: summary(heartbeat.delaysMs), batchSamples, nativeBindings,
     samples: { operations, lookup, turnWaits, heartbeatDelays: heartbeat.delaysMs }, files: { before, afterBuild, afterGc }, maxObservedBytes, maxObservedWal,
@@ -179,6 +184,7 @@ try {
     budgets, passed, scope: search ? 'synthetic short-string text/vector/trigram admission with foreground writes, scalar/substring reads and 56 watches; readiness refusals are tagged; not relevance/recall, large-text, app or durability qualification' : 'synthetic same-connection value-index admission with foreground reads/writes and 53 watches; not complete app or durability qualification' }));
   if (!passed) process.exitCode = 1;
 } finally {
+  if (diagnostic) db.commitWrite = commitWrite;
   heartbeat?.stop();
   try { if (runtimeTrace) await runtimeTrace.stop(); }
   finally {

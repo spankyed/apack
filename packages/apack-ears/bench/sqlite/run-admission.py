@@ -77,7 +77,13 @@ def main():
                         math.isfinite(b['limit']) for b in budgets.values())
                     record['passed'] = result.returncode == 0 and report['passed'] is True and all(
                         b['actual'] <= b['limit'] for b in budgets.values())
+                    assert isinstance(report['cpuModels'], list) and report['cpuModels']
+                    assert all(isinstance(model, str) and model.strip() for model in report['cpuModels'])
                     if args.trace:
+                        spans = report['diagnostic']['spans']
+                        commits = [span for span in spans if span['kind'] == 'write-commit']
+                        assert commits, 'Diagnostic must observe actual synchronous write commits'
+                        assert all(math.isfinite(span['start']) and math.isfinite(span['end']) and span['end'] >= span['start'] for span in commits)
                         trace = json.loads(prefix.with_suffix('.json').read_text())
                         profile = json.loads(prefix.with_suffix('.cpuprofile').read_text())
                         assert report['diagnostic']['qualification'] is False
