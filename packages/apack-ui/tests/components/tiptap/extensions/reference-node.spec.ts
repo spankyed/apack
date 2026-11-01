@@ -195,7 +195,7 @@ it('preserves read-only reference navigation and metadata updates, then releases
     expect(send).toHaveBeenCalledWith({ type: 'OPEN_ENTITY', id: 'Thread-one' });
     entries = entries.map(entry => entry.packId === 'thread-pack' ? { ...entry, declaration: { ...entry.declaration,
       types: { thread: { ...entry.declaration.types.thread, svgElements: [['path', { d: 'M2 4h8' }]] } } } } : entry);
-    for (const listener of [...listeners]) listener();
+    for (const listener of listeners) listener();
     expect(pill.querySelector('path')?.getAttribute('d')).toBe('M2 4h8');
     expect(pill.querySelector('.reference-pill-label')!.firstChild).toBe(label);
   } finally { if (typeof cleanup === 'function') cleanup(); }
