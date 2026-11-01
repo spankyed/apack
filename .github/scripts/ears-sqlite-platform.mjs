@@ -1,5 +1,6 @@
 // Built-workspace Node qualification; complete installed/signed distributions and app budgets are separate gates.
 import assert from 'node:assert/strict';
+import { verifyFilesystemReadonly } from './ears-sqlite-readonly-report.mjs';
 import { verifyFilesystemFull } from './ears-sqlite-full-report.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -213,7 +214,10 @@ if (mode === 'verify') {
   assert.equal(nativeGeneration.patchApplied,true);
   assert.equal(nativeGeneration.patchSha256,createHash('sha256').update(readFileSync('native/vectors/vec1-membership.patch')).digest('hex'));
   assert.equal(nativeGeneration.sourceSha256,'04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a');
-  if(platform()==='linux')verifyFilesystemFull(filesystemFull,source);
+  if(platform()==='linux') {
+    verifyFilesystemFull(filesystemFull,source);
+    verifyFilesystemReadonly(report('filesystem-readonly.json'),source);
+  }
   assert.equal(nativeMembership.source,source);
   assert.equal(nativeMembership.extensionSha256,nativeGeneration.extensionSha256);
   assert.equal(nativeMembership.completed,true);

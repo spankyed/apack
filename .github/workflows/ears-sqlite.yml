@@ -119,6 +119,19 @@ jobs:
           trap 'sudo umount /fault; sudo rmdir /fault' EXIT
           node --import tsx packages/apack-ears/bench/sqlite/filesystem-full.mjs \
             /fault .temp/sqlite-platform/filesystem-full.json 2>&1 | tee .temp/sqlite-platform/filesystem-full.log
+      - name: Independent WAL reader on a real read-only filesystem
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          readonly_root=$(mktemp -d "$RUNNER_TEMP/ears-readonly-XXXXXX")
+          mkdir "$readonly_root/writable" "$readonly_root/readonly"
+          node --experimental-strip-types scripts/bounded.ts quick node packages/apack-ears/bench/sqlite/filesystem-readonly.mjs prepare "$readonly_root/writable"
+          sudo mount --bind "$readonly_root/writable" "$readonly_root/readonly"
+          trap 'sudo umount "$readonly_root/readonly"; rm -rf "$readonly_root"' EXIT
+          sudo mount -o remount,bind,ro "$readonly_root/readonly"
+          node --experimental-strip-types scripts/bounded.ts quick node packages/apack-ears/bench/sqlite/filesystem-readonly.mjs probe \
+            "$readonly_root/readonly" "$readonly_root/writable" .temp/sqlite-platform/filesystem-readonly.json \
+            2>&1 | tee .temp/sqlite-platform/filesystem-readonly.log
       - name: Host recovery and storage contracts
         run: >-
           npm test -w @apackdev/host -- tests/backup/recovery.spec.ts
