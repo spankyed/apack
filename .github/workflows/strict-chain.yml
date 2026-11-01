@@ -120,9 +120,15 @@ jobs:
           args=(--strict --all --cores 2 --job "$APACK_STRICT_JOB")
           if [[ -n "$APACK_STRICT_SHARD" ]]; then args+=(--shard "$APACK_STRICT_SHARD"); fi
           npm run chain -- "${args[@]}" | tee "$RUNNER_TEMP/strict-chain.log"
-      - name: Isolated source SQLite app smoke and storage witness
-        # This independent witness must still run after a contract failure; that failed step retains job failure.
+      - name: Build the independent SQLite app witness
+        # A failed rest/unit step can stop the chain before the app build. Reuse only verified producer
+        # inputs and build the runtime explicitly; the earlier failure still keeps this job red.
+        id: sqlite_app_build
         if: ${{ !cancelled() && matrix.name == 'app-and-rest' }}
+        run: npm run chain -- --strict --cores 2 --only build:runtime | tee "$RUNNER_TEMP/strict-app-build.log"
+      - name: Isolated source SQLite app smoke and storage witness
+        # Run after contract failures when the actual app is ready; preparation failures remain explicit.
+        if: ${{ !cancelled() && matrix.name == 'app-and-rest' && steps.sqlite_app_build.outcome == 'success' }}
         env:
           APACK_STORAGE_FORMAT: sqlite/1
           PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/tests/results/strict-sqlite-app.json
@@ -151,6 +157,7 @@ jobs:
           include-hidden-files: true
           path: |
             ${{ runner.temp }}/strict-chain.log
+            ${{ runner.temp }}/strict-app-build.log
             ${{ runner.temp }}/strict-spec-progress.*.jsonl
             node_modules/.cache/apack-chain/runs/
             .apack/tests/results/
