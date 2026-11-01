@@ -1,0 +1,146 @@
+{
+  "source": "2d1307c672fd3b86aaa4f1667d739e337d68031d",
+  "run": 41338613335,
+  "scope": "Developer ID hardened-runtime private Preview plus selected installed lifecycle; not notarization/distribution or performance qualification",
+  "signingStep": "success",
+  "temporaryKeychainCleanupStep": "success",
+  "originalAppReportSha256": "86a2eb8292526701c2978bf1ee75a8ee685b56b69796cbbc4a894fd843be909f",
+  "originalPostSignNativeLogSha256": "536e15ef2cc15ca0b4ecbc03a0033f38a068cfa518e6b744b93c8088ab355d67",
+  "stats": {
+    "startTime": "2026-11-01T19:23:32.062Z",
+    "duration": 17658.189,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "packaged SQLite stores hold their model claims across the real API process",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 13350
+        }
+      ]
+    },
+    {
+      "title": "app launches without crashing",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 26
+        }
+      ]
+    },
+    {
+      "title": "app reaches connected state",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 39
+        }
+      ]
+    },
+    {
+      "title": "applicationState is accessible with surfaces loaded",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 39
+        }
+      ]
+    },
+    {
+      "title": "runs in an isolated per-worker test data dir",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 47
+        }
+      ]
+    },
+    {
+      "title": "publishes no session, though a test app has a debug port open",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 26
+        }
+      ]
+    }
+  ],
+  "native": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "versions": {
+      "node": "22.17.1",
+      "electron": "37.2.4",
+      "chrome": "138.0.7204.157",
+      "modules": "136",
+      "napi": "10"
+    },
+    "addons": [
+      {
+        "file": "node_modules/elmdb/elmdb.darwin-arm64.node",
+        "sha256": "64ee0ccf720b2853251ca98a8fef29e8e534bdfd99d7544c64db464f936af564"
+      },
+      {
+        "file": "node_modules/@msgpackr-extract/msgpackr-extract-darwin-arm64/node.napi.glibc.node",
+        "sha256": "1464f673c144a07e9821e2269b1460b8f5f8fc2e61d25bf999599c74912d3360"
+      },
+      {
+        "file": "node_modules/better-sqlite3/prebuilds/darwin-arm64.node",
+        "sha256": "f763c48066eacd3e730d1b1b7e947384f046ae571ba19e272e928ed576d8f9db"
+      },
+      {
+        "file": "node_modules/fs-native-extensions/prebuilds/darwin-arm64/fs-native-extensions.node",
+        "sha256": "c83cf165d0f4bcce7087b3ff0a68d0faf26f029a76a19729ff2aaf8c22824bbc"
+      },
+      {
+        "file": "node_modules/node-pty/build/Release/pty.node",
+        "sha256": "957b8a5927df50d7733b4fdf078ca2d27558f9db6dc8d319ccd2a5653aeadcf3"
+      },
+      {
+        "file": "node_modules/@napi-rs/keyring-darwin-arm64/keyring.darwin-arm64.node",
+        "sha256": "f59ea0b2e1f543941431ddfba1d3e06270a8f0afaafa8115b0ea30cb2983f858"
+      }
+    ]
+  },
+  "sqlite": {
+    "entry": "node_modules/@apackdev/ears/dist/sqlite/index.js",
+    "driverVersion": "13.0.3",
+    "sqliteVersion": "3.53.4",
+    "nativeManifest": {
+      "format": 1,
+      "platform": "darwin",
+      "arch": "arm64",
+      "upstream": "814fd8ef4d42d6567f1613a66f556c8194764d06",
+      "sourceSha256": "04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a",
+      "patchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+      "headersPackage": "13.0.3",
+      "extensionSha256": "1f8a5a6ac343920921ae54c06bdfdf2c4c0c67ac3af2f569ce594a19eed41f71"
+    },
+    "graphManifest": {
+      "format": 1,
+      "leidenVersion": "0.8.1",
+      "toolchain": "1.99.1",
+      "bindgenVersion": "0.2.105",
+      "sourceSha256": "540011397304601fea362342a273728d9f3c6539ebc06370562bb72c1a75e2de",
+      "loaderSha256": "51dca864da108c2491474c92d888cadc0697966e40ad623f7cb185cd0ed43b0f",
+      "wasmSha256": "83e0de2bd7d3df8e8956733dba3584d5ab5d155e92ae68591b33cb5b9c0023d5"
+    }
+  }
+}

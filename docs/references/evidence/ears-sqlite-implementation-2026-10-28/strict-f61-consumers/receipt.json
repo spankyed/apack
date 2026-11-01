@@ -1,7 +1,7 @@
 {
   "source": "f61acd3c7db33ffcc6c4f313efbf7a9a9be60173",
   "run": 41336141230,
-  "scope": "partial terminal consumer evidence; other consumers still running",
+  "scope": "Terminal strict consumers; overall failure on host unit timeout and retained platform keyword judgment",
   "hostUnit": {
     "outcome": "suite-timeout",
     "limitSeconds": 600,
@@ -145,5 +145,27 @@
     "cacheStampValid": false,
     "cacheWarning": "Step passed, then its inputs changed; no reusable success cache stamp",
     "originalChainLogSha256": "85d7850c62c94aeacc41d4e9ca7c1f37cd3d8670a7ecb878947c974f58e597bd"
+  },
+  "overallConclusion": "failure",
+  "producerConclusion": "success",
+  "native1": {
+    "passed": 26,
+    "skipped": 2,
+    "failed": 0,
+    "filesPassed": 8,
+    "excludedFile": "packages/apack-cli/tests/build/compiler-elf-libraries.native.spec.ts",
+    "cacheStampValid": false,
+    "cacheWarning": "Step passed, then its inputs changed; no reusable success cache stamp",
+    "originalChainLogSha256": "7bf0fc655c06769a719781f791b9a77827a8d339d4d665c7ef3b097f30bfe16c"
+  },
+  "integration1": {
+    "passed": 242,
+    "skipped": 0,
+    "failed": 0,
+    "filesPassed": 31,
+    "excludedFile": null,
+    "cacheStampValid": false,
+    "cacheWarning": "Step passed, then its inputs changed; no reusable success cache stamp",
+    "originalChainLogSha256": "46403d855b40f3ccba94ee26177f2801b9124668e30ce9d4188a0d0fdeab6869"
   }
 }

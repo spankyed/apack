@@ -98,7 +98,9 @@ native/API runtime only: renderer, installer/signature and final app/platform/st
 separate. [Current-source Linux execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-linux/README.md)
 passes inside Electron 37.2.4 at `2d1307c672`, with four Preview contract passes. Matching
 [Windows execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-windows/README.md)
-also passes with four Preview contract cases. Signed macOS remains pending. Missing/skipped witnesses refuse; pending execution is not qualification.
+also passes with four Preview contract cases. [Signed macOS installed execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-2d-signed/README.md)
+also passes all six selected installed cases, post-sign native smoke and deep strict verification.
+This private test signing has no timestamp/notarization and does not certify distribution. Missing/skipped witnesses refuse; pending execution is not qualification.
 
 ## Candidate invariant and maintenance review
 
@@ -402,7 +404,6 @@ requested persisted markers, with SQLite application/format headers checked and 
 A focused tooling control covers requested-versus-actual mismatch, mixed stores, foreign identity and
 non-disposable profiles. Existing full raw-run/capture admission remains intact.
 
-This is prepared, not executed. It characterizes one warmed process per backend/scenario on one macOS
+The first real app-flow run is queued at `50cf9d6980` as workflow 41341760226; execution is unproven. It characterizes one warmed process per backend/scenario on one macOS
 runner; its actual machine metadata remains visible. It does not replace bounded Linux/corpus/physical
-failure or independent-device requirements, and no timing budget is redefined. Preserve the pending
-`sqlite-watch` run; dispatch this new suite only after that run is active or terminal.
+failure or independent-device requirements, and no timing budget is redefined. Preserve the pending app-flow slot; `sqlite-watch` is now active.
