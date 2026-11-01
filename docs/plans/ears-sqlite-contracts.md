@@ -379,6 +379,50 @@ Neither the keyword miss also occurring on native nor the stronger correctness e
 adoption with unmet requirements. Keep the candidate isolated, preserve current baseline evidence,
 finish the running gates, and resolve the execution decision before presenting a final cutover proposal.
 
+### Proposed app-search execution contract (decision pending)
+
+This specifies the proposed decision above; it authorizes no implementation or acceptance change.
+Its deliverable would be the actual app search interaction completing within the existing query and
+foreground budgets under representative writes, admission and chunk skew. Moving a function into a
+worker is insufficient evidence. Keep the existing synchronous EARS methods and their blocking costs
+explicit; the app would opt into an asynchronous repository/service operation.
+
+- **Request ownership:** reuse the existing structured query vocabulary for the app's data-only search
+  plans. Send declared scope, search options and requested projections, never JavaScript callbacks,
+  database handles or executable paths from stored metadata. Construct the reader from trusted package
+  assets and the host's selected profile/storage descriptor. An unsupported plan must refuse explicitly.
+- **Snapshot identity:** execute each answer on one actual read snapshot and capture its commit identity
+  inside that snapshot. The existing observer sequence is explicitly not a snapshot ID and cannot be
+  reused as one. Include request identity and schema identity in the response. Scope/ranking/highlights,
+  model/hash freshness and projected values must describe the same accepted request and snapshot.
+- **Publication and invalidation:** the app owns current input identity and publishes only its current
+  request. Committed writes and schema/index visibility changes schedule a fresh read; they must not
+  disappear when a request is superseded. Preserve existing synchronous watch contracts. Define any
+  app-level invalidation coarsening explicitly and measure its rerun cost rather than inventing precise
+  dependencies the worker never registered. Test writes between read completion and response delivery.
+- **Queue and cancellation:** retain at most one executing request and one latest pending request per
+  owned search session; account for request/result size and active sessions as well as queue length.
+  Coalescing and refusing stale publication do not prove that native work stopped. Qualify cancellation
+  during actual FTS/vector calls and join worker exit where shutdown requires it; do not assume a
+  JavaScript cancellation message or termination request interrupts a native SQLite call promptly.
+  Measure rapid input, old expensive work followed by a small query, crash/restart and repeated cancellation.
+- **Lifecycle and resources:** the host owns the read handle, worker and retained snapshots. Maintenance,
+  backup replacement, schema changes and profile removal must account for actual reader/worker exit,
+  retain incumbent recovery authority on refusal, and release WAL pins and kernel claims. Measure worker
+  startup, native/JS memory, transport/allocation, retained-reader WAL growth and foreground writer contention.
+  A responsive parent with unbounded obsolete native work or leaked readers does not pass.
+- **Closing evidence:** extend the maintained real app-flow, search supersession and owned shutdown
+  harnesses. Require useful results, current-response identity, source/native provenance, cancellation and
+  maintenance failure witnesses, and the original 16 ms/100 ms/200 ms budgets on the declared representative
+  workloads. Preserve the existing synchronous failures as a different execution contract. A relative
+  backend claim additionally needs the same app scheduling/acknowledgment contract on both sides; comparing
+  a worker path with a blocking baseline is not an isolated engine comparison.
+
+If this proposal is approved, qualify the smallest complete app search flow first, then its shared
+failure/resource cases before widening use. If synchronous app execution is retained instead, the
+original responsiveness requirement remains with that path. Neither choice waives keyword usefulness,
+recall, supported search features or the rest of the candidate's adoption gates.
+
 ### Sustained write/watch requalification
 
 The existing built-package `bench/watch-stress.ts` now records loaded native hashes and an
