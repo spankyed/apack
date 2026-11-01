@@ -1,0 +1,50 @@
+{
+  "scope": "Actual primaryData/equality/fingerprint over controlled primary cursors plus real file-backed Python SQLite scratch; per-RPC connections, not Node transaction/type/codec or resource qualification",
+  "groups": [
+    {
+      "distinctKeys": 16,
+      "duplicate": false,
+      "forcedCollision": false,
+      "comparisons": 0,
+      "candidateRows": 0,
+      "decodes": 16,
+      "spooledIdentities": 16
+    },
+    {
+      "distinctKeys": 32,
+      "duplicate": false,
+      "forcedCollision": false,
+      "comparisons": 0,
+      "candidateRows": 0,
+      "decodes": 32,
+      "spooledIdentities": 32
+    },
+    {
+      "distinctKeys": 64,
+      "duplicate": false,
+      "forcedCollision": false,
+      "comparisons": 0,
+      "candidateRows": 0,
+      "decodes": 64,
+      "spooledIdentities": 64
+    },
+    {
+      "distinctKeys": 64,
+      "duplicate": true,
+      "forcedCollision": false,
+      "comparisons": 1,
+      "candidateRows": 1,
+      "decodes": 66,
+      "spooledIdentities": 64
+    },
+    {
+      "distinctKeys": 16,
+      "duplicate": false,
+      "forcedCollision": true,
+      "comparisons": 120,
+      "candidateRows": 120,
+      "decodes": 136,
+      "spooledIdentities": 16
+    }
+  ]
+}
