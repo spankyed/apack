@@ -1,3 +1,7 @@
+// Interpose the exported libc ABI, not glibc's fortified inline pread wrappers.
+// This affects only this disposable test translation unit.
+#undef _FORTIFY_SOURCE
+#define _FORTIFY_SOURCE 0
 #define _GNU_SOURCE
 #include <unistd.h>
 #include <sys/syscall.h>
