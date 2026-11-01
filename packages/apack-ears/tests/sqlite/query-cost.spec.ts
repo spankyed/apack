@@ -40,9 +40,10 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
       }
     });
     await db.indexesReady();
-    const query = e.query.all().search('needle', { fuzzy: false }).limit(64).reverse();
+    const query = e.query.all().search('needle', { fuzzy: false }).limit(128).reverse();
     const expected = query.hits({ highlights: true });
-    expect(expected).toHaveLength(64);
+    expect(expected).toHaveLength(128);
+    expect(new Set(expected.map(hit => hit.id.split('-')[0]))).toEqual(new Set(['Row', 'Other']));
     const row = vi.spyOn(db, 'row'), rows = vi.spyOn(db, 'rows'), read = vi.spyOn(db.values, 'read');
     const projected = query.hits({ fields: ['rank', 'missing'], highlights: true });
     expect(projected).toEqual(expected.map(hit => ({ ...hit, row: { id: hit.id, rank: ranks.get(hit.id) } })));
