@@ -1,0 +1,5 @@
+# Keyword ranking diagnostic
+
+A small Python SQLite in-memory FTS5 reproduction indexes the frozen public fixture's name/body strings and queries `generate-entries`. It retrieves the predeclared Generated files overview at rank nine; narrower sections occupy the first eight positions. This confirms that this simplified tokenizer/query path can retrieve the wanted document, while BM25 term-frequency/length ranking does not satisfy the frozen top-five judgment. It does not isolate length normalization from term frequency or prove the exact production ranking cause.
+
+The numeric/title-only report records SQLite version and fixture SHA-256. Identifier aliases, full query adaptation, field-weighted entity aggregation and the better-sqlite3 runtime are omitted. This is diagnostic evidence, not a replacement shared-contract execution, relevance pass or authorization to change the frozen judgment. Any ranking repair needs representative feature/language/highlight and hybrid controls, rather than a query-specific boost.
