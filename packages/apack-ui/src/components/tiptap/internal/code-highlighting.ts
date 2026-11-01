@@ -1,6 +1,6 @@
 import { common, createLowlight } from 'lowlight'
 
-export const lowlight = createLowlight(common)
+export const lowlight: ReturnType<typeof createLowlight> = createLowlight(common)
 
 /** Build syntax markup as DOM; highlighted source is always text, never HTML. */
 export function highlightCode(code: HTMLElement): void {

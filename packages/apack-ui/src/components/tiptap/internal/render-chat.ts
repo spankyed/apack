@@ -15,7 +15,11 @@ export function renderChat(parser: MarkdownIt, source: string, adapters: readonl
     if (errors.length) throw new AggregateError(errors, 'Read-only message cleanup failed')
   }
   try {
-    for (const adapter of adapters) source = adapter.transformMarkdown?.(source) ?? source
+    for (const adapter of adapters) {
+      if (!adapter.transformMarkdown) continue
+      source = adapter.transformMarkdown(source)
+      if (typeof source !== 'string') throw new TypeError('Read-only Markdown transform must return a string')
+    }
     root.innerHTML = parser.render(source)
     for (const code of root.querySelectorAll<HTMLElement>('pre > code')) {
       highlightCode(code)
@@ -29,6 +33,7 @@ export function renderChat(parser: MarkdownIt, source: string, adapters: readonl
     }
     for (const adapter of adapters) {
       const cleanup = adapter.decorate?.(root)
+      if (cleanup !== undefined && typeof cleanup !== 'function') throw new TypeError('Read-only decoration must return cleanup or undefined')
       if (cleanup) cleanups.push(cleanup)
     }
     return { root, dispose }
