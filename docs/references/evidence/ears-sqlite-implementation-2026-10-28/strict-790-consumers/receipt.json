@@ -46,6 +46,14 @@
         "test:external-pack-fork"
       ],
       "laterDependentSteps": "Unproven: retained relevance failure stops chain"
+    },
+    {
+      "name": "integration-1",
+      "passedTests": 242,
+      "skippedTests": 0,
+      "passedFiles": 31,
+      "chainSeconds": 1536.6,
+      "cache": "Inputs changed; no reusable successful stamp"
     }
   ],
   "independentApp": {
@@ -126,5 +134,6 @@
         ]
       }
     ]
-  }
+  },
+  "scope": "All five current-runtime consumers are terminal. Four integration/native shards pass; app-and-rest retains the keyword failure. Later CI-only fault/startup/WAL recipes are not covered."
 }
