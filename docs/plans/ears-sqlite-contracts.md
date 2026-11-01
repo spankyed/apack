@@ -209,9 +209,9 @@ This is prepared coverage, not a passed operational claim. The pure receipt veri
 
 ## Native canonical ranks and planner qualification
 
-Native f496 now serializes empty `ranks: {}` in canonical dump schemas. SQLite accepts that empty declaration so explicit copied-profile conversion can consume the current native format. Nonempty named maintained rank indexes are explicitly UNSUPPORTED; EARS EngineSchema does not expose them. No declaration is silently dropped. Existing on-demand query.rank behavior is separate and unchanged. The actual matching-producer conversion failed on this root property in platform a8 and needs focused requalification after the correction.
+Native f496 now serializes empty `ranks: {}` in canonical dump schemas. SQLite accepts that empty declaration so explicit copied-profile conversion can consume the current native format. Nonempty named maintained rank indexes are explicitly UNSUPPORTED; EARS EngineSchema does not expose them. No declaration is silently dropped. Existing on-demand query.rank behavior is separate and unchanged. The actual matching-producer conversion failed on this root property in platform a8 and passes all five copied-profile check groups in focused c27 on Linux after the correction. The skipped downstream/Windows gates still need qualification.
 
-Adjacency plan guards require a persistent indexed SEARCH bounded by source equality, not one literal index name. relations_between is a valid covering access path alongside relations_source. Native plans that scan all relations or search only target do not satisfy the guard. Existing answer, call-count and early-cursor-release assertions stay intact. Source-plan predicate controls pass; actual focused driver tests are pending.
+Adjacency plan guards require a persistent indexed SEARCH bounded by source equality, not one literal index name. relations_between is a valid covering access path alongside relations_source. Native plans that scan all relations or search only target do not satisfy the guard. Existing answer, call-count and early-cursor-release assertions stay intact. Source-plan predicate controls and actual focused native/SQLite driver cases pass at c27. Full supported-platform requalification remains required.
 
 ## App embedding and search lifecycle evidence
 
