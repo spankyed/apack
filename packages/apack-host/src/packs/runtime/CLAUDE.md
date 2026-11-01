@@ -195,7 +195,7 @@ The resolver patch is restored in a `finally`; the bridged cache entries stay, s
 The composition supplies `registry.indexesReady` from its owning database. Registration and installer acceptance
 remain synchronous; startup, activation, accepted install/update/restore and reload await readiness before onInit,
 migrations, apply or actor startup. Await their returned promises and retain operation claims through completion.
-Single-pack activation/reload waits for its own entity types, transitive dependency declarations and SDK/host types; unrelated retained index failures do not block it. Boot/reset and whole-store maintenance keep global waits. Scoped waits reject retired/replaced generations instead of silently accepting replacement work.
+Single-pack activation/reload waits for its own entity types, transitive dependency declarations and SDK/host types; unrelated retained index failures do not block it. Boot/reset and whole-store maintenance keep global waits. Scoped waits reject retired/replaced generations and changed relevant runtime/declaration owners instead of silently accepting replacement work. Unrelated registration or catalog cloning does not cancel them.
 Failed readiness after acceptance keeps installed files but removes the unavailable runtime and records its problem.
 Declaration-only registries have no build work. This wait does not change synchronous EARS read/write semantics.
 

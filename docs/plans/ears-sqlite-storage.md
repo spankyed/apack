@@ -237,7 +237,7 @@ Single-pack activation and reload instead include that pack's entity types, its 
 (including admitted declarations without a running runtime), and common SDK/host types. Unrelated retained
 failures remain visible to global waits without blocking the scoped admission. The database snapshots scoped
 generation identities and rejects `CANCELLED` when they retire or change while waiting, rather than silently
-accepting a replacement. Closed/stale/open-unit/fatal-owner refusals still apply, including empty scopes.
+accepting a replacement. The registry also snapshots relevant accepted runtime bindings/dependency declarations and checks them again after awaiting, because a replacement can add types outside an earlier scope. This check ignores unrelated owners and structurally equal catalog clones; dependency discovery is iterative with indexed owner lookup. These new owner-race cases remain unqualified pending disposable CI. Closed/stale/open-unit/fatal-owner refusals still apply, including empty scopes.
 Real-store unrelated-failure and generation-replacement regressions plus registry ownership and actual lifecycle
 forwarding checks pass [focused 644](../references/evidence/ears-sqlite-implementation-2026-10-28/readiness-644/README.md). The additional host fixture uses normal SQLite store composition and installed-pack activation, with a valid persisted failed derived generation and bridged onInit primary read; it still requires global readiness to refuse. That integrated fixture, admitted-inactive-dependency/fatal-owner assertions and the Linux old-global-behavior controls require disposable qualification. Passing these controls alone does not close full final-source/app acceptance.
 

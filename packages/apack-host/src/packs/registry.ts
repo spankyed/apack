@@ -805,6 +805,25 @@ export function createPackRegistry({ indexesReady = () => Promise.resolve(), ins
   const services = derived((): Record<string, unknown> =>
     Object.fromEntries([...admitted.values()].flatMap(pack => [...pack.services])));
 
+  function indexReadinessScope(packId: string) {
+    const snapshot = catalog.getSnapshot();
+    const native = new Map(snapshot.native.map(pack => [pack.id, pack]));
+    const installed = new Map(snapshot.packs.map(pack => [pack.snapshot.manifest.id, pack.snapshot.manifest]));
+    const types = new Set<string>(RESERVED_ENTITIES);
+    const owners = new Map<string, { binding: AdmittedPackContributions | undefined; declaration: unknown }>();
+    const pending = [packId];
+    while (pending.length) {
+      const id = pending.pop()!;
+      if (owners.has(id)) continue;
+      const registration = registrations.get(id);
+      const declaration = native.get(id) ?? installed.get(id);
+      owners.set(id, { binding: admitted.get(id), declaration });
+      for (const type of Object.values(registration?.ears?.entities ?? (declaration ? _packEntityTypes(declaration) : {}))) types.add(type);
+      pending.push(...Object.keys(registration?.dependencies ?? declaration?.dependencies ?? {}));
+    }
+    return { types, owners };
+  }
+
   return {
     catalog,
     refreshCatalog,
@@ -815,23 +834,19 @@ export function createPackRegistry({ indexesReady = () => Promise.resolve(), ins
     }),
     registerContentRuntime,
     unregisterPack,
-    indexesReady(packId) {
+    async indexesReady(packId) {
       if (packId === undefined) return indexesReady();
-      if (!registrations.has(packId)) return Promise.reject(new Error(`Pack "${packId}" is not registered`));
-      const snapshot = catalog.getSnapshot();
-      const types = new Set<string>(RESERVED_ENTITIES);
-      const seen = new Set<string>();
-      const visit = (id: string): void => {
-        if (seen.has(id)) return;
-        seen.add(id);
-        const registration = registrations.get(id);
-        const declaration = snapshot.native.find(pack => pack.id === id)
-          ?? snapshot.packs.find(pack => pack.snapshot.manifest.id === id)?.snapshot.manifest;
-        for (const type of Object.values(registration?.ears?.entities ?? (declaration ? _packEntityTypes(declaration) : {}))) types.add(type);
-        for (const dependency of Object.keys(registration?.dependencies ?? declaration?.dependencies ?? {})) visit(dependency);
-      };
-      visit(packId);
-      return indexesReady([...types]);
+      if (!registrations.has(packId)) throw new Error(`Pack "${packId}" is not registered`);
+      const scope = indexReadinessScope(packId);
+      await indexesReady([...scope.types]);
+      const current = indexReadinessScope(packId);
+      // A dependency can add types while an older type scope waits (or after an immediate ready result).
+      // Compare only these owners: unrelated catalog changes must not invalidate a healthy activation.
+      if (!isDeepStrictEqual(scope.types, current.types) || scope.owners.size !== current.owners.size
+        || [...scope.owners].some(([id, owner]) => {
+          const next = current.owners.get(id);
+          return !next || next.binding !== owner.binding || !isDeepStrictEqual(next.declaration, owner.declaration);
+        })) throw Object.assign(new Error(`Pack "${packId}" or its dependencies changed during index readiness`), { code: 'CANCELLED' });
     },
     onRegistrationChanged(listener) {
       registrationListeners.add(listener);

@@ -501,3 +501,50 @@ describe('pack index readiness ownership', () => {
     expect(readiness).toHaveBeenCalledTimes(4);
   });
 });
+
+
+describe('pack readiness ownership across asynchronous admission', () => {
+  const owner = { id: 'owner-pack', ears: { entities: { Owner: 'Owner' }, relKinds: {}, roles: {} } };
+  const consumer = { id: 'consumer-pack', dependencies: { 'owner-pack': '*' }, ears: { entities: { Consumer: 'Consumer' }, relKinds: {}, roles: {} } };
+
+  it.each([false, true])('cancels when a dependency is replaced while waiting (new types: %s)', async newTypes => {
+    let finish!: () => void;
+    const ready = new Promise<void>(resolve => { finish = resolve; });
+    const packs = createNativePackTestRegistry({ indexesReady: () => ready });
+    packs.registerPack(owner); packs.registerPack(consumer);
+    const waiting = expect(packs.indexesReady('consumer-pack')).rejects.toMatchObject({ code: 'CANCELLED' });
+    packs.unregisterPack('owner-pack');
+    packs.registerPack(newTypes ? { ...owner, ears: { ...owner.ears, entities: { Owner: 'Owner', Added: 'Added' } } } : owner);
+    finish(); await waiting;
+  });
+
+  it('cancels after an immediately ready result if a dependency is replaced before continuation', async () => {
+    const packs = createNativePackTestRegistry();
+    packs.registerPack(owner); packs.registerPack(consumer);
+    const waiting = expect(packs.indexesReady('consumer-pack')).rejects.toMatchObject({ code: 'CANCELLED' });
+    packs.unregisterPack('owner-pack'); packs.registerPack(owner);
+    await waiting;
+  });
+
+  it('ignores unrelated registration and cloned catalog changes during readiness', async () => {
+    let finish!: () => void;
+    const ready = new Promise<void>(resolve => { finish = resolve; });
+    const packs = createNativePackTestRegistry({ indexesReady: () => ready });
+    packs.registerPack(owner); packs.registerPack(consumer);
+    const waiting = packs.indexesReady('consumer-pack');
+    packs.registerPack({ id: 'unrelated-pack', ears: { entities: { Unrelated: 'Unrelated' }, relKinds: {}, roles: {} } });
+    finish(); await expect(waiting).resolves.toBeUndefined();
+  });
+
+  it('cancels when an admitted inactive dependency changes while waiting', async () => {
+    let finish!: () => void;
+    const ready = new Promise<void>(resolve => { finish = resolve; });
+    const packs = createNativePackTestRegistry({ indexesReady: () => ready });
+    packs.registerPack(owner); packs.registerPack(consumer);
+    const declarations = packs.catalog.getSnapshot().native;
+    packs.unregisterPack('owner-pack'); packs.catalog.setNative(declarations);
+    const waiting = expect(packs.indexesReady('consumer-pack')).rejects.toMatchObject({ code: 'CANCELLED' });
+    packs.catalog.setNative(declarations.map(declaration => declaration.id === 'owner-pack' ? { ...declaration, version: '2.0.0' } : declaration));
+    finish(); await waiting;
+  });
+});
