@@ -188,3 +188,17 @@ outcomes. It is a warm-process characterization, not a causal engine speedup, mo
 independent-device variance, cold startup, real-provider qualification or the bounded Linux 16 ms gate.
 The streaming CLI is deterministic and calls no external model. Source, native and build provenance
 remain mandatory; raw capture/profile data must be inspected and minimized before repository publication.
+
+
+The manual `sqlite-startup` app-acceptance choice reuses the populated-startup
+controller for both backends, with five warmups and twenty fresh-process trials
+each, in fixed native-before-SQLite order on one macOS runner. The controller’s
+closed seed and per-trial copies use owned `apack-e2e-` profile names. Seed and
+measured-launch manifests verify both actual stores with the same storage-identity
+helper as warm scenarios; requested environment alone cannot label results. Header
+checks run outside the measured launch/readiness and resource-recording boundary.
+Each full run must pass existing `readPerformanceRun` capture/provenance/invocation
+admission. Original failed/incomplete reports are retained. This characterizes
+populated fresh-process reopening on a warm filesystem, not cold disk, balanced
+backend order, physical durability or independent-device variance. Actual runtime
+qualification is pending; no new latency budget or acceptance waiver is introduced.

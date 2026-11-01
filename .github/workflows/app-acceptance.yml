@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-watch, sqlite-wal, sqlite-app-flows, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-watch, sqlite-wal, sqlite-app-flows, sqlite-startup, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       sqlite_vector_models:
         description: Real corpus vector regime; managed verifies native readiness above the exact-search threshold
@@ -1058,9 +1058,10 @@ jobs:
         # The renderer leg's heap ceiling is declared on the leg (RUNTIME_BUILD_LEGS).
         run: npm run build:runtime -- --cores 2
       - name: Verify app performance storage provenance and types
-        if: ${{ inputs.suite == 'sqlite-app-flows' }}
+        if: ${{ inputs.suite == 'sqlite-app-flows' || inputs.suite == 'sqlite-startup' }}
         run: |
           npm run typecheck:scripts
+          node_modules/.bin/tsc -p tests --noEmit --incremental false
           npm test -w @app/repo-checks -- tests/performance-qualification.spec.ts --maxWorkers 2
       - name: Existing real application performance scenarios on both stores
         if: ${{ inputs.suite == 'sqlite-app-flows' }}
@@ -1092,8 +1093,33 @@ jobs:
           JS
             done
           done
+      - name: Existing populated startup controller on both actual stores
+        if: ${{ inputs.suite == 'sqlite-startup' }}
+        run: |
+          set -euo pipefail
+          export APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=20
+          export APACK_PERFORMANCE_MACHINE_ID="github-startup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          unset APACK_HOST_EXECUTABLE E2E_DATA_DIR APACK_PERFORMANCE_COMPARE_MODE APACK_PERFORMANCE_GATE
+          for storage in elmdb/1 sqlite/1; do
+            export APACK_STORAGE_FORMAT="$storage" APACK_PERFORMANCE_SCENARIO=populated-startup
+            export APACK_PERFORMANCE_RUN_OUTPUT="$GITHUB_WORKSPACE/.apack/performance/sqlite-evaluation/${storage%%/*}-populated-startup"
+            node scripts/with-source.mjs node --import tsx tests/performance/startup-run.ts
+            node scripts/with-source.mjs node --import tsx --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { writeFileSync } from 'node:fs';
+          import { readPerformanceRun } from '@apackdev/testing/performance';
+          const run = readPerformanceRun(process.env.APACK_PERFORMANCE_RUN_OUTPUT, 20);
+          assert.equal(run.manifest.runtime.storageFormat, process.env.APACK_STORAGE_FORMAT);
+          assert.equal(run.scenario, 'populated-startup');
+          assert.equal(run.manifest.source.dirty, false); assert.equal(run.manifest.native.dirty, false);
+          writeFileSync(process.env.APACK_PERFORMANCE_RUN_OUTPUT + '/admission.json', JSON.stringify({ completed: true,
+            scope: 'Fresh processes from closed copied populated profiles; warm filesystem, fixed native-first order, one macOS runner; not cold disk, independent-device variance or the Linux foreground gate',
+            source: run.manifest.source.revision, storageFormat: run.manifest.runtime.storageFormat,
+            scenario: run.scenario, summary: run.summary, machine: run.manifest.machine }, null, 2) + '\n');
+          JS
+          done
       - name: Preserve every app-flow performance outcome
-        if: ${{ always() && inputs.suite == 'sqlite-app-flows' }}
+        if: ${{ always() && (inputs.suite == 'sqlite-app-flows' || inputs.suite == 'sqlite-startup') }}
         uses: actions/upload-artifact@v4
         with:
           name: ears-sqlite-app-flows-${{ github.run_id }}

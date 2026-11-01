@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import { performanceIdentity, manifestSchema } from '@apackdev/testing/performance';
 import { searchFixture } from './fixture.ts';
+import { performanceStorageFormat } from './storage-identity.ts';
 import type { PerformanceWindow } from './window.ts';
 
 // Preparation only. The controller owns E2E_DATA_DIR and waits for this process to close before copying it.
@@ -46,9 +47,11 @@ test('prepare a populated startup profile outside measurement', async ({ app, ap
       return context.currentThread?.id === 'Thread-search-11' && context.chatMessageIds.length === 50;
     })).toBe(true);
     writeFileSync(process.env.APACK_PERFORMANCE_SEED_REPORT, JSON.stringify(fixture.identity, null, 2));
+    const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'));
+    const storageFormat = performanceStorageFormat(userData, process.env.APACK_STORAGE_FORMAT ?? 'elmdb/1');
     const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
     const manifest = performanceIdentity({ fixture: fixture.identity, mode: manifestSchema.shape.mode.parse(process.env.APACK_PERFORMANCE_MODE ?? 'lightweight'),
-      cache: 'fresh-process-warm-filesystem', warmups: 5, runtime: { ...runtime, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' } });
+      cache: 'fresh-process-warm-filesystem', warmups: 5, runtime: { ...runtime, storageFormat, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' } });
     writeFileSync(`${process.env.APACK_PERFORMANCE_SEED_REPORT}.manifest.json`, JSON.stringify(manifest, null, 2));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
