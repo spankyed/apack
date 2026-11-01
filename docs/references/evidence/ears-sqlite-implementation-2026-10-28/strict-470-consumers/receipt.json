@@ -1,0 +1,33 @@
+{
+  "source": "4701bd839df1cf32e39e674b02fa285904f80a7f",
+  "scope": "Completed host and integration-2 only; remaining strict consumers are separate live gates; predates hit projection corrections",
+  "consumers": [
+    {
+      "name": "app-and-rest",
+      "endedFiles": 612,
+      "failedModules": [
+        {
+          "project": "@apackdev/ears",
+          "file": "tests/engine/real-search-relevance.spec.ts"
+        }
+      ]
+    },
+    {
+      "name": "integration-2",
+      "endedFiles": 31,
+      "failedModules": []
+    }
+  ],
+  "independentApp": {
+    "stats": {
+      "startTime": "2026-11-01T21:01:23.993Z",
+      "duration": 19510.163,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "originalSha256": "a9acb85b9e9ae46c69e15707336aafc2894d3828bbc3e08bb3f2166d0c87b345",
+    "scope": "Derived counts; raw app payload/logs are omitted"
+  }
+}

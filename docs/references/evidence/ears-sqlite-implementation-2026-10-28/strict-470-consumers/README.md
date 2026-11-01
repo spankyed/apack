@@ -1,0 +1,9 @@
+# Rebased strict consumers: completed host and integration shard
+
+[Strict run 41346286188](https://github.com/spankyed/apack/actions/runs/41346286188), source `4701bd839d`, master `461f7bf2cb`, elmdb `f496470`. This checkpoint preserves the completed app-and-rest and integration-2 receipts; other consumers remain live at collection time. It predates projected-hit batching/dependency corrections.
+
+The full host unit pool completes all 612 files in 504.7 seconds under its unchanged 600-second ceiling: 7,008 passed, the retained keyword failure, and 95 exclusions (606 passed files, one failed, five excluded). The earlier f61 timeout does not reproduce; no controlled attribution to code, runner variance or a scheduling fix is established. API/package/facade checks and external-pack fork pass before the unit step. Later dependent chain steps remain unproven because the keyword failure stops the chain. Its independent verified runtime build succeeds and six Electron smoke cases pass once, without exclusions/retries/flakes. The derived receipt retains original report hash and scalar counts, not app payloads.
+
+Integration shard 2 passes 580 tests across 31 files, with one Windows-only exclusion, in 930.8 seconds (chain 931.2 seconds). Its log warns that inputs changed during execution and no reusable cache stamp is produced; this is passing execution, not proof of a valid reusable successful stamp.
+
+Original allowlisted per-file progress streams are gzip-preserved with decompressed SHA-256. Only public test paths/projects, lifecycle/status and numeric timings are present. Complete local logs and the original app report remain in their owned scratch downloads and GitHub run artifacts; database/profile payloads are not published. No relevance, full-suite, installed or resource acceptance waiver follows.
