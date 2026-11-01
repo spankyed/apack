@@ -348,6 +348,7 @@ jobs:
           case "$SQLITE_VECTOR_BACKEND" in
             packaged) ;;
             paired-dispatch)
+              PYTHONDONTWRITEBYTECODE=1 python3 docs/references/evidence/ears-sqlite-implementation-2026-10-28/vector-pair-protocol/control.py
               test "$SQLITE_VECTOR_MODE" = managed
               test "$SQLITE_NATIVE_CANDIDATE_FLOOR" = production
               ;;
@@ -450,7 +451,7 @@ jobs:
               if test "$variant" = dispatch; then extension=/workspace/.temp/sqlite-corpus/native-build/dispatch; fi
               docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
                 --user "$(id -u):$(id -g)" --workdir /workspace \
-                -e GITHUB_SHA="$GITHUB_SHA" -e TMPDIR=/private/runtime \
+                -e GITHUB_SHA="$GITHUB_SHA" -e GITHUB_RUN_ID="$GITHUB_RUN_ID" -e TMPDIR=/private/runtime \
                 -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 \
                 -v "$GITHUB_WORKSPACE:/workspace:ro" -v "$hybrid_node_binary:/runtime/node:ro" \
                 -v "$private_fixture:/private" -v "$GITHUB_WORKSPACE/.temp/sqlite-corpus:/results" \

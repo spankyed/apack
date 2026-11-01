@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 import importlib.util
 
@@ -21,12 +22,27 @@ def compare(root, source):
             report = json.loads((root / variant / f'hybrid-{size}.json').read_text())
             groups[variant] = qualification.validate(report, size, source, manifest_hash)
             assert report['modelMode'] == 'managed' and report['nativeCandidateFloor'] is None
-            assert report['cpuModels'] and report['nativeExtensionSha256']
+            assert report['cpuModels']
+            assert isinstance(report['runId'], str) and report['runId'].isdigit()
+            assert isinstance(report['nativeExtensionSha256'], str) and re.fullmatch('[a-f0-9]{64}', report['nativeExtensionSha256'])
             assert report['nativeVectorRuntime'].startswith('version 0.8 (' + ('Scalar' if variant == 'generic' else 'AVX2') + ',')
             reports[variant] = report
         generic, dispatch = reports['generic'], reports['dispatch']
+        if size == 1000:
+            result['runId'] = generic['runId']
+            result['cpuModels'] = generic['cpuModels']
+            result['extensionHashes'] = {variant: report['nativeExtensionSha256'] for variant, report in reports.items()}
+            result['diagnosticProvenanceSha256'] = dispatch['nativeDiagnostic']['provenanceSha256']
+        for variant, report in reports.items():
+            assert report['runId'] == result['runId'] and report['cpuModels'] == result['cpuModels']
+            assert report['nativeExtensionSha256'] == result['extensionHashes'][variant]
+            if size > 4096:
+                assert report['nativeModel']['extension_sha256'] == report['nativeExtensionSha256']
+                assert isinstance(report['nativeModel']['worker_sha256'], str) and re.fullmatch('[a-f0-9]{64}', report['nativeModel']['worker_sha256'])
+        assert dispatch['nativeDiagnostic']['provenanceSha256'] == result['diagnosticProvenanceSha256']
         assert generic['nativeDiagnostic'] is None
         assert dispatch['nativeDiagnostic']['kind'] == 'upstream-x64-runtime-dispatch'
+        assert isinstance(dispatch['nativeDiagnostic']['provenanceSha256'], str) and re.fullmatch('[a-f0-9]{64}', dispatch['nativeDiagnostic']['provenanceSha256'])
         assert dispatch['nativeDiagnostic']['baselineExtensionSha256'] == generic['nativeExtensionSha256']
         assert generic['nativeExtensionSha256'] != dispatch['nativeExtensionSha256']
         for field in ['cpuModels', 'limits', 'oracleSha256', 'oracleRecipeSha256', 'node', 'arch', 'sqlite', 'synchronous']:
@@ -35,7 +51,8 @@ def compare(root, source):
             assert generic['nativeModel']['worker_sha256'] == dispatch['nativeModel']['worker_sha256']
             assert generic['nativeModel']['native_version'] == generic['nativeVectorRuntime']
             assert dispatch['nativeModel']['native_version'] == dispatch['nativeVectorRuntime']
-        for left, right in zip(groups['generic'], groups['dispatch'], strict=True):
+        assert len(groups['generic']) == len(groups['dispatch']) == 6
+        for left, right in zip(groups['generic'], groups['dispatch']):
             assert (left['size'], left['cohort'], left['family']) == (right['size'], right['cohort'], right['family'])
             result['groups'].append({'size': size, 'cohort': left['cohort'], 'family': left['family'],
                                      'generic': left, 'dispatch': right,
