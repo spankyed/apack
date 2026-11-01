@@ -138,3 +138,19 @@ updated before either comparison. The owned `.apack/resume-thread-comparison.sh`
 preparation, the readiness diagnostic, a two-trial contract check, then twenty measured actions per
 revision. Evidence goes under `.apack/performance/thread-resumed-4d3a7f6356/`. None of these
 resumed measurements has yet completed; candidate acceptance remains pending.
+
+## Candidate 1 result and final candidate
+
+The two-trial contract passed, but the twenty-trial comparison rejected candidate 1: baseline
+median 473.35 ms, candidate 493.80 ms (+20.45 ms, +4.32%). All forty measured actions passed
+correctness. The diagnostic confirmed zero pre-editor reads, fifty editor roots and all 25 controls
+at and after readiness for seven actions; avoiding those reads alone did not improve latency.
+Retain this result; do not use the favorable two-trial result as qualification.
+
+Candidate 2 also replaces `onUpdated(checkTruncation)` with a post-flush watch of the delivered
+message row. `readMessage` replaces that row, while unchanged rows retain their identity through
+`messagesOf`. Message updates therefore still check overflow even when a capped bubble's outer
+size stays fixed; ResizeObserver continues to cover layout, image/font changes and expansion.
+Local truncation-state rendering no longer requests another synchronous measurement. Compare
+against the same original baseline and retain the same minimum gain and correctness requirements.
+This is the second and final localized candidate.

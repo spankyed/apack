@@ -214,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUpdated, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
 import InteractionContainer from './interactions/InteractionContainer.vue'
@@ -294,7 +294,8 @@ watch(bubbleRef, (el, _prev, onCleanup) => {
   onCleanup(() => observer.disconnect())
 }, { immediate: true })
 
-onUpdated(checkTruncation)
+// Delivered message rows are replaced; local truncation renders need no second measurement.
+watch(() => props.message, checkTruncation, { flush: 'post' })
 
 const revertMenuItems = [
   {
