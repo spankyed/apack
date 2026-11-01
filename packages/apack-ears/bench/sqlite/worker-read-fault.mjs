@@ -43,11 +43,15 @@ try {
   writeFileSync(arm, 'owned worker read fault', { flag: 'wx' });
   let refused;
   try { await trainer.train(job); } catch (error) { refused = error; }
-  assert(refused, 'A real armed worker read must fail'); assert.match(refused.code ?? '', /^SQLITE_IOERR(?:_READ)?$/);
-  report.error = { code: refused.code, message: refused.message };
-  report.syscall = JSON.parse(readFileSync(event, 'utf8'));
+  // Retain diagnostics before assertions: even a refusal with an unexpected code must keep its witness.
+  if (refused) report.error = { code: refused.code, message: refused.message };
+  if (existsSync(event)) report.syscall = JSON.parse(readFileSync(event, 'utf8'));
+  assert(refused, 'A real armed worker read must fail');
+  assert(report.syscall, 'The owned non-main-thread database pread must actually receive EIO');
   assert.equal(report.syscall.targetMatched, true); assert.equal(report.syscall.mainThread, false);
   assert.equal(report.syscall.errno, 5); assert(report.syscall.requestedBytes > 0);
+  // SQLite unixRead explicitly maps POSIX EIO to this extended result, including during open.
+  assert.equal(refused.code, 'SQLITE_IOERR_CORRUPTFS');
   await trainer.stop();
   assert.equal(db.sequence, sequence); assert.equal(canonical(), before);
   assert.equal(e.query('Row').count(), 512);
