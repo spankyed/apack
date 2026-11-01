@@ -199,10 +199,14 @@ export class SqliteText {
     // only need those owners; their scores never contribute to a positive result.
     const candidates = required.map(group => group.reduce((last, i) => positions.get(last)! > positions.get(i)! ? last : i));
     const select = (open: string, close: string, details = wantHits, selected?: Data[]) => {
-      const filtered = selected ? [JSON.stringify(selected.map(row => row.id))] : scoped;
-      const eligible = selected ? 'f.entity_id IN (SELECT value FROM json_each(?))' : scope;
+      // Reuse expensive pipeline prefixes across clauses in this statement. A single clause and the
+      // bounded highlight fetch keep their direct membership path; no candidate IDs cross into JS.
+      const sharedScope = !selected && within !== null && clauses.length > 1;
+      const filtered = selected ? [JSON.stringify(selected.map(row => row.id))] : sharedScope ? [] : scoped;
+      const eligible = selected ? 'f.entity_id IN (SELECT value FROM json_each(?))' :
+        sharedScope ? 'f.entity_id IN (SELECT id FROM text_scope)' : scope;
       const ownerMask = selected && selected.length <= 2048 ? selected.map(row => quote(String(row.owner))).join(' OR ') : undefined;
-      const args: any[] = [], ctes = executionOrder.map(i => {
+      const args: any[] = sharedScope ? [...scoped] : [], ctes = executionOrder.map(i => {
         const clause = clauses[i]!;
         const preceding = previous.get(i);
         const owners = clause.negative ? candidates.map(candidate => `SELECT owner FROM c${candidate}`).join(' UNION ') :
@@ -222,6 +226,7 @@ export class SqliteText {
           FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ${match} AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
           AND ${eligible})`;
       });
+      if (sharedScope) ctes.unshift(`text_scope AS MATERIALIZED (SELECT id FROM (${within.sql}))`);
       const single = clauses.length === 1, source = single ? 'c0' : 'matches';
       const combined = single ? 'accepted AS (SELECT id,max(score) score,min(owner) owner,min(seq) seq FROM c0 GROUP BY id)' :
         `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),

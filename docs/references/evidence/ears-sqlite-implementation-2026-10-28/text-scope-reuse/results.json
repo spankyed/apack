@@ -1,0 +1,33 @@
+{
+  "sqlite": "3.51.0",
+  "casesPerVariant": 18,
+  "answersAndScoresEqual": true,
+  "counts": [
+    {
+      "variant": "before",
+      "visits": [
+        {
+          "hits": false,
+          "visits": 52
+        },
+        {
+          "hits": true,
+          "visits": 52
+        }
+      ]
+    },
+    {
+      "variant": "after",
+      "visits": [
+        {
+          "hits": false,
+          "visits": 26
+        },
+        {
+          "hits": true,
+          "visits": 26
+        }
+      ]
+    }
+  ]
+}

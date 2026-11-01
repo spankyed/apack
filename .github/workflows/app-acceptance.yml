@@ -586,6 +586,7 @@ jobs:
             const cases=report.testResults.flatMap(file=>file.assertionResults);
             const required=[...shared,...(backend==='sqlite'?[
               'restored logical stores audits unchecked duplicate edge identities and invalid keyed info without repairing them',
+              'native text pipeline scopes uses posting estimates without reevaluating the candidate prefix and still scopes actual matches',
               'SQLite authoritative attribute layout projects a single-field page in one SQL call and patches a scalar without reading or encoding its large neighbors',
               'SQLite authoritative attribute layout projects each lossless kind with ordered duplicates, absent rows and fresh composite ownership',
               'SQLite authoritative attribute layout reopens existing layouts read-only and diagnoses missing or duplicate authoritative values',

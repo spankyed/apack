@@ -29,10 +29,12 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native text pi
       };
       const text = new SqliteText(db), job = db.indexBuilds.index('Row', 'text', 'search');
       const hits = text.search(job, {
-        sql: 'SELECT value FROM json_each(?) WHERE observe_advisory_scope(value)',
+        sql: 'SELECT value id FROM json_each(?) WHERE observe_advisory_scope(value)',
         parameters: [JSON.stringify(selected)],
       }, 'needle alpha', { fuzzy: false }, true, 5);
-      expect(hits.map(hit => hit.id)).toEqual(expected); expect(scopeVisits).toBeGreaterThan(0);
+      expect(hits.map(hit => hit.id)).toEqual(expected);
+      // Both positive clauses share the prefix; the second highlight statement uses only the page.
+      expect(scopeVisits).toBe(selected.length);
       expect(e.query.ids(selected).search('needle alpha', { fuzzy: false }).limit(5).ids()).toEqual(expected);
     } finally { db.get = get; db.close(); rmSync(path, { recursive: true, force: true }); }
   });
