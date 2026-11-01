@@ -12,16 +12,17 @@ import { SqliteVectorTraining } from '../../dist/sqlite/vector-training.js';
 import { loadedNativeBindings } from './load-metrics.ts';
 
 assert.equal(process.env.GITHUB_ACTIONS, 'true'); assert.equal(process.platform, 'linux'); assert.equal(process.arch, 'x64');
-const [output, ...extra] = process.argv.slice(2); assert(output && !existsSync(output) && !extra.length);
+const [output, phase = 'header', ...extra] = process.argv.slice(2); assert(output && !existsSync(output) && !extra.length);
+assert(['header', 'embedding-page'].includes(phase));
 assert.match(process.env.GITHUB_SHA ?? '', /^[a-f0-9]{40}$/);
 const preload = process.env.LD_PRELOAD; assert(preload && preload.endsWith('/worker-read-fault.so'));
 const extension = process.env.EARS_VEC1_EXTENSION; assert(extension && existsSync(extension));
 const directory = mkdtempSync(join(tmpdir(), 'ears-worker-read-fault-')), store = join(directory, 'store');
 const arm = join(directory, 'armed'), event = join(directory, 'event.json');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const report = { protocol: 'ears-worker-read-fault/1', source: process.env.GITHUB_SHA,
+const report = { protocol: 'ears-worker-read-fault/2', phase, source: process.env.GITHUB_SHA,
   completed: false, qualification: false, execution: 'built-package', node: process.version,
-  scope: 'One injected native worker database read error and retry; not mid-training phase attribution, device faults, physical power loss or all worker/resource regimes',
+  scope: 'One selected native worker header/embedding-table-page read error and retry; not compute-stage attribution, device faults, physical power loss or all worker/resource regimes',
   preloadSha256: sha(readFileSync(preload)), extensionSha256: sha(readFileSync(extension)) };
 let db, trainer, failure;
 try {
@@ -38,6 +39,17 @@ try {
   const job = db.indexBuilds.jobs().find(job => job.kind === 'vector'); assert(job);
   const canonical = () => sha(Buffer.concat(db.all('SELECT embedding FROM embedding_values ORDER BY id').map(row => row.embedding)));
   const before = canonical(), sequence = db.sequence;
+  // Place the selected canonical page in the main file rather than a WAL frame. This is
+  // fixture setup, outside the injected interval; the worker still owns a fresh read handle.
+  const checkpoint = db.get('PRAGMA wal_checkpoint(TRUNCATE)');
+  assert.equal(checkpoint.busy, 0); assert.equal(checkpoint.log, 0);
+  report.fixtureCheckpoint = checkpoint;
+  const targetOffset = phase === 'header' ? 0 :
+    (Number(db.get("SELECT rootpage FROM sqlite_schema WHERE name='embedding_values' AND type='table'").rootpage) - 1)
+      * Number(db.get('PRAGMA page_size').page_size);
+  assert(Number.isSafeInteger(targetOffset) && (phase === 'header' ? targetOffset === 0 : targetOffset >= 4096));
+  report.targetOffset = targetOffset;
+  process.env.EARS_WORKER_READ_OFFSET = String(targetOffset);
   process.env.EARS_WORKER_READ_FILE = resolve(store, 'data.sqlite3');
   process.env.EARS_WORKER_READ_ARM = arm; process.env.EARS_WORKER_READ_EVENT = event;
   writeFileSync(arm, 'owned worker read fault', { flag: 'wx' });
@@ -50,6 +62,12 @@ try {
   assert(report.syscall, 'The owned non-main-thread database pread must actually receive EIO');
   assert.equal(report.syscall.targetMatched, true); assert.equal(report.syscall.mainThread, false);
   assert.equal(report.syscall.errno, 5); assert(report.syscall.requestedBytes > 0);
+  assert.equal(report.syscall.targetOffset, targetOffset);
+  assert(report.syscall.offset <= targetOffset && targetOffset < report.syscall.offset + report.syscall.requestedBytes);
+  if (phase === 'embedding-page') {
+    assert(report.syscall.successfulMatchedReads > 0, 'Worker must open/read the database before reaching the canonical embedding table');
+    assert(report.syscall.offset > 0, 'Embedding-page fault must be beyond the database header');
+  }
   // SQLite unixRead explicitly maps POSIX EIO to this extended result, including during open.
   assert.equal(refused.code, 'SQLITE_IOERR_CORRUPTFS');
   await trainer.stop();
@@ -78,7 +96,7 @@ finally {
     try { await cleanup(); }
     catch (error) { failure = failure ? new AggregateError([failure, error], 'Probe and cleanup failed') : error; }
   }
-  for (const name of ['EARS_WORKER_READ_FILE', 'EARS_WORKER_READ_ARM', 'EARS_WORKER_READ_EVENT']) delete process.env[name];
+  for (const name of ['EARS_WORKER_READ_FILE', 'EARS_WORKER_READ_ARM', 'EARS_WORKER_READ_EVENT', 'EARS_WORKER_READ_OFFSET']) delete process.env[name];
   report.completed = !failure;
   if (failure) report.failure = { name: failure.name, message: failure.message, code: failure.code };
   writeFileSync(output, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });

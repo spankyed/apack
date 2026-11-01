@@ -801,10 +801,12 @@ jobs:
           cc -shared -fPIC -O2 -Wall -Wextra -Werror packages/apack-ears/bench/sqlite/worker-read-fault.c \
             -o .temp/sqlite-api/worker-read-fault/worker-read-fault.so
           native_extension=$(node --import tsx --input-type=module -e "import {resolveNativeVectorExtension} from './packages/apack-ears/src/sqlite/native-extension.ts'; console.log(resolveNativeVectorExtension())")
-          EARS_VEC1_EXTENSION="$native_extension" node --import tsx scripts/bounded.ts scenario env \
-            LD_PRELOAD="$PWD/.temp/sqlite-api/worker-read-fault/worker-read-fault.so" \
-            node --experimental-strip-types packages/apack-ears/bench/sqlite/worker-read-fault.mjs \
-            .temp/sqlite-api/worker-read-fault/report.json
+          for phase in header embedding-page; do
+            EARS_VEC1_EXTENSION="$native_extension" node --import tsx scripts/bounded.ts scenario env \
+              LD_PRELOAD="$PWD/.temp/sqlite-api/worker-read-fault/worker-read-fault.so" \
+              node --experimental-strip-types packages/apack-ears/bench/sqlite/worker-read-fault.mjs \
+              ".temp/sqlite-api/worker-read-fault/$phase.json" "$phase"
+          done
       - name: Native adapter readiness observes builder status
         run: >-
           npm test -w @apackdev/ears -- tests/lmdb/index-readiness.spec.ts
