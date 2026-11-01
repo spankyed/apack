@@ -389,7 +389,7 @@ views cover one row, a 50-row page and the ordered open-task set. It verifies co
 all raw heartbeat samples and each process report, and retains failed/180-second-timeout outcomes
 without retry. Execution is restricted to a disposable 2 CPU/6 GiB/no-swap container.
 
-The first run is queued at `bd4e6f9506` as workflow 41340220925, after signing was confirmed active. It replaces no original acceptance requirement and does not qualify
+[The first run](../references/evidence/ears-sqlite-implementation-2026-10-28/sustained-bd4/README.md) completes all twelve fresh-process trials at `bd4e6f9506`: all views converge, SQLite passes all six 16 ms heartbeat-p99 cohorts while native misses them, but SQLite retains slower ordered reads and individual stalls up to 146.51 ms. Closed-view median throughput favors SQLite; open-view throughput favors native. It replaces no original acceptance requirement and does not qualify
 actual renderer/provider/search flows, peak disk/WAL or independent-device variance. The earlier
 five-second Seagate pilot remains historical evidence; its absolute timings are not a matched
 hardware comparison with this new CI cohort. Preserve the queued workload rather than dispatching another run into the same pending slot.
@@ -404,6 +404,6 @@ requested persisted markers, with SQLite application/format headers checked and 
 A focused tooling control covers requested-versus-actual mismatch, mixed stores, foreign identity and
 non-disposable profiles. Existing full raw-run/capture admission remains intact.
 
-The first real app-flow run is queued at `50cf9d6980` as workflow 41341760226; execution is unproven. It characterizes one warmed process per backend/scenario on one macOS
+The first real app-flow run is live at `50cf9d6980` as workflow 41341760226; execution is unproven. It characterizes one warmed process per backend/scenario on one macOS
 runner; its actual machine metadata remains visible. It does not replace bounded Linux/corpus/physical
 failure or independent-device requirements, and no timing budget is redefined. Preserve the pending app-flow slot; `sqlite-watch` is now active.
