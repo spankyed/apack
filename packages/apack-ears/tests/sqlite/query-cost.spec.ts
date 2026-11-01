@@ -70,8 +70,9 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     }); });
     await db.indexesReady();
     const explained = e.query('Task').where('status', 'open').orderBy('rank').explain();
-    expect(explained.ids).toEqual(Array.from({ length: 667 }, (_, i) => `Task-${1998 - i * 3}`));
     if (explained.backend !== 'sqlite') throw new Error('Expected SQLite diagnostics');
+    expect(explained.statements.some(statement => statement.sql.startsWith('SELECT DISTINCT e.type'))).toBe(false);
+    expect(explained.ids).toEqual(Array.from({ length: 667 }, (_, i) => `Task-${1998 - i * 3}`));
     const sorted = explained.statements.find(statement => statement.sql.includes('ORDER BY CASE p._sort_kind'))!;
     expect(sorted).toBeDefined();
     expect(sorted.plan.some(row => storage === 'inline'
@@ -80,6 +81,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
     expect(sorted.plan.some(row => row.detail.includes('SCAN f LEFT-JOIN'))).toBe(false);
     expect(e.query('Task').where('status', 'open').orderBy('rank').pick(['rank']).map(row => row.rank))
       .toEqual(Array.from({ length: 667 }, (_, i) => 2 + i * 3));
+    expect(e.query('Task').where('status', 'absent').orderBy('rank').ids()).toEqual([]);
   });
 
   it('uses keyed sort-value reads across different type layouts', () => {
@@ -94,10 +96,32 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite orderin
       const n = 511 - i; return `${n % 2 ? 'Other' : 'Row'}-${n}`;
     }));
     if (explained.backend !== 'sqlite') throw new Error('Expected SQLite diagnostics');
+    expect(explained.statements.some(statement => statement.sql.startsWith('SELECT DISTINCT e.type'))).toBe(true);
     const sorted = explained.statements.find(statement => statement.sql.includes('ORDER BY CASE p._sort_kind'))!;
     expect(sorted).toBeDefined();
     expect(sorted.plan.filter(row => row.detail.includes('SCAN f LEFT-JOIN'))).toEqual([]);
     expect(sorted.plan.some(row => row.detail.includes('SEARCH f USING'))).toBe(true);
+  });
+
+  it('uses a traversed single type without leaking a seed type into mixed or untyped ordering', () => {
+    const path = mkdtempSync(join(tmpdir(), 'ears-sort-type-scope-'));
+    const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema({ ...schema, relations: { refs: {} } }) });
+    held.push({ db, path });
+    const e = createEarsEngine({ database: db });
+    e.transact(() => {
+      const seed = e.create('Row', { id: 'Row-seed', rank: 100, body: '' }).id();
+      for (const [id, type, rank] of [['Other-slow', 'Other', 20], ['Other-fast', 'Other', 10], ['Row-next', 'Row', 5]] as const) {
+        e.create(type, { id, rank, body: '' }); e.write(seed).link('refs', id);
+      }
+    });
+    const narrowed = e.query('Row').out('refs', 'Other').orderBy('rank').explain();
+    expect(narrowed.ids).toEqual(['Other-fast', 'Other-slow']);
+    if (narrowed.backend !== 'sqlite') throw Error('Expected SQLite diagnostics');
+    expect(narrowed.statements.some(statement => statement.sql.startsWith('SELECT DISTINCT e.type'))).toBe(false);
+    const mixed = e.query.ids('Row-seed').out('refs').orderBy('rank').explain();
+    expect(mixed.ids).toEqual(['Row-next', 'Other-fast', 'Other-slow']);
+    if (mixed.backend !== 'sqlite') throw Error('Expected SQLite diagnostics');
+    expect(mixed.statements.some(statement => statement.sql.startsWith('SELECT DISTINCT e.type'))).toBe(true);
   });
 
   it('executes scalar distinct in SQL and batches member-group projection', () => {

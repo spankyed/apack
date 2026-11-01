@@ -407,3 +407,17 @@ non-disposable profiles. Existing full raw-run/capture admission remains intact.
 The first real app-flow run is live at `50cf9d6980` as workflow 41341760226; execution is unproven. It characterizes one warmed process per backend/scenario on one macOS
 runner; its actual machine metadata remains visible. It does not replace bounded Linux/corpus/physical
 failure or independent-device requirements, and no timing budget is redefined. Preserve the pending app-flow slot; `sqlite-watch` is now active.
+
+### Known-type numeric ordering
+
+The repeated workload retains SQLite's slower ordered view. Source inspection identifies an avoidable
+whole-candidate type-discovery query even when the pipeline guarantees one admitted type. The new
+ordering path accepts that private scope fact, checks only for a first member to preserve empty-scope
+short-circuit behavior, and retains the existing per-cell validation, numeric/tie semantics and fallback.
+Mixed/unknown scopes still discover actual types. Existing inline/overflow cost witnesses now require
+absence of the redundant discovery, and a traversal control distinguishes a narrowed destination type
+from seed/mixed types. The focused disposable suite now collects the cost file.
+
+This correction is syntax-checked only; types/runtime/negative-control execution and remeasurement
+remain required. No speedup is inferred from reducing one scan. Preserve the live app-flow run before
+queuing focused qualification, then measure the relevant ordered workload on the corrected source.

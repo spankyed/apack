@@ -4,9 +4,14 @@ import { singleTypeFieldRows } from './field-query.ts';
 /** SQL ordering is equivalent only for these scalar cells; ICU text and deep values use the JS comparator. */
 export function orderNumericIds(db: SqliteDatabase, input: {
   sql: string; parameters: unknown[]; order: string; field: string; descending?: boolean; limit?: number;
+  /** Supplied only when the pipeline already restricts every candidate to this admitted type. */
+  knownType?: string;
 }): string[] | undefined {
   if (input.field === 'id' || input.field === 'entityType' || input.field.includes('\0')) return undefined;
-  const types = [...new Set(db.all(`SELECT DISTINCT e.type FROM (${input.sql}) p
+  // Keep the empty-scope short circuit before inspecting value storage, without scanning all members
+  // merely to rediscover a type that the pipeline already guarantees.
+  if (input.knownType !== undefined && !db.get(`SELECT 1 FROM (${input.sql}) p LIMIT 1`, input.parameters)) return [];
+  const types = input.knownType !== undefined ? [input.knownType] : [...new Set(db.all(`SELECT DISTINCT e.type FROM (${input.sql}) p
     JOIN entities e ON e.id=p.id`, input.parameters).map(row => String(row.type)))].sort();
   if (!types.length) return [];
   if (types.some(type => type.includes('\0'))) return undefined;

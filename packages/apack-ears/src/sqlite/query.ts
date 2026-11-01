@@ -342,6 +342,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         );
         const next = steps[stepIndex + 1];
         const native = orderNumericIds(db, { sql, parameters, order: order(), field: step.field,
+          knownType: specificTypes && types.length === 1 ? types[0] : undefined,
           descending: step.descending,
           limit: next?.step === 'limit' ? Math.max(0, Math.floor(next.n)) : undefined });
         if (native !== undefined) { restart(native); break; }

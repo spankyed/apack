@@ -791,6 +791,7 @@ jobs:
           files=(tests/no-module-state.spec.ts tests/watch-causes.spec.ts
                  tests/engine/relations.spec.ts tests/engine/writes.spec.ts tests/engine/graph-similarity.spec.ts
                  tests/engine/sqlite-operations.spec.ts tests/sqlite/graph-execution.spec.ts
+                 tests/sqlite/query-cost.spec.ts
                  tests/sqlite/elmdb-conversion.spec.ts
                  tests/engine/vector.spec.ts
                  tests/engine/observation.spec.ts tests/engine/search-relevance.spec.ts
