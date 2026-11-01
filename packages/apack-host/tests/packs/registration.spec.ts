@@ -4,6 +4,7 @@ import { createSettingsStore, createSettingsService } from '../../src/features/s
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { _createTestEngine } from '@apackdev/sdk/testing';
 import { _bindEars, boundEars } from '@apackdev/sdk/ears';
+import { boundHost } from '@apackdev/sdk/runtime/internals';
 import { repository } from '@apackdev/sdk/services';
 import { getSettingsCatalog, type PackFeatureSystem, type PackRegistration } from '@apackdev/sdk/framework';
 import { artifactRegistry } from '@apackdev/sdk/artifacts';
@@ -546,5 +547,119 @@ describe('pack readiness ownership across asynchronous admission', () => {
     const waiting = expect(packs.indexesReady('consumer-pack')).rejects.toMatchObject({ code: 'CANCELLED' });
     packs.catalog.setNative(declarations.map(declaration => declaration.id === 'owner-pack' ? { ...declaration, version: '2.0.0' } : declaration));
     finish(); await waiting;
+  });
+});
+
+
+describe('database admission before registration publication', () => {
+  const owner = { id: 'data-owner', ears: { entities: { Owned: 'Owned' }, relKinds: {}, roles: {} } };
+
+  it.each([false, true])('preserves the incumbent on declaration refusal (cleanup failure: %s)', cleanupFails => {
+    const packs = createNativePackTestRegistry({ settingsForPack: () => ({ get: <T,>() => ({} as T), set() {}, reset() {}, onChange: () => () => {} }) });
+    packs.registerPack(owner);
+    const failure = Object.assign(new Error('schema refused before commit'), { code: 'SCHEMA_CHANGED' });
+    const declare = vi.fn();
+    packs.bindDatabaseSchema({ isOpen: true, assertUsable: () => undefined, indexesReady: async () => {}, declare });
+    declare.mockClear(); declare.mockImplementationOnce(() => { throw failure; });
+    const changed = vi.fn(); packs.onRegistrationChanged(changed);
+    const cleanup = vi.fn(() => { if (cleanupFails) throw new Error('provisional cleanup failed'); });
+    const candidate = { ...owner, bindServices: () => cleanup };
+    let error: unknown;
+    try { packs.replacePack(candidate); } catch (caught) { error = caught; }
+    expect(error).toMatchObject({ code: 'SCHEMA_CHANGED' });
+    if (cleanupFails) expect(error).toMatchObject({ cause: failure, errors: [failure, expect.objectContaining({ message: 'provisional cleanup failed' })] });
+    else expect(error).toBe(failure);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(declare).toHaveBeenCalledOnce();
+    expect(packs.getPackRegistration(owner.id)).toBe(owner);
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it.each(['NOT_DURABLE', 'COMMIT_UNKNOWN'])('retains accepted identity and reports %s through scoped readiness', async code => {
+    const ready = vi.fn(async (_types?: readonly string[]) => {});
+    const packs = createNativePackTestRegistry({ indexesReady: ready });
+    const failure = Object.assign(new Error('schema outcome ' + code), { code });
+    let faulted = false;
+    const declare = vi.fn();
+    packs.bindDatabaseSchema({ isOpen: true, assertUsable: () => { if (faulted) throw failure; return undefined; }, indexesReady: ready, declare });
+    declare.mockImplementationOnce(() => { faulted = code === 'COMMIT_UNKNOWN'; throw failure; });
+    expect(() => packs.registerPack(owner)).not.toThrow();
+    expect(packs.getPackRegistration(owner.id)).toBe(owner);
+    await expect(packs.indexesReady(owner.id)).rejects.toBe(failure);
+    await expect(packs.indexesReady()).rejects.toBe(failure);
+    expect(ready).not.toHaveBeenCalled();
+    if (code === 'NOT_DURABLE') {
+      packs.registerPack({ id: 'healthy-owner' });
+      await expect(packs.indexesReady('healthy-owner')).resolves.toBeUndefined();
+      expect(ready).toHaveBeenCalledOnce();
+    } else {
+      expect(() => packs.registerPack({ id: 'healthy-owner' })).toThrow(failure);
+      expect(packs.getPackRegistration('healthy-owner')).toBeNull();
+    }
+    packs.unregisterPack(owner.id);
+    if (faulted) await expect(packs.indexesReady()).rejects.toBe(failure);
+    else await expect(packs.indexesReady()).resolves.toBeUndefined();
+  });
+
+  it('refuses existing quarantine before attempting another declaration or publishing a candidate', () => {
+    const packs = createNativePackTestRegistry();
+    const declare = vi.fn();
+    const assertUsable = vi.fn(() => undefined);
+    packs.bindDatabaseSchema({ isOpen: true, assertUsable, indexesReady: async () => {}, declare });
+    declare.mockClear();
+    const failure = Object.assign(new Error('prior commit uncertainty'), { code: 'COMMIT_UNKNOWN' });
+    assertUsable.mockImplementation(() => { throw failure; });
+    expect(() => packs.registerPack(owner)).toThrow(failure);
+    expect(declare).not.toHaveBeenCalled();
+    expect(packs.getPackRegistration(owner.id)).toBeNull();
+  });
+
+  it('allows only one live writable schema owner and permits rebinding after close', async () => {
+    const unboundReady = vi.fn(async () => {});
+    const packs = createNativePackTestRegistry({ indexesReady: unboundReady });
+    let open = true;
+    const firstReady = vi.fn(async (_types?: readonly string[]) => {}), secondReady = vi.fn(async (_types?: readonly string[]) => {});
+    const first = { get isOpen() { return open; }, assertUsable: () => undefined, indexesReady: firstReady, declare: vi.fn() };
+    const second = { isOpen: true, assertUsable: () => undefined, indexesReady: secondReady, declare: vi.fn() };
+    packs.bindDatabaseSchema(first);
+    expect(() => packs.bindDatabaseSchema(second)).toThrow(expect.objectContaining({ code: 'DATABASE_BOUND' }));
+    open = false;
+    expect(() => packs.bindDatabaseSchema(second)).not.toThrow();
+    packs.registerPack(owner);
+    expect(first.declare).toHaveBeenCalledOnce();
+    expect(second.declare).toHaveBeenCalledTimes(2);
+    await packs.indexesReady(owner.id);
+    expect(secondReady).toHaveBeenCalledWith(expect.arrayContaining(['Owned']));
+    expect(firstReady).not.toHaveBeenCalled(); expect(unboundReady).not.toHaveBeenCalled();
+  });
+
+  it('clears earlier admission outcomes only after a replacement owner admits the current schema', async () => {
+    const packs = createNativePackTestRegistry();
+    let open = true;
+    const declare = vi.fn();
+    packs.bindDatabaseSchema({ get isOpen() { return open; }, assertUsable: () => undefined, indexesReady: async () => {}, declare });
+    const failure = Object.assign(new Error('old uncertain schema'), { code: 'COMMIT_UNKNOWN' });
+    declare.mockImplementationOnce(() => { throw failure; });
+    packs.registerPack(owner);
+    await expect(packs.indexesReady(owner.id)).rejects.toBe(failure);
+    open = false;
+    expect(() => packs.bindDatabaseSchema({ isOpen: true, assertUsable: () => undefined, indexesReady: async () => {}, declare: () => { throw new Error('reopen refused'); } })).toThrow('reopen refused');
+    await expect(packs.indexesReady(owner.id)).rejects.toMatchObject({ code: 'CLOSED' });
+    packs.bindDatabaseSchema({ isOpen: true, assertUsable: () => undefined, indexesReady: async () => {}, declare: () => undefined });
+    await expect(packs.indexesReady(owner.id)).resolves.toBeUndefined();
+  });
+
+  it('keeps accepted publication and later observers when an observer and its reporter throw', () => {
+    const packs = createNativePackTestRegistry();
+    const report = vi.spyOn(boundHost().transport.rootEvents, 'emitLog').mockImplementationOnce(() => { throw new Error('reporting failed'); });
+    const changed = vi.fn();
+    packs.onRegistrationChanged(() => { throw new Error('observer failed'); });
+    packs.onRegistrationChanged(changed);
+    try {
+      expect(() => packs.registerPack(owner)).not.toThrow();
+      expect(packs.getPackRegistration(owner.id)).toBe(owner);
+      expect(changed).toHaveBeenCalledOnce();
+      expect(report).toHaveBeenCalledOnce();
+    } finally { report.mockRestore(); }
   });
 });

@@ -192,6 +192,15 @@ The resolver patch is restored in a `finally`; the bridged cache entries stay, s
 
 ## Runtime lifecycle
 
+A writable store binds one `DatabaseSchemaOwner` to its registry. Candidate bindings and declaration projections
+are prepared first; schema admission happens before runtime publication or incumbent retirement. Definite
+refusal preserves the incumbent and lets the installer restore its files. `NOT_DURABLE` and fresh
+`COMMIT_UNKNOWN` retain accepted files/identity and reject readiness before hooks or actors start; the original
+error remains available. Existing handle quarantine refuses a new admission before attempting it. Readiness
+uses that same database owner, including after reopening. Unregistration retains data declarations and can
+clean up a faulted owner. Post-publication observers cannot turn acceptance into filesystem rollback. This
+ordering does not make arbitrary user initialization effects reversible.
+
 The composition supplies `registry.indexesReady` from its owning database. Registration and installer acceptance
 remain synchronous; startup, activation, accepted install/update/restore and reload await readiness before onInit,
 migrations, apply or actor startup. Await their returned promises and retain operation claims through completion.

@@ -33,23 +33,32 @@ export interface DatabaseStoreOptions {
 /**
  * The elmdb database at `path` and a new engine reading and writing it. The database keeps the schema it was last
  * held to; opened to write, it is held to what `schema` names too (`admin.declare`), and again each time those names
- * change (`onRegistrationChanged`: the app's registry, as packs register), so a declaration another pack made stays
+ * change (the app's registry admits declarations before publishing a runtime), so a declaration another pack made stays
  * while that pack registers. Nothing is installed.
  */
 export function openDatabaseStore({ path, schema, readOnly, warn, storageFormat = configuredDatabaseFormat() }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
   if (!readOnly) assertNoImportRecovery(path);
   const database = openProfileDatabase(path, readOnly, () => databaseStorage(storageFormat).open({ path, readOnly }));
-  const engine = createEarsEngine({ database, warn });
-  if (!readOnly) {
-    try {
-      engine.admin.declare(engineSchemaOf(schema));
-    } catch (error) {
-      database.close();
-      throw error;
+  try {
+    const engine = createEarsEngine({ database, warn });
+    if (!readOnly) {
+      if (schema.bindDatabaseSchema) schema.bindDatabaseSchema({
+        get isOpen() { return database.isOpen; },
+        assertUsable: () => { void database.sequence; return undefined; },
+        indexesReady: types => database.indexesReady(types),
+        declare: candidate => { engine.admin.declare(candidate); return undefined; },
+      });
+      else engine.admin.declare(engineSchemaOf(schema));
     }
-    schema.onRegistrationChanged?.(() => { if (database.isOpen) engine.admin.declare(engineSchemaOf(schema)); });
+    return { database, engine };
+  } catch (error) {
+    try { database.close(); }
+    catch (cleanup) {
+      throw Object.assign(new AggregateError([error, cleanup], 'Database initialization and close failed', { cause: error }),
+        { code: (error as { code?: unknown })?.code, databaseConnectionUnclosed: true });
+    }
+    throw error;
   }
-  return { database, engine };
 }
 
 /** The run history's database and the engine over it, which no `transact` on the app's engine reaches */

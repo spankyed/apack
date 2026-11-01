@@ -12,6 +12,14 @@ import type { EngineSchema, RelationRules, RowRules } from '@apackdev/ears';
 import { PACK_LAYOUT } from '../packs/layout.ts';
 import { readInstalledPackBuilds } from '../packs/discovery.ts';
 
+/** One writable store admits declarations before its registry publishes runtime authority. */
+export interface DatabaseSchemaOwner {
+  readonly isOpen: boolean;
+  assertUsable(): undefined;
+  declare(schema: EngineSchema): undefined;
+  indexesReady(types?: readonly string[]): Promise<void>;
+}
+
 /** What opening a database needs from the packs: which names are entity types, and where each type is stored */
 export interface DatabaseSchema {
   /** The SDK's entity types, the host's and the packs' */
@@ -28,8 +36,8 @@ export interface DatabaseSchema {
   getRowRules?(type: string): RowRules | undefined;
   /** What a relation kind's edges are held to; none when the kind declares no rule */
   getRelationRules?(kind: string): RelationRules | undefined;
-  /** Calls `listener` after the names change — the app's registry, as a pack registers — returning the unsubscribe */
-  onRegistrationChanged?(listener: (packId: string) => void): () => void;
+  /** Admit the current schema and bind its writable owner; a live registry has exactly one. */
+  bindDatabaseSchema?(owner: DatabaseSchemaOwner): void;
 }
 
 /**

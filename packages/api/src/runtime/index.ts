@@ -99,7 +99,6 @@ export function openAppStore(performance?: ReturnType<typeof createNodePerforman
   let runtime: HostRuntime;
   const packs = createPackRegistry({
     nativeDeclarations: [hostDeclaration],
-    indexesReady: (types) => database.indexesReady(types),
     installedPacksDir: () => resolveAppEnvironment().packsDir,
     appPackSourcesDir: () => process.env.SHIPPED_PACKS_DIR,
     settingsForPack: (packId) => runtime.services.settings.forPack(packId),

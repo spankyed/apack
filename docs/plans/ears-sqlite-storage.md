@@ -214,6 +214,17 @@ the chosen backend at the final adoption decision.
 
 ## Runtime index admission
 
+Writable host stores bind one declaration/readiness owner to a registry; a second live writer refuses and its
+provisional handle closes. Binding admits the current schema before replacing a closed owner or clearing
+old outcomes. Registration prepares bindings/prospective declarations, checks existing handle health, and
+admits the schema before publishing registry state or retiring incumbent authority. Ordinary schema refusal
+therefore leaves the incumbent intact for filesystem rollback. Fresh committed/uncertain outcomes retain
+accepted files/identity and fail readiness with the original NOT_DURABLE/COMMIT_UNKNOWN error. Existing
+quarantine is checked separately and cannot be mistaken for a new ambiguous commit. Unload preserves retained
+data and remains possible on a faulted handle. Post-publication notification/reporting errors do not become
+installation refusals. These changes and their new tests are implemented but still await disposable validation.
+The pinned pre-fix real-peer regression demonstrates restored old files with a replacement still published.
+
 The composition supplies `PackRegistryOptions.indexesReady` from its owning database. Registration stays
 synchronous for installer acceptance; boot/reset and accepted activation/update/restore/reload await readiness
 before onInit, migrations, content and actor publication. Pack operation claims cover that wait. An index failure
