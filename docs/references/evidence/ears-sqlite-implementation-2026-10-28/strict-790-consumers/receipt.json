@@ -8,6 +8,15 @@
       "passedFiles": 31,
       "chainSeconds": 412.3,
       "cache": "Inputs changed; no reusable successful stamp"
+    },
+    {
+      "name": "native-1",
+      "passedTests": 26,
+      "skippedTests": 2,
+      "passedFiles": 8,
+      "skippedFiles": 1,
+      "chainSeconds": 1097.3,
+      "cache": "Inputs changed; no reusable successful stamp"
     }
   ]
 }
