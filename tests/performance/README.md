@@ -172,3 +172,19 @@ output/runtime/machine/cache conditions, clean source, and the native checkout e
 pin. Source/app output hashes may differ between revisions and are retained. Renderer identity is read
 outside action timing through the existing Playwright main-process handle; identity failure preserves
 raw results and invalidates capture. Node report identities come from their actual process.
+
+### Isolated SQLite candidate app flows
+
+The manual `sqlite-app-flows` app-acceptance dispatcher reuses `thread-open`, `search` and
+`streaming` with five warmups/twenty measured lightweight actions per backend on one macOS runner.
+Each process owns a fresh profile. Before recording a backend label, the common warm-scenario
+helper checks both actual store files: persisted EARS application/format headers for SQLite,
+native marker files for elmdb, and no mixed backend files. The manifest records the verified
+`runtime.storageFormat`; the requested environment alone is insufficient. Ordinary mode/revision
+comparison admission therefore cannot silently compare different storage backends as identical inputs.
+
+The dispatcher validates each full raw run with `readPerformanceRun` and preserves failed/incomplete
+outcomes. It is a warm-process characterization, not a causal engine speedup, mode-overhead comparison,
+independent-device variance, cold startup, real-provider qualification or the bounded Linux 16 ms gate.
+The streaming CLI is deterministic and calls no external model. Source, native and build provenance
+remain mandatory; raw capture/profile data must be inspected and minimized before repository publication.

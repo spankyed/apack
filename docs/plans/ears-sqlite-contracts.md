@@ -391,3 +391,18 @@ The first run is queued at `bd4e6f9506` as workflow 41340220925, after signing w
 actual renderer/provider/search flows, peak disk/WAL or independent-device variance. The earlier
 five-second Seagate pilot remains historical evidence; its absolute timings are not a matched
 hardware comparison with this new CI cohort. Preserve the queued workload rather than dispatching another run into the same pending slot.
+
+### Existing application-flow harness admission
+
+The `sqlite-app-flows` manual CI path reuses the maintained performance scenarios instead of duplicating
+renderer/transport/streaming logic. It runs five warmups and twenty measured lightweight actions for
+thread opening, search and deterministic CLI streaming on each backend, each in a fresh app/profile.
+The common warm-scenario manifest now includes a verified `storageFormat`: both stores must have the
+requested persisted markers, with SQLite application/format headers checked and mixed files refused.
+A focused tooling control covers requested-versus-actual mismatch, mixed stores, foreign identity and
+non-disposable profiles. Existing full raw-run/capture admission remains intact.
+
+This is prepared, not executed. It characterizes one warmed process per backend/scenario on one macOS
+runner; its actual machine metadata remains visible. It does not replace bounded Linux/corpus/physical
+failure or independent-device requirements, and no timing budget is redefined. Preserve the pending
+`sqlite-watch` run; dispatch this new suite only after that run is active or terminal.

@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-watch, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-watch, sqlite-app-flows, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       sqlite_vector_models:
         description: Real corpus vector regime; managed verifies native readiness above the exact-search threshold
@@ -980,6 +980,11 @@ jobs:
           cache: npm
       - name: Record source
         run: git rev-parse HEAD
+      - name: Prepare app-flow evidence
+        if: ${{ inputs.suite == 'sqlite-app-flows' }}
+        run: |
+          mkdir -p .apack/performance/sqlite-evaluation
+          git rev-parse HEAD > .apack/performance/sqlite-evaluation/source.txt
       - name: Validate storage selection
         run: |
           case "$APACK_STORAGE_FORMAT" in
@@ -1014,6 +1019,51 @@ jobs:
         id: runtime
         # The renderer leg's heap ceiling is declared on the leg (RUNTIME_BUILD_LEGS).
         run: npm run build:runtime -- --cores 2
+      - name: Verify app performance storage provenance and types
+        if: ${{ inputs.suite == 'sqlite-app-flows' }}
+        run: |
+          npm run typecheck:scripts
+          npm test -w @app/repo-checks -- tests/performance-qualification.spec.ts --maxWorkers 2
+      - name: Existing real application performance scenarios on both stores
+        if: ${{ inputs.suite == 'sqlite-app-flows' }}
+        run: |
+          set -euo pipefail
+          export APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=20
+          export APACK_PERFORMANCE_MACHINE_ID="github-app-flows-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          unset APACK_HOST_EXECUTABLE E2E_DATA_DIR APACK_PERFORMANCE_COMPARE_MODE APACK_PERFORMANCE_GATE
+          for scenario in thread-open search streaming; do
+            for storage in elmdb/1 sqlite/1; do
+              name="${storage%%/*}-$scenario"
+              export APACK_STORAGE_FORMAT="$storage" APACK_PERFORMANCE_SCENARIO="$scenario"
+              export APACK_PERFORMANCE_RUN_OUTPUT="$GITHUB_WORKSPACE/.apack/performance/sqlite-evaluation/$name"
+              export PLAYWRIGHT_JSON_OUTPUT_NAME="$GITHUB_WORKSPACE/.apack/tests/results/app-flows-$name.json"
+              node scripts/with-source.mjs node_modules/.bin/playwright test --config tests/performance/playwright.config.ts --workers 1 --reporter=line,json
+              node scripts/with-source.mjs node --import tsx --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { writeFileSync } from 'node:fs';
+          import { readPerformanceRun } from '@apackdev/testing/performance';
+          const run = readPerformanceRun(process.env.APACK_PERFORMANCE_RUN_OUTPUT, 20);
+          assert.equal(run.manifest.runtime.storageFormat, process.env.APACK_STORAGE_FORMAT);
+          assert.equal(run.scenario, process.env.APACK_PERFORMANCE_SCENARIO);
+          assert.equal(run.manifest.source.dirty, false);
+          assert.equal(run.manifest.native.dirty, false);
+          writeFileSync(process.env.APACK_PERFORMANCE_RUN_OUTPUT + '/admission.json', JSON.stringify({ completed: true,
+            scope: 'Single warm process per backend/scenario on one macOS runner; not independent-device variance, corpus recall or the 2 CPU Linux budget gate',
+            source: run.manifest.source.revision, storageFormat: run.manifest.runtime.storageFormat,
+            scenario: run.scenario, summary: run.summary, machine: run.manifest.machine }, null, 2) + '\n');
+          JS
+            done
+          done
+      - name: Preserve every app-flow performance outcome
+        if: ${{ always() && inputs.suite == 'sqlite-app-flows' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-app-flows-${{ github.run_id }}
+          include-hidden-files: true
+          path: |
+            .apack/performance/sqlite-evaluation
+            .apack/tests/results/app-flows-*.json
+          if-no-files-found: error
       - name: Build unsigned installed Preview
         if: ${{ startsWith(inputs.suite, 'installed') }}
         run: |

@@ -1,4 +1,9 @@
 import { expect, it } from 'vitest';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { _appDataPaths } from '@apackdev/sdk/utils';
+import { performanceStorageFormat } from '../../../tests/performance/storage-identity.ts';
 import { performanceQualificationCommand, performanceQualificationOptions, performanceRevisionOptions } from '../../../scripts/lib/performance-qualification.ts';
 it('selects all four scenarios, declared trials and two different modes', () => {
   const options = performanceQualificationOptions(['--scenario', 'all'], '/checkout', 123);
@@ -26,4 +31,23 @@ it('requires explicit revision checkouts and uses independent worker output with
   expect(command.env.APACK_PERFORMANCE_COMPARE_MODE).toBeUndefined();
   expect(command.env.APACK_PERFORMANCE_GATE).toBeUndefined();
   for (const args of [[], ['--baseline', 'before'], ['--baseline', 'before', '--candidate', 'after', '--trials', '3']]) expect(() => performanceRevisionOptions(args, '/checkout')).toThrow();
+});
+
+it('requires both actual store markers and persisted SQLite identity before labeling application measurements', () => {
+  const profile = mkdtempSync(path.join(tmpdir(), 'apack-e2e-performance-'));
+  const stores = _appDataPaths(profile), directories = [stores.lmdb, stores.runHistory];
+  const header = Buffer.alloc(100); header.write('SQLite format 3\0'); header.writeUInt32BE(1, 60); header.writeUInt32BE(0x45415253, 68);
+  try {
+    expect(() => performanceStorageFormat('/developer/profile', 'sqlite/1')).toThrow(/disposable/);
+    for (const directory of directories) { mkdirSync(directory, { recursive: true }); writeFileSync(path.join(directory, 'data.mdb'), Buffer.alloc(4096)); }
+    expect(performanceStorageFormat(profile, 'elmdb/1')).toBe('elmdb/1');
+    expect(() => performanceStorageFormat(profile, 'sqlite/1')).toThrow();
+    rmSync(path.join(directories[0]!, 'data.mdb')); writeFileSync(path.join(directories[0]!, 'data.sqlite3'), header);
+    expect(() => performanceStorageFormat(profile, 'sqlite/1')).toThrow();
+    rmSync(path.join(directories[1]!, 'data.mdb')); writeFileSync(path.join(directories[1]!, 'data.sqlite3'), header);
+    expect(performanceStorageFormat(profile, 'sqlite/1')).toBe('sqlite/1');
+    expect(() => performanceStorageFormat(profile, 'elmdb/1')).toThrow();
+    const foreign = Buffer.from(header); foreign.writeUInt32BE(0, 68); writeFileSync(path.join(directories[1]!, 'data.sqlite3'), foreign);
+    expect(() => performanceStorageFormat(profile, 'sqlite/1')).toThrow(/persisted EARS/);
+  } finally { rmSync(profile, { recursive: true, force: true }); }
 });
