@@ -103,9 +103,9 @@ it('keeps the last worker alive until the coordinator releases both sources', as
   await pending; expect(finished).toBe(true);
 });
 
-it('activates the permitted worker before its action so background throttling cannot bias a revision', async () => {
-  const own = directory(); vi.stubEnv('APACK_PERFORMANCE_GATE', JSON.stringify({ directory: own, deadline: Date.now() + 10_000, mode: 'lightweight', lastIndex: 6 }));
-  writeFileSync(path.join(own, 'permit-0.json'), JSON.stringify({ index: 0, mode: 'lightweight' }));
+it.each([false, true])('activates the interactive window before timing with revision gate=%s', async gated => {
+  const own = directory(); vi.stubEnv('APACK_PERFORMANCE_GATE', gated ? JSON.stringify({ directory: own, deadline: Date.now() + 10_000, mode: 'lightweight', lastIndex: 6 }) : '');
+  if (gated) writeFileSync(path.join(own, 'permit-0.json'), JSON.stringify({ index: 0, mode: 'lightweight' }));
   const steps: string[] = [];
   const window = { show: () => steps.push('show'), focus: () => steps.push('focus'), webContents: { focus: () => steps.push('contents') } };
   const target = { application: { browserWindow: async () => ({ evaluate: async (fn: (window: unknown) => unknown) => fn(window), dispose: async () => { steps.push('dispose'); } }) },
