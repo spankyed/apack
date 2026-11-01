@@ -463,8 +463,8 @@ export class SqliteDatabase implements EarsDatabase {
   private advanceCounter(name: 'commit' | 'schemaRevision'): number {
     const current: unknown = this.meta(name) ?? 0;
     if (typeof current !== 'number' || !Number.isSafeInteger(current) || current < 0)
-      fail('CORRUPT', `Invalid ${name} counter`);
-    if (current === Number.MAX_SAFE_INTEGER) fail('NUMBERS_EXHAUSTED', `${name} counter exhausted`);
+      return fail('CORRUPT', `Invalid ${name} counter`);
+    if (current === Number.MAX_SAFE_INTEGER) return fail('NUMBERS_EXHAUSTED', `${name} counter exhausted`);
     return current + 1;
   }
   private next(name: string): number {
