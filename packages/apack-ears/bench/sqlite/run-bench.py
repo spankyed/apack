@@ -11,6 +11,7 @@ repo=pathlib.Path(__file__).resolve().parents[4]
 args.output.mkdir(parents=True,exist_ok=True)
 # A commit alone does not identify a working-tree experiment. Retain exact source fingerprints as well.
 files = sorted((repo/'packages/apack-ears/src').rglob('*.ts')) + sorted((repo/'packages/apack-ears/bench/sqlite').glob('*.*')) + [repo/'package-lock.json',repo/'vendor/elmdb.rev']
+runtime_files = sorted(path for path in (repo/'packages/apack-ears/dist').rglob('*') if path.suffix in ['.js', '.wasm'])
 engine=repo/'vendor/elmdb'
 observed_engine=subprocess.run(['git','rev-parse','HEAD'],cwd=engine,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 engine_files=sorted((engine/'crates').rglob('*.rs'))+sorted((engine/'crates').glob('*/Cargo.toml'))+[engine/'Cargo.toml',engine/'Cargo.lock']
@@ -19,7 +20,7 @@ engine_files=sorted((engine/'crates').rglob('*.rs'))+sorted((engine/'crates').gl
 node_probe = """
 import {createRequire} from 'node:module';
 import {loadedNativeBindings} from './packages/apack-ears/bench/sqlite/load-metrics.ts';
-const require=createRequire(new URL('./packages/apack-ears/src/sqlite/database.ts',import.meta.url));
+const require=createRequire(new URL('./packages/apack-ears/dist/sqlite/database.js',import.meta.url));
 const driverPackage=require.resolve('better-sqlite3/package.json');
 const extension=require('sqlite-vec');
 const extensionPath=extension.getLoadablePath();
@@ -37,6 +38,8 @@ provenance = {
     'commit': subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip(),
     'status': subprocess.check_output(['git','status','--short'],cwd=repo,text=True),
     'sourceSha256': {str(path.relative_to(repo)):hashlib.sha256(path.read_bytes()).hexdigest() for path in files if path.is_file()},
+    'runtimeSha256': {str(path.relative_to(repo)):hashlib.sha256(path.read_bytes()).hexdigest() for path in runtime_files if path.is_file()},
+    'execution': 'built-package',
     'sqliteNative': sqlite_native,
     'platform': platform.platform(), 'machine': platform.machine(),
     'node': subprocess.check_output(['node','--version'],cwd=repo,text=True).strip(),
@@ -64,6 +67,7 @@ def text(value):
 def validate(value,backend):
     if value.get('backend') != backend or value.get('durable') is not args.durable or value.get('n') != 10000:
         raise ValueError('Report does not match the selected backend/durability/fixture')
+    if value.get('execution') != 'built-package': raise ValueError('Benchmark must execute the shipped JavaScript package')
     if value.get('consumed') is not True: raise ValueError('Benchmark results were not consumed')
     bindings=value.get('nativeBindings')
     if not isinstance(bindings,list) or not bindings or any(not isinstance(row,dict) or not isinstance(row.get('path'),str) or not isinstance(row.get('sha256'),str) or len(row['sha256'])!=64 or any(c not in '0123456789abcdef' for c in row['sha256']) for row in bindings):
@@ -83,7 +87,7 @@ for trial in range(1,args.trials+1):
     for backend in (['sqlite','elmdb'] if trial%2 else ['elmdb','sqlite']):
         name=f'{backend}-{trial}'
         print(f'Running {name}, durable={args.durable}',flush=True)
-        command=['node','--import','tsx','--expose-gc','packages/apack-ears/bench/sqlite/bench.ts',backend]
+        command=['node','--experimental-strip-types','--expose-gc','packages/apack-ears/bench/sqlite/bench.ts',backend]
         if args.durable:command.append('--durable')
         started=time.monotonic()
         try:

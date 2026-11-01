@@ -3,17 +3,20 @@ import { mkdtempSync, readdirSync, statSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
-import { createEarsEngine, type EARS, type EngineSchema } from "../../src/index.ts";
-import { openDatabase } from "../../src/lmdb/index.ts";
-import { openDatabase as openSqlite } from "../../src/sqlite/index.ts";
-import { SqliteDatabase } from "../../src/sqlite/database.ts";
+import type { EARS, EngineSchema } from "../../src/index.ts";
+import type { SqliteDatabase } from "../../src/sqlite/database.ts";
 import { loadedNativeBindings } from "./load-metrics.ts";
-import { getLoadablePath } from "sqlite-vec";
 const backend = process.argv[2],
   durable = process.argv.includes("--durable"),
   n = 10_000;
 if (!["sqlite", "elmdb"].includes(backend))
   throw new Error("Expected sqlite or elmdb");
+// Like the ordinary EARS benchmarks, read source types before build but execute the shipped package.
+const DIST = '../../dist/index.js';
+const DIST_BACKEND = backend === 'sqlite' ? '../../dist/sqlite/index.js' : '../../dist/lmdb/index.js';
+const { createEarsEngine } = await import(DIST) as typeof import('../../src/index.ts');
+const { openDatabase: openBackend } = await import(DIST_BACKEND) as
+  typeof import('../../src/sqlite/index.ts') | typeof import('../../src/lmdb/index.ts');
 const dir = mkdtempSync(join(tmpdir(), "ears-backend-bench-"));
 const schema = {
   types: {
@@ -34,10 +37,7 @@ const schema = {
   relations: { in: {}, next: {} },
   roles: [],
 } satisfies EngineSchema;
-const db =
-  backend === "sqlite"
-    ? openSqlite({ path: dir, schema, syncs: durable })
-    : openDatabase({ path: dir, schema, syncs: durable });
+const db = openBackend({ path: dir, schema, syncs: durable });
 const e = createEarsEngine({ database: db });
 const id = (i: number) => `Message-${i}` as EARS.EntityId;
 const vector = (i: number) =>
@@ -238,10 +238,11 @@ try {
       : undefined;
   const memory = process.memoryUsage(), resourceUsage = process.resourceUsage();
   const extension = backend === 'sqlite' ? (db as SqliteDatabase).nativeVectorExtension : undefined;
-  const nativeBindings = loadedNativeBindings(backend === 'sqlite' ? [getLoadablePath(), ...(extension ? [extension] : [])] : []);
+  const nativeBindings = loadedNativeBindings(backend === 'sqlite' ? [(await import('sqlite-vec')).getLoadablePath(), ...(extension ? [extension] : [])] : []);
   console.log(
     JSON.stringify({
       backend,
+      execution: 'built-package',
       durable,
       n,
       node: process.version,
