@@ -200,5 +200,32 @@ The endpoint and token describe the current process, are removed at exit, and ar
 each run. A focused correction adds `writePrivateRuntimeFile`: it retains unique 0600 temporaries,
 complete byte writes, atomic rename, Windows retries and refusal cleanup, without requesting file
 or directory durability. Only API contact files use it. Durable secret and dev-session writes keep
-the existing sync and NOT_DURABLE contracts. A balanced paired writer benchmark and fresh app
-validation are pending; detailed startup figures are not their unprofiled baseline.
+the existing sync and NOT_DURABLE contracts. The [paired writer benchmark](performance-anomalies-2026-10-31/followthrough/runtime-contact-validation/writer-benchmark.json)
+ran ten balanced durable/runtime/runtime/durable blocks, twenty trials per path, on disk-backed
+`/work` under the maintained two-CPU/6-GiB Linux runner. Publishing the endpoint and 64-character
+token took median **2,311.517 ms durable versus 0.150 ms runtime**. Every trial checked token bytes,
+0600 mode and exactly two published files. No trials were excluded. This isolates publication cost
+on this host/storage configuration; it is not an application latency percentage.
+
+The affected producer/runtime builds passed. Three unprofiled fresh-profile application probes
+reached the thread surface and shut down cleanly, with connection phases at **14.666, 15.671 and
+24.400 s**. Their variability and different capture mode preclude comparison against the earlier
+detailed launches. The historical 103-second event remains unexplained. The focused private-file
+suite passes nine cases (eight existing durable contracts and one runtime contract); the API contact
+and authentication suite passes all eleven cases. Host/API typechecks and focused correctness lint
+pass. Strict CI for this correction is running on `198de6ba5a`.
+
+
+## Focused compiler recheck before combined validation
+
+After the Linux batch finished, current prerequisite packages were ensured and the two complete
+compiler files ran serially on macOS with their original assertions and deadlines. All **16 cases
+in two files passed** in 157.46 seconds. The formerly failing facade-report case took 15.304 seconds
+within its 80-second deadline; the dependency-graph file completed in 74.657 seconds within its
+existing setup/test budgets. No compiler source or deadline changed. This does not retroactively
+pass the earlier broad run or prove its environmental cause. The
+[focused log](performance-anomalies-2026-10-31/followthrough/focused-compiler.log) is retained.
+
+Final source review found no additional material defect in the window discovery, seed isolation,
+shutdown grace or private runtime publication paths. Combined committed-input validation and strict
+CI remain required before merge.

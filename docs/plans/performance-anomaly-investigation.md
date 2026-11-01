@@ -1,6 +1,6 @@
 # Performance anomaly investigation
 
-Status: investigation complete; local chain and strict CI pending. Base `9bcf4cd9f8`; native pin `1849f68`. Continue independently of the active
+Status: investigation and bounded profiles complete; final startup correction and combined validation in progress. Base `9bcf4cd9f8`; native pin `1849f68`. Continue independently of the active
 thread-opening work and main-checkout validation. Preserve original failures and their source hashes.
 
 ## Questions and completion
@@ -39,26 +39,28 @@ reviewable changes; use the repository chain and required CI at a stable impleme
 Documentation-only findings reuse existing valid checks. Do not merge new changes without instruction.
 
 
-## Current handoff
+## Completion disposition
 
-Read the [finding-by-finding disposition](../references/evidence/2026-10-31-performance-anomalies.md).
-The model-fixture and window-discovery fixes passed clean six-job strict CI on `e42fcfc745`. The local
-chain failed two compiler deadlines; evidence edits also invalidated its host-unit aggregate proof.
-Do not report the local chain as passing. The independent model properties and isolation counterfactual
-passed with unchanged 120/40 workloads and deadlines.
+Read the [finding-by-finding evidence](../references/evidence/2026-10-31-performance-anomalies.md).
 
-A subsequent real-child probe exposed a shutdown timer race. Its corrected eight-case suite passes;
-the old implementation fails the strengthened case. The existing simpler state case was replaced,
-so test count did not increase. Actual source now passes 15 focused main/testing cases. Initial-only
-launch logging is also corrected. Finish typechecks, commit/push the checkpoint and dispatch strict CI.
+- Model workloads: preserved 120/40 workloads, operation counts, isolation, durability and deadlines.
+  Copying a closed empty seed removes redundant durable format creation; the isolation counterfactual fails.
+- Window discovery: an unresponsive page no longer defeats the discovery deadline or hides another ready window.
+- Shutdown: a real-child counterfactual reproduces an overdue-timer false refusal; the correction preserves
+  escalation and requires actual exit. A real application shutdown-stall probe passes.
+- Launch evidence: phases are recorded once per application. The maintained shared-app smoke cases verify this.
+- Recording: admitted real search comparison is 10.6 → 11.4 ms (+0.8 ms / +7.55%), over the original 5% budget.
+  The bounded detailed profile cannot isolate lightweight cost; no recorder rewrite or threshold relaxation.
+- Startup: fresh-profile detailed launches take 17.5–19.1 s. Flush parent stacks identify regenerated API
+  contact publication. Only those files switch to private atomic publication without durability flushes.
+  Secrets and dev-session records retain durable writes. Paired publication measured 2,311.517 ms durable versus 0.150 ms runtime; all three fresh-app probes pass.
+  This is an isolated publication win, not a whole-startup latency qualification.
+- Historical 102.914-second setup: exact cause remains unestablished. Later passes do not explain it.
 
-The bounded Linux candidate build timed out in default-pack preparation before its app probes. Gather
-a CPU profile of that one build before another local app run, with unchanged resource limits and
-ceiling. Once preparation succeeds, use the existing two smoke cases to verify shared-app launch logs,
-then the explicit shutdown-stall probe and one clean real search comparison. Keep all diagnostic and
-qualification invocations separate. No native source changes are proposed.
+Strict CI passed all six jobs on e602e9ad77. The runtime contact correction has a new strict CI checkpoint
+in progress. The earlier local broad chain remains failed, with unchanged compiler deadlines and an
+invalidated host-unit aggregate proof; do not describe it as passing. Both complete compiler files now pass all 16 focused cases under unchanged deadlines. Validate the combined committed branch against current master through
+`session:check` before merging. Finish evidence before that gate and freeze its inputs throughout.
 
-The narrow disabled/disabled controls measured +1.44% search and +0.37% startup; a real startup recording
-comparison passed (-1.82%). The historical 102.914-second setup cause and a robust sub-5% short-search
-overhead bound remain unestablished. Preserve failures and do not relax the timing or correctness gates.
-Do not merge.
+The user authorized completion and merge on November 1. Keep the active main checkout untouched.
+No native source changes, workload reductions, timeout increases or acceptance relaxations are authorized.
