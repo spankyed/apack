@@ -120,5 +120,58 @@
         "status": "passed"
       }
     ]
+  },
+  "Windows": {
+    "ears": {
+      "numPassedTests": 926,
+      "numFailedTests": 1,
+      "numPendingTests": 4
+    },
+    "nativeAdapterReadiness": [
+      {
+        "name": "waits for the native builder without blocking foreground turns and releases its timer",
+        "status": "passed"
+      },
+      {
+        "name": "scopes readiness and failures to the requested type",
+        "status": "passed"
+      },
+      {
+        "name": "rejects superseded scoped declarations even if changed back before the timer runs",
+        "status": "passed"
+      },
+      {
+        "name": "keeps a scoped wait through an unrelated type declaration",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when reset changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when replaceWith changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when close changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "refuses open units, closed handles and unfinished read-only builds",
+        "status": "passed"
+      }
+    ],
+    "otherCounts": {
+      "host.json": {
+        "numPassedTests": 309,
+        "numFailedTests": 0,
+        "numPendingTests": 6
+      },
+      "host-crash.json": {
+        "numPassedTests": 2,
+        "numFailedTests": 0,
+        "numPendingTests": 10
+      }
+    }
   }
 }
