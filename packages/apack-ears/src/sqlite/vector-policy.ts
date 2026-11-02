@@ -1,5 +1,8 @@
 // Shared routing/admission limits. Training parameters remain owned by the training worker.
 export const EXACT_VECTOR_CHUNK_LIMIT = 4096;
+// Search every trained bucket before bounded binary-quantized candidate admission.
+// Half-bucket probing missed the required recall on a fresh managed model.
+export const NATIVE_VECTOR_PROBES = 64;
 export const NATIVE_VECTOR_OWNER_TARGET = 256;
 export const APPROXIMATE_VECTOR_RESULT_LIMIT = 64;
 

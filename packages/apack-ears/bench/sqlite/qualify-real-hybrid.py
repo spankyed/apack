@@ -124,12 +124,15 @@ def validate(report, size, source, manifest_hash):
             for statement in row['statements']:
                 assert set(statement) == {'sqlSha256', 'distanceScoring', 'returnedRows', 'ms', 'plan'}
                 assert finite(statement['ms']) and finite(statement['returnedRows'])
+    if 'nativeProbes' in report:
+        assert report['nativeProbes'] == 64
+        assert report['nativeProbeValues'] == [8, 16, 32, 64]
     if 'nativeProbeComparison' in report:
         assert report['modelMode'] == 'managed' and report['nativeCandidateFloor'] is None
         expected = {(cohort, family, query, probe, k)
                     for cohort, stride in COHORTS.items() if math.ceil(size / stride) > 4096
                     for family in FAMILIES for query in range(0, 100, 10)
-                    for probe in [8, 16, 32] for k in [10, 40, 64]}
+                    for probe in report.get('nativeProbeValues', [8, 16, 32]) for k in [10, 40, 64]}
         rows = report['nativeProbeComparison']
         assert len(rows) == len(expected)
         assert {(r['cohort'], r['family'], r['query'], r['nprobe'], r['k']) for r in rows} == expected

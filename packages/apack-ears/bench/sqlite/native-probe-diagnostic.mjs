@@ -1,5 +1,6 @@
 // Benchmark-only matched nprobe comparison; ordinary policy and model training stay unchanged.
 import assert from 'node:assert/strict';
+import { NATIVE_VECTOR_PROBES } from '../../src/sqlite/vector-policy.ts';
 
 export function compareNativeProbes(db, cohorts, inputs, independentAnswers, size, exactLimit) {
   const samples = [], ordinaryAll = db.all;
@@ -8,7 +9,7 @@ export function compareNativeProbes(db, cohorts, inputs, independentAnswers, siz
     const native = activeProbe !== undefined && /^SELECT owner FROM ann_[0-9]+\(\?,\?\) WHERE /.test(sql);
     if (native) {
       const options = JSON.parse(parameters[1]);
-      assert.equal(options.nprobe, 32);
+      assert.equal(options.nprobe, NATIVE_VECTOR_PROBES);
       nativeCalls++;
       parameters = [...parameters];
       parameters[1] = JSON.stringify({ ...options, nprobe: activeProbe });
@@ -22,7 +23,7 @@ export function compareNativeProbes(db, cohorts, inputs, independentAnswers, siz
     for (const cohort of cohorts) {
       if ((cohort.ids?.length ?? size) <= exactLimit) continue;
       for (const input of inputs.filter(input => input.ordinal % 10 === 0)) {
-        const variants = [8, 16, 32], rotation = input.ordinal / 10 % variants.length;
+        const variants = [8, 16, 32, 64], rotation = input.ordinal / 10 % variants.length;
         const order = [...variants.slice(rotation), ...variants.slice(0, rotation)];
         for (const nprobe of order) for (const k of [10, 40, 64]) {
           activeProbe = nprobe; nativeCalls = 0; nativePages = []; bqFallback = false;

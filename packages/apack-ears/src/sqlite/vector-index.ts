@@ -1,6 +1,7 @@
 // Generation-owned native projections. The database owner supplies its trusted extension;
 // no database metadata may select executable code. Training and packaging have separate owners.
 import { createHash } from 'node:crypto';
+import { NATIVE_VECTOR_PROBES } from './vector-policy.ts';
 import { prepareEmptyNativeVectorCursor } from './vector-cursor.ts';
 import type { SqliteDatabase } from './database.ts';
 import type { SqliteIndexJob } from './index-builds.ts';
@@ -122,7 +123,7 @@ export class SqliteVectorIndex {
     // Owner admission does not need native Float32 payloads or a second exact distance calculation.
     const columns=projection==='owners'?'owner':'rowid embedding_id,owner,vec1_cos_distance(v,?) distance';
     return this.db.all(`SELECT ${columns} FROM ${name}(?,?) WHERE ${filter}`,
-      [...(projection==='owners'?[]:[Buffer.from(vector)]),Buffer.from(vector),JSON.stringify({K:limit,nprobe:32}),
+      [...(projection==='owners'?[]:[Buffer.from(vector)]),Buffer.from(vector),JSON.stringify({K:limit,nprobe:NATIVE_VECTOR_PROBES}),
         ...(scope || exclude ? [...(scope?.parameters ?? []),exclude ?? ''] : [])]);
   }
   ready(generation:number):Record<string,any>|undefined {

@@ -14,7 +14,7 @@ import { startVectorModels, waitForNativeModels } from '../../src/sqlite/index.t
 import { resolveNativeVectorExtension } from '../../src/sqlite/native-extension.ts';
 import { prepareEmptyNativeVectorCursor } from '../../src/sqlite/vector-cursor.ts';
 import { SqliteVectorIndex } from '../../src/sqlite/vector-index.ts';
-import { EXACT_VECTOR_CHUNK_LIMIT } from '../../src/sqlite/vector-policy.ts';
+import { EXACT_VECTOR_CHUNK_LIMIT, NATIVE_VECTOR_PROBES } from '../../src/sqlite/vector-policy.ts';
 import { compareNativeProbes } from './native-probe-diagnostic.mjs';
 
 const [root, output, sizeArg = '1000', modelMode = 'fallback', candidateFloorArg = 'production', diagnosticBuild = 'packaged', ...extra] = process.argv.slice(2);
@@ -110,7 +110,7 @@ const report = { protocol: 'ears-private-real-hybrid/1', completed: false, quali
   source: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID ?? null, limits, cpuModels: [...new Set(cpus().map(cpu => cpu.model))], vectorRecallReference: 'independent-float64-canonical-f32', oracleSha256: sha(truthBytes), oracleRecipeSha256: truth.recipeSha256, oracleScalarChecks: truth.scalarChecks.filter(row => row.size === size), node: process.version, arch: process.arch, manifestSha256: sha(manifestBytes), size, queries: 200, queryFamilies: { heldOut: 100, lexicalControls: 100 },
   scope: 'Selected real paired prefix; exact fusion correctness and warm timings, not relevance judgments or resource qualification',
   nativeDiagnostic, nativeExtensionSha256: nativeExtension ? sha(readFileSync(nativeExtension)) : null,
-  containsPayload: false, fusionPolicy: 'global-vector-window-max-40-4k', fusionVectorDepth: 40, vectorPolicy: 'adaptive-native-owner-pool', nativeOwnerTargets: { through32: 256, through40: 1024, through64: 2048 }, fallbackOwnerTarget: 256, nativeModelOwnerStarted: false, modelMode, nativeCandidateFloor, matchedCandidateWidths, timing: 'Warm query after independent reference reads; 2CPU/6GiB/no-swap disposable container', samples: [] };
+  containsPayload: false, fusionPolicy: 'global-vector-window-max-40-4k', fusionVectorDepth: 40, vectorPolicy: 'adaptive-native-owner-pool', nativeProbes: NATIVE_VECTOR_PROBES, nativeProbeValues: [8, 16, 32, 64], nativeOwnerTargets: { through32: 256, through40: 1024, through64: 2048 }, fallbackOwnerTarget: 256, nativeModelOwnerStarted: false, modelMode, nativeCandidateFloor, matchedCandidateWidths, timing: 'Warm query after independent reference reads; 2CPU/6GiB/no-swap disposable container', samples: [] };
 writeFileSync(output, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
 const save = () => {
   writeFileSync(output + '.next', JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
@@ -296,7 +296,7 @@ try {
         const result = { cohort: cohort.name, limit, samples: [] };
         report.ownerProjection.push(result);
         for (let trial = 0; trial < 3; trial++) {
-          const bindings = [query, JSON.stringify({ K: limit, nprobe: 32 }), ...(cohort.ids ? [JSON.stringify(cohort.ids), ''] : [])];
+          const bindings = [query, JSON.stringify({ K: limit, nprobe: NATIVE_VECTOR_PROBES }), ...(cohort.ids ? [JSON.stringify(cohort.ids), ''] : [])];
           const source = `FROM ann_${current.id}(?,?) WHERE ${filter}`;
           let owners, rowids, mapped, ownerMs, rowidMs, mappingMs;
           const owner = () => { const at = performance.now(); owners = db.all('SELECT owner ' + source, bindings); ownerMs = performance.now() - at; };

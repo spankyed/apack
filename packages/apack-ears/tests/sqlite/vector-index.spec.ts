@@ -43,7 +43,12 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite' && !!process.env.E
     e.embed([{id:first,chunk:old.chunk,hash:old.hash,model:old.model,vector:vector(1)}]);
     const third=e.create('Row',{title:'four'}).id();embed();
     while(!write(()=>index.step(job.generation,1))) { /* bounded caller-owned slices */ }
+    const calls=vi.spyOn(db,'all');
     const answers=index.candidates(job.generation,bytes(vector(1)),100);
+    const nativeCall=calls.mock.calls.find(([sql])=>sql.startsWith('SELECT rowid embedding_id,owner,vec1_cos_distance'));
+    expect(nativeCall).toBeDefined();
+    expect(JSON.parse(nativeCall![1]![2] as string)).toEqual({K:100,nprobe:64});
+    calls.mockRestore();
     expect(answers).toHaveLength(4);
     expect(index.candidates(job.generation,bytes(vector(1)),100,null,undefined,'owners')).toEqual(answers.map(({owner})=>({owner})));
     expect(answers.find(a=>a.embedding_id===old.id)!.distance).toBeCloseTo(0);
