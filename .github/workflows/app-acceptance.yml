@@ -6,7 +6,7 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-watch, sqlite-admission-watch, sqlite-wal, sqlite-app-flows, sqlite-startup, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-watch, sqlite-admission-watch, sqlite-wal, sqlite-cold, sqlite-app-flows, sqlite-startup, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
       sqlite_vector_models:
         description: Real corpus vector regime; managed verifies native readiness above the exact-search threshold
@@ -205,7 +205,7 @@ jobs:
           retention-days: 14
   sqlite-watch:
     name: SQLite storage workloads
-    if: ${{ inputs.suite == 'sqlite-watch' || inputs.suite == 'sqlite-admission-watch' || inputs.suite == 'sqlite-wal' }}
+    if: ${{ inputs.suite == 'sqlite-watch' || inputs.suite == 'sqlite-admission-watch' || inputs.suite == 'sqlite-wal' || inputs.suite == 'sqlite-cold' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -249,6 +249,8 @@ jobs:
                 python3 packages/apack-ears/bench/sqlite/run-watch.py /results/trials
               elif [ "$1" = sqlite-admission-watch ]; then
                 python3 packages/apack-ears/bench/sqlite/run-watch.py /results/trials --admission
+              elif [ "$1" = sqlite-cold ]; then
+                python3 packages/apack-ears/bench/sqlite/run-cold.py /results/cold-reopen
               else
                 for regime in burst sustained; do
                   for mode in released retained; do
@@ -1029,7 +1031,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
   check:
-    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-watch' && inputs.suite != 'sqlite-admission-watch' && inputs.suite != 'sqlite-wal' && inputs.suite != 'sqlite-model-windows' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'sqlite-vector-dispatch' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
+    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-watch' && inputs.suite != 'sqlite-admission-watch' && inputs.suite != 'sqlite-wal' && inputs.suite != 'sqlite-cold' && inputs.suite != 'sqlite-model-windows' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'sqlite-vector-dispatch' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
     runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45

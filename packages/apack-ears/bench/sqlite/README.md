@@ -696,3 +696,36 @@ while schema acknowledgment follows each backend’s ordinary default. Original
 16-ms responsiveness limits and failures remain. The recipe is not executed yet;
 it is not representative app/provider, independent-device or complete resource
 qualification. The existing steady-state recipe remains a separate protocol.
+
+## Verified file-page cache and reopen diagnostic
+
+Manual `App acceptance` suite `sqlite-cold` runs `run-cold.py` and the built-package
+`cold-reopen.mjs` under the existing two-CPU/6-GiB/no-swap resource runner. It creates
+closed 10,000-row stores with deterministic 2-KiB ASCII payloads and indexed group/rank
+fields. Each backend/cache condition has twenty fresh-process trials, alternating whole
+backend/condition order; individual cold/warm reads within a process are not paired.
+Every trial uses a new owned copy. Nonempty SQLite WAL refuses admission rather than
+pretending eviction of the main file controls its data.
+
+Before launch, the controller flushes copy writes, reads the entire main file to establish
+warm residency, and either retains it or requests eviction with POSIX_FADV_DONTNEED.
+Advice is not a guarantee: [Linux fadvise documentation](https://man7.org/linux/man-pages/man2/posix_fadvise.2.html)
+requires dirty pages to be flushed first. The independent
+[mincore residency snapshot](https://man7.org/linux/man-pages/man2/mincore.2.html)
+must observe every page warm and then zero resident pages for a cold trial; failures
+retain incomplete evidence without retry or success labels. A separate warm/evicted
+witness prevents a kernel that cannot expose actual residency from passing vacuously.
+No global cache flush, root privilege or unrelated file is involved.
+
+The child records backend open, EARS engine construction, first field read, filtered/ordered fifty-row projection
+and a subsequent ordered projection separately, verifies complete answers/counts, and
+fingerprints loaded native bindings/runtime output. Native/JavaScript memory includes
+module/open/setup overhead. Copying, cache control and fixture preparation are outside
+those intervals. Residency is observed before launch; open itself warms pages, so later
+reads are not individually cold and the snapshot is not a promise about future residency.
+
+This diagnostic does not measure whole-app startup, cold executable/module caches,
+physical-device caches, many-device variance, search/recall or final adoption. The
+existing fresh-process application startup remains labelled warm-filesystem. Original
+foreground/recall/resource requirements remain unchanged. Runtime execution of this new
+recipe is pending; local syntax checks establish no cold-cache or performance result.
