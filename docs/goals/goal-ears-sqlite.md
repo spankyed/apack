@@ -212,12 +212,13 @@ reproduces all gate outcomes; five summary means differ only by floating-point r
 other fields identical. [Original reports and matched same-model probe diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-93ed/README.md).
 
 Next deliverable: inspect [whole strict/platform 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216),
-then finish the requirement-by-requirement adoption report. Producer job 125476904574 and platform
-jobs 125476905128/125476905599/125476905761 were last verified live. Require actual reports and final
+then finish the requirement-by-requirement adoption report. Linux job 125476905599 is TERMINAL SUCCESS, with 946 EARS, 313 host, 12 recovery, 41 CLI and 1,330 SDK passes, no exclusions; its final guard passes. [Original platform reports](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md). Producer job 125476904574 and Windows/macOS jobs 125476905128/125476905761 were last verified live. Require actual reports and final
 guards for all three OSes, both native/integration shards and app/rest. Do not restart merely because
 observation times out. Platform coverage is reusable and invoked by strict; it has no manual-dispatch
 trigger. No app workflow is currently queued by this session. Compiler/native, full and runtime
 checks remain disposable; local work is source review, metadata and pure evidence validation.
+
+The [final input audit](../references/evidence/ears-sqlite-implementation-2026-10-28/final-input-audit/README.md) verifies the two-file runtime delta, 66 unchanged files per 68-file fault fingerprint, unchanged driver/backup/native/dependency inputs, pinned ancestry and elmdb default. Historical runs retain their tested sources.
 
 The [adoption assessment](../plans/ears-sqlite-contracts.md#current-adoption-assessment) maps all seven
 phases and source-pinned evidence, including a850 whole strict/platform, operational faults, signed
