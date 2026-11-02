@@ -10,7 +10,7 @@ At 99,900 documents:
 | 1 percent | 21.05 ms | 24.19 ms |
 | 10 percent | 114.76 ms | 107.83 ms |
 
-Nine heartbeat groups miss the original 16 ms target. They remain measured failures with the user's accepted synchronous responsiveness degradation, not passing targets. At 99,900 rows, load is 76.56 s and managed admission 46.21 s. Maximum sampled database/WAL/sidecar bytes are 1,971,839,008. Whole-harness peak RSS is 1,494,368 KiB; this includes acquisition/oracle/query work and is not isolated database memory. File snapshots are not instantaneous disk peaks.
+Nine heartbeat groups miss the original 16 ms target. They remain measured failures with the user's accepted synchronous responsiveness degradation, not passing targets. At 99,900 rows, load is 76.56 s and managed admission 46.21 s. Maximum sampled database/WAL/sidecar bytes are 1,971,839,008. Whole-harness peak RSS is 1,494,368 KiB; this includes corpus loading/reference-oracle/query work and is not isolated database memory. File snapshots are not instantaneous disk peaks.
 
 The unchanged pure validator independently checks every sample, pairing/provenance and original target. Its local recomputation differs from the CI summary only in ten floating-point means by at most 4.44e-16; all other fields and gate outcomes agree. Byte identity is not claimed. The receipt lists every rounding difference. All sealed corpus file identities and acquisition recipe match the preceding 94cf run; native model/runner/source differences preclude causal performance claims. No new corpus data is selected for these results.
 
