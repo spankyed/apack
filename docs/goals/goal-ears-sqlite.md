@@ -197,35 +197,15 @@ remains dated evidence for its recorded tip. The new compound-query correction c
 runtime input `src/sqlite/text.ts`; earlier integration/corpus/installed results retain their original
 source and do not qualify this changed execution. Requalify the affected search and app behavior.
 
-Current checkpoint: finish the original unstemmed keyword judgment without changing its query,
-expected answer or top-five threshold. The [compound correction](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
-passes 93 search contracts and both old-source controls; SQLite English keyword is 25/25, but
-unstemmed case 6 is still rank 12. English-stemmed elmdb's distinct failure is typo case 20.
+Current checkpoint: complete original keyword acceptance without changing its query, expected answer or top-five threshold. Passage-only source `373bf288c6` passes SQLite unstemmed 25/25 but regresses English to 24/25 (case 6 rank 13). [Preserved terminal failure](../references/evidence/ears-sqlite-implementation-2026-10-28/passages-373/README.md). It passed the production EARS build, then the hard gate stopped execution; no following contracts or inference ran.
 
-The current next correction uses separately normalized native FTS passages for a bounded leading-text prefix:
-at most 256 UTF-16 units, cut at whitespace to avoid invented partial words, weighted 3 beside
-a full-source fallback. Long strings add at most one complete-token prefix passage, each with
-its own FTS length normalization; SQL takes the best passage score per entity/clause. It applies
-to every source string without a query/document special case or JS reranking/vocabulary scan.
-Derived text revision 2 replaces the earlier leading-column layout: that [hard-gate attempt](../references/evidence/ears-sqlite-implementation-2026-10-28/lead-column-a9/README.md)
-still ranked the required overview seventh because it shared full-row length normalization.
-The cap and declared weight remain unchanged; the passage weight now multiplies its native
-score rather than weighting frequency within one column. This is not a controlled single-factor
-normalization experiment. A derived text revision creates new
-generations on writable reopen. Read-only obsolete generations refuse with INDEX_BUILDING and
-an explicit writable-rebuild instruction. Audit includes leading text; primary values and logical
-commit identity remain unchanged during derived regeneration.
+Runtime `a91c0b0d5c` keeps independently normalized bounded leading passages (256 UTF-16 units, whitespace boundary, weight 3) beside each full source. It adds an unstemmed external-content FTS companion only for English indexes, sharing source bodies instead of storing them twice. For positive unquoted compound tokens, literal compound coverage ranks before Porter-only matches, with monotonic BM25 within each tier and recency afterward. Membership, phrase boundaries, scopes and winner-only highlight fetching remain native. No fixture-specific constants, raw-body scan, JS ranking or vocabulary transfer is introduced. Explicit empty field selection now searches no fields.
 
-Closing checks: unchanged original 25/25 SQLite keyword gate in both none/English configurations,
-original frozen shared spec plus existing search contracts, generic long-field lead ranking,
-truncation safety, lead corruption audit/rebuild, real old-layout reopen, and three assertion
-failures against the exact old text source followed by verified restoration. The relevance-only
-job builds the EARS package with its normal native-asset producer; full integrated/app/platform
-qualification remains separate and required after the final runtime correction. The keyword
-measurement now runs before inference and is a hard gate, so diagnostic completion cannot hide
-an original keyword failure. Local checks cover YAML/shell syntax, links/diff and unchanged fixture
-hash only; all compilation/native/runtime testing remains disposable. This correction is unqualified
-until actual CI reports prove it; previous corpus/installed reports retain their original source.
+Derived text revision 3 admits replacement generations on writable reopen; obsolete read-only opens refuse with INDEX_BUILDING. Lifecycle changes cover companion insertion, removal before shared-content deletion, clearing, bounded retirement and reset. The private-snapshot audit compares companion postings against original stored text using native external-content integrity checking. Primary values and logical commit identity remain authoritative and unchanged by regeneration.
+
+[Run 41477975796](https://github.com/spankyed/apack/actions/runs/41477975796) qualifies runtime `a91c0b0d5c`; inspect its actual status before dispatching another app workflow. Test-only descendant `cded08de00` additionally constructs the real English revision-2 passage layout without a companion, verifies read-only nonmutation/writable upgrade and retirement, and extends the exact-old-source counterfactual from three to four required named assertion failures. These added checks are not executed by the earlier run and need current-source qualification.
+
+Closing checks: unchanged original 25/25 SQLite keyword gate in both none/English configurations; original frozen shared spec and existing search contracts; generic leading-passage ranking and truncation safety; compound literal/stem ordering with recency, updates and deletion; both storage upgrade paths; leading and companion corruption/rebuild; and exact-old-source assertion failures with verified source restoration. The hard keyword measurement precedes expensive inference. The relevance job builds the normal EARS native assets. Full strict/app/platform/corpus qualification remains required for changed runtime; earlier receipts preserve their original source scope. Local checks are syntax/metadata only; compiler/native/runtime tests remain disposable. No acceptance waiver or completion claim follows from an active run.
 
 A minimal two-file elmdb written-word fuzzy patch is prepared in
 `/private/tmp/ears-native-written-fuzzy.patch` against f496, with source hashes in the adjacent
