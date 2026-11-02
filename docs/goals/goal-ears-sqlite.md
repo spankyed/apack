@@ -288,7 +288,10 @@ Current validation handles and results:
 
 - [Independent ordinary managed corpus repetition 41413055256](https://github.com/spankyed/apack/actions/runs/41413055256)
   is queued/in progress at `94cf2eeac6`. Packaged/managed/production inputs are explicit; no diagnostic override.
-  Its corpus and relevance outcomes are unqualified until the actual reports are verified.
+  Its corpus outcome remains unqualified until actual reports are verified. The separate relevance job
+  succeeds: [verified original receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-94cf/README.md)
+  repeat hybrid 25/25 on each backend and keyword 24/25 in all four backend/stemming groups.
+  Fixture/vector/model identities match b989; both validators reproduce original summaries byte-for-byte.
 
 - [Populated-WAL allocation/refusal check 41411063927](https://github.com/spankyed/apack/actions/runs/41411063927)
   is terminal at `5cf602ce3b0c6b0323ef1db56c277c895b7314f4`: allocation/WAL and all other named
