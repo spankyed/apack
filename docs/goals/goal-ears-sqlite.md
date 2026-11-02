@@ -193,7 +193,7 @@ elmdb `f496470679a7bd9764398108b20f62a73333c701`. Production defaults remain elm
 release, daily-profile migration or native-baseline ranking patch is authorized.
 
 Current implementation is `93ed37e67f`; later commits contain documentation only. Keyword search is
-fixed, not waived: [final a850-code relevance](../references/evidence/ears-sqlite-implementation-2026-10-28/final-3fea/README.md)
+fixed, not waived: [current 64-probe relevance](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-93ed/README.md)
 passes the unchanged 25/25 gate for both SQLite none/English modes, all 125 contracts, four effective
 old-source assertion controls and hybrid 25/25 on both engines. Native keyword remains a separately
 recorded 24/25 comparison. Complete source-app lifecycle passes 33 cases and ten discovery cases;
@@ -212,7 +212,7 @@ Inspect these existing handles; do not restart merely because observation times 
 - [Whole strict/platform 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216):
   producer, all three OSes, both native/integration shards and app/rest. Verify actual reports and final guards.
 
-Both handles were verified live after dispatch. Platform coverage is a reusable workflow invoked by
+Both handles were verified live after dispatch; relevance job 125476893507 has since succeeded, with independent summary reproduction and minimized reports preserved. Corpus job 125476892995 and all four initial strict/platform jobs were last verified live. Platform coverage is a reusable workflow invoked by
 strict; it has no manual-dispatch trigger. Keep the single app-workflow queue intact. Compiler/native,
 full and runtime checks remain disposable; local work is source review, metadata and pure evidence validation.
 
