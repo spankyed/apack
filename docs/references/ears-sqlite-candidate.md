@@ -2,7 +2,7 @@
 
 This describes the implementation on `session/ears-sqlite`, draft PR [#286](https://github.com/spankyed/apack/pull/286).
 Production continues to select elmdb. The [goal](../goals/goal-ears-sqlite.md#current-handoff) owns
-qualification status; the [assessment](../plans/ears-sqlite-contracts.md#current-adoption-assessment)
+qualification status; the [evaluation report](ears-sqlite-evaluation-report.md)
 owns the adoption recommendation. This reference does not authorize a cutover or daily-profile migration.
 
 ## Selection and ownership

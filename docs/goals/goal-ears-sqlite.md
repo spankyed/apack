@@ -234,6 +234,8 @@ Both active/pending app-workflow lists were empty before dispatch. Preserve ever
 failure and actual source; only foreground responsiveness has the user's accepted degradation.
 Inspect this same run to terminal. Its results are not inferred from old measurements or corpus passes.
 
+The [evaluation report](../references/ears-sqlite-evaluation-report.md) now maps all seven phases and records the recommendation, evidence scope, retained failures and explicit pending admission gate.
+
 Frozen closing checklist: inspect/preserve this current admission suite, reconcile each original phase
 and numbered acceptance item against the existing source-pinned evidence, finalize the recommendation
 and reference/public docs, repair archival links and commit closure. Do not add arbitrary universal
