@@ -53,7 +53,7 @@ const components: Array<[string, 'TABLE' | 'INDEX' | 'TRIGGER', (text: string, t
   ['vector retirement index', 'INDEX', () => 'chunk_generation'],
   ['text retirement index', 'INDEX', () => 'text_generation'],
   ['trigram shadow index', 'TABLE', (_t, g) => g + '_idx'],
-  ['text shadow content', 'TABLE', t => t + '_content'],
+  ['text shadow index', 'TABLE', t => t + '_idx'],
 ];
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing search storage recovery', () => {

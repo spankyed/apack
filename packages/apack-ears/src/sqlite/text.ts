@@ -193,7 +193,7 @@ export class SqliteText {
       const phrase = token.startsWith('"'), raw = token.replace(/^"|"$/g, '');
       // ASCII separators in ordinary identifiers do not impose phrase adjacency. Keep non-ASCII
       // text intact for unicode61: JS Unicode categories differ from its pinned tokenizer rules.
-      const parts = phrase ? [raw] : raw.split(/[\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/).filter(Boolean);
+      const parts = phrase ? [raw] : raw.split(/[^0-9A-Za-z\u0080-\uffff]+/).filter(Boolean);
       const selected = (field === undefined ? fields : [field]).filter(f => options.fields === undefined || options.fields.includes(f))
         .map(f => fields.indexOf(f)).filter(i => i >= 0);
       if (!negative && !phrase && parts.length > 1 && job.definition.stem === 'en') {
