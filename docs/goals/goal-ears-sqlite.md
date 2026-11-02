@@ -198,16 +198,15 @@ approved disposition, not passes. No async search API is being implemented. Keyw
 remains 24/25 on both backends; English hybrid is 25/25. The separate keyword disposition question is
 pending; no waiver or answer is assumed. Other requirements below remain intact.
 
-**Current blocking finding:** the newly exercised pack-unit stage reveals a real watch invalidation
-regression at c5d6f3ea66: 988 passes, one failure and two exclusions. Creating an unrelated thread
-queues three open-thread views that should remain untouched. [Original failure evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/pack-scope-c5d-failure/README.md)
-is preserved. The corrective query patch limits membership/field dependencies to explicit IDs or
-admitted types, removes unread far-membership dependencies for fixed relation endpoints, and retains
-untyped/deep intermediate reachability tracking. Five shared guards and the real thread-view case
-require disposable qualification in run `41390395444`, pinned to correction `cd8b413fa8`;
-syntax checks alone do not close this defect. The Linux platform
-control tests both backends, reverts only the CI query source to the pinned old implementation to
-require four precise failures, then restores it byte-for-byte before subsequent checks.
+**Watch correction:** the newly exercised pack-unit stage at c5d6f3ea66 exposed three unnecessary
+open-thread view reruns (988 passes, one failure, two exclusions). [Original failure evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/pack-scope-c5d-failure/README.md)
+is preserved. Correction `cd8b413fa8` scopes ID/type/typed-hop dependencies and preserves untyped/deep
+reachability. [Its actual Linux control](../references/evidence/ears-sqlite-implementation-2026-10-28/watch-scope-cd8/README.md)
+passes all 31 watch and six real thread-view cases on each backend, including the original metric
+case. Four precision guards fail against the exact old c5d6f3ea66 module; both source blob hashes
+and byte-for-byte restoration verify. Linux/macOS complete EARS now pass 935 cases with only the
+retained keyword failure. This closes the demonstrated defect at focused scope; all 991 pack units
+and the remaining authoring/app stages still require corrected-source integrated qualification.
 
 Latest demonstrated results:
 
@@ -247,30 +246,27 @@ Latest demonstrated results:
   import remains slower. [Sustained checkpoint capacity](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-c471/README.md)
   passes four cohorts and shows 765 MB controlled logical overlap, not instantaneous peak or power-loss certification.
 
-Live check: integrated strict/platform run
-[41385303835](https://github.com/spankyed/apack/actions/runs/41385303835) at `c5d6f3ea66` is running.
-Its producer passes. Integration-2 passes 580 cases with one exclusion; native-2 passes 47 with
-26 exclusions. Integration-1/native-1 also pass their jobs. App/rest fails at the retained keyword gate,
-its independent SQLite witness passes, then the new remaining stage fails at the thread-view
-pack-unit guard described above; later selected authoring/app stages remain unexecuted. All three platform
-jobs are terminal with only the frozen keyword failure. Linux/macOS EARS 930, host 313 and host
-process-death recovery 12 pass; Windows EARS 926, host 310 and applicable recovery two pass with
-four/six/ten original exclusions. All eight native-readiness cases, 735 membership comparisons,
-nine native-training cases and 41 CLI-maintenance cases pass on each platform. Exact verifier
-failures and original log hashes confirm the remaining keyword gate rather than assuming it from
-the pre-assertion report.
-Final source-app run `41383516309` is terminal success, including the terminal-exit wait. Corpus/relevance
-run `41382184193` is also terminal success, with diagnostic responsiveness misses preserved. Do not
-cancel/restart for an observation timeout. Preserve minimized final strict receipts, then reconcile
-every remaining requirement and finish the completion report. No new heavyweight run is needed
-without a changed input, failed check or unresolved concern.
+Live checks on corrected program source:
 
-[Explicit SQLite external-pack run `41388294349`](../references/evidence/ears-sqlite-implementation-2026-10-28/external-bb35/README.md)
-at `bb35e86c7f` passes all 28 cases, fixture contracts and the default-fork producer; storage selection
-and the suite environment both confirm sqlite/1. Its source precedes the dependency correction.
-Dedicated platform/control run `41390395444` at `cd8b413fa8` is now active across Linux/macOS/Windows.
-Require both-backend positives, four actual-old-source failures, restored source and the real thread
-views before closing the invalidation defect. Do not displace an occupied pending app-workflow slot.
+- Platform/control run [41390395444](https://github.com/spankyed/apack/actions/runs/41390395444)
+  at `cd8b413fa8`: Linux/macOS complete with only keyword failure; Windows remains active. The
+  focused dependency control passes with original numeric reports retained above.
+- Integrated strict run [41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
+  at `06106d18dd` is pending behind platform workflow concurrency; it must execute the full pack
+  pool and previously unexecuted remaining stages. This source differs from cd8 only in documentation.
+- Explicit SQLite packaged-authoring run [41392105607](https://github.com/spankyed/apack/actions/runs/41392105607)
+  at `06106d18dd` is pending behind the active app workflow. Preserve the occupied pending slot.
+
+Previous integrated run `41385303835` at c5d6f3ea66 is terminal: producer and all four integration/native
+consumers pass; host retains keyword failure and the independent SQLite witness passes; pack units
+expose the now-focused-corrected watch regression and stop later authoring/app stages. Its original
+three-platform results retain only keyword failure. [Explicit SQLite external-pack run](../references/evidence/ears-sqlite-implementation-2026-10-28/external-bb35/README.md)
+passes all 28 cases at bb35e86c7f, before this dependency correction. No source-app, corpus or installed
+receipt is silently promoted to execution of a later revision.
+
+Do not cancel/restart an existing handle for observation timeout. Inspect actual live steps before
+adding any pending app run. Collect corrected-source results and reconcile every remaining requirement
+before experimental completion; only foreground responsiveness has an approved degradation disposition.
 
 The strict audit identified a concrete gap: the retained keyword failure stops app/rest before
 pack-unit, packaged-authoring, external-pack app and smoke stages complete. The current workflow

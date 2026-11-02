@@ -1,0 +1,28 @@
+{
+  "run": 41390395444,
+  "source": "cd8b413fa8038715a0b1ccd3dea892d294df336a",
+  "before": "c5d6f3ea66e61840a8d69a22e2174fc790c3be75",
+  "positiveCore": {
+    "elmdb": 31,
+    "sqlite": 31
+  },
+  "positiveThreadViews": {
+    "elmdb": 6,
+    "sqlite": 6
+  },
+  "oldSourceNegative": {
+    "failed": 4,
+    "passed": 0,
+    "unselected": 27,
+    "names": [
+      "watch keeps explicit-ID filters and ordering scoped while tracking selected fields and missing IDs",
+      "watch does not queue type-scoped ordering for another type\u2019s fields or membership",
+      "watch keeps fixed-endpoint link filters independent of unrelated entity births",
+      "watch tracks typed one-hop target membership and fields after leaving an explicit-ID start"
+    ]
+  },
+  "sourceRestoredByteForByte": true,
+  "querySourceSha256": "41e3e953f4de1231f0f33d98197418d1c9d53a25486bdcc0052de4c084c648de",
+  "beforeQuerySourceSha256": "dc8bb3e8df48956a209298a85a44f71c85c466e8b186c2754c5548130aa055ab",
+  "completePackUnitPool": "not yet requalified; new integrated run 41391989615 is pending"
+}

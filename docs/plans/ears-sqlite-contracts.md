@@ -14,11 +14,13 @@ implementation of the complete app-facing API; the evidence does not establish a
 The candidate remains isolated in draft PR #286. This recommendation does not close unresolved gates
 or authorize closing the PR, merging, migrating profiles or removing either implementation.
 
-**New failed contract:** [The independent pack-unit stage](../references/evidence/ears-sqlite-implementation-2026-10-28/pack-scope-c5d-failure/README.md)
-finds three unnecessary thread-view reruns after an unrelated thread is created (988 other pack tests
-pass). The query dependency correction and five shared guards are authored but unqualified. The
-responsiveness exception does not waive this existing watch/observability contract. Current full
-acceptance is contradicted until the actual thread-view case and positive/negative controls pass.
+**Watch finding and correction:** [The independent pack-unit stage](../references/evidence/ears-sqlite-implementation-2026-10-28/pack-scope-c5d-failure/README.md)
+exposed three unnecessary thread-view reruns after an unrelated thread is created. [Correction cd8](../references/evidence/ears-sqlite-implementation-2026-10-28/watch-scope-cd8/README.md)
+passes 31 watch and six real thread-view cases on each backend; all four precision guards fail against
+the actual old module, followed by verified source restoration. Linux/macOS complete EARS have 935
+passes and only keyword failure. The focused defect is closed; full corrected-source pack/authoring
+qualification is still pending in runs 41391989615 and 41392105607. The responsiveness disposition
+does not waive an existing watch/observability contract.
 
 | Area | Demonstrated result and disposition |
 | --- | --- |
