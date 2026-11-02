@@ -1,0 +1,37 @@
+{
+  "sources": {
+    "sqlite-vec.c": "ba081a47fa02eadc3cf6b16c314b695b84081269349aac722b4efa338fe8fd85",
+    "sqlite-vec.h": "8e4d7bfcd779c89bd19a6b2959fce24ee391b2eaf79a85a979377a36627cb060"
+  },
+  "builds": {
+    "plain": {
+      "command": [
+        "cc",
+        "-O3",
+        "-fPIC",
+        "-shared",
+        "-flax-vector-conversions",
+        "/amalgamation/sqlite-vec.c",
+        "-o",
+        "/optimized/plain/vec0.so",
+        "-lm"
+      ],
+      "sha256": "34f4dc8acc0fe5e98b1c8f09d3f9c82c5144118e3ac88f626d6fc8b90f1f66d1"
+    },
+    "neon": {
+      "command": [
+        "cc",
+        "-O3",
+        "-fPIC",
+        "-shared",
+        "-flax-vector-conversions",
+        "-DSQLITE_VEC_ENABLE_NEON",
+        "/amalgamation/sqlite-vec.c",
+        "-o",
+        "/optimized/neon/vec0.so",
+        "-lm"
+      ],
+      "sha256": "41b5f6164513599d3949885f608e14023ed51aaf8c0a6505e3962ddf7dfc3979"
+    }
+  }
+}

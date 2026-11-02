@@ -1,0 +1,9 @@
+# Vector validation parity
+
+Shared tests exercise ordinary embedding/query refusal after Float32 conversion, model refusal before obsolete chunk handling, and batch rollback without watch delivery. The unchanged native backend passed all 16 focused cases; the original SQLite implementation failed seven of those cases. This is a correctness prerequisite, not high-dimensional latency or recall qualification.
+
+The first corrected snapshot passed both focused suites and API reports but lint rejected the test literal `1e-300` for precision loss. The final fixture uses `Number.MIN_VALUE` to exercise the same Float32 underflow with a precisely defined JS value. Retain both attempts rather than discarding the failed check. Full final results are recorded alongside this note when complete.
+
+Final source snapshot `9d0fb016edeeaa22fc894ec87e6d9d749399f2c44eb1ed191ee0b7529a4a205d` passed five package builds, EARS type checking, both focused vector files (16 cases each), API reports, lint, import specifiers and full EARS suites: SQLite 524 cases / 38 files; unchanged native backend 302 cases. Check the retained full logs for file counts. Source base and changed paths are in `vector-final-source.json`; implementation/test and workflow patches are retained separately. Execution used the pinned prior Linux seed and native engine read-only, a private dependency copy, two CPUs, 6 GiB memory/no additional swap, all capabilities dropped, and an actual mode-denial preflight. No Mac compiler or full suite ran.
+
+This changes ordinary writes/queries only; unchecked recovery/import representation policy is unchanged. Invalid batches cannot partially embed, advance lastCommit, or publish a watch delivery. Native parity is evidence for these cases, not proof that SQLite exact cosine scales to the eventual corpus.

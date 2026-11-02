@@ -1,0 +1,232 @@
+{
+  "source": "a9c9340df74f90b85434e8ddafa9742bd6867cbf",
+  "qualification": false,
+  "queriesPerBackend": 7200,
+  "nativeGates": {
+    "totalPasses": 72,
+    "failedAny": 35,
+    "failedRecall": 0,
+    "failedHeartbeat": 35,
+    "failedLatency": 2,
+    "minimumMeanRecall": 0.9860000000000001
+  },
+  "sqliteGates": {
+    "totalPasses": 72,
+    "failedAny": 49,
+    "failedRecall": 0,
+    "failedHeartbeat": 49,
+    "failedLatency": 4,
+    "minimumMeanRecall": 0.9730000000000003
+  },
+  "nativeCanonicalBytesPassed": false,
+  "sqliteCanonicalRowsVerified": 99900,
+  "sqliteUpdatedCanonicalRowsVerified": 99900,
+  "sqliteAdmissionMs": 1001973.184839,
+  "sqliteProjectionBatches": 1763,
+  "sqliteProjectionMs": 8531.229886002737,
+  "sqliteCommitMs": 990425.6828780008,
+  "native999OwnerUpdateMs": 269581.426953,
+  "sqlite999OwnerUpdateMs": 22020.014662999893,
+  "nativeProcessMaxRssKiB": 1780328,
+  "sqliteProcessMaxRssKiB": 905732,
+  "comparisons": [
+    {
+      "phase": "initial",
+      "size": 1000,
+      "scopePercent": 100,
+      "eligible": 988,
+      "nativePooledTimedP95Ms": 2.5384309999644756,
+      "sqlitePooledTimedP95Ms": 8.039343000156805,
+      "sqliteOverNative": 3.167052009792392,
+      "nativeFirstPassP95Ms": 2.6985580008476973,
+      "sqliteFirstPassP95Ms": 10.603985000168905
+    },
+    {
+      "phase": "initial",
+      "size": 1000,
+      "scopePercent": 10,
+      "eligible": 99,
+      "nativePooledTimedP95Ms": 1.3888830002397299,
+      "sqlitePooledTimedP95Ms": 10.29485800000839,
+      "sqliteOverNative": 7.412329187002384,
+      "nativeFirstPassP95Ms": 1.446259000338614,
+      "sqliteFirstPassP95Ms": 10.313106999965385
+    },
+    {
+      "phase": "initial",
+      "size": 1000,
+      "scopePercent": 1,
+      "eligible": 9,
+      "nativePooledTimedP95Ms": 1.2956739999353886,
+      "sqlitePooledTimedP95Ms": 2.614975000033155,
+      "sqliteOverNative": 2.0182352969678763,
+      "nativeFirstPassP95Ms": 1.2266739998012781,
+      "sqliteFirstPassP95Ms": 3.002852999838069
+    },
+    {
+      "phase": "initial",
+      "size": 10000,
+      "scopePercent": 100,
+      "eligible": 9886,
+      "nativePooledTimedP95Ms": 34.16657199990004,
+      "sqlitePooledTimedP95Ms": 52.43396100006066,
+      "sqliteOverNative": 1.5346567692016062,
+      "nativeFirstPassP95Ms": 36.81271199975163,
+      "sqliteFirstPassP95Ms": 1469.1225519999862
+    },
+    {
+      "phase": "initial",
+      "size": 10000,
+      "scopePercent": 10,
+      "eligible": 989,
+      "nativePooledTimedP95Ms": 14.271291000768542,
+      "sqlitePooledTimedP95Ms": 22.799354000017047,
+      "sqliteOverNative": 1.5975677322247335,
+      "nativeFirstPassP95Ms": 11.946194000542164,
+      "sqliteFirstPassP95Ms": 22.118683999869972
+    },
+    {
+      "phase": "initial",
+      "size": 10000,
+      "scopePercent": 1,
+      "eligible": 98,
+      "nativePooledTimedP95Ms": 9.99222500063479,
+      "sqlitePooledTimedP95Ms": 4.81469799997285,
+      "sqliteOverNative": 0.481844434014144,
+      "nativeFirstPassP95Ms": 9.785973000340164,
+      "sqliteFirstPassP95Ms": 6.1391229999717325
+    },
+    {
+      "phase": "initial",
+      "size": 99900,
+      "scopePercent": 100,
+      "eligible": 98770,
+      "nativePooledTimedP95Ms": 7.484835000708699,
+      "sqlitePooledTimedP95Ms": 25.58870600000955,
+      "sqliteOverNative": 3.4187401589462816,
+      "nativeFirstPassP95Ms": 7.946920999325812,
+      "sqliteFirstPassP95Ms": 1286.1510030000936
+    },
+    {
+      "phase": "initial",
+      "size": 99900,
+      "scopePercent": 10,
+      "eligible": 9878,
+      "nativePooledTimedP95Ms": 40.920319999568164,
+      "sqlitePooledTimedP95Ms": 62.95352900004946,
+      "sqliteOverNative": 1.5384417570711522,
+      "nativeFirstPassP95Ms": 34.903784999623895,
+      "sqliteFirstPassP95Ms": 332.81009300006554
+    },
+    {
+      "phase": "initial",
+      "size": 99900,
+      "scopePercent": 1,
+      "eligible": 987,
+      "nativePooledTimedP95Ms": 4.658276999369264,
+      "sqlitePooledTimedP95Ms": 15.246806000126526,
+      "sqliteOverNative": 3.2730569698175875,
+      "nativeFirstPassP95Ms": 4.4464840004220605,
+      "sqliteFirstPassP95Ms": 15.783309999853373
+    },
+    {
+      "phase": "updated",
+      "size": 1000,
+      "scopePercent": 100,
+      "eligible": 988,
+      "nativePooledTimedP95Ms": 3.1314360005781054,
+      "sqlitePooledTimedP95Ms": 11.561324000125751,
+      "sqliteOverNative": 3.6920198905522494,
+      "nativeFirstPassP95Ms": 3.635773000307381,
+      "sqliteFirstPassP95Ms": 11.363114000065252
+    },
+    {
+      "phase": "updated",
+      "size": 1000,
+      "scopePercent": 10,
+      "eligible": 99,
+      "nativePooledTimedP95Ms": 1.986429000273347,
+      "sqlitePooledTimedP95Ms": 10.479942000005394,
+      "sqliteOverNative": 5.275769734817242,
+      "nativeFirstPassP95Ms": 1.7401769999414682,
+      "sqliteFirstPassP95Ms": 10.910652999999002
+    },
+    {
+      "phase": "updated",
+      "size": 1000,
+      "scopePercent": 1,
+      "eligible": 9,
+      "nativePooledTimedP95Ms": 1.4498839993029833,
+      "sqlitePooledTimedP95Ms": 2.9270600001327693,
+      "sqliteOverNative": 2.0188235759136064,
+      "nativeFirstPassP95Ms": 2.463264999911189,
+      "sqliteFirstPassP95Ms": 3.5690650001633912
+    },
+    {
+      "phase": "updated",
+      "size": 10000,
+      "scopePercent": 100,
+      "eligible": 9886,
+      "nativePooledTimedP95Ms": 40.86137900035828,
+      "sqlitePooledTimedP95Ms": 54.12113799992949,
+      "sqliteOverNative": 1.324505910567897,
+      "nativeFirstPassP95Ms": 55.180634000338614,
+      "sqliteFirstPassP95Ms": 55.13314499985427
+    },
+    {
+      "phase": "updated",
+      "size": 10000,
+      "scopePercent": 10,
+      "eligible": 989,
+      "nativePooledTimedP95Ms": 14.83759200014174,
+      "sqlitePooledTimedP95Ms": 21.162844999926165,
+      "sqliteOverNative": 1.4262991595754893,
+      "nativeFirstPassP95Ms": 15.371720000170171,
+      "sqliteFirstPassP95Ms": 24.397156999912113
+    },
+    {
+      "phase": "updated",
+      "size": 10000,
+      "scopePercent": 1,
+      "eligible": 98,
+      "nativePooledTimedP95Ms": 26.286204000003636,
+      "sqlitePooledTimedP95Ms": 6.890085999853909,
+      "sqliteOverNative": 0.26211795357948814,
+      "nativeFirstPassP95Ms": 14.921426000073552,
+      "sqliteFirstPassP95Ms": 4.851239999989048
+    },
+    {
+      "phase": "updated",
+      "size": 99900,
+      "scopePercent": 100,
+      "eligible": 98770,
+      "nativePooledTimedP95Ms": 22.662681999616325,
+      "sqlitePooledTimedP95Ms": 33.17733799992129,
+      "sqliteOverNative": 1.4639634444185812,
+      "nativeFirstPassP95Ms": 38.10727799963206,
+      "sqliteFirstPassP95Ms": 81.37064599990845
+    },
+    {
+      "phase": "updated",
+      "size": 99900,
+      "scopePercent": 10,
+      "eligible": 9878,
+      "nativePooledTimedP95Ms": 261.563497999683,
+      "sqlitePooledTimedP95Ms": 66.76042799977586,
+      "sqliteOverNative": 0.25523602685515684,
+      "nativeFirstPassP95Ms": 127.68550099991262,
+      "sqliteFirstPassP95Ms": 189.0698379999958
+    },
+    {
+      "phase": "updated",
+      "size": 99900,
+      "scopePercent": 1,
+      "eligible": 987,
+      "nativePooledTimedP95Ms": 12.72970400005579,
+      "sqlitePooledTimedP95Ms": 24.52224100008607,
+      "sqliteOverNative": 1.9263795136146604,
+      "nativeFirstPassP95Ms": 28.67301100026816,
+      "sqliteFirstPassP95Ms": 17.48198700021021
+    }
+  ]
+}

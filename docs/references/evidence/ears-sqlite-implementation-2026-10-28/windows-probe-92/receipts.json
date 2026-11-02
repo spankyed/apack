@@ -1,0 +1,26 @@
+{
+  "ears-installed-build--source.txt": {
+    "sha256": "46387989d197d13054279a307012f8f4b3270561598558bf2371eccffb869139",
+    "bytes": 41
+  },
+  "ears-installed-build--preview-tests.json": {
+    "sha256": "17bfcea16b64e2026cd8bf0018e03e6c236379918177473873cd383413b8a8b8",
+    "bytes": 1921
+  },
+  "ears-installed-build--build.log": {
+    "sha256": "200957f2a0fdad4685d4724b4d095f471c4705af3221d9f9b7b85fee887742fb",
+    "bytes": 12872
+  },
+  "ears-installed-platform--report.json": {
+    "sha256": "af0f61ac8e8e2a996caa24184c0146f14cfd1217e9179132c0a50e7e1662e9e8",
+    "bytes": 1898
+  },
+  "ears-installed-platform--native.log": {
+    "sha256": "8330a461ea7724b7b08b598f5a8fed3ffcd78dfc50392ada703e01649ffa4b13",
+    "bytes": 2777
+  },
+  "ears-installed-92-windows.log": {
+    "sha256": "fdb7ad79b5af2067a322a3f5a3396d8008e598522f4c710366aef5f4cd11d677",
+    "bytes": 236896
+  }
+}

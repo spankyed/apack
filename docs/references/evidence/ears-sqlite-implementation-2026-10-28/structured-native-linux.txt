@@ -1,0 +1,26 @@
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/writes.spec.ts (61 tests) 454ms
+ ✓ tests/engine/queries.spec.ts (26 tests) 517ms
+ ✓ tests/engine/relations.spec.ts (18 tests) 118ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 553ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 327ms
+ ↓ tests/engine/sqlite-operations.spec.ts (13 tests | 13 skipped)
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 105ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 21ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 38ms
+ ✓ tests/engine/search.spec.ts (7 tests) 51ms
+ ✓ tests/engine/calls.spec.ts (6 tests) 76ms
+ ✓ tests/engine/model-based.spec.ts (2 tests) 19327ms
+   ✓ refuses, holds and answers what the model does  6169ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  13157ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 80ms
+ ✓ tests/engines.spec.ts (4 tests) 42ms
+ ✓ tests/engine/query-values.spec.ts (2 tests) 19ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 16ms
+
+ Test Files  15 passed | 1 skipped (16)
+      Tests  221 passed | 13 skipped (234)
+   Start at  05:22:12
+   Duration  25.00s (transform 377ms, setup 34ms, collect 1.35s, tests 21.74s, environment 2ms, prepare 702ms)
+

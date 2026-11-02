@@ -1,0 +1,20 @@
+[
+  {
+    "file": "run.json.gz",
+    "originalBytes": 6513,
+    "originalSha256": "45c61636c90253128fe6395c248ff3a96fcba8ae554e6d3f2faae43767a4fe95",
+    "storedSha256": "1bf1ed1c7bf5327363e2baef3427f84e8ee7c9ef9de9e2f69ea8efbe5c18352f"
+  },
+  {
+    "file": "job.log.gz",
+    "originalBytes": 56784,
+    "originalSha256": "86803652d03984f4cd68c60027abfc084c644206a3725bd986ccf3db08d5f7e8",
+    "storedSha256": "af57093f635453c9b7a10a0b489110b3ed7690fa26ad52a16537667e4e1be6e5"
+  },
+  {
+    "file": "source-app.json.gz",
+    "originalBytes": 53071,
+    "originalSha256": "4e45bb37e660c9cece4bd8a06e6b67638a2076583bd8f3d9517f3ebb4c579458",
+    "storedSha256": "976414707a94823bef15e70dbc0a021c24e4450623f06ef5147b546e55d71492"
+  }
+]

@@ -1,0 +1,97 @@
+[
+  {
+    "file": "install.log.gz",
+    "sha256": "d0cc92b7bd99ddae7c64399be55b6ca3b9bc1465ad5107c73662ec20736e51ef",
+    "originalSha256": "c2ce85f02a739c774b1582ba3316271e0bccd2d59d6fe6cb2f96e1157955b769"
+  },
+  {
+    "file": "guard.json.gz",
+    "sha256": "11b473c18a2646353d4b60e0c2af8786b994133222ea4214c0a67432bbddfb7d",
+    "originalSha256": "4a6cfc9015342a11bbf3130b220127ad22fa3f3fd9151c810e333b88d7a2db9a"
+  },
+  {
+    "file": "guard.log.gz",
+    "sha256": "8d4cd35fdfe8b51fddebc031474b96f11e2282d717146f28a0ab3955f9b142dd",
+    "originalSha256": "3245bd6c74c90134870d12c33bcb73241ee9f5fa52ed7b49fcdc399e09647d57"
+  },
+  {
+    "file": "lifetime.json.gz",
+    "sha256": "c8e125d5a40b08fd578d7d5f996fc3007972574dc44bd775fcae192660af3bd9",
+    "originalSha256": "8df83c41b43e90dd8ee2b2598b1379029e6ae54e49fc5ff13e83edbc6e6241ec"
+  },
+  {
+    "file": "lifetime.log.gz",
+    "sha256": "8d85edbf538b70eae65b754995cb56d5830d5b7227f41b4dc2f6a765bf32a978",
+    "originalSha256": "53800c4530cd71bda211a6038e75a2ae298eabf34dcbf17d1533cd49a18dd734"
+  },
+  {
+    "file": "owner-packages.log.gz",
+    "sha256": "492eb5938afc229cf74a52d83812c3c7514e1f4b0e2e38839b495eb277824c75",
+    "originalSha256": "da4fda45550e748f4ff53d03a8562393808eda331d7b62c8a22abafae2621ce4"
+  },
+  {
+    "file": "owner-all-ears.json.gz",
+    "sha256": "79d96da3d70cdc8311789dc55c911b516865b74b10247404566b1179d761a8f6",
+    "originalSha256": "9cfa3f09fd404e573e33a1caaecc20acb53f2e84dbe87feea5693d98a6d559ae"
+  },
+  {
+    "file": "owner-all-ears.log.gz",
+    "sha256": "c0f3e9ff0d26e35a5ce44504a84fb0696bd3db58772f35a30535a23976da9ae2",
+    "originalSha256": "cb387afcaf08ab6e6b31f0b3fb9f4d13b4bb28714845760aecb69e487e950a23"
+  },
+  {
+    "file": "missing-kernel-claim.json.gz",
+    "sha256": "1106d9c45e7135ce7a0f9fe8bab05c307e6268cb36ea560c8c9c3c17bef6b6b8",
+    "originalSha256": "65aee25ff08a0d678ba326c8713b562896fede9aac54f738de976e279449f5e9"
+  },
+  {
+    "file": "reject-missing-kernel-claim.log.gz",
+    "sha256": "d51556e85c0ad4aeca9d68403895c3eaadbdad3ed7800fd94fac15e46d38c7be",
+    "originalSha256": "d85264aa49efd56d31b2f460e30b768cee0adcaa8262868d73134b6b7fba001d"
+  },
+  {
+    "file": "early-claim-release.json.gz",
+    "sha256": "94b61c26db9efefdfeac9f1bddb3231332043598ef27d0b1c27d3037783c0487",
+    "originalSha256": "26333e409fbdb9c1c7f5ae5867df54ddad5eee596f127f7050a00b98b5377cba"
+  },
+  {
+    "file": "reject-early-claim-release.log.gz",
+    "sha256": "a9a82c8d0995b566ce4f9111e1cc409150587da288e91da72a1d5c1af91d5d24",
+    "originalSha256": "2afd75db2daae4631e5290c8715ef8599394ad76d333a54212d8c3b64b539995"
+  },
+  {
+    "file": "owner-types.log.gz",
+    "sha256": "1c41e80107e7acc7146fd5d4614e064d9af30ba2ce97e5dc21e47a34efddf335",
+    "originalSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9"
+  },
+  {
+    "file": "owner-host-types.log.gz",
+    "sha256": "4e95f7bfdbcc92cf09a3a82e3f40d6933d6fa88631876f529726911b5b8e55d5",
+    "originalSha256": "30875d155e1427fe0fe9db0b4dbf5d313d4b7d0153d1a59363d93d0ee9f9727c"
+  },
+  {
+    "file": "owner-boundaries.log.gz",
+    "sha256": "5fe6210cba4459737f164f2d44bdf5fb8b2ce14589b8569815ad57ecf8fd74f0",
+    "originalSha256": "8c0ee2506a655436db74df17e7321a3f1d20d5cbae7d799ffc4a951537965907"
+  },
+  {
+    "file": "owner-lint.log.gz",
+    "sha256": "6a4aca48dd700329689d7e4557b97122478b7993507d6ca4f2c57dfdf7bbfc87",
+    "originalSha256": "bc6e7235b80e96eee4035c7e4eed5aa726f84eee47fef275eb05fe61c099985c"
+  },
+  {
+    "file": "owner-platform-syntax.log.gz",
+    "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+    "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "file": "initial-full-owner-packages.log.gz",
+    "sha256": "cb3f04363545c700ab78bf6a5f459e8224e216e9dcb5019f8576311022fcfbbc",
+    "originalSha256": "c4b50a70cfa881740053fa47acb277944c108a3ea6679a5056204966bdfd0c58"
+  },
+  {
+    "file": "reference-iteration-owner-lint.log.gz",
+    "sha256": "2a2179cb43786cd47507cfc1e87c03219351784c49a49e3212929bd5d2753ea1",
+    "originalSha256": "29f66cfcdcb3d404b2bc05e5363913714e922e31761d0aca33fb4ee1047f6680"
+  }
+]

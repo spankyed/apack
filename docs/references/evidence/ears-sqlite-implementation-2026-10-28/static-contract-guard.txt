@@ -1,0 +1,9 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-sdk
+
+ ✓ tests/build/no-phantom-contract.spec.ts (9 tests) 33ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+   Start at  00:54:39
+   Duration  617ms (transform 45ms, setup 18ms, collect 330ms, tests 33ms, environment 0ms, prepare 62ms)

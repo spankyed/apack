@@ -1,0 +1,5 @@
+
+> apack@0.3.14 typecheck:scripts
+> tsc -p scripts && tsc -p tests && tsc -p packages/repo-checks && tsc -p packages/publish-checks && echo '✅ Scripts, repo and publish checks, and E2E type check passed'
+
+✅ Scripts, repo and publish checks, and E2E type check passed

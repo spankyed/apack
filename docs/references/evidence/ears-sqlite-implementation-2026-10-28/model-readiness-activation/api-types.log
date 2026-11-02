@@ -1,0 +1,6 @@
+
+> apack@0.3.14 typecheck:api
+> cd packages/api && npx tsc -p . --noEmit && npx tsc -p tsconfig.test.json && npx tsc -p tsconfig.scripts.json && echo '✅ Backend type check passed'
+
+tests/runtime/sqlite-profile.spec.ts(71,40): error TS2339: Property 'mockImplementation' does not exist on type 'never'.
+tests/runtime/sqlite-profile.spec.ts(71,65): error TS7006: Parameter 'database' implicitly has an 'any' type.

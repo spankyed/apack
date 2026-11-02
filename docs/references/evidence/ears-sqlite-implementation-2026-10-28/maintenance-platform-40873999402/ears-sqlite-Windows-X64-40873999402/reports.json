@@ -1,0 +1,41 @@
+{
+  "ears.json": {
+    "sha256": "673b145daf5017a9fbccc25f2949c0296028e19159ad4ca177a46ab7de81350c",
+    "passed": 538,
+    "failed": 0,
+    "pending": 1,
+    "notPassed": [
+      "yielding value-index admission resumes a committed batch cursor after a real killed process"
+    ]
+  },
+  "host.json": {
+    "sha256": "1fc48201fdc8f257d6daff1df816b39c55d24a839376270252f830094e7eb71c",
+    "passed": 86,
+    "failed": 0,
+    "pending": 15,
+    "notPassed": [
+      "refuses before replacement when syncing the recovery copy fails",
+      "refuses before replacement when syncing the recovery parent fails",
+      "recovers elmdb/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+      "recovers elmdb/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+      "recovers elmdb/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+      "recovers elmdb/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+      "recovers sqlite/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+      "recovers sqlite/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+      "recovers sqlite/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+      "recovers sqlite/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+      "refuses a separate live reader and reclaims its claim after SIGKILL",
+      "refuses a managed open without writable metadata while direct read-only snapshots remain available",
+      "the database write lock releases the lock when the tool is interrupted with POSIX SIGINT",
+      "the database write lock releases the lock when the tool is interrupted with POSIX SIGTERM",
+      "the database write lock releases the lock when the tool is interrupted with POSIX SIGHUP"
+    ]
+  },
+  "cli-maintenance.json": {
+    "sha256": "5f8c0b6f3eac621bbacb25bb411390b05614de0a40cf53fe21b96c03f5490ead",
+    "passed": 9,
+    "failed": 0,
+    "pending": 0,
+    "notPassed": []
+  }
+}

@@ -1,0 +1,70 @@
+[
+  {
+    "path": "Linux-X64/verification.json",
+    "sha256": "d857301145d322f551471c8dc227034f4a9f0e045439a746554231971c756fdf"
+  },
+  {
+    "path": "Linux-X64/ears.json",
+    "sha256": "24863c5292425d15800d88317962aa07d56ba4d9672dc3bd0b3c21efa53ee56c"
+  },
+  {
+    "path": "Linux-X64/host.json",
+    "sha256": "58936e14e55fd33fe790fd6696a17e434679be6adcb542b42c417fe00cf2aa4b"
+  },
+  {
+    "path": "Linux-X64/native-membership.json",
+    "sha256": "27ac8e3cd29c189dbd7dc7bf543cbd638ae205bd9bac41cd58b45f84ffdef706"
+  },
+  {
+    "path": "Linux-X64/query-work.json",
+    "sha256": "94b3d6aab9640d284ae74c3c39f844883e5ad18fa620759368b4b6343aef14fe"
+  },
+  {
+    "path": "Linux-X64/api-startup.json",
+    "sha256": "69748d45d3aa5c51831f807dbe67932c46553683fad8c6be3968d8f09ee411ce"
+  },
+  {
+    "path": "Linux-X64/sdk-all-sqlite.json",
+    "sha256": "01514f34bd4ed5deda03da014fe5393691083a75d7aee73ab11136cc4cc644fe"
+  },
+  {
+    "path": "Windows-X64/verification.json",
+    "sha256": "c78d33e46a9aa6347d83b007c644f4e6e4a48fd95e8c8bef215e416ba487c65d"
+  },
+  {
+    "path": "Windows-X64/ears.json",
+    "sha256": "77906a372aae155666884f0d2681de82e2528c56176301f5527d3e0510e88405"
+  },
+  {
+    "path": "Windows-X64/host.json",
+    "sha256": "91c9f3f3fe90114eff0b2e454021b771eef194b28ce7971a203c91b92097c606"
+  },
+  {
+    "path": "Windows-X64/native-membership.json",
+    "sha256": "22501ffc0937ea80031f1ac2de9d6bf14b001cb78b6f842155b0a3e7ffc275a9"
+  },
+  {
+    "path": "Windows-X64/query-work.json",
+    "sha256": "53233dc83ed5bc9967b54d30f26b5243379bcf932eb0356cba10e615bf99d63d"
+  },
+  {
+    "path": "macOS-ARM64/verification.json",
+    "sha256": "86751bb0a1c4be91f2b3638abcab4f571a5bfde5068415da1df34a1c2633930d"
+  },
+  {
+    "path": "macOS-ARM64/ears.json",
+    "sha256": "8749d0168509b8cd79a5b5bce746e1df3117a9a3fafcbee7f0272d3a5943d62b"
+  },
+  {
+    "path": "macOS-ARM64/host.json",
+    "sha256": "1541f26e2ac1a222ec75c3374d66c4dbbb44b3bb84906fec10975d6b38c1d344"
+  },
+  {
+    "path": "macOS-ARM64/native-membership.json",
+    "sha256": "115b1aa7d1e754893383110c07fee98744337fddc987bc0e150e08cfcb75cc50"
+  },
+  {
+    "path": "macOS-ARM64/query-work.json",
+    "sha256": "713f88d4a05bd6d7ce4f7be713d2f3ebd6e0e8f29307d5c36fc4b94d15bd9559"
+  }
+]

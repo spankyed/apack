@@ -1,0 +1,9 @@
+{
+  "base": "a3f390fa6a253b5025e28e85bde3e8f1d7c8022e",
+  "changedFiles": [
+    "docs/goals/goal-ears-sqlite.md",
+    "packages/apack-ears/src/sqlite/text.ts",
+    "packages/apack-ears/tests/sqlite/text-limits.spec.ts"
+  ],
+  "sha256": "018d7f9411c332af981356e3c91499aca598f7301c2c52b6a4f9ff7c8e8388f2"
+}

@@ -1,0 +1,606 @@
+{
+  "run": 41246957158,
+  "source": "cc24040e5c2775619b96ab7c7cb704d802d05016",
+  "reports": [
+    {
+      "size": 1000,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "modelMode": "managed",
+      "nativeModel": null,
+      "nativeCandidateFloor": null,
+      "oracleSha256": "2616baa601b69ba15f8acd8746a40c4249bb48eb7e56e481dc10ce047408a47b",
+      "completed": true,
+      "databaseScratchRemoved": true,
+      "rawSha256": "c1473ea3c350b3e7dec17d233ed34e6830deea358c1d3b3eb37616e983852c9d"
+    },
+    {
+      "size": 10000,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "modelMode": "managed",
+      "nativeModel": {
+        "state": "ready",
+        "samples": 10000,
+        "model_sha256": "a93added65841b3eab59c619d565848452f3fb961b8ae5a99de1d6a010bc16f7",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "nativeCandidateFloor": null,
+      "oracleSha256": "2616baa601b69ba15f8acd8746a40c4249bb48eb7e56e481dc10ce047408a47b",
+      "completed": true,
+      "databaseScratchRemoved": true,
+      "rawSha256": "9b137865630f7e5cc24f888a0ccf0f92df5f42c008b1eaa45bbffaa91924141e"
+    },
+    {
+      "size": 99900,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "modelMode": "managed",
+      "nativeModel": {
+        "state": "ready",
+        "samples": 20000,
+        "model_sha256": "b9588be8ad72093d3aed6eef7c6a2bf7a758437cecddce3b08a0d1631d75430e",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "nativeCandidateFloor": null,
+      "oracleSha256": "2616baa601b69ba15f8acd8746a40c4249bb48eb7e56e481dc10ce047408a47b",
+      "completed": true,
+      "databaseScratchRemoved": true,
+      "rawSha256": "b38133cf9afd0e1b3d290009a9e047b5eaa2fd10013b65bd37c9be3f335044d0"
+    }
+  ],
+  "groups": [
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.96,
+      "p95Ms": 6.761808999995992
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.98,
+      "p95Ms": 6.882768000003125
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 1,
+      "p95Ms": 7.646506999997655
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.9175,
+      "p95Ms": 15.704343999997946
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.9725,
+      "p95Ms": 14.860121999998228
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9924999999999999,
+      "p95Ms": 15.763584000000264
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.9890625,
+      "p95Ms": 19.924189999997907
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.965625,
+      "p95Ms": 25.257230999995954
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9875,
+      "p95Ms": 26.06846300000325
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.95,
+      "p95Ms": 6.725899000004574
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.97,
+      "p95Ms": 6.934222000003501
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.98,
+      "p95Ms": 7.421261999996204
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.9125,
+      "p95Ms": 17.6206619999939
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.9299999999999999,
+      "p95Ms": 15.343422999998438
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9775,
+      "p95Ms": 15.843755999994755
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.9734375,
+      "p95Ms": 18.483908999995037
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.890625,
+      "p95Ms": 24.920736000000034
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9671875,
+      "p95Ms": 26.34918199999811
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.97,
+      "p95Ms": 11.988806000037584
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.98,
+      "p95Ms": 14.275517000001855
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 1,
+      "p95Ms": 19.640765999967698
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.9425,
+      "p95Ms": 24.421191999979783
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.9575,
+      "p95Ms": 26.866790000000037
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.985,
+      "p95Ms": 31.80420700000832
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.9171875,
+      "p95Ms": 38.34072199999355
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.9421875,
+      "p95Ms": 41.20737000001827
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9859375,
+      "p95Ms": 45.83777199999895
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.93,
+      "p95Ms": 11.70053299999563
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.97,
+      "p95Ms": 14.122953999962192
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.99,
+      "p95Ms": 20.383265000011306
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.915,
+      "p95Ms": 23.990544000000227
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.955,
+      "p95Ms": 26.285403999965638
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9825,
+      "p95Ms": 31.66871399997035
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.8953125,
+      "p95Ms": 37.848108000005595
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.95,
+      "p95Ms": 40.957480999990366
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9875,
+      "p95Ms": 53.747099000029266
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.92,
+      "p95Ms": 47.83172899996862
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.94,
+      "p95Ms": 50.63564500003122
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 10,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.97,
+      "p95Ms": 57.694600000046194
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.765,
+      "p95Ms": 58.632325000013225
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.8375,
+      "p95Ms": 61.73977400001604
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 40,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9425,
+      "p95Ms": 68.73975799995242
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.984375,
+      "p95Ms": 94.46487199998228
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.8125,
+      "p95Ms": 76.49148899997817
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "k": 64,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.9328125,
+      "p95Ms": 82.08020399999805
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.85,
+      "p95Ms": 47.03216899995459
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.93,
+      "p95Ms": 50.35856500000227
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 10,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.97,
+      "p95Ms": 57.751064000010956
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.7925,
+      "p95Ms": 59.28236499999184
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.875,
+      "p95Ms": 61.920718999987
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 40,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.975,
+      "p95Ms": 68.55239399999846
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 8,
+      "samples": 10,
+      "meanRecall": 0.9625,
+      "p95Ms": 93.83623899996746
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 16,
+      "samples": 10,
+      "meanRecall": 0.8453125,
+      "p95Ms": 76.4158780000289
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "k": 64,
+      "nprobe": 32,
+      "samples": 10,
+      "meanRecall": 0.959375,
+      "p95Ms": 83.99529699998675
+    }
+  ],
+  "acquisitionCleanup": {
+    "privateScratchRemoved": true
+  }
+}

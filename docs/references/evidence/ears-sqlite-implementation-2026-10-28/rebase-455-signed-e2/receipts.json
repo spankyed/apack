@@ -1,0 +1,82 @@
+{
+  "api--ears-sqlite-api-41222851237--.temp--sqlite-api--check.log": {
+    "sha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "bytes": 458
+  },
+  "api--ears-sqlite-api-41222851237--.temp--sqlite-api--elmdb.rev": {
+    "sha256": "c0c37c221beb7e95dfc06ad787c90759465af6e89061e85589ac44fd43486381",
+    "bytes": 41
+  },
+  "api--ears-sqlite-api-41222851237--.temp--sqlite-api--graph-probe.log": {
+    "sha256": "e6dce5d7782876ebc17c3ffe1d613f3484fbda645e9e1d544c9fd3ccaec0e3df",
+    "bytes": 407
+  },
+  "api--ears-sqlite-api-41222851237--.temp--sqlite-api--graph-report.json": {
+    "sha256": "a65ce75a7bdd030feca0343bba74bcf00bce30cf9c6bca2d1cd22191cf560bcc",
+    "bytes": 725
+  },
+  "api--ears-sqlite-api-41222851237--.temp--sqlite-api--packages.log": {
+    "sha256": "3632b78ce93289e1f93ec085b9fb0960790cc80423e6c335a923f6c0c87ccf60",
+    "bytes": 13891
+  },
+  "api--ears-sqlite-api-41222851237--.temp--sqlite-api--reports.patch": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "api--ears-sqlite-api-41222851237--.temp--sqlite-api--source.txt": {
+    "sha256": "88527ba9045bde18ce46959e52608bfbad1bfc0b5dbe1dd0dbe3237920eec9c9",
+    "bytes": 41
+  },
+  "api--ears-sqlite-api-41222851237--.temp--sqlite-api--update.log": {
+    "sha256": "224f96c2041b05ba898aee0c6a8536e46c687fc36523272ce5a6ea26502306b2",
+    "bytes": 469
+  },
+  "api--ears-sqlite-api-41222851237--packages--apack-ears--etc--index.api.md": {
+    "sha256": "f56ad2191d7679f03ddbe4a56b3cbc051011217e41eaa0bc34205867b8d9cf71",
+    "bytes": 32572
+  },
+  "api--ears-sqlite-api-41222851237--packages--apack-ears--etc--lmdb.api.md": {
+    "sha256": "dcebf934aeef02e6d5384ac2aa70fba020c11de7f15d9838dcfecbba50883d3d",
+    "bytes": 689
+  },
+  "api--ears-sqlite-api-41222851237--packages--apack-ears--etc--sqlite.api.md": {
+    "sha256": "c011286ca87cee4b818e9f84b835f85a709cd47b0e7b59916935c9aab1709cab",
+    "bytes": 2629
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--installed-evidence--installed-app.json": {
+    "sha256": "fd32dccd06e4619a9e9125e11dadd4c557b20e199458af0947e769dfc8634e58",
+    "bytes": 10039
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--installed-evidence--installed-build.log": {
+    "sha256": "94753f9e3c1d251aab985e56aa6b046ddee7ee8298b5b5ccdb7489bb08f56e2d",
+    "bytes": 11693
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--installed-evidence--installed-native.log": {
+    "sha256": "c179c5610f5f7b97e995d51c7f20766d467983bbe6e312620e85df73a3343dc8",
+    "bytes": 2783
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--installed-evidence--installed-signed-native.log": {
+    "sha256": "aba18f080c480ff0798a39f1f0d87cb764a8a31e95c6451169d494cec39a8e9c",
+    "bytes": 2783
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--installed-evidence--installed-signing.log": {
+    "sha256": "cef4045d7362cdce520b23174cb41b898af96885faa2120fa6a60861bbceb3c9",
+    "bytes": 1433
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--installed-evidence--typecheck.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--installed-evidence--verification.json": {
+    "sha256": "ddd898bde416228ad847a11d945ff2e20fc758bd542eb6e2c11c0fa0dd47efee",
+    "bytes": 263
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--tests--results--.last-run.json": {
+    "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+    "bytes": 45
+  },
+  "signed--app-acceptance-e2f569fa252e84c50ac5550477da1a92227c6cd6-suites--.apack--tests--results--app-0.log": {
+    "sha256": "9bfd5ce97e3b786f2f6212d635e9db4e2efd213ee37b3596ab424204c1d19525",
+    "bytes": 2555
+  }
+}

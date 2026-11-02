@@ -1,0 +1,7 @@
+{
+  "testedSourceSha256": "5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b",
+  "mutationRejected": true,
+  "allocationFailureReported": "SQLITE_NOMEM",
+  "sanitizerChecks": 555,
+  "testedSourceUnchanged": true
+}

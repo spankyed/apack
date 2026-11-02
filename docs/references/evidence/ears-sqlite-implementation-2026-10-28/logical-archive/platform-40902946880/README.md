@@ -1,0 +1,5 @@
+# CLI archive platform checkpoint
+
+Focused App acceptance 40902946880 completed SUCCESS on exact source 29c2cf746cc6f421c5036465c2b983bfde9eec37 across Linux x64, macOS arm64 and Windows x64. Every platform executes eight logical CLI command cases, two parent-issued publication-kill cases, five actual staged CLI checks, five public snapshot cases and nine maintenance cases. Windows passes 595 EARS /122 host cases; Linux/macOS counts and all explicit skips are retained in summary.json. Windows directory-sync remains explicitly skipped. The ordinary app job is intentionally skipped.
+
+Raw reports/logs are losslessly compressed with uncompressed hashes; runtime/native and built CLI receipts are retained. This run follows the Windows worker RPC failure at 203ab2c32c with a two-worker host cap; success does not establish the prior timeout's cause. These are staged Node packages on CI-host filesystems, not installed/signed distributions, full app or arbitrary filesystem/power-loss/resource qualification. Converter work after this source is not covered. Canonical remains the older full Strict green at 6cf6c8349e.

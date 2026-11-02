@@ -1,0 +1,43 @@
+{
+  "source": "2d0a0e7d4885b47c3d330870e75ff74666f81fdd",
+  "entries": {
+    "@apackdev/ears": "file:///home/runner/work/apack/apack/packages/apack-ears/dist/index.js",
+    "@apackdev/ears/sqlite": "file:///home/runner/work/apack/apack/packages/apack-ears/dist/sqlite/index.js"
+  },
+  "node": "v23.11.1",
+  "platform": "linux",
+  "arch": "x64",
+  "release": "7.0.0-1017-azure",
+  "cpus": 4,
+  "enginePin": "8ab7088f9a583202f9ccc766381a31e39d19851f",
+  "sqlite": "3.53.4",
+  "nativeBindings": [
+    {
+      "path": "/home/runner/work/apack/apack/node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/node.napi.glibc.node",
+      "sha256": "d144534a0d0cfdeb78e5b79526ea57b0382b2e742b7675bbe5cc3b80741956cd"
+    },
+    {
+      "path": "/home/runner/work/apack/apack/node_modules/better-sqlite3/prebuilds/linux-x64.node",
+      "sha256": "6fd4292c6c5f352436cd85c9e1cb286978efa43c20ae350973f83414ced9991d"
+    },
+    {
+      "path": "/home/runner/work/apack/apack/node_modules/sqlite-vec-linux-x64/vec0.so",
+      "sha256": "5923730861b86c707cca5602b5f91092f9e52a46706dbc6e269fd4bb9c4498e8"
+    }
+  ],
+  "extension": {
+    "path": "/home/runner/work/apack/apack/node_modules/sqlite-vec-linux-x64/vec0.so",
+    "sha256": "5923730861b86c707cca5602b5f91092f9e52a46706dbc6e269fd4bb9c4498e8"
+  },
+  "regexAssets": [
+    {
+      "path": "/home/runner/work/apack/apack/packages/apack-ears/vendor/rregex/rregex.cjs",
+      "sha256": "5a8b72e18f1f25df12ec19499168be74caaa4a2476c6c098283887b5718d3e1a"
+    },
+    {
+      "path": "/home/runner/work/apack/apack/packages/apack-ears/vendor/rregex/rregex_bg.wasm",
+      "sha256": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525"
+    }
+  ],
+  "qualification": "Built Node packages, FTS/recency/regex/vec and read-only backup; no recall, packaging or durability claim"
+}

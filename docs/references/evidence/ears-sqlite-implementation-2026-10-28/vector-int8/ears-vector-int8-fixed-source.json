@@ -1,0 +1,10 @@
+{
+  "commit": "c8c6a911873be7bb141855efa11a9a6cab5f5ed1",
+  "files": {
+    "vector-quantized.mjs": "d99a251f97c5cc2d6c9f3d7294505ee7a80f69e0bea4f644b4d1c6427992c69f",
+    "load-metrics.ts": "2f6ac8f834e561cc7473bbec06bdb364e692bf6de8f9d998523cd05bd0c80795",
+    "package.json": "89c47db7851f89caec72da4f215ebc21cf1e294aeef3b45d2583562d846ab035",
+    "vector-corpus.mjs": "ccde028d33d583a385aeace07192073d0163e94ddadba0fee7a540c8ce0e3d53"
+  },
+  "dependencies": "read-only session-owned apack-linux-work-415e99180b08 node_modules; Node builtin/native primitive only; no workspace package imports"
+}

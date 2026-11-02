@@ -1,0 +1,98 @@
+[
+  {
+    "file": "direct.log.gz",
+    "originalBytes": 14353,
+    "originalSha256": "98867090a49d2138c2af181094da8644480455d5a4b64e05a76f4e62bea7b684",
+    "storedSha256": "94552ed240788669665a257249f32766afd0162ce5782045f3be585faf07b1a7"
+  },
+  {
+    "file": "source.json.gz",
+    "originalBytes": 1348,
+    "originalSha256": "c7b391ec85fdaa45a3392c3700ca3e001b6111687dc52ef70dfab83ef8f125cc",
+    "storedSha256": "4827a254721a74c30f8c99608a2a84b06845230d3af2549a4ec14e6885b9dfa9"
+  },
+  {
+    "file": "prepared.json.gz",
+    "originalBytes": 1982,
+    "originalSha256": "54f3bc2356fa523a470a936e3358cb7a441232cc598ff9b1bcc0cbb02c19b243",
+    "storedSha256": "89a09145678605bd313acb47fd09c4e912e01022e1bc979f990902307744f2cb"
+  },
+  {
+    "file": "prepared.log.gz",
+    "originalBytes": 790,
+    "originalSha256": "c4d254622dfb685ad1e84fdd8b4cdaf47ff65a12dc6a688587db802d22e76bac",
+    "storedSha256": "48b7fe893d04b9a5465e4daf30aae37c6469bbce5d8dc5f58fa1fd51ac16e5b0"
+  },
+  {
+    "file": "direct.json.gz",
+    "originalBytes": 7810779,
+    "originalSha256": "df9cc61327ff75af04eaf678248d3e469c3b9ff674e18c2eb5abc3c22a1594e5",
+    "storedSha256": "15e8477ef5969b876fdd86ebcb358e50339d9c0f47da30e8bb224925eb0fe7cb"
+  },
+  {
+    "file": "baseline.log.gz",
+    "originalBytes": 14365,
+    "originalSha256": "4bd915dcf653445db06fff484cad0fcd698b2641dc7676d4bf6694e314112f72",
+    "storedSha256": "4bb9f4423fc17d880a2033362179f405ef4f4cc12d2a7d6ec39eba6cae8e9404"
+  },
+  {
+    "file": "baseline.json.gz",
+    "originalBytes": 7835598,
+    "originalSha256": "60bdf3f0a3402c9a0937152e1d68d51d0fc823e2565f0ef1e0f0975d70b9e241",
+    "storedSha256": "9a83032fd8cc20c31532a2ac73575369a6337e9114ef2e0bcba59a0e0ed04e04"
+  },
+  {
+    "file": "inputs.json.gz",
+    "originalBytes": 6963,
+    "originalSha256": "bcae04dc7b2cbeb5b40c5916ffd6f62ddc36cd11603a6d123008b15b18706fa4",
+    "storedSha256": "ffb90795a037c63c80e35bba47e40b5d8c55dddd89d22054f7a1eb514236bcff"
+  },
+  {
+    "file": "resource-watch.log.gz",
+    "originalBytes": 217,
+    "originalSha256": "8b11b0f93a2250bbe22599597a1e3cabbf6657a00c80d4d86f198d86ae0cb55d",
+    "storedSha256": "f87be239d600ca2c717bc3ba46fe0fcda1915dc97fff21a14b7fe5b1b409d175"
+  },
+  {
+    "file": "run.json.gz",
+    "originalBytes": 1928,
+    "originalSha256": "f4371b18025fd596550239ba8334826587f329d292aa38df97a5ccd7ebac97ff",
+    "storedSha256": "a19c1be5b3e59080c1e0fcecabbee8299c474d162aae7ef5405f3334c0edb000"
+  },
+  {
+    "file": "ears-make-direct-full-matrix.py.gz",
+    "originalBytes": 6007,
+    "originalSha256": "8fd6e3d1e4ef643db6cc2fc23d87c5d23105eac97226d0e3cb8a206d676e365c",
+    "storedSha256": "2b98e5b3d35d747f2438213af6faab1416f6789e80b73079f908bf795000548d"
+  },
+  {
+    "file": "ears-direct-full-producer.mjs.gz",
+    "originalBytes": 9212,
+    "originalSha256": "07f615e6f4cd9a9888e57f17bff98467e2284bb644f7c2dc687bfea1df5af2ac",
+    "storedSha256": "40cbdd70edd669391dd1e745ced2933ed7356b46d106bae6e2da7ef43d7da70a"
+  },
+  {
+    "file": "ears-direct-full-consumer.mjs.gz",
+    "originalBytes": 14300,
+    "originalSha256": "29a0a51312a62751efd2e14fe86684a99fd8ec51505d3e280168b9bfb69dcb7e",
+    "storedSha256": "41904933298b3118ca52e6196a80ec85ba087f5d0f489225b1d415db7cf3a0d6"
+  },
+  {
+    "file": "ears-direct-full-run.py.gz",
+    "originalBytes": 3592,
+    "originalSha256": "d58c180f2082cf7f4f55f86a4e11c629ae8d4daf4ac4f892be2dffe12fc8dbcd",
+    "storedSha256": "45b9f41d6aea54e75c5dc8e5f44185bdbb9bac6f39feac1784e6607869bbe89c"
+  },
+  {
+    "file": "ears-run-direct-full.py.gz",
+    "originalBytes": 1919,
+    "originalSha256": "71c5fa2f410924b3531dec7a47d2bd70ed8d079fb9bd048643484b5545f62905",
+    "storedSha256": "fe649efbd1a465b9f0a3f62cec162daa74925ae2798a03590ecc2156afdd7387"
+  },
+  {
+    "file": "ears-wait-direct-full.py.gz",
+    "originalBytes": 1346,
+    "originalSha256": "bfd49b9dede6938c359ef6e90afdb599a79fdbfeaf7608a3ca0d08b5623f68f2",
+    "storedSha256": "a90cf9100a295e975c719843c0e7ac11b011e6a4896ac655721f1292955caae0"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "candidate": "bc1dcdfbcd4bd46c7831157564e6a92791a5e498",
+  "nativeProducerSource": "6ab2f69fa13289ed4f02952253c58b4d41922c98",
+  "image": "apack-linux-test:74d4b8cfe839",
+  "limits": {
+    "cpus": 2,
+    "memoryBytes": 6442450944,
+    "swap": false,
+    "capabilities": "none"
+  },
+  "archives": {
+    "ears-elmdb-conversion-native-source.tar": "943366f508c52e2e53cce71f9a8890162b9a6cfbd521a1128d760e5f36d228bd",
+    "ears-conversion-native-6ab2f69.tar": "2184fc7b8bd8239dc1efa20076a9293031dcec03100907ffdae4dcf72020bf52",
+    "ears-elmdb-conversion-raw-source.tar": "4baae396cce1d396de7edf2b40782f360616a01a085bc870378e9c0f0889c0ad"
+  }
+}

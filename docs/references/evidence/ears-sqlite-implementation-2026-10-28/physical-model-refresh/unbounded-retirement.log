@@ -1,0 +1,44 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/vector-index.spec.ts (10 tests | 1 failed | 9 skipped) 296ms
+   ↓ generation-owned native vector projection > captures foreground changes behind the cursor before readiness without logical commits
+   ↓ generation-owned native vector projection > stops inside a partial page at the time budget and resumes only committed rows after rollback
+   × generation-owned native vector projection > preserves the incumbent through refresh, foreground changes and a refused atomic publication 295ms
+     → expected +0 to be 2 // Object.is equality
+   ↓ generation-owned native vector projection > keeps an older read snapshot usable while a refreshed physical model is published and retired
+   ↓ generation-owned native vector projection > keeps nested/outer rollback, trash, replacement and destruction in the same transaction
+   ↓ generation-owned native vector projection > reopens the native generation in a read-only EARS backup with an owner-supplied extension
+   ↓ generation-owned native vector projection > prepares ordinary empty stores before ingestion and admits native loading after populated reopen
+   ↓ generation-owned native vector projection > owns the empty-check transaction and rolls back refused cursor preparation before retry
+   ↓ generation-owned native vector projection > refuses an implicit cursor-index build on a populated store
+   ↓ generation-owned native vector projection > rolls back refused admission and rejects stale generations and unsafe writer use
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/vector-index.spec.ts > generation-owned native vector projection > preserves the incumbent through refresh, foreground changes and a refused atomic publication
+AssertionError: expected +0 to be 2 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 0[39m
+
+ ❯ tests/sqlite/vector-index.spec.ts:104:74
+    102|     const remaining=Number(db.get(`SELECT count(*) n FROM ann_${incumb…
+    103|     write(()=>index.collectSuperseded(1));expect(db.get('SELECT 1 FROM…
+    104|     expect(Number(db.get(`SELECT count(*) n FROM ann_${incumbent}`)!.n…
+       |                                                                          ^
+    105|     while(index.retirementPending())write(()=>index.collectSuperseded(…
+    106|     expect(db.get('SELECT 1 FROM sqlite_schema WHERE name=?',[`ann_${i…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  09:51:13
+   Duration  1.89s (transform 795ms, setup 76ms, collect 1.12s, tests 296ms, environment 0ms, prepare 116ms)
+
+JSON report written to /results/unbounded-retirement.json

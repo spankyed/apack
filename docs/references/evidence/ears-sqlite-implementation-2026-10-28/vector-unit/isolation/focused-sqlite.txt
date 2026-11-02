@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/vector.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/engine/vector.spec.ts (17 tests) 629ms
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  11:47:22
+   Duration  1.10s (transform 246ms, setup 16ms, collect 342ms, tests 629ms, environment 0ms, prepare 40ms)
+

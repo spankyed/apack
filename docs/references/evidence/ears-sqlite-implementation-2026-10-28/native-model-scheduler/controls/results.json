@@ -1,0 +1,93 @@
+[
+  {
+    "label": "dependencies",
+    "exitCode": 0,
+    "seconds": 1.6095637739927042
+  },
+  {
+    "label": "packages-build",
+    "exitCode": 0,
+    "seconds": 26.44422984099947
+  },
+  {
+    "label": "compile-original",
+    "args": [
+      "cc",
+      "-O3",
+      "-DNDEBUG",
+      "-Werror=implicit-function-declaration",
+      "-shared",
+      "-fPIC",
+      "-I/seed/node_modules/better-sqlite3/deps/sqlite3",
+      "/assets/vec1.c",
+      "-lm",
+      "-o",
+      "/metrics/vec1.so"
+    ],
+    "exitCode": 0,
+    "seconds": 2.4686820289934985
+  },
+  {
+    "label": "ears-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.516053153987741
+  },
+  {
+    "label": "native-admission",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "tests/sqlite/vector-index.spec.ts",
+      "tests/sqlite/vector-training.spec.ts",
+      "tests/sqlite/vector-models.spec.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/native-admission.json"
+    ],
+    "exitCode": 0,
+    "seconds": 4.151174501981586
+  },
+  {
+    "label": "mutation-shared-ack-order",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "tests/sqlite/vector-models.spec.ts",
+      "-t",
+      "retains a completed model",
+      "--maxWorkers=1"
+    ],
+    "exitCode": 1,
+    "seconds": 1.0541817319754045
+  },
+  {
+    "label": "mutation-stale-attempt",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "tests/sqlite/vector-models.spec.ts",
+      "-t",
+      "recovers abandoned attempts",
+      "--maxWorkers=1"
+    ],
+    "exitCode": 1,
+    "seconds": 1.2254131720110308
+  }
+]

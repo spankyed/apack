@@ -1,0 +1,56 @@
+[
+  {
+    "label": "source-stage",
+    "exitCode": 0,
+    "seconds": 0.03925599198555574,
+    "args": [
+      "git",
+      "add",
+      "-A"
+    ]
+  },
+  {
+    "label": "source-snapshot",
+    "exitCode": 0,
+    "seconds": 0.020231561007676646,
+    "args": [
+      "git",
+      "-c",
+      "user.name=Native maintenance qualification",
+      "-c",
+      "user.email=qualification@localhost",
+      "commit",
+      "--allow-empty",
+      "-qm",
+      "Native audit and rebuild overlay"
+    ]
+  },
+  {
+    "label": "packages",
+    "exitCode": 0,
+    "seconds": 29.539971402002266,
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ]
+  },
+  {
+    "label": "all-ears",
+    "exitCode": 1,
+    "seconds": 56.26784378598677,
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@apackdev/ears",
+      "--outputFile=/results/all-ears.json"
+    ]
+  }
+]

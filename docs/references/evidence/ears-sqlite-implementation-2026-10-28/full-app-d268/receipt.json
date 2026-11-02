@@ -1,0 +1,445 @@
+{
+  "source": "d2684393ece95151cdbce410de5928117dc7238e",
+  "run": 41395988057,
+  "scope": "Complete source SQLite app, testing-workspace typecheck and ten window-discovery cases; retained unit artifact survives Playwright cleanup.",
+  "originalAppReportSha256": "1a6290faa36c140062e86f88ca7c7e21145b71724f4977f812b8e820cae8c236",
+  "originalUnitReportSha256": "a5bcfb05da8301b6cd1b8d16e59fbbd753f74f70a5463a94b20ca9116e490b5f",
+  "testingWorkspaceTypecheck": "success",
+  "appTestTypecheckAndSettingsLint": "success",
+  "stats": {
+    "startTime": "2026-11-02T05:58:20.759Z",
+    "duration": 101486.685,
+    "expected": 33,
+    "skipped": 1,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "refuses API connections and reloads without the run token",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 13485
+        }
+      ]
+    },
+    {
+      "title": "subscribes to the bus again once the API it lost is restarted",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 7681
+        }
+      ]
+    },
+    {
+      "title": "answer the same verb identically",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 49
+        }
+      ]
+    },
+    {
+      "title": "see each other writes, being one app",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 92
+        }
+      ]
+    },
+    {
+      "title": "survive the connection going away, which is what a launch cannot",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 149
+        }
+      ]
+    },
+    {
+      "title": "reads the running app's data and refuses to change it",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 7774
+        }
+      ]
+    },
+    {
+      "title": "a rebuilt built-in pack reloads with the content the rebuild changed",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 2313
+        }
+      ]
+    },
+    {
+      "title": "a surface setting changed in Settings reaches the feature's surface, once",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 1427
+        }
+      ]
+    },
+    {
+      "title": "a surface setting changed in Settings is what its canvas reads",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 1512
+        }
+      ]
+    },
+    {
+      "title": "a link to another surface opens it and hands it the events",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 507
+        }
+      ]
+    },
+    {
+      "title": "previews a compiled content directory by its content.json and imports the selected items",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 2712
+        }
+      ]
+    },
+    {
+      "title": "adds, selects and stores API keys without the key strings reaching logs, files or renderer state",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 611
+        }
+      ]
+    },
+    {
+      "title": "repairs invalid persisted settings in the app and starts packs only after reopening",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 10500
+        }
+      ]
+    },
+    {
+      "title": "source SQLite app opens both managed stores with persisted EARS identity",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 22
+        }
+      ]
+    },
+    {
+      "title": "packaged SQLite stores hold their model claims across the real API process",
+      "status": "skipped",
+      "results": [
+        {
+          "status": "skipped",
+          "retry": 0,
+          "durationMs": 0
+        }
+      ]
+    },
+    {
+      "title": "the code system's file watcher and terminal output reach the code surface",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 2522
+        }
+      ]
+    },
+    {
+      "title": "a reloaded pack's browser surface restores what its system saved, asking as it starts",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 2154
+        }
+      ]
+    },
+    {
+      "title": "app launches without crashing",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 100
+        }
+      ]
+    },
+    {
+      "title": "app reaches connected state",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 31
+        }
+      ]
+    },
+    {
+      "title": "applicationState is accessible with surfaces loaded",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 21
+        }
+      ]
+    },
+    {
+      "title": "runs in an isolated per-worker test data dir",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 18
+        }
+      ]
+    },
+    {
+      "title": "publishes no session, though a test app has a debug port open",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 14
+        }
+      ]
+    },
+    {
+      "title": "a reference in a stored thread message opens its note in another feature",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 1231
+        }
+      ]
+    },
+    {
+      "title": "inspect mode shows the brain's panel beside a surface that has none",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 150
+        }
+      ]
+    },
+    {
+      "title": "host preferences and shortcuts work with default-setup disabled",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 7555
+        }
+      ]
+    },
+    {
+      "title": "the host-only editor preserves saved references without activating default-setup",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 110
+        }
+      ]
+    },
+    {
+      "title": "an open editor follows installed pack activation without losing its draft",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 4077
+        }
+      ]
+    },
+    {
+      "title": "shortcut drafts follow another window and preserve the global flag",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 2188
+        }
+      ]
+    },
+    {
+      "title": "cold Monaco documents follow source-free declarations and share worker libraries",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 3519
+        }
+      ]
+    },
+    {
+      "title": "opens every surface, and every surface's settings, without a renderer error",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 3218
+        }
+      ]
+    },
+    {
+      "title": "an open feature form follows its settings being reset",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 344
+        }
+      ]
+    },
+    {
+      "title": "pops a built-in surface out into its own window, which renders it",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 1971
+        }
+      ]
+    },
+    {
+      "title": "Settings Help searches bundled articles and opens feature help",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 290
+        }
+      ]
+    },
+    {
+      "title": "unavailable help targets explain the problem and return to the index",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 103
+        }
+      ]
+    }
+  ],
+  "windowDiscoveryCases": [
+    {
+      "name": "finds readiness in an existing window without waiting for another window to be created",
+      "status": "passed",
+      "durationMs": 7.545542000000012
+    },
+    {
+      "name": "wakes on a new window beside a closed candidate",
+      "status": "passed",
+      "durationMs": 1.4745000000000346
+    },
+    {
+      "name": "wakes on a new window beside a unresponsive candidate",
+      "status": "passed",
+      "durationMs": 2.891834000000017
+    },
+    {
+      "name": "retains the discovery deadline with an unresponsive window: false",
+      "status": "passed",
+      "durationMs": 1.373207999999977
+    },
+    {
+      "name": "retains the discovery deadline with an unresponsive window: true",
+      "status": "passed",
+      "durationMs": 0.5518749999999955
+    },
+    {
+      "name": "selects the main renderer beside an already-ready popout (popout first: false)",
+      "status": "passed",
+      "durationMs": 0.7800409999999829
+    },
+    {
+      "name": "selects the main renderer beside an already-ready popout (popout first: true)",
+      "status": "passed",
+      "durationMs": 0.5051250000000209
+    },
+    {
+      "name": "rechecks window role when navigation finishes during a readiness probe",
+      "status": "passed",
+      "durationMs": 3.4624999999999773
+    },
+    {
+      "name": "keeps the discovery deadline when only a ready popout exists",
+      "status": "passed",
+      "durationMs": 0.9327920000000063
+    },
+    {
+      "name": "accepts a main renderer with a surface selection query but no popout role",
+      "status": "passed",
+      "durationMs": 0.3527499999999577
+    }
+  ]
+}

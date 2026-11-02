@@ -1,0 +1,8 @@
+check	Selected integration files	2026-10-31T10:26:05.2294060Z [dependency-graph] deep-pack: start
+check	Selected integration files	2026-10-31T10:26:52.4478500Z [dependency-graph] deep-pack: 47197ms
+check	Selected integration files	2026-10-31T10:26:52.4484860Z [dependency-graph] left-pack: start
+check	Selected integration files	2026-10-31T10:27:19.0003690Z [dependency-graph] left-pack: 26540ms
+check	Selected integration files	2026-10-31T10:27:19.0004530Z [dependency-graph] right-pack: start
+check	Selected integration files	2026-10-31T10:27:55.1880400Z [dependency-graph] right-pack: 36170ms
+check	Selected integration files	2026-10-31T10:27:55.1990220Z [dependency-graph] app-pack: start
+check	Selected integration files	2026-10-31T10:28:47.6428570Z [dependency-graph] app-pack: 52417ms

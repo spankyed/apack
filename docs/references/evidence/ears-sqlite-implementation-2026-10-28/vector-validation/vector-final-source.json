@@ -1,0 +1,9 @@
+{
+  "base": "b69140ef4351a196f23e7cb50fbd2432cc2f2ed9",
+  "changedFiles": [
+    ".github/workflows/strict-chain.yml",
+    "packages/apack-ears/src/sqlite/search.ts",
+    "packages/apack-ears/tests/engine/vector.spec.ts"
+  ],
+  "sha256": "9d0fb016edeeaa22fc894ec87e6d9d749399f2c44eb1ed191ee0b7529a4a205d"
+}

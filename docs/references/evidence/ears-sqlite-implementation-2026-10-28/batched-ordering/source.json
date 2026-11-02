@@ -1,0 +1,4 @@
+{
+  "packages/apack-ears/src/sqlite/query.ts": "3165f4bcb5d6f595552442ac53d95f9e64117a97047cc4c8e2d44ada8b99cd36",
+  "packages/apack-ears/tests/sqlite/query-cost.spec.ts": "9525795de89cc18b05c47de0c84efbffbe283b9a417b77ca27d9255a120a4f02"
+}

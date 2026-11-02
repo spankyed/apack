@@ -1,0 +1,823 @@
+﻿2026-10-30T17:06:35.9335500Z Current runner version: '2.338.2'
+2026-10-30T17:06:35.9364680Z ##[group]Runner Image Provisioner
+2026-10-30T17:06:35.9365460Z Hosted Compute Agent
+2026-10-30T17:06:35.9365930Z Version: 20261021.618
+2026-10-30T17:06:35.9366370Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-30T17:06:35.9366920Z Build Date: 2026-10-21T00:45:21Z
+2026-10-30T17:06:35.9367440Z Worker ID: {15d2f524-5c12-4d77-a4ae-38a4cd42bf68}
+2026-10-30T17:06:35.9368040Z Region: westus
+2026-10-30T17:06:35.9368460Z Cloud: MacCloud
+2026-10-30T17:06:35.9368850Z ##[endgroup]
+2026-10-30T17:06:35.9371230Z ##[group]Operating System
+2026-10-30T17:06:35.9371660Z macOS
+2026-10-30T17:06:35.9372020Z 26.6.2
+2026-10-30T17:06:35.9372430Z 25G83
+2026-10-30T17:06:35.9372840Z ##[endgroup]
+2026-10-30T17:06:35.9373220Z ##[group]Runner Image
+2026-10-30T17:06:35.9373690Z Image: macos-26-arm64
+2026-10-30T17:06:35.9374120Z Version: 20261026.0455.2
+2026-10-30T17:06:35.9375910Z Included Software: https://github.com/actions/runner-images/blob/macos-26-arm64/20261026.0455/images/macos/macos-26-arm64-Readme.md
+2026-10-30T17:06:35.9377130Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-26-arm64%2F20261026.0455
+2026-10-30T17:06:35.9377920Z ##[endgroup]
+2026-10-30T17:06:35.9379540Z ##[group]GITHUB_TOKEN Permissions
+2026-10-30T17:06:35.9381430Z Contents: read
+2026-10-30T17:06:35.9381860Z Metadata: read
+2026-10-30T17:06:35.9382240Z ##[endgroup]
+2026-10-30T17:06:35.9388640Z Secret source: Actions
+2026-10-30T17:06:35.9391230Z Cache mode: write
+2026-10-30T17:06:35.9392050Z Prepare workflow directory
+2026-10-30T17:06:35.9870230Z Prepare all required actions
+2026-10-30T17:06:35.9957590Z Getting action download info
+2026-10-30T17:06:36.4473630Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-30T17:06:36.7655780Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-10-30T17:06:36.9024010Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-30T17:06:37.1370360Z Complete job name: check
+2026-10-30T17:06:37.2135450Z ##[group]Run actions/checkout@v4
+2026-10-30T17:06:37.2136400Z with:
+2026-10-30T17:06:37.2136740Z   repository: spankyed/apack
+2026-10-30T17:06:37.2140120Z   token: ***
+2026-10-30T17:06:37.2140450Z   ssh-strict: true
+2026-10-30T17:06:37.2140770Z   ssh-user: git
+2026-10-30T17:06:37.2141970Z   persist-credentials: true
+2026-10-30T17:06:37.2142370Z   clean: true
+2026-10-30T17:06:37.2142780Z   sparse-checkout-cone-mode: true
+2026-10-30T17:06:37.2143160Z   fetch-depth: 1
+2026-10-30T17:06:37.2143490Z   fetch-tags: false
+2026-10-30T17:06:37.2143890Z   show-progress: true
+2026-10-30T17:06:37.2144260Z   lfs: false
+2026-10-30T17:06:37.2144570Z   submodules: false
+2026-10-30T17:06:37.2144900Z   set-safe-directory: true
+2026-10-30T17:06:37.2145330Z   allow-unsafe-pr-checkout: false
+2026-10-30T17:06:37.2146000Z env:
+2026-10-30T17:06:37.2146390Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:06:37.2146790Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:06:37.2147270Z ##[endgroup]
+2026-10-30T17:06:37.7022570Z Syncing repository: spankyed/apack
+2026-10-30T17:06:37.7024450Z ##[group]Getting Git version info
+2026-10-30T17:06:37.7024970Z Working directory is '/Users/runner/work/apack/apack'
+2026-10-30T17:06:37.7026650Z [command]/opt/homebrew/bin/git version
+2026-10-30T17:06:37.7338010Z git version 2.56.0
+2026-10-30T17:06:37.7353240Z ##[endgroup]
+2026-10-30T17:06:37.7367340Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/b75a32c3-dc03-4c13-8ab9-cf11d5a59452/.gitconfig'
+2026-10-30T17:06:37.7375910Z Temporarily overriding HOME='/Users/runner/work/_temp/b75a32c3-dc03-4c13-8ab9-cf11d5a59452' before making global git config changes
+2026-10-30T17:06:37.7377260Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-30T17:06:37.7379920Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/apack/apack
+2026-10-30T17:06:37.7516060Z Deleting the contents of '/Users/runner/work/apack/apack'
+2026-10-30T17:06:37.7522390Z ##[group]Initializing the repository
+2026-10-30T17:06:37.7528470Z [command]/opt/homebrew/bin/git init /Users/runner/work/apack/apack
+2026-10-30T17:06:37.7893510Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-30T17:06:37.7906190Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-30T17:06:37.7911410Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-30T17:06:37.7973340Z hint: call:
+2026-10-30T17:06:37.7984100Z hint:
+2026-10-30T17:06:37.7985030Z hint: 	git config --global init.defaultBranch <name>
+2026-10-30T17:06:37.7985670Z hint:
+2026-10-30T17:06:37.7986240Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-30T17:06:37.7987130Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-30T17:06:37.7987780Z hint:
+2026-10-30T17:06:37.7988220Z hint: 	git branch -m <name>
+2026-10-30T17:06:37.7988740Z hint:
+2026-10-30T17:06:37.7989310Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-30T17:06:37.7990100Z Initialized empty Git repository in /Users/runner/work/apack/apack/.git/
+2026-10-30T17:06:37.7991820Z [command]/opt/homebrew/bin/git remote add origin https://github.com/spankyed/apack
+2026-10-30T17:06:37.8088120Z ##[endgroup]
+2026-10-30T17:06:37.8088990Z ##[group]Disabling automatic garbage collection
+2026-10-30T17:06:37.8095960Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-10-30T17:06:37.8228610Z ##[endgroup]
+2026-10-30T17:06:37.8229260Z ##[group]Setting up auth
+2026-10-30T17:06:37.8236440Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-30T17:06:37.8336570Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-30T17:06:37.9734720Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-30T17:06:37.9812990Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-30T17:06:38.1249260Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-30T17:06:38.1329440Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-30T17:06:38.2654520Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-30T17:06:38.2693730Z ##[endgroup]
+2026-10-30T17:06:38.2694870Z ##[group]Fetching the repository
+2026-10-30T17:06:38.2700540Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +836d3d1d1ffedf85f1ae2dd8baa40be4e488276b:refs/remotes/origin/session/ears-sqlite
+2026-10-30T17:06:41.4832880Z From https://github.com/spankyed/apack
+2026-10-30T17:06:41.4835310Z  * [new ref]         836d3d1d1ffedf85f1ae2dd8baa40be4e488276b -> origin/session/ears-sqlite
+2026-10-30T17:06:41.4855240Z ##[endgroup]
+2026-10-30T17:06:41.4855750Z ##[group]Determining the checkout info
+2026-10-30T17:06:41.4856380Z ##[endgroup]
+2026-10-30T17:06:41.4856710Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-10-30T17:06:41.4942040Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-30T17:06:41.5029010Z ##[group]Checking out the ref
+2026-10-30T17:06:41.5037920Z [command]/opt/homebrew/bin/git checkout --progress --force -B session/ears-sqlite refs/remotes/origin/session/ears-sqlite
+2026-10-30T17:06:42.6178960Z Updating files:  60% (4865/8039)
+2026-10-30T17:06:42.6386310Z Updating files:  61% (4904/8039)
+2026-10-30T17:06:42.6528450Z Updating files:  62% (4985/8039)
+2026-10-30T17:06:42.6716620Z Updating files:  63% (5065/8039)
+2026-10-30T17:06:42.6854750Z Updating files:  64% (5145/8039)
+2026-10-30T17:06:42.6990150Z Updating files:  65% (5226/8039)
+2026-10-30T17:06:42.7105400Z Updating files:  66% (5306/8039)
+2026-10-30T17:06:42.7216550Z Updating files:  67% (5387/8039)
+2026-10-30T17:06:42.7362850Z Updating files:  68% (5467/8039)
+2026-10-30T17:06:42.7506880Z Updating files:  69% (5547/8039)
+2026-10-30T17:06:42.7674060Z Updating files:  70% (5628/8039)
+2026-10-30T17:06:42.7839620Z Updating files:  71% (5708/8039)
+2026-10-30T17:06:42.8002960Z Updating files:  72% (5789/8039)
+2026-10-30T17:06:42.8139230Z Updating files:  73% (5869/8039)
+2026-10-30T17:06:42.8312530Z Updating files:  74% (5949/8039)
+2026-10-30T17:06:42.8468210Z Updating files:  75% (6030/8039)
+2026-10-30T17:06:42.8642250Z Updating files:  76% (6110/8039)
+2026-10-30T17:06:42.8782330Z Updating files:  77% (6191/8039)
+2026-10-30T17:06:42.8907950Z Updating files:  78% (6271/8039)
+2026-10-30T17:06:42.9015020Z Updating files:  79% (6351/8039)
+2026-10-30T17:06:42.9095930Z Updating files:  80% (6432/8039)
+2026-10-30T17:06:42.9274770Z Updating files:  81% (6512/8039)
+2026-10-30T17:06:42.9422710Z Updating files:  82% (6592/8039)
+2026-10-30T17:06:42.9620590Z Updating files:  83% (6673/8039)
+2026-10-30T17:06:42.9737380Z Updating files:  84% (6753/8039)
+2026-10-30T17:06:42.9830900Z Updating files:  85% (6834/8039)
+2026-10-30T17:06:42.9968850Z Updating files:  86% (6914/8039)
+2026-10-30T17:06:43.0420170Z Updating files:  87% (6994/8039)
+2026-10-30T17:06:43.0614870Z Updating files:  88% (7075/8039)
+2026-10-30T17:06:43.1247390Z Updating files:  89% (7155/8039)
+2026-10-30T17:06:43.1484490Z Updating files:  90% (7236/8039)
+2026-10-30T17:06:43.1710660Z Updating files:  91% (7316/8039)
+2026-10-30T17:06:43.1873040Z Updating files:  92% (7396/8039)
+2026-10-30T17:06:43.1997580Z Updating files:  93% (7477/8039)
+2026-10-30T17:06:43.2174390Z Updating files:  94% (7557/8039)
+2026-10-30T17:06:43.2335350Z Updating files:  95% (7638/8039)
+2026-10-30T17:06:43.2452130Z Updating files:  96% (7718/8039)
+2026-10-30T17:06:43.2844490Z Updating files:  97% (7798/8039)
+2026-10-30T17:06:43.2948420Z Updating files:  98% (7879/8039)
+2026-10-30T17:06:43.3057660Z Updating files:  99% (7959/8039)
+2026-10-30T17:06:43.3059000Z Updating files: 100% (8039/8039)
+2026-10-30T17:06:43.3059720Z Updating files: 100% (8039/8039), done.
+2026-10-30T17:06:43.3201040Z Switched to a new branch 'session/ears-sqlite'
+2026-10-30T17:06:43.3205820Z branch 'session/ears-sqlite' set up to track 'origin/session/ears-sqlite'.
+2026-10-30T17:06:43.3225090Z ##[endgroup]
+2026-10-30T17:06:43.3355720Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-10-30T17:06:43.3453680Z 836d3d1d1ffedf85f1ae2dd8baa40be4e488276b
+2026-10-30T17:06:43.4453150Z ##[group]Run actions/setup-node@v4
+2026-10-30T17:06:43.4453550Z with:
+2026-10-30T17:06:43.4453790Z   node-version: 23.11.1
+2026-10-30T17:06:43.4454850Z   cache: npm
+2026-10-30T17:06:43.4455460Z   always-auth: false
+2026-10-30T17:06:43.4455810Z   check-latest: false
+2026-10-30T17:06:43.4458910Z   token: ***
+2026-10-30T17:06:43.4459120Z env:
+2026-10-30T17:06:43.4459390Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:06:43.4459640Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:06:43.4459850Z ##[endgroup]
+2026-10-30T17:06:44.0102820Z Attempting to download 23.11.1...
+2026-10-30T17:06:44.0372040Z (node:1157) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-30T17:06:44.0578870Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-30T17:06:44.9092520Z Not found in manifest. Falling back to download directly from Node
+2026-10-30T17:06:44.9601090Z Acquiring 23.11.1 - arm64 from https://nodejs.org/dist/v23.11.1/node-v23.11.1-darwin-arm64.tar.gz
+2026-10-30T17:06:45.6642720Z Extracting ...
+2026-10-30T17:06:45.6919910Z [command]/usr/bin/tar xz --strip 1 -C /Users/runner/work/_temp/1b43e7dc-d76a-40d9-832f-49f3eff0b9d7 -f /Users/runner/work/_temp/f1407cca-7d8a-421d-a725-8860849da7e0
+2026-10-30T17:06:46.9242680Z Adding to the cache ...
+2026-10-30T17:06:49.5960070Z Done
+2026-10-30T17:06:49.5961440Z ##[group]Environment details
+2026-10-30T17:06:50.1674790Z node: v23.11.1
+2026-10-30T17:06:50.1675330Z npm: 10.9.2
+2026-10-30T17:06:50.1675890Z yarn: 1.22.22
+2026-10-30T17:06:50.1677270Z ##[endgroup]
+2026-10-30T17:06:50.1715090Z [command]/Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/npm config get cache
+2026-10-30T17:06:50.2982640Z /Users/runner/.npm
+2026-10-30T17:06:50.5657220Z Cache hit for: node-cache-macOS-arm64-npm-5fcebe10fe6d10fbc1d7054843871dbb4c0f9fb98a0e44e092b7e4f303100d2a
+2026-10-30T17:06:50.5723850Z (node:1157) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-30T17:06:51.8872790Z Received 0 of 205977716 (0.0%), 0.0 MBs/sec
+2026-10-30T17:06:52.8881750Z Received 67108864 of 205977716 (32.6%), 31.9 MBs/sec
+2026-10-30T17:06:53.8911280Z Received 134217728 of 205977716 (65.2%), 42.6 MBs/sec
+2026-10-30T17:06:54.8939780Z Received 185006196 of 205977716 (89.8%), 44.0 MBs/sec
+2026-10-30T17:06:55.1133580Z Received 205977716 of 205977716 (100.0%), 46.6 MBs/sec
+2026-10-30T17:06:55.1187090Z Cache Size: ~196 MB (205977716 B)
+2026-10-30T17:06:55.1220000Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/b99ecc55-a6b8-4240-80e4-571bda600eba/cache.tzst -P -C /Users/runner/work/apack/apack --delay-directory-restore --use-compress-program unzstd
+2026-10-30T17:06:56.7263450Z Cache restored successfully
+2026-10-30T17:06:56.7661020Z Cache restored from key: node-cache-macOS-arm64-npm-5fcebe10fe6d10fbc1d7054843871dbb4c0f9fb98a0e44e092b7e4f303100d2a
+2026-10-30T17:06:56.8122220Z ##[group]Run git rev-parse HEAD
+2026-10-30T17:06:56.8122660Z [36;1mgit rev-parse HEAD[0m
+2026-10-30T17:06:56.8199760Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:06:56.8200240Z env:
+2026-10-30T17:06:56.8200490Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:06:56.8200830Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:06:56.8201110Z ##[endgroup]
+2026-10-30T17:06:56.9287070Z 836d3d1d1ffedf85f1ae2dd8baa40be4e488276b
+2026-10-30T17:06:56.9428710Z ##[group]Run repeat_pattern='^([1-9]|1[0-9]|20)$'
+2026-10-30T17:06:56.9429400Z [36;1mrepeat_pattern='^([1-9]|1[0-9]|20)$'[0m
+2026-10-30T17:06:56.9431920Z [36;1mif [[ ! "$APACK_E2E_REPEAT" =~ $repeat_pattern ]]; then[0m
+2026-10-30T17:06:56.9433280Z [36;1m  echo 'repeat_each must be an integer from 1 to 20'; exit 1[0m
+2026-10-30T17:06:56.9434230Z [36;1mfi[0m
+2026-10-30T17:06:56.9497730Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:06:56.9498250Z env:
+2026-10-30T17:06:56.9498590Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:06:56.9498890Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:06:56.9499200Z ##[endgroup]
+2026-10-30T17:06:57.0076670Z Prepare all required actions
+2026-10-30T17:06:57.0077620Z Getting action download info
+2026-10-30T17:06:57.1371330Z Download action repository 'Swatinem/rust-cache@v2' (SHA:d1527c8f67ef9af357290475d4af4b0fab8f12e0)
+2026-10-30T17:06:57.6089030Z ##[group]Run ./.github/actions/elmdb
+2026-10-30T17:06:57.6089300Z env:
+2026-10-30T17:06:57.6089530Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:06:57.6089730Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:06:57.6089930Z ##[endgroup]
+2026-10-30T17:06:57.6189760Z ##[start-action display=Clone elmdb at the pinned commit;id=__self.__run]
+2026-10-30T17:06:57.6236070Z ##[group]Run rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
+2026-10-30T17:06:57.6236430Z [36;1mrev=$(tr -d '[:space:]' < vendor/elmdb.rev)[0m
+2026-10-30T17:06:57.6236690Z [36;1mgit init -q vendor/elmdb[0m
+2026-10-30T17:06:57.6237080Z [36;1mgit -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"[0m
+2026-10-30T17:06:57.6237550Z [36;1mgit -C vendor/elmdb checkout -q FETCH_HEAD[0m
+2026-10-30T17:06:57.6279630Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:06:57.6279910Z env:
+2026-10-30T17:06:57.6280130Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:06:57.6285870Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:06:57.6286060Z ##[endgroup]
+2026-10-30T17:06:58.4713620Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=851]
+2026-10-30T17:06:58.4721580Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__self.__Swatinem_rust-cache]
+2026-10-30T17:06:58.4853080Z ##[group]Run Swatinem/rust-cache@v2
+2026-10-30T17:06:58.4854050Z with:
+2026-10-30T17:06:58.4854290Z   workspaces: vendor/elmdb
+2026-10-30T17:06:58.4854640Z   prefix-key: v0-rust
+2026-10-30T17:06:58.4855070Z   add-job-id-key: true
+2026-10-30T17:06:58.4855480Z   add-rust-environment-hash-key: true
+2026-10-30T17:06:58.4855830Z   cache-targets: true
+2026-10-30T17:06:58.4856050Z   cache-all-crates: false
+2026-10-30T17:06:58.4856470Z   cache-workspace-crates: false
+2026-10-30T17:06:58.4857160Z   save-if: true
+2026-10-30T17:06:58.4858050Z   cache-provider: github
+2026-10-30T17:06:58.4858570Z   cache-bin: true
+2026-10-30T17:06:58.4859030Z   lookup-only: false
+2026-10-30T17:06:58.4859610Z   cmd-format: {0}
+2026-10-30T17:06:58.4860150Z env:
+2026-10-30T17:06:58.4860360Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:06:58.4860620Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:06:58.4860830Z ##[endgroup]
+2026-10-30T17:07:06.6913010Z ##[group]Cache Configuration
+2026-10-30T17:07:06.6925320Z Cache Provider:
+2026-10-30T17:07:06.6925930Z     github
+2026-10-30T17:07:06.6926640Z Workspaces:
+2026-10-30T17:07:06.6941230Z     /Users/runner/work/apack/apack/vendor/elmdb
+2026-10-30T17:07:06.6941670Z Cache Paths:
+2026-10-30T17:07:06.6942130Z     /Users/runner/.cargo/bin
+2026-10-30T17:07:06.6942740Z     /Users/runner/.cargo/.crates.toml
+2026-10-30T17:07:06.6943230Z     /Users/runner/.cargo/.crates2.json
+2026-10-30T17:07:06.6943630Z     /Users/runner/.cargo/registry
+2026-10-30T17:07:06.6944180Z     /Users/runner/.cargo/git
+2026-10-30T17:07:06.6944850Z     /Users/runner/work/apack/apack/vendor/elmdb/target
+2026-10-30T17:07:06.6945310Z Restore Key:
+2026-10-30T17:07:06.6946860Z     v0-rust-check-Darwin-arm64-30c62bd1
+2026-10-30T17:07:06.6947620Z Cache Key:
+2026-10-30T17:07:06.6948110Z     v0-rust-check-Darwin-arm64-30c62bd1-98f5c083
+2026-10-30T17:07:06.6948560Z .. Prefix:
+2026-10-30T17:07:06.6948940Z   - v0-rust-check-Darwin-arm64
+2026-10-30T17:07:06.6949470Z .. Environment considered:
+2026-10-30T17:07:06.6949960Z   - Rust Versions:
+2026-10-30T17:07:06.6950490Z     - 1.99.1 aarch64-apple-darwin 58cf8f9c35b355199727627d07ae34a4e2846d67
+2026-10-30T17:07:06.6951060Z   - CARGO_INCREMENTAL
+2026-10-30T17:07:06.6951490Z .. Lockfiles considered:
+2026-10-30T17:07:06.6952420Z   - /Users/runner/work/apack/apack/vendor/elmdb/.cargo/config.toml
+2026-10-30T17:07:06.6953510Z   - /Users/runner/work/apack/apack/vendor/elmdb/Cargo.lock
+2026-10-30T17:07:06.6954290Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-cli/Cargo.toml
+2026-10-30T17:07:06.6955760Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-node/Cargo.toml
+2026-10-30T17:07:06.6956660Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb/Cargo.toml
+2026-10-30T17:07:06.6957390Z   - /Users/runner/work/apack/apack/vendor/elmdb/rust-toolchain.toml
+2026-10-30T17:07:06.6958120Z   - /Users/runner/work/apack/apack/vendor/elmdb/xtask/Cargo.toml
+2026-10-30T17:07:06.6958860Z ##[endgroup]
+2026-10-30T17:07:06.6959110Z
+2026-10-30T17:07:06.6959490Z ... Restoring cache ...
+2026-10-30T17:07:06.9409960Z Cache hit for: v0-rust-check-Darwin-arm64-30c62bd1-98f5c083
+2026-10-30T17:07:08.2437360Z Received 0 of 186382503 (0.0%), 0.0 MBs/sec
+2026-10-30T17:07:09.2442400Z Received 41943040 of 186382503 (22.5%), 20.0 MBs/sec
+2026-10-30T17:07:10.2467550Z Received 100663296 of 186382503 (54.0%), 31.9 MBs/sec
+2026-10-30T17:07:11.2476810Z Received 125829120 of 186382503 (67.5%), 29.9 MBs/sec
+2026-10-30T17:07:12.2491350Z Received 163577856 of 186382503 (87.8%), 31.2 MBs/sec
+2026-10-30T17:07:12.9081700Z Received 186382503 of 186382503 (100.0%), 31.4 MBs/sec
+2026-10-30T17:07:12.9116590Z Cache Size: ~178 MB (186382503 B)
+2026-10-30T17:07:12.9233620Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/2351d702-6f77-4ac0-a3bd-c4cef9ce7c6e/cache.tzst -P -C /Users/runner/work/apack/apack --delay-directory-restore --use-compress-program unzstd
+2026-10-30T17:07:15.0718410Z Cache restored successfully
+2026-10-30T17:07:15.0765220Z Restored from cache key "v0-rust-check-Darwin-arm64-30c62bd1-98f5c083" full match: true.
+2026-10-30T17:07:15.0905450Z ##[end-action id=__self.__Swatinem_rust-cache;outcome=success;conclusion=success;duration_ms=16609]
+2026-10-30T17:07:15.0913260Z ##[start-action display=Build the binding;id=__self.__run_2]
+2026-10-30T17:07:15.0950820Z ##[group]Run rustup show active-toolchain
+2026-10-30T17:07:15.0951250Z [36;1mrustup show active-toolchain[0m
+2026-10-30T17:07:15.0951740Z [36;1mnpm ci --no-audit --no-fund[0m
+2026-10-30T17:07:15.0952400Z [36;1m# On Windows, @napi-rs/cli's build times out on its own filesystem-reconciliation lock (elmdb's own CI does[0m
+2026-10-30T17:07:15.0953090Z [36;1m# the same), so cargo builds the binding and it is named as napi's loader expects[0m
+2026-10-30T17:07:15.0953660Z [36;1mif [ "$RUNNER_OS" = Windows ]; then[0m
+2026-10-30T17:07:15.0954100Z [36;1m  cargo build -p elmdb-node --release[0m
+2026-10-30T17:07:15.0954990Z [36;1m  cp target/release/elmdb_node.dll crates/elmdb-node/elmdb.win32-x64-msvc.node[0m
+2026-10-30T17:07:15.0955470Z [36;1melse[0m
+2026-10-30T17:07:15.0955710Z [36;1m  npm run build[0m
+2026-10-30T17:07:15.0956010Z [36;1mfi[0m
+2026-10-30T17:07:15.1009200Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:07:15.1009680Z env:
+2026-10-30T17:07:15.1010060Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:07:15.1010410Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:07:15.1010750Z   CACHE_ON_FAILURE: false
+2026-10-30T17:07:15.1011130Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:07:15.1011380Z ##[endgroup]
+2026-10-30T17:07:15.2245650Z 1.99.1-aarch64-apple-darwin (overridden by '/Users/runner/work/apack/apack/vendor/elmdb/rust-toolchain.toml')
+2026-10-30T17:07:17.9716570Z
+2026-10-30T17:07:17.9718080Z added 78 packages in 2s
+2026-10-30T17:07:18.2852670Z
+2026-10-30T17:07:18.2854160Z > build
+2026-10-30T17:07:18.2855710Z > napi build --cwd crates/elmdb-node --platform --release
+2026-10-30T17:07:18.2856580Z
+2026-10-30T17:07:26.6126330Z    Compiling elmdb-node v0.0.0 (/Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-node)
+2026-10-30T17:07:26.6128040Z    Compiling elmdb v0.0.0 (/Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb)
+2026-10-30T17:10:01.7441200Z     Finished `release` profile [optimized] target(s) in 2m 35s
+2026-10-30T17:10:02.7537230Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=167578]
+2026-10-30T17:10:02.7713470Z ##[group]Run npm ci
+2026-10-30T17:10:02.7714510Z [36;1mnpm ci[0m
+2026-10-30T17:10:02.7993460Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:10:02.7993870Z env:
+2026-10-30T17:10:02.7994150Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:10:02.7994490Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:10:02.7994800Z   CACHE_ON_FAILURE: false
+2026-10-30T17:10:02.7995120Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:10:02.8001610Z   GITHUB_TOKEN: ***
+2026-10-30T17:10:02.8002140Z ##[endgroup]
+2026-10-30T17:10:04.2266970Z npm warn EBADENGINE Unsupported engine {
+2026-10-30T17:10:04.2378220Z npm warn EBADENGINE   package: 'eslint-visitor-keys@5.0.1',
+2026-10-30T17:10:04.2497950Z npm warn EBADENGINE   required: { node: '^20.19.0 || ^22.13.0 || >=24' },
+2026-10-30T17:10:04.2600230Z npm warn EBADENGINE   current: { node: 'v23.11.1', npm: '10.9.2' }
+2026-10-30T17:10:04.2701630Z npm warn EBADENGINE }
+2026-10-30T17:10:04.2804580Z npm warn EBADENGINE Unsupported engine {
+2026-10-30T17:10:04.2908510Z npm warn EBADENGINE   package: 'tsup@9.0.0',
+2026-10-30T17:10:04.3010730Z npm warn EBADENGINE   required: { node: '^22.18.0 || ^24.11.0 || >=26.0.0' },
+2026-10-30T17:10:04.3022710Z npm warn EBADENGINE   current: { node: 'v23.11.1', npm: '10.9.2' }
+2026-10-30T17:10:04.3068380Z npm warn EBADENGINE }
+2026-10-30T17:10:10.1897200Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-10-30T17:10:10.4901900Z npm warn deprecated rimraf@2.6.3: Rimraf versions prior to v4 are no longer supported
+2026-10-30T17:10:10.6127110Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+2026-10-30T17:10:11.1476380Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-30T17:10:11.1558240Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-30T17:10:11.8110480Z npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+2026-10-30T17:10:15.3875520Z npm warn deprecated glob@11.1.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-30T17:10:15.4620700Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-30T17:10:15.4657590Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-30T17:10:44.9459170Z
+2026-10-30T17:10:44.9573970Z > apack@0.3.14 preinstall
+2026-10-30T17:10:44.9640230Z > [ "$NODE_ENV" = 'production' ] && echo '⚠️  NODE_ENV=production — devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true
+2026-10-30T17:10:44.9677300Z
+2026-10-30T17:10:44.9785900Z
+2026-10-30T17:10:44.9787470Z > apack@0.3.14 postinstall
+2026-10-30T17:10:44.9788810Z > node scripts/postinstall.mjs
+2026-10-30T17:10:44.9789780Z
+2026-10-30T17:10:47.8081710Z rebuilt dependencies successfully
+2026-10-30T17:10:47.8539670Z
+2026-10-30T17:10:47.8546950Z added 1363 packages, and audited 1382 packages in 45s
+2026-10-30T17:10:47.8548100Z
+2026-10-30T17:10:47.8548700Z 322 packages are looking for funding
+2026-10-30T17:10:47.8549420Z   run `npm fund` for details
+2026-10-30T17:10:47.9648770Z
+2026-10-30T17:10:47.9656250Z 5 vulnerabilities (1 moderate, 2 high, 2 critical)
+2026-10-30T17:10:47.9657260Z
+2026-10-30T17:10:47.9657970Z To address all issues (including breaking changes), run:
+2026-10-30T17:10:47.9659420Z   npm audit fix --force
+2026-10-30T17:10:47.9659990Z
+2026-10-30T17:10:47.9660400Z Run `npm audit` for details.
+2026-10-30T17:10:48.1579540Z ##[group]Run mkdir -p .apack/installed-evidence
+2026-10-30T17:10:48.1581270Z [36;1mmkdir -p .apack/installed-evidence[0m
+2026-10-30T17:10:48.1581860Z [36;1mversion="$(node -p 'require("./package.json").version.split("-")[0]')"[0m
+2026-10-30T17:10:48.1582540Z [36;1mnpm run build:preview -- --version "$version" | tee .apack/installed-evidence/installed-build.log[0m
+2026-10-30T17:10:48.3631540Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:10:48.3632090Z env:
+2026-10-30T17:10:48.3632370Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:10:48.3632670Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:10:48.3632850Z   CACHE_ON_FAILURE: false
+2026-10-30T17:10:48.3634150Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:10:48.3634840Z ##[endgroup]
+2026-10-30T17:10:48.6847610Z
+2026-10-30T17:10:48.6848590Z > apack@0.3.14 build:preview
+2026-10-30T17:10:48.6860600Z > tsx scripts/build-preview.ts --version 0.3.14
+2026-10-30T17:10:48.6861130Z
+2026-10-30T17:10:49.1160900Z Building apack Preview 0.3.14-preview.1
+2026-10-30T17:10:49.1184640Z
+2026-10-30T17:10:49.1186980Z npm run build:default-setup
+2026-10-30T17:10:49.3540670Z
+2026-10-30T17:10:49.3642220Z > apack@0.3.14 build:default-setup
+2026-10-30T17:10:49.3743660Z > npm run packages:ensure && npm run build -w @app/default-setup
+2026-10-30T17:10:49.3845550Z
+2026-10-30T17:10:49.6614230Z
+2026-10-30T17:10:49.6716290Z > apack@0.3.14 packages:ensure
+2026-10-30T17:10:49.6717730Z > tsx scripts/ensure-packages-built.ts
+2026-10-30T17:10:49.6735100Z
+2026-10-30T17:10:50.0413680Z Published packages are out of date:
+2026-10-30T17:10:50.0415680Z   @apackdev/ears: not built (no packages/apack-ears/dist, packages/apack-ears/publish)
+2026-10-30T17:10:50.0417510Z   @apackdev/sdk: not built (no packages/apack-sdk/dist, packages/apack-sdk/publish)
+2026-10-30T17:10:50.0418530Z   @apackdev/ui: not built (no packages/apack-ui/dist, packages/apack-ui/publish)
+2026-10-30T17:10:50.0419440Z   @apackdev/testing: not built (no packages/apack-testing/dist/package/package.json, packages/apack-testing/dist/package/dist)
+2026-10-30T17:10:50.0420650Z   @apackdev/cli: not built (no packages/apack-cli/dist/package/package.json, packages/apack-cli/dist/package/dist, packages/apack-cli/dist/package/bin, packages/apack-cli/dist/package/templates)
+2026-10-30T17:10:50.0421530Z Rebuilding 5 of 5
+2026-10-30T17:10:50.2422630Z
+2026-10-30T17:10:50.2423950Z > @apackdev/ears@0.1.0 build:package
+2026-10-30T17:10:50.2425130Z > tsx ../../scripts/build-package.ts .
+2026-10-30T17:10:50.2425560Z
+2026-10-30T17:11:00.1276540Z /Users/runner/work/apack/apack/packages/apack-ears/.temp/native-vectors/vec1.dylib
+2026-10-30T17:11:01.5343490Z Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+2026-10-30T17:11:01.8501310Z
+2026-10-30T17:11:01.8603370Z > @apackdev/sdk@0.1.0 build:package
+2026-10-30T17:11:01.8712620Z > tsx ../../scripts/build-package.ts .
+2026-10-30T17:11:01.8814180Z
+2026-10-30T17:11:17.4089930Z Built @apackdev/sdk@0.1.0 into dist, staged for publishing in publish
+2026-10-30T17:11:17.6661920Z
+2026-10-30T17:11:17.6663200Z > @apackdev/ui@0.1.0 build:package
+2026-10-30T17:11:17.6663950Z > tsx ../../scripts/build-ui-package.ts .
+2026-10-30T17:11:17.6664200Z
+2026-10-30T17:11:20.0628100Z (node:7421) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+2026-10-30T17:11:20.0638770Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-30T17:11:35.9868110Z Built @apackdev/ui@0.1.0 into dist, staged for publishing in publish
+2026-10-30T17:11:36.3879180Z
+2026-10-30T17:11:36.3981210Z > @apackdev/testing@0.1.0 build:package
+2026-10-30T17:11:36.4088980Z > tsx ../../scripts/bundle-package.ts .
+2026-10-30T17:11:36.4183920Z
+2026-10-30T17:11:51.1510340Z Built @apackdev/testing@0.1.0 into dist/package
+2026-10-30T17:11:51.8712380Z
+2026-10-30T17:11:51.8730210Z > @apackdev/cli@0.1.0 build:package
+2026-10-30T17:11:51.8739360Z > tsx ../../scripts/bundle-package.ts .
+2026-10-30T17:11:51.8976850Z
+2026-10-30T17:11:54.3465020Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+2026-10-30T17:11:54.3618970Z
+2026-10-30T17:11:54.3674290Z     src/build/compiler-pe-environment.ts:38:102:
+2026-10-30T17:11:54.3895940Z       38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+2026-10-30T17:11:54.4016780Z          ╵                                                     ~~~~~~~~~~~
+2026-10-30T17:11:54.4117810Z
+2026-10-30T17:11:54.4220040Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+2026-10-30T17:11:54.4321540Z
+2026-10-30T17:11:54.4321900Z Built @apackdev/cli@0.1.0 into dist/package
+2026-10-30T17:11:54.4437900Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+2026-10-30T17:11:54.4494940Z
+2026-10-30T17:11:54.4537640Z     src/build/tool-identity.ts:19:42:
+2026-10-30T17:11:54.4552790Z       19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+2026-10-30T17:11:54.4553700Z          ╵                                           ~~~~~~~~~~~
+2026-10-30T17:11:54.4554020Z
+2026-10-30T17:11:54.4554370Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+2026-10-30T17:11:54.4554820Z
+2026-10-30T17:11:54.4555560Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+2026-10-30T17:11:54.4556010Z
+2026-10-30T17:11:54.4556220Z     src/build/tool-identity.ts:61:48:
+2026-10-30T17:11:54.4556810Z       61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+2026-10-30T17:11:54.4557450Z          ╵                                            ~~~~~~~~~~~
+2026-10-30T17:11:54.4557680Z
+2026-10-30T17:11:54.4558040Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+2026-10-30T17:11:54.4560160Z
+2026-10-30T17:11:54.8919380Z
+2026-10-30T17:11:54.9021420Z > @app/default-setup@0.1.0 build
+2026-10-30T17:11:54.9121260Z > apack pack build
+2026-10-30T17:11:54.9221360Z
+2026-10-30T17:11:57.9621510Z
+2026-10-30T17:11:57.9630520Z > apack@0.3.14 packages:ensure
+2026-10-30T17:11:57.9647840Z > tsx scripts/ensure-packages-built.ts
+2026-10-30T17:11:57.9651180Z
+2026-10-30T17:12:53.7835890Z Generated:
+2026-10-30T17:12:53.7839160Z   src/__generated__/entity-destinations.json
+2026-10-30T17:12:53.7845910Z   src/__generated__/event-contracts.json
+2026-10-30T17:12:53.7881770Z   src/__generated__/pack-entry.ts
+2026-10-30T17:12:53.7899670Z   src/__generated__/pack-entry-fe.ts
+2026-10-30T17:12:53.7960070Z   src/__generated__/ears.ts
+2026-10-30T17:12:53.8012740Z   src/__generated__/ref.ts
+2026-10-30T17:12:53.8013820Z   src/__generated__/paths.ts
+2026-10-30T17:12:53.8014400Z   src/__generated__/settings.ts
+2026-10-30T17:12:53.8014910Z   src/__generated__/settings-fe.ts
+2026-10-30T17:12:53.8015470Z   src/__generated__/fe.ts
+2026-10-30T17:12:53.8016500Z   src/__generated__/system-specs.ts
+2026-10-30T17:12:53.8016960Z   src/__generated__/events.ts
+2026-10-30T17:12:53.8017530Z   src/__generated__/types.ts
+2026-10-30T17:12:53.8018140Z   src/__generated__/services.ts
+2026-10-30T17:12:53.8018740Z   src/__generated__/runtime-services.ts
+2026-10-30T17:12:53.8019290Z   src/__generated__/repository.ts
+2026-10-30T17:12:53.8019790Z   src/__generated__/repositories.ts
+2026-10-30T17:12:53.8020220Z   src/__generated__/pack-types.ts
+2026-10-30T17:12:53.8021380Z   src/__generated__/references.ts
+2026-10-30T17:12:53.8024460Z   src/__generated__/appliers.ts
+2026-10-30T17:12:53.8029630Z   src/__generated__/content-runtime.ts
+2026-10-30T17:12:53.8032710Z   src/__generated__/flow-helpers.ts
+2026-10-30T17:12:53.8034230Z   src/__generated__/step-types.ts
+2026-10-30T17:12:53.8035660Z   src/__generated__/steps-build.ts
+2026-10-30T17:12:55.2327830Z Building pack: Default Setup v0.1.0
+2026-10-30T17:13:16.6153920Z Compiling pack: default-setup
+2026-10-30T17:13:23.3267830Z   actions: 70
+2026-10-30T17:13:23.3269450Z   prompts: 6
+2026-10-30T17:13:23.3277730Z   flows: 5
+2026-10-30T17:13:23.3280590Z   notes: 1
+2026-10-30T17:13:23.3301090Z   commands: 4
+2026-10-30T17:13:34.4680750Z
+2026-10-30T17:13:34.4684850Z Build output:
+2026-10-30T17:13:34.4687100Z   actions: 70
+2026-10-30T17:13:34.4688750Z   prompts: 6
+2026-10-30T17:13:34.4690070Z   flows: 5
+2026-10-30T17:13:34.4691230Z   notes: 1
+2026-10-30T17:13:34.4693080Z   commands: 4
+2026-10-30T17:13:34.4693830Z
+2026-10-30T17:13:34.4695510Z Note: 2 entities have no shape declared, so their fields read as unknown values: SearchIndex, IndexedDoc
+2026-10-30T17:13:34.6882820Z   step build: dist/build/steps.build.mjs
+2026-10-30T17:13:36.0426900Z   content runtime: dist/build/content-runtime.mjs
+2026-10-30T17:13:45.1029690Z   dsl defs: dist/defs/monaco/action-defs.d.ts
+2026-10-30T17:13:45.1032140Z   dsl defs: dist/defs/monaco/prompt-defs.d.ts
+2026-10-30T17:13:45.1033650Z   dsl defs: dist/defs/monaco/database-defs.d.ts
+2026-10-30T17:13:46.7667440Z   runtime: dist/runtime/index.cjs
+2026-10-30T17:14:09.4424300Z [33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-30T17:14:11.3385340Z   fe: dist/runtime/fe.js
+2026-10-30T17:14:11.3399880Z   fe styles: dist/runtime/fe.css
+2026-10-30T17:14:31.0762920Z
+2026-10-30T17:14:31.0764640Z Output: dist/
+2026-10-30T17:14:34.0171130Z
+2026-10-30T17:14:34.0180270Z npm run build:runtime
+2026-10-30T17:14:34.4061830Z
+2026-10-30T17:14:34.4062880Z > apack@0.3.14 build:runtime
+2026-10-30T17:14:34.4063890Z > tsx scripts/build-runtime.ts
+2026-10-30T17:14:34.4064660Z
+2026-10-30T17:14:59.1483530Z   ok   @app/api         24.4s
+2026-10-30T17:15:03.4969750Z   ok   @app/main        4.4s
+2026-10-30T17:15:05.0012280Z   ok   @app/preload     1.5s
+2026-10-30T17:16:04.9034940Z   ok   @app/renderer    90.1s
+2026-10-30T17:16:05.0905280Z ✅ App built
+2026-10-30T17:16:05.1889590Z
+2026-10-30T17:16:05.1915450Z npm run build:speech-macos
+2026-10-30T17:16:05.7346560Z
+2026-10-30T17:16:05.7352110Z > apack@0.3.14 build:speech-macos
+2026-10-30T17:16:05.7354470Z > cd native/speech/macos && bash build.sh
+2026-10-30T17:16:05.7357130Z
+2026-10-30T17:16:25.1763370Z Built SpeechHelper successfully
+2026-10-30T17:16:25.1889100Z
+2026-10-30T17:16:25.1990730Z npx electron-rebuild --only node-pty
+2026-10-30T17:16:26.3153200Z Searching dependency tree
+2026-10-30T17:16:26.7161350Z Building modules: node-pty
+2026-10-30T17:16:35.3081240Z ✔ Rebuild Complete
+2026-10-30T17:16:35.3518770Z
+2026-10-30T17:16:35.3559310Z npx electron-builder build --config electron-builder.mjs --dir --publish never --mac --arm64
+2026-10-30T17:16:38.1394590Z   • electron-builder  version=26.15.3 os=25.6.0
+2026-10-30T17:16:38.5261590Z (node:17855) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+2026-10-30T17:16:38.5263430Z   • loaded configuration  file=/Users/runner/work/apack/apack/electron-builder.mjs
+2026-10-30T17:16:38.5370970Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-30T17:16:39.9069860Z   • detected workspace root for project using lock file  pm=npm config=undefined resolved=/Users/runner/work/apack/apack projectDir=/Users/runner/work/apack/apack
+2026-10-30T17:16:39.9174670Z   • skipped dependencies rebuild  reason=npmRebuild is set to false
+2026-10-30T17:16:39.9295160Z   • packaging       platform=darwin arch=arm64 electron=37.2.4 appOutDir=dist/preview/mac-arm64
+2026-10-30T17:16:40.2453200Z   • downloaded      label=electron progress=100%
+2026-10-30T17:16:43.3772430Z   • downloaded electron zip extracted successfully  output=/Users/runner/work/apack/apack/dist/preview/mac-arm64
+2026-10-30T17:16:43.3878540Z   • asar usage is disabled — this is strongly not recommended  solution=enable asar and use asarUnpack to unpack files that must be externally available
+2026-10-30T17:16:43.8547440Z   • searching for node modules  pm=npm searchDir=/Users/runner/work/apack/apack
+2026-10-30T17:16:46.0879020Z   • duplicate dependency references  dependencies=["@apackdev/host@0.1.0","@apackdev/sdk@0.1.0","@octokit/request@9.2.4","@octokit/types@14.1.0","@octokit/types@14.1.0","@octokit/types@14.1.0","@octokit/request-error@6.1.8","@octokit/types@14.1.0","@octokit/core@6.1.6","@octokit/core@6.1.6","@octokit/core@6.1.6","vite@7.3.7","vue@3.5.44","browserslist@4.29.4","is-glob@4.0.3","@jridgewell/trace-mapping@0.3.31","magic-string@0.30.21","rollup@4.65.1","chokidar@3.6.0","glob-parent@5.1.2","micromatch@4.0.8","is-glob@4.0.3","is-glob@4.0.3","braces@3.0.3","postcss@8.5.31","resolve@1.22.11","postcss@8.5.31","postcss@8.5.31","tsx@4.23.15","postcss-selector-parser@6.1.5","postcss@8.5.31","postcss@8.5.31","@jridgewell/gen-mapping@0.3.13","tinyglobby@0.2.17","postcss@8.5.31","rollup@4.65.1","is-glob@4.0.3","tsx@4.23.15","@babel/parser@7.29.11","@vue/compiler-core@3.5.44","@vue/compiler-dom@3.5.44","@vue/compiler-dom@3.5.44","magic-string@0.30.21","postcss@8.5.31","@vue/reactivity@3.5.44","@vue/compiler-ssr@3.5.44","@vue/runtime-dom@3.5.44","@ai-sdk/provider@4.0.14","@ai-sdk/provider-utils@5.0.40","@ai-sdk/provider@4.0.14","@ai-sdk/provider-utils@5.0.40","@ai-sdk/provider@4.0.14","@ai-sdk/provider-utils@5.0.40","@ai-sdk/provider@4.0.14","@ai-sdk/provider-utils@5.0.40","@ai-sdk/provider@4.0.14","@ai-sdk/provider-utils@5.0.40","@ai-sdk/provider@4.0.14","@apackdev/ears@0.1.0","@apackdev/sdk@0.1.0","@ai-sdk/provider-utils@5.0.40","@ai-sdk/provider@4.0.14","@ai-sdk/provider-utils@5.0.40","@ai-sdk/provider@4.0.14","@apackdev/ears@0.1.0","prosemirror-transform@1.12.4","prosemirror-model@1.25.12","prosemirror-state@1.4.4","prosemirror-transform@1.12.4","prosemirror-state@1.4.4","prosemirror-transform@1.12.4","prosemirror-view@1.42.8","prosemirror-keymap@1.2.3","prosemirror-model@1.25.12","prosemirror-state@1.4.4","prosemirror-view@1.42.8","prosemirror-state@1.4.4","prosemirror-transform@1.12.4","prosemirror-view@1.42.8","prosemirror-state@1.4.4","prosemirror-transform@1.12.4","prosemirror-state@1.4.4","prosemirror-model@1.25.12","prosemirror-state@1.4.4","prosemirror-transform@1.12.4","prosemirror-model@1.25.12","prosemirror-transform@1.12.4","prosemirror-view@1.42.8","prosemirror-keymap@1.2.3","prosemirror-model@1.25.12","prosemirror-state@1.4.4","prosemirror-transform@1.12.4","prosemirror-view@1.42.8","prosemirror-model@1.25.12","prosemirror-model@1.25.12","prosemirror-state@1.4.4","prosemirror-transform@1.12.4","@floating-ui/dom@1.7.6","@tiptap/pm@3.32.0","@floating-ui/dom@1.7.6","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","vue@3.5.44","js-yaml@4.3.2","is-glob@4.0.3","tinyglobby@0.2.17","@types/mdast@4.0.4","decode-named-character-reference@1.3.0","micromark-util-decode-numeric-character-reference@2.0.2","decode-named-character-reference@1.3.0","devlop@1.1.0","decode-named-character-reference@1.3.0","devlop@1.1.0","micromark-util-character@2.1.1","devlop@1.1.0","micromark-util-character@2.1.1","micromark-factory-space@2.1.0","micromark-factory-space@2.1.0","micromark-util-character@2.1.1","micromark-factory-space@2.1.0","micromark-util-character@2.1.1","micromark-util-character@2.1.1","micromark-util-chunked@2.0.1","micromark-util-classify-character@2.0.1","micromark-util-edit-map@1.0.0","micromark-util-normalize-identifier@2.0.1","micromark-util-resolve-all@2.0.1","micromark-util-subtokenize@2.1.0","micromark-util-character@2.1.1","micromark-util-character@2.1.1","micromark-util-chunked@2.0.1","micromark-util-decode-numeric-character-reference@2.0.2","micromark-util-normalize-identifier@2.0.1","micromark-util-character@2.1.1","devlop@1.1.0","micromark-util-chunked@2.0.1","@types/mdast@4.0.4","@types/mdast@4.0.4","mdast-util-to-string@4.0.0","micromark-util-character@2.1.1","micromark-util-decode-string@2.0.1","unist-util-is@6.0.1","unist-util-is@6.0.1","vue@3.5.44","@apackdev/ears@0.1.0","@apackdev/host@0.1.0","@apackdev/sdk@0.1.0","playwright@1.55.1","tsx@4.23.15","@apackdev/sdk@0.1.0","monaco-editor@0.55.1","vue@3.5.44","vue@3.5.44","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","lowlight@3.3.0","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","@tiptap/pm@3.32.0","@tiptap/extension-link@3.32.0","@tiptap/pm@3.32.0","@tiptap/vue-3@3.32.0","d3-drag@3.0.0","d3-interpolate@3.0.1","d3-interpolate@3.0.1","vue@3.5.44","vue@3.5.44","devlop@1.1.0","vue@3.5.44","prosemirror-model@1.25.12","@floating-ui/dom@1.7.6","@floating-ui/vue@1.1.11","@swc/helpers@0.5.21","vue@3.5.44","vue@3.5.44","vue@3.5.44","vue@3.5.44","markdown-it@14.3.3","@types/markdown-it@14.1.2","markdown-it@14.3.3","prosemirror-model@1.25.12","vue@3.5.44","@apackdev/ears@0.1.0","@napi-rs/keyring@1.3.0","debug@4.4.3","chokidar@3.6.0","fs-extra@11.4.0","@antv/g@6.3.1","@antv/util@3.3.11","@antv/util@3.3.11","@antv/g-math@3.1.0","@antv/util@3.3.11","d3-dsv@3.0.1","d3-force-3d@3.0.6","d3-force@3.0.0","d3-array@3.2.4","d3-geo@3.1.1","d3-array@3.2.4","d3-interpolate@3.0.1","d3-interpolate@3.0.1","d3-array@3.2.4","d3-interpolate@3.0.1","d3-time@3.1.0","d3-time@3.1.0","d3-array@3.2.4","@antv/util@3.3.11","@antv/util@3.3.11","@antv/g-lite@2.7.0","@antv/util@3.3.11","@antv/g-lite@2.7.0","@antv/util@3.3.11","utrie@1.0.2","@antv/graphlib@2.0.4","@antv/util@3.3.11","@apackdev/ears@0.1.0","@apackdev/sdk@0.1.0","@apackdev/ui@0.1.0","@floating-ui/dom@1.7.6","@vscode/ripgrep@1.17.1","@vue-flow/core@1.48.2","vue@3.5.44","@vue-flow/core@1.48.2","vue@3.5.44","@vue-flow/core@1.48.2","d3-zoom@3.0.0","vue@3.5.44","chokidar@3.6.0","node-pty@1.1.0","@vueuse/shared@11.3.0","vue@3.5.44","vue@3.5.44","@apackdev/cli@0.1.0","@apackdev/host@0.1.0","@apackdev/sdk@0.1.0","@app/api@0.0.0","@app/renderer@0.0.0","@apackdev/host@0.1.0","@apackdev/sdk@0.1.0","@apackdev/ui@0.1.0","@guolao/vue-monaco-editor@1.6.0","@tiptap/extension-link@3.32.0","@tiptap/starter-kit@3.32.0","@tiptap/vue-3@3.32.0","@vue-flow/core@1.48.2","lowlight@3.3.0","monaco-editor@0.55.1","reka-ui@2.9.5","tiptap-markdown@0.9.0","@floating-ui/dom@1.7.6","vue@3.5.44"]
+2026-10-30T17:16:58.2928730Z Packaged node_modules: every declared dependency is present
+2026-10-30T17:16:58.2990510Z   • asar usage is disabled — this is strongly not recommended  solution=enable asar and use asarUnpack to unpack files that must be externally available
+2026-10-30T17:16:58.2993000Z   • skipped macOS code signing  reason=identity explicitly is set to null
+2026-10-30T17:16:58.3345050Z
+2026-10-30T17:16:58.3459440Z Preview built in dist/preview. It keeps its own data in apack-preview.
+2026-10-30T17:16:58.4815350Z ##[group]Run node node_modules/typescript/bin/tsc -p tests --noEmit | tee .apack/installed-evidence/typecheck.log
+2026-10-30T17:16:58.4817330Z [36;1mnode node_modules/typescript/bin/tsc -p tests --noEmit | tee .apack/installed-evidence/typecheck.log[0m
+2026-10-30T17:16:58.8144080Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:16:58.8144680Z env:
+2026-10-30T17:16:58.8146440Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:16:58.8150990Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:16:58.8156240Z   CACHE_ON_FAILURE: false
+2026-10-30T17:16:58.8156800Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:16:58.8161270Z ##[endgroup]
+2026-10-30T17:17:07.7638800Z ##[group]Run apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
+2026-10-30T17:17:07.7639840Z [36;1mapps=(dist/preview/mac-*/*.app/Contents/Resources/app)[0m
+2026-10-30T17:17:07.7640330Z [36;1mif (( ${#apps[@]} != 1 )) || [[ ! -d "${apps[0]}" ]]; then[0m
+2026-10-30T17:17:07.7640800Z [36;1m  echo 'Expected one unpacked Preview app'; exit 1[0m
+2026-10-30T17:17:07.7641200Z [36;1mfi[0m
+2026-10-30T17:17:07.7641610Z [36;1mnode build/prod/smoke-native.mjs "${apps[0]}" | tee .apack/installed-evidence/installed-native.log[0m
+2026-10-30T17:17:07.7730970Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:17:07.7731900Z env:
+2026-10-30T17:17:07.7732620Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:17:07.7733210Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:17:07.7733900Z   CACHE_ON_FAILURE: false
+2026-10-30T17:17:07.7734670Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:17:07.7735810Z ##[endgroup]
+2026-10-30T17:17:11.2619280Z elmdb: wrote, closed, reopened and read back
+2026-10-30T17:17:11.2626150Z EARS SQLite provenance: {"entry":"node_modules/@apackdev/ears/dist/sqlite/index.js","driverVersion":"13.0.3","sqliteVersion":"3.53.4","nativeManifest":{"format":1,"platform":"darwin","arch":"arm64","upstream":"814fd8ef4d42d6567f1613a66f556c8194764d06","sourceSha256":"5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b","patchSha256":"33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923","headersPackage":"13.0.3","extensionSha256":"3bf657a9adea0584351a29232690f8b3a1e909a7439d0c6aaafdab7e594cc4ba"}}
+2026-10-30T17:17:11.2632120Z EARS SQLite: claimed ownership, trained a native model in a worker, queried and reopened read-only with FTS/regex
+2026-10-30T17:17:11.2635200Z node-pty: spawned a shell, which exited 0
+2026-10-30T17:17:11.2681500Z @napi-rs/keyring: binding loaded
+2026-10-30T17:17:11.2800650Z Packaged native provenance: {"versions":{"node":"22.17.1","acorn":"8.14.1","ada":"2.9.2","amaro":"0.4.1","ares":"1.34.5","brotli":"1.0.9","cjs_module_lexer":"2.1.0","cldr":"44.1","icu":"74.2","llhttp":"9.3.0","modules":"136","napi":"10","nbytes":"0.1.1","ncrypto":"0.0.1","nghttp2":"1.64.0","openssl":"0.0.0","simdjson":"3.12.3","simdutf":"7.0.0","sqlite":"3.50.0","tz":"2025b","undici":"6.21.2","unicode":"15.1","uv":"1.51.0","uvwasi":"0.0.21","v8":"13.8.258.26-electron.0","zlib":"1.3.1","zstd":"1.5.8","electron":"37.2.4","chrome":"138.0.7204.157"},"platform":"darwin","arch":"arm64","addons":[{"file":"node_modules/elmdb/elmdb.darwin-arm64.node","sha256":"c1cea5c2e1321088244cbc0e30497255710eaee4443869f7cf12cf593edaaae2"},{"file":"node_modules/@msgpackr-extract/msgpackr-extract-darwin-arm64/node.napi.glibc.node","sha256":"bfa99d95d3f342972b006a66328aff1a6935c0da460c5134dc92ed79fbbc5ab4"},{"file":"node_modules/better-sqlite3/prebuilds/darwin-arm64.node","sha256":"98e0e8acd01c632fe5615243e1296af0372826f8783b18fc31c506f73c47459c"},{"file":"node_modules/fs-native-extensions/prebuilds/darwin-arm64/fs-native-extensions.node","sha256":"f3f08575b0c2574426ab8536dcbfa7af5b8bbe7715cbf6076420f10f8bf6dd4d"},{"file":"node_modules/node-pty/build/Release/pty.node","sha256":"8fa69e5b7327f8a8c025161d277b460423eef6cf8abcc61889140c2c7a42f377"},{"file":"node_modules/@napi-rs/keyring-darwin-arm64/keyring.darwin-arm64.node","sha256":"9627560bd2490b8495504df6b48dafe0153883aab09fd8eee976f826c74a6fff"}]}
+2026-10-30T17:17:11.2941500Z Packaged native modules: each one loads in apack Preview
+2026-10-30T17:17:11.3032740Z ##[group]Run test -n "$APACK_TEST_CERTIFICATE"
+2026-10-30T17:17:11.3033340Z [36;1mtest -n "$APACK_TEST_CERTIFICATE"[0m
+2026-10-30T17:17:11.3033800Z [36;1mumask 077[0m
+2026-10-30T17:17:11.3034210Z [36;1mkeychain="$RUNNER_TEMP/apack-installed-signing.keychain-db"[0m
+2026-10-30T17:17:11.3034690Z [36;1mcertificate="$RUNNER_TEMP/apack-installed-signing.p12"[0m
+2026-10-30T17:17:11.3035670Z [36;1mpassword=$(openssl rand -hex 24)[0m
+2026-10-30T17:17:11.3036140Z [36;1mecho "::add-mask::$password"[0m
+2026-10-30T17:17:11.3036510Z [36;1mtrap 'rm -f "$certificate"' EXIT[0m
+2026-10-30T17:17:11.3036940Z [36;1mprintf '%s' "$APACK_TEST_CERTIFICATE" | base64 --decode > "$certificate"[0m
+2026-10-30T17:17:11.3037450Z [36;1msecurity create-keychain -p "$password" "$keychain"[0m
+2026-10-30T17:17:11.3037800Z [36;1msecurity set-keychain-settings -lut 1200 "$keychain"[0m
+2026-10-30T17:17:11.3038280Z [36;1msecurity unlock-keychain -p "$password" "$keychain"[0m
+2026-10-30T17:17:11.3039040Z [36;1msecurity import "$certificate" -P "$APACK_TEST_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -t cert -f pkcs12 -k "$keychain"[0m
+2026-10-30T17:17:11.3040370Z [36;1msecurity set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null[0m
+2026-10-30T17:17:11.3040980Z [36;1mexport APACK_TEST_SIGNING_KEYCHAIN="$keychain"[0m
+2026-10-30T17:17:11.3041570Z [36;1mnode --input-type=module <<'JS' | tee .apack/installed-evidence/installed-signing.log[0m
+2026-10-30T17:17:11.3042040Z [36;1mimport fs from 'node:fs';[0m
+2026-10-30T17:17:11.3043780Z [36;1mimport path from 'node:path';[0m
+2026-10-30T17:17:11.3044620Z [36;1mimport assert from 'node:assert/strict';[0m
+2026-10-30T17:17:11.3045780Z [36;1mimport { execFileSync, spawnSync } from 'node:child_process';[0m
+2026-10-30T17:17:11.3047260Z [36;1mimport { signMacApplication } from './scripts/lib/native-signing.mjs';[0m
+2026-10-30T17:17:11.3048960Z [36;1mconst apps=fs.readdirSync('dist/preview',{withFileTypes:true}).filter(d=>d.isDirectory()&&d.name.startsWith('mac-'))[0m
+2026-10-30T17:17:11.3050950Z [36;1m  .flatMap(d=>fs.readdirSync(path.join('dist/preview',d.name)).filter(n=>n.endsWith('.app')).map(n=>path.resolve('dist/preview',d.name,n)));[0m
+2026-10-30T17:17:11.3052330Z [36;1massert.equal(apps.length,1);[0m
+2026-10-30T17:17:11.3053310Z [36;1mconst app=apps[0],keychain=process.env.APACK_TEST_SIGNING_KEYCHAIN;[0m
+2026-10-30T17:17:11.3054540Z [36;1mconst search=execFileSync('security',['list-keychains','-d','user'],{encoding:'utf8'})[0m
+2026-10-30T17:17:11.3057570Z [36;1m  .trim().split('\n').map(n=>n.trim().replace(/^"|"$/g,'')).filter(Boolean);[0m
+2026-10-30T17:17:11.3058300Z [36;1mexecFileSync('security',['list-keychains','-d','user','-s',keychain,...search]);[0m
+2026-10-30T17:17:11.3058980Z [36;1mconst identities=execFileSync('security',['find-identity','-v','-p','codesigning',keychain],{encoding:'utf8'});[0m
+2026-10-30T17:17:11.3059780Z [36;1mconst matches=[...identities.matchAll(/\b([A-F0-9]{40}) "Developer ID Application:[^"\n]+"/g)];[0m
+2026-10-30T17:17:11.3060330Z [36;1massert.equal(matches.length,1,'Expected one Developer ID Application identity');[0m
+2026-10-30T17:17:11.3060900Z [36;1mconst entitlements=path.resolve('build/resources/entitlements.mac.plist');[0m
+2026-10-30T17:17:11.3062360Z [36;1mawait signMacApplication({app,identity:matches[0][1],identityValidation:false,keychain,platform:'darwin',[0m
+2026-10-30T17:17:11.3064010Z [36;1m  strictVerify:true,preAutoEntitlements:false,preEmbedProvisioningProfile:false,[0m
+2026-10-30T17:17:11.3064720Z [36;1m  optionsForFile:()=>({entitlements,hardenedRuntime:true,timestamp:'none'})});[0m
+2026-10-30T17:17:11.3065340Z [36;1mexecFileSync('codesign',['--verify','--deep','--strict',app],{stdio:'inherit'});[0m
+2026-10-30T17:17:11.3066790Z [36;1mconst executable=path.join(app,'Contents/MacOS',fs.readdirSync(path.join(app,'Contents/MacOS'))[0]);[0m
+2026-10-30T17:17:11.3068510Z [36;1mconst details=spawnSync('codesign',['--display','--verbose=4',executable],{encoding:'utf8'});[0m
+2026-10-30T17:17:11.3069070Z [36;1massert.equal(details.status,0);assert.match(details.stderr,/flags=.*\bruntime\b/);[0m
+2026-10-30T17:17:11.3069610Z [36;1massert.match(details.stderr,/TeamIdentifier=[A-Z0-9]{10}\b/);console.log(details.stderr);[0m
+2026-10-30T17:17:11.3070060Z [36;1mJS[0m
+2026-10-30T17:17:11.3070560Z [36;1mapps=(dist/preview/mac-*/*.app/Contents/Resources/app)[0m
+2026-10-30T17:17:11.3071060Z [36;1mnode build/prod/smoke-native.mjs "${apps[0]}" | tee .apack/installed-evidence/installed-signed-native.log[0m
+2026-10-30T17:17:11.3123930Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:17:11.3124380Z env:
+2026-10-30T17:17:11.3124660Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:17:11.3124860Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:17:11.3125030Z   CACHE_ON_FAILURE: false
+2026-10-30T17:17:11.3125240Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:17:11.3146150Z   APACK_TEST_CERTIFICATE: ***
+
+2026-10-30T17:17:11.3146750Z   APACK_TEST_CERTIFICATE_PASSWORD: ***
+2026-10-30T17:17:11.3147020Z ##[endgroup]
+2026-10-30T17:17:40.2186060Z Signed native vector provenance: {"file":"Contents/Resources/app/node_modules/@apackdev/ears/dist/sqlite/native/darwin-arm64/vec1.dylib","unsignedSha256":"3bf657a9adea0584351a29232690f8b3a1e909a7439d0c6aaafdab7e594cc4ba","signedSha256":"4487e0643bc872e4a582cb4f969209a7dd7203da17c5d2cfc2f9320efcc25e15"}
+2026-10-30T17:17:47.6644640Z Executable=/Users/runner/work/apack/apack/dist/preview/mac-arm64/apack Preview.app/Contents/MacOS/apack Preview
+2026-10-30T17:17:47.6748740Z Identifier=dev.apack.preview
+2026-10-30T17:17:47.6787610Z Format=app bundle with Mach-O thin (arm64)
+2026-10-30T17:17:47.6790270Z CodeDirectory v=20500 size=477 flags=0x10000(runtime) hashes=4+7 location=embedded
+2026-10-30T17:17:47.6792470Z VersionPlatform=1
+2026-10-30T17:17:47.6794110Z VersionMin=720896
+2026-10-30T17:17:47.6795190Z VersionSDK=984064
+2026-10-30T17:17:47.6799450Z Hash type=sha256 size=32
+2026-10-30T17:17:47.6801500Z CandidateCDHash sha256=51a43a286c19c7fd7a80cdda5e89ab06cab4a197
+2026-10-30T17:17:47.6804130Z CandidateCDHashFull sha256=51a43a286c19c7fd7a80cdda5e89ab06cab4a197c11be93ed4f6bd9aab2e20c1
+2026-10-30T17:17:47.6805900Z Hash choices=sha256
+2026-10-30T17:17:47.6808700Z CMSDigest=51a43a286c19c7fd7a80cdda5e89ab06cab4a197c11be93ed4f6bd9aab2e20c1
+2026-10-30T17:17:47.6810550Z CMSDigestType=2
+2026-10-30T17:17:47.6811340Z Executable Segment base=0
+2026-10-30T17:17:47.6812280Z Executable Segment limit=16384
+2026-10-30T17:17:47.6957880Z Executable Segment flags=0x1
+2026-10-30T17:17:47.6958290Z Page size=16384
+2026-10-30T17:17:47.6958680Z CDHash=51a43a286c19c7fd7a80cdda5e89ab06cab4a197
+2026-10-30T17:17:47.6959110Z Signature size=4762
+2026-10-30T17:17:47.6959690Z Authority=Developer ID Application: ANGEL JUSTINIANO SANTIAGO (GQHD6J4H7G)
+2026-10-30T17:17:47.6960290Z Authority=Developer ID Certification Authority
+2026-10-30T17:17:47.6960900Z Authority=Apple Root CA
+2026-10-30T17:17:47.6965180Z Signed Time=Oct 30, 2026 at 5:17:43 PM
+2026-10-30T17:17:47.6965560Z Info.plist entries=35
+2026-10-30T17:17:47.6965970Z TeamIdentifier=GQHD6J4H7G
+2026-10-30T17:17:47.6968350Z Runtime Version=15.4.0
+2026-10-30T17:17:47.6969460Z Sealed Resources version=2 rules=13 files=15591
+2026-10-30T17:17:47.6970690Z Internal requirements count=1 size=180
+2026-10-30T17:17:47.6971250Z
+2026-10-30T17:17:51.0449180Z elmdb: wrote, closed, reopened and read back
+2026-10-30T17:17:51.0462180Z EARS SQLite provenance: {"entry":"node_modules/@apackdev/ears/dist/sqlite/index.js","driverVersion":"13.0.3","sqliteVersion":"3.53.4","nativeManifest":{"format":1,"platform":"darwin","arch":"arm64","upstream":"814fd8ef4d42d6567f1613a66f556c8194764d06","sourceSha256":"5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b","patchSha256":"33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923","headersPackage":"13.0.3","extensionSha256":"4487e0643bc872e4a582cb4f969209a7dd7203da17c5d2cfc2f9320efcc25e15"}}
+2026-10-30T17:17:51.0466770Z EARS SQLite: claimed ownership, trained a native model in a worker, queried and reopened read-only with FTS/regex
+2026-10-30T17:17:51.0467550Z node-pty: spawned a shell, which exited 0
+2026-10-30T17:17:51.0468080Z @napi-rs/keyring: binding loaded
+2026-10-30T17:17:51.0483530Z Packaged native provenance: {"versions":{"node":"22.17.1","acorn":"8.14.1","ada":"2.9.2","amaro":"0.4.1","ares":"1.34.5","brotli":"1.0.9","cjs_module_lexer":"2.1.0","cldr":"44.1","icu":"74.2","llhttp":"9.3.0","modules":"136","napi":"10","nbytes":"0.1.1","ncrypto":"0.0.1","nghttp2":"1.64.0","openssl":"0.0.0","simdjson":"3.12.3","simdutf":"7.0.0","sqlite":"3.50.0","tz":"2025b","undici":"6.21.2","unicode":"15.1","uv":"1.51.0","uvwasi":"0.0.21","v8":"13.8.258.26-electron.0","zlib":"1.3.1","zstd":"1.5.8","electron":"37.2.4","chrome":"138.0.7204.157"},"platform":"darwin","arch":"arm64","addons":[{"file":"node_modules/elmdb/elmdb.darwin-arm64.node","sha256":"262e767276c5df3939628648c73a68a2a63b9b5143208f5bfcbc6b0410c982b7"},{"file":"node_modules/@msgpackr-extract/msgpackr-extract-darwin-arm64/node.napi.glibc.node","sha256":"c0dc6483c907307659cc91a0a69389763e64697599c89647c7d06468c0844021"},{"file":"node_modules/better-sqlite3/prebuilds/darwin-arm64.node","sha256":"48d98404e34fdbd66cdb188dabd29ebd58a5c211efd70b9f4e8a0870bb8f06e1"},{"file":"node_modules/fs-native-extensions/prebuilds/darwin-arm64/fs-native-extensions.node","sha256":"5f76b3411e275e93cc66d5e7f588ef61202c33819fe37d51d9fac32934eb6935"},{"file":"node_modules/node-pty/build/Release/pty.node","sha256":"a21fd6f1c1436772e2cb5353a1d9a89f984d908405bcf21a9641924deb0bdb33"},{"file":"node_modules/@napi-rs/keyring-darwin-arm64/keyring.darwin-arm64.node","sha256":"f0f9c9c73c9ca195b0c2e94eed6624bcb66bf8e39af885afe4b7d127998e0229"}]}
+2026-10-30T17:17:51.0492930Z Packaged native modules: each one loads in apack Preview
+2026-10-30T17:17:51.1015010Z ##[group]Run apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
+2026-10-30T17:17:51.1016040Z [36;1mapps=(dist/preview/mac-*/*.app/Contents/Resources/app)[0m
+2026-10-30T17:17:51.1016620Z [36;1mexecutables=("${apps[0]}"/../../MacOS/*)[0m
+2026-10-30T17:17:51.1017040Z [36;1mif (( ${#executables[@]} != 1 )) || [[ ! -x "${executables[0]}" ]]; then[0m
+2026-10-30T17:17:51.1017840Z [36;1m  echo 'Expected one packaged Preview executable'; exit 1[0m
+2026-10-30T17:17:51.1018270Z [36;1mfi[0m
+2026-10-30T17:17:51.1018440Z [36;1munset APACK_HOST_ROOT[0m
+2026-10-30T17:17:51.1018710Z [36;1mexport APACK_HOST_EXECUTABLE="${executables[0]}"[0m
+2026-10-30T17:17:51.1019450Z [36;1mnode scripts/with-source.mjs node_modules/.bin/playwright test tests/e2e/smoke tests/e2e/app-integration/sqlite-storage.spec.ts --workers 1 --reporter=line,json[0m
+2026-10-30T17:17:51.1020670Z [36;1mnode - <<'NODE'[0m
+2026-10-30T17:17:51.1021180Z [36;1mconst fs=require('node:fs'),assert=require('node:assert/strict');[0m
+2026-10-30T17:17:51.1022090Z [36;1mconst report=JSON.parse(fs.readFileSync(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME,'utf8'));[0m
+2026-10-30T17:17:51.1024290Z [36;1mconst specs=suites=>suites.flatMap(s=>[...(s.specs??[]),...specs(s.suites??[])]);[0m
+2026-10-30T17:17:51.1025440Z [36;1mconst witness=specs(report.suites).find(s=>s.title==='packaged SQLite stores hold their model claims across the real API process');[0m
+2026-10-30T17:17:51.1026770Z [36;1massert(witness?.ok&&witness.tests.every(t=>t.results.some(r=>r.status==='passed')),'Actual packaged SQLite witness must execute');[0m
+2026-10-30T17:17:51.1028770Z [36;1massert(report.stats.expected>=6&&report.stats.unexpected===0&&report.stats.skipped===0&&report.stats.flaky===0,'Installed app checks must pass without skips or retries');[0m
+2026-10-30T17:17:51.1030400Z [36;1mfs.writeFileSync('.apack/installed-evidence/verification.json',JSON.stringify({stats:report.stats,sqliteWitness:witness.title},null,2)+'\n');[0m
+2026-10-30T17:17:51.1031300Z [36;1mNODE[0m
+2026-10-30T17:17:51.1394070Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:17:51.1394570Z env:
+2026-10-30T17:17:51.1394900Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:17:51.1395190Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:17:51.1395600Z   CACHE_ON_FAILURE: false
+2026-10-30T17:17:51.1395950Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:17:51.1396330Z   APACK_STORAGE_FORMAT: sqlite/1
+2026-10-30T17:17:51.1396880Z   PLAYWRIGHT_JSON_OUTPUT_NAME: /Users/runner/work/apack/apack/.apack/installed-evidence/installed-app.json
+2026-10-30T17:17:51.1397340Z ##[endgroup]
+2026-10-30T17:17:54.3673270Z
+2026-10-30T17:17:54.3675230Z Running 6 tests using 1 worker
+2026-10-30T17:17:54.3676150Z
+2026-10-30T17:17:55.9830710Z [1A[2K[1/6] tests/e2e/app-integration/sqlite-storage.spec.ts:10:1 › packaged SQLite stores hold their model claims across the real API process
+2026-10-30T17:18:04.7752990Z [1A[2Ktests/e2e/app-integration/sqlite-storage.spec.ts:10:1 › packaged SQLite stores hold their model claims across the real API process
+2026-10-30T17:18:04.7863490Z [e2e] app connected 7767ms after launch
+2026-10-30T17:18:04.7964690Z
+2026-10-30T17:18:04.9216250Z [1A[2K[2/6] tests/e2e/smoke/smoke.spec.ts:5:1 › app launches without crashing
+2026-10-30T17:18:04.9898130Z [1A[2K[3/6] tests/e2e/smoke/smoke.spec.ts:19:1 › app reaches connected state
+2026-10-30T17:18:05.0098850Z [1A[2K[4/6] tests/e2e/smoke/smoke.spec.ts:24:1 › applicationState is accessible with surfaces loaded
+2026-10-30T17:18:05.0351970Z [1A[2K[5/6] tests/e2e/smoke/smoke.spec.ts:30:1 › runs in an isolated per-worker test data dir
+2026-10-30T17:18:05.1451580Z [1A[2K[6/6] tests/e2e/smoke/smoke.spec.ts:55:1 › publishes no session, though a test app has a debug port open
+2026-10-30T17:18:06.0963380Z [1A[2K  6 passed (13.6s)
+2026-10-30T17:18:06.1913030Z ##[group]Run actions/upload-artifact@v4
+2026-10-30T17:18:06.1913310Z with:
+2026-10-30T17:18:06.1913590Z   name: app-acceptance-836d3d1d1ffedf85f1ae2dd8baa40be4e488276b-suites
+2026-10-30T17:18:06.1913930Z   include-hidden-files: true
+2026-10-30T17:18:06.1914400Z   path: .apack/tests/results/
+.apack/installed-evidence/
+tests/packs/*/.apack/tests/results/
+tests/packs/*/dist/build-inputs.json
+
+2026-10-30T17:18:06.1914880Z   if-no-files-found: warn
+2026-10-30T17:18:06.1915070Z   compression-level: 6
+2026-10-30T17:18:06.1915250Z   overwrite: false
+2026-10-30T17:18:06.1915400Z env:
+2026-10-30T17:18:06.1915540Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:18:06.1915710Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:18:06.1915890Z   CACHE_ON_FAILURE: false
+2026-10-30T17:18:06.1916070Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:18:06.1916240Z ##[endgroup]
+2026-10-30T17:18:06.7383710Z (node:26097) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-30T17:18:06.7401310Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-30T17:18:06.7803570Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-30T17:18:06.7833700Z The least common ancestor is /Users/runner/work/apack/apack. This will be the root directory of the artifact
+2026-10-30T17:18:06.7844070Z With the provided path, there will be 9 files uploaded
+2026-10-30T17:18:06.7844970Z Artifact name is valid!
+2026-10-30T17:18:06.7845880Z Root directory input is valid!
+2026-10-30T17:18:07.2039000Z Beginning upload of artifact content to blob storage
+2026-10-30T17:18:07.2132520Z (node:26097) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-30T17:18:07.5049280Z Uploaded bytes 10013
+2026-10-30T17:18:07.5765190Z Finished uploading artifact content to blob storage!
+2026-10-30T17:18:07.5767040Z SHA256 digest of uploaded artifact zip is bc37496bbd1bbfc45b5bfedcf462d6ad06b0775562e9c02289da09d4d633339c
+2026-10-30T17:18:07.5767760Z Finalizing artifact upload
+2026-10-30T17:18:08.1643220Z Artifact app-acceptance-836d3d1d1ffedf85f1ae2dd8baa40be4e488276b-suites.zip successfully finalized. Artifact ID 12996952407
+2026-10-30T17:18:08.1666640Z Artifact app-acceptance-836d3d1d1ffedf85f1ae2dd8baa40be4e488276b-suites has been successfully uploaded! Final size is 10013 bytes. Artifact ID is 12996952407
+2026-10-30T17:18:08.1670410Z Artifact download URL: https://github.com/spankyed/apack/actions/runs/41095894244/artifacts/12996952407
+2026-10-30T17:18:08.1979750Z ##[group]Run actions/upload-artifact@v4
+2026-10-30T17:18:08.1980050Z with:
+2026-10-30T17:18:08.1980330Z   name: app-acceptance-836d3d1d1ffedf85f1ae2dd8baa40be4e488276b
+2026-10-30T17:18:08.1980710Z   include-hidden-files: true
+2026-10-30T17:18:08.1981630Z   path: .apack/tests/results/
+.apack/installed-evidence/
+tests/packs/*/.apack/tests/results/
+tests/packs/*/dist/build-inputs.json
+
+2026-10-30T17:18:08.1982200Z   if-no-files-found: warn
+2026-10-30T17:18:08.1982400Z   compression-level: 6
+2026-10-30T17:18:08.1982610Z   overwrite: false
+2026-10-30T17:18:08.1982790Z env:
+2026-10-30T17:18:08.1982950Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:18:08.1983130Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:18:08.1983450Z   CACHE_ON_FAILURE: false
+2026-10-30T17:18:08.1983680Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:18:08.1983860Z ##[endgroup]
+2026-10-30T17:18:08.3741430Z (node:26110) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-30T17:18:08.3842120Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-30T17:18:08.4022550Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-30T17:18:08.4025580Z The least common ancestor is /Users/runner/work/apack/apack. This will be the root directory of the artifact
+2026-10-30T17:18:08.4027810Z With the provided path, there will be 9 files uploaded
+2026-10-30T17:18:08.4029240Z Artifact name is valid!
+2026-10-30T17:18:08.4029580Z Root directory input is valid!
+2026-10-30T17:18:08.7776770Z (node:26110) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-30T17:18:08.8398430Z Beginning upload of artifact content to blob storage
+2026-10-30T17:18:09.0505060Z Uploaded bytes 10013
+2026-10-30T17:18:09.1260850Z Finished uploading artifact content to blob storage!
+2026-10-30T17:18:09.1363710Z SHA256 digest of uploaded artifact zip is 3f4b307b02ad7f8f0a229cb4ef9e011abab602c27d2e1512e1745a40f73f5438
+2026-10-30T17:18:09.1468720Z Finalizing artifact upload
+2026-10-30T17:18:09.6287700Z Artifact app-acceptance-836d3d1d1ffedf85f1ae2dd8baa40be4e488276b.zip successfully finalized. Artifact ID 12996762932
+2026-10-30T17:18:09.6291550Z Artifact app-acceptance-836d3d1d1ffedf85f1ae2dd8baa40be4e488276b has been successfully uploaded! Final size is 10013 bytes. Artifact ID is 12996762932
+2026-10-30T17:18:09.6292770Z Artifact download URL: https://github.com/spankyed/apack/actions/runs/41095894244/artifacts/12996762932
+2026-10-30T17:18:09.6352020Z ##[group]Run security delete-keychain "$RUNNER_TEMP/apack-installed-signing.keychain-db" || true
+2026-10-30T17:18:09.6352860Z [36;1msecurity delete-keychain "$RUNNER_TEMP/apack-installed-signing.keychain-db" || true[0m
+2026-10-30T17:18:09.6353350Z [36;1mrm -f "$RUNNER_TEMP/apack-installed-signing.p12"[0m
+2026-10-30T17:18:09.6651940Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-30T17:18:09.6652260Z env:
+2026-10-30T17:18:09.6652450Z   APACK_CHAIN_CORES: 2
+2026-10-30T17:18:09.6652670Z   APACK_E2E_REPEAT: 1
+2026-10-30T17:18:09.6652870Z   CACHE_ON_FAILURE: false
+2026-10-30T17:18:09.6653090Z   CARGO_INCREMENTAL: 0
+2026-10-30T17:18:09.6653300Z ##[endgroup]
+2026-10-30T17:18:09.7218600Z Post job cleanup.
+2026-10-30T17:18:09.7234870Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__cafdf9db-a858-4919-b8b3-0147ba0eef69.__Swatinem_rust-cache]
+2026-10-30T17:18:09.7291180Z Post job cleanup.
+2026-10-30T17:18:09.8482960Z Cache up-to-date.
+2026-10-30T17:18:09.8516980Z ##[end-action id=__cafdf9db-a858-4919-b8b3-0147ba0eef69.__Swatinem_rust-cache;outcome=success;conclusion=success;duration_ms=128]
+2026-10-30T17:18:09.8575330Z Post job cleanup.
+2026-10-30T17:18:09.9649430Z (node:26384) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-30T17:18:09.9650380Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-30T17:18:09.9651750Z Cache hit occurred on the primary key node-cache-macOS-arm64-npm-5fcebe10fe6d10fbc1d7054843871dbb4c0f9fb98a0e44e092b7e4f303100d2a, not saving cache.
+2026-10-30T17:18:09.9743560Z Post job cleanup.
+2026-10-30T17:18:10.0635470Z [command]/opt/homebrew/bin/git version
+2026-10-30T17:18:10.0854360Z git version 2.56.0
+2026-10-30T17:18:10.0875400Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/fea986c8-42e8-447f-aeb9-ef03e86c013b/.gitconfig'
+2026-10-30T17:18:10.0882600Z Temporarily overriding HOME='/Users/runner/work/_temp/fea986c8-42e8-447f-aeb9-ef03e86c013b' before making global git config changes
+2026-10-30T17:18:10.0883510Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-30T17:18:10.0886300Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/apack/apack
+2026-10-30T17:18:10.1295600Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-30T17:18:10.1361250Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-30T17:18:10.2652280Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-30T17:18:10.2736760Z http.https://github.com/.extraheader
+2026-10-30T17:18:10.2743860Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-30T17:18:10.2823350Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-30T17:18:10.3622290Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-30T17:18:10.3689820Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-30T17:18:10.4771760Z Cleaning up orphan processes
+2026-10-30T17:18:12.8573090Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

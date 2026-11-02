@@ -1,0 +1,29 @@
+{
+  "baseline": "32d88574daf67267ae11b165c8563ac7c7a3d1f0",
+  "fixedMethodSha256": "91754425148866b18412333929151414a7dd16d0b6e0269a7009920f7ed4d7ae",
+  "scope": "Actual method extracted into a Node VM with controlled source/transaction adapters; not native SQLite qualification",
+  "controls": [
+    {
+      "name": "source close refusal precedes destination commit",
+      "fixed": "passes",
+      "baseline": "exposes defect"
+    },
+    {
+      "name": "primary refusal survives source cleanup failure",
+      "fixed": "passes",
+      "baseline": "exposes defect"
+    },
+    {
+      "name": "thrown undefined survives source cleanup failure",
+      "fixed": "passes",
+      "baseline": "exposes defect"
+    },
+    {
+      "name": "COMMIT_UNKNOWN survives source cleanup ordering",
+      "fixed": "passes",
+      "baseline": "exposes defect"
+    }
+  ],
+  "typescript": "Both changed TS files parse through Node stripTypeScriptTypes; not a typecheck",
+  "actualDriverRegressions": "All 13 commit-outcome cases pass at 77cbd28f38 in run 41255361459; see ../replacement-focused-77c/README.md"
+}

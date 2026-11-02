@@ -1,0 +1,5 @@
+# Native-worker read probe: compiler preparation refusal
+
+[Run 41352778422](https://github.com/spankyed/apack/actions/runs/41352778422), source `e1652e2fb4`, is terminal failure. Matching package/API generation and EARS source/test types pass. The test preload fails compilation: Ubuntu/glibc's fortified inline `pread`/`pread64` wrappers conflict with definitions intended to interpose the exported libc ABI. No shared library, runtime report, syscall fault or retry witness is produced. Dependent controls/host/shared steps are skipped; their absent reports do not count as passes.
+
+The inspected compiler diagnostic is preserved as a minimal excerpt with original completed-job-log hash in the derived receipt. Logs/environment/profile/build payloads are omitted. The correction undefines fortify before libc headers only in this test translation unit; production native builds retain their own settings. Actual compile and runtime error/retry qualification remains required. Earlier full current-runtime app/platform/packaged results are independent evidence.

@@ -1,0 +1,109 @@
+{
+  "sourceParent": "dcd374c47768ed5c1aa946c91dafa5d37563494a",
+  "native": "2441af4658d961f547c7094cd041c2ac246668c5",
+  "inputs": {
+    "packages/apack-ears/src/sqlite/database.ts": "c4cdf66bdfa5189bc4be55ea7f2b2a02cb07d81215b42b766728028ca1fbdb36",
+    "packages/apack-ears/src/sqlite/file-ownership.ts": "d855fd76e422b3f5096bda1dc390d071e3c31edf712fd3cedeebb23182807f90",
+    "packages/apack-ears/tests/sqlite/file-ownership.spec.ts": "ecdcbabfc2c2ae1f2b56c1533624cc009463a04be996c734656b1b158d921e6a"
+  },
+  "commands": [
+    {
+      "label": "ears-types",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/apack-ears",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 3.331202507019043
+    },
+    {
+      "label": "ownership-lint",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/oxlint/bin/oxlint",
+        "packages/apack-ears/src/sqlite/file-ownership.ts",
+        "packages/apack-ears/tests/sqlite/file-ownership.spec.ts",
+        "-D",
+        "correctness"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.07282614707946777
+    },
+    {
+      "label": "packages-build",
+      "backend": null,
+      "args": [
+        "npm",
+        "run",
+        "packages:build"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 30.648609399795532
+    },
+    {
+      "label": "cli-timeout-reproduction",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "vitest.integration.config.ts",
+        "--maxWorkers=1",
+        "packages/apack-cli/tests/build/build-output-swap.integration.spec.ts",
+        "-t",
+        "stamps from a refused replacement",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/cli-timeout-reproduction.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 31.24154567718506
+    },
+    {
+      "label": "ears-full",
+      "backend": "sqlite",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-ears",
+        "--maxWorkers",
+        "2",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/ears-full.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 56.51296401023865
+    },
+    {
+      "label": "host-full",
+      "backend": "sqlite",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-host",
+        "--maxWorkers",
+        "2",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/host-full.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 112.82114005088806
+    }
+  ]
+}

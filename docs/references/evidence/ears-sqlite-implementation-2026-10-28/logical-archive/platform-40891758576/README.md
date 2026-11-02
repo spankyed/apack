@@ -1,0 +1,5 @@
+# Logical archive platform checkpoint
+
+Focused App acceptance 40891758576 completed successfully on exact source 31c6c751b5ae7f3206a6a2948bf4c44d36a24e0e. Linux x64 and macOS arm64 pass 596 EARS / 131 host cases; Windows x64 passes 595 / 118, with every skipped case named in summary.json. Each platform executes all five public snapshot cases and nine maintenance command cases. Host logical archive cases pass 10/10 on Linux/macOS and 9/10 on Windows, whose directory-sync case is explicitly skipped. The ordinary app job is intentionally skipped for the focused dispatch.
+
+Runtime/native receipts and nonvacuous verification are retained per platform. Full raw JSON reports are losslessly gzip-compressed; their uncompressed SHA-256 hashes and skipped names are in summary.json. These checks cover built Node packages and ordinary CI-host filesystems, not new CLI dump/load, installed/signed distributions, arbitrary filesystem support, Windows directory durability/ACLs, real corpus budgets, physical power loss or complete app acceptance. Canonical stays at the earlier exact full-Strict green; the native own-unit vector discrepancy remains unresolved.

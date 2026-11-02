@@ -1,0 +1,14 @@
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/database/storage.spec.ts -t refuses unreadable run history
+
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/database/storage.spec.ts (16 tests | 15 skipped) 4ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 15 skipped (16)
+   Start at  12:08:40
+   Duration  1.66s (transform 744ms, setup 12ms, collect 1.49s, tests 4ms, environment 0ms, prepare 61ms)
+

@@ -1,0 +1,17 @@
+[
+  {
+    "control": "ignore-native-owner",
+    "exitCode": 1,
+    "failedTests": 1
+  },
+  {
+    "control": "unclaimed-rebuild",
+    "exitCode": 1,
+    "failedTests": 1
+  },
+  {
+    "control": "keep-native-epoch",
+    "exitCode": 1,
+    "failedTests": 1
+  }
+]

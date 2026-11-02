@@ -1,0 +1,20 @@
+{
+  "base": "1efad34246795ee6286d915e47637fe9c55807ef",
+  "inputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "571d3a22d5359e65d45e989281de014325cf4d0486a97c0812d9c287451d835a",
+    "package-lock.json": "5ebf73c66622130c9c51ad1c5f4bb1282de13821d81721981548fc4bb5fbcb66",
+    "packages/apack-ears/package.json": "cf57561185cba71e31d20bff83a877b4113b1de85c3e5741eabbf64a92c29935",
+    "packages/apack-ears/src/sqlite/vector-models.ts": "e3409c95a691b4d5c0bd5091efa6dcdccd39050218ff09193bfca7199421e4f8",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "a2354825505fc076f2978bc333696f7ab8fcb5d9fec47053d2d00ba348196dfe",
+    "packages/apack-ears/src/sqlite/vector-owner.ts": "d18558d19e29a8da7bdb538f3156da40c4806078488896ebb7a1f8725c1af1ed",
+    "packages/apack-ears/tests/sqlite/vector-owner.spec.ts": "d731c7d644cc67a0f0af64f3711b056b849f07650cf3350194bb94f7f1df4cd9"
+  },
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "nativeBinding": "recorded older base-plus-own-unit-patch binding; not exact native 006d6ce qualification",
+  "network": "none",
+  "scope": "SQLite source and native model ownership; app activation remains separate"
+}

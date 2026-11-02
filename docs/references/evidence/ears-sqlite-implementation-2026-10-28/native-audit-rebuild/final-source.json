@@ -1,0 +1,38 @@
+{
+  "base": "4903c50a4a39bba91c8dff495d54764e1472ff18",
+  "nativePin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+  "validatedRuntimeInputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "614078087525c6c41d9c4764955b0617ce2a765195bdc8e89c3021c5f2fd3d03",
+    "packages/apack-ears/src/sqlite/audit.ts": "b6dfd24818152ff489c31ed934730d2b3afe0ff27cbc39bdf7412933f6b95e78",
+    "packages/apack-ears/src/sqlite/database.ts": "afd205ab71a616c066f795c39539782f7b450dd4f6daa1b634fa73e93d612229",
+    "packages/apack-ears/src/sqlite/index.ts": "4d6bbe46448ecfef6caebc02cd7a3429c869abed1328a80552eb526d8184f339",
+    "packages/apack-ears/src/sqlite/vector-index.ts": "344d2adec302c52c498dfc07896ffe3b7e9587d98b1b92fa5f1131e65b297906",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "2fc8ab55ed07c75bccefbd8c801e15aa7f02c37a043a8697a36ce2b9ddc0e08c",
+    "packages/apack-ears/src/sqlite/vector-audit.ts": "10ffc9110a670af5c9e5998751ed06e846d75c3e45c84a2e9df6ccadc47c5f0b",
+    "packages/apack-ears/tests/sqlite/vector-audit.spec.ts": "68d60106dccc9760a0a25788f9feda2b0ba28c80dc3553e5fe7721f5afbcdcae"
+  },
+  "finalInputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "614078087525c6c41d9c4764955b0617ce2a765195bdc8e89c3021c5f2fd3d03",
+    "docs/goals/goal-ears-sqlite.md": "a3a8e67b3b96c393b4c05254fbeaadb907a3692dd06755b30a49de32976bb034",
+    "docs/plans/ears-sqlite-storage.md": "c8c6b360abbd89ce5acb3d3405b9d1a3203e7fe69281a2cf7c60d1cfd48a8539",
+    "packages/apack-ears/CLAUDE.md": "739a8a10ddef9ba001e621ef1082363221dd7539d0650cdc9a1934e3f987ef4f",
+    "packages/apack-ears/etc/sqlite.api.md": "c011286ca87cee4b818e9f84b835f85a709cd47b0e7b59916935c9aab1709cab",
+    "packages/apack-ears/src/sqlite/audit.ts": "b6dfd24818152ff489c31ed934730d2b3afe0ff27cbc39bdf7412933f6b95e78",
+    "packages/apack-ears/src/sqlite/database.ts": "afd205ab71a616c066f795c39539782f7b450dd4f6daa1b634fa73e93d612229",
+    "packages/apack-ears/src/sqlite/index.ts": "4d6bbe46448ecfef6caebc02cd7a3429c869abed1328a80552eb526d8184f339",
+    "packages/apack-ears/src/sqlite/vector-index.ts": "344d2adec302c52c498dfc07896ffe3b7e9587d98b1b92fa5f1131e65b297906",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "2fc8ab55ed07c75bccefbd8c801e15aa7f02c37a043a8697a36ce2b9ddc0e08c",
+    "docs/references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-native-audit.md": "1caed2a29b8d6ecec208d4ea0c767377620c152a69aaad6300cdd36d005a7436",
+    "packages/apack-ears/src/sqlite/vector-audit.ts": "10ffc9110a670af5c9e5998751ed06e846d75c3e45c84a2e9df6ccadc47c5f0b",
+    "packages/apack-ears/tests/sqlite/vector-audit.spec.ts": "68d60106dccc9760a0a25788f9feda2b0ba28c80dc3553e5fe7721f5afbcdcae"
+  },
+  "normalizedReportCheckExitCode": 0,
+  "postValidationDocumentationChanges": [
+    {
+      "file": "docs/references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-native-audit.md",
+      "validatedSha256": "1caed2a29b8d6ecec208d4ea0c767377620c152a69aaad6300cdd36d005a7436",
+      "finalSha256": "571468cba855dbf9d57323866bc5aff75a0f9248644ae0f3463811bada9d0f52",
+      "reason": "Repair relative links after moving the historical handoff; no runtime/test input changed"
+    }
+  ]
+}

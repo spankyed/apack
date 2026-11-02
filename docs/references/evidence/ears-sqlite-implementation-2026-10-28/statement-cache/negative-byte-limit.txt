@@ -1,0 +1,43 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/statement-cache.spec.ts -t limits retained SQL text
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/statement-cache.spec.ts (6 tests | 1 failed | 5 skipped) 79ms
+   ↓ SQLite statement cache resource policy > evicts old query shapes while retaining frequently reused statements
+   × SQLite statement cache resource policy > also limits retained SQL text by UTF-8 bytes, independently of entry count 78ms
+     → expected 1281824 to be less than or equal to 1048576
+   ↓ SQLite statement cache resource policy > executes oversized SQL without retaining it or flushing an existing hot statement
+   ↓ SQLite statement cache resource policy > keeps real EARS answers correct while dynamic field predicates churn the cache
+   ↓ SQLite statement cache resource policy > owns caches per connection, including when another connection closes
+   ↓ SQLite statement cache resource policy > releases all owned cache references on close and refuses even cached SQL afterwards
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/statement-cache.spec.ts > SQLite statement cache resource policy > also limits retained SQL text by UTF-8 bytes, independently of entry count
+AssertionError: expected 1281824 to be less than or equal to 1048576
+ ❯ tests/sqlite/statement-cache.spec.ts:39:38
+     37|     for (let i = 1; i < 4; i++) expect(db.statement(query(i)).get(i)).…
+     38|     expect(owned(db).size).toBeLessThan(256);
+     39|     expect(owned(db).calculatedSize).toBeLessThanOrEqual(1024 * 1024);
+       |                                      ^
+     40|     expect(db.statement(query(0))).not.toBe(first);
+     41|     expect(first.get(42)).toEqual({ answer: 42 });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 skipped (6)
+   Start at  14:34:55
+   Duration  425ms (transform 169ms, setup 12ms, collect 224ms, tests 79ms, environment 0ms, prepare 39ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/statement-cache.spec.ts -t 'limits retained SQL text'

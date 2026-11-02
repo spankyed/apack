@@ -1,0 +1,22 @@
+[
+  {
+    "file": "ears-native-zero-sign-matrix.mjs.gz",
+    "sha256": "af307f7a88cfbff0f34397e87f69a459e0468162891baa17ec469ddf09e19ab0",
+    "storedSha256": "7e52a81c2336e74d59959db43e2db74543a65cc3b4b15673ea62bda8e428bdec"
+  },
+  {
+    "file": "ears-native-zero-sign-matrix-run.py.gz",
+    "sha256": "4b51060242932debbf5e61755b2863c9da7747738c0f25489aa1f025af517909",
+    "storedSha256": "2c0ed573900f9f6bf67b0a714c779954eb4680ff572b7dc8cc6af0462f36efad"
+  },
+  {
+    "file": "ears-run-native-zero-sign-matrix.py.gz",
+    "sha256": "28cf87931c46727d8023bbdc1adceb70ce0a69ccb6c08ef424aec47e6e5c95b2",
+    "storedSha256": "0a56238c9e1a5f9ec105578925bb7f9f3cd499690d641ae51cb17030d29d9f9c"
+  },
+  {
+    "file": "ears-wait-native-zero-sign-matrix.py.gz",
+    "sha256": "e535a1204853c6029da74c2c1f10c64a782e3f5c330b34d9af59d5a6d3c79901",
+    "storedSha256": "8bd66181a241d750dabd1681297004bce73120dabccb40ea0e47558916dd89eb"
+  }
+]

@@ -1,0 +1,46 @@
+{
+  "source": "bdfe36732333d6c0db2fce15f2a616cd499600ec",
+  "phaseScope": "Actual worker header and canonical embedding root-page read failures; not vector-compute failure, physical device faults or all resource regimes",
+  "reports": {
+    "sqlite-contracts.json": {
+      "originalSha256": "a759705fb1100464b48ce98bca328d3f62bcd180b2059d91f24a73fcc0d46521",
+      "numPassedTests": 454,
+      "numFailedTests": 1,
+      "numPendingTests": 0,
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    "elmdb-contracts.json": {
+      "originalSha256": "59013234eeb4f638705596c64109667795e90a2b2246a353c0e936d918b28d99",
+      "numPassedTests": 263,
+      "numFailedTests": 1,
+      "numPendingTests": 191,
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    "pack-readiness.json": {
+      "originalSha256": "723bfe0cd303a7e93156bfae177b70e5ef85229749cf8d8e4e89b0743776e9dc",
+      "numPassedTests": 114,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "failures": []
+    },
+    "native-index-readiness.json": {
+      "originalSha256": "1edfd1d60a58be8bc543f10eebde94d8fe6457dd05d9d52c81380feab46f5258",
+      "numPassedTests": 8,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "failures": []
+    },
+    "subprocess-inventory.json": {
+      "originalSha256": "cd349ef061945ff3496a59fc7633e551562a5a30051c58ea59d80cdddc144787",
+      "numPassedTests": 78,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "failures": []
+    }
+  },
+  "apiDiffBytes": 0
+}

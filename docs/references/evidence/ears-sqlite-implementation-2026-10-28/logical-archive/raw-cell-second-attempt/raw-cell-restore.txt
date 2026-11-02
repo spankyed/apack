@@ -1,0 +1,60 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts tests/sqlite/logical-stage.spec.ts tests/sqlite/values.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/values.spec.ts (10 tests | 1 failed) 226ms
+   ✓ SQLite authoritative attribute layout > round-trips native and overflow kinds, distinguishing missing, null, false, zero and signed zero 49ms
+   ✓ SQLite authoritative attribute layout > allocates physical names without case-folding logical type or field names 12ms
+   × SQLite authoritative attribute layout > restores logical raw cells without normalizing composite bytes or depending on slot identity 17ms
+     → expected { kind: 'num', value: -0 } to deeply equal { kind: 'num', value: +0 }
+   ✓ SQLite authoritative attribute layout > validates a raw payload before replacing its incumbent value 13ms
+   ✓ SQLite authoritative attribute layout > admits a declared field over flexible data without rewriting or validating incumbent values 13ms
+   ✓ SQLite authoritative attribute layout > projects a page in two SQL calls and patches a scalar without reading or encoding its large neighbors 19ms
+   ✓ SQLite authoritative attribute layout > keeps attribute changes and newly declared slots inside the caller transaction 12ms
+   ✓ SQLite authoritative attribute layout > reopens existing layouts read-only and diagnoses missing or duplicate authoritative values 10ms
+   ✓ SQLite authoritative attribute layout > stores wide declarations beyond the native column budget without losing fields 62ms
+   ✓ SQLite authoritative attribute layout > rejects invalid values and ambiguous patches before changing stored data 13ms
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 277ms
+ ✓ tests/sqlite/logical-stage.spec.ts (7 tests) 924ms
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 15ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/values.spec.ts > SQLite authoritative attribute layout > restores logical raw cells without normalizing composite bytes or depending on slot identity
+AssertionError: expected { kind: 'num', value: -0 } to deeply equal { kind: 'num', value: +0 }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "kind": "num",[22m
+[32m-   "value": 0,[39m
+[31m+   "value": -0,[39m
+[2m  }[22m
+
+ ❯ tests/sqlite/values.spec.ts:66:115
+     64|     expect(row.nil).toBeNull(); expect(Object.hasOwn(row, '__proto__')…
+     65|     expect(db.get("SELECT value FROM value_overflow WHERE entity_id=? …
+     66|     expect(db.get("SELECT kind,value FROM value_members WHERE entity_i…
+       |                                                                                                                   ^
+     67|   });
+     68| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 33 passed (34)
+   Start at  13:35:36
+   Duration  2.30s (transform 226ms, setup 20ms, collect 417ms, tests 1.44s, environment 0ms, prepare 143ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts tests/sqlite/logical-stage.spec.ts tests/sqlite/values.spec.ts

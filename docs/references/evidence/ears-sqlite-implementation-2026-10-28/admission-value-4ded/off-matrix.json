@@ -1,0 +1,232 @@
+{
+  "protocol": "ears-admission-trials/1",
+  "completed": true,
+  "qualification": false,
+  "trials": 3,
+  "sizes": [
+    10000,
+    100000
+  ],
+  "durable": false,
+  "kind": "value",
+  "records": [
+    {
+      "trial": 1,
+      "size": 10000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 2.187699000000066,
+          "limit": 100
+        },
+        "operationP99Ms": {
+          "actual": 1.0585829999999987,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 1.8007230000002892,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 3.1414049999998497,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 6.34142699999984,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4358992,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 15008592,
+          "limit": 41066992
+        }
+      }
+    },
+    {
+      "trial": 1,
+      "size": 100000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 2.2096199999996315,
+          "limit": 100
+        },
+        "operationP99Ms": {
+          "actual": 0.6616700000013225,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 2.124379000000772,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 3.630991999998514,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 6.59939999999915,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4457872,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 110691728,
+          "limit": 207498016
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "size": 100000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 2.2033580000006623,
+          "limit": 100
+        },
+        "operationP99Ms": {
+          "actual": 0.657232000001386,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 2.1603850000028615,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 3.5319259999996575,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 6.806137000001399,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4457872,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 110691728,
+          "limit": 207498016
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "size": 10000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 2.144465000000082,
+          "limit": 100
+        },
+        "operationP99Ms": {
+          "actual": 1.0682809999998426,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 1.8891990000001897,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 2.6071640000000116,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 6.178455000000213,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4358992,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 15008592,
+          "limit": 41066992
+        }
+      }
+    },
+    {
+      "trial": 3,
+      "size": 10000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 2.1847029999998995,
+          "limit": 100
+        },
+        "operationP99Ms": {
+          "actual": 1.0843519999998534,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 2.0987919999997757,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 5.108930000000328,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 6.654763999999886,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4358992,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 15008592,
+          "limit": 41066992
+        }
+      }
+    },
+    {
+      "trial": 3,
+      "size": 100000,
+      "passed": true,
+      "returncode": 0,
+      "budgets": {
+        "admissionMs": {
+          "actual": 2.2141850000007253,
+          "limit": 100
+        },
+        "operationP99Ms": {
+          "actual": 0.6609370000005583,
+          "limit": 16
+        },
+        "lookupP99Ms": {
+          "actual": 2.2030000000013388,
+          "limit": 16
+        },
+        "turnWaitP99Ms": {
+          "actual": 3.5587480000031064,
+          "limit": 16
+        },
+        "heartbeatDelayP99Ms": {
+          "actual": 6.744442999999592,
+          "limit": 16
+        },
+        "maxObservedWalBytes": {
+          "actual": 4457872,
+          "limit": 16777216
+        },
+        "maxObservedFilesBytes": {
+          "actual": 110691728,
+          "limit": 207498016
+        }
+      }
+    }
+  ],
+  "scope": "Fresh-process synthetic admission; resource limits belong to the enclosing runner",
+  "passed": true
+}

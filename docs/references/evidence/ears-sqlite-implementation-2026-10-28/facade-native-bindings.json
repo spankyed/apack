@@ -1,0 +1,10 @@
+{
+  "scope": "Observed after both benchmark cohorts; lockfile and dependency volume unchanged between cohorts",
+  "driverPackage": "node_modules/better-sqlite3/package.json",
+  "driverVersion": "13.0.3",
+  "extensionPath": "node_modules/sqlite-vec-linux-arm64/vec0.so",
+  "files": {
+    "node_modules/better-sqlite3/prebuilds/linux-arm64.node": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485",
+    "node_modules/sqlite-vec-linux-arm64/vec0.so": "0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "packages/apack-ears/src/sqlite/database.ts": "c4cdf66bdfa5189bc4be55ea7f2b2a02cb07d81215b42b766728028ca1fbdb36",
+  "packages/apack-ears/src/sqlite/file-ownership.ts": "d855fd76e422b3f5096bda1dc390d071e3c31edf712fd3cedeebb23182807f90",
+  "packages/apack-ears/tests/sqlite/file-ownership.spec.ts": "ecdcbabfc2c2ae1f2b56c1533624cc009463a04be996c734656b1b158d921e6a"
+}

@@ -1,0 +1,22 @@
+const fs=require('node:fs'),assert=require('node:assert/strict');
+const source=fs.readFileSync('/electron/.github/scripts/ears-sqlite-platform.mjs','utf8');
+const helper=source.slice(source.indexOf('function requirePassingCases('),source.indexOf('const requiredPublicationCases'));
+const definitions=['requiredNamespaceCases','requiredResetCases'].map(name=>source.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\n\\];`))[0]).join('\n');
+const selectors=['namespace','reset'].map(name=>source.match(new RegExp(`^  const ${name} = .*;$`,'m'))[0]).join('\n');
+const calls=['namespace','reset'].map(name=>source.match(new RegExp(`^  requirePassingCases\\(${name},.*;$`,'m'))[0]).join('\n');
+const verify=Function('assert','host','cli',`${helper}\n${definitions}\n${selectors}\n${calls}\nreturn {namespace:namespace.length,sqliteProfile:reset.length}`);
+const host=JSON.parse(fs.readFileSync('/results/focused-host-final.json','utf8'));
+const cli=JSON.parse(fs.readFileSync('/results/sqlite-profile.json','utf8'));
+const rows=[];
+const test=(name,run)=>{run();rows.push({name,passed:true})};
+function mutate(report,match,change){const copy=structuredClone(report);let changed=false;for(const file of copy.testResults){const index=file.assertionResults.findIndex(match);if(index>=0){change(file.assertionResults,index);changed=true;break}}assert(changed,'Control must reach an actual selected case');return copy}
+test('real passing reports',()=>assert.deepEqual(verify(assert,host,cli),{namespace:24,sqliteProfile:7}));
+test('missing stale sibling refusal rejects',()=>assert.throws(()=>verify(assert,mutate(host,t=>t.fullName.includes('store exclusion (sqlite/1) refuses stale identity'),(a,i)=>a.splice(i,1)),cli),/required case must execute/));
+test('skipped uncertain-close witness rejects',()=>assert.throws(()=>verify(assert,mutate(host,t=>t.fullName.includes('quarantine publication (sqlite/1) retains directory authority'),(a,i)=>a[i].status='pending'),cli),/required case must execute/));
+test('missing read-only history refusal rejects',()=>assert.throws(()=>verify(assert,host,mutate(cli,t=>t.fullName.includes('refuses reset before changing')&&t.fullName.endsWith('readOnly=true)'),(a,i)=>a.splice(i,1))),/required case must execute/));
+test('skipped dry run witness rejects',()=>assert.throws(()=>verify(assert,host,mutate(cli,t=>t.fullName.startsWith('permits a SQLite reset dry run'),(a,i)=>a[i].status='pending')),/required case must execute/));
+test('duplicate namespace witness rejects',()=>assert.throws(()=>verify(assert,mutate(host,t=>t.fullName.startsWith('quarantine publication'),(a,i)=>a.push(structuredClone(a[i]))),cli),/duplicate witness/));
+test('additional passing namespace witness accepted',()=>assert.equal(verify(assert,mutate(host,t=>t.fullName.startsWith('quarantine publication'),a=>a.push({fullName:'additional passing namespace case',status:'passed'})),cli).namespace,25));
+test('additional passing case cannot hide missing reset witness',()=>assert.throws(()=>verify(assert,host,mutate(cli,t=>t.fullName.startsWith('resets a SQLite profile'),(a,i)=>a.splice(i,1,{fullName:'additional passing reset case',status:'passed'}))),/required case must execute/));
+test('Windows report paths use the same selectors',()=>{const h=structuredClone(host),c=structuredClone(cli);for(const report of [h,c])for(const f of report.testResults)f.name=f.name.replaceAll('/','\\');assert.deepEqual(verify(assert,h,c),{namespace:24,sqliteProfile:7})});
+fs.writeFileSync('/results/verifier-controls.json',JSON.stringify({source:'/electron/.github/scripts/ears-sqlite-platform.mjs',controls:rows},null,2)+'\n');console.log(JSON.stringify(rows));

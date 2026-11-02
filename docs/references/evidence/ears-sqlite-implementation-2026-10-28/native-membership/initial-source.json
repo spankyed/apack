@@ -1,0 +1,14 @@
+{
+  "appSource": "dd5d7da67e96c44b323e2572c48e529e7593da2e",
+  "uncommittedNativeInputs": {
+    "native/vectors/build.mjs": "6dfb631f85a8608c14a8d35620fcf0b68828872885f309f6054368f764aee7b9",
+    "native/vectors/membership-test.mjs": "9df115b5f5c803999b343e45079b3ff6e79a7474d7b1acf2b4400708695e6f1b",
+    "native/vectors/vec1-membership.patch": "33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923"
+  },
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "gitMetadata": "synthetic only; source/archive and native overlay hashes are authoritative"
+}

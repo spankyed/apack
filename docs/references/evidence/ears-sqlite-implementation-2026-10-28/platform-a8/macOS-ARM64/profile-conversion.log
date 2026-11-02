@@ -1,0 +1,15 @@
+/Users/runner/work/apack/apack/packages/apack-ears/src/sqlite/schema-validation.ts:7
+  throw Object.assign(new Error(`${path}: ${message}`), { code });
+                      ^
+
+
+Error: schema: schema must NOT have additional properties
+    at refuse (/Users/runner/work/apack/apack/packages/apack-ears/src/sqlite/schema-validation.ts:7:23)
+    at <anonymous> (/Users/runner/work/apack/apack/packages/apack-ears/src/sqlite/schema-validation.ts:69:7)
+    at convertElmdbDump (/Users/runner/work/apack/apack/packages/apack-ears/scripts/convert-elmdb-dump.ts:136:29)
+    at convertSqliteProfile (/Users/runner/work/apack/apack/scripts/convert-sqlite-profile.ts:83:85)
+    at <anonymous> (/Users/runner/work/apack/apack/tests/scripts/test-sqlite-profile-conversion.ts:68:24) {
+  code: 'SCHEMA_INVALID'
+}
+
+Node.js v23.11.1

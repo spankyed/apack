@@ -1,0 +1,15 @@
+{
+  "corpus/safeguards.log": "261696bfb7df8f53e39d9d05b043af343120e6e3954afe1e4b65413fb31efc1f",
+  "corpus/source.txt": "13862fb8a756edee4ceecdfa18f359e05f2a90be6a8b248f3a3820237229b8e2",
+  "corpus/safeguards.json": "71341b566e7e05e1d83dd7e0b428fc01a15a65819bb3a95e42c007fb2afd02cb",
+  "relevance/model.json": "5670c7adb6d0c2502afe151f22ac3a102447a44578956d9f7e48b799ebadb86a",
+  "relevance/judgments.json": "ab87593ea189041b2705a95073e6879dd060814743be45ef03aa109734629424",
+  "relevance/source.txt": "13862fb8a756edee4ceecdfa18f359e05f2a90be6a8b248f3a3820237229b8e2",
+  "relevance/cleanup.json": "0387430e60186bbca1d4272dc3465d3d2be68d68142f2e044d42bf57e85d59ac",
+  "relevance/elmdb.json": "efbdc91b7037898ff06be9eb3acecdde703afaeb491c060654c43549ffb869e6",
+  "relevance/text-language.json": "e1ff16097c8771eeafe394d3c4685eb73039c2c20f55e7c6a59d037766a20e90",
+  "relevance/text-language-receipt.json": "e2e95a9b1edbd2e3c88fd343733af5e5a90aee14b6f4162347df1e36256fb80b",
+  "relevance/sqlite.json": "8f12fe2eb978e778f6f6cc98412edd01c642b1701be2298129f3614583ddd6e2",
+  "relevance/image.json": "9ed3db5207e48b0aaba92054c2cfbc59cebc703f97b6d7c1d6bf4e1c875a23cd",
+  "relevance/install.log": "6e90340164c147a8277df6ee8734c40c14a5081864cfb04d7084046dbce48896"
+}

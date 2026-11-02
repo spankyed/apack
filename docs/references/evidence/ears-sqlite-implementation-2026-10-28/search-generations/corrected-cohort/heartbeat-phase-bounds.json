@@ -1,0 +1,53 @@
+[
+  {
+    "trial": "100000-OFF-1.stdout",
+    "samples": 8218,
+    "clampedZeroSamples": 892,
+    "timeBoundWidthMs": 7151.743223999991,
+    "certainPhaseSampleCounts": {
+      "build": 4095,
+      "gc": 3700,
+      "unassigned": 423
+    },
+    "above16msCertainPhaseCounts": {
+      "build": 6,
+      "gc": 4,
+      "unassigned": 2
+    },
+    "method": "conservative reset-deadline/stage-marker bounds; not callback attribution"
+  },
+  {
+    "trial": "100000-OFF-2.stdout",
+    "samples": 8373,
+    "clampedZeroSamples": 920,
+    "timeBoundWidthMs": 7378.583649999971,
+    "certainPhaseSampleCounts": {
+      "build": 4145,
+      "gc": 3798,
+      "unassigned": 430
+    },
+    "above16msCertainPhaseCounts": {
+      "build": 2,
+      "gc": 8,
+      "unassigned": 2
+    },
+    "method": "conservative reset-deadline/stage-marker bounds; not callback attribution"
+  },
+  {
+    "trial": "100000-OFF-3.stdout",
+    "samples": 9277,
+    "clampedZeroSamples": 885,
+    "timeBoundWidthMs": 7102.442455999961,
+    "certainPhaseSampleCounts": {
+      "build": 4262,
+      "gc": 4664,
+      "unassigned": 351
+    },
+    "above16msCertainPhaseCounts": {
+      "build": 6,
+      "gc": 180,
+      "unassigned": 10
+    },
+    "method": "conservative reset-deadline/stage-marker bounds; not callback attribution"
+  }
+]

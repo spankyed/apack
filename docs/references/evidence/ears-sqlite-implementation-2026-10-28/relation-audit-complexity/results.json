@@ -1,0 +1,25 @@
+{
+  "scope": "Actual primaryData loop and key equality over controlled cursor rows; comparison-count proof, not SQL/Node-driver timing or memory qualification",
+  "groups": [
+    {
+      "distinctKeysSharingEndpoints": 16,
+      "priorRelationComparisons": 120,
+      "decodedInfos": 136
+    },
+    {
+      "distinctKeysSharingEndpoints": 32,
+      "priorRelationComparisons": 496,
+      "decodedInfos": 528
+    },
+    {
+      "distinctKeysSharingEndpoints": 64,
+      "priorRelationComparisons": 2016,
+      "decodedInfos": 2080
+    },
+    {
+      "distinctKeysSharingEndpoints": 128,
+      "priorRelationComparisons": 8128,
+      "decodedInfos": 8256
+    }
+  ]
+}

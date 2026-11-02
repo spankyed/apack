@@ -1,0 +1,18 @@
+{
+  "source": "2d0a0e7d4885b47c3d330870e75ff74666f81fdd",
+  "baseHarnessSha256": "45149247e914d77584e2a3a020025df326412edef7a2843df137f7957ee190c5",
+  "probeSha256": "4de5d9b4af653389cc4b1ae47822186e6607dd7919c9cf976ce2566015ac426c",
+  "extensionSha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d",
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "order": [
+    "auto-1000",
+    "manual-1000",
+    "auto-99900",
+    "manual-99900"
+  ],
+  "control": "same data and FULL commits; checkpoint thresholds changed only after common truncating checkpoint before model admission; separate model training, fixed order, not a paired same-model performance claim"
+}

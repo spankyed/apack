@@ -1,0 +1,74 @@
+{
+  "persistent-inputs.json": {
+    "sha256": "de1f217547dfcf7af3e00a25627baef96c11bc08f38fef269eebaf169bda877d",
+    "bytes": 214398
+  },
+  "persistent-unit.log": {
+    "sha256": "6010a0f2dd0d9d2899ac81e204fb8f4d3727b6d4cf8e5bbd90481640d3be24e4",
+    "bytes": 34865
+  },
+  "persistent-unit.json": {
+    "sha256": "de49a50712c487632c29c9d77a671a1efb3c17bf2da741a7510fe4cb109fbeea",
+    "bytes": 58246
+  },
+  "persistent-run.json": {
+    "sha256": "04230310b2c08517fda23bbbd9201ff60d794c8379fa3ae2ce0e0e768f6fe26b",
+    "bytes": 8058
+  },
+  "persistent-host-launch.json": {
+    "sha256": "ebd6eb0adf84f2b0069bfdb0ee9f68a5a7c39cd267d050cb110be99709387200",
+    "bytes": 3719
+  },
+  "persistent-ears-sqlite-fixture-boundaries-run.py": {
+    "sha256": "478347e11bd2fc3799bc83b88908a1ce1b3216bb2c47a061cbad6d4f0bee42e3",
+    "bytes": 2147
+  },
+  "persistent-ears-run-sqlite-fixture-boundaries.py": {
+    "sha256": "c3409eb35fd8e2a87d17cd26cb3697703a6382427dfd7215a49f7d64e8f508fe",
+    "bytes": 5568
+  },
+  "logic-tmpfs-integration.log": {
+    "sha256": "478c882f33ec0ad0afe8e7af011ed8c49becd3cfde4e60c008bae1acb52e150b",
+    "bytes": 4140
+  },
+  "logic-tmpfs-inputs.json": {
+    "sha256": "de1f217547dfcf7af3e00a25627baef96c11bc08f38fef269eebaf169bda877d",
+    "bytes": 214398
+  },
+  "logic-tmpfs-unit.log": {
+    "sha256": "131d451e9c705f11e22823b1629737cc715acafc4b3f37d42231e75c801ef0ee",
+    "bytes": 13023
+  },
+  "logic-tmpfs-unit.json": {
+    "sha256": "43d15a0787a7e7c364f789340829e50c3adaf3b0b1866f29514208d4af4a0e4d",
+    "bytes": 29351
+  },
+  "logic-tmpfs-integration.json": {
+    "sha256": "81c1f77f420e4870f0c8cfaf03206390451d1448fc88472f73efdec5689df92c",
+    "bytes": 23648
+  },
+  "logic-tmpfs-run.json": {
+    "sha256": "b4200a612c7f78ea62ef841adeb34fdbf99d15ba9164bcc88fae5522399fe0e4",
+    "bytes": 351
+  },
+  "logic-tmpfs-host-launch.json": {
+    "sha256": "b64700d1e79a502b755345e7a0f1a91daaa2656cd84836c7b390a3cbaadeafc2",
+    "bytes": 3776
+  },
+  "logic-tmpfs-ears-sqlite-fixture-logic-tmpfs-run.py": {
+    "sha256": "7334cc9d1180e02e7409facbdc67d2faa146d5d5c93e5b8221cbb49c97133e54",
+    "bytes": 2160
+  },
+  "logic-tmpfs-ears-run-sqlite-fixture-logic-tmpfs.py": {
+    "sha256": "2ad7827e16ff55e2415819f7d87e81575ef06ac7dd8d81416249f530c7e24aa3",
+    "bytes": 5618
+  },
+  "ears-strict-92-app.log": {
+    "sha256": "4e76cbd8f7d0e0104c491a392a8ba580c409556c8c892165d539e517a2a9f81e",
+    "bytes": 910568
+  },
+  "ears-strict-92-integration2.log": {
+    "sha256": "f73e4cea06cdda8aadc1a9d8187ab2977a8afbdee48ec5a1c4995311cec02159",
+    "bytes": 58824
+  }
+}

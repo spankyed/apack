@@ -1,0 +1,46 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/sqlite-evaluation/packages/apack-ears
+
+ ❯ tests/sqlite/index-builds.spec.ts (7 tests | 1 failed | 6 skipped) 45ms
+   ↓ yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes
+   × yielding value-index admission > keeps a single-type fallback page in insertion order without sorting the entire candidate set 45ms
+     → expected [ { id: 92, parent: 2, …(1) } ] to deeply equal []
+   ↓ yielding value-index admission > rolls back failed batches, reports failure, and resumes the committed cursor on reopen
+   ↓ yielding value-index admission > cancels removed generations and collects them without deleting a replacement generation
+   ↓ yielding value-index admission > uses authoritative reads on a read-only reopen and never lets a stale builder fail a newer generation
+   ↓ yielding value-index admission > resumes a committed batch cursor after a real killed process
+   ↓ yielding value-index admission > refuses competing foreground writers promptly and retries a busy backfill without failing its job
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > keeps a single-type fallback page in insertion order without sorting the entire candidate set
+AssertionError: expected [ { id: 92, parent: 2, …(1) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "detail": "USE TEMP B-TREE FOR ORDER BY",
++     "id": 92,
++     "parent": 2,
++   },
++ ]
+
+ ❯ tests/sqlite/index-builds.spec.ts:78:74
+     76|     expect(explained.backend).toBe('sqlite');
+     77|     if (explained.backend === 'sqlite') expect(explained.statements.fl…
+     78|       .filter(step => step.detail.includes('TEMP B-TREE FOR ORDER BY')…
+       |                                                                          ^
+     79|   });
+     80|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  05:05:33
+   Duration  566ms (transform 155ms, setup 13ms, collect 200ms, tests 45ms, environment 0ms, prepare 57ms)
+

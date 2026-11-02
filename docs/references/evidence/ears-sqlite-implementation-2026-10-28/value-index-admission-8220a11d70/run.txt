@@ -1,0 +1,18 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc python3 packages/apack-ears/bench/sqlite/run-admission.py .temp/value-index-sync-off --trials 3 && python3 packages/apack-ears/bench/sqlite/run-admission.py .temp/value-index-durable --trials 3 --durable
+
+    Finished `release` profile [optimized] target(s) in 0.06s
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+Admission load 10000-1
+Admission load 100000-1
+Admission load 100000-2
+Admission load 10000-2
+Admission load 10000-3
+Admission load 100000-3
+Admission load 10000-1
+Traceback (most recent call last):
+  File "/work/packages/apack-ears/bench/sqlite/run-admission.py", line 22, in <module>
+    if result.returncode:raise RuntimeError(f'{name} failed its recorded budgets: {result.stderr}')
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: 10000-1 failed its recorded budgets:

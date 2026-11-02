@@ -1,0 +1,47 @@
+{
+  "run": 41503546216,
+  "attempt": 2,
+  "source": "93ed37e67f40faee3fd25a10f3b897c15e55c858",
+  "job": 125510874345,
+  "artifact": {
+    "id": 13175604072,
+    "createdAt": "2026-11-02T20:27:38Z",
+    "originalAttempt1ArtifactId": 13173022874,
+    "separateDirectories": true
+  },
+  "conclusion": "success",
+  "repositoryFiles": 31,
+  "passedTests": 242,
+  "failedTests": 0,
+  "excludedTests": 0,
+  "sameRepositoryFileSelectionAsA850": true,
+  "nestedFixtureFiles": 4,
+  "previousTimeout": {
+    "case": "does not reuse facade files from an incumbent with stamps from a refused replacement",
+    "passedMs": 146398,
+    "unchangedDeadlineMs": 200000,
+    "fixture": "packages/apack-cli/tests/build/build-output-swap.integration.spec.ts",
+    "fixtureSha256": "c288ec75312c9d4df3f7c244617fe9d411f28d2928b9d536c7dd1d8345ff92a2",
+    "byteIdenticalToPassingA850": true,
+    "firstAttemptRemainsFailed": true,
+    "noSourceOrContentionFixClaim": true
+  },
+  "chainSeconds": 1924.1,
+  "cores": 2,
+  "originalProgressSha256": [
+    "9561c34fbb178e4103588d087bc3ed17e356c72d7e8245c508f07201d35c4251",
+    "ab859b3ad5f3002440b62528fb09fdce8cb35ea21302bc4d42d1fa5c336a9d36",
+    "7da7d0b570dbcccc68ac13e77710d3346ebe6eaf25cb1939e859f0d9219d54e5"
+  ],
+  "originalStepLogSha256": "90a0762e56c4d53e15bbb98934c6b4a9233473388bdb4296e5107e5485f250e5",
+  "originalChainLogSha256": "11c24f3523479406fe75eed744fc6ffe62d6be6e213874f3435f67a9ee31ee7f",
+  "originalJobLogSha256": "a772acfee140ad61b3ab1edd39abb8395ce6cd3026f594aecb62e531e1556502",
+  "originalJobMetadataSha256": "837921a7a615cf819fe7c02d2dcbc46d18c0e0ae01d767ee36dc2240cbd1b630",
+  "wholeStrict": {
+    "conclusion": "success",
+    "jobs": 9,
+    "scope": "Eight original passed jobs retained; only integration-1 reran in attempt 2. No nine-new-jobs claim.",
+    "originalLatestRunMetadataSha256": "f7c8cef769c899bd2515bc46b0a069fc71ae779d10ca5572deb01a11456baa96"
+  },
+  "limits": "One full unchanged replay closes this attempt; intermittent compiler-test timing remains a follow-up. Not proof of stable future timing or a causal contention diagnosis."
+}

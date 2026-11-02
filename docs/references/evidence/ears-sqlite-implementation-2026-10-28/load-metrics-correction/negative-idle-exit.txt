@@ -1,0 +1,33 @@
+(node:29761) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✖ does not own process lifetime (3005.959ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3121.7295
+
+✖ failing tests:
+
+test at packages/apack-ears/bench/sqlite/load-metrics.check.ts:37:1
+✖ does not own process lifetime (3005.959ms)
+  AssertionError [ERR_ASSERTION]: (node:29765) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+  (Use `node --trace-warnings ...` to show where the warning was created)
+  
+  
+  null !== 0
+  
+      at TestContext.<anonymous> (file:///private/tmp/ears-sqlite-diagnosis-evidence/packages/apack-ears/bench/sqlite/load-metrics.check.ts:41:10)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1047:25)
+      at Test.start (node:internal/test_runner/test:944:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:297:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: 0,
+    operator: 'strictEqual'
+  }

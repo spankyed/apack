@@ -1,0 +1,19 @@
+{
+  "run": 41413055256,
+  "source": "94cf2eeac6208c6022865b5d7e5bf513935a6080",
+  "originalJobMetadataSha256": "a3564c064c1226c6f75565716e70924cd4077251207463facdd0b57a2ac542a2",
+  "queriesVerified": 1800,
+  "groups": 18,
+  "minimumMeanRecall": 0.95203125,
+  "queryP95Failures": 0,
+  "heartbeatMissGroups": 8,
+  "heartbeatDisposition": "Accepted synchronous responsiveness degradation; original misses retained as failures",
+  "safeguards": {
+    "passed": 29,
+    "failed": 0,
+    "excluded": 0
+  },
+  "comparisonSha256": "0c885250eb9747ed6221ec5e36c7569a125a6b309cd5bd3758a968572a75af6d",
+  "comparisonRecipeSha256": "514fbbdb98b7c0d8e0974f6f36408f0f0c5193d30a78b3bd5f77973df1cafae6",
+  "scope": "Second observed independent model/run repetition; not causal model-performance attribution, matched-engine speedup or broad model variance certification"
+}

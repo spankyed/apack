@@ -1,0 +1,73 @@
+{
+  "run": 41481261106,
+  "source": "c28f067c96ffc8bbf1f3ff01a7fb158ed37b71e8",
+  "queriesVerified": 1800,
+  "groups": 18,
+  "minimumMeanRecall": 0.959375,
+  "queryP95Failures": 0,
+  "heartbeatMissGroups": 9,
+  "heartbeatDisposition": "Accepted synchronous responsiveness degradation; original misses retained as failures",
+  "safeguards": {
+    "passed": 29,
+    "failed": 0,
+    "excluded": 0
+  },
+  "independentValidation": {
+    "validator": "packages/apack-ears/bench/sqlite/qualify-real-hybrid.py",
+    "validatorSha256": "28ef1a673ccc17eaa47c2fb95a8139be897150fd6e937a44b1b034cea32bd274",
+    "allOtherFieldsIdentical": true,
+    "summaryMeanRoundingDifferences": [
+      {
+        "field": "/groups/6/meanFullRankingOverlapAt10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/6/meanVectorRecall/10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/7/meanVectorRecall/40",
+        "absoluteDifference": 2.220446049250313e-16
+      },
+      {
+        "field": "/groups/12/meanVectorRecall/40",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/13/meanFullRankingOverlapAt10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/13/meanVectorRecall/40",
+        "absoluteDifference": 2.220446049250313e-16
+      },
+      {
+        "field": "/groups/16/meanFullRankingOverlapAt10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/16/meanVectorRecall/10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/16/meanVectorRecall/40",
+        "absoluteDifference": 4.440892098500626e-16
+      },
+      {
+        "field": "/groups/17/meanVectorRecall/10",
+        "absoluteDifference": 1.1102230246251565e-16
+      }
+    ],
+    "maximumAbsoluteDifference": 4.440892098500626e-16
+  },
+  "sealedCorpusFilesAndRecipeMatch94cf": true,
+  "largeCorpus": {
+    "loadMs": 76556.538006,
+    "admissionMs": 46211.97800300001,
+    "processMaxRssKiB": 1494368,
+    "maximumSampledFileBytes": 1971839008,
+    "reopenPasses": 3
+  },
+  "originalJobMetadataSha256": "8c94339fb984710aed6827853f0bcd9b75b0e2420630566530aa4acb07bde393",
+  "scope": "Ordinary managed Scalar candidate after text ranking/layout correction; no matched-engine speedup or isolated storage memory claim"
+}

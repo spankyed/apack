@@ -1,0 +1,38 @@
+{
+  "sqlite-contracts.json": {
+    "sha256": "a0e44a882f91f9981ff354dd49dcc83038ce9bb2948162fa8ac3a5e7f40aa7e4",
+    "bytes": 136681
+  },
+  "elmdb-contracts.json": {
+    "sha256": "b4f784a3a4a6d64fef186767fc4f85dcdefb25c6618743b227eb9abf361427fc",
+    "bytes": 132521
+  },
+  "relation-audit-resources.json": {
+    "sha256": "2e9ff2ab592ef7675aefbc805d03078c1eabab25ba0f8a84d16398014910d11a",
+    "bytes": 25560
+  },
+  "profile-conversion.json": {
+    "sha256": "608de852bb435aa1dd99578efce0f374d25c9a7ad5d6336db0b35a9e6f7320b2",
+    "bytes": 2657
+  },
+  "vector-runtime-info.json": {
+    "sha256": "649663d2c26ce8d9a2ed35d733a19d647877d1822ae3804c44fbec4f1c84271f",
+    "bytes": 594
+  },
+  "check.log": {
+    "sha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "bytes": 458
+  },
+  "source.txt": {
+    "sha256": "4f9dcc7f471759f1becb4162bed3457f8a5a3f9f084ab6fc11d133337fb5e92d",
+    "bytes": 41
+  },
+  "elmdb.rev": {
+    "sha256": "a5a5fd172947dca970a0433224911f7e0f7de3e39dce508ef9e00548fba2bcf9",
+    "bytes": 41
+  },
+  "reports.patch": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  }
+}

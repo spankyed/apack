@@ -1,0 +1,12 @@
+{
+  "source": "15757f6df1e84982583d823af722c12a0e6d27cf",
+  "primary": {
+    "sequence": 181,
+    "label": "updated after API restart",
+    "typedAndLargeFieldsRetained": true,
+    "settingsRetained": true
+  },
+  "historyRetained": true,
+  "mediaSha256": "2f36a18044fe854573fe6b8f0ca00cf19e31a929c8cd0724e647a714f4c5e935",
+  "allStoresSqlite": true
+}

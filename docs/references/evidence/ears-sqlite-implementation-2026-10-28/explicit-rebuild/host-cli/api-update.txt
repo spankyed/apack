@@ -1,0 +1,13 @@
+
+> @apackdev/ears@0.1.0 api:update
+> npm run api:build && tsx ../../scripts/api-reports.ts . --local
+
+
+> @apackdev/ears@0.1.0 api:build
+> node -e "require('fs').rmSync('.temp/api-types', { recursive: true, force: true })" && tsc -p tsconfig.api-extractor.json
+
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+[33mWarning: You have changed the API signature for this project. Updating etc/sqlite.api.md[39m
+@apackdev/ears: 1 of 3 API reports updated

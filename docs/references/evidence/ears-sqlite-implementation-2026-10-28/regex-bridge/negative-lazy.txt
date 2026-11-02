@@ -1,0 +1,67 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/regex.spec.ts -t without loading
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/regex.spec.ts (11 tests | 1 failed | 10 skipped) 174ms
+   ↓ SQLite Rust regex bridge > loads the exact controlled runtime assets
+   ↓ SQLite Rust regex bridge > compiles Rust syntax with Unicode, inline flags and class intersection
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: x(?=y)
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: (a)\1
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: (
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: a{100000000}
+   ↓ SQLite Rust regex bridge > frees the owned allocation once and refuses using a closed pattern
+   ↓ SQLite Rust regex bridge > does not relabel a WASM runtime failure as an invalid pattern
+   ↓ SQLite Rust regex bridge > keeps WASM allocation stable through varied explicitly closed patterns
+   × SQLite Rust regex bridge > imports and constructs a compiler without loading the WASM runtime 173ms
+     → file:///metrics/packages/apack-ears/[eval1]:1
+const {createRegexCompiler}=await import("file:///metrics/packages/apack-ears/src/sqlite/regex.ts");createRegexCompiler();if(Object.keys((await import('node:module')).createRequire(import.meta.url).cache).some(p=>p.endsWith('/rregex.cjs')))throw Error('eager runtime load');
+                                                                                                                                                                                                                                                      ^
+
+Error: eager runtime load
+    at file:///metrics/packages/apack-ears/[eval1]:1:247
+
+Node.js v23.11.1
+: expected 1 to be +0 // Object.is equality
+   ↓ SQLite Rust regex bridge > preserves missing-asset errors instead of reporting a pattern refusal
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/regex.spec.ts > SQLite Rust regex bridge > imports and constructs a compiler without loading the WASM runtime
+AssertionError: file:///metrics/packages/apack-ears/[eval1]:1
+const {createRegexCompiler}=await import("file:///metrics/packages/apack-ears/src/sqlite/regex.ts");createRegexCompiler();if(Object.keys((await import('node:module')).createRequire(import.meta.url).cache).some(p=>p.endsWith('/rregex.cjs')))throw Error('eager runtime load');
+                                                                                                                                                                                                                                                      ^
+
+Error: eager runtime load
+    at file:///metrics/packages/apack-ears/[eval1]:1:247
+
+Node.js v23.11.1
+: expected 1 to be +0 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+ ❯ [eval1]:1:247
+ ❯ tests/sqlite/regex.spec.ts:77:40
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 skipped (11)
+   Start at  15:13:56
+   Duration  446ms (transform 82ms, setup 39ms, collect 54ms, tests 174ms, environment 0ms, prepare 65ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/regex.spec.ts -t 'without loading'

@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/query-cost.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/query-cost.spec.ts (18 tests) 1151ms
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+   Start at  14:02:14
+   Duration  1.61s (transform 201ms, setup 11ms, collect 287ms, tests 1.15s, environment 0ms, prepare 43ms)
+

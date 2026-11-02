@@ -1,0 +1,6 @@
+{
+  ".github/scripts/ears-sqlite-platform.mjs": "1c56c2902dbd3ac9634cf926d1ee70c63c67a77cfd1b349119d43e3a4719d8c2",
+  ".github/workflows/strict-chain.yml": "cdb90245f8e6ecac60831251665c3e065ee3ce2b8d30557ec91cc9c374489a40",
+  "scripts/lib/spec-durations-reporter.ts": "f504f9ab8ce3fefc8a7e0102098564e074bb12b512e6a3575842260dd7795e32",
+  "packages/repo-checks/tests/spec-durations-reporter.integration.spec.ts": "d3ea66cbba2803729400d849ad7b157522fdfa1e8ca7a8bd0b6a075cc9357f23"
+}

@@ -1,0 +1,415 @@
+[
+  {
+    "mode": "sync-off",
+    "trial": "10000-1",
+    "n": 10000,
+    "admissionMs": 1.9319650000002184,
+    "buildMs": 1281.764348,
+    "gcMs": 835.7162920000001,
+    "writes": 626,
+    "operationMs": {
+      "count": 626,
+      "p50": 0.3165840000001481,
+      "p95": 0.6046689999998307,
+      "p99": 2.6709679999999025,
+      "max": 23.495456999999988
+    },
+    "lookupMs": {
+      "count": 626,
+      "p50": 1.1952959999998711,
+      "p95": 1.6009220000000823,
+      "p99": 4.601015999999618,
+      "max": 49.53704700000026
+    },
+    "timerStallMs": {
+      "count": 626,
+      "p50": 0.7096270000001823,
+      "p95": 1.7417140000000018,
+      "p99": 7.73073499999964,
+      "max": 17.422685999999885
+    },
+    "maxObservedBytes": 14975824,
+    "maxObservedWal": 4358992,
+    "budgets": {
+      "admissionMs": {
+        "actual": 1.9319650000002184,
+        "limit": 100
+      },
+      "operationP99Ms": {
+        "actual": 2.6709679999999025,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 4.601015999999618,
+        "limit": 16
+      },
+      "timerStallP99Ms": {
+        "actual": 7.73073499999964,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4358992,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 14975824,
+        "limit": 41083856
+      }
+    },
+    "passed": true
+  },
+  {
+    "mode": "sync-off",
+    "trial": "10000-2",
+    "n": 10000,
+    "admissionMs": 1.5072120000002087,
+    "buildMs": 1193.6643230000002,
+    "gcMs": 1011.019702,
+    "writes": 629,
+    "operationMs": {
+      "count": 629,
+      "p50": 0.30470900000000256,
+      "p95": 0.5316669999999704,
+      "p99": 1.6159210000000712,
+      "max": 12.778695999999854
+    },
+    "lookupMs": {
+      "count": 629,
+      "p50": 1.1723360000000866,
+      "p95": 2.025963000000047,
+      "p99": 7.463933999999881,
+      "max": 20.073045000000093
+    },
+    "timerStallMs": {
+      "count": 629,
+      "p50": 0.6572929999999815,
+      "p95": 1.9652540000001864,
+      "p99": 9.78773000000001,
+      "max": 22.066759000000275
+    },
+    "maxObservedBytes": 14971776,
+    "maxObservedWal": 4367232,
+    "budgets": {
+      "admissionMs": {
+        "actual": 1.5072120000002087,
+        "limit": 100
+      },
+      "operationP99Ms": {
+        "actual": 1.6159210000000712,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 7.463933999999881,
+        "limit": 16
+      },
+      "timerStallP99Ms": {
+        "actual": 9.78773000000001,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4367232,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 14971776,
+        "limit": 41083856
+      }
+    },
+    "passed": true
+  },
+  {
+    "mode": "sync-off",
+    "trial": "10000-3",
+    "n": 10000,
+    "admissionMs": 1.4671700000001238,
+    "buildMs": 1049.491705,
+    "gcMs": 787.5258629999998,
+    "writes": 626,
+    "operationMs": {
+      "count": 626,
+      "p50": 0.31291699999997036,
+      "p95": 0.5622090000001663,
+      "p99": 0.9870849999997517,
+      "max": 3.3737989999999627
+    },
+    "lookupMs": {
+      "count": 626,
+      "p50": 1.1888360000000375,
+      "p95": 1.598171000000093,
+      "p99": 3.001132000000325,
+      "max": 12.649611999999934
+    },
+    "timerStallMs": {
+      "count": 626,
+      "p50": 0.6531690000001618,
+      "p95": 1.135752999999795,
+      "p99": 3.122632000000067,
+      "max": 4.515509999999722
+    },
+    "maxObservedBytes": 14975824,
+    "maxObservedWal": 4358992,
+    "budgets": {
+      "admissionMs": {
+        "actual": 1.4671700000001238,
+        "limit": 100
+      },
+      "operationP99Ms": {
+        "actual": 0.9870849999997517,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 3.001132000000325,
+        "limit": 16
+      },
+      "timerStallP99Ms": {
+        "actual": 3.122632000000067,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4358992,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 14975824,
+        "limit": 41083856
+      }
+    },
+    "passed": true
+  },
+  {
+    "mode": "sync-off",
+    "trial": "100000-1",
+    "n": 100000,
+    "admissionMs": 1.7795900000000984,
+    "buildMs": 19465.672936000003,
+    "gcMs": 20649.61536,
+    "writes": 6259,
+    "operationMs": {
+      "count": 6259,
+      "p50": 0.32962599999882514,
+      "p95": 0.6069609999976819,
+      "p99": 2.0747149999988324,
+      "max": 38.51309300000139
+    },
+    "lookupMs": {
+      "count": 6259,
+      "p50": 2.4541749999989406,
+      "p95": 4.523683000006713,
+      "p99": 13.654089000003296,
+      "max": 100.2505170000004
+    },
+    "timerStallMs": {
+      "count": 6259,
+      "p50": 0.7722940000021481,
+      "p95": 3.273761000000377,
+      "p99": 8.904531000000134,
+      "max": 31.751569000000018
+    },
+    "maxObservedBytes": 110658960,
+    "maxObservedWal": 4457872,
+    "budgets": {
+      "admissionMs": {
+        "actual": 1.7795900000000984,
+        "limit": 100
+      },
+      "operationP99Ms": {
+        "actual": 2.0747149999988324,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 13.654089000003296,
+        "limit": 16
+      },
+      "timerStallP99Ms": {
+        "actual": 8.904531000000134,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4457872,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 110658960,
+        "limit": 207432480
+      }
+    },
+    "passed": true
+  },
+  {
+    "mode": "sync-off",
+    "trial": "100000-2",
+    "n": 100000,
+    "admissionMs": 1.603877999999895,
+    "buildMs": 24972.607897,
+    "gcMs": 18385.026717,
+    "writes": 6279,
+    "operationMs": {
+      "count": 6279,
+      "p50": 0.3317509999978938,
+      "p95": 0.5995430000002671,
+      "p99": 3.816842000000179,
+      "max": 51.016365000003134
+    },
+    "lookupMs": {
+      "count": 6279,
+      "p50": 2.4905890000009094,
+      "p95": 5.273969999998371,
+      "p99": 15.257160000001022,
+      "max": 98.21618100000342
+    },
+    "timerStallMs": {
+      "count": 6279,
+      "p50": 0.7816679999996268,
+      "p95": 4.1629679999969085,
+      "p99": 11.961735999997472,
+      "max": 113.09621400000105
+    },
+    "maxObservedBytes": 110658960,
+    "maxObservedWal": 4457872,
+    "budgets": {
+      "admissionMs": {
+        "actual": 1.603877999999895,
+        "limit": 100
+      },
+      "operationP99Ms": {
+        "actual": 3.816842000000179,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 15.257160000001022,
+        "limit": 16
+      },
+      "timerStallP99Ms": {
+        "actual": 11.961735999997472,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4457872,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 110658960,
+        "limit": 207432480
+      }
+    },
+    "passed": true
+  },
+  {
+    "mode": "sync-off",
+    "trial": "100000-3",
+    "n": 100000,
+    "admissionMs": 1.2453780000014376,
+    "buildMs": 15542.430168,
+    "gcMs": 13367.243918,
+    "writes": 6252,
+    "operationMs": {
+      "count": 6252,
+      "p50": 0.2927510000008624,
+      "p95": 0.48833499999454943,
+      "p99": 0.7168350000065402,
+      "max": 7.786809000001085
+    },
+    "lookupMs": {
+      "count": 6252,
+      "p50": 2.0818380000000616,
+      "p95": 2.678631000000678,
+      "p99": 3.543257999997877,
+      "max": 10.526232000000164
+    },
+    "timerStallMs": {
+      "count": 6252,
+      "p50": 0.7252939999998489,
+      "p95": 1.7607129999996687,
+      "p99": 3.569550000000163,
+      "max": 10.023230999999214
+    },
+    "maxObservedBytes": 110658960,
+    "maxObservedWal": 4457872,
+    "budgets": {
+      "admissionMs": {
+        "actual": 1.2453780000014376,
+        "limit": 100
+      },
+      "operationP99Ms": {
+        "actual": 0.7168350000065402,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 3.543257999997877,
+        "limit": 16
+      },
+      "timerStallP99Ms": {
+        "actual": 3.569550000000163,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4457872,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 110658960,
+        "limit": 207432480
+      }
+    },
+    "passed": true
+  },
+  {
+    "mode": "durable",
+    "trial": "10000-1",
+    "n": 10000,
+    "admissionMs": 3.6446339999999964,
+    "buildMs": 2968.5442090000006,
+    "gcMs": 2869.55336,
+    "writes": 626,
+    "operationMs": {
+      "count": 626,
+      "p50": 2.403921999999966,
+      "p95": 7.62039299999924,
+      "p99": 16.785247000000254,
+      "max": 67.15915099999984
+    },
+    "lookupMs": {
+      "count": 626,
+      "p50": 1.30141999999978,
+      "p95": 1.5273370000004434,
+      "p99": 2.378838000000542,
+      "max": 3.9967169999999896
+    },
+    "timerStallMs": {
+      "count": 626,
+      "p50": 2.7755480000000716,
+      "p95": 9.126603999999588,
+      "p99": 19.39075200000002,
+      "max": 45.85901999999987
+    },
+    "maxObservedBytes": 14975824,
+    "maxObservedWal": 4358992,
+    "budgets": {
+      "admissionMs": {
+        "actual": 3.6446339999999964,
+        "limit": 100
+      },
+      "operationP99Ms": {
+        "actual": 16.785247000000254,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 2.378838000000542,
+        "limit": 16
+      },
+      "timerStallP99Ms": {
+        "actual": 19.39075200000002,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4358992,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 14975824,
+        "limit": 41083856
+      }
+    },
+    "passed": false
+  }
+]

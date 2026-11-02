@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 /electron
+
+ ✓ |@apackdev/cli| tests/commands/db.integration.spec.ts (77 tests | 75 skipped) 3010ms
+   ✓ apack db reset > keeps new managed history opens excluded until deletion finishes  1544ms
+   ✓ apack db reset > releases history exclusion after deletion fails, leaving history available for retry  1465ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 75 skipped (77)
+   Start at  19:54:37
+   Duration  10.78s (transform 4.08s, setup 18ms, collect 6.58s, tests 3.01s, environment 0ms, prepare 179ms)
+
+JSON report written to /results/corrected-cli-faults.json

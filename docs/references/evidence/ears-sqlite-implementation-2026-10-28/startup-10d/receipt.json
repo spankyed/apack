@@ -1,0 +1,21 @@
+{
+  "source": "10d46d09af7325b81c791a0c0cc350fda88379c9",
+  "nativeResultsOriginalSha256": "ee0753d93120a021c4fe39378d5e9756ab1338f12615cfffd2d4f0d48b9265f7",
+  "nativeSummary": {
+    "measured": 20,
+    "passed": 20,
+    "unsuccessful": 0,
+    "medianMs": 5390.2537085,
+    "minMs": 4220.960083,
+    "maxMs": 10327.621041999999
+  },
+  "nativeTrialCount": 25,
+  "sqlite": {
+    "seedCompleted": false,
+    "measuredTrials": 0,
+    "observedFixtureThreads": 0,
+    "expectedFixtureThreads": 12,
+    "failure": "five-second import completion assertion expired; app closed during unfinished import",
+    "fixStatus": "existing page-completion wait adopted for seed setup; runtime outcome unproven"
+  }
+}

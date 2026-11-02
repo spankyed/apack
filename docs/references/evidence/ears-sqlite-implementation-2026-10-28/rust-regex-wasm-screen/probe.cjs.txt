@@ -1,0 +1,22 @@
+const {createRequire}=require('node:module');
+const {createHash}=require('node:crypto');
+const {readFileSync}=require('node:fs');
+const requireLocal=createRequire('/regex/probe.cjs');
+const {RRegex,__wasm}=requireLocal('rregex');
+const checks=[];
+for(const [pattern,text,expected] of [['(?i)^error','ERROR',true],['\\p{Greek}+','Σίσυφος',true],['\\b\\w+\\b','東京',true],['[a-z&&[^b]]+','b',false],['(?:a+)+$','a'.repeat(100000)+'!',false]]) {
+ const before=performance.now(),regex=new RRegex(pattern);
+ try { const actual=regex.isMatch(text);if(actual!==expected)throw Error('mismatch '+pattern); checks.push({pattern,inputLength:text.length,actual,ms:performance.now()-before}); }
+ finally {regex.free();}
+}
+for(const pattern of ['x(?=y)','(a)\\1','(']) {
+ let refused=false;
+ try { const regex=new RRegex(pattern);regex.free(); }
+ catch(error){refused=true;checks.push({pattern,errorType:typeof error,errorClass:error?.constructor?.name,message:error?.message??String(error)});}
+ if(!refused)throw Error('accepted invalid pattern '+pattern);
+}
+const literal=new RRegex('^literal.+tail$');let syntax;
+try {syntax=literal.syntax();}finally{literal.free();}
+const before=__wasm.memory.buffer.byteLength;
+for(let i=0;i<1000;i++){const regex=new RRegex('(?i)foo'+i);regex.isMatch('FOO'+i);regex.free();}
+console.log(JSON.stringify({node:process.version,platform:process.platform,arch:process.arch,package:requireLocal('rregex/package.json').version,wasmSha256:createHash('sha256').update(readFileSync('/regex/node_modules/rregex/lib/rregex.wasm')).digest('hex'),checks,syntax,wasmBytesBefore:before,wasmBytesAfter:__wasm.memory.buffer.byteLength},null,2));

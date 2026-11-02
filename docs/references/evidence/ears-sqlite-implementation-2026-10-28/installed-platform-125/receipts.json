@@ -1,0 +1,17 @@
+[
+  {
+    "file": "linux-report.json",
+    "sha256": "62103c63ec282f60e1d6b4dcad1ae7e37a43d3dd987b78b7a9b646b0bfa23343",
+    "bytes": 3018
+  },
+  {
+    "file": "linux-native.log",
+    "sha256": "6485231f4ca84eae39e8b7a18c51b61cc088c4e8a1913164a2acdd8b9ad4ead5",
+    "bytes": 2298
+  },
+  {
+    "file": "windows-failed.log",
+    "sha256": "59c7bdfae4c9951d4aef8bd49a4871fea97283b24d6862832bc7cbf813d2a906",
+    "bytes": 265818
+  }
+]

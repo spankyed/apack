@@ -1,0 +1,102 @@
+{
+  "header": {
+    "completed": true,
+    "phase": "header",
+    "preloadSha256": "e2c855ec0faf50617cdb409e3e3aa03ed835a759b1fa1ee4898564f009e636df",
+    "extensionSha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+    "refusedWithoutPublication": true,
+    "foregroundReusable": true,
+    "canonicalSha256": "94d304a2811be98e68f7832e87184e8606d02b6abd374ba8f6eb49860ec630a7",
+    "scratchRemoved": true,
+    "errorCode": "SQLITE_IOERR_CORRUPTFS",
+    "retry": {
+      "samples": 512,
+      "modelSha256": "e4310b2bbb7b7b7b59c86592e61805c00c16b7bf2b3a3cac11074a8499385008",
+      "workerSha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+    },
+    "originalReportSha256": "86555612ec18ff9b853c46986bd5a8b8766d4adf0fe49e22239984615c1a0a08"
+  },
+  "embedding-page": {
+    "completed": true,
+    "phase": "embedding-page",
+    "preloadSha256": "e2c855ec0faf50617cdb409e3e3aa03ed835a759b1fa1ee4898564f009e636df",
+    "extensionSha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+    "refusedWithoutPublication": true,
+    "foregroundReusable": true,
+    "canonicalSha256": "94d304a2811be98e68f7832e87184e8606d02b6abd374ba8f6eb49860ec630a7",
+    "scratchRemoved": true,
+    "errorCode": "SQLITE_CORRUPT",
+    "retry": {
+      "samples": 512,
+      "modelSha256": "05284f18be09f358d341882576753eafb8df1b9cfa4a73e9871ca3a65c4fab64",
+      "workerSha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+    },
+    "originalReportSha256": "aa4844628619aea2a6cd32fcc2ca18257b6202e841b64aca377182e19101840d"
+  },
+  "history": {
+    "completed": true,
+    "scope": "One main-thread metadata-page EIO during actual host history open; observes recovery policy, not all corruption/I/O or physical storage regimes",
+    "targetOffset": 12288,
+    "beforeSha256": "38a8128abeb431c89f1b187915c87463d3cecaf592b6e7f8cc08a2c139d23895",
+    "quarantinedCount": 0,
+    "outcome": "refused",
+    "incumbentBytesUnchanged": true,
+    "incumbentReadableAfterDisarm": true,
+    "scratchRemoved": true,
+    "originalReportSha256": "d35f64513bfbc14d6a88b6e4eeb885d48bbfa09f9382394c3d44d47a004855a8"
+  },
+  "model-allocation": {
+    "completed": true,
+    "phase": "model-allocation",
+    "preloadSha256": "7af9306cdc15f8a39deb46a7d796d659beee500a5a8f4ac250f1bf12d912b81d",
+    "extensionSha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+    "refusedWithoutPublication": true,
+    "foregroundReusable": true,
+    "canonicalSha256": "94d304a2811be98e68f7832e87184e8606d02b6abd374ba8f6eb49860ec630a7",
+    "scratchRemoved": true,
+    "errorCode": "SQLITE_NOMEM",
+    "retry": {
+      "samples": 512,
+      "modelSha256": "222359a01c3f94e5cd14471b239fa52ce8fb71407514b41b975d4d1e26f38d78",
+      "workerSha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+    },
+    "allocation": {
+      "allocator": "malloc",
+      "mainThread": false,
+      "extensionMatched": true,
+      "functionMatched": true,
+      "functionOffset": 113024,
+      "functionBegin": 112416,
+      "functionEnd": 128134,
+      "requestedBytes": 32800,
+      "modelBytes": 32792,
+      "errno": 12
+    },
+    "readerHeldBeforeRefusal": {
+      "walBytes": 57712,
+      "checkpoint": {
+        "busy": 1,
+        "log": 14,
+        "checkpointed": 0
+      }
+    },
+    "readerReleasedAfterRefusal": {
+      "checkpoint": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      },
+      "walBytes": 0
+    },
+    "failedWorkerReaderReleased": true,
+    "commits": {
+      "before": 3,
+      "afterForeground": 4,
+      "afterFailure": 4,
+      "afterRetry": 4,
+      "afterReuse": 5
+    },
+    "canonicalBeforeSha256": "94d304a2811be98e68f7832e87184e8606d02b6abd374ba8f6eb49860ec630a7",
+    "originalReportSha256": "3060de2e0c3d98e678c4f255e1f1b717faf46b1759acc2afc4c47e3bac361c71"
+  }
+}

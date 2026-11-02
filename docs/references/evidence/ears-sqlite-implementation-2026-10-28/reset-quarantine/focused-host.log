@@ -1,0 +1,30 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+ ✓ tests/backup/recovery.spec.ts (44 tests) 7792ms
+   ✓ restores both sqlite/1 stores and media, preserves forensic copies, and never replays completed recovery  405ms
+(node:215) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | tests/database/storage.spec.ts > quarantines corrupt elmdb/1 history while an unrelated primary handle stays open
+[run-history] The run history at /tmp/apack-sqlite-profile-Ck832u/runs couldn't be opened (/tmp/apack-sqlite-profile-Ck832u/runs/data.mdb isn't a file this LMDB reads: MDB_INVALID: File is not an LMDB file. Files lmdb-js wrote are in its own LMDB data version, which elmdb doesn't read; re-create the database with elmdb): it was moved to /tmp/apack-sqlite-profile-Ck832u/runs.unreadable-2026-10-30T19-55-06-674Z-42a42312-3d1d-4cb1-93ce-7bcab7e03aa2, and a new one started
+
+stderr | tests/database/storage.spec.ts > quarantines corrupt sqlite/1 history while an unrelated primary handle stays open
+[run-history] The run history at /tmp/apack-sqlite-profile-YhMNe7/runs couldn't be opened (file is not a database): it was moved to /tmp/apack-sqlite-profile-YhMNe7/runs.unreadable-2026-10-30T19-55-06-812Z-d481809a-bc7d-4e1e-b9bb-ed24d2bc7a21, and a new one started
+
+ ✓ tests/database/storage.spec.ts (38 tests) 2318ms
+   ✓ refuses sqlite/1 history quarantine while a managed reader still holds the directory  391ms
+stderr | tests/database/quarantine-publication.spec.ts > quarantine publication (elmdb/1) > syncs the rename before opening a replacement and the parent after creating it
+[run-history] The run history at /tmp/apack-quarantine-publication-DUOtDA/run-history couldn't be opened (/tmp/apack-quarantine-publication-DUOtDA/run-history/data.mdb isn't a file this LMDB reads: MDB_INVALID: File is not an LMDB file. Files lmdb-js wrote are in its own LMDB data version, which elmdb doesn't read; re-create the database with elmdb): it was moved to /tmp/apack-quarantine-publication-DUOtDA/run-history.unreadable-2026-10-30T19-55-08-741Z-78b15d68-9521-45d2-bc21-2a387ef128c7, and a new one started
+
+stderr | tests/database/quarantine-publication.spec.ts > quarantine publication (sqlite/1) > syncs the rename before opening a replacement and the parent after creating it
+[run-history] The run history at /tmp/apack-quarantine-publication-z2NADa/run-history couldn't be opened (file is not a database): it was moved to /tmp/apack-quarantine-publication-z2NADa/run-history.unreadable-2026-10-30T19-55-09-149Z-f516d76c-3c6e-4c88-98f5-c18b857dc786, and a new one started
+
+ ✓ tests/database/quarantine-publication.spec.ts (8 tests) 1049ms
+ ✓ tests/database/recovery-exclusion.spec.ts (16 tests) 831ms
+
+ Test Files  4 passed (4)
+      Tests  106 passed (106)
+   Start at  19:54:55
+   Duration  15.08s (transform 805ms, setup 16ms, collect 2.62s, tests 11.99s, environment 0ms, prepare 154ms)
+
+JSON report written to /results/focused-host-final.json

@@ -1,0 +1,7 @@
+{
+  "functionalCommit": "ac84b7d3fb4dba6b6c460ea5163096c4a1a1cdb1",
+  "cpus": 2,
+  "memoryGiB": 6,
+  "timeoutSeconds": 240,
+  "sparseStderrStageMarkers": true
+}

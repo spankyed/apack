@@ -1,0 +1,193 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc npm run typecheck -w @apackdev/ears && npm run api:check -w @apackdev/ears && npm test -w @apackdev/host -- tests/build/shared-deps.spec.ts && npm test -w @apackdev/cli -- tests/build/pack-rules.spec.ts && (cd packages/repo-checks && ../../node_modules/.bin/vitest run --config vitest.integration.config.ts tests/import-specifiers.integration.spec.ts -t findDatabaseImports) && npm test -w @apackdev/ears && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears
+
+cannot delete non-empty directory: packages/renderer/node_modules
+    Finished `release` profile [optimized] target(s) in 0.10s
+Published packages are out of date:
+  @apackdev/ears: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts (and 1 more)
+  @apackdev/testing: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts (and 1 more)
+  @apackdev/cli: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts (and 1 more)
+Rebuilding 3 of 5
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+Built @apackdev/testing@0.1.0 into dist/package
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/compiler-pe-environment.ts:38:102:
+      38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+         ╵                                                     ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:19:42:
+      19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+         ╵                                           ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:61:48:
+      61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+         ╵                                            ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+Built @apackdev/cli@0.1.0 into dist/package
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/ears@0.1.0 api:check
+> npm run api:build && tsx ../../scripts/api-reports.ts .
+
+
+> @apackdev/ears@0.1.0 api:build
+> node -e "require('fs').rmSync('.temp/api-types', { recursive: true, force: true })" && tsc -p tsconfig.api-extractor.json
+
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+@apackdev/ears: 3 API reports up to date
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/build/shared-deps.spec.ts
+
+
+ RUN  v3.2.7 /work/packages/apack-host
+
+ ✓ tests/build/shared-deps.spec.ts (12 tests) 17ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  06:31:09
+   Duration  291ms (transform 93ms, setup 16ms, collect 93ms, tests 17ms, environment 0ms, prepare 61ms)
+
+
+> @apackdev/cli@0.1.0 pretest
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @apackdev/cli@0.1.0 test
+> vitest run tests/build/pack-rules.spec.ts
+
+
+ RUN  v3.2.7 /work/packages/apack-cli
+
+ ❯ tests/build/pack-rules.spec.ts (65 tests | 1 failed) 173ms
+   ✓ internal-package-imports > refuses src/system.ts 10ms
+   ✓ internal-package-imports > refuses src/probe.ts 4ms
+   ✓ internal-package-imports > refuses src/panel.vue 4ms
+   ✓ internal-package-imports > accepts public API, a pack-local underscore and the generated facades 3ms
+   ✓ internal-package-imports > has nothing to say about a pack with no src 1ms
+   ✓ every rule > own-modules fires on an offending file, and owns it 7ms
+   ✓ every rule > own-modules fires on an offending file, and owns it 3ms
+   ✓ every rule > pack-own-aliases fires on an offending file, and owns it 3ms
+   ✓ every rule > host-imports fires on an offending file, and owns it 3ms
+   ✓ every rule > database-imports fires on an offending file, and owns it 3ms
+   ✓ every rule > untyped-sends fires on an offending file, and owns it 2ms
+   ✓ every rule > raw-transport fires on an offending file, and owns it 3ms
+   ✓ every rule > window-storage fires on an offending file, and owns it 2ms
+   ✓ every rule > window-storage fires on an offending file, and owns it 3ms
+   ✓ every rule > window-storage fires on an offending file, and owns it 2ms
+   ✓ every rule > window-storage fires on an offending file, and owns it 2ms
+   ✓ every rule > repository-casts fires on an offending file, and owns it 3ms
+   ✓ every rule > reserved-event-keys fires on an offending file, and owns it 3ms
+   ✓ every rule > reserved-event-keys fires on an offending file, and owns it 2ms
+   ✓ every rule > repository-casts allows the generated facade, which is this cast by design 2ms
+   ✓ every rule > reserved-event-keys leaves a pack's own fields and the call verbs alone 4ms
+   ✓ every rule > reserved-event-keys fires in a pack's tests as well as its src 2ms
+   ✓ every rule > backend-console fires under a backend path and not under a frontend one 2ms
+   ✓ every rule > component-sends flags a feature's component and allows an extension's 3ms
+   ✓ every rule > cross-feature-imports flags another feature's frontend and allows a feature its own 5ms
+   ✓ every rule > re-reads a pack whose exports changed while its mtime did not 3ms
+   ✓ every rule > contract-leaves flags a contract leaf that reaches its own machine 3ms
+   ✓ every rule > contract-leaves reads the layout when no manifest names the contracts 1ms
+   ✓ every rule > reports an offence two rules word differently under one rule, not two 2ms
+   ✓ every rule > reports a contract leaf reaching another feature under one rule, not two 6ms
+   ✓ every rule > claims the offence a whole-pack rule named, not the whole line it sat on 3ms
+   ✓ every rule > names a case that exists for each rule covered elsewhere 0ms
+   ✓ manifest checks.allow > silences a switchable rule the pack allows 2ms
+   ✓ manifest checks.allow > reports the rule when the pack allows nothing 2ms
+   ✓ manifest checks.allow > refuses a non-switchable or unknown rule: host-imports 3ms
+   ✓ manifest checks.allow > refuses a non-switchable or unknown rule: no-console 2ms
+   ✓ manifest checks.allow > refuses a value that is not a list 1ms
+   ✓ manifest checks.allow > is optional: a pack without checks allows nothing 1ms
+   ✓ refusePackRuleViolations > names every rule that fired, and how to allow the switchable one 1ms
+   ✓ refusePackRuleViolations > returns for a pack with nothing to report 1ms
+   ✓ when several rules are right about one site > reports the cause that comes first, and only that one 1ms
+   ✓ when several rules are right about one site > keeps two real offences that happen to share a line 1ms
+   ✓ when several rules are right about one site > gives an @internal send to the rule about @internal names, not the one about sends 1ms
+   ✓ when several rules are right about one site > gives an untyped send from the raw transport to the send rule 1ms
+   ✓ when several rules are right about one site > hands that site to the transport rule inside generated code, which exempts nothing 2ms
+   ✓ when several rules are right about one site > refuses app-only SQLite storage @apackdev/ears/sqlite in packs 1ms
+   ✓ when several rules are right about one site > refuses app-only SQLite storage better-sqlite3 in packs 1ms
+   ✓ when several rules are right about one site > refuses app-only SQLite storage sqlite-vec in packs 1ms
+   ✓ when several rules are right about one site > gives an @internal name from the store to the rule about the store 1ms
+   ✓ when several rules are right about one site > gives a cast of the raw transport to the transport rule, whose span sits inside the cast 1ms
+   ✓ when several rules are right about one site > gives an extensionless cross-feature import to the rule about the crossing, the fix that subsumes the other 3ms
+   ✓ when several rules are right about one site > rewrites the places a whole-pack finding names, and nothing else 0ms
+   × when several rules are right about one site > documents exactly the rules that exist, and which are switchable, in docs/public-facing/cli.md 10ms
+     → expected [ 'backend-console', …(14) ] to deeply equal [ 'backend-console', …(14) ]
+   ✓ when several rules are right about one site > declares that precedence in one place 0ms
+   ✓ allowLineWorks: pasting the line the error prints switches the rule off 2ms
+   ✓ source-resolution > passes a pack that resolves the published dist 7ms
+   ✓ source-resolution > refuses one whose tsconfig resolves a checkout's source, naming the file 4ms
+   ✓ source-resolution > refuses it through an extends chain too 7ms
+   ✓ source-resolution > reports a tsconfig that does not parse, rather than passing 3ms
+   ✓ source-resolution > reports an extends naming a file that is not there 3ms
+   ✓ source-resolution > says nothing about a pack whose include matches no file 2ms
+   ✓ source-resolution > reports a pack's vitest config naming the condition 3ms
+   ✓ source-resolution > reports a JS config too, not only a .ts one 3ms
+   ✓ source-resolution > says nothing about a config that only mentions it in a comment 3ms
+   ✓ source-resolution > says nothing about a package the pack does not have 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/build/pack-rules.spec.ts > when several rules are right about one site > documents exactly the rules that exist, and which are switchable, in docs/public-facing/cli.md
+AssertionError: expected [ 'backend-console', …(14) ] to deeply equal [ 'backend-console', …(14) ]
+
+- Expected
++ Received
+
+@@ -1,11 +1,11 @@
+  [
+    "backend-console",
+    "component-sends",
+    "contract-leaves",
+    "cross-feature-imports",
+-   "database-imports",
++   "elmdb-imports",
+    "host-imports",
+    "internal-package-imports",
+    "own-modules",
+    "pack-own-aliases",
+    "raw-transport",
+
+ ❯ tests/build/pack-rules.spec.ts:584:53
+    582|     });
+    583|     population('the rule table rows in cli.md', documented);
+    584|     expect(documented.map((row) => row.key).sort()).toEqual(PACK_RULES…
+       |                                                     ^
+    585|
+    586|     // A row whose marker is missing or misspelled would otherwise rea…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 64 passed (65)
+   Start at  06:31:10
+   Duration  2.16s (transform 893ms, setup 13ms, collect 1.61s, tests 173ms, environment 0ms, prepare 46ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /work/packages/apack-cli
+npm error workspace @apackdev/cli@0.1.0
+npm error location /work/packages/apack-cli
+npm error command failed
+npm error command sh -c vitest run tests/build/pack-rules.spec.ts

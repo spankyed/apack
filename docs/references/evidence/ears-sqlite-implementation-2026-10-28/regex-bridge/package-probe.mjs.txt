@@ -1,0 +1,19 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+const pkg=resolve('packages/apack-ears'), root=mkdtempSync(join(tmpdir(),'ears-regex-package-'));
+const run=(args)=>{const p=spawnSync(process.execPath,args,{encoding:'utf8'});assert.equal(p.status,0,p.stderr);return p.stdout;};
+const probe=path=>`const {createRegexCompiler}=await import(${JSON.stringify(new URL('file://'+path).href)});const r=createRegexCompiler().compile('(?i)\\\\p{Greek}+');try{if(!r.matches('Σίσυφος'))throw Error('bad packed result')}finally{r.close()}`;
+try {
+ const npm=spawnSync('npm',['pack','--ignore-scripts','--json','--pack-destination',root,join(pkg,'publish')],{encoding:'utf8'});assert.equal(npm.status,0,npm.stderr);
+ const info=JSON.parse(npm.stdout)[0];for(const file of ['vendor/rregex/rregex.cjs','vendor/rregex/rregex_bg.wasm','vendor/rregex/LICENSE'])assert(info.files.some(f=>f.path===file),file);
+ const tar=spawnSync('tar',['-xf',join(root,info.filename),'-C',root],{encoding:'utf8'});assert.equal(tar.status,0,tar.stderr);
+ const output=[];
+ for(const [kind,base] of [['source',pkg],['staged',join(pkg,'publish')],['packed',join(root,'package')]]) {
+  const file=join(base,kind==='source'?'src/sqlite/regex.ts':'dist/sqlite/regex.js');assert(existsSync(file));
+  run([...(kind==='source'?['--import','tsx']:[]),'--input-type=module','-e',probe(file)]);output.push(kind);
+ }
+ console.log(JSON.stringify({verified:output,packedFiles:info.files.filter(f=>f.path.startsWith('vendor/rregex/')).map(f=>({path:f.path,size:f.size})),package:JSON.parse(readFileSync(join(root,'package/package.json'),'utf8')).name},null,2));
+}finally{rmSync(root,{recursive:true,force:true});}

@@ -1,0 +1,14 @@
+{
+  "legacy": {
+    "commit": "9a2771ec257dcde88cf4dcbab36e7a3f036b1d14",
+    "sha256": "f5641eefc2d9fe310440fd0986da0018e45510167adab435fd42e8a07dfd7db0"
+  },
+  "postings": {
+    "commit": "c132441538bbbad60a53dc12fb79f77755c83406",
+    "sha256": "e04a46ea99e912f3ab3e15d70aa00ce92ecffa7908e7da7b97912ee040f27092"
+  },
+  "prefix": {
+    "commit": "76b1aa2765beabf80ea4260ec7565105facc7153",
+    "sha256": "781c92ada4611cb6df48f14761d34436ac7e52ae962f118f48c63e01b177f1dd"
+  }
+}

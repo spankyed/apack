@@ -1,0 +1,10 @@
+{
+  "checkpoint": "28dfa80beb",
+  "commentOnlyDifferences": {
+    "packages/apack-ears/src/sqlite/scalar-groups.ts": {
+      "testedSha256": "3c6ddf548ab1bb75258faed7f67f1ae71d0aa0791f79bd3e46b6d8a8997078cc",
+      "checkpointSha256": "6acd2841bbdde2c41b66dbf6db5279b3b90eda5fd8fcfa135471b19099f40b05",
+      "onlyDifference": "// The sole min aggregate also retains the original first cell representation, including signed zero."
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "baseline": {
+    "count": 500,
+    "p50Ms": 1.62896499999988,
+    "p99Ms": 23.42583900000136,
+    "maxMs": 71.80393899999945,
+    "above16ms": 9,
+    "outlierWallMs": 289.86072500000046,
+    "outlierProcessCpuMs": 289.97499999999997
+  },
+  "guarded": {
+    "count": 500,
+    "p50Ms": 1.5630469999996421,
+    "p99Ms": 33.0529579999984,
+    "maxMs": 86.48624500000005,
+    "above16ms": 6,
+    "outlierWallMs": 315.50956999999653,
+    "outlierProcessCpuMs": 315.749
+  },
+  "conditional": {
+    "count": 500,
+    "p50Ms": 1.579171999999744,
+    "p99Ms": 20.817496000001483,
+    "maxMs": 55.93450400000074,
+    "above16ms": 5,
+    "outlierWallMs": 178.7554700000037,
+    "outlierProcessCpuMs": 178.818
+  },
+  "combined": {
+    "count": 500,
+    "p50Ms": 1.6201729999993404,
+    "p99Ms": 12.61138100000062,
+    "maxMs": 26.978227000001425,
+    "above16ms": 4,
+    "outlierWallMs": 102.27072099999896,
+    "outlierProcessCpuMs": 102.301
+  }
+}

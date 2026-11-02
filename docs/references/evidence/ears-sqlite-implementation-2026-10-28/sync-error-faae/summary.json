@@ -1,0 +1,196 @@
+{
+  "run": 41243483379,
+  "source": "faae1545e2",
+  "modes": {
+    "lost-ack": {
+      "completed": true,
+      "rawReportSha256": "e09f105803b61bc5e38db7a0c668fc3989a4a008ea73a02fd9324349fe3fb11e",
+      "helpers": {
+        "lost-ack.c": "4deb2ef3ef6cf378babae6ea608b01b35ae4f9823c2d19dc5b1f9ecdd762bb34",
+        "lost-ack.mjs": "179dd84e44d446546a9990b99f617a5ae8ff3a567d61f39de3afefa1b85d6f8b",
+        "lost-ack.py": "8f59d94244955d33f81348be7e8d97ccaad9cfc58c426edf211ecbdc17a5c655"
+      },
+      "records": [
+        {
+          "operation": "write",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-before-return"
+          },
+          "killedBeforeSuccessAcknowledgement": true
+        },
+        {
+          "operation": "unit",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-before-return"
+          },
+          "killedBeforeSuccessAcknowledgement": true
+        },
+        {
+          "operation": "bulkLoad",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-before-return"
+          },
+          "killedBeforeSuccessAcknowledgement": true
+        },
+        {
+          "operation": "schema",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-before-return"
+          },
+          "killedBeforeSuccessAcknowledgement": true
+        },
+        {
+          "operation": "disabled-control",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "missingInjectorRejected": true
+        }
+      ]
+    },
+    "sync-error-no-close": {
+      "completed": true,
+      "rawReportSha256": "710d88ec10abd982ae87afc400fe51750dd433db0fd1730600ebb140ad930659",
+      "helpers": {
+        "lost-ack.c": "4deb2ef3ef6cf378babae6ea608b01b35ae4f9823c2d19dc5b1f9ecdd762bb34",
+        "lost-ack.mjs": "179dd84e44d446546a9990b99f617a5ae8ff3a567d61f39de3afefa1b85d6f8b",
+        "lost-ack.py": "8f59d94244955d33f81348be7e8d97ccaad9cfc58c426edf211ecbdc17a5c655"
+      },
+      "records": [
+        {
+          "operation": "write",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-return-eio"
+          },
+          "killedBeforeSuccessAcknowledgement": true,
+          "applicationErrorReturned": {
+            "returned": true,
+            "code": "COMMIT_UNKNOWN",
+            "causeCode": "SQLITE_IOERR_FSYNC",
+            "fenced": true,
+            "readErrorCode": "COMMIT_UNKNOWN"
+          }
+        },
+        {
+          "operation": "unit",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-return-eio"
+          },
+          "killedBeforeSuccessAcknowledgement": true,
+          "applicationErrorReturned": {
+            "returned": true,
+            "code": "COMMIT_UNKNOWN",
+            "causeCode": "SQLITE_IOERR_FSYNC",
+            "fenced": true,
+            "readErrorCode": "COMMIT_UNKNOWN"
+          }
+        },
+        {
+          "operation": "bulkLoad",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-return-eio"
+          },
+          "killedBeforeSuccessAcknowledgement": true,
+          "applicationErrorReturned": {
+            "returned": true,
+            "code": "COMMIT_UNKNOWN",
+            "causeCode": "SQLITE_IOERR_FSYNC",
+            "fenced": true,
+            "readErrorCode": "COMMIT_UNKNOWN"
+          }
+        },
+        {
+          "operation": "schema",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-return-eio"
+          },
+          "killedBeforeSuccessAcknowledgement": true,
+          "applicationErrorReturned": {
+            "returned": true,
+            "code": "COMMIT_UNKNOWN",
+            "causeCode": "SQLITE_IOERR_FSYNC",
+            "fenced": true,
+            "readErrorCode": "COMMIT_UNKNOWN"
+          }
+        },
+        {
+          "operation": "disabled-control",
+          "passed": true,
+          "beforeSequence": 2,
+          "reopenSequence": 3,
+          "recoveredSequence": 4,
+          "observedCommitted": true,
+          "negativeZero": true,
+          "missingInjectorRejected": true
+        }
+      ]
+    }
+  }
+}

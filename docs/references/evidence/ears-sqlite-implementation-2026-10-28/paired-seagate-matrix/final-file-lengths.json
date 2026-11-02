@@ -1,0 +1,18 @@
+{
+  "native": [
+    {
+      "file": "data.mdb",
+      "bytes": 1844715520
+    },
+    {
+      "file": "lock.mdb",
+      "bytes": 8256
+    }
+  ],
+  "sqlite": [
+    {
+      "file": "data.sqlite3",
+      "bytes": 1798098944
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+Restored reset source after both actual SQLite held-handle guards failed as intended

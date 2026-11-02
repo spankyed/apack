@@ -1,0 +1,77 @@
+diff --git a/docs/goals/goal-ears-sqlite.md b/docs/goals/goal-ears-sqlite.md
+index ecf2143e8b..a554e99f78 100644
+--- a/docs/goals/goal-ears-sqlite.md
++++ b/docs/goals/goal-ears-sqlite.md
+@@ -281,7 +281,11 @@ Recovery correction is committed at 964f1e1fd2 and published in 60d4283f68 with
+ Do not promote before exact success. Next diagnose actual native ranking/recency
+ plans and remaining costs, preserving every failed cohort and the entire phase 3–7 scope. The next pinned
+ `text-plan.mjs` diagnostic is preregistered in the benchmark README: actual SQL/plans, binding/JS split, ten
+-samples per path, one 10k profile, no retry; this is diagnosis, not a new qualification cohort. Preserve every failed cohort and all remaining
++samples per path, one 10k profile, no retry. It completed: broad execution is almost entirely native SQL
++with three entity lookups; recency returns/hydrates all 10k candidates. See [actual plan evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/text-plans/README.md).
++The local next correction carries immutable sequence through ranking instead of redundant entity joins;
++validate actual native lookup bounds and semantics before a new pinned cost cohort. Recency stays an
++explicit separate requirement; this diagnosis is not qualification. Preserve every failed cohort and all remaining
+ phase 3–7 requirements. Preserve the first cohort; do not retry identical source into acceptance. Publish/run one new exact strict gate only
+ after that functional/cost checkpoint converges. Per-string ranking/index costs are not accepted by correctness alone. This does not replace phase 3's failed
+ 100k heartbeat/FULL gate. Fuzzy vocabulary bounding, larger relevance/languages, vector qualification and the
+diff --git a/packages/apack-ears/src/sqlite/text.ts b/packages/apack-ears/src/sqlite/text.ts
+index fa0e83163d..56fbb14df2 100644
+--- a/packages/apack-ears/src/sqlite/text.ts
++++ b/packages/apack-ears/src/sqlite/text.ts
+@@ -192,24 +192,24 @@ export class SqliteText {
+         if (details) args.push(open, close, open, close);
+         args.push(ownerMask ? `(${clause.match}) AND owner : (${ownerMask})` : clause.match);
+         args.push(...filtered);
+-        return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,
++        return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,e.seq,
+           -bm25(${table},0,0,0,1,1,0)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
+           ${details ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
+           FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ${match} AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
+           AND ${eligible})`;
+       });
+       const single = clauses.length === 1, source = single ? 'c0' : 'matches';
+-      const combined = single ? 'accepted AS (SELECT id,max(score) score,min(owner) owner FROM c0 GROUP BY id)' :
++      const combined = single ? 'accepted AS (SELECT id,max(score) score,min(owner) owner,min(seq) seq FROM c0 GROUP BY id)' :
+         `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
+-         clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner FROM matches WHERE negative=0 GROUP BY clause,id),
+-         accepted AS (SELECT id,sum(score) score,min(owner) owner FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
++         clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner,min(seq) seq FROM matches WHERE negative=0 GROUP BY clause,id),
++         accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
+       const ranked = nativeLimit === undefined ? '' : `, ranked AS MATERIALIZED
+-        (SELECT a.id,a.score,a.owner FROM accepted a JOIN entities e ON e.id=a.id ORDER BY a.score DESC,e.seq LIMIT ?)`;
++        (SELECT a.id,a.score,a.owner,a.seq FROM accepted a ORDER BY a.score DESC,a.seq LIMIT ?)`;
+       if (nativeLimit !== undefined) args.push(nativeLimit);
+       return this.db.all(`WITH ${ctes.join(',')}, ${combined}${ranked}
+         SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? 'accepted' : 'ranked'} a
+-        JOIN entities e ON e.id=a.id ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
+-        ORDER BY a.score DESC,e.seq${details ? ',m.docid,m.clause' : ''}`, args);
++        ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
++        ORDER BY a.score DESC,a.seq${details ? ',m.docid,m.clause' : ''}`, args);
+     };
+     let open = '\u0001', close = '\u0002';
+     // The read request owns a snapshot across both statements. Score the entity prefix before fetching
+diff --git a/packages/apack-ears/tests/sqlite/text-limits.spec.ts b/packages/apack-ears/tests/sqlite/text-limits.spec.ts
+index fac1e99e5a..54edb52b14 100644
+--- a/packages/apack-ears/tests/sqlite/text-limits.spec.ts
++++ b/packages/apack-ears/tests/sqlite/text-limits.spec.ts
+@@ -38,6 +38,19 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native text pr
+     expect(query().pickOne(['name'])).toEqual({ id: 'Row-0', name: 'needle' }); expect(statements.at(-1)?.returnedRows).toBe(1);
+     expect(query().exists()).toBe(true); expect(statements.at(-1)?.returnedRows).toBe(1);
+   });
++  it('ranks a prefix without relooking up every accepted entity', () => {
++    const { db, e } = open(); seed(e);
++    const all = db.all.bind(db), plans: string[][] = [];
++    vi.spyOn(db, 'all').mockImplementation((sql, args) => {
++      const rows = all(sql, args);
++      if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) plans.push(db.sql.prepare('EXPLAIN QUERY PLAN ' + sql)
++        .all(...(args ?? [])).map((row: any) => String(row.detail)));
++      return rows;
++    });
++    expect(e.query('Row').search('needle', { fuzzy: false }).limit(7).ids()).toEqual(Array.from({ length: 7 }, (_, i) => `Row-${i}`));
++    expect(plans).toHaveLength(1);
++    expect(plans[0]!.filter(detail => detail.includes('SEARCH e USING')).length).toBeLessThanOrEqual(1);
++  });
+   it('keeps filters, cursors and reorderings in their original pipeline scope', () => {
+     const { db, e } = open(); seed(e, 'Row', 16); const statements = observe(db);
+     const query = () => e.query('Row').search('needle', { fuzzy: false });

@@ -1,0 +1,89 @@
+{
+  "sqlite": {
+    "database": [
+      "Doc-title",
+      "Doc-list"
+    ],
+    "openDatabaseStore": [
+      "Doc-code"
+    ],
+    "thr-12": [
+      "Doc-code"
+    ],
+    "cafe": [
+      "Doc-accent"
+    ],
+    "東京": [],
+    "title:database": [],
+    "\"database engine\"": [
+      "Doc-title",
+      "Doc-list"
+    ],
+    "zebra OR cafe": [
+      "Doc-accent",
+      "Doc-list"
+    ],
+    "-zebra": [],
+    "\"split phrase\"": [
+      "Doc-cross"
+    ],
+    "listHighlights": [
+      {
+        "id": "Doc-list",
+        "highlights": {
+          "body": [
+            [
+              1,
+              0,
+              5
+            ]
+          ]
+        }
+      }
+    ]
+  },
+  "elmdb": {
+    "database": [
+      "Doc-title",
+      "Doc-list",
+      "Doc-code"
+    ],
+    "openDatabaseStore": [
+      "Doc-code"
+    ],
+    "thr-12": [
+      "Doc-code"
+    ],
+    "cafe": [
+      "Doc-accent"
+    ],
+    "東京": [],
+    "title:database": [
+      "Doc-title"
+    ],
+    "\"database engine\"": [
+      "Doc-title",
+      "Doc-list"
+    ],
+    "zebra OR cafe": [
+      "Doc-accent",
+      "Doc-list"
+    ],
+    "-zebra": [],
+    "\"split phrase\"": [],
+    "listHighlights": [
+      {
+        "id": "Doc-list",
+        "highlights": {
+          "body": [
+            [
+              1,
+              0,
+              5
+            ]
+          ]
+        }
+      }
+    ]
+  }
+}

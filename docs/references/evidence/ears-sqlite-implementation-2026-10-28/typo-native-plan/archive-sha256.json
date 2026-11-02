@@ -1,0 +1,18 @@
+{
+  "ears-typo-native-diagnostic-source.json": "9e6c3c5a9bc8ad069cc5ffa7b294d78ecdbf24b0ea63c5318177742ab539fbc0",
+  "ears-typo-native-diagnostic.mjs": "70a6618a43704f2ed9fef2003ccde9ae5a293bb940fd305716cedc0af012d6b1",
+  "ears-typo-native-diagnostic.patch": "445d26742421024d1771d8257948386188d96b8256e04b7a0f7e0d19374de717",
+  "ears-typo-native-diagnostic.py": "081cccfcca38bffdc8d816c2e157a3d6ed47b42bda78a907352d785ec4f0adaf",
+  "ears-typo-point-diagnostic-results.tar.gz": "e2f0ee04e5742ae3aa8d08f8079439b3a15c76e5c4c373cf82e0ce9e883c1c5b",
+  "ears-typo-point-diagnostic-source.json": "a3b2b3750315ef90c4a2e444cd6461599c46db8890fd2192977503892962201d",
+  "ears-typo-point-diagnostic.mjs": "8d78332e4ad7e90938c842648fb020c465a4d6896932e978d17428429a7cf45b",
+  "ears-typo-point-diagnostic.patch": "ccb857ab549a04ed1121677de03c30c450a36cefa132465a1909845fef5985b9",
+  "ears-typo-point-diagnostic.py": "081cccfcca38bffdc8d816c2e157a3d6ed47b42bda78a907352d785ec4f0adaf",
+  "ears-typo-point-in-diagnostic-results.tar.gz": "517e92f201bb285de73698ce47fdec9843141957e2d6dedc2c3e99df54eec672",
+  "ears-typo-point-in-diagnostic-source.json": "edb9bbe8e0f9a28192b7a6840a5534ea8c2fed8e2287a8f6b258a77f55eca573",
+  "ears-typo-point-in-diagnostic.mjs": "6f5e9db8ff276395d43fb43391438f93c2e0ff445b76d8c24dd5726967fbac93",
+  "ears-typo-point-in-diagnostic.patch": "e5c55862b918c26246833ea4671c066ad54663ac0e7bf948f8b7ab191f57a702",
+  "ears-typo-point-in-diagnostic.py": "081cccfcca38bffdc8d816c2e157a3d6ed47b42bda78a907352d785ec4f0adaf",
+  "linux-results.tar.gz": "fd9aa5d8bd2bda076bb5c15f7681d5af25dd189699b0713e187116ddfeec8eeb",
+  "pinned-fts5-vocab-planner.json": "b2b7e7d0c48429919a07a9f58d86c2a3e24f69c1f5e761e9d2b16f722a6c04c4"
+}

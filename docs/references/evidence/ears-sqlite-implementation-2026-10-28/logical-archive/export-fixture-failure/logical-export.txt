@@ -1,0 +1,109 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/logical-export.spec.ts (4 tests | 4 failed) 211ms
+   × logical snapshot traversal > preserves raw cells, schema/counters, live/trash ordering, relations and embeddings 99ms
+     → Row requires "negative"
+   × logical snapshot traversal > finishes from its private snapshot while later source writes continue 41ms
+     → Row requires "negative"
+   × logical snapshot traversal > closes the snapshot and removes scratch when a consumer cancels 38ms
+     → Row requires "negative"
+   × logical snapshot traversal > refuses malformed primary payloads instead of completing a truncated logical representation 31ms
+     → Row requires "negative"
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 16ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/logical-export.spec.ts > logical snapshot traversal > preserves raw cells, schema/counters, live/trash ordering, relations and embeddings
+EarsError: Row requires "negative"
+ ❯ crossing src/database.ts:157:23
+    155|     const code = (error as { code?: unknown })?.code;
+    156|     const mapped = typeof code === 'string' ? CODES[code] : undefined;
+    157|     if (mapped) throw new EarsError(mapped, (error as Error).message);
+       |                       ^
+    158|     throw error;
+    159|   }
+ ❯ src/database.ts:398:24
+ ❯ counting src/database.ts:349:24
+ ❯ write src/database.ts:395:23
+ ❯ one src/write.ts:56:41
+ ❯ Object.create src/write.ts:166:20
+ ❯ fixture tests/sqlite/logical-export.spec.ts:22:5
+ ❯ tests/sqlite/logical-export.spec.ts:35:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/sqlite/logical-export.spec.ts > logical snapshot traversal > finishes from its private snapshot while later source writes continue
+EarsError: Row requires "negative"
+ ❯ crossing src/database.ts:157:23
+    155|     const code = (error as { code?: unknown })?.code;
+    156|     const mapped = typeof code === 'string' ? CODES[code] : undefined;
+    157|     if (mapped) throw new EarsError(mapped, (error as Error).message);
+       |                       ^
+    158|     throw error;
+    159|   }
+ ❯ src/database.ts:398:24
+ ❯ counting src/database.ts:349:24
+ ❯ write src/database.ts:395:23
+ ❯ one src/write.ts:56:41
+ ❯ Object.create src/write.ts:166:20
+ ❯ fixture tests/sqlite/logical-export.spec.ts:22:5
+ ❯ tests/sqlite/logical-export.spec.ts:60:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/sqlite/logical-export.spec.ts > logical snapshot traversal > closes the snapshot and removes scratch when a consumer cancels
+EarsError: Row requires "negative"
+ ❯ crossing src/database.ts:157:23
+    155|     const code = (error as { code?: unknown })?.code;
+    156|     const mapped = typeof code === 'string' ? CODES[code] : undefined;
+    157|     if (mapped) throw new EarsError(mapped, (error as Error).message);
+       |                       ^
+    158|     throw error;
+    159|   }
+ ❯ src/database.ts:398:24
+ ❯ counting src/database.ts:349:24
+ ❯ write src/database.ts:395:23
+ ❯ one src/write.ts:56:41
+ ❯ Object.create src/write.ts:166:20
+ ❯ fixture tests/sqlite/logical-export.spec.ts:22:5
+ ❯ tests/sqlite/logical-export.spec.ts:70:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/sqlite/logical-export.spec.ts > logical snapshot traversal > refuses malformed primary payloads instead of completing a truncated logical representation
+EarsError: Row requires "negative"
+ ❯ crossing src/database.ts:157:23
+    155|     const code = (error as { code?: unknown })?.code;
+    156|     const mapped = typeof code === 'string' ? CODES[code] : undefined;
+    157|     if (mapped) throw new EarsError(mapped, (error as Error).message);
+       |                       ^
+    158|     throw error;
+    159|   }
+ ❯ src/database.ts:398:24
+ ❯ counting src/database.ts:349:24
+ ❯ write src/database.ts:395:23
+ ❯ one src/write.ts:56:41
+ ❯ Object.create src/write.ts:166:20
+ ❯ fixture tests/sqlite/logical-export.spec.ts:22:5
+ ❯ tests/sqlite/logical-export.spec.ts:78:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  4 failed | 13 passed (17)
+   Start at  13:10:09
+   Duration  754ms (transform 219ms, setup 12ms, collect 302ms, tests 227ms, environment 0ms, prepare 72ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts

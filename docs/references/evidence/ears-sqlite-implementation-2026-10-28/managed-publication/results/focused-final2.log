@@ -1,0 +1,92 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+stderr | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Imported lmdb
+[database:backup] Imported runHistory
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Restored media assets
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Import completed
+
+stderr | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Imported lmdb
+[database:backup] Imported runHistory
+
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Restored media assets
+
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Import completed
+
+stderr | tests/backup/storage.spec.ts > closes managed app stores without announcing success when settings cleanup fails after import
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stdout | tests/backup/storage.spec.ts > closes managed app stores without announcing success when settings cleanup fails after import
+[database:backup] Imported lmdb
+[database:backup] Imported runHistory
+
+stdout | tests/backup/storage.spec.ts > closes managed app stores without announcing success when settings cleanup fails after import
+[database:backup] Restored media assets
+
+stdout | tests/backup/storage.spec.ts > closes managed app stores without announcing success when settings cleanup fails after import
+[database:backup] Import completed
+
+ ✓ tests/backup/storage.spec.ts (27 tests) 18584ms
+   ✓ Host backup storage elmdb/1 > refuses cross-format import before validation, replacement or media changes  431ms
+   ✓ Host backup storage elmdb/1 > checks the second store format before validating or replacing the primary  381ms
+   ✓ Host backup storage sqlite/1 > opens real primary/run-history backups and uses the files even when metadata claims another format  695ms
+   ✓ Host backup storage sqlite/1 > restores both populated stores and media when application acceptance refuses  697ms
+   ✓ Host backup storage sqlite/1 > restores the primary when replacing the second store refuses  645ms
+   ✓ Host backup storage sqlite/1 > restores a replacement which committed before reporting NOT_DURABLE  695ms
+   ✓ Host backup storage sqlite/1 > keeps readable incumbent copies when replacement and restoration both fail  853ms
+   ✓ Host backup storage sqlite/1 > refuses cross-format import before validation, replacement or media changes  736ms
+   ✓ Host backup storage sqlite/1 > checks the second store format before validating or replacing the primary  588ms
+   ✓ Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings  858ms
+   ✓ Host backup storage sqlite/1 > refuses invalid settings through appData before replacing either live store  735ms
+   ✓ Host backup storage sqlite/1 > refuses ambiguous physical files regardless of backup metadata  588ms
+   ✓ coordinates real native services through populated SQLite import and success  2511ms
+   ✓ coordinates real native services through populated SQLite import and acceptance  2960ms
+   ✓ coordinates real native services through populated SQLite import and media  2900ms
+   ✓ closes managed app stores without announcing success when settings cleanup fails after import  820ms
+ ✓ tests/backup/recovery.spec.ts (44 tests) 9620ms
+   ✓ restores both sqlite/1 stores and media, preserves forensic copies, and never replays completed recovery  1227ms
+   ✓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'complete'  300ms
+   ✓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'publish-incumbent'  319ms
+   ✓ excludes an open managed lmdb reader until it closes  300ms
+stderr | tests/database/storage.spec.ts > quarantines corrupt elmdb/1 history while an unrelated primary handle stays open
+[run-history] The run history at /tmp/apack-sqlite-profile-kBvfIW/runs couldn't be opened (/tmp/apack-sqlite-profile-kBvfIW/runs/data.mdb isn't a file this LMDB reads: MDB_INVALID: File is not an LMDB file. Files lmdb-js wrote are in its own LMDB data version, which elmdb doesn't read; re-create the database with elmdb): it was moved to /tmp/apack-sqlite-profile-kBvfIW/runs.unreadable-2026-10-30T15-11-44-880Z, and a new one started
+
+stderr | tests/database/storage.spec.ts > quarantines corrupt sqlite/1 history while an unrelated primary handle stays open
+[run-history] The run history at /tmp/apack-sqlite-profile-Z6RGbO/runs couldn't be opened (file is not a database): it was moved to /tmp/apack-sqlite-profile-Z6RGbO/runs.unreadable-2026-10-30T15-11-45-071Z, and a new one started
+
+ ✓ tests/database/storage.spec.ts (36 tests) 2876ms
+   ✓ refuses sqlite/1 history quarantine while a managed reader still holds the directory  466ms
+stderr | tests/services/run-history.spec.ts > the run history on disk > drops a node whose parent it does not hold, and ignores a write to one it does not hold
+[run-history] Dropped run node RunNode-0mvv41lr60000: its parent RunNode-missing isn't in the run history
+
+stderr | tests/services/run-history.spec.ts > the run history of the test runtime > drops a node whose parent it does not hold, and ignores a write to one it does not hold
+[run-history] Dropped run node RunNode-0mvv41m290000: its parent RunNode-missing isn't in the run history
+
+stdout | tests/services/run-history.spec.ts > the app's run history > removes a session that ended past the retention period, with everything it ran
+[run-history] Removed 1 run(s) older than 30 days
+
+stderr | tests/services/run-history.spec.ts > the app's run history > moves files it cannot read aside and starts a new history, rather than keeping the app from starting
+[run-history] The run history at /tmp/run-history-eqS0Ji/case-8xjA56/run-history couldn't be opened (/tmp/run-history-eqS0Ji/case-8xjA56/run-history/data.mdb isn't a file this LMDB reads: MDB_INVALID: File is not an LMDB file. Files lmdb-js wrote are in its own LMDB data version, which elmdb doesn't read; re-create the database with elmdb): it was moved to /tmp/run-history-eqS0Ji/case-8xjA56/run-history.unreadable-2026-10-30T15-11-48-025Z, and a new one started
+
+ ✓ tests/services/run-history.spec.ts (22 tests) 919ms
+
+ Test Files  4 passed (4)
+      Tests  129 passed (129)
+   Start at  15:11:11
+   Duration  36.73s (transform 1.39s, setup 22ms, collect 4.19s, tests 32.00s, environment 0ms, prepare 169ms)
+
+JSON report written to /results/focused-final2.json

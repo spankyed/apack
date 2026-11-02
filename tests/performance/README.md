@@ -76,6 +76,20 @@ measurement. It closes the seed process, copies the profile, then launches and c
 for each warmup/trial. The measured boundary is parent-process launch through the actual initial
 usable restored chat (correct fifty full message bodies, corpus and matching chat revision), including backend admission. This is a warm-filesystem experiment, not cold disk.
 
+The candidate's manual `App acceptance` workflow with `suite=sqlite-startup` runs
+both backend cohorts. `storage_format` selects which cohort runs first (default elmdb);
+each admission report records the actual `comparisonOrder`. This is whole-cohort order,
+not interleaved/paired trials. Run the opposite ordering to investigate order sensitivity;
+independent runner/load variance still prevents exclusive causal attribution. It accepts
+`sqlite_startup_mode=lightweight` (default) or `detailed`. Both use the same controller,
+five warmups, twenty fresh-process measured trials per actual store and complete admission.
+Use `detailed` to inspect the existing bounded V8 CPU/allocation captures when lightweight
+traces leave a regression unexplained; its instrumentation cost is a distinct recording mode,
+not a replacement latency result. Reports include the actual admitted mode. Preserve the
+original lightweight result, process/profile size limits and failures. Inspect/minimize captures
+before publishing evidence; no daily-use profiles are allowed.
+
+
 Before comparing reports, run `node scripts/with-source.mjs tsx tests/performance/verify-run.ts RUN`
 (or `RUN_A RUN_B` for compatibility and median/range comparison). The default requires all five
 warmups and twenty measured trials; a comparison does not itself certify balanced order or quiet
@@ -172,3 +186,33 @@ output/runtime/machine/cache conditions, clean source, and the native checkout e
 pin. Source/app output hashes may differ between revisions and are retained. Renderer identity is read
 outside action timing through the existing Playwright main-process handle; identity failure preserves
 raw results and invalidates capture. Node report identities come from their actual process.
+
+### Isolated SQLite candidate app flows
+
+The manual `sqlite-app-flows` app-acceptance dispatcher reuses `thread-open`, `search` and
+`streaming` with five warmups/twenty measured lightweight actions per backend on one macOS runner.
+Each process owns a fresh profile. Before recording a backend label, the common warm-scenario
+helper checks both actual store files: persisted EARS application/format headers for SQLite,
+native marker files for elmdb, and no mixed backend files. The manifest records the verified
+`runtime.storageFormat`; the requested environment alone is insufficient. Ordinary mode/revision
+comparison admission therefore cannot silently compare different storage backends as identical inputs.
+
+The dispatcher validates each full raw run with `readPerformanceRun` and preserves failed/incomplete
+outcomes. It is a warm-process characterization, not a causal engine speedup, mode-overhead comparison,
+independent-device variance, cold startup, real-provider qualification or the bounded Linux 16 ms gate.
+The streaming CLI is deterministic and calls no external model. Source, native and build provenance
+remain mandatory; raw capture/profile data must be inspected and minimized before repository publication.
+
+
+The manual `sqlite-startup` app-acceptance choice reuses the populated-startup
+controller for both backends, with five warmups and twenty fresh-process trials
+each, in fixed native-before-SQLite order on one macOS runner. The controller’s
+closed seed and per-trial copies use owned `apack-e2e-` profile names. Seed and
+measured-launch manifests verify both actual stores with the same storage-identity
+helper as warm scenarios; requested environment alone cannot label results. Header
+checks run outside the measured launch/readiness and resource-recording boundary.
+Each full run must pass existing `readPerformanceRun` capture/provenance/invocation
+admission. Original failed/incomplete reports are retained. This characterizes
+populated fresh-process reopening on a warm filesystem, not cold disk, balanced
+backend order, physical durability or independent-device variance. Actual runtime
+qualification is pending; no new latency budget or acceptance waiver is introduced.

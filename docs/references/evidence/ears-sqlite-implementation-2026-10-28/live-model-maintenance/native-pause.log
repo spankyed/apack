@@ -1,0 +1,14 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/vector-models.spec.ts (30 tests | 26 skipped) 2659ms
+   ✓ durable native model admission > drains the real worker while retaining the service claim and logical readiness through nested maintenance  933ms
+   ✓ durable native model admission > rolls back a refused corpus epoch and invalidates the old model on successful same-schema replacement  1272ms
+   ✓ durable native model admission > keeps cleared data usable and permits physical cleanup only after the paused worker has exited  326ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 26 skipped (30)
+   Start at  10:48:59
+   Duration  4.86s (transform 1.34s, setup 74ms, collect 1.71s, tests 2.66s, environment 0ms, prepare 115ms)
+
+JSON report written to /results/native-pause.json

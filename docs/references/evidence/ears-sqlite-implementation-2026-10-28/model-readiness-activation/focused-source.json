@@ -1,0 +1,25 @@
+{
+  "base": "1d16d85c8104859932a555d09d4b4f00600f8b1a",
+  "inputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "270b567a8a587c2d8c2c701d4d70174fa8eae01f9c896a2091d6bf6577f9a351",
+    "packages/apack-ears/bench/sqlite/real-vector-ears.mjs": "faf5919975d39287e2bfbba03200787a3fc67b0399251863f83a41ce17b3388e",
+    "packages/apack-ears/src/database.ts": "6830f3bd13cd456a381e09a5f0554072539b837be47db7ad01c32d911cdfe15e",
+    "packages/apack-ears/src/sqlite/database.ts": "0fb8ed98bb6f3d19bbd1b0a1a67e04680ed7e202302f66ef09bd8f631d40e75f",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "281b0f627bc59c4737ef4f829c76e2c42b660b97a019d4da28f249e63b73a660",
+    "packages/apack-ears/src/sqlite/index.ts": "b05b56a296658a6d720a3be5d96b407fad973601c50f8c44f208271cbeaeaa05",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "9fdd6e4d4e29bc910dd9a929df71c799137ebb3ef4142b492007d11fae7f53be",
+    "packages/apack-host/src/database/index.ts": "a3773cea6031839ddeb48f4a1bed164817d6823d08f0959dc459301db606cc07",
+    "packages/apack-host/src/database/storage.ts": "ca5f2ec1f90c079a5418ba7014b4fe4f51633b9c30d97948cdbafe0dd7b6cefa",
+    "packages/apack-host/tests/database/storage.spec.ts": "ecd90666886652c1ce33e680037de0df3a93187fbccb2dd24de66d3430fe2010",
+    "packages/api/src/runtime/index.ts": "c5491a66a2f430f5e9a1fd306ec59951af5937cbe38fbffa05662c8cd2ea40b5"
+  },
+  "image": "sha256:0146a4490634fe153ec35c63e7075a4b3e31b1d1a2996d29c77506c5d07b6507",
+  "scope": "Six focused SQLite readiness/startup cases and two negative controls only; no elmdb runtime or whole-app qualification",
+  "limits": {
+    "cpus": 0.5,
+    "memoryMiB": 768,
+    "swapMiB": 0
+  },
+  "network": "none",
+  "nativeExtensionSha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d"
+}

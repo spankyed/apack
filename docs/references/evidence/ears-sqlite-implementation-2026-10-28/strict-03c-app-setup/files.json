@@ -1,0 +1,12 @@
+{
+  "strict-sqlite-app.json": {
+    "sha256": "330472c2f2e36d93043a13942d95b9490f4715b1ac650083ef262972524ef104",
+    "bytes": 41580
+  },
+  "unit-failure-tail.log": {
+    "originalLogSha256": "45ca1ffe7a03d5cf2a77f0430beab0641cce49ba2b4da4287ff0c6ce7e3c49da",
+    "sha256": "02e7ee2b527bbac103cbcd43ff75a2581f941099979386fb9ae9d53d7dbf5580",
+    "bytes": 1982,
+    "extractedTail": true
+  }
+}

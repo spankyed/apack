@@ -1,0 +1,30 @@
+{
+  "run": 41070518650,
+  "source": "098d479157aaf9c7cfa363f01a8a8a371c1473d5",
+  "conclusion": "failure",
+  "cause": "Checked-JavaScript helper needs explicit parameter types after moving into scripts",
+  "logs": [
+    {
+      "file": "ears-routing-linux-41070518650.log",
+      "rawSha256": "d3125489aaaba8083a57c290a5799094ba6ee22264dc7ce1604bc7c59e76286c",
+      "errors": [
+        "2026-10-30T15:08:07.8348799Z ##[error]scripts/lib/native-signing.mjs(10,13): error TS7006: Parameter 'file' implicitly has an 'any' type.",
+        "2026-10-30T15:08:07.8355853Z ##[error]scripts/lib/native-signing.mjs(11,20): error TS7006: Parameter 'root' implicitly has an 'any' type.",
+        "2026-10-30T15:08:07.8357664Z ##[error]scripts/lib/native-signing.mjs(11,26): error TS7006: Parameter 'file' implicitly has an 'any' type.",
+        "2026-10-30T15:08:07.8358886Z ##[error]scripts/lib/native-signing.mjs(20,42): error TS7006: Parameter 'options' implicitly has an 'any' type."
+      ]
+    },
+    {
+      "file": "ears-routing-producers-41070518650.log",
+      "rawSha256": "519159ed1cd669db440f6578c1e6b55b3dbb9ded9c8b31272235b3fee3134234",
+      "errors": [
+        "2026-10-30T15:19:48.9138920Z ##[error]scripts/lib/native-signing.mjs(10,13): error TS7006: Parameter 'file' implicitly has an 'any' type.",
+        "2026-10-30T15:19:48.9194440Z ##[error]scripts/lib/native-signing.mjs(11,20): error TS7006: Parameter 'root' implicitly has an 'any' type.",
+        "2026-10-30T15:19:48.9320910Z ##[error]scripts/lib/native-signing.mjs(11,26): error TS7006: Parameter 'file' implicitly has an 'any' type.",
+        "2026-10-30T15:19:48.9323950Z ##[error]scripts/lib/native-signing.mjs(20,42): error TS7006: Parameter 'options' implicitly has an 'any' type."
+      ]
+    }
+  ],
+  "fixedCommand": "npm run typecheck:scripts",
+  "fixedEvidence": "results/matched-scripts.log"
+}

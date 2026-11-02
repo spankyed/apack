@@ -1,0 +1,161 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc npm run typecheck -w @apackdev/ears -w @apackdev/sdk -w @apackdev/host -w @apackdev/cli -w @apackdev/testing && npm run api:check -w @apackdev/ears -w @apackdev/sdk && npm test -w @apackdev/ears -- tests/engine/watch.spec.ts tests/engine/watch-schedule.spec.ts && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears -- tests/engine/watch.spec.ts tests/engine/watch-schedule.spec.ts tests/sqlite/watch-lifecycle.spec.ts
+
+cannot delete non-empty directory: node_modules/.cache
+cannot delete non-empty directory: packages/renderer/node_modules
+   Compiling elmdb-node v0.0.0 (/elmdb/crates/elmdb-node)
+    Finished `release` profile [optimized] target(s) in 2m 18s
+Published packages are out of date:
+  @apackdev/ears: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts (and 1 more)
+  @apackdev/testing: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts (and 1 more)
+  @apackdev/cli: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/database.ts (and 1 more)
+Rebuilding 3 of 5
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+Built @apackdev/testing@0.1.0 into dist/package
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/compiler-pe-environment.ts:38:102:
+      38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+         ╵                                                     ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:19:42:
+      19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+         ╵                                           ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:61:48:
+      61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+         ╵                                            ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+Built @apackdev/cli@0.1.0 into dist/package
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/sdk@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/host@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/cli@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/testing@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/ears@0.1.0 api:check
+> npm run api:build && tsx ../../scripts/api-reports.ts .
+
+
+> @apackdev/ears@0.1.0 api:build
+> node -e "require('fs').rmSync('.temp/api-types', { recursive: true, force: true })" && tsc -p tsconfig.api-extractor.json
+
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+@apackdev/ears: 3 API reports up to date
+
+> @apackdev/sdk@0.1.0 api:check
+> npm run api:build && tsx ../../scripts/api-reports.ts .
+
+
+> @apackdev/sdk@0.1.0 api:build
+> node -e "require('fs').rmSync('.temp/api-types', { recursive: true, force: true })" && tsc -p tsconfig.api-extractor.json
+
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+@apackdev/sdk: 30 API reports up to date
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/watch.spec.ts tests/engine/watch-schedule.spec.ts
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/watch.spec.ts (25 tests) 2849ms
+   ✓ admin committed errors > notifies a replacement that commits and then reports failed sync  501ms
+ ✓ tests/engine/watch-schedule.spec.ts (12 tests) 1501ms
+   ✓ the watch scheduler > costs a bounded number of runs for a thousand commits on separate turns, and delivers the last result  659ms
+
+ Test Files  2 passed (2)
+      Tests  37 passed (37)
+   Start at  11:02:39
+   Duration  5.80s (transform 592ms, setup 156ms, collect 764ms, tests 4.35s, environment 0ms, prepare 207ms)
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/watch.spec.ts tests/engine/watch-schedule.spec.ts tests/sqlite/watch-lifecycle.spec.ts
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/watch.spec.ts (25 tests) 7427ms
+   ✓ watch > hears a durable unit that committed and then failed to sync  310ms
+   ✓ watch > delivers nothing once stopped, and leaves nothing filed  372ms
+   ✓ watch > is a pure read of the engine: what it reads anywhere else is not tracked  349ms
+   ✓ admin committed errors > notifies a committed bulkLoad before rethrowing  365ms
+   ✓ admin committed errors > refreshes declarations and notifies a committed setSchema  419ms
+   ✓ admin committed errors > refreshes declarations and notifies a committed declare  378ms
+   ✓ admin committed errors > does not notify an uncommitted reset refusal  755ms
+   ✓ admin committed errors > does not notify an uncommitted bulkLoad refusal  553ms
+   ✓ admin committed errors > does not notify an uncommitted setSchema refusal  332ms
+   ✓ admin committed errors > does not notify or adopt declarations after a SCHEMA_CHANGED refusal  507ms
+   ✓ admin committed errors > notifies a replacement that commits and then reports failed sync  342ms
+   ✓ reports a committed load to connection listeners exactly once  669ms
+ ✓ tests/engine/watch-schedule.spec.ts (12 tests) 3390ms
+   ✓ the watch scheduler > costs a bounded number of runs for a thousand commits on separate turns, and delivers the last result  1242ms
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (3 tests) 2733ms
+   ✓ SQLite watch ownership > releases tracked dependencies when closing under a pending watch  350ms
+   ✓ SQLite watch ownership > keeps an explicit settlement wait alive until its final delivery (during flush: false)  1590ms
+   ✓ SQLite watch ownership > keeps an explicit settlement wait alive until its final delivery (during flush: true)  792ms
+
+ Test Files  3 passed (3)
+      Tests  40 passed (40)
+   Start at  11:02:46
+   Duration  15.92s (transform 516ms, setup 90ms, collect 1.02s, tests 13.55s, environment 0ms, prepare 623ms)
+

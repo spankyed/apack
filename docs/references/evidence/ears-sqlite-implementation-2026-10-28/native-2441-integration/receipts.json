@@ -1,0 +1,67 @@
+{
+  "qualification.json": {
+    "rawSha256": "29dc1bda75e2f20cb13a3f295213fda75d526e4bb7347e4878c2ee0a306e9ffa",
+    "storedSha256": "29dc1bda75e2f20cb13a3f295213fda75d526e4bb7347e4878c2ee0a306e9ffa",
+    "bytes": 4746
+  },
+  "inputs.json": {
+    "rawSha256": "766a9b3553dfeef6000bdc3f0142ebdafa2bf1a72a671d2e42569ee2bd2ac0d2",
+    "storedSha256": "766a9b3553dfeef6000bdc3f0142ebdafa2bf1a72a671d2e42569ee2bd2ac0d2",
+    "bytes": 2218
+  },
+  "ears-types.log": {
+    "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "storedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "focused-elmdb.json.gz": {
+    "rawSha256": "08e93f4ad156e5466ca814939485fcc92b9bdec165038d00cbba63ee9bc11cec",
+    "storedSha256": "ddf34afc87b041ded3e96d494d28850da5e2d996e2eb2504dfd670f0f930f649",
+    "bytes": 17878
+  },
+  "focused-elmdb.log": {
+    "rawSha256": "1b01a445c8d79cfa1bbd0015da3bbc2afbd9aa471eacc79447e3433fe0191659",
+    "storedSha256": "1b01a445c8d79cfa1bbd0015da3bbc2afbd9aa471eacc79447e3433fe0191659",
+    "bytes": 386
+  },
+  "focused-sqlite.json.gz": {
+    "rawSha256": "d1c2af1aa8074cb736df6bef8fcd44bcc01e41132a667956e3a335e0198d794f",
+    "storedSha256": "b02618827b3467d35eb4710d65a21c17f7275770f103a3ff033400427e5688ca",
+    "bytes": 17878
+  },
+  "focused-sqlite.log": {
+    "rawSha256": "453f18d636dd3b5e7c2c114eb44ab63c01933e0cd1de9d95c76a969cb6c3faf7",
+    "storedSha256": "453f18d636dd3b5e7c2c114eb44ab63c01933e0cd1de9d95c76a969cb6c3faf7",
+    "bytes": 835
+  },
+  "packages-build.log": {
+    "rawSha256": "c6d22981ea6d7ba77d472ecad398611d5a9a9c9bf9a635933e15d91d9639c620",
+    "storedSha256": "c6d22981ea6d7ba77d472ecad398611d5a9a9c9bf9a635933e15d91d9639c620",
+    "bytes": 2459
+  },
+  "ears-api.log": {
+    "rawSha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "storedSha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "bytes": 458
+  },
+  "ears-full.json.gz": {
+    "rawSha256": "b8d5bf65ad5bb25c6b6866d3886efeb957e4291a4164741fe9c837f254a391f7",
+    "storedSha256": "a053d0ef43e4574bb1aca3972712344f3f596411d16bd20d422501e6f4ca8ed2",
+    "bytes": 238226
+  },
+  "ears-full.log": {
+    "rawSha256": "87a227632140e96435eb76b8fbaee4d46ba4a484b9bfb2d2f24b689c290a199b",
+    "storedSha256": "87a227632140e96435eb76b8fbaee4d46ba4a484b9bfb2d2f24b689c290a199b",
+    "bytes": 9478
+  },
+  "build.json": {
+    "rawSha256": "b55cd2547baf1343c6ffa15eea92afc80973cb60f08914ad646045a9876a866a",
+    "storedSha256": "b55cd2547baf1343c6ffa15eea92afc80973cb60f08914ad646045a9876a866a",
+    "bytes": 1256
+  },
+  "build.log": {
+    "rawSha256": "9ff7818725f48b35e10dabdd4d3ac1543ef09c1370652a24f46e27a0d65f7273",
+    "storedSha256": "9ff7818725f48b35e10dabdd4d3ac1543ef09c1370652a24f46e27a0d65f7273",
+    "bytes": 12126
+  }
+}

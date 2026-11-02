@@ -1,0 +1,105 @@
+[
+  {
+    "label": "native-binding",
+    "args": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "elmdb-node"
+    ],
+    "exitCode": 0,
+    "seconds": 167.20295176500804
+  },
+  {
+    "label": "all-ears",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@apackdev/ears",
+      "--outputFile=/results/all-ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 58.86674990999745
+  },
+  {
+    "label": "host-startup",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@apackdev/host",
+      "packages/apack-host/tests/database/storage.spec.ts",
+      "packages/apack-host/tests/database/close.spec.ts",
+      "--outputFile=/results/host-startup.json"
+    ],
+    "exitCode": 0,
+    "seconds": 3.2842200589948334
+  },
+  {
+    "label": "api-startup",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@app/api",
+      "packages/api/tests/runtime/sqlite-profile.spec.ts",
+      "packages/api/tests/transport/shutdown.spec.ts",
+      "--outputFile=/results/api-startup.json"
+    ],
+    "exitCode": 0,
+    "seconds": 4.417014108999865
+  },
+  {
+    "label": "ears-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.92507072200533
+  },
+  {
+    "label": "host-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:host"
+    ],
+    "exitCode": 0,
+    "seconds": 9.404702218977036
+  },
+  {
+    "label": "api-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:api"
+    ],
+    "exitCode": 2,
+    "seconds": 13.118249659019057
+  }
+]

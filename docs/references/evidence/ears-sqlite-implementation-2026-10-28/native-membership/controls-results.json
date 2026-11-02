@@ -1,0 +1,92 @@
+[
+  {
+    "label": "compile-clobbered-mask",
+    "args": [
+      "cc",
+      "-O3",
+      "-DNDEBUG",
+      "-Werror=implicit-function-declaration",
+      "-shared",
+      "-fPIC",
+      "-I/metrics/node_modules/better-sqlite3/deps/sqlite3",
+      "/metrics/clobbered-mask.c",
+      "-lm",
+      "-o",
+      "/metrics/clobbered-mask.so"
+    ],
+    "exitCode": 0,
+    "seconds": 2.889643302973127
+  },
+  {
+    "label": "mutation-mask",
+    "args": [
+      "node",
+      "native/vectors/membership-test.mjs",
+      "/metrics/clobbered-mask.so",
+      "/results/mutation-mask.json"
+    ],
+    "exitCode": 1,
+    "seconds": 0.4747105469868984
+  },
+  {
+    "label": "compile-allocation-refusal",
+    "args": [
+      "cc",
+      "-O3",
+      "-DNDEBUG",
+      "-Werror=implicit-function-declaration",
+      "-shared",
+      "-fPIC",
+      "-I/metrics/node_modules/better-sqlite3/deps/sqlite3",
+      "/metrics/allocation-refusal.c",
+      "-lm",
+      "-o",
+      "/metrics/allocation-refusal.so"
+    ],
+    "exitCode": 0,
+    "seconds": 2.7718124290113337
+  },
+  {
+    "label": "allocation-refusal",
+    "args": [
+      "node",
+      "native/vectors/membership-test.mjs",
+      "/metrics/allocation-refusal.so",
+      "/results/allocation-refusal.json"
+    ],
+    "exitCode": 1,
+    "seconds": 0.2654521139920689
+  },
+  {
+    "label": "compile-sanitized",
+    "args": [
+      "cc",
+      "-O1",
+      "-g",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer",
+      "-DNDEBUG",
+      "-Werror=implicit-function-declaration",
+      "-shared",
+      "-fPIC",
+      "-I/metrics/node_modules/better-sqlite3/deps/sqlite3",
+      "/metrics/sanitized.c",
+      "-lm",
+      "-o",
+      "/metrics/sanitized.so"
+    ],
+    "exitCode": 0,
+    "seconds": 5.987139478995232
+  },
+  {
+    "label": "sanitized-membership",
+    "args": [
+      "node",
+      "native/vectors/membership-test.mjs",
+      "/metrics/sanitized.so",
+      "/results/sanitized-membership.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.8094174589787144
+  }
+]

@@ -1,0 +1,11 @@
+# Integrated schema-admission platform evidence
+
+[Strict run 41336141230](https://github.com/spankyed/apack/actions/runs/41336141230), source `f61acd3c7db33ffcc6c4f313efbf7a9a9be60173`, completes Linux x64 and macOS ARM64 platform jobs. Each has 312 passing host cases with no failures/exclusions and 919 EARS passes/one retained keyword failure/no exclusions. Both actual native/SQLite write-unit admission refusal cases pass without losing staged writes, alongside pre-publication schema refusal and ownership/lifecycle cases.
+
+Linux's old-global-readiness mutation control produces exactly its intended failed EARS isolation case (zero passes, eleven unselected cases), and its actual installed-host counterpart produces exactly its intended failed activation case (zero passes, twenty-eight unselected cases). The workflow verifies the expected unrelated-index errors, restores the production source and checks byte equality plus clean git diff. Both controls complete successfully. Exclusions in selected negative-control reports are deliberate unselected cases, not ordinary-suite exclusions.
+
+The completed Linux job log's verifier fails at the final complete-EARS zero-failure assertion, with actual one versus expected zero; its earlier named-case gates pass. These platform jobs remain red on `real repository-content search relevance 'find generated metadata ownership'`, not accepted suites. Windows also completes: 309 host passes/no failures/six explicit exclusions and 915 EARS passes/the same keyword failure/four FIFO exclusions. Both actual write-unit refusal cases pass. Its separate host-crash suite has two passes and ten POSIX recovery/signal exclusions; retained raw reports name every exclusion. The overall strict run and final consumer outcomes remain separate. Later mandatory-name/resource-probe edits are absent from this tested source.
+
+Nine explicitly selected original test JSON reports are compressed unchanged with decompressed SHA-256 hashes. No profiles, database files, build output, configuration or traces are published.
+
+The subsequent mandatory write-unit name guards replay successfully against all three original host reports. Removing, skipping or duplicating either new witness is refused on each platform (eighteen negative controls). This pure metadata replay is distinct from execution of the later workflow revision.

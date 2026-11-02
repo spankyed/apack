@@ -1,0 +1,71 @@
+{
+  "source": "17f14da2e1c4b1925d617d0b1525be9bc087feac",
+  "comparisons": [
+    {
+      "size": 1000,
+      "scopePercent": 100,
+      "baselineMedianMs": 7.26765449999948,
+      "scopeFirstMedianMs": 7.442342499984079
+    },
+    {
+      "size": 1000,
+      "scopePercent": 10,
+      "baselineMedianMs": 8.454388500002096,
+      "scopeFirstMedianMs": 8.640617499986547
+    },
+    {
+      "size": 1000,
+      "scopePercent": 1,
+      "baselineMedianMs": 2.627323000000615,
+      "scopeFirstMedianMs": 2.3666030000022147
+    },
+    {
+      "size": 10000,
+      "scopePercent": 100,
+      "baselineMedianMs": 40.32512100000167,
+      "scopeFirstMedianMs": 37.5153100000025
+    },
+    {
+      "size": 10000,
+      "scopePercent": 10,
+      "baselineMedianMs": 15.534854000004998,
+      "scopeFirstMedianMs": 14.732892499989248
+    },
+    {
+      "size": 10000,
+      "scopePercent": 1,
+      "baselineMedianMs": 3.2790135000032024,
+      "scopeFirstMedianMs": 2.8947615000070073
+    },
+    {
+      "size": 99900,
+      "scopePercent": 100,
+      "baselineMedianMs": 19.33551549999538,
+      "scopeFirstMedianMs": 18.836200500009
+    },
+    {
+      "size": 99900,
+      "scopePercent": 10,
+      "baselineMedianMs": 49.80507600000419,
+      "scopeFirstMedianMs": 44.70507449998695
+    },
+    {
+      "size": 99900,
+      "scopePercent": 1,
+      "baselineMedianMs": 12.263903500017477,
+      "scopeFirstMedianMs": 11.806213999996544
+    }
+  ],
+  "measuredQueries": 7200,
+  "pairedProductionControls": 900,
+  "pairedPipelineControls": 50,
+  "timedOrderedAnswerPairs": 3600,
+  "canonicalRowsVerified": 99900,
+  "snapshotUnchanged": true,
+  "resourcePauses": 0,
+  "frozenGatesPassed": [
+    false,
+    false
+  ],
+  "promoted": false
+}

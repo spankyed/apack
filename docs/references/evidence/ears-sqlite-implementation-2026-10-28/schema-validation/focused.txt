@@ -1,0 +1,36 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/schema-validation.spec.ts tests/sqlite/schema-admission.spec.ts tests/sqlite/index-builds.spec.ts tests/engine/sqlite-operations.spec.ts tests/no-module-state.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 11291ms
+   ✓ SQLite operational feasibility > selects adjacency and relation payloads without a binding call per source or edge  2656ms
+   ✓ SQLite operational feasibility > replaces logical values when the source and destination have different physical field slots  558ms
+   ✓ SQLite operational feasibility > explains actual FTS and vector statements with their original bindings  304ms
+   ✓ SQLite operational feasibility > bounds explain capture while counting every executed query statement  520ms
+   ✓ SQLite operational feasibility > reopens lossless payloads, FTS and embeddings, including read-only access  383ms
+   ✓ SQLite operational feasibility > backs up and replaces a populated destination with text, relations and vectors intact  583ms
+   ✓ SQLite operational feasibility > rolls back primary, FTS and pending-vector changes together  514ms
+   ✓ SQLite operational feasibility > admits new types and value indexes over existing data, and refuses stale handles  554ms
+   ✓ SQLite operational feasibility > keeps the incumbent intact when replacement fails midway  643ms
+   ✓ SQLite operational feasibility > gives a consistent multi-statement snapshot while another handle commits  418ms
+   ✓ SQLite operational feasibility > preserves the declared schema and data after unsupported index admission  805ms
+   ✓ SQLite operational feasibility > allows another process to read a committed snapshot and refuses its competing writer  917ms
+   ✓ SQLite operational feasibility > admits required fields over old data and checks only changed fields  657ms
+   ✓ SQLite operational feasibility > preserves array-element and UTF-16 highlight locations  593ms
+   ✓ SQLite operational feasibility > reports its own commit sequence when another writer commits immediately after it  690ms
+ ✓ tests/sqlite/index-builds.spec.ts (9 tests) 1780ms
+   ✓ yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes  307ms
+   ✓ yielding value-index admission > resumes a committed batch cursor after a real killed process  564ms
+ ✓ tests/sqlite/schema-validation.spec.ts (49 tests) 4118ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 256ms
+ ✓ tests/sqlite/schema-admission.spec.ts (2 tests) 1252ms
+   ✓ SQLite schema admission ownership > allows changing an unused prefix  953ms
+
+ Test Files  5 passed (5)
+      Tests  80 passed (80)
+   Start at  14:24:52
+   Duration  21.08s (transform 288ms, setup 22ms, collect 1.47s, tests 18.70s, environment 0ms, prepare 313ms)
+

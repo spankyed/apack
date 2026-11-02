@@ -1,0 +1,76 @@
+{
+  "base": "098d479157aaf9c7cfa363f01a8a8a371c1473d5",
+  "inputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "5e7631a42238ced3895ace15ca195c5b2bc766874f37f83386866170a162dc66",
+    "packages/apack-host/src/database/recovery-lock.ts": "b26e2a9ceb5302cb1a12c7421d158fb65d610fde87e9d4a43856a28a0438ac25",
+    "packages/apack-host/src/database/open.ts": "cc525a4da68e460d13543a4c684f0105cd8cf3db1b4c406f2c862a9de95bd7d0",
+    "packages/apack-host/src/database/storage.ts": "8fc24a46616385fc5cb117184bec0f343996750c776eefd661b02fe33856d760",
+    "packages/apack-ears/src/sqlite/database.ts": "9a516b6c4e48d97a5599bff7a9577a71391f0dc6dd9f96a7dbece0cd0c42ebf3",
+    "packages/apack-host/tests/backup/recovery.spec.ts": "ebbb2c42526e1bd3d22c3241dd9fbd6ec3c3472efc9b4cb5138d45ae86c5e72c",
+    "packages/apack-host/tests/backup/recovery-crash.spec.ts": "23131488da57ba85359e5512ea473135eacb08ea0c0525d609c8fd013d20fbfc",
+    "packages/apack-host/tests/database/storage.spec.ts": "f32b8074c82fdfc5f09a4fcff3adeba4fa07fb6ce13f8053cfaf573aeb9ddeab",
+    "packages/apack-host/tests/services/run-history.spec.ts": "027d5f64c094a280644d7276b78cfba20b429f6711d91c806dc64ffde1b61d86",
+    "packages/apack-host/tests/backup/storage.spec.ts": "216afd3ff1bafe90bdeeb352696d2f05537085362567d5582da732c2c370b39e"
+  },
+  "controls": [
+    {
+      "label": "unclaimed-writable",
+      "path": "packages/apack-host/src/database/recovery-lock.ts",
+      "exitCode": 1,
+      "failedAssertions": [
+        "excludes writable elmdb/1 handles from physical recovery until close",
+        "excludes writable sqlite/1 handles from physical recovery until close"
+      ]
+    },
+    {
+      "label": "quarantine-without-exclusion",
+      "path": "packages/apack-host/src/database/open.ts",
+      "exitCode": 1,
+      "failedAssertions": [
+        "refuses elmdb/1 history quarantine while a managed reader still holds the directory",
+        "refuses sqlite/1 history quarantine while a managed reader still holds the directory"
+      ]
+    },
+    {
+      "label": "io-classified-unreadable",
+      "path": "packages/apack-host/src/database/storage.ts",
+      "exitCode": 1,
+      "failedAssertions": [
+        "never treats SQLITE_IOERR_READ as permission to replace a SQLite history directory"
+      ]
+    },
+    {
+      "label": "forget-uncertain-open",
+      "path": "packages/apack-host/src/database/recovery-lock.ts",
+      "exitCode": 1,
+      "failedAssertions": [
+        "retains the directory claim when a failed SQLite constructor could not close its connection"
+      ]
+    },
+    {
+      "label": "ignore-directory-identity",
+      "path": "packages/apack-host/src/database/recovery-lock.ts",
+      "exitCode": 1,
+      "failedAssertions": [
+        "excludes physical directory identity even when its claim uses another leaf spelling"
+      ]
+    },
+    {
+      "label": "quarantine-stale-incumbent",
+      "path": "packages/apack-host/src/database/open.ts",
+      "exitCode": 1,
+      "failedAssertions": [
+        "refuses stale elmdb/1 history publication after another directory was installed",
+        "refuses stale sqlite/1 history publication after another directory was installed"
+      ]
+    },
+    {
+      "label": "omit-native-close-uncertainty",
+      "path": "packages/apack-ears/src/sqlite/database.ts",
+      "exitCode": 1,
+      "failedAssertions": [
+        "retains the directory claim when a failed SQLite constructor could not close its connection"
+      ]
+    }
+  ]
+}

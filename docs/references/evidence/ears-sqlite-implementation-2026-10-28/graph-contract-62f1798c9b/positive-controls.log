@@ -1,0 +1,18 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 4293ms
+   ✓ SQLite operational feasibility > selects adjacency and relation payloads without a binding call per source or edge  518ms
+   ✓ SQLite operational feasibility > replaces logical values when the source and destination have different physical field slots  578ms
+   ✓ SQLite operational feasibility > bounds explain capture while counting every executed query statement  328ms
+   ✓ SQLite operational feasibility > reopens lossless payloads, FTS and embeddings, including read-only access  369ms
+   ✓ SQLite operational feasibility > backs up and replaces a populated destination with text, relations and vectors intact  355ms
+ ✓ tests/sqlite/graph-execution.spec.ts (2 tests) 586ms
+   ✓ SQLite graph execution > batches a width-256 frontier and closes an early-return cursor before the next write  377ms
+
+ Test Files  2 passed (2)
+      Tests  20 passed (20)
+   Start at  17:04:35
+   Duration  7.23s (transform 962ms, setup 81ms, collect 1.63s, tests 4.88s, environment 0ms, prepare 280ms)
+
+JSON report written to /results/positive-controls.json

@@ -1,0 +1,694 @@
+{
+  "source": "1deae9851769b4d40ef78966badacbf8cef90fa6",
+  "run": 41490418115,
+  "originalJobMetadataSha256": "03b104623baf07b3c6ae23a236b06adb88b219dadd06c3311e610fb88844d825",
+  "ordinaryMeasuredActions": 120,
+  "ordinaryWarmups": 30,
+  "sourceAppPlaywrightCases": [
+    {
+      "backend": "elmdb",
+      "scenario": "thread-open",
+      "name": "open a populated thread through the real transport and render its bounded page",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 38388,
+      "originalReportSha256": "271cc62645710c48761c291038c2814bcf18b9dfafa6d64a92fe97459865b60b"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "thread-open",
+      "name": "open a populated thread through the real transport and render its bounded page",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 30548,
+      "originalReportSha256": "48b80c5a879ed482da145a7e5517d7c17e5d92af7ab0cdc7bb3778d348348587"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "search",
+      "name": "search a populated corpus and apply only the current query results",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 11144,
+      "originalReportSha256": "fb8cf867f6f222485932c1458f7e3d31a8fe1de52dfe67dcfcb021561d1a21a9"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "search",
+      "name": "search a populated corpus and apply only the current query results",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 18563,
+      "originalReportSha256": "ce6fe4e4751a5af9a8dd9fddedc968bd973a513dc8d40c8a3467e496afd19dba"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight warmup 0",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 8575,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight warmup 1",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1197,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight warmup 2",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1156,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight warmup 3",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1139,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight warmup 4",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1242,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 5",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1269,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 6",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1332,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 7",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1531,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 8",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1237,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 9",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1285,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 10",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1241,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 11",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1240,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 12",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1270,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 13",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1267,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 14",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1238,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 15",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1186,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 16",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1430,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 17",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1279,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 18",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1328,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 19",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1364,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 20",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1271,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 21",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1216,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 22",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1278,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 23",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1484,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "name": "lightweight trial 24",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1254,
+      "originalReportSha256": "1b2485667b5145aff3f9cce532110141086ce622904d2f6f62ffbfde4f091e42"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight warmup 0",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 14832,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight warmup 1",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1636,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight warmup 2",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1485,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight warmup 3",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1246,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight warmup 4",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1281,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 5",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1448,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 6",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1443,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 7",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1598,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 8",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1508,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 9",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1439,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 10",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1522,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 11",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1429,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 12",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1649,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 13",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1555,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 14",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1465,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 15",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1432,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 16",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1458,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 17",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1627,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 18",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1642,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 19",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1436,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 20",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1459,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 21",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1686,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 22",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1577,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 23",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1592,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "name": "lightweight trial 24",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 1391,
+      "originalReportSha256": "fbe357bb9669832282b392f79c946fb5f6c19dba0ef05f3eaf180dc131a0054e"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "search-supersession",
+      "name": "a late old result cannot replace current search results, including after cancellation",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 9506,
+      "originalReportSha256": "9530d6b3ac7b310ee8da4728e5f31975fe4f376b4bcf8459e879140ecfd0fb23"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "search-supersession",
+      "name": "a late old result cannot replace current search results, including after cancellation",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 18725,
+      "originalReportSha256": "a582375c00a8f82312a18743d397860c785c59f13cd22a611c8d725b68d8b543"
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "search-resource-refusal",
+      "name": "renderer resource refusal preserves correctness and incomplete capture",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 11239,
+      "originalReportSha256": "795c2f737c3e13ccc2f7f41e460e935d71926d2405cf84840580fb490aeeadfc"
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "search-resource-refusal",
+      "name": "renderer resource refusal preserves correctness and incomplete capture",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 19442,
+      "originalReportSha256": "b9baa40fd76e620fe0cd5f993d75ec0b531147edf0c369bdc9a5d5b748814261"
+    }
+  ],
+  "sourceAppReportFiles": 10,
+  "sourceAppPassedCases": 58,
+  "controlMeasuredIncompleteCaptures": 40,
+  "controlWarmupIncompleteCaptures": 10,
+  "controlIndexStates": "Both resource-refusal indexes remain failed; controlled incompleteness is not performance acceptance.",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpus": 3,
+    "memoryBytes": 7516192768,
+    "identity": "f22bd20ad3c6cf21dd9d2f521221ef9366c6025d1ae867398fe0d4c9342e6034"
+  },
+  "controlMachine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpus": 3,
+    "memoryBytes": 7516192768,
+    "identity": "dced95a4b914f13ca911b3ad7efe8440e53e8641352a2e446d03832eecd76fc4"
+  },
+  "machineIdentityScope": "Ordinary cohorts share one identity; controls use the workflow\u2019s separate phase label. Platform/arch/CPU count/memory agree; no cross-phase timing comparison.",
+  "runs": [
+    {
+      "backend": "elmdb",
+      "scenario": "thread-open",
+      "capturedState": "passed",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 761.2999999999302,
+        "minMs": 560.8000000000466,
+        "maxMs": 1134.9000000000233
+      },
+      "rawTrialsVerified": 25,
+      "intentionallyIncompleteMeasuredCaptures": 0
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "search",
+      "capturedState": "passed",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 28.79999999998836,
+        "minMs": 17.599999999976717,
+        "maxMs": 44.5
+      },
+      "rawTrialsVerified": 25,
+      "intentionallyIncompleteMeasuredCaptures": 0
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "capturedState": "passed",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 849.5000000001164,
+        "minMs": 819.4000000001397,
+        "maxMs": 967.5999999998603
+      },
+      "rawTrialsVerified": 25,
+      "intentionallyIncompleteMeasuredCaptures": 0,
+      "visibleProgress": {
+        "firstVisibleMs": {
+          "median": 216.10000000009313,
+          "max": 346.0999999998603
+        },
+        "maxVisibleGapMs": {
+          "median": 90.69999999995343,
+          "max": 163.80000000004657
+        }
+      }
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "search-resource-refusal",
+      "capturedState": "failed",
+      "summary": {
+        "measured": 20,
+        "passed": 0,
+        "unsuccessful": 20,
+        "medianMs": null,
+        "minMs": null,
+        "maxMs": null
+      },
+      "rawTrialsVerified": 25,
+      "intentionallyIncompleteMeasuredCaptures": 20
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "thread-open",
+      "capturedState": "passed",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 670.4000000000815,
+        "minMs": 571.9000000000233,
+        "maxMs": 780.5
+      },
+      "rawTrialsVerified": 25,
+      "intentionallyIncompleteMeasuredCaptures": 0
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "search",
+      "capturedState": "passed",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 25.95000000001164,
+        "minMs": 18.400000000023283,
+        "maxMs": 34.40000000002328
+      },
+      "rawTrialsVerified": 25,
+      "intentionallyIncompleteMeasuredCaptures": 0
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "capturedState": "passed",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 978.0499999999302,
+        "minMs": 914,
+        "maxMs": 1099.8000000000466
+      },
+      "rawTrialsVerified": 25,
+      "intentionallyIncompleteMeasuredCaptures": 0,
+      "visibleProgress": {
+        "firstVisibleMs": {
+          "median": 362.3499999999767,
+          "max": 466.89999999990687
+        },
+        "maxVisibleGapMs": {
+          "median": 109.34999999997672,
+          "max": 160
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "search-resource-refusal",
+      "capturedState": "failed",
+      "summary": {
+        "measured": 20,
+        "passed": 0,
+        "unsuccessful": 20,
+        "medianMs": null,
+        "minMs": null,
+        "maxMs": null
+      },
+      "rawTrialsVerified": 25,
+      "intentionallyIncompleteMeasuredCaptures": 20
+    }
+  ],
+  "scope": "Six warm-process cohorts, native then SQLite per scenario, one macOS host; default durability differs. No causal engine-only, tail, independent-device/provider/model or 2-CPU Linux foreground-budget claim."
+}

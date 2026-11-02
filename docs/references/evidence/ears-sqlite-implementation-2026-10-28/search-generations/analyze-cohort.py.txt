@@ -1,0 +1,12 @@
+import json,pathlib
+r=pathlib.Path('corrected-cohort')
+def q(xs,p):
+ a=sorted(xs);return a[min(len(a)-1,int(len(a)*p))] if a else 0
+# Raw stdout is gzip-compressed in the committed evidence.
+import gzip
+for p in sorted(r.glob('100000-OFF-*.stdout.gz')):
+ v=json.loads(gzip.decompress(p.read_bytes()));print(p.name)
+ for phase in ['build','gc']:
+  a=[x['ms'] for x in v['batchSamples'] if x['phase']==phase]
+  print(phase,{'count':len(a),'p50':q(a,.5),'p95':q(a,.95),'p99':q(a,.99),'max':max(a),'above16':sum(x>16 for x in a)})
+ print('operation',v['operationMs'],'lookup',v['lookupMs'],'turn',v['turnWaitMs'],'heartbeat',v['heartbeatDelayMs'],'resources',v['resourceUsage'])

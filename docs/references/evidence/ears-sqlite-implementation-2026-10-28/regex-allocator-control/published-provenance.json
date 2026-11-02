@@ -1,0 +1,47 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "pkg:npm/rregex@1.13.1",
+      "digest": {
+        "sha512": "434f5bb648f83a6ceef58cbf809d9ff86db6807ccbdbf64faa03206a8409d49c1fca342e99077e65c8cec2a9af086484901fbedf47def074448111d515e185f4"
+      }
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+      "externalParameters": {
+        "workflow": {
+          "ref": "refs/heads/master",
+          "repository": "https://github.com/2fd/rregex",
+          "path": ".github/workflows/release.yml"
+        }
+      },
+      "internalParameters": {
+        "github": {
+          "event_name": "push",
+          "repository_id": "434048895",
+          "repository_owner_id": "208789"
+        }
+      },
+      "resolvedDependencies": [
+        {
+          "uri": "git+https://github.com/2fd/rregex@refs/heads/master",
+          "digest": {
+            "gitCommit": "ffdc766d0ce78c2bad3eb9ce5f02229e5a47bd8a"
+          }
+        }
+      ]
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/actions/runner/github-hosted"
+      },
+      "metadata": {
+        "invocationId": "https://github.com/2fd/rregex/actions/runs/29774674503/attempts/1"
+      }
+    }
+  }
+}

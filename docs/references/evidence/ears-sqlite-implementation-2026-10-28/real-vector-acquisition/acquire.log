@@ -1,0 +1,29 @@
+{"shard": "train-00000-of-00004.parquet", "downloadedBytes": 67108864}
+{"shard": "train-00000-of-00004.parquet", "downloadedBytes": 134217728}
+{"shard": "train-00000-of-00004.parquet", "downloadedBytes": 201326592}
+{"shard": "train-00000-of-00004.parquet", "downloadedBytes": 268435456}
+{"shard": "train-00000-of-00004.parquet", "downloadedBytes": 335544320}
+{"shard": "train-00000-of-00004.parquet", "downloadedBytes": 402653184}
+{"projectedShard": "train-00000-of-00004.parquet", "rows": 25000, "counts": {"corpus": 24975, "queries": 25}}
+{"shard": "train-00001-of-00004.parquet", "downloadedBytes": 67108864}
+{"shard": "train-00001-of-00004.parquet", "downloadedBytes": 134217728}
+{"shard": "train-00001-of-00004.parquet", "downloadedBytes": 201326592}
+{"shard": "train-00001-of-00004.parquet", "downloadedBytes": 268435456}
+{"shard": "train-00001-of-00004.parquet", "downloadedBytes": 335544320}
+{"shard": "train-00001-of-00004.parquet", "downloadedBytes": 402653184}
+{"projectedShard": "train-00001-of-00004.parquet", "rows": 50000, "counts": {"corpus": 49950, "queries": 50}}
+{"shard": "train-00002-of-00004.parquet", "downloadedBytes": 67108864}
+{"shard": "train-00002-of-00004.parquet", "downloadedBytes": 134217728}
+{"shard": "train-00002-of-00004.parquet", "downloadedBytes": 201326592}
+{"shard": "train-00002-of-00004.parquet", "downloadedBytes": 268435456}
+{"shard": "train-00002-of-00004.parquet", "downloadedBytes": 335544320}
+{"shard": "train-00002-of-00004.parquet", "downloadedBytes": 402653184}
+{"projectedShard": "train-00002-of-00004.parquet", "rows": 75000, "counts": {"corpus": 74925, "queries": 75}}
+{"shard": "train-00003-of-00004.parquet", "downloadedBytes": 67108864}
+{"shard": "train-00003-of-00004.parquet", "downloadedBytes": 134217728}
+{"shard": "train-00003-of-00004.parquet", "downloadedBytes": 201326592}
+{"shard": "train-00003-of-00004.parquet", "downloadedBytes": 268435456}
+{"shard": "train-00003-of-00004.parquet", "downloadedBytes": 335544320}
+{"shard": "train-00003-of-00004.parquet", "downloadedBytes": 402653184}
+{"projectedShard": "train-00003-of-00004.parquet", "rows": 100000, "counts": {"corpus": 99900, "queries": 100}}
+{"sealed": "/data/qdrant-3small-v1/manifest.json", "counts": {"corpus": 99900, "queries": 100}}

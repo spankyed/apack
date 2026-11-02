@@ -1,0 +1,56 @@
+[
+  {
+    "label": "compile",
+    "args": [
+      "cc",
+      "-O3",
+      "-DNDEBUG",
+      "-Werror=implicit-function-declaration",
+      "-shared",
+      "-fPIC",
+      "-I/seed/node_modules/better-sqlite3/deps/sqlite3",
+      "/assets/vec1.c",
+      "-lm",
+      "-o",
+      "/metrics/vec1.so"
+    ],
+    "exitCode": 0,
+    "seconds": 2.489096277000499
+  },
+  {
+    "label": "99900-ivf-bq-256-probes-32",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/real-vector-vec1.mjs",
+      "/metrics/vec1.so",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "ivf-bq-256",
+      "/results/99900-ivf-bq-256-probes-32.json",
+      "/results/model-99900-ivf-bq.bin"
+    ],
+    "exitCode": 0,
+    "seconds": 42.6954881450074
+  },
+  {
+    "label": "99900-ivf-bq-256-probes-64",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/real-vector-vec1.mjs",
+      "/metrics/vec1.so",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "ivf-bq-256",
+      "/results/99900-ivf-bq-256-probes-64.json",
+      "/results/model-99900-ivf-bq.bin"
+    ],
+    "exitCode": 0,
+    "seconds": 57.01467078800488
+  }
+]

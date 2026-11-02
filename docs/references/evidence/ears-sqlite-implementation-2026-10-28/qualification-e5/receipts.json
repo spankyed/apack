@@ -1,0 +1,57 @@
+[
+  {
+    "file": "linux/verification.json",
+    "sha256": "2c417894819b5507a098817ab04186628ffa1a51715eed56c28f1179b578030d",
+    "bytes": 1723
+  },
+  {
+    "file": "linux/host.json",
+    "sha256": "b7b7cacb056654b373e4ba9d340debad52323cbb8932a3f20a99c83b8b744a9b",
+    "bytes": 63974
+  },
+  {
+    "file": "linux/ears.json",
+    "sha256": "73b91e227305a98bada9063e756bd9b8cbdeba9672364d514fcd49aecc0efe76",
+    "bytes": 253464
+  },
+  {
+    "file": "linux/sdk-all-sqlite.json",
+    "sha256": "22ae1a3a78d602e051e0f83e2870c68f77381e69cefbfd88299cf9f9f6e2e3e7",
+    "bytes": 428761
+  },
+  {
+    "file": "linux/filesystem-full.json",
+    "sha256": "15440629cf6ebf4c3451280280c199132021fee9bcc91f47c9ca3b1904d1bff2",
+    "bytes": 3040
+  },
+  {
+    "file": "macos/verification.json",
+    "sha256": "2bf94dc470bdfdc324d39570bd77042e45859c9c42e28043c03b6bf1e32e5535",
+    "bytes": 1354
+  },
+  {
+    "file": "macos/host.json",
+    "sha256": "30d28db2e095d983d862d15a7d11ee40a037f6801efc9d878045e7aaf2ea2746",
+    "bytes": 63993
+  },
+  {
+    "file": "macos/ears.json",
+    "sha256": "7767a9dc58e4f9c063765e307f86ec5984060dc7571e61447e2ba2dd914429da",
+    "bytes": 253547
+  },
+  {
+    "file": "windows/verification.json",
+    "sha256": "7f0249d47f0be1ee7034566a61cc20bcd2c224dd44e445920884628317120acf",
+    "bytes": 1354
+  },
+  {
+    "file": "windows/host.json",
+    "sha256": "e820bb7d601b9f1dfe96829166c5c8277ed0c2887a5bf1afac97e487929b8eed",
+    "bytes": 64029
+  },
+  {
+    "file": "windows/ears.json",
+    "sha256": "1d1be0235851e87c5c95b3751ea3d20cdf5fb671997459edddc0f1c90cfc0b75",
+    "bytes": 252475
+  }
+]

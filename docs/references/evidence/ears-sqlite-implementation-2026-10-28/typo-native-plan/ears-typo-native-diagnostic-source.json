@@ -1,0 +1,6 @@
+{
+  "runtime": "9beb23ebc9a73c0860c7e8053c9be85814ff1929",
+  "fixtureBase": "0ba7b955b8",
+  "fixtureSha256": "70a6618a43704f2ed9fef2003ccde9ae5a293bb940fd305716cedc0af012d6b1",
+  "purpose": "10k full/pruned native MATCH count and scored SQL; exact result equality; no source edits"
+}

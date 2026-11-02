@@ -1,0 +1,36 @@
+{
+  "source": "dc19e4ecd2e247244a9f41bf4584c12c70500c69",
+  "run": 41236449413,
+  "reports": {
+    "sqlite": {
+      "rawSha256": "9db60fc0ce6ee902a650b2db052dae98ad5f736afd5180bd7165c456473c3add",
+      "passed": 182,
+      "failed": 1,
+      "pending": 0,
+      "failedCases": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ],
+      "textScopeGuard": [
+        {
+          "name": "native text pipeline scopes returns only the selected page across the binding rather than all eligible IDs",
+          "status": "passed"
+        }
+      ]
+    },
+    "elmdb": {
+      "rawSha256": "5611aba41bb95b501a8c1724b320b5f7c07a033fe0a5fe72d6d68c8f743b8f3b",
+      "passed": 149,
+      "failed": 1,
+      "pending": 33,
+      "failedCases": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ],
+      "textScopeGuard": [
+        {
+          "name": "native text pipeline scopes returns only the selected page across the binding rather than all eligible IDs",
+          "status": "skipped"
+        }
+      ]
+    }
+  }
+}

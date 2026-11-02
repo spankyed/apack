@@ -1,0 +1,46 @@
+{
+  "run": 41237774881,
+  "source": "fcbe188ba00806f5196ceb6fed39cbc607c54a49",
+  "backends": {
+    "sqlite": {
+      "passed": 185,
+      "failed": 1,
+      "skipped": 0,
+      "rawSha256": "163801e3134e075f2c505edc13c6e005f820dfa448d0fb38872fb6f5c0d2b31e",
+      "mixedTypeCases": [
+        {
+          "name": "search searches global and filtered sets containing types without a text index",
+          "status": "passed"
+        },
+        {
+          "name": "vector search searches global and filtered vector sets containing unindexed types",
+          "status": "passed"
+        },
+        {
+          "name": "vector search fuses independently indexed types in a global hybrid search",
+          "status": "passed"
+        }
+      ]
+    },
+    "elmdb": {
+      "passed": 152,
+      "failed": 1,
+      "skipped": 33,
+      "rawSha256": "4d0f771ca468b8bb773816eb3f249c89b1241d48e881cc740f857c1698ff9158",
+      "mixedTypeCases": [
+        {
+          "name": "search searches global and filtered sets containing types without a text index",
+          "status": "passed"
+        },
+        {
+          "name": "vector search searches global and filtered vector sets containing unindexed types",
+          "status": "passed"
+        },
+        {
+          "name": "vector search fuses independently indexed types in a global hybrid search",
+          "status": "passed"
+        }
+      ]
+    }
+  }
+}

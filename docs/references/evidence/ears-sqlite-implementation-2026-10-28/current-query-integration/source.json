@@ -1,0 +1,9 @@
+{
+  "source": "399c4765f0be8892330f0188f39cde8215b500fc",
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "sourceDescription": "exact integration commit archive; synthetic Git classification metadata"
+}

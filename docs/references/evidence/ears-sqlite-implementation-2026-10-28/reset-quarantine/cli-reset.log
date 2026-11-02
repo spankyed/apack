@@ -1,0 +1,20 @@
+
+ RUN  v3.2.7 /electron
+
+ ✓ |@apackdev/cli| tests/commands/db.integration.spec.ts (77 tests | 68 skipped) 6076ms
+   ✓ apack db reset > lists what it would delete, and deletes the data and stored keys only with --force  871ms
+   ✓ apack db reset > refuses an open history handle before deleting primary data or keys (readOnly=false)  574ms
+   ✓ apack db reset > refuses an open history handle before deleting primary data or keys (readOnly=true)  557ms
+   ✓ apack db reset > resets primary data when history is absent without excluding its own primary handle  437ms
+   ✓ apack db reset > keeps new managed history opens excluded until deletion finishes  378ms
+   ✓ apack db reset > releases history exclusion after deletion fails, leaving history available for retry  455ms
+   ✓ apack db reset > can resume a reset killed after primary clear and before history deletion  1763ms
+   ✓ apack db reset > keeps the stored keys with --keep-keys, and says so  719ms
+   ✓ apack db reset > refuses while an app runs on the data dir  319ms
+
+ Test Files  1 passed (1)
+      Tests  9 passed | 68 skipped (77)
+   Start at  19:57:04
+   Duration  8.35s (transform 1.20s, setup 19ms, collect 1.94s, tests 6.08s, environment 0ms, prepare 40ms)
+
+JSON report written to /results/cli-reset.json

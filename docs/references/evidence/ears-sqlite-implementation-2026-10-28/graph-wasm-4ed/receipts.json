@@ -1,0 +1,74 @@
+{
+  "portable--ears-sqlite-graph-wasm-41210058617--native--graphs--Cargo.lock": {
+    "sha256": "f8377cd1c0d050c92e6e382d9e3b4341875fdd02e247a3869480ae74e8259285",
+    "bytes": 6963
+  },
+  "portable--ears-sqlite-graph-wasm-41210058617--.temp--sqlite-graph-wasm--report.json": {
+    "sha256": "6875cd1136c76033317c4fdfb69e84c3067548a048b31382dbade59079c3ffbb",
+    "bytes": 725
+  },
+  "portable--ears-sqlite-graph-wasm-41210058617--.temp--sqlite-graph-wasm--probe.log": {
+    "sha256": "ddb817414e30d5fcde7c122fbef4f3bd3d06fe25202a90ee332f953a45843e57",
+    "bytes": 407
+  },
+  "portable--ears-sqlite-graph-wasm-41210058617--.temp--sqlite-graph-wasm--source.txt": {
+    "sha256": "c20550a9fa1ad4eacb72d4a3e4cd9abe33c853bdee9349ec3472b74216abc740",
+    "bytes": 41
+  },
+  "portable--ears-sqlite-graph-wasm-41210058617--.temp--sqlite-graph-wasm--build.log": {
+    "sha256": "937290f004515ca232c9f3380ae574a30854875fdfbc613a46d37af613120f97",
+    "bytes": 1670
+  },
+  "ears-sqlite-graph-wasm-integration--types.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-graph-wasm-integration--sqlite.log": {
+    "sha256": "2800555f9bd0d9e8103c0c66cb213c85aead8e436d8f3b77cfdf55142fa4fbbb",
+    "bytes": 1217
+  },
+  "ears-sqlite-graph-wasm-integration--inputs.json": {
+    "sha256": "e25104b3e3f4d2a3274f6f79b47da7de13385657b0ff28b7711656e13b947efc",
+    "bytes": 214776
+  },
+  "ears-sqlite-graph-wasm-integration--sqlite.json": {
+    "sha256": "f7c5dd2fc10344b2c677175d84f3cc2727af76b165427c296c2037d7f4c89282",
+    "bytes": 33763
+  },
+  "ears-sqlite-graph-wasm-integration--run.json": {
+    "sha256": "8a1a02db31d93f7143695fb3481783b38ca6d68a7c71d8e68bf59b037b49cca9",
+    "bytes": 401
+  },
+  "ears-sqlite-graph-wasm-integration--host-launch.json": {
+    "sha256": "fda291bb7a953b24ed375e14fe625d1c0ffa1f82cae27f368ea1c85a577a96ca",
+    "bytes": 4461
+  },
+  "ears-sqlite-graph-wasm-integration--ears-sqlite-graph-wasm-integration-run.py": {
+    "sha256": "ffc325f6e3732d28417af7cb04713ca25c8b3bdfa07d918f01b3db0d45ef9703",
+    "bytes": 1877
+  },
+  "ears-sqlite-graph-wasm-integration--ears-run-sqlite-graph-wasm-integration.py": {
+    "sha256": "2f7786ba71af0f32c7000c164a59b48e6e88a026d85c861536bccbde520b7088",
+    "bytes": 6274
+  },
+  "ears-graph-frozen-cleanup--report.json": {
+    "sha256": "01bb1470ddfa5f39ff8b0518acd0fef2ec0fe86a25136925cc95d25c39b9bf39",
+    "bytes": 1094
+  },
+  "ears-graph-frozen-cleanup--ears-graph-frozen-cleanup.py": {
+    "sha256": "a64195235e85ca68ef57a00105d1c04627608fe74505951a66fc30ccdaf53571",
+    "bytes": 1948
+  },
+  "ears-graph-wasm-4ed-metadata.json": {
+    "sha256": "3cc429f334eaa7c7b789b678b783db1c44b4f8b05edf68a1605464ff5cf1a5ab",
+    "bytes": 3281
+  },
+  "ears-graph-wasm-4ed.log": {
+    "sha256": "e97bcba7e7bc5c349da0546eecc6dbd19363f118a9acab380810d8ae06576a72",
+    "bytes": 78099
+  },
+  "ears-strict-dcbb-final.json": {
+    "sha256": "580d466f9b5e5f5e0a44c0bdfe32e336f7c487224cb881c1137f37ddc5cfbac1",
+    "bytes": 36899
+  }
+}

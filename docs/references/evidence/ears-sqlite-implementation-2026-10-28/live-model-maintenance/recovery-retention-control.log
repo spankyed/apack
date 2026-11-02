@@ -1,0 +1,56 @@
+(node:300) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ❯ |@apackdev/host| tests/backup/import-transaction.spec.ts (10 tests | 1 failed | 9 skipped) 90ms
+   ↓ retains incumbent files through acceptance and restores them before the restored data is announced
+   ↓ preserves both failures and the durable recovery path if the restored data is refused too
+   ↓ rolls back a replacement that committed before reporting failed sync
+   ↓ retains a prepared recovery journal and never replays an uncertain replacement
+   ↓ refuses before replacement when syncing the recovery copy fails
+   ↓ refuses before replacement when syncing the recovery parent fails
+   × retains prepared incumbent recovery when background restart fails after accepted import 89ms
+     → expected AggregateError: Acceptance cleanup failed… { …(4) } to match object { code: 'RECOVERY_REQUIRED', …(2) }
+(1 matching property omitted from actual)
+   ↓ retains the original refusal and restored incumbent when background restart also fails
+   ↓ finishes background recovery before the outer replacement lifecycle announces completion
+   ↓ retains a prepared incumbent when outer acceptance cleanup refuses after installation
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@apackdev/host| tests/backup/import-transaction.spec.ts > retains prepared incumbent recovery when background restart fails after accepted import
+AssertionError: expected AggregateError: Acceptance cleanup failed… { …(4) } to match object { code: 'RECOVERY_REQUIRED', …(2) }
+(1 matching property omitted from actual)
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- {[39m
+[32m-   "cause": Error {[39m
+[32m-     "message": "background restart refused",[39m
+[32m-     "code": "SQLITE_IOERR",[39m
+[32m-     "backgroundRecoveryFailed": true,[39m
+[32m-   },[39m
+[31m+ AggregateError {[39m
+[2m    "code": "RECOVERY_REQUIRED",[22m
+[2m    "dataInstalled": true,[22m
+[2m  }[22m
+
+ ❯ tests/backup/import-transaction.spec.ts:146:19
+    144|   const managed:BackupStore={...store,async withExclusiveWrites(operat…
+    145|   let failure:unknown;try{await importDatabase({lmdb:managed},backup,m…
+    146|   expect(failure).toMatchObject({code:'RECOVERY_REQUIRED',dataInstalle…
+       |                   ^
+    147|   const recovery=(failure as {recoveryPath:string}).recoveryPath;
+    148|   expect(fs.readFileSync(path.join(recovery,'lmdb/data.mdb'),'utf8')).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  11:42:06
+   Duration  3.38s (transform 1.81s, setup 13ms, collect 2.78s, tests 90ms, environment 0ms, prepare 287ms)
+
+JSON report written to /results/recovery-retention-control.json

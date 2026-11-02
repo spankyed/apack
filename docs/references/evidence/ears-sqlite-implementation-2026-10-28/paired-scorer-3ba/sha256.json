@@ -1,0 +1,14 @@
+{
+  "vector-build-comparison.json": "5ab09e7b5fb4cbb816a441d519f8afc496fc7347da354e22c405f9ac053de9c6",
+  "corpus-manifest.json": "5f18935a870f3c4c68e814b17733ebaa34d5a16ac3cc9e7cfaf777e4b14a883e",
+  "qualification.json": "27d0a352672e998b62ffda68f5fe86c4c0d4be6b1ae6c5213f17d53daf920bcc",
+  "safeguards.json": "0fa4b8a2939115de798f78554dea40674add18f30c75c36ff897f15e7b826a3a",
+  "generic/hybrid-1000.json": "88adb1696564e2759adeb92607327ce059fc0f3a79328ebf307ba151b62be716",
+  "generic/hybrid-10000.json": "6055d9ea90745f3ed784249019955f2c25876b93acabf6045e10cd3c0165de07",
+  "generic/hybrid-99900.json": "8d2fc320c9c067077f8f552d1740c9f08985b397ad4ce4bac612f5537e538bbf",
+  "generic/hybrid-matrix.json": "ef8598791df85db98f5d8c631dc9361019cb44aeacd8528d388ce68a7782c8a4",
+  "dispatch/hybrid-1000.json": "ac7a54ab737ca2ff1d06cc0f8a39424f06ea84fe07ec7d4b5f79b7c3afb61ad0",
+  "dispatch/hybrid-10000.json": "18a6d27b03b20705187320fb7ca7cb08a406266ffb1349e3a719edcd4edf8631",
+  "dispatch/hybrid-99900.json": "9ccb1c26d4efdd8813b7caab4ff1080c97a22b2741b4dec8e955497761799ed7",
+  "dispatch/hybrid-matrix.json": "ea91f4b916c02c453a5d44aef8158f72a7f02f25bce458403e0c5185c3735c5e"
+}

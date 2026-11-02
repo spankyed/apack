@@ -1,0 +1,22 @@
+{
+  "parent": "2a641ce10216763d102b3153ac09b256a87228e3",
+  "file": "packages/repo-checks/tests/subprocess-inventory.spec.ts",
+  "sha256": "df1a4bb90481cc2cb47c63e213675a14fecd5c9ea6f9f6d917e8390744cdcfe9",
+  "command": [
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--root",
+    "packages/repo-checks",
+    "tests/subprocess-inventory.spec.ts",
+    "--maxWorkers",
+    "1",
+    "--minWorkers",
+    "1"
+  ],
+  "limits": {
+    "cpu": 0.5,
+    "memoryMiB": 768,
+    "swapMiB": 0
+  }
+}

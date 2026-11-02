@@ -1,0 +1,2 @@
+packages/apack-cli/tests/commands/db.integration.spec.ts(1033,22): error TS18047: 'child.stdout' is possibly 'null'.
+packages/apack-cli/tests/commands/db.integration.spec.ts(1033,78): error TS18047: 'child.stderr' is possibly 'null'.

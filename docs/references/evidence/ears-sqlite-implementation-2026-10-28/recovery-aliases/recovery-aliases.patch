@@ -1,0 +1,162 @@
+diff --git a/packages/apack-host/CLAUDE.md b/packages/apack-host/CLAUDE.md
+index 02b9b0c7d2..efe7d17883 100644
+--- a/packages/apack-host/CLAUDE.md
++++ b/packages/apack-host/CLAUDE.md
+@@ -44,7 +44,9 @@ without replay. Host composition closes affected stores and suppresses settled s
+ `database/open.ts` refuses writable startup while a preparation exists; read-only forensic opens remain available.
+ `backup/restore.ts` owns explicit offline restoration: stage/validate retained incumbents, persist a restore plan,
+ quarantine interrupted live directories, publish verified stages and rename the preparation only after every entry
+-settles. The CLI exposes it as `db recover`; completed sessions are never replayed. Full crash/filesystem
++settles. Recovery matches the selected profile by physical parent and fixed destination leaf, allowing ancestor
++aliases while refusing foreign profiles and database-leaf symlinks. Publication uses the selected profile paths.
++The CLI exposes it as `db recover`; completed sessions are never replayed. Full crash/filesystem
+ qualification remains in the SQLite goal; never delete a preparation simply to bypass that refusal. These leases do not exclude a separate process or promise a single
+ cross-store read snapshot. Managed read-only store opens register private metadata claims via
+ `database/recovery-lock.ts` until close. Recovery publishes its exclusion before checking claims; readers publish
+diff --git a/packages/apack-host/src/backup/restore.ts b/packages/apack-host/src/backup/restore.ts
+index 99a7e33dec..c1d242a6b0 100644
+--- a/packages/apack-host/src/backup/restore.ts
++++ b/packages/apack-host/src/backup/restore.ts
+@@ -40,6 +40,14 @@ function sessionPath(userDataDir: string, session: string): string {
+   const parent = path.dirname(_appDataPaths(userDataDir).lmdb), dir = path.join(parent, session);
+   directory(parent); directory(dir); return dir;
+ }
++// Backend paths may canonicalize ancestor aliases, while the selected profile retains the caller's spelling.
++// Match the physical parent and fixed leaf separately: an arbitrary database-leaf symlink is not a destination.
++function sameDestination(actual: unknown, expected: string): boolean {
++  if (typeof actual !== 'string' || !path.isAbsolute(actual)) return false;
++  const source = path.resolve(actual), destination = path.resolve(expected);
++  return path.basename(source) === path.basename(destination)
++    && fs.realpathSync(path.dirname(source)) === fs.realpathSync(path.dirname(destination));
++}
+ function preparation(userDataDir: string, dir: string, completed = false): Preparation {
+   const file = path.join(dir, completed ? 'recovered.json' : 'recovery.json');
+   const value = readJson(file) as Partial<Preparation> | null, paths = _appDataPaths(userDataDir);
+@@ -48,10 +56,10 @@ function preparation(userDataDir: string, dir: string, completed = false): Prepa
+   const seen = new Set<string>();
+   for (const store of value.stores) {
+     if (!store || !['lmdb', 'runHistory'].includes(store.name) || seen.has(store.name)
+-      || store.path !== paths[store.name] || typeof store.format !== 'string') throw new Error(`Import preparation does not match this profile: ${file}`);
++      || !sameDestination(store.path, paths[store.name]) || typeof store.format !== 'string') throw new Error(`Import preparation does not match this profile: ${file}`);
+     databaseStorage(store.format); seen.add(store.name);
+   }
+-  if (value.mediaPath !== undefined && value.mediaPath !== paths.media) throw new Error(`Import media does not match this profile: ${file}`);
++  if (value.mediaPath !== undefined && !sameDestination(value.mediaPath, paths.media)) throw new Error(`Import media does not match this profile: ${file}`);
+   return value as Preparation;
+ }
+ 
+@@ -105,7 +113,7 @@ export function restoreImportRecovery(target: { userDataDir: string; apiPortFile
+     const record = preparation(target.userDataDir, dir), paths = _appDataPaths(target.userDataDir);
+     if (record.stores.some(store => store.format !== target.storageFormat)) throw new Error('Select the retained databases’ storage format before recovery');
+     directory(path.join(dir, 'rollback'));
+-    const entries = [...record.stores.map(store => ({ name: store.name as string, destination: store.path,
++    const entries = [...record.stores.map(store => ({ name: store.name as string, destination: paths[store.name],
+       dataFile: databaseStorage(store.format).dataFile, format: store.format })),
+     ...(record.mediaPath ? [{ name: 'media', destination: paths.media, dataFile: '', format: '' }] : [])];
+     const stage = path.join(dir, 'restore-stage'), interrupted = path.join(dir, 'interrupted'), planFile = path.join(dir, 'restore.json');
+diff --git a/packages/apack-host/tests/backup/recovery-crash.spec.ts b/packages/apack-host/tests/backup/recovery-crash.spec.ts
+index f7c91ffcfc..a418cd55cc 100644
+--- a/packages/apack-host/tests/backup/recovery-crash.spec.ts
++++ b/packages/apack-host/tests/backup/recovery-crash.spec.ts
+@@ -94,17 +94,20 @@ async function run(action: string, root: string, format: string, boundary: strin
+   return JSON.parse(result.stdout);
+ }
+ 
+-it.skipIf(process.platform === 'win32').each([
+-  ['elmdb/1', 'move'], ['elmdb/1', 'publish'], ['sqlite/1', 'move'], ['sqlite/1', 'publish'],
+-])('recovers %s after SIGKILL at %s without exposing a partially restored profile', async (format, boundary) => {
+-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-real-import-crash-')); roots.push(root);
++it.skipIf(process.platform === 'win32').each(
++  ['elmdb/1', 'sqlite/1'].flatMap(format => ['move', 'publish'].flatMap(boundary =>
++    [false, true].map(alias => [format, boundary, alias] as const))),
++)('recovers %s after SIGKILL at %s (alias=%s) without exposing a partially restored profile', async (format, boundary, alias) => {
++  const physical = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-real-import-crash-')); roots.push(physical);
++  const root = alias ? path.join(physical, 'profile-alias') : physical;
++  if (alias) fs.symlinkSync(physical, root, 'dir');
+   await run('import', root, format!, boundary!, true);
+   expect(fs.readFileSync(path.join(root, 'killed-at'), 'utf8')).toBe('import-committed');
+   expect(await run('inspect', root, format!, boundary!)).toMatchObject({ primary: ['Row-candidate'], history: ['RunNode-before'], media: 'incumbent', primaryOpen: 'RECOVERY_REQUIRED', historyOpen: 'RECOVERY_REQUIRED' });
+   await run('kill-recovery', root, format!, boundary!, true);
+   expect(fs.readFileSync(path.join(root, 'killed-at'), 'utf8')).toBe('recovery-' + boundary);
+   expect(await run('inspect', root, format!, boundary!)).toMatchObject({ primaryOpen: 'RECOVERY_REQUIRED', historyOpen: 'RECOVERY_REQUIRED', sessions: [{ status: 'restoring' }] });
+-  expect(await run('recover', root, format!, boundary!)).toMatchObject({ primary: ['Row-before'], history: ['RunNode-before'], media: 'incumbent', primaryOpen: null, historyOpen: null, result: { status: 'recovered' }, interrupted: ['Row-candidate'], retained: ['Row-before'], writer: null });
++  expect(await run('recover', alias ? fs.realpathSync(physical) : root, format!, boundary!)).toMatchObject({ primary: ['Row-before'], history: ['RunNode-before'], media: 'incumbent', primaryOpen: null, historyOpen: null, result: { status: 'recovered' }, interrupted: ['Row-candidate'], retained: ['Row-before'], writer: null });
+ });
+ 
+ it.skipIf(process.platform === 'win32')('refuses a separate live reader and reclaims its claim after SIGKILL', async () => {
+diff --git a/packages/apack-host/tests/backup/recovery.spec.ts b/packages/apack-host/tests/backup/recovery.spec.ts
+index 511a109ac1..fae5eb2461 100644
+--- a/packages/apack-host/tests/backup/recovery.spec.ts
++++ b/packages/apack-host/tests/backup/recovery.spec.ts
+@@ -75,6 +75,71 @@ it.each(['move-incumbent', 'publish-incumbent'] as const)('resumes after interru
+   expect(ids(f.paths.runHistory, f.format, 'RunNode')).toEqual(['RunNode-before']);
+ });
+ 
++
++// Exercise alias spelling on Linux too; macOS /var -> /private/var exposed this with real import records.
++function aliasedFixture(format: string, recordAlias: boolean) {
++  const f = fixture(format), alias = path.join(f.target.userDataDir, 'profile-alias');
++  fs.symlinkSync(f.target.userDataDir, alias, 'dir');
++  const target = { ...resolveAppEnvironment({ env: 'test', userDataDir: recordAlias ? fs.realpathSync(f.target.userDataDir) : alias }), storageFormat: format };
++  const paths = _appDataPaths(target.userDataDir), recorded = _appDataPaths(recordAlias ? alias : fs.realpathSync(f.target.userDataDir));
++  prepareImportRecovery(f.dir, [{ name: 'lmdb', path: recorded.lmdb, format }, { name: 'runHistory', path: recorded.runHistory, format }], recorded.media);
++  return { ...f, target, paths, originalTarget: f.target };
++}
++
++it.each(['elmdb/1', 'sqlite/1'].flatMap(format => [false, true].flatMap(recordAlias =>
++  ['complete', 'move-incumbent', 'publish-incumbent'].map(boundary => ({ format, recordAlias, boundary })))))
++('restores $format through parent aliases (recordAlias=$recordAlias) at $boundary', ({ format, recordAlias, boundary }) => {
++  const f = aliasedFixture(format, recordAlias), failure = new Error('interrupted alias recovery');
++  expect(listImportRecoveries(f.target.userDataDir)[0]?.status).toBe('pending');
++  if (boundary !== 'complete') {
++    const rename = fs.renameSync.bind(fs);
++    const destination = boundary === 'move-incumbent'
++      ? path.join(path.dirname(f.paths.lmdb), f.session, 'interrupted/lmdb') : f.paths.lmdb;
++    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
++      rename(from, to);
++      if (String(to) === destination) throw failure;
++    });
++    syncBuiltinESMExports();
++    expect(() => restoreImportRecovery(f.target, f.session)).toThrow(failure);
++    spy.mockRestore(); syncBuiltinESMExports();
++    expect(listImportRecoveries(f.target.userDataDir)[0]?.status).toBe('restoring');
++  }
++  // A resumed operator may select the same physical profile through another spelling.
++  expect(restoreImportRecovery(f.originalTarget, f.session).status).toBe('recovered');
++  expect(ids(f.paths.lmdb, format)).toEqual(['Row-before']);
++  expect(ids(f.paths.runHistory, format, 'RunNode')).toEqual(['RunNode-before']);
++  expect(ids(path.join(f.dir, 'interrupted/lmdb'), format)).toEqual(['Row-before', 'Row-interrupted']);
++  expect(fs.readFileSync(path.join(f.paths.media, 'asset'), 'utf8')).toBe('incumbent');
++  expect(listImportRecoveries(f.target.userDataDir)[0]?.status).toBe('recovered');
++});
++
++it.each(['elmdb/1', 'sqlite/1'])('parent aliases preserve managed reader exclusion for %s', format => {
++  const f = aliasedFixture(format, false);
++  const reader = openRunHistory(_appDataPaths(f.originalTarget.userDataDir).runHistory, { readOnly: true, storageFormat: format });
++  try { expect(() => restoreImportRecovery(f.target, f.session)).toThrow('Close tools reading this profile'); }
++  finally { reader.database.close(); }
++  expect(restoreImportRecovery(f.target, f.session).status).toBe('recovered');
++});
++
++it.each(['foreign-parent', 'different-leaf', 'relative', 'leaf-symlink'] as const)
++('does not admit %s as a recovery destination through an alias', kind => {
++  const f = aliasedFixture('sqlite/1', false), marker = path.join(f.dir, 'recovery.json');
++  const record = JSON.parse(fs.readFileSync(marker, 'utf8'));
++  if (kind === 'foreign-parent') {
++    const foreign = path.join(f.target.userDataDir, 'foreign'); fs.mkdirSync(foreign);
++    record.stores[0].path = path.join(foreign, path.basename(f.paths.lmdb));
++  } else if (kind === 'different-leaf') record.stores[0].path = path.join(path.dirname(f.paths.lmdb), 'other');
++  else if (kind === 'relative') record.stores[0].path = path.relative(process.cwd(), f.paths.lmdb);
++  else {
++    const moved = f.paths.lmdb + '-moved'; fs.renameSync(f.paths.lmdb, moved); fs.symlinkSync(moved, f.paths.lmdb, 'dir');
++  }
++  fs.writeFileSync(marker, JSON.stringify(record));
++  expect(() => restoreImportRecovery(f.target, f.session)).toThrow(kind === 'leaf-symlink' ? 'ordinary directory' : 'does not match this profile');
++  expect(fs.existsSync(path.join(f.dir, 'interrupted/lmdb'))).toBe(false);
++  expect(fs.existsSync(marker)).toBe(true);
++  expect(ids(f.paths.lmdb, f.format)).toEqual(['Row-before', 'Row-interrupted']);
++});
++
+ it('restores the original absence of media', () => {
+   const f = fixture('sqlite/1', false); restoreImportRecovery(f.target, f.session);
+   expect(fs.existsSync(f.paths.media)).toBe(false);

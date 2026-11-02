@@ -1,0 +1,74 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+ ❯ tests/database/storage.spec.ts (36 tests | 1 failed | 35 skipped) 246ms
+   ↓ keeps elmdb as the normal default
+   ↓ refuses unknown boot formats
+   ↓ requires explicit absolute candidate storage (undefined)
+   ↓ requires explicit absolute candidate storage (relative/profile)
+   ↓ refuses the default production profile without opening it
+   ↓ refuses the default beta profile without opening it
+   ↓ refuses the default preview profile without opening it
+   ↓ refuses the default development profile without opening it
+   ↓ refuses the default test profile without opening it
+   ↓ selects both real stores and preserves the profile when selection is omitted on reopen
+   ↓ uses the explicitly supplied CLI profile for the isolation check
+   ↓ refuses children of a default profile and symlink aliases without creating their targets
+   ↓ blocks writable recovery opens without salvaging either elmdb/1 store
+   ↓ blocks writable recovery opens without salvaging either sqlite/1 store
+   ↓ routes explicit SQLite rebuild through maintenance ownership and waits for readiness
+   ↓ refuses unreadable run history without replacement when maintenance disables salvage
+   ↓ starts optional models on managed SQLite stores and releases both owners on shutdown
+   ↓ does not start native services for forensic SQLite readers or the normal elmdb backend
+   ↓ quarantines corrupt elmdb/1 history while an unrelated primary handle stays open
+   ↓ quarantines corrupt sqlite/1 history while an unrelated primary handle stays open
+   ↓ refuses elmdb/1 history quarantine while a managed reader still holds the directory
+   ↓ refuses sqlite/1 history quarantine while a managed reader still holds the directory
+   ↓ never treats SQLITE_IOERR_READ as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_IOERR_FSYNC as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CANTOPEN as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_PERM as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_FULL as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_BUSY as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CORRUPT_INDEX as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CORRUPT_VTAB as permission to replace a SQLite history directory
+   ↓ never treats CORRUPT as permission to replace a SQLite history directory
+   ↓ never treats NATIVE_CHANGED as permission to replace a SQLite history directory
+   × retains the directory claim when a failed SQLite constructor could not close its connection 245ms
+     → expected AggregateError: Opening SQLite failed and… { …(2) } to match object { code: 'SQLITE_NOTADB', …(1) }
+   ↓ preserves failed SQLite constructor authority without an AggregateError prototype
+   ↓ refuses stale elmdb/1 history publication after another directory was installed
+   ↓ refuses stale sqlite/1 history publication after another directory was installed
+ ↓ tests/backup/recovery.spec.ts (44 tests | 44 skipped)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/database/storage.spec.ts > retains the directory claim when a failed SQLite constructor could not close its connection
+AssertionError: expected AggregateError: Opening SQLite failed and… { …(2) } to match object { code: 'SQLITE_NOTADB', …(1) }
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- {[39m
+[31m+ AggregateError {[39m
+[2m    "code": "SQLITE_NOTADB",[22m
+[32m-   "databaseConnectionUnclosed": true,[39m
+[2m  }[22m
+
+ ❯ tests/database/storage.spec.ts:185:21
+    183|     try { openRunHistory(directory, { storageFormat: SQLITE }); } catc…
+    184|     expect(failure).toBeInstanceOf(AggregateError);
+    185|     expect(failure).toMatchObject({ code: 'SQLITE_NOTADB', databaseCon…
+       |                     ^
+    186|     expect((failure as AggregateError).errors).toContain(closeFailure);
+    187|     expect(() => holdRecoveryExclusion(directory)).toThrow('Close apps…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 skipped (2)
+      Tests  1 failed | 79 skipped (80)
+   Start at  15:18:40
+   Duration  2.76s (transform 850ms, setup 14ms, collect 2.21s, tests 246ms, environment 0ms, prepare 120ms)
+
+JSON report written to /results/omit-native-close-uncertainty.json

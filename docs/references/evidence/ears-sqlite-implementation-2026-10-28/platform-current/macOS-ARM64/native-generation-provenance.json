@@ -1,0 +1,31 @@
+{
+  "upstream": {
+    "commit": "814fd8ef4d42d6567f1613a66f556c8194764d06",
+    "sha256": "b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1",
+    "url": "https://raw.githubusercontent.com/sqlite/sqlite/814fd8ef4d42d6567f1613a66f556c8194764d06/ext/vec1/vec1.c"
+  },
+  "patchSha256": "33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923",
+  "sourceSha256": "5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b",
+  "compiler": "clang",
+  "args": [
+    "-O3",
+    "-DNDEBUG",
+    "-Werror=implicit-function-declaration",
+    "-dynamiclib",
+    "-fPIC",
+    "-I/Users/runner/work/apack/apack/node_modules/better-sqlite3/deps/sqlite3",
+    "/Users/runner/work/apack/apack/.temp/sqlite-platform/native-generation/vec1.c",
+    "-lm",
+    "-o",
+    "/Users/runner/work/apack/apack/.temp/sqlite-platform/native-generation/vec1.dylib"
+  ],
+  "headersPackage": "13.0.3",
+  "extension": "/Users/runner/work/apack/apack/.temp/sqlite-platform/native-generation/vec1.dylib",
+  "extensionSha256": "5a5927db70c4e0621b6d015d0c26173db3dd8c5652b4d70d791616ecbba1ec0e",
+  "node": "v23.11.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "source": "2d0a0e7d4885b47c3d330870e75ff74666f81fdd",
+  "patchApplied": true,
+  "qualification": "Pinned membership patch for the SQLite candidate; packaging, signing and performance remain separate gates"
+}

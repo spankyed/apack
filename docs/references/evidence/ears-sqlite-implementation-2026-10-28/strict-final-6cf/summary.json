@@ -1,0 +1,66 @@
+{
+  "run": 41236766386,
+  "source": "6cfdf32dad574f42799165efea332266154b2e2a",
+  "status": "completed",
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "id": 124642093523,
+      "name": "producers",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 124642093801,
+      "name": "sqlite-candidate / sqlite (macos-26)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 124642093932,
+      "name": "sqlite-candidate / sqlite (ubuntu-24.04)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 124642093963,
+      "name": "sqlite-candidate / sqlite (windows-latest)",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 124650366830,
+      "name": "native-2",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 124650366868,
+      "name": "integration-1",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 124650366905,
+      "name": "app-and-rest",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 124650366910,
+      "name": "native-1",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 124650366928,
+      "name": "integration-2",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "producerChainSeconds": 696.0,
+  "producerScriptTypecheckSeconds": 37.7,
+  "cores": 2,
+  "producerLogSha256": "849e6582248cd68a4b435558f8e0b61ad7f928ca9c999215aafd1998a458e60b"
+}

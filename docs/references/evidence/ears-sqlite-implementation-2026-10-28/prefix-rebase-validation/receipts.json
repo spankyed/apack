@@ -1,0 +1,82 @@
+[
+  {
+    "file": "lint.log.gz",
+    "sha256": "4f743550351e3af417d250bbc158e36c837abea1dde023f5d4b875580d6e52ac",
+    "storedSha256": "8d1dcb44cbe0612a2c62251b10e2f43f255bd6650d93812d6a1bf98bfc1f6f14"
+  },
+  {
+    "file": "native-gold.json.gz",
+    "sha256": "d6935848dd96caa10183c7c3bb089b99aa4d6f6783c5936d54c1e4918525edc9",
+    "storedSha256": "ff322f38c9519c6466d020756ca6abd4f013972db820981f7f719efaa4793a11"
+  },
+  {
+    "file": "native-gold.log.gz",
+    "sha256": "e4a5de977d74863b7507b969bc010e0e40be13aa8cae5d1d588ed4d53846dbf4",
+    "storedSha256": "dbb117d49c823b134c31ad2140c44d5bdcca1a1e3fa9a595b77a51b382d02beb"
+  },
+  {
+    "file": "packages-build.log.gz",
+    "sha256": "8886c53989e8067c3a78883b0063cbdafcee219748a854d021d56cd891f22be4",
+    "storedSha256": "c012979dad07c34dc3dd84f0b7bec344b37a15254446307890564005e65c700e"
+  },
+  {
+    "file": "resource-observation.json.gz",
+    "sha256": "785023bb115399c7a2e967891dbd5fc007134750ab76250a31e4c362063dd497",
+    "storedSha256": "adee1052fe28f7b4b93565de75cbb0d5f104ac050b56dfad1ef50be96303ac3b"
+  },
+  {
+    "file": "run.json.gz",
+    "sha256": "3383bd6a10dfd727a5dad8fb2d510aaa688b8e5f7afb1134c70324d2014db2b1",
+    "storedSha256": "6420595cc84c8da79bff8d9bcb47ef6de1a82e9d519ed375f65e1792ea793b4e"
+  },
+  {
+    "file": "sqlite-before.json.gz",
+    "sha256": "379c324a6fe818990f1269b1fb1db7544f6d73bb734a39e9cba9884d2824025e",
+    "storedSha256": "8948a6c28d00746099eb0f7692400cb03726cd57ff25f1ad8c2965c462f53c8d"
+  },
+  {
+    "file": "sqlite-before.log.gz",
+    "sha256": "1542281727fb6228733ba233de4abc53126be2b9aa82f6608fc9eeff6c84102d",
+    "storedSha256": "e43259d72a430cd0dd345f7df6e040f604efba1bb75672dd1d6cf37618cfb661"
+  },
+  {
+    "file": "sqlite-contracts.json.gz",
+    "sha256": "878b81c222c2fd842c488c3296d4153c45f382408e7ea7d9cca1a0d10cdb7e80",
+    "storedSha256": "395c776b82673f95cb4bbffe4ecc3057bb0a9b6f3c53cac811bdc1af2f598daa"
+  },
+  {
+    "file": "sqlite-contracts.log.gz",
+    "sha256": "b8a7db30181cd933597bbba721ebb457b4b37079108c5ba55d6d29fb0d276a96",
+    "storedSha256": "3068f6a1953e8eb5c0ef11836dcfd5486abf5f24fa6d1d2652881461e99d01e8"
+  },
+  {
+    "file": "types.log.gz",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "storedSha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+  },
+  {
+    "file": "recipes/ears-prefix-qualification.py.gz",
+    "sha256": "1da42eb4078977c872770ff420de11eeaf87c88ca6705ba8eaef2604f6500739",
+    "storedSha256": "601bda89ed77581fafcce71d2ca9da4a9843a0ee4c019573384ed3b8925db273"
+  },
+  {
+    "file": "recipes/ears-run-prefix-qualification.py.gz",
+    "sha256": "62f7bc80d2368b4db11df334cef1391401cdc5f8ff565be9064441dd908ad158",
+    "storedSha256": "e994b016f9a6ddf08e07e83baa31d0f6c12879670f9b0b58f1fe3d0001dd3001"
+  },
+  {
+    "file": "recipes/ears-wait-prefix-qualification.py.gz",
+    "sha256": "931443102761fd092da53b9b6f4fa30d6c15701306d9db48bffd7e744df7df43",
+    "storedSha256": "8c45d1a9cf7af97d9c034c7937fc4fc872aee32686fcd1d3c82c749abd79b301"
+  },
+  {
+    "file": "recipes/ears-prefix-cost.mjs.gz",
+    "sha256": "3c292bf15f4ec0ac781e40ef3400cde742b907c0058ad413f7890889e0d348a5",
+    "storedSha256": "b75a7d1979a0b21f15b1df1d4a25c5e9a6f68c8991a149c1a0046ca9694b21fb"
+  },
+  {
+    "file": "baseline-source-inputs.json.gz",
+    "sha256": "cb6004aba6824154fe057d8c74cd672689be316e658f27f5ab9e7c53c02814a6",
+    "storedSha256": "5a601808058821dac86606ccdd2b824c65517a7c162c39e91276bec3494b0243"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "source": "d19662485d00d7b7c064b1da3311fdf7c9d01f47",
+  "run": 41366575578,
+  "outcome": "failure",
+  "historyProbeExecuted": false,
+  "historyProbeErrorCode": "ERR_MODULE_NOT_FOUND",
+  "missingRepoRelativeModule": "packages/apack-host/dist/database/index.js",
+  "laterNamedVerifier": "ENOENT pack-readiness.json after dependent steps skipped",
+  "apiDiffBytes": 0,
+  "originalFailedLogSha256": "d708e0fb70ecd331008c3534141c94583bb41537721cf4e8818a6ce4be649d1e",
+  "workerProbeReports": [
+    "header.json.gz",
+    "embedding-page.json.gz"
+  ],
+  "scope": "No history syscall, open or quarantine outcome observed; successful worker probes do not establish history policy"
+}

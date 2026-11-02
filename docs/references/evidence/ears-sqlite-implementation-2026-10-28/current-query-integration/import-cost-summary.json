@@ -1,0 +1,12 @@
+{
+  "candidate": {
+    "meanWallSeconds": 2.7799699979950674,
+    "meanModuleOverheadMs": 1318.4494165,
+    "testsPassedPerRun": 62
+  },
+  "native-only-control": {
+    "meanWallSeconds": 2.4259824299952015,
+    "meanModuleOverheadMs": 999.7586275000001,
+    "testsPassedPerRun": 62
+  }
+}

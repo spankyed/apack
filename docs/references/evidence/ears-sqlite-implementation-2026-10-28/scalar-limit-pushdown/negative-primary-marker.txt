@@ -1,0 +1,55 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/query-cost.spec.ts -t missing primary
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/query-cost.spec.ts (18 tests | 1 failed | 17 skipped) 54ms
+   ↓ SQLite ordering work > orders rank without loading unrelated bodies or issuing per-entity SQL
+   ↓ SQLite ordering work > orders sortText without loading unrelated bodies or issuing per-entity SQL
+   ↓ SQLite ordering work > returns only an adjacent limit from the SQL sort, preserving filters and earlier prefixes
+   ↓ SQLite ordering work > validates scalar cells outside a pushed sort prefix
+   ↓ SQLite ordering work > preserves stable input order and duplicate ids across different physical type layouts
+   ↓ SQLite ordering work > orders actual scalar kinds from unchecked imports, with stable null and signed-zero ties
+   ↓ SQLite ordering work > retains pipeline scope and prior ordering on ties
+   ↓ SQLite ordering work > preserves decoder rounding of large integer ties ('max')
+   ↓ SQLite ordering work > preserves decoder rounding of large integer ties ('min')
+   ↓ SQLite ordering work > preserves corruption refusal: invalid cell
+   × SQLite ordering work > preserves corruption refusal: missing primary 54ms
+     → expected function to throw an error, but it didn't
+   ↓ SQLite ordering work > keeps a fallback for embedded-NUL field names
+   ↓ SQLite ordering work > keeps sparse flexible keys and undeclared repair types in native scalar ordering
+   ↓ SQLite ordering work > falls back to decoder date clipping for fractional stored timestamps
+   ↓ SQLite ordering work > matches the ICU fallback on a mixed scalar corpus (asc)
+   ↓ SQLite ordering work > matches the ICU fallback on a mixed scalar corpus (desc)
+   ↓ SQLite ordering work > ignores another type table's stray row but refuses a missing actual primary row
+   ↓ SQLite ordering work > does not inspect another type's missing physical table for a selected or empty candidate set
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/query-cost.spec.ts > SQLite ordering work > preserves corruption refusal: missing primary
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/sqlite/query-cost.spec.ts:131:56
+    129|     if (damage === 'invalid cell') db.run(`UPDATE ${layout.table} SET …
+    130|     else db.sql.exec(`DELETE FROM ${layout.table}`);
+    131|     expect(() => e.query('Row').orderBy('rank').ids()).toThrow(expect.…
+       |                                                        ^
+    132|   });
+    133| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 skipped (18)
+   Start at  14:02:08
+   Duration  406ms (transform 176ms, setup 13ms, collect 220ms, tests 54ms, environment 0ms, prepare 44ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/query-cost.spec.ts -t 'missing primary'

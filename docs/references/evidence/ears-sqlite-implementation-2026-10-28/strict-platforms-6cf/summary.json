@@ -1,0 +1,46 @@
+{
+  "source": "6cfdf32dad574f42799165efea332266154b2e2a",
+  "run": 41236766386,
+  "scope": "SQLite-selected EARS platform jobs; failed acceptance, not final-source platform certification",
+  "platforms": {
+    "linux": {
+      "job": 124642093932,
+      "passed": 846,
+      "failed": 2,
+      "skipped": 0,
+      "total": 848,
+      "failedCases": [
+        "tests/engine/real-search-relevance.spec.ts > real repository-content search relevance > 'find generated metadata ownership'",
+        "tests/sqlite/vector-models.spec.ts > durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility"
+      ],
+      "killedSearchCursorRecoveryPassed": true,
+      "rawLogSha256": "c205ab68c39b193f8189677c7af5f2c0c89252ae4b3ec355a610155e34b9cb79"
+    },
+    "macos": {
+      "job": 124642093801,
+      "passed": 846,
+      "failed": 2,
+      "skipped": 0,
+      "total": 848,
+      "failedCases": [
+        "tests/engine/real-search-relevance.spec.ts > real repository-content search relevance > 'find generated metadata ownership'",
+        "tests/sqlite/vector-models.spec.ts > durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility"
+      ],
+      "killedSearchCursorRecoveryPassed": true,
+      "rawLogSha256": "47e09d87b77266b8acca27d4500cec6662baef363c2cdb4d606e85c932843cbe"
+    },
+    "windows": {
+      "job": 124642093963,
+      "passed": 842,
+      "failed": 2,
+      "skipped": 4,
+      "total": 848,
+      "failedCases": [
+        "tests/engine/real-search-relevance.spec.ts > real repository-content search relevance > 'find generated metadata ownership'",
+        "tests/sqlite/vector-models.spec.ts > durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility"
+      ],
+      "killedSearchCursorRecoveryPassed": true,
+      "rawLogSha256": "2c720176c364d03bab85cd0c6ca76628ce73fefd06077505b181c87cc6ea247e"
+    }
+  }
+}

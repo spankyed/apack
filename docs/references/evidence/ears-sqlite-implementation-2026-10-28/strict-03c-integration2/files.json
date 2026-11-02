@@ -1,0 +1,22 @@
+{
+  "strict-chain.log": {
+    "sha256": "337e05ec623c883391a5d00325e0d8f1c3e9cbe904963f41baad1cb3d3a16ea6",
+    "bytes": 2762
+  },
+  "test-excerpts.log": {
+    "sha256": "d6ad5efb1b088c952b2a7f47cc0e30b9dd8d15c34355ce9dc03f7cc05a7ad6c3",
+    "bytes": 1917,
+    "originalLogSha256": "896bc331051c3a646ca3b8c6001a7456c72c466a9b60c464cdee3006afb4331b",
+    "lineRanges": [
+      [
+        367,
+        374
+      ],
+      [
+        671,
+        679
+      ]
+    ],
+    "excerpts": true
+  }
+}

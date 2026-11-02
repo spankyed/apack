@@ -1,0 +1,39 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/elmdb-conversion.spec.ts (6 tests | 1 failed) 2127ms
+   × explicit elmdb dump conversion > reopens an audited store, retains typed values, trash/order/relations/counters and leaves input unchanged 510ms
+     → expected false to be true // Object.is equality
+   ✓ explicit elmdb dump conversion > refuses an incumbent destination without removing its contents 15ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late truncated failure  343ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late trailing failure  323ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late count failure  609ms
+   ✓ explicit elmdb dump conversion > refuses precision loss and malformed loads rather than silently changing primary data  325ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/elmdb-conversion.spec.ts > explicit elmdb dump conversion > reopens an audited store, retains typed values, trash/order/relations/counters and leaves input unchanged
+AssertionError: expected false to be true // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+ ❯ tests/sqlite/elmdb-conversion.spec.ts:47:91
+     45|       expect(e.getAttr('Row-second', 'at')).toEqual(at);
+     46|       expect(e.getAttr('Row-second', 'bytes')).toEqual(new Uint8Array(…
+     47|       expect(Object.is((e.getAttr('Row-second', 'nested') as { zero: n…
+       |                                                                                           ^
+     48|       expect(e.getRelation('Relation-edge')?.info).toEqual({ at });
+     49|       const next = e.create('Row', { text: 'next' }).id();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  15:40:39
+   Duration  2.58s (transform 235ms, setup 11ms, collect 324ms, tests 2.13s, environment 0ms, prepare 41ms)
+

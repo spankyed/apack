@@ -1,0 +1,22 @@
+{
+  "run.json": {
+    "sha256": "fabcf0c4b939926da208278152be5cc346ed882410f9b7652e53767482fd1e0d",
+    "bytes": 36928
+  },
+  "native1-chain.log": {
+    "sha256": "3df8b4a7638ce90bf0d2bfd5ac1a5de4e319eb12e537dfe3f65a5b53b503f196",
+    "bytes": 2618
+  },
+  "native2-chain.log": {
+    "sha256": "846192153c2a5b0d08045b1fcb89ba97e6801bac3e9aa175918fff069aa7e418",
+    "bytes": 2358
+  },
+  "integration1-chain.log": {
+    "sha256": "67e4da2d7206df3d143cc972e05225f97e14f93691d8eb64d40c3f7ea423bd07",
+    "bytes": 2482
+  },
+  "integration2-chain.log": {
+    "sha256": "337e05ec623c883391a5d00325e0d8f1c3e9cbe904963f41baad1cb3d3a16ea6",
+    "bytes": 2762
+  }
+}

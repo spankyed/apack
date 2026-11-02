@@ -1,0 +1,31 @@
+{
+  "run": 41374793452,
+  "source": "eb06bd71374779836913f6279af7a810df6078f0",
+  "scope": "Actual unsigned unpacked Preview native/API probes; not renderer, installer, signing or distribution",
+  "platforms": [
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "completed": true,
+      "previewCasesPassed": 4,
+      "nativeAddons": 6,
+      "electron": "37.2.4",
+      "node": "22.17.1",
+      "sqlite": "3.53.4",
+      "driver": "13.0.3",
+      "leiden": "0.8.1"
+    },
+    {
+      "platform": "win32",
+      "arch": "x64",
+      "completed": true,
+      "previewCasesPassed": 4,
+      "nativeAddons": 6,
+      "electron": "37.2.4",
+      "node": "22.17.1",
+      "sqlite": "3.53.4",
+      "driver": "13.0.3",
+      "leiden": "0.8.1"
+    }
+  ]
+}

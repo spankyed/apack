@@ -1,0 +1,20 @@
+{
+  "retention": "explicit inspected metadata allowlist; input payload/logs/host mounts excluded",
+  "decompressedSha256": {
+    "corpus/source.txt": "bf470c5e84be209a4fdf92499f6948c43567c8464dd91a2690f31a017761b1af",
+    "corpus/cleanup.json": "0387430e60186bbca1d4272dc3465d3d2be68d68142f2e044d42bf57e85d59ac",
+    "corpus/corpus-manifest.json": "2764bd8937ccda1e1c8521d8b3cc250fb686cf4973bfbcd83d49155b7f5dbcb7",
+    "corpus/qualification.json": "af0affa7c278e01df740d34cc0f091702ecff6e7c9299487170faf15df822e3c",
+    "corpus/hybrid-1000.json": "4b8b9dc5a52f018e2a442f8b2ec2c6c3320c53b2e22da5a8fd02e573bac66676",
+    "corpus/hybrid-10000.json": "f39300a4dd51fafe2437856b4447e39c3914b2a626bad08ab624b1702096f0df",
+    "corpus/hybrid-99900.json": "7add0178b561a25e16d78eecf0d6f0752ffd33c87b8aa5395b80c67f99cdb3cf",
+    "corpus/hybrid-matrix.json": "900e43f91f82cf4161f1380d5c9a0d07063ec09cdaac037c6925b052226ffdac",
+    "corpus/safeguards.json": "13b89d2361e86c0a42d9cde386f1063dd5dcffb1e912795d594ce2b55c9fd3c1",
+    "corpus/image.json": "9ed3db5207e48b0aaba92054c2cfbc59cebc703f97b6d7c1d6bf4e1c875a23cd",
+    "corpus/node-image.json": "092af6f9a35b1dbcf88487ffc5c03a3d89e864a00c99e977c46b6394ec2fff6d",
+    "relevance/judgments.json": "b7186903af88a645f722732ee06a7d1443e73f261e9af7164947fff41d3ed0a1",
+    "relevance/text-language-receipt.json": "00b7ac2c429618746174c064c8a496c931437cde03260c7a56bd5f8c538b7632",
+    "relevance/model.json": "5670c7adb6d0c2502afe151f22ac3a102447a44578956d9f7e48b799ebadb86a",
+    "relevance/cleanup.json": "0387430e60186bbca1d4272dc3465d3d2be68d68142f2e044d42bf57e85d59ac"
+  }
+}

@@ -1,0 +1,67 @@
+[
+  {
+    "label": "dependencies",
+    "exitCode": 0,
+    "seconds": 2.045763905000058
+  },
+  {
+    "label": "packages-build",
+    "exitCode": 0,
+    "seconds": 27.663307073002215
+  },
+  {
+    "label": "shipped-pack-build",
+    "args": [
+      "npm",
+      "run",
+      "build:default-setup"
+    ],
+    "exitCode": 0,
+    "seconds": 66.34416892899026
+  },
+  {
+    "label": "api-build",
+    "args": [
+      "npm",
+      "run",
+      "build",
+      "-w",
+      "@app/api"
+    ],
+    "exitCode": 0,
+    "seconds": 11.801195031002862
+  },
+  {
+    "label": "converted-api",
+    "args": [
+      "python3",
+      "tests/scripts/test-sqlite-converted-api.py",
+      "--producer",
+      "/native-target/release/elmdb",
+      "--output",
+      "/results/converted-api"
+    ],
+    "exitCode": 0,
+    "seconds": 12.407198358996538
+  },
+  {
+    "label": "lint",
+    "args": [
+      "npm",
+      "run",
+      "lint:check"
+    ],
+    "exitCode": 0,
+    "seconds": 2.8807443650002824
+  },
+  {
+    "label": "specifiers",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.464311075993464
+  }
+]

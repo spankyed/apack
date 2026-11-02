@@ -1,0 +1,23 @@
+[
+  {
+    "label": "atomic-bootstrap",
+    "exitCode": 1,
+    "failedCases": [
+      "SQLite database identity rolls back identity and every primary initializer together, preserving the original refusal"
+    ]
+  },
+  {
+    "label": "foreign-wal",
+    "exitCode": 1,
+    "failedCases": [
+      "SQLite database identity preserves a foreign committed WAL after its writer dies (readOnly=false)"
+    ]
+  },
+  {
+    "label": "missing-primary",
+    "exitCode": 1,
+    "failedCases": [
+      "SQLite database identity refuses missing authoritative entities without recreating it"
+    ]
+  }
+]

@@ -1,0 +1,30 @@
+{
+  "strict-chain.log": {
+    "sha256": "d7dc986ef1e714dc86062dac8520b166a059e2a8ca234fa250323d17d5b4edff",
+    "bytes": 606883
+  },
+  "strict-spec-progress.20947.jsonl": {
+    "sha256": "e2c4c06f453ee229fd54b8abb20517bf961097b5b4f534a0d77988150b57a238",
+    "bytes": 222496
+  },
+  "api-check.log": {
+    "sha256": "ef48363052b3e57b1723ddbfc5057df2fe419a3f7e8a0c343292c0c76780f46e",
+    "bytes": 377
+  },
+  "facade-check.log": {
+    "sha256": "555ff9adcef0cc94d0f241e43b4ea69effc063dc59dbc165bbcbe1632302d0b3",
+    "bytes": 247
+  },
+  "packages-check.log": {
+    "sha256": "66b9b8648d9713c6ca1f77df542bbac44aaa02fce04f47b35ee0cf9189d9271d",
+    "bytes": 28970
+  },
+  "test-external-pack-fork.log": {
+    "sha256": "5a012d51db7bce0bd538e44e5fa1366dad60fab1d937a40f3327a611a8e67e04",
+    "bytes": 2560
+  },
+  "test-unit-host.log": {
+    "sha256": "3bf7e7a0e6a811b74d759d880ad457c73a3976c5b3134bcc5c82de0dd0c163b5",
+    "bytes": 605360
+  }
+}

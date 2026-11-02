@@ -1,0 +1,11 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/vector-index.spec.ts (10 tests | 8 skipped) 484ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 8 skipped (10)
+   Start at  09:50:55
+   Duration  2.12s (transform 953ms, setup 90ms, collect 1.12s, tests 484ms, environment 0ms, prepare 190ms)
+
+JSON report written to /results/physical-positive-index.json

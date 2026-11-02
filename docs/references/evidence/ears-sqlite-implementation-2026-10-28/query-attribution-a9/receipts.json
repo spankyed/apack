@@ -1,0 +1,57 @@
+[
+  {
+    "file": "sqlite.log",
+    "sha256": "bc7fa58f825558e0455cbbf28ade3db771b9629730bce2d58c319b780d02dbb3",
+    "bytes": 327
+  },
+  {
+    "file": "source.json",
+    "sha256": "cc2fb454545940bda8cb822d883ded8df279753fd11dac25a4003d5067d05f65",
+    "bytes": 313
+  },
+  {
+    "file": "native.json",
+    "sha256": "11cef6b3757599f5aedacd5fd97372b3a2ddfe4b4acdbfddbd84d29b891674ae",
+    "bytes": 21562
+  },
+  {
+    "file": "native.log",
+    "sha256": "34caf079d73aa47aaec4b68d80d2fca96f88f41a960a14b55e6e0d0f5533dbd1",
+    "bytes": 327
+  },
+  {
+    "file": "inputs.json",
+    "sha256": "eeb41da5e01012d199ce6ea029a8ae37ba164aa53a819cd9fc3052d78cead25f",
+    "bytes": 213071
+  },
+  {
+    "file": "sqlite.json",
+    "sha256": "bcdf00180bfa0840fd3d43ff33c94a2a2c2f94054df244564efc6f2170977be9",
+    "bytes": 140285
+  },
+  {
+    "file": "run.json",
+    "sha256": "f27d1791401bcb08bc23a0502bd3a184465cab5d30f5893b3d07f438ac77af15",
+    "bytes": 769
+  },
+  {
+    "file": "host-launch.json",
+    "sha256": "2e98740bb93b0dba850a869aaf8d85ed84a3421083693e883770f9da48f85152",
+    "bytes": 1055
+  },
+  {
+    "file": "ears-paired-read-plan.mjs",
+    "sha256": "61dd9640c9657d9fead73222740d84afef3cf523e9e52a66fa7a3fd88f135a69",
+    "bytes": 4506
+  },
+  {
+    "file": "ears-paired-read-plan-run.py",
+    "sha256": "4c039a13ccdf808c90213399bf26638a3f38e28bfd1768010052d9dc441ad9fc",
+    "bytes": 1995
+  },
+  {
+    "file": "ears-run-paired-read-plan.py",
+    "sha256": "7f0c79b4d5611af9aa5e505ee6b2efe4cd61ab68ca001be14e1176851e4bb0af",
+    "bytes": 2890
+  }
+]

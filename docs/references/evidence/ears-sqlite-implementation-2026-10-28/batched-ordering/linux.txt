@@ -1,0 +1,5 @@
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+{"passedTests": 280, "failedTests": 3, "knownFailures": ["containing and matching find text as it is written, in the order the query had, among what the steps before reached", "containing and matching refuse a type with no trigram index, and a pattern the syntax does not hold, naming it", "containing and matching follow writes"], "scope": "SQLite ordering change; inherited substring/regex requirements remain open"}

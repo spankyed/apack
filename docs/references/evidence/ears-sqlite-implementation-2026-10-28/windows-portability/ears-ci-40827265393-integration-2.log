@@ -1,0 +1,989 @@
+﻿2026-10-29T06:22:37.8456890Z Current runner version: '2.338.0'
+2026-10-29T06:22:37.8474010Z ##[group]Runner Image Provisioner
+2026-10-29T06:22:37.8474600Z Hosted Compute Agent
+2026-10-29T06:22:37.8475090Z Version: 20261012.601
+2026-10-29T06:22:37.8475630Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
+2026-10-29T06:22:37.8476150Z Build Date: 2026-10-12T17:48:21Z
+2026-10-29T06:22:37.8476670Z Worker ID: {cbfcb35f-45f3-488b-a63f-6c9f262ed91c}
+2026-10-29T06:22:37.8477160Z Region: westus
+2026-10-29T06:22:37.8477540Z Cloud: MacCloud
+2026-10-29T06:22:37.8477900Z ##[endgroup]
+2026-10-29T06:22:37.8478880Z ##[group]Operating System
+2026-10-29T06:22:37.8479710Z macOS
+2026-10-29T06:22:37.8480940Z 26.6.2
+2026-10-29T06:22:37.8482370Z 25G83
+2026-10-29T06:22:37.8483280Z ##[endgroup]
+2026-10-29T06:22:37.8484240Z ##[group]Runner Image
+2026-10-29T06:22:37.8485320Z Image: macos-26-arm64
+2026-10-29T06:22:37.8486340Z Version: 20261013.0424.1
+2026-10-29T06:22:37.8488810Z Included Software: https://github.com/actions/runner-images/blob/macos-26-arm64/20261013.0424/images/macos/macos-26-arm64-Readme.md
+2026-10-29T06:22:37.8491860Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-26-arm64%2F20261013.0424
+2026-10-29T06:22:37.8493700Z ##[endgroup]
+2026-10-29T06:22:37.8495720Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T06:22:37.8500820Z Contents: read
+2026-10-29T06:22:37.8501950Z Metadata: read
+2026-10-29T06:22:37.8502910Z ##[endgroup]
+2026-10-29T06:22:37.8507290Z Secret source: Actions
+2026-10-29T06:22:37.8508910Z Cache mode: write
+2026-10-29T06:22:37.8510150Z Prepare workflow directory
+2026-10-29T06:22:37.9120360Z Prepare all required actions
+2026-10-29T06:22:37.9164550Z Getting action download info
+2026-10-29T06:22:38.3438310Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-29T06:22:39.1559560Z Download action repository 'actions/download-artifact@v4' (SHA:d3f86a106a0bac45b974a628896c90dbdf5c8093)
+2026-10-29T06:22:40.2319920Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-29T06:22:40.6562120Z Complete job name: integration-2
+2026-10-29T06:22:40.7820490Z ##[group]Run actions/checkout@v4
+2026-10-29T06:22:40.7821810Z with:
+2026-10-29T06:22:40.7822430Z   repository: spankyed/apack
+2026-10-29T06:22:40.7834820Z   token: ***
+2026-10-29T06:22:40.7836410Z   ssh-strict: true
+2026-10-29T06:22:40.7837840Z   ssh-user: git
+2026-10-29T06:22:40.7844460Z   persist-credentials: true
+2026-10-29T06:22:40.7845440Z   clean: true
+2026-10-29T06:22:40.7846110Z   sparse-checkout-cone-mode: true
+2026-10-29T06:22:40.7846940Z   fetch-depth: 1
+2026-10-29T06:22:40.7847720Z   fetch-tags: false
+2026-10-29T06:22:40.7848360Z   show-progress: true
+2026-10-29T06:22:40.7849610Z   lfs: false
+2026-10-29T06:22:40.7850230Z   submodules: false
+2026-10-29T06:22:40.7850890Z   set-safe-directory: true
+2026-10-29T06:22:40.7851640Z   allow-unsafe-pr-checkout: false
+2026-10-29T06:22:40.7853640Z env:
+2026-10-29T06:22:40.7854310Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:22:40.7855110Z ##[endgroup]
+2026-10-29T06:22:41.7035360Z Syncing repository: spankyed/apack
+2026-10-29T06:22:41.7037930Z ##[group]Getting Git version info
+2026-10-29T06:22:41.7038910Z Working directory is '/Users/runner/work/apack/apack'
+2026-10-29T06:22:41.7040280Z [command]/opt/homebrew/bin/git version
+2026-10-29T06:22:41.7636140Z git version 2.56.0
+2026-10-29T06:22:41.7666410Z ##[endgroup]
+2026-10-29T06:22:41.7673790Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/44d7ffec-c58d-4b17-9a0f-50702dd6a425/.gitconfig'
+2026-10-29T06:22:41.7690540Z Temporarily overriding HOME='/Users/runner/work/_temp/44d7ffec-c58d-4b17-9a0f-50702dd6a425' before making global git config changes
+2026-10-29T06:22:41.7693100Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-29T06:22:41.7699360Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/apack/apack
+2026-10-29T06:22:41.7963100Z Deleting the contents of '/Users/runner/work/apack/apack'
+2026-10-29T06:22:41.7971290Z ##[group]Initializing the repository
+2026-10-29T06:22:41.7974440Z [command]/opt/homebrew/bin/git init /Users/runner/work/apack/apack
+2026-10-29T06:22:41.8501060Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-29T06:22:41.8502800Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-29T06:22:41.8504910Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-29T06:22:41.8506100Z hint: call:
+2026-10-29T06:22:41.8506730Z hint:
+2026-10-29T06:22:41.8507460Z hint: 	git config --global init.defaultBranch <name>
+2026-10-29T06:22:41.8508550Z hint:
+2026-10-29T06:22:41.8509430Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-29T06:22:41.8511040Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-29T06:22:41.8512110Z hint:
+2026-10-29T06:22:41.8512700Z hint: 	git branch -m <name>
+2026-10-29T06:22:41.8513430Z hint:
+2026-10-29T06:22:41.8514360Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-29T06:22:41.8518460Z Initialized empty Git repository in /Users/runner/work/apack/apack/.git/
+2026-10-29T06:22:41.8530980Z [command]/opt/homebrew/bin/git remote add origin https://github.com/spankyed/apack
+2026-10-29T06:22:41.8696690Z ##[endgroup]
+2026-10-29T06:22:41.8699700Z ##[group]Disabling automatic garbage collection
+2026-10-29T06:22:41.8702490Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+2026-10-29T06:22:41.8846550Z ##[endgroup]
+2026-10-29T06:22:41.8849240Z ##[group]Setting up auth
+2026-10-29T06:22:41.8856170Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-29T06:22:41.8978720Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-29T06:22:42.0527530Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-29T06:22:42.0617330Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-29T06:22:42.2112480Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-29T06:22:42.2211890Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-29T06:22:42.3985500Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-29T06:22:42.4132180Z ##[endgroup]
+2026-10-29T06:22:42.4168210Z ##[group]Fetching the repository
+2026-10-29T06:22:42.4170690Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c:refs/remotes/origin/session/ears-sqlite
+2026-10-29T06:22:43.6833030Z From https://github.com/spankyed/apack
+2026-10-29T06:22:43.6834270Z  * [new ref]         a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c -> origin/session/ears-sqlite
+2026-10-29T06:22:43.6914400Z ##[endgroup]
+2026-10-29T06:22:43.6915750Z ##[group]Determining the checkout info
+2026-10-29T06:22:43.6916420Z ##[endgroup]
+2026-10-29T06:22:43.6916940Z [command]/opt/homebrew/bin/git sparse-checkout disable
+2026-10-29T06:22:43.7049770Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-29T06:22:43.7142950Z ##[group]Checking out the ref
+2026-10-29T06:22:43.7151380Z [command]/opt/homebrew/bin/git checkout --progress --force -B session/ears-sqlite refs/remotes/origin/session/ears-sqlite
+2026-10-29T06:22:44.8417680Z Updating files:  75% (3653/4826)
+2026-10-29T06:22:44.8508940Z Updating files:  76% (3668/4826)
+2026-10-29T06:22:44.8750890Z Updating files:  77% (3717/4826)
+2026-10-29T06:22:44.8815240Z Updating files:  78% (3765/4826)
+2026-10-29T06:22:44.8949670Z Updating files:  79% (3813/4826)
+2026-10-29T06:22:44.9095230Z Updating files:  80% (3861/4826)
+2026-10-29T06:22:44.9491750Z Updating files:  81% (3910/4826)
+2026-10-29T06:22:44.9644890Z Updating files:  82% (3958/4826)
+2026-10-29T06:22:44.9746980Z Updating files:  83% (4006/4826)
+2026-10-29T06:22:44.9840180Z Updating files:  84% (4054/4826)
+2026-10-29T06:22:44.9944410Z Updating files:  85% (4103/4826)
+2026-10-29T06:22:45.0086840Z Updating files:  86% (4151/4826)
+2026-10-29T06:22:45.0192450Z Updating files:  87% (4199/4826)
+2026-10-29T06:22:45.0336720Z Updating files:  88% (4247/4826)
+2026-10-29T06:22:45.0492240Z Updating files:  89% (4296/4826)
+2026-10-29T06:22:45.0639370Z Updating files:  90% (4344/4826)
+2026-10-29T06:22:45.0743770Z Updating files:  91% (4392/4826)
+2026-10-29T06:22:45.0817490Z Updating files:  92% (4440/4826)
+2026-10-29T06:22:45.0930270Z Updating files:  93% (4489/4826)
+2026-10-29T06:22:45.1096110Z Updating files:  94% (4537/4826)
+2026-10-29T06:22:45.2026440Z Updating files:  95% (4585/4826)
+2026-10-29T06:22:45.2260780Z Updating files:  96% (4633/4826)
+2026-10-29T06:22:45.2366620Z Updating files:  97% (4682/4826)
+2026-10-29T06:22:45.2509190Z Updating files:  98% (4730/4826)
+2026-10-29T06:22:45.2646540Z Updating files:  99% (4778/4826)
+2026-10-29T06:22:45.2647130Z Updating files: 100% (4826/4826)
+2026-10-29T06:22:45.2647800Z Updating files: 100% (4826/4826), done.
+2026-10-29T06:22:45.2796510Z Switched to a new branch 'session/ears-sqlite'
+2026-10-29T06:22:45.2803780Z branch 'session/ears-sqlite' set up to track 'origin/session/ears-sqlite'.
+2026-10-29T06:22:45.2831730Z ##[endgroup]
+2026-10-29T06:22:45.3183990Z [command]/opt/homebrew/bin/git log -1 --format=%H
+2026-10-29T06:22:45.3369970Z a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c
+2026-10-29T06:22:45.4079330Z Prepare all required actions
+2026-10-29T06:22:45.4080040Z Getting action download info
+2026-10-29T06:22:45.5626860Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-10-29T06:22:46.1358900Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-10-29T06:22:46.4236000Z ##[group]Run ./.github/actions/node-runtime
+2026-10-29T06:22:46.4236350Z with:
+2026-10-29T06:22:46.4236540Z   node-version: 23.11.1
+2026-10-29T06:22:46.4236720Z env:
+2026-10-29T06:22:46.4236870Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:22:46.4237020Z ##[endgroup]
+2026-10-29T06:22:46.4346720Z ##[start-action display=Restore Node toolchain;id=__self.toolchain]
+2026-10-29T06:22:46.4444720Z ##[group]Run actions/cache/restore@v4
+2026-10-29T06:22:46.4444990Z with:
+2026-10-29T06:22:46.4445210Z   path: /Users/runner/hostedtoolcache/node/23.11.1
+2026-10-29T06:22:46.4445640Z   key: node-toolchain-v1-macOS-ARM64-23.11.1
+2026-10-29T06:22:46.4446080Z   enableCrossOsArchive: false
+2026-10-29T06:22:46.4446380Z   fail-on-cache-miss: false
+2026-10-29T06:22:46.4446610Z   lookup-only: false
+2026-10-29T06:22:46.4446820Z env:
+2026-10-29T06:22:46.4447040Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:22:46.4447260Z ##[endgroup]
+2026-10-29T06:22:46.7929050Z (node:5881) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T06:22:46.7931170Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T06:22:47.3761040Z Cache hit for: node-toolchain-v1-macOS-ARM64-23.11.1
+2026-10-29T06:22:47.3895130Z (node:5881) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-29T06:22:48.7460820Z Received 0 of 37656307 (0.0%), 0.0 MBs/sec
+2026-10-29T06:22:49.7351270Z Received 33462003 of 37656307 (88.9%), 15.6 MBs/sec
+2026-10-29T06:22:50.5826600Z Received 37656307 of 37656307 (100.0%), 12.5 MBs/sec
+2026-10-29T06:22:50.5906700Z Cache Size: ~36 MB (37656307 B)
+2026-10-29T06:22:50.5964280Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/0475bdbe-d523-4b1f-8503-f5175fb6ff2e/cache.tzst -P -C /Users/runner/work/apack/apack --delay-directory-restore --use-compress-program unzstd
+2026-10-29T06:22:53.6443140Z Cache restored successfully
+2026-10-29T06:22:53.7032270Z Cache restored from key: node-toolchain-v1-macOS-ARM64-23.11.1
+2026-10-29T06:22:53.7318120Z ##[end-action id=__self.toolchain;outcome=success;conclusion=success;duration_ms=7289]
+2026-10-29T06:22:53.7330360Z ##[start-action display=Run actions/setup-node@v4;id=__self.__actions_setup-node]
+2026-10-29T06:22:53.7429660Z ##[group]Run actions/setup-node@v4
+2026-10-29T06:22:53.7493100Z with:
+2026-10-29T06:22:53.7493580Z   node-version: 23.11.1
+2026-10-29T06:22:53.7493810Z   cache: npm
+2026-10-29T06:22:53.7494060Z   always-auth: false
+2026-10-29T06:22:53.7494320Z   check-latest: false
+2026-10-29T06:22:53.7496810Z   token: ***
+2026-10-29T06:22:53.7497100Z env:
+2026-10-29T06:22:53.7498500Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:22:53.7498790Z ##[endgroup]
+2026-10-29T06:22:54.1523020Z (node:6176) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T06:22:54.1624620Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T06:22:54.2346030Z Found in cache @ /Users/runner/hostedtoolcache/node/23.11.1/arm64
+2026-10-29T06:22:54.2916590Z ##[group]Environment details
+2026-10-29T06:22:54.6409170Z node: v23.11.1
+2026-10-29T06:22:54.6510680Z npm: 10.9.2
+2026-10-29T06:22:54.6612700Z yarn: 1.22.22
+2026-10-29T06:22:54.6714700Z ##[endgroup]
+2026-10-29T06:22:54.6815990Z [command]/Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/npm config get cache
+2026-10-29T06:22:54.8323190Z /Users/runner/.npm
+2026-10-29T06:22:55.1192580Z Cache hit for: node-cache-macOS-arm64-npm-4984968ff64a3dcfb4f348c66f10b08ad8644b73733fe138abcf56c8f961cdde
+2026-10-29T06:22:55.1263150Z (node:6176) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-29T06:22:56.4028430Z Received 0 of 205334979 (0.0%), 0.0 MBs/sec
+2026-10-29T06:22:57.4039040Z Received 71303168 of 205334979 (34.7%), 34.0 MBs/sec
+2026-10-29T06:22:58.4074310Z Received 134217728 of 205334979 (65.4%), 42.6 MBs/sec
+2026-10-29T06:22:59.4100120Z Received 192937984 of 205334979 (94.0%), 45.9 MBs/sec
+2026-10-29T06:23:00.1806430Z Received 205334979 of 205334979 (100.0%), 41.0 MBs/sec
+2026-10-29T06:23:00.1824240Z Cache Size: ~196 MB (205334979 B)
+2026-10-29T06:23:00.1901910Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/808c9124-b63d-4cd3-8cbb-8701194a5129/cache.tzst -P -C /Users/runner/work/apack/apack --delay-directory-restore --use-compress-program unzstd
+2026-10-29T06:23:01.8694960Z Cache restored successfully
+2026-10-29T06:23:01.8745110Z Cache restored from key: node-cache-macOS-arm64-npm-4984968ff64a3dcfb4f348c66f10b08ad8644b73733fe138abcf56c8f961cdde
+2026-10-29T06:23:01.9208590Z ##[end-action id=__self.__actions_setup-node;outcome=success;conclusion=success;duration_ms=8187]
+2026-10-29T06:23:01.9232140Z ##[start-action display=Retain Node toolchain;id=__self.__actions_cache]
+2026-10-29T06:23:01.9286660Z ##[end-action id=__self.__actions_cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-29T06:23:01.9513760Z ##[group]Run git rev-parse HEAD
+2026-10-29T06:23:01.9514270Z [36;1mgit rev-parse HEAD[0m
+2026-10-29T06:23:01.9671180Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T06:23:01.9672570Z env:
+2026-10-29T06:23:01.9673560Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:23:01.9674710Z ##[endgroup]
+2026-10-29T06:23:02.1434920Z a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c
+2026-10-29T06:23:02.1619500Z Prepare all required actions
+2026-10-29T06:23:02.1620220Z Getting action download info
+2026-10-29T06:23:02.2895830Z Download action repository 'Swatinem/rust-cache@v2' (SHA:d1527c8f67ef9af357290475d4af4b0fab8f12e0)
+2026-10-29T06:23:02.8508480Z ##[group]Run ./.github/actions/elmdb
+2026-10-29T06:23:02.8524900Z env:
+2026-10-29T06:23:02.8525190Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:23:02.8525410Z ##[endgroup]
+2026-10-29T06:23:02.8532140Z ##[start-action display=Clone elmdb at the pinned commit;id=__self_2.__run]
+2026-10-29T06:23:02.8566860Z ##[group]Run rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
+2026-10-29T06:23:02.8568460Z [36;1mrev=$(tr -d '[:space:]' < vendor/elmdb.rev)[0m
+2026-10-29T06:23:02.8569460Z [36;1mgit init -q vendor/elmdb[0m
+2026-10-29T06:23:02.8570560Z [36;1mgit -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"[0m
+2026-10-29T06:23:02.8572260Z [36;1mgit -C vendor/elmdb checkout -q FETCH_HEAD[0m
+2026-10-29T06:23:02.8622340Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T06:23:02.8622760Z env:
+2026-10-29T06:23:02.8622970Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:23:02.8623180Z ##[endgroup]
+2026-10-29T06:23:03.6796630Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=826]
+2026-10-29T06:23:03.6802170Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__self_2.__Swatinem_rust-cache]
+2026-10-29T06:23:03.6894270Z ##[group]Run Swatinem/rust-cache@v2
+2026-10-29T06:23:03.6894560Z with:
+2026-10-29T06:23:03.6894740Z   workspaces: vendor/elmdb
+2026-10-29T06:23:03.6894970Z   prefix-key: v0-rust
+2026-10-29T06:23:03.6895190Z   add-job-id-key: true
+2026-10-29T06:23:03.6895420Z   add-rust-environment-hash-key: true
+2026-10-29T06:23:03.6895680Z   cache-targets: true
+2026-10-29T06:23:03.6895860Z   cache-all-crates: false
+2026-10-29T06:23:03.6896080Z   cache-workspace-crates: false
+2026-10-29T06:23:03.6896300Z   save-if: true
+2026-10-29T06:23:03.6896490Z   cache-provider: github
+2026-10-29T06:23:03.6896870Z   cache-bin: true
+2026-10-29T06:23:03.6897060Z   lookup-only: false
+2026-10-29T06:23:03.6897290Z   cmd-format: {0}
+2026-10-29T06:23:03.6897450Z env:
+2026-10-29T06:23:03.6897610Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:23:03.6897800Z ##[endgroup]
+2026-10-29T06:23:13.5031660Z ##[group]Cache Configuration
+2026-10-29T06:23:13.5034440Z Cache Provider:
+2026-10-29T06:23:13.5034980Z     github
+2026-10-29T06:23:13.5035570Z Workspaces:
+2026-10-29T06:23:13.5036220Z     /Users/runner/work/apack/apack/vendor/elmdb
+2026-10-29T06:23:13.5036830Z Cache Paths:
+2026-10-29T06:23:13.5046600Z     /Users/runner/.cargo/bin
+2026-10-29T06:23:13.5047980Z     /Users/runner/.cargo/.crates.toml
+2026-10-29T06:23:13.5054560Z     /Users/runner/.cargo/.crates2.json
+2026-10-29T06:23:13.5055710Z     /Users/runner/.cargo/registry
+2026-10-29T06:23:13.5066960Z     /Users/runner/.cargo/git
+2026-10-29T06:23:13.5067650Z     /Users/runner/work/apack/apack/vendor/elmdb/target
+2026-10-29T06:23:13.5076330Z Restore Key:
+2026-10-29T06:23:13.5077070Z     v0-rust-consumers-Darwin-arm64-d8b0379c
+2026-10-29T06:23:13.5078050Z Cache Key:
+2026-10-29T06:23:13.5078520Z     v0-rust-consumers-Darwin-arm64-d8b0379c-93401fda
+2026-10-29T06:23:13.5078910Z .. Prefix:
+2026-10-29T06:23:13.5079700Z   - v0-rust-consumers-Darwin-arm64
+2026-10-29T06:23:13.5080860Z .. Environment considered:
+2026-10-29T06:23:13.5081260Z   - Rust Versions:
+2026-10-29T06:23:13.5081780Z     - 1.99.0 aarch64-apple-darwin b940084d7eb6a299eb4bfeb8e34901bc051e7ac4
+2026-10-29T06:23:13.5082180Z   - CARGO_INCREMENTAL
+2026-10-29T06:23:13.5082540Z .. Lockfiles considered:
+2026-10-29T06:23:13.5083000Z   - /Users/runner/work/apack/apack/vendor/elmdb/.cargo/config.toml
+2026-10-29T06:23:13.5083550Z   - /Users/runner/work/apack/apack/vendor/elmdb/Cargo.lock
+2026-10-29T06:23:13.5084040Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-cli/Cargo.toml
+2026-10-29T06:23:13.5085230Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-node/Cargo.toml
+2026-10-29T06:23:13.5088090Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb/Cargo.toml
+2026-10-29T06:23:13.5089000Z   - /Users/runner/work/apack/apack/vendor/elmdb/rust-toolchain.toml
+2026-10-29T06:23:13.5089680Z   - /Users/runner/work/apack/apack/vendor/elmdb/xtask/Cargo.toml
+2026-10-29T06:23:13.5090730Z ##[endgroup]
+2026-10-29T06:23:13.5090930Z 
+2026-10-29T06:23:13.5091990Z ... Restoring cache ...
+2026-10-29T06:23:13.7735240Z Cache hit for: v0-rust-consumers-Darwin-arm64-d8b0379c-93401fda
+2026-10-29T06:23:15.0752090Z Received 0 of 162886249 (0.0%), 0.0 MBs/sec
+2026-10-29T06:23:16.0809000Z Received 54525952 of 162886249 (33.5%), 26.0 MBs/sec
+2026-10-29T06:23:17.0860490Z Received 134217728 of 162886249 (82.4%), 42.6 MBs/sec
+2026-10-29T06:23:17.6069070Z Received 162886249 of 162886249 (100.0%), 44.0 MBs/sec
+2026-10-29T06:23:17.6195940Z Cache Size: ~155 MB (162886249 B)
+2026-10-29T06:23:17.6359060Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/f08322f6-08e3-4d99-8aa2-8532e7589f89/cache.tzst -P -C /Users/runner/work/apack/apack --delay-directory-restore --use-compress-program unzstd
+2026-10-29T06:23:19.5954720Z Cache restored successfully
+2026-10-29T06:23:19.5984880Z Restored from cache key "v0-rust-consumers-Darwin-arm64-d8b0379c-93401fda" full match: true.
+2026-10-29T06:23:19.6186800Z ##[end-action id=__self_2.__Swatinem_rust-cache;outcome=success;conclusion=success;duration_ms=15938]
+2026-10-29T06:23:19.6195030Z ##[start-action display=Build the binding;id=__self_2.__run_2]
+2026-10-29T06:23:19.6315710Z ##[group]Run rustup show active-toolchain
+2026-10-29T06:23:19.6316000Z [36;1mrustup show active-toolchain[0m
+2026-10-29T06:23:19.6316240Z [36;1mnpm ci --no-audit --no-fund[0m
+2026-10-29T06:23:19.6316930Z [36;1m# On Windows, @napi-rs/cli's build times out on its own filesystem-reconciliation lock (elmdb's own CI does[0m
+2026-10-29T06:23:19.6317580Z [36;1m# the same), so cargo builds the binding and it is named as napi's loader expects[0m
+2026-10-29T06:23:19.6318020Z [36;1mif [ "$RUNNER_OS" = Windows ]; then[0m
+2026-10-29T06:23:19.6318330Z [36;1m  cargo build -p elmdb-node --release[0m
+2026-10-29T06:23:19.6318780Z [36;1m  cp target/release/elmdb_node.dll crates/elmdb-node/elmdb.win32-x64-msvc.node[0m
+2026-10-29T06:23:19.6319210Z [36;1melse[0m
+2026-10-29T06:23:19.6319430Z [36;1m  npm run build[0m
+2026-10-29T06:23:19.6319750Z [36;1mfi[0m
+2026-10-29T06:23:19.6391620Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T06:23:19.6392200Z env:
+2026-10-29T06:23:19.6392550Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:23:19.6392980Z   CACHE_ON_FAILURE: false
+2026-10-29T06:23:19.6393290Z   CARGO_INCREMENTAL: 0
+2026-10-29T06:23:19.6394020Z ##[endgroup]
+2026-10-29T06:23:19.8189920Z 1.99.1-aarch64-apple-darwin (overridden by '/Users/runner/work/apack/apack/vendor/elmdb/rust-toolchain.toml')
+2026-10-29T06:23:23.2985350Z 
+2026-10-29T06:23:23.2987060Z added 78 packages in 3s
+2026-10-29T06:23:23.6550950Z 
+2026-10-29T06:23:23.6552200Z > build
+2026-10-29T06:23:23.6557330Z > napi build --cwd crates/elmdb-node --platform --release
+2026-10-29T06:23:23.6558000Z 
+2026-10-29T06:23:30.5448760Z    Compiling elmdb-node v0.0.0 (/Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-node)
+2026-10-29T06:23:30.5450300Z    Compiling elmdb v0.0.0 (/Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb)
+2026-10-29T06:25:57.2083930Z     Finished `release` profile [optimized] target(s) in 2m 27s
+2026-10-29T06:25:58.0424220Z ##[end-action id=__self_2.__run_2;outcome=success;conclusion=success;duration_ms=158422]
+2026-10-29T06:25:58.0632840Z ##[group]Run npm ci
+2026-10-29T06:25:58.0633410Z [36;1mnpm ci[0m
+2026-10-29T06:25:58.1103810Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T06:25:58.1104270Z env:
+2026-10-29T06:25:58.1104540Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:25:58.1104860Z   CACHE_ON_FAILURE: false
+2026-10-29T06:25:58.1105250Z   CARGO_INCREMENTAL: 0
+2026-10-29T06:25:58.1109060Z   GITHUB_TOKEN: ***
+2026-10-29T06:25:58.1109390Z ##[endgroup]
+2026-10-29T06:25:59.4769000Z npm warn EBADENGINE Unsupported engine {
+2026-10-29T06:25:59.4770510Z npm warn EBADENGINE   package: 'eslint-visitor-keys@5.0.1',
+2026-10-29T06:25:59.4772030Z npm warn EBADENGINE   required: { node: '^20.19.0 || ^22.13.0 || >=24' },
+2026-10-29T06:25:59.4773940Z npm warn EBADENGINE   current: { node: 'v23.11.1', npm: '10.9.2' }
+2026-10-29T06:25:59.4774650Z npm warn EBADENGINE }
+2026-10-29T06:25:59.4823710Z npm warn EBADENGINE Unsupported engine {
+2026-10-29T06:25:59.4824370Z npm warn EBADENGINE   package: 'tsup@9.0.0',
+2026-10-29T06:25:59.4825400Z npm warn EBADENGINE   required: { node: '^22.18.0 || ^24.11.0 || >=26.0.0' },
+2026-10-29T06:25:59.4826190Z npm warn EBADENGINE   current: { node: 'v23.11.1', npm: '10.9.2' }
+2026-10-29T06:25:59.4826950Z npm warn EBADENGINE }
+2026-10-29T06:26:07.5850920Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-10-29T06:26:07.9961860Z npm warn deprecated rimraf@2.6.3: Rimraf versions prior to v4 are no longer supported
+2026-10-29T06:26:08.1249580Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+2026-10-29T06:26:09.0123850Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T06:26:09.0483020Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T06:26:10.2083250Z npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+2026-10-29T06:26:14.5285480Z npm warn deprecated glob@11.1.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T06:26:14.6137350Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T06:26:14.6279290Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T06:26:44.5795900Z 
+2026-10-29T06:26:44.5797620Z > apack@0.3.14 preinstall
+2026-10-29T06:26:44.5917070Z > [ "$NODE_ENV" = 'production' ] && echo '⚠️  NODE_ENV=production — devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true
+2026-10-29T06:26:44.5918420Z 
+2026-10-29T06:26:44.5983920Z 
+2026-10-29T06:26:44.5986260Z > apack@0.3.14 postinstall
+2026-10-29T06:26:44.5987710Z > node scripts/postinstall.mjs
+2026-10-29T06:26:44.5989500Z 
+2026-10-29T06:26:47.7884330Z rebuilt dependencies successfully
+2026-10-29T06:26:47.8238180Z 
+2026-10-29T06:26:47.8370550Z added 1357 packages, and audited 1376 packages in 49s
+2026-10-29T06:26:47.8371000Z 
+2026-10-29T06:26:47.8479490Z 322 packages are looking for funding
+2026-10-29T06:26:47.8583030Z   run `npm fund` for details
+2026-10-29T06:26:47.9203530Z 
+2026-10-29T06:26:47.9312610Z 5 vulnerabilities (1 moderate, 2 high, 2 critical)
+2026-10-29T06:26:47.9422680Z 
+2026-10-29T06:26:47.9526880Z To address all issues (including breaking changes), run:
+2026-10-29T06:26:47.9553660Z   npm audit fix --force
+2026-10-29T06:26:47.9695480Z 
+2026-10-29T06:26:47.9745350Z Run `npm audit` for details.
+2026-10-29T06:26:48.0055500Z ##[group]Run actions/download-artifact@v4
+2026-10-29T06:26:48.0056730Z with:
+2026-10-29T06:26:48.0057910Z   name: strict-producers-a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c
+2026-10-29T06:26:48.0058820Z   path: /Users/runner/work/_temp
+2026-10-29T06:26:48.0059570Z   merge-multiple: false
+2026-10-29T06:26:48.0073460Z   repository: spankyed/apack
+2026-10-29T06:26:48.0074270Z   run-id: 40827265393
+2026-10-29T06:26:48.0074990Z env:
+2026-10-29T06:26:48.0075610Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:26:48.0076370Z   CACHE_ON_FAILURE: false
+2026-10-29T06:26:48.0077230Z   CARGO_INCREMENTAL: 0
+2026-10-29T06:26:48.0077910Z ##[endgroup]
+2026-10-29T06:26:48.9766620Z Downloading single artifact
+2026-10-29T06:26:49.0101230Z (node:12631) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T06:26:49.0140210Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T06:26:49.3010740Z Preparing to download the following artifacts:
+2026-10-29T06:26:49.3013930Z - strict-producers-a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c (ID: 12877707512, Size: 198555360, Expected Digest: sha256:489c79fd4e8e0b0c10418aff3639e38e91310b4c20e2285024e33ad6309fb106)
+2026-10-29T06:26:49.5813030Z Redirecting to blob download url: https://productionresultssa12.blob.core.windows.net/actions-results/6d5e69c5-c5cb-47fe-8160-986ec346c16e/workflow-job-run-966b4b4e-bc5f-51f8-a278-d8022b93eb6f/artifacts/9aab0093f5bdf55aca0092101050ee770b36eb4184d89e1eee0f7f8894a5749e.zip
+2026-10-29T06:26:49.5820180Z Starting download of artifact to: /Users/runner/work/_temp
+2026-10-29T06:26:49.9440000Z (node:12631) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+2026-10-29T06:27:03.9559810Z SHA256 digest of downloaded artifact is 489c79fd4e8e0b0c10418aff3639e38e91310b4c20e2285024e33ad6309fb106
+2026-10-29T06:27:03.9563340Z Artifact download completed successfully.
+2026-10-29T06:27:03.9665590Z Total of 1 artifact(s) downloaded
+2026-10-29T06:27:03.9765090Z Download artifact has finished successfully
+2026-10-29T06:27:03.9933540Z ##[group]Run tar -xzf "$RUNNER_TEMP/producers.tgz"
+2026-10-29T06:27:03.9934060Z [36;1mtar -xzf "$RUNNER_TEMP/producers.tgz"[0m
+2026-10-29T06:27:04.2200350Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T06:27:04.2200820Z env:
+2026-10-29T06:27:04.2201120Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:27:04.2201500Z   CACHE_ON_FAILURE: false
+2026-10-29T06:27:04.2201840Z   CARGO_INCREMENTAL: 0
+2026-10-29T06:27:04.2202090Z ##[endgroup]
+2026-10-29T06:27:10.6917570Z ##[group]Run args=(--strict --all --cores 2 --job "$APACK_STRICT_JOB")
+2026-10-29T06:27:10.6918320Z [36;1margs=(--strict --all --cores 2 --job "$APACK_STRICT_JOB")[0m
+2026-10-29T06:27:10.6918840Z [36;1mif [[ -n "$APACK_STRICT_SHARD" ]]; then args+=(--shard "$APACK_STRICT_SHARD"); fi[0m
+2026-10-29T06:27:10.6919440Z [36;1mnpm run chain -- "${args[@]}" | tee "$RUNNER_TEMP/strict-chain.log"[0m
+2026-10-29T06:27:10.6968730Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+2026-10-29T06:27:10.6969090Z env:
+2026-10-29T06:27:10.6969480Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:27:10.6969850Z   CACHE_ON_FAILURE: false
+2026-10-29T06:27:10.6970170Z   CARGO_INCREMENTAL: 0
+2026-10-29T06:27:10.6970450Z   APACK_STRICT_JOB: integration
+2026-10-29T06:27:10.6970680Z   APACK_STRICT_SHARD: 2/2
+2026-10-29T06:27:10.6970890Z ##[endgroup]
+2026-10-29T06:27:11.7621900Z 
+2026-10-29T06:27:11.7627540Z > apack@0.3.14 chain
+2026-10-29T06:27:11.7628670Z > tsx scripts/chain.ts --strict --all --cores 2 --job integration --shard 2/2
+2026-10-29T06:27:11.7629220Z 
+2026-10-29T06:43:45.1453180Z    FAIL     test:integration               992.0s  --all
+2026-10-29T06:43:45.1700540Z                                            144.7s  a build > compiles flows against the steps it lo…
+2026-10-29T06:43:45.1795670Z                                            108.0s  apack pack add migration > declares each migrati…
+2026-10-29T06:43:45.1802430Z                                            105.2s  builds declared editor members and step presenta…
+2026-10-29T06:43:45.1826550Z                                             66.3s  invalidates generated metadata when external inh…
+2026-10-29T06:43:45.1828310Z                                             64.1s  captures explicitly imported dependency code and…
+2026-10-29T06:43:45.1887240Z                                                    nothing measured — every project was already fresh
+2026-10-29T06:43:45.1888690Z 
+2026-10-29T06:43:45.1890160Z ========================================================================
+2026-10-29T06:43:45.1896130Z test:integration failed (exit 1)
+2026-10-29T06:43:45.1896920Z ========================================================================
+2026-10-29T06:43:45.1897840Z 
+2026-10-29T06:43:45.1899310Z > apack@0.3.14 test:integration
+2026-10-29T06:43:45.1903390Z > tsx scripts/test-unit-pool.ts integration --all --shard=2/2
+2026-10-29T06:43:45.1906080Z 
+2026-10-29T06:43:45.1906080Z 
+2026-10-29T06:43:45.1907310Z > apack@0.3.14 packages:ensure
+2026-10-29T06:43:45.1911340Z > tsx scripts/ensure-packages-built.ts
+2026-10-29T06:43:45.1911550Z 
+2026-10-29T06:43:45.1911960Z integration pool: 3 of 3 project(s) to run
+2026-10-29T06:43:45.2188590Z   @apackdev/cli        --all
+2026-10-29T06:43:45.2189610Z   @app/repo-checks     --all
+2026-10-29T06:43:45.2191080Z   @app/publish-checks  --all
+2026-10-29T06:43:45.2194050Z integration pool: shard 2 of 2, recording nothing — a shard is part of each suite
+2026-10-29T06:43:45.2195460Z 
+2026-10-29T06:43:45.2196820Z [1m[46m RUN [49m[22m [36mv3.2.7 [39m[90m/Users/runner/work/apack/apack[39m
+2026-10-29T06:43:45.2197950Z 
+2026-10-29T06:43:45.2205360Z  [32m✓[39m [30m[43m @app/repo-checks [49m[39m tests/import-specifiers.integration.spec.ts [2m([22m[2m313 tests[22m[2m)[22m[33m 15912[2mms[22m[39m
+2026-10-29T06:43:45.2208010Z    [33m[2m✓[22m[39m findInternalPackageImports[2m > [22mholds for the repo [33m 3378[2mms[22m[39m
+2026-10-29T06:43:45.2209400Z    [33m[2m✓[22m[39m findUpwardImports[2m > [22mreports a workspace that holds code and has no layer [33m 5215[2mms[22m[39m
+2026-10-29T06:43:45.2210980Z    [33m[2m✓[22m[39m CHECKS[2m > [22mclaims each offence under at most one rule, at every place a rule discriminates on [33m 2979[2mms[22m[39m
+2026-10-29T06:43:45.2212650Z    [33m[2m✓[22m[39m findRepositoryCasts[2m > [22mholds for the repo [33m 400[2mms[22m[39m
+2026-10-29T06:43:45.2217440Z    [33m[2m✓[22m[39m findMissingSourceConditions[2m > [22mholds for the repo [33m 326[2mms[22m[39m
+2026-10-29T06:43:45.2322240Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/commands/db.integration.spec.ts [2m([22m[2m71 tests[22m[2m)[22m[33m 77164[2mms[22m[39m
+2026-10-29T06:43:45.2430530Z    [33m[2m✓[22m[39m apack db query[2m > [22mprints the result, after the data dir it targets [33m 898[2mms[22m[39m
+2026-10-29T06:43:45.2549050Z    [33m[2m✓[22m[39m apack db query[2m > [22mreads code from a file, and writes CSV to a file [33m 715[2mms[22m[39m
+2026-10-29T06:43:45.2658820Z    [33m[2m✓[22m[39m apack db query[2m > [22mcan't write, and changes nothing [33m 547[2mms[22m[39m
+2026-10-29T06:43:45.2909850Z    [33m[2m✓[22m[39m apack db query[2m > [22mreads nonwritable data while preserving writable reader registration [33m 436[2mms[22m[39m
+2026-10-29T06:43:45.3016980Z    [33m[2m✓[22m[39m apack db query[2m > [22mreports how to restore reader registration when the lock file cannot be written [33m 610[2mms[22m[39m
+2026-10-29T06:43:45.3136900Z    [33m[2m✓[22m[39m apack db query[2m > [22mwarns while an app runs on the data dir, and still reads [33m 429[2mms[22m[39m
+2026-10-29T06:43:45.3248190Z    [33m[2m✓[22m[39m apack db query[2m > [22mreads a database another process holds open in a unit it is writing, as a running app does [33m 461[2mms[22m[39m
+2026-10-29T06:43:45.3362870Z    [33m[2m✓[22m[39m naming the data dir[2m > [22mrefuses two data dirs [33m 365[2mms[22m[39m
+2026-10-29T06:43:45.3466840Z    [33m[2m✓[22m[39m naming the data dir[2m > [22mmakes a command that changes the database name its data dir, and opens none until it does [33m 443[2mms[22m[39m
+2026-10-29T06:43:45.3572850Z    [33m[2m✓[22m[39m naming the data dir[2m > [22mlets a command that only reads take the production app's data without being told, dry runs included [33m 1116[2mms[22m[39m
+2026-10-29T06:43:45.3649970Z    [33m[2m✓[22m[39m naming the data dir[2m > [22mnames a data dir for a change, and writes what the code returns to it [33m 824[2mms[22m[39m
+2026-10-29T06:43:45.3794620Z    [33m[2m✓[22m[39m the lock a change holds[2m > [22mis held while a change runs and released after, so an app that starts meanwhile refuses to open the database [33m 631[2mms[22m[39m
+2026-10-29T06:43:45.3811710Z    [33m[2m✓[22m[39m the lock a change holds[2m > [22mis not taken by a command that only reads [33m 532[2mms[22m[39m
+2026-10-29T06:43:45.3916110Z    [33m[2m✓[22m[39m the lock a change holds[2m > [22mrefuses a second command, and is released when one fails [33m 477[2mms[22m[39m
+2026-10-29T06:43:45.4021410Z    [33m[2m✓[22m[39m apack db runs[2m > [22mlists the runs, newest first, and prints one run's tree [33m 382[2mms[22m[39m
+2026-10-29T06:43:45.4124810Z    [33m[2m✓[22m[39m apack db runs[2m > [22msays when a data dir has no run history, and leaves it without one [33m 303[2mms[22m[39m
+2026-10-29T06:43:45.4227790Z    [33m[2m✓[22m[39m apack db exec[2m > [22mwrites with the transaction helpers [33m 860[2mms[22m[39m
+2026-10-29T06:43:45.4313140Z    [33m[2m✓[22m[39m apack db exec[2m > [22mrefuses while an app holds the data dir or its API answers, changing nothing [33m 1011[2mms[22m[39m
+2026-10-29T06:43:45.4314400Z    [33m[2m✓[22m[39m apack db exec[2m > [22mkeeps none of what the code wrote when it throws part way [33m 890[2mms[22m[39m
+2026-10-29T06:43:45.4315660Z    [33m[2m✓[22m[39m apack db repl[2m > [22mruns each line, reporting errors without stopping [33m 405[2mms[22m[39m
+2026-10-29T06:43:45.4316900Z    [33m[2m✓[22m[39m apack db repl[2m > [22mrefuses a --write session while an app runs on the data dir, changing nothing [33m 376[2mms[22m[39m
+2026-10-29T06:43:45.4419600Z    [33m[2m✓[22m[39m apack db repl[2m > [22mreads while an app runs, warning as the other commands do [33m 351[2mms[22m[39m
+2026-10-29T06:43:45.4523720Z    [33m[2m✓[22m[39m apack db repl[2m > [22msaves the writes of a --write session [33m 490[2mms[22m[39m
+2026-10-29T06:43:45.4632330Z    [33m[2m✓[22m[39m apack db script[2m > [22mwaits for a script that awaits, before the process exits [33m 4007[2mms[22m[39m
+2026-10-29T06:43:45.4738360Z    [33m[2m✓[22m[39m apack db script[2m > [22mruns a file with the open database, its arguments and a printer, and prints what it returns [33m 686[2mms[22m[39m
+2026-10-29T06:43:45.4841820Z    [33m[2m✓[22m[39m apack db script[2m > [22mruns a plain module too, and writes what it returns to a file [33m 416[2mms[22m[39m
+2026-10-29T06:43:45.4946430Z    [33m[2m✓[22m[39m apack db script[2m > [22mruns a TypeScript script through the real CLI, with its own imports, as a user does [33m 2780[2mms[22m[39m
+2026-10-29T06:43:45.5046670Z    [33m[2m✓[22m[39m apack db script[2m > [22mruns a script in a directory it can't write, importing a package from beside it [33m 2948[2mms[22m[39m
+2026-10-29T06:43:45.5153210Z    [33m[2m✓[22m[39m apack db script[2m > [22mwaits for an async script, printing everything it logged and saving what it wrote [33m 2976[2mms[22m[39m
+2026-10-29T06:43:45.5260060Z    [33m[2m✓[22m[39m apack db script[2m > [22mwaits for a script that asks the user something [33m 3311[2mms[22m[39m
+2026-10-29T06:43:45.5382310Z    [33m[2m✓[22m[39m apack db script[2m > [22mfails, naming the script, when it throws or rejects, keeping what it printed first [33m 3350[2mms[22m[39m
+2026-10-29T06:43:45.5483140Z    [33m[2m✓[22m[39m apack db script[2m > [22mrefuses a file that is missing, or exports no function, changing nothing [33m 504[2mms[22m[39m
+2026-10-29T06:43:45.5589280Z    [33m[2m✓[22m[39m apack db script[2m > [22mwrites by default, and only reads with --read-only, which works while an app runs [33m 687[2mms[22m[39m
+2026-10-29T06:43:45.5687930Z    [33m[2m✓[22m[39m apack db inspect[2m > [22mshows an entity's roles and relations, in the directions asked [33m 969[2mms[22m[39m
+2026-10-29T06:43:45.5806460Z    [33m[2m✓[22m[39m apack db inspect[2m > [22mshows only incoming relations with --incoming, and only the first five of a crowded type [33m 896[2mms[22m[39m
+2026-10-29T06:43:45.5914710Z    [33m[2m✓[22m[39m apack db inspect[2m > [22mcounts relations per entity type, or shows the first entities of one [33m 843[2mms[22m[39m
+2026-10-29T06:43:45.6025990Z    [33m[2m✓[22m[39m apack db inspect[2m > [22mcounts a database no app has opened, which holds no schema, as a load of a dump leaves one [33m 545[2mms[22m[39m
+2026-10-29T06:43:45.6123050Z    [33m[2m✓[22m[39m apack db export[2m > [22mwrites a file per entity type with entities, the relations, and a summary [33m 376[2mms[22m[39m
+2026-10-29T06:43:45.6231300Z    [33m[2m✓[22m[39m apack db export[2m > [22mexports the types asked, as CSV, and refuses a type no pack declares [33m 490[2mms[22m[39m
+2026-10-29T06:43:45.6343070Z    [33m[2m✓[22m[39m apack db clear-settings[2m > [22mlists the Settings rows, and destroys them only with --force [33m 861[2mms[22m[39m
+2026-10-29T06:43:45.6449830Z    [33m[2m✓[22m[39m apack db clear-settings[2m > [22mleaves every other entity, its roles and its relations where they were [33m 1037[2mms[22m[39m
+2026-10-29T06:43:45.6548660Z    [33m[2m✓[22m[39m a dry run of a command that changes data[2m > [22mreads, so it works while an app runs on the data dir and against nonwritable data with reader registration [33m 1446[2mms[22m[39m
+2026-10-29T06:43:45.6651550Z    [33m[2m✓[22m[39m a dry run of a command that changes data[2m > [22mtakes no lock, so two dry runs can run at once [33m 450[2mms[22m[39m
+2026-10-29T06:43:45.6754220Z    [33m[2m✓[22m[39m apack db reset[2m > [22mlists what it would delete, and deletes the data and stored keys only with --force [33m 1035[2mms[22m[39m
+2026-10-29T06:43:45.6857070Z    [33m[2m✓[22m[39m apack db reset[2m > [22mkeeps the stored keys with --keep-keys, and says so [33m 865[2mms[22m[39m
+2026-10-29T06:43:45.7019580Z    [33m[2m✓[22m[39m apack db reset[2m > [22mrefuses while an app runs on the data dir [33m 581[2mms[22m[39m
+2026-10-29T06:43:45.7022150Z    [33m[2m✓[22m[39m apack db import[2m > [22mlists the backup and what it replaces, and replaces the database and media only with --force [33m 4236[2mms[22m[39m
+2026-10-29T06:43:45.7125460Z    [33m[2m✓[22m[39m apack db import[2m > [22msays what made the backup, and names it when the files are in a format it cannot read [33m 2009[2mms[22m[39m
+2026-10-29T06:43:45.7229800Z    [33m[2m✓[22m[39m apack db import[2m > [22mrefuses a backup whose run history this version cannot read, before replacing anything [33m 1705[2mms[22m[39m
+2026-10-29T06:43:45.7333150Z    [33m[2m✓[22m[39m apack db import[2m > [22mbrings back the run history the backup holds [33m 1462[2mms[22m[39m
+2026-10-29T06:43:45.7442370Z    [33m[2m✓[22m[39m apack db import[2m > [22mrestores a backup whose metadata claims a format its databases aren't in [33m 2158[2mms[22m[39m
+2026-10-29T06:43:45.7554780Z    [33m[2m✓[22m[39m apack db import[2m > [22mrestores a backup made before what wrote it was recorded [33m 2989[2mms[22m[39m
+2026-10-29T06:43:45.7678290Z    [33m[2m✓[22m[39m apack db import[2m > [22mkeeps the backup's own progress lines off stdout, so only the command's output is there [33m 1732[2mms[22m[39m
+2026-10-29T06:43:45.7796940Z    [33m[2m✓[22m[39m apack db import[2m > [22mrefuses a backup that is not one or lacks a database, changing nothing [33m 2291[2mms[22m[39m
+2026-10-29T06:43:45.7944380Z    [33m[2m✓[22m[39m apack db import[2m > [22msays when the backup lists a store it holds nothing for, rather than dropping it quietly [33m 2495[2mms[22m[39m
+2026-10-29T06:43:45.8102020Z    [33m[2m✓[22m[39m apack db import[2m > [22msays when the backup holds rows of a type no installed pack declares, and keeps them [33m 2640[2mms[22m[39m
+2026-10-29T06:43:45.8208270Z    [33m[2m✓[22m[39m apack db import[2m > [22mrefuses a backup from a newer apack, saying how to import it without what this one can't hold [33m 3344[2mms[22m[39m
+2026-10-29T06:43:45.8315000Z    [33m[2m✓[22m[39m apack db import[2m > [22mrefuses while an app runs on the data dir [33m 1271[2mms[22m[39m
+2026-10-29T06:43:45.8416990Z    [33m[2m✓[22m[39m a data dir whose packs are gone[2m > [22manswers a query that names an undeclared type with that type, not with everything [33m 439[2mms[22m[39m
+2026-10-29T06:43:45.8524840Z    [33m[2m✓[22m[39m a data dir whose packs are gone[2m > [22msays which types nothing declares, and how many rows each has [33m 360[2mms[22m[39m
+2026-10-29T06:43:45.8625380Z    [33m[2m✓[22m[39m a data dir whose packs are gone[2m > [22mdoes not invent a relation kind, whose alias no row holds [33m 543[2mms[22m[39m
+2026-10-29T06:43:45.8724870Z    [33m[2m✓[22m[39m a data dir whose packs are gone[2m > [22mdeclares them again when --schema-from names the pack, and stops warning [33m 521[2mms[22m[39m
+2026-10-29T06:43:45.8827490Z    [33m[2m✓[22m[39m a data dir whose packs are gone[2m > [22mlets a declared name keep its declared value [33m 526[2mms[22m[39m
+2026-10-29T06:43:45.8930630Z [90mstdout[2m | tests/commands/release.integration.spec.ts[2m > [22m[2mpublishRelease[2m > [22m[2mcreates a prerelease for beta versions and uploads the archive and checksum
+2026-10-29T06:43:45.9030650Z [22m[39mPublished acme/demo-pack@v1.3.0-beta.2 (prerelease)
+2026-10-29T06:43:45.9132820Z 
+2026-10-29T06:43:45.9240160Z [90mstderr[2m | tests/commands/release.integration.spec.ts[2m > [22m[2mrunRelease[2m > [22m[2mreleases build signal ownership before running synchronous verification checks
+2026-10-29T06:43:45.9338130Z [22m[39m  ! no .github/workflows/release.yml — pushing the tag will not publish anything (use --local, or run "apack pack init" to scaffold the workflow)
+2026-10-29T06:43:45.9439390Z 
+2026-10-29T06:43:45.9551140Z [90mstderr[2m | tests/commands/release.integration.spec.ts[2m > [22m[2mrunRelease[2m > [22m[2mreports aborted verification before signal exit and stops the release (resuming: false)
+2026-10-29T06:43:45.9653830Z [22m[39m  ! no .github/workflows/release.yml — pushing the tag will not publish anything (use --local, or run "apack pack init" to scaffold the workflow)
+2026-10-29T06:43:45.9741140Z 
+2026-10-29T06:43:45.9843590Z [90mstderr[2m | tests/commands/release.integration.spec.ts[2m > [22m[2mrunRelease[2m > [22m[2mreports aborted verification before signal exit and stops the release (resuming: true)
+2026-10-29T06:43:45.9946630Z [22m[39m  ! no .github/workflows/release.yml — pushing the tag will not publish anything (use --local, or run "apack pack init" to scaffold the workflow)
+2026-10-29T06:43:46.0047910Z 
+2026-10-29T06:43:46.0150380Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/commands/release.integration.spec.ts [2m([22m[2m31 tests[22m[2m)[22m[33m 7729[2mms[22m[39m
+2026-10-29T06:43:46.0251340Z    [33m[2m✓[22m[39m runRelease[2m > [22mpacks after the version commit, so integrity.json records the tagged commit [33m 2135[2mms[22m[39m
+2026-10-29T06:43:46.0355790Z    [33m[2m✓[22m[39m runRelease[2m > [22mpacks the version on disk on a dry run, not the one a real release would cut [33m 1183[2mms[22m[39m
+2026-10-29T06:43:46.0390120Z    [33m[2m✓[22m[39m runRelease[2m > [22mbumps every version file, the lockfile included, and commits them together [33m 917[2mms[22m[39m
+2026-10-29T06:43:46.0499330Z    [33m[2m✓[22m[39m runRelease[2m > [22mcuts the next version after a release that finished, with no commits in between [33m 1362[2mms[22m[39m
+2026-10-29T06:43:46.0612300Z    [33m[2m✓[22m[39m runRelease[2m > [22mresumes the committed version instead of bumping past it [33m 636[2mms[22m[39m
+2026-10-29T06:43:46.0715670Z    [33m[2m✓[22m[39m runRelease[2m > [22mreports what the release left behind when a step after the commit fails [33m 507[2mms[22m[39m
+2026-10-29T06:43:46.0819040Z [90mstdout[2m | tests/build/compiler-file-reads.integration.spec.ts[2m > [22m[2mcompiles content records and copied media from the same captured input view
+2026-10-29T06:43:46.0929930Z [22m[39mCompiling pack: media-proof
+2026-10-29T06:43:46.1034380Z   memos: 1
+2026-10-29T06:43:46.1135760Z 
+2026-10-29T06:43:46.1237850Z [90mstdout[2m | tests/build/compiler-file-reads.integration.spec.ts[2m > [22m[2mexecutes content reads through files, streams and descriptors while writable handles stay native
+2026-10-29T06:43:46.1341380Z [22m[39mCompiling pack: content-reads
+2026-10-29T06:43:46.1442520Z 
+2026-10-29T06:43:46.1545130Z [90mstdout[2m | tests/build/compiler-file-reads.integration.spec.ts[2m > [22m[2mexecutes content reads through files, streams and descriptors while writable handles stay native
+2026-10-29T06:43:46.1647730Z [22m[39m  rows: 1
+2026-10-29T06:43:46.1749240Z 
+2026-10-29T06:43:46.1793640Z [90mstdout[2m | tests/commands/add-extensions.integration.spec.ts[2m > [22m[2mapack pack add artifact and block[2m > [22m[2mscaffolds single-file components and register files that typecheck with vue-tsc
+2026-10-29T06:43:46.1819360Z [22m[39m[run] /Users/runner/work/apack/apack/node_modules/.bin/vue-tsc --noEmit -p tsconfig.sfc.json: 5451ms
+2026-10-29T06:43:46.1821080Z 
+2026-10-29T06:43:46.1822510Z [90mstdout[2m | tests/build/compiler-file-reads.integration.spec.ts[2m > [22m[2mexecutes owned TypeScript compiler modules and transitive imports through temporary source edits
+2026-10-29T06:43:46.1823830Z [22m[39mCompiling pack: owned-module
+2026-10-29T06:43:46.1824380Z 
+2026-10-29T06:43:46.1825480Z [90mstdout[2m | tests/build/compiler-file-reads.integration.spec.ts[2m > [22m[2mexecutes owned TypeScript compiler modules and transitive imports through temporary source edits
+2026-10-29T06:43:46.1826780Z [22m[39m  rows: 1
+2026-10-29T06:43:46.1827430Z   flows: 0
+2026-10-29T06:43:46.1827960Z 
+2026-10-29T06:43:46.1829880Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/compiler-file-reads.integration.spec.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 498905[2mms[22m[39m
+2026-10-29T06:43:46.1831710Z    [33m[2m✓[22m[39m loads an explicitly imported outside native addon from owned bytes [33m 57276[2mms[22m[39m
+2026-10-29T06:43:46.1834610Z    [33m[2m✓[22m[39m compiles content records and copied media from the same captured input view [33m 30891[2mms[22m[39m
+2026-10-29T06:43:46.1836170Z    [33m[2m✓[22m[39m captures explicitly imported dependency code and relative modules outside authored discovery [33m 64080[2mms[22m[39m
+2026-10-29T06:43:46.1838600Z    [33m[2m✓[22m[39m executes content reads through files, streams and descriptors while writable handles stay native [33m 36292[2mms[22m[39m
+2026-10-29T06:43:46.1840460Z    [33m[2m✓[22m[39m keeps concurrent build views isolated and reports missing input paths without private locations [33m 44970[2mms[22m[39m
+2026-10-29T06:43:46.1842580Z    [33m[2m✓[22m[39m owns native directory results across sync, callback and promise reads without exposing mutable Dirents [33m 58430[2mms[22m[39m
+2026-10-29T06:43:46.1844530Z    [33m[2m✓[22m[39m shares captured metadata across native sync, callback and promise APIs [33m 8519[2mms[22m[39m
+2026-10-29T06:43:46.1845670Z    [33m[2m✓[22m[39m keeps descriptor metadata with captured bytes through pathname replacement and closure [33m 29976[2mms[22m[39m
+2026-10-29T06:43:46.1847070Z    [33m[2m✓[22m[39m serves captured opendir membership through all native handle entry points [33m 42849[2mms[22m[39m
+2026-10-29T06:43:46.1848240Z    [33m[2m✓[22m[39m executes owned TypeScript compiler modules and transitive imports through temporary source edits [33m 37517[2mms[22m[39m
+2026-10-29T06:43:46.1849760Z    [33m[2m✓[22m[39m keeps original-parent require calls isolated across concurrent module scopes [33m 51936[2mms[22m[39m
+2026-10-29T06:43:46.1860480Z    [33m[2m✓[22m[39m uses captured JSX and alias configuration for CommonJS compiler modules [33m 36162[2mms[22m[39m
+2026-10-29T06:43:46.1862260Z  [32m✓[39m [30m[43m @app/repo-checks [49m[39m tests/fingerprint-scope.integration.spec.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 12720[2mms[22m[39m
+2026-10-29T06:43:46.1863910Z    [33m[2m✓[22m[39m a guard over the whole repo[2m > [22mfound some, so this is not looking at nothing [33m 2798[2mms[22m[39m
+2026-10-29T06:43:46.1865020Z    [33m[2m✓[22m[39m prose costs nothing[2m > [22mfound the guides, so this is not looking at nothing [33m 439[2mms[22m[39m
+2026-10-29T06:43:46.1866320Z    [33m[2m✓[22m[39m prose costs nothing[2m > [22mkeeps every CLAUDE.md out of every step's cache key [33m 4348[2mms[22m[39m
+2026-10-29T06:43:46.1867400Z    [33m[2m✓[22m[39m prose costs nothing[2m > [22mkeeps prose that is not a guide out of every step's cache key [33m 3959[2mms[22m[39m
+2026-10-29T06:43:46.1868440Z    [33m[2m✓[22m[39m prose costs nothing[2m > [22mkeeps markdown a build reads in the key of the step that reads it [33m 844[2mms[22m[39m
+2026-10-29T06:43:46.1869980Z [90mstdout[2m | tests/session.integration.spec.ts[2m > [22m[2misolated editing sessions[2m > [22m[2mmerges committed branches in a detached candidate without touching source branches or indexes
+2026-10-29T06:43:46.1871620Z [22m[39mIntegration checkout: /private/var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/apack-session-test-J1ykGy/repo-worktrees.noindex/integration-iNpfU2
+2026-10-29T06:43:46.1872420Z   HEAD: b7af5536d7f71fceafd64dfe3e01b4d64dca749d
+2026-10-29T06:43:46.1872880Z   first: 9d7df7a3b3eea27accf753dad27d963e8fb3ee07
+2026-10-29T06:43:46.1873420Z   second: c0ff82ca0db74f25ecfe0a5f8cb61b075783cb6c
+2026-10-29T06:43:46.1873710Z 
+2026-10-29T06:43:46.1874560Z [90mstdout[2m | tests/session.integration.spec.ts[2m > [22m[2misolated editing sessions[2m > [22m[2mrefuses uncommitted inputs and keeps merge conflicts outside the source checkout
+2026-10-29T06:43:46.1876630Z [22m[39mIntegration checkout: /private/var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/apack-session-test-5TYicq/repo-worktrees.noindex/integration-9UG4ku
+2026-10-29T06:43:46.1877600Z   HEAD: c3c81538d92dda2f14591bf1bbbed250b1f6cfd5
+2026-10-29T06:43:46.1878060Z   first: ab184589cf18f8a97cc1953e36311627b1a69215
+2026-10-29T06:43:46.1878510Z   second: d60ace5b6fb01aa03346070e6487f53fd9de5eed
+2026-10-29T06:43:46.1878690Z 
+2026-10-29T06:43:46.1879450Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/commands/add-extensions.integration.spec.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 453696[2mms[22m[39m
+2026-10-29T06:43:46.1881040Z    [33m[2m✓[22m[39m apack pack add step[2m > [22mnames the DSL node interface DSL<Type>Node and the form takes node/resources, emitting update-node and close [33m 45884[2mms[22m[39m
+2026-10-29T06:43:46.1882400Z    [33m[2m✓[22m[39m apack pack add step[2m > [22mgenerates flow helpers for the kebab-case step that typecheck with tsc [33m 39340[2mms[22m[39m
+2026-10-29T06:43:46.1883630Z    [33m[2m✓[22m[39m apack pack add step in a pack without steps[2m > [22mdeclares the first step, in a manifest that names none [33m 10358[2mms[22m[39m
+2026-10-29T06:43:46.1885030Z    [33m[2m✓[22m[39m apack pack add step in a pack without steps[2m > [22mscaffolds a hyphenated trigger with declared track metadata and checked callbacks [33m 48585[2mms[22m[39m
+2026-10-29T06:43:46.1886380Z    [33m[2m✓[22m[39m apack pack add artifact and block[2m > [22mscaffolds an artifact viewer taking artifact, declared with its icon and viewer [33m 54766[2mms[22m[39m
+2026-10-29T06:43:46.1887830Z    [33m[2m✓[22m[39m apack pack add artifact and block[2m > [22mscaffolds display blocks taking their props and input blocks taking disabled/response, emitting submit/cancel [33m 39243[2mms[22m[39m
+2026-10-29T06:43:46.1889840Z    [33m[2m✓[22m[39m apack pack add artifact and block[2m > [22mscaffolds single-file components and register files that typecheck with vue-tsc [33m 5477[2mms[22m[39m
+2026-10-29T06:43:46.1891370Z    [33m[2m✓[22m[39m apack pack add migration[2m > [22mdeclares each migration under its version line and the version it targets, which the pack entry registers and tsc accepts [33m 107962[2mms[22m[39m
+2026-10-29T06:43:46.1892730Z    [33m[2m✓[22m[39m apack pack add migration[2m > [22mrefuses a version it already declares on that line, leaving the manifest as it was [33m 50640[2mms[22m[39m
+2026-10-29T06:43:46.1894050Z    [33m[2m✓[22m[39m apack pack add migration[2m > [22mtakes the version from the first argument that is not a flag, so --app alone is not the version [33m 17772[2mms[22m[39m
+2026-10-29T06:43:46.1895320Z  [32m✓[39m [30m[43m @app/repo-checks [49m[39m tests/session.integration.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 16272[2mms[22m[39m
+2026-10-29T06:43:46.1896540Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mseparates files, index and profiles while canonical paths share their own identity [33m 1876[2mms[22m[39m
+2026-10-29T06:43:46.1897790Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22midentifies the primary checkout with separately stored Git metadata [33m 1367[2mms[22m[39m
+2026-10-29T06:43:46.1898960Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22minserts profile options before the positional delimiter [33m 461[2mms[22m[39m
+2026-10-29T06:43:46.1900290Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mmerges committed branches in a detached candidate without touching source branches or indexes [33m 1472[2mms[22m[39m
+2026-10-29T06:43:46.1901560Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mrefuses uncommitted inputs and keeps merge conflicts outside the source checkout [33m 1131[2mms[22m[39m
+2026-10-29T06:43:46.1902730Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mprepares a new session and retains it when dependency setup fails [33m 1046[2mms[22m[39m
+2026-10-29T06:43:46.1904370Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mretains a new session whose elmdb checkout does not hold the pinned commit, before installing anything [33m 895[2mms[22m[39m
+2026-10-29T06:43:46.1905660Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mruns dependency installation and the full strict gate in the candidate [33m 2003[2mms[22m[39m
+2026-10-29T06:43:46.1906780Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mnever reports success when validation is invalid: fail [33m 1962[2mms[22m[39m
+2026-10-29T06:43:46.1907810Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mnever reports success when validation is invalid: drift [33m 1882[2mms[22m[39m
+2026-10-29T06:43:46.1908960Z    [33m[2m✓[22m[39m isolated editing sessions[2m > [22mnever reports success when validation is invalid: advance [33m 2173[2mms[22m[39m
+2026-10-29T06:43:46.1910290Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/fe-bundler-dev-server.integration.spec.ts [2m([22m[2m3 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 762[2mms[22m[39m
+2026-10-29T06:43:46.1913660Z [90mstdout[2m | tests/harness/dependency-runtime.integration.spec.ts[2m > [22m[2ma dependent pack's unit tests on the harness runtime tier[2m > [22m[2mrefuses dependency execution before importing a mismatched runtime: undefined
+2026-10-29T06:43:46.1921090Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/node_modules/vitest/vitest.mjs run: 7251ms
+2026-10-29T06:43:46.1921820Z 
+2026-10-29T06:43:46.1923470Z [90mstdout[2m | tests/harness/dependency-runtime.integration.spec.ts[2m > [22m[2ma dependent pack's unit tests on the harness runtime tier[2m > [22m[2mrefuses dependency execution before importing a mismatched runtime: 2
+2026-10-29T06:43:46.1926510Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/node_modules/vitest/vitest.mjs run: 5156ms
+2026-10-29T06:43:46.1927310Z 
+2026-10-29T06:43:46.1931850Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/dependency-flow-helpers.integration.spec.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 15888[2mms[22m[39m
+2026-10-29T06:43:46.1933720Z    [33m[2m✓[22m[39m a dependency's flow helpers[2m > [22mtype the dependency's step options, custom helpers and track builders as the dependency does [33m 6927[2mms[22m[39m
+2026-10-29T06:43:46.1935810Z [90mstdout[2m | tests/harness/dependency-runtime.integration.spec.ts[2m > [22m[2ma dependent pack's unit tests on the harness runtime tier[2m > [22m[2mruns default-setup's systems and the app's settings beside them
+2026-10-29T06:43:46.1937930Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/node_modules/vitest/vitest.mjs run: 6280ms
+2026-10-29T06:43:46.1938760Z 
+2026-10-29T06:43:46.1946110Z [90mstdout[2m | tests/harness/dependency-runtime.integration.spec.ts[2m > [22m[2ma dependent pack's unit tests on the harness runtime tier[2m > [22m[2mdrops a system's sends to its surface until a client connects
+2026-10-29T06:43:46.1947670Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/node_modules/vitest/vitest.mjs run: 8752ms
+2026-10-29T06:43:46.1948240Z 
+2026-10-29T06:43:46.1949200Z [90mstdout[2m | tests/harness/dependency-runtime.integration.spec.ts[2m > [22m[2ma dependent pack's unit tests on the harness runtime tier[2m > [22m[2mfails a test when a system reports an error the test didn't take
+2026-10-29T06:43:46.1950680Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/node_modules/vitest/vitest.mjs run: 8908ms
+2026-10-29T06:43:46.1951230Z 
+2026-10-29T06:43:46.1951830Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/harness/dependency-runtime.integration.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 48868[2mms[22m[39m
+2026-10-29T06:43:46.1953590Z    [33m[2m✓[22m[39m a dependent pack's unit tests on the harness runtime tier[2m > [22mrefuses dependency execution before importing a mismatched runtime: undefined [33m 11122[2mms[22m[39m
+2026-10-29T06:43:46.1954990Z    [33m[2m✓[22m[39m a dependent pack's unit tests on the harness runtime tier[2m > [22mrefuses dependency execution before importing a mismatched runtime: 2 [33m 7760[2mms[22m[39m
+2026-10-29T06:43:46.1956260Z    [33m[2m✓[22m[39m a dependent pack's unit tests on the harness runtime tier[2m > [22mruns default-setup's systems and the app's settings beside them [33m 8017[2mms[22m[39m
+2026-10-29T06:43:46.1957480Z    [33m[2m✓[22m[39m a dependent pack's unit tests on the harness runtime tier[2m > [22mdrops a system's sends to its surface until a client connects [33m 10731[2mms[22m[39m
+2026-10-29T06:43:46.1958600Z    [33m[2m✓[22m[39m a dependent pack's unit tests on the harness runtime tier[2m > [22mfails a test when a system reports an error the test didn't take [33m 10719[2mms[22m[39m
+2026-10-29T06:43:46.1960120Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mreports malformed release/dependency metadata at its manifest path: { version: '1.2.3garbage' }
+2026-10-29T06:43:46.1961560Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 2935ms
+2026-10-29T06:43:46.1962060Z 
+2026-10-29T06:43:46.1963010Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mreports malformed release/dependency metadata at its manifest path: { version: '1.2.3garbage' }
+2026-10-29T06:43:46.1964400Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate --json: 2773ms
+2026-10-29T06:43:46.1965430Z 
+2026-10-29T06:43:46.1966410Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mreports malformed release/dependency metadata at its manifest path: { hostVersion: '' }
+2026-10-29T06:43:46.1967710Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 2237ms
+2026-10-29T06:43:46.1968170Z 
+2026-10-29T06:43:46.1969050Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mreports malformed release/dependency metadata at its manifest path: { hostVersion: '' }
+2026-10-29T06:43:46.1970560Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate --json: 2332ms
+2026-10-29T06:43:46.1971070Z 
+2026-10-29T06:43:46.1972170Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mreports malformed release/dependency metadata at its manifest path: { dependencies: { provider: 'github:owner/repo nonsense' } }
+2026-10-29T06:43:46.1973710Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 2657ms
+2026-10-29T06:43:46.1975830Z 
+2026-10-29T06:43:46.1995920Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mreports malformed release/dependency metadata at its manifest path: { dependencies: { provider: 'github:owner/repo nonsense' } }
+2026-10-29T06:43:46.1997730Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate --json: 2408ms
+2026-10-29T06:43:46.1998290Z 
+2026-10-29T06:43:46.1999220Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack doctor enforces inline check policy without executing source
+2026-10-29T06:43:46.2001560Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 3413ms
+2026-10-29T06:43:46.2002170Z 
+2026-10-29T06:43:46.2003040Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack doctor enforces inline check policy without executing source
+2026-10-29T06:43:46.2004310Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 3739ms
+2026-10-29T06:43:46.2004850Z 
+2026-10-29T06:43:46.2005670Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack doctor enforces inline check policy without executing source
+2026-10-29T06:43:46.2007020Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 2602ms
+2026-10-29T06:43:46.2007550Z 
+2026-10-29T06:43:46.2008440Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack validate enforces inline check policy without executing source
+2026-10-29T06:43:46.2009690Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate: 3834ms
+2026-10-29T06:43:46.2010210Z 
+2026-10-29T06:43:46.2011030Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack validate enforces inline check policy without executing source
+2026-10-29T06:43:46.2012290Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate: 3714ms
+2026-10-29T06:43:46.2013320Z 
+2026-10-29T06:43:46.2014160Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack validate enforces inline check policy without executing source
+2026-10-29T06:43:46.2015410Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate: 2403ms
+2026-10-29T06:43:46.2015890Z 
+2026-10-29T06:43:46.2016900Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack doctor checks a system module default export without activation
+2026-10-29T06:43:46.2018610Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 3854ms
+2026-10-29T06:43:46.2019170Z 
+2026-10-29T06:43:46.2020330Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack validate checks a system module default export without activation
+2026-10-29T06:43:46.2021600Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate: 3591ms
+2026-10-29T06:43:46.2022090Z 
+2026-10-29T06:43:46.2024670Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack doctor diagnoses an export selector where a whole module is required
+2026-10-29T06:43:46.2026270Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 2869ms
+2026-10-29T06:43:46.2026750Z 
+2026-10-29T06:43:46.2027680Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack validate diagnoses an export selector where a whole module is required
+2026-10-29T06:43:46.2029050Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate: 1973ms
+2026-10-29T06:43:46.2029980Z 
+2026-10-29T06:43:46.2033770Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack doctor reports missing declared files even with unresolved dependencies
+2026-10-29T06:43:46.2037090Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 2612ms
+2026-10-29T06:43:46.2037690Z 
+2026-10-29T06:43:46.2038710Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mpack validate reports missing declared files even with unresolved dependencies
+2026-10-29T06:43:46.2041040Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack validate: 2586ms
+2026-10-29T06:43:46.2041640Z 
+2026-10-29T06:43:46.2044490Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mchecks extensionless exports without executing modules or generating files
+2026-10-29T06:43:46.2048170Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 5400ms
+2026-10-29T06:43:46.2048660Z 
+2026-10-29T06:43:46.2049550Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mrefuses a missing export naming its declaration
+2026-10-29T06:43:46.2051450Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 3251ms
+2026-10-29T06:43:46.2052390Z 
+2026-10-29T06:43:46.2053430Z [90mstdout[2m | tests/commands/pack-doctor.integration.spec.ts[2m > [22m[2mpack doctor static validation[2m > [22m[2mreports unresolved dependencies and unchecked exports as incomplete
+2026-10-29T06:43:46.2055190Z [22m[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack doctor: 2311ms
+2026-10-29T06:43:46.2055720Z 
+2026-10-29T06:43:46.2057220Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/commands/pack-doctor.integration.spec.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 63773[2mms[22m[39m
+2026-10-29T06:43:46.2059430Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mreports malformed release/dependency metadata at its manifest path: { version: '1.2.3garbage' } [33m 5723[2mms[22m[39m
+2026-10-29T06:43:46.2060930Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mreports malformed release/dependency metadata at its manifest path: { hostVersion: '' } [33m 4574[2mms[22m[39m
+2026-10-29T06:43:46.2062520Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mreports malformed release/dependency metadata at its manifest path: { dependencies: { provider: 'github:owner/repo nonsense' } } [33m 5080[2mms[22m[39m
+2026-10-29T06:43:46.2064610Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mpack doctor enforces inline check policy without executing source [33m 9831[2mms[22m[39m
+2026-10-29T06:43:46.2065760Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mpack validate enforces inline check policy without executing source [33m 9995[2mms[22m[39m
+2026-10-29T06:43:46.2067090Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mpack doctor checks a system module default export without activation [33m 3871[2mms[22m[39m
+2026-10-29T06:43:46.2068330Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mpack validate checks a system module default export without activation [33m 3615[2mms[22m[39m
+2026-10-29T06:43:46.2070700Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mpack doctor diagnoses an export selector where a whole module is required [33m 2879[2mms[22m[39m
+2026-10-29T06:43:46.2073980Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mpack validate diagnoses an export selector where a whole module is required [33m 1977[2mms[22m[39m
+2026-10-29T06:43:46.2075370Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mpack doctor reports missing declared files even with unresolved dependencies [33m 2617[2mms[22m[39m
+2026-10-29T06:43:46.2078180Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mpack validate reports missing declared files even with unresolved dependencies [33m 2609[2mms[22m[39m
+2026-10-29T06:43:46.2081560Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mchecks extensionless exports without executing modules or generating files [33m 5428[2mms[22m[39m
+2026-10-29T06:43:46.2084280Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mrefuses a missing export naming its declaration [33m 3256[2mms[22m[39m
+2026-10-29T06:43:46.2087120Z    [33m[2m✓[22m[39m pack doctor static validation[2m > [22mreports unresolved dependencies and unchecked exports as incomplete [33m 2314[2mms[22m[39m
+2026-10-29T06:43:46.2090150Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/facade-gate.integration.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 14855[2mms[22m[39m
+2026-10-29T06:43:46.2092630Z    [33m[2m✓[22m[39m facade gate[2m > [22mpasses a facade that imports only @apackdev/* and @apackdev/sdk peers [33m 3840[2mms[22m[39m
+2026-10-29T06:43:46.2095200Z    [33m[2m✓[22m[39m facade gate[2m > [22mfails a facade that does not type-check: a type-only re-export through a namespace [33m 2306[2mms[22m[39m
+2026-10-29T06:43:46.2097690Z    [33m[2m✓[22m[39m facade gate[2m > [22mfails a facade that imports a package outside the allowlist [33m 2333[2mms[22m[39m
+2026-10-29T06:43:46.2101140Z    [33m[2m✓[22m[39m facade gate[2m > [22mfails a facade that imports an @apackdev/* module no pack resolves [33m 3857[2mms[22m[39m
+2026-10-29T06:43:46.2103350Z    [33m[2m✓[22m[39m facade gate[2m > [22mfails a facade whose import does not resolve [33m 2506[2mms[22m[39m
+2026-10-29T06:43:46.2106030Z  [32m✓[39m [30m[43m @app/publish-checks [49m[39m tests/published-manifest-paths.integration.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 5669[2mms[22m[39m
+2026-10-29T06:43:46.2108400Z    [33m[2m✓[22m[39m a published tarball[2m > [22mnames only files it ships [33m 5658[2mms[22m[39m
+2026-10-29T06:43:46.2111970Z [90mstdout[2m | tests/commands/init-install-load.integration.spec.ts[2m > [22m[2mpack full lifecycle: init → install → load[2m > [22m[2mscaffolded pack can be installed and loaded by the pack loader
+2026-10-29T06:43:46.2115700Z [22m[39m[pack-installer] Installed "My Test Pack" v0.1.0 to /var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/init-install-load-Xkrq8D/apack/packs/my-test-pack
+2026-10-29T06:43:46.2117050Z 
+2026-10-29T06:43:46.2119460Z [90mstdout[2m | tests/commands/init-install-load.integration.spec.ts[2m > [22m[2mpack full lifecycle: init → install → load[2m > [22m[2mscaffolded pack can be installed and loaded by the pack loader
+2026-10-29T06:43:46.2121710Z [22m[39m[pack-loader] Loading 1 pack(s)
+2026-10-29T06:43:46.2122170Z 
+2026-10-29T06:43:46.2123750Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/commands/init-install-load.integration.spec.ts [2m([22m[2m1 test[22m[2m)[22m[33m 12849[2mms[22m[39m
+2026-10-29T06:43:46.2126530Z    [33m[2m✓[22m[39m pack full lifecycle: init → install → load[2m > [22mscaffolded pack can be installed and loaded by the pack loader [33m 12843[2mms[22m[39m
+2026-10-29T06:43:46.2129260Z  [32m✓[39m [30m[43m @app/repo-checks [49m[39m tests/component-contracts.integration.spec.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 6714[2mms[22m[39m
+2026-10-29T06:43:46.2131970Z    [33m[2m✓[22m[39m componentContracts[2m > [22mreports a component's props, emits, slots and exposed members [33m 4004[2mms[22m[39m
+2026-10-29T06:43:46.2135600Z    [33m[2m✓[22m[39m componentContracts[2m > [22mreports a component with no props as having none, rather than failing [33m 2406[2mms[22m[39m
+2026-10-29T06:43:46.2138770Z    [33m[2m✓[22m[39m componentContracts[2m > [22mfails when the declaration isn't the shape vue-tsc emits, instead of reporting no props [33m 301[2mms[22m[39m
+2026-10-29T06:43:46.2140100Z 
+2026-10-29T06:43:46.2140460Z > apack@0.3.14 packages:ensure
+2026-10-29T06:43:46.2141280Z > tsx scripts/ensure-packages-built.ts
+2026-10-29T06:43:46.2141720Z 
+2026-10-29T06:43:46.2141930Z Generated:
+2026-10-29T06:43:46.2142520Z   src/__generated__/entity-destinations.json
+2026-10-29T06:43:46.2143300Z   src/__generated__/event-contracts.json
+2026-10-29T06:43:46.2144070Z   src/__generated__/pack-entry.ts
+2026-10-29T06:43:46.2144920Z   src/__generated__/pack-entry-fe.ts
+2026-10-29T06:43:46.2145540Z   src/__generated__/ears.ts
+2026-10-29T06:43:46.2146100Z   src/__generated__/ref.ts
+2026-10-29T06:43:46.2146690Z   src/__generated__/paths.ts
+2026-10-29T06:43:46.2147320Z   src/__generated__/settings.ts
+2026-10-29T06:43:46.2148000Z   src/__generated__/settings-fe.ts
+2026-10-29T06:43:46.2148610Z   src/__generated__/events.ts
+2026-10-29T06:43:46.2149340Z   src/__generated__/types.ts
+2026-10-29T06:43:46.2150060Z   src/__generated__/services.ts
+2026-10-29T06:43:46.2150770Z   src/__generated__/runtime-services.ts
+2026-10-29T06:43:46.2151530Z   src/__generated__/repository.ts
+2026-10-29T06:43:46.2152230Z   src/__generated__/pack-types.ts
+2026-10-29T06:43:46.2153020Z   src/__generated__/references.ts
+2026-10-29T06:43:46.2154440Z   src/__generated__/appliers.ts
+2026-10-29T06:43:46.2155270Z   src/__generated__/content-runtime.ts
+2026-10-29T06:43:46.2156000Z   src/__generated__/flow-helpers.ts
+2026-10-29T06:43:46.2156940Z   src/__generated__/step-types.ts
+2026-10-29T06:43:46.2158550Z   src/__generated__/steps-build.ts
+2026-10-29T06:43:46.2159390Z Building pack: Editor pack v1.0.0
+2026-10-29T06:43:46.2160740Z No content.sources or content.datasets in manifest. Skipping content compilation.
+2026-10-29T06:43:46.2161570Z 
+2026-10-29T06:43:46.2161820Z Build output:
+2026-10-29T06:43:46.2162530Z   step build: dist/build/steps.build.mjs
+2026-10-29T06:43:46.2163420Z   content runtime: dist/build/content-runtime.mjs
+2026-10-29T06:43:46.2164320Z   runtime: dist/runtime/index.cjs
+2026-10-29T06:43:46.2164760Z 
+2026-10-29T06:43:46.2167180Z [1m[33mwarn[39m[22m - No utility classes were detected in your source files. If this is unexpected, double-check the `content` option in your Tailwind CSS configuration.
+2026-10-29T06:43:46.2169630Z [1m[33mwarn[39m[22m - https://tailwindcss.com/docs/content-configuration
+2026-10-29T06:43:46.2171680Z [33m[plugin vite:reporter] 
+2026-10-29T06:43:46.2177790Z (!) /private/var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/apack-editor-declarations-wlgMWg/src/Popup.vue is dynamically imported by /private/var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/apack-editor-declarations-wlgMWg/src/__generated__/pack-entry-fe.ts but also statically imported by /private/var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/apack-editor-declarations-wlgMWg/src/__generated__/pack-entry-fe.ts, dynamic import will not move module into another chunk.
+2026-10-29T06:43:46.2182290Z [39m
+2026-10-29T06:43:46.2185240Z [33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2187290Z   fe: dist/runtime/fe.js
+2026-10-29T06:43:46.2189780Z [90mstdout[2m | tests/build/editor-declarations.integration.spec.ts[2m > [22m[2mbuilds declared editor members and step presentation, then discovers a copied source-free build
+2026-10-29T06:43:46.2191510Z [22m[39m
+2026-10-29T06:43:46.2191990Z Output: dist/
+2026-10-29T06:43:46.2192260Z 
+2026-10-29T06:43:46.2193860Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/editor-declarations.integration.spec.ts [2m([22m[2m1 test[22m[2m)[22m[33m 105225[2mms[22m[39m
+2026-10-29T06:43:46.2198320Z    [33m[2m✓[22m[39m builds declared editor members and step presentation, then discovers a copied source-free build [33m 105223[2mms[22m[39m
+2026-10-29T06:43:46.2201520Z  [31m❯[39m [30m[43m @apackdev/cli [49m[39m tests/build/dependency-graph.integration.spec.ts [2m([22m[2m5 tests[22m[2m | [22m[33m5 skipped[39m[2m)[22m[33m 248708[2mms[22m[39m
+2026-10-29T06:43:46.2204400Z    [2m[90m↓[39m[22m a pack depending on two packs that share an ancestor[2m > [22mbuilds, rather than reporting the ancestor as a collision
+2026-10-29T06:43:46.2206940Z    [2m[90m↓[39m[22m a pack depending on two packs that share an ancestor[2m > [22mnames the ancestor's entity exactly once in the dependent's EntityName
+2026-10-29T06:43:46.2210470Z    [2m[90m↓[39m[22m a pack depending on two packs that share an ancestor[2m > [22mattributes the ancestor's entity to the ancestor in each side's snapshot
+2026-10-29T06:43:46.2211800Z    [2m[90m↓[39m[22m a pack depending on two packs that share an ancestor[2m > [22mattributes each pack's own entity to itself
+2026-10-29T06:43:46.2212840Z    [2m[90m↓[39m[22m a collision that is real[2m > [22mstill fails when two independent packs declare the same entity
+2026-10-29T06:43:46.2213760Z  [32m✓[39m [30m[43m @app/repo-checks [49m[39m tests/bounded-spawn.integration.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 7466[2mms[22m[39m
+2026-10-29T06:43:46.2214760Z    [33m[2m✓[22m[39m stopping a bounded spawn[2m > [22mreaps a TERM-resistant grandchild on parent-only SIGINT [33m 2387[2mms[22m[39m
+2026-10-29T06:43:46.2215690Z    [33m[2m✓[22m[39m stopping a bounded spawn[2m > [22mreaps a TERM-resistant grandchild on parent-only SIGTERM [33m 2462[2mms[22m[39m
+2026-10-29T06:43:46.2217200Z    [33m[2m✓[22m[39m stopping a bounded spawn[2m > [22mkills the whole group, not the process it started [33m 2231[2mms[22m[39m
+2026-10-29T06:43:46.2218130Z    [33m[2m✓[22m[39m stopping a bounded spawn[2m > [22mkills what the child left in its group when it exits, a pass included [33m 364[2mms[22m[39m
+2026-10-29T06:43:46.2219380Z [90mstderr[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2220000Z [22m[39m
+2026-10-29T06:43:46.2220870Z [1m[33mwarn[39m[22m - No utility classes were detected in your source files. If this is unexpected, double-check the `content` option in your Tailwind CSS configuration.
+2026-10-29T06:43:46.2221680Z [1m[33mwarn[39m[22m - https://tailwindcss.com/docs/content-configuration
+2026-10-29T06:43:46.2221970Z 
+2026-10-29T06:43:46.2222880Z [90mstderr[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2224500Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2225200Z 
+2026-10-29T06:43:46.2225940Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/facade-gate-system-contract.integration.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 11191[2mms[22m[39m
+2026-10-29T06:43:46.2227000Z    [33m[2m✓[22m[39m facade gate: a system contract[2m > [22mpublishes the contract’s events through the gate [33m 4151[2mms[22m[39m
+2026-10-29T06:43:46.2228000Z    [33m[2m✓[22m[39m facade gate: a system contract[2m > [22mpublishes the same events when the entry is annotated, which used to erase them [33m 7025[2mms[22m[39m
+2026-10-29T06:43:46.2229070Z  [32m✓[39m [30m[43m @app/publish-checks [49m[39m tests/published-exports.integration.spec.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 12216[2mms[22m[39m
+2026-10-29T06:43:46.2230600Z    [33m[2m✓[22m[39m published package exports[2m > [22mall resolve to declarations under TypeScript 'current', moduleResolution 'node16' [33m 2411[2mms[22m[39m
+2026-10-29T06:43:46.2231760Z    [33m[2m✓[22m[39m published package exports[2m > [22mall resolve to declarations under TypeScript 'current', moduleResolution 'bundler' [33m 1862[2mms[22m[39m
+2026-10-29T06:43:46.2232990Z    [33m[2m✓[22m[39m published package exports[2m > [22mall resolve to declarations under TypeScript '5.7', moduleResolution 'node16' [33m 1953[2mms[22m[39m
+2026-10-29T06:43:46.2234120Z    [33m[2m✓[22m[39m published package exports[2m > [22mall resolve to declarations under TypeScript '5.7', moduleResolution 'bundler' [33m 1756[2mms[22m[39m
+2026-10-29T06:43:46.2235340Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2236280Z [22m[39mgenerate-entries: inputs unchanged, skipping (use --force to regenerate)
+2026-10-29T06:43:46.2236570Z 
+2026-10-29T06:43:46.2237350Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2238080Z [22m[39mBuilding pack: Registry pack v1.0.0
+2026-10-29T06:43:46.2238260Z 
+2026-10-29T06:43:46.2239010Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2239710Z [22m[39mCompiling pack: registry-pack
+2026-10-29T06:43:46.2239880Z 
+2026-10-29T06:43:46.2240640Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2241460Z [22m[39m  flows: 1
+2026-10-29T06:43:46.2241580Z 
+2026-10-29T06:43:46.2242330Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2243020Z [22m[39m  facade types: unchanged, reused
+2026-10-29T06:43:46.2243200Z 
+2026-10-29T06:43:46.2243960Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2244560Z [22m[39m
+2026-10-29T06:43:46.2244710Z Build output:
+2026-10-29T06:43:46.2244860Z   flows: 1
+2026-10-29T06:43:46.2244960Z 
+2026-10-29T06:43:46.2245700Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2251560Z [22m[39m  step build: dist/build/steps.build.mjs
+2026-10-29T06:43:46.2251770Z 
+2026-10-29T06:43:46.2252590Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2253410Z [22m[39m  content runtime: dist/build/content-runtime.mjs
+2026-10-29T06:43:46.2253620Z 
+2026-10-29T06:43:46.2254360Z [90mstdout[2m | tests/build/build-registry.integration.spec.ts[2m > [22m[2ma build[2m > [22m[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2255060Z [22m[39m  runtime: dist/runtime/index.cjs
+2026-10-29T06:43:46.2255240Z 
+2026-10-29T06:43:46.2255820Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/compiler-configuration.integration.spec.ts [2m([22m[2m1 test[22m[2m)[22m[33m 66261[2mms[22m[39m
+2026-10-29T06:43:46.2256860Z    [33m[2m✓[22m[39m invalidates generated metadata when external inherited path mappings change [33m 66260[2mms[22m[39m
+2026-10-29T06:43:46.2258670Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("../../pages/**/*.js", { eager: true })
+2026-10-29T06:43:46.2260210Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2260910Z 
+2026-10-29T06:43:46.2261820Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("../../pages/**/*.js", { eager: true })
+2026-10-29T06:43:46.2263480Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2264170Z 
+2026-10-29T06:43:46.2265000Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("../../pages/**/*.js", { eager: true })
+2026-10-29T06:43:46.2266470Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2267150Z 
+2026-10-29T06:43:46.2268100Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob([`../../pages/**/*.js`, "!../../pages/excluded/**"], { eager: true })
+2026-10-29T06:43:46.2269680Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2270610Z 
+2026-10-29T06:43:46.2271490Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob([`../../pages/**/*.js`, "!../../pages/excluded/**"], { eager: true })
+2026-10-29T06:43:46.2273020Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2273680Z 
+2026-10-29T06:43:46.2279050Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob([`../../pages/**/*.js`, "!../../pages/excluded/**"], { eager: true })
+2026-10-29T06:43:46.2280700Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2281410Z 
+2026-10-29T06:43:46.2282210Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("./**/*.js", { eager: true, base: "../../pages" })
+2026-10-29T06:43:46.2283830Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2284510Z 
+2026-10-29T06:43:46.2285370Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("./**/*.js", { eager: true, base: "../../pages" })
+2026-10-29T06:43:46.2286950Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2287650Z 
+2026-10-29T06:43:46.2289020Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("./**/*.js", { eager: true, base: "../../pages" })
+2026-10-29T06:43:46.2290570Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2291230Z 
+2026-10-29T06:43:46.2291940Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("#pages/**/*.js", { eager: true })
+2026-10-29T06:43:46.2293420Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2294090Z 
+2026-10-29T06:43:46.2299050Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("#pages/**/*.js", { eager: true })
+2026-10-29T06:43:46.2303520Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2305410Z 
+2026-10-29T06:43:46.2307400Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: import.meta.glob("#pages/**/*.js", { eager: true })
+2026-10-29T06:43:46.2311710Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2314380Z 
+2026-10-29T06:43:46.2316570Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: name => import(`../../pages/nested/${name}.js`)
+2026-10-29T06:43:46.2320720Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2322790Z 
+2026-10-29T06:43:46.2324600Z  [31m❯[39m [30m[43m @apackdev/cli [49m[39m tests/build/build-registry.integration.spec.ts [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 144811[2mms[22m[39m
+2026-10-29T06:43:46.2327660Z [31m   [31m×[31m a build[2m > [22mcompiles flows against the steps it loaded, and leaves the bound registry untouched[39m[33m 144716[2mms[22m[39m
+2026-10-29T06:43:46.2329360Z [31m     → Test timed out in 140000ms.
+2026-10-29T06:43:46.2331150Z If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+2026-10-29T06:43:46.2333220Z    [90m·[39m a build[2m > [22mrefuses a flow that names an undeclared step
+2026-10-29T06:43:46.2336010Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: name => import(`../../pages/nested/${name}.js`)
+2026-10-29T06:43:46.2340350Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2342260Z 
+2026-10-29T06:43:46.2344210Z [90mstderr[2m | tests/build/frontend-globs.integration.spec.ts[2m > [22m[2mwatches an initially empty external glob: name => import(`../../pages/nested/${name}.js`)
+2026-10-29T06:43:46.2350240Z [22m[39m[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help[39m
+2026-10-29T06:43:46.2351770Z 
+2026-10-29T06:43:46.2352620Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/frontend-globs.integration.spec.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 6358[2mms[22m[39m
+2026-10-29T06:43:46.2353640Z    [33m[2m✓[22m[39m watches an initially empty external glob: import.meta.glob("../../pages/**/*.js", { eager: true }) [33m 1792[2mms[22m[39m
+2026-10-29T06:43:46.2354810Z    [33m[2m✓[22m[39m watches an initially empty external glob: import.meta.glob([`../../pages/**/*.js`, "!../../pages/excluded/**"], { eager: true }) [33m 1231[2mms[22m[39m
+2026-10-29T06:43:46.2355900Z    [33m[2m✓[22m[39m watches an initially empty external glob: import.meta.glob("./**/*.js", { eager: true, base: "../../pages" }) [33m 1132[2mms[22m[39m
+2026-10-29T06:43:46.2356830Z    [33m[2m✓[22m[39m watches an initially empty external glob: import.meta.glob("#pages/**/*.js", { eager: true }) [33m 1151[2mms[22m[39m
+2026-10-29T06:43:46.2357830Z    [33m[2m✓[22m[39m watches an initially empty external glob: name => import(`../../pages/nested/${name}.js`) [33m 1051[2mms[22m[39m
+2026-10-29T06:43:46.2358240Z 
+2026-10-29T06:43:46.2358720Z [31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+2026-10-29T06:43:46.2359080Z 
+2026-10-29T06:43:46.2360100Z [41m[1m FAIL [22m[49m [30m[43m @apackdev/cli [49m[39m tests/build/dependency-graph.integration.spec.ts[2m [ packages/apack-cli/tests/build/dependency-graph.integration.spec.ts ][22m
+2026-10-29T06:43:46.2360970Z [31m[1mError[22m: Hook timed out in 240000ms.
+2026-10-29T06:43:46.2362060Z If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".[39m
+2026-10-29T06:43:46.2363730Z [36m [2m❯[22m tests/build/dependency-graph.integration.spec.ts:[2m61:1[22m[39m
+2026-10-29T06:43:46.2372780Z     [90m 59| [39m[35mlet[39m built[33m:[39m { code[33m:[39m number[33m;[39m output[33m:[39m string } [33m|[39m undefined[33m;[39m
+2026-10-29T06:43:46.2373430Z     [90m 60| [39m
+2026-10-29T06:43:46.2373810Z     [90m 61| [39m[34mbeforeAll[39m([35masync[39m () [33m=>[39m {
+2026-10-29T06:43:46.2374170Z     [90m   | [39m[31m^[39m
+2026-10-29T06:43:46.2374650Z     [90m 62| [39m  [35mif[39m ([33m![39m[33mPACKAGES_BUILT[39m) [35mreturn[39m[33m;[39m
+2026-10-29T06:43:46.2375550Z     [90m 63| [39m  parent [33m=[39m fs[33m.[39m[34mmkdtempSync[39m(path[33m.[39m[34mjoin[39m(os[33m.[39m[34mtmpdir[39m()[33m,[39m [32m'dependency-graph-'[39m))[33m;[39m
+2026-10-29T06:43:46.2376030Z 
+2026-10-29T06:43:46.2376260Z [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+2026-10-29T06:43:46.2376450Z 
+2026-10-29T06:43:46.2376470Z 
+2026-10-29T06:43:46.2376760Z [31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+2026-10-29T06:43:46.2376990Z 
+2026-10-29T06:43:46.2377920Z [41m[1m FAIL [22m[49m [30m[43m @apackdev/cli [49m[39m tests/build/build-registry.integration.spec.ts[2m > [22ma build[2m > [22mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+2026-10-29T06:43:46.2378730Z [31m[1mError[22m: Test timed out in 140000ms.
+2026-10-29T06:43:46.2379440Z If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+2026-10-29T06:43:46.2380280Z [36m [2m❯[22m tests/build/build-registry.integration.spec.ts:[2m70:3[22m[39m
+2026-10-29T06:43:46.2380650Z     [90m 68| [39m
+2026-10-29T06:43:46.2381030Z     [90m 69| [39m[34mdescribe[39m([32m'a build'[39m[33m,[39m () [33m=>[39m {
+2026-10-29T06:43:46.2381690Z     [90m 70| [39m  it('compiles flows against the steps it loaded, and leaves the bound…
+2026-10-29T06:43:46.2382090Z     [90m   | [39m  [31m^[39m
+2026-10-29T06:43:46.2382550Z     [90m 71| [39m    [35mconst[39m root [33m=[39m [34mpack[39m([32m'note'[39m)[33m;[39m
+2026-10-29T06:43:46.2383740Z     [90m 72| [39m    expect(await compiledContent(root), 'the flow compiled using its l…
+2026-10-29T06:43:46.2384080Z 
+2026-10-29T06:43:46.2384320Z [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+2026-10-29T06:43:46.2384500Z 
+2026-10-29T06:43:46.2384500Z 
+2026-10-29T06:43:46.2384910Z [2m Test Files [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m21 passed[39m[22m[90m (30)[39m
+2026-10-29T06:43:46.2385760Z [2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m522 passed[39m[22m[2m | [22m[33m6 skipped[39m[90m (532)[39m
+2026-10-29T06:43:46.2386370Z [2m   Start at [22m 06:27:20
+2026-10-29T06:43:46.2387220Z [2m   Duration [22m 981.76s[2m (transform 7.19s, setup 663ms, collect 43.55s, tests 1854.01s, environment 5ms, prepare 2.62s)[22m
+2026-10-29T06:43:46.2387620Z 
+2026-10-29T06:43:46.2387620Z 
+2026-10-29T06:43:46.2387760Z integration pool failed (exit 1)
+2026-10-29T06:43:46.2387910Z 
+2026-10-29T06:43:46.2387910Z 
+2026-10-29T06:43:46.2388130Z chain FAILED at test:integration in 992.3s on a 2-core budget
+2026-10-29T06:43:46.2388740Z evidence from this run in node_modules/.cache/apack-chain/runs/2026-10-29T06-27-12Z-13092 (1 step)
+2026-10-29T06:43:46.2578440Z ##[error]Process completed with exit code 1.
+2026-10-29T06:43:46.3240940Z ##[group]Run actions/upload-artifact@v4
+2026-10-29T06:43:46.3241310Z with:
+2026-10-29T06:43:46.3241640Z   name: strict-chain-a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c-integration-2
+2026-10-29T06:43:46.3242080Z   include-hidden-files: true
+2026-10-29T06:43:46.3242470Z   path: /Users/runner/work/_temp/strict-chain.log
+node_modules/.cache/apack-chain/runs/
+
+2026-10-29T06:43:46.3242840Z   if-no-files-found: warn
+2026-10-29T06:43:46.3243040Z   compression-level: 6
+2026-10-29T06:43:46.3243220Z   overwrite: false
+2026-10-29T06:43:46.3243630Z env:
+2026-10-29T06:43:46.3243790Z   APACK_CHAIN_CORES: 2
+2026-10-29T06:43:46.3243980Z   CACHE_ON_FAILURE: false
+2026-10-29T06:43:46.3244170Z   CARGO_INCREMENTAL: 0
+2026-10-29T06:43:46.3244340Z ##[endgroup]
+2026-10-29T06:43:47.6244890Z (node:61518) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T06:43:47.6350520Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T06:43:47.6934280Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-29T06:43:47.6935580Z The least common ancestor is /Users/runner/work. This will be the root directory of the artifact
+2026-10-29T06:43:47.6936210Z With the provided path, there will be 2 files uploaded
+2026-10-29T06:43:47.6937190Z Artifact name is valid!
+2026-10-29T06:43:47.6937570Z Root directory input is valid!
+2026-10-29T06:43:48.1939350Z Beginning upload of artifact content to blob storage
+2026-10-29T06:43:48.2377380Z (node:61518) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-29T06:43:48.6675930Z Uploaded bytes 20193
+2026-10-29T06:43:48.7542730Z Finished uploading artifact content to blob storage!
+2026-10-29T06:43:48.7589640Z SHA256 digest of uploaded artifact zip is 1036566318bab261e2ed1cb48dffc1022c6c9cf249f56d5a47db68a1dceaf5d8
+2026-10-29T06:43:48.7593210Z Finalizing artifact upload
+2026-10-29T06:43:49.3010070Z Artifact strict-chain-a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c-integration-2.zip successfully finalized. Artifact ID 12878413528
+2026-10-29T06:43:49.3014320Z Artifact strict-chain-a4c377cf5b6fcabd74ba26a932fef1cd9c039f5c-integration-2 has been successfully uploaded! Final size is 20193 bytes. Artifact ID is 12878413528
+2026-10-29T06:43:49.3015940Z Artifact download URL: https://github.com/spankyed/apack/actions/runs/40827265393/artifacts/12878413528
+2026-10-29T06:43:49.3329030Z Post job cleanup.
+2026-10-29T06:43:49.3349030Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__0cc8f5bc-ff3f-4f50-9ee4-b5b46c5f8bc8.__Swatinem_rust-cache]
+2026-10-29T06:43:49.3360990Z ##[end-action id=__0cc8f5bc-ff3f-4f50-9ee4-b5b46c5f8bc8.__Swatinem_rust-cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-29T06:43:49.3484560Z Post job cleanup.
+2026-10-29T06:43:49.3495390Z ##[start-action display=Run actions/setup-node@v4;id=__80341b9a-7d61-4bc1-ab5e-fb712f101691.__actions_setup-node]
+2026-10-29T06:43:49.3502160Z ##[end-action id=__80341b9a-7d61-4bc1-ab5e-fb712f101691.__actions_setup-node;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-29T06:43:49.3664660Z Post job cleanup.
+2026-10-29T06:43:49.7167800Z [command]/opt/homebrew/bin/git version
+2026-10-29T06:43:49.7930580Z git version 2.56.0
+2026-10-29T06:43:49.8138380Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/b85a3fb5-f4cf-459c-b855-51cde53070f0/.gitconfig'
+2026-10-29T06:43:49.8139550Z Temporarily overriding HOME='/Users/runner/work/_temp/b85a3fb5-f4cf-459c-b855-51cde53070f0' before making global git config changes
+2026-10-29T06:43:49.8140410Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-29T06:43:49.8141190Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/apack/apack
+2026-10-29T06:43:49.8315980Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-29T06:43:49.8916380Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-29T06:43:50.2830140Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-29T06:43:50.2932250Z http.https://github.com/.extraheader
+2026-10-29T06:43:50.3259290Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-29T06:43:50.3569960Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-29T06:43:50.5651740Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-29T06:43:50.5966850Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-29T06:43:50.8143280Z Cleaning up orphan processes
+2026-10-29T06:43:53.2861560Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache/restore@v4, actions/checkout@v4, actions/download-artifact@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

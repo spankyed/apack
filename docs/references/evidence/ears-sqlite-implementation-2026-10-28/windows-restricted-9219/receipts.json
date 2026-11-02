@@ -1,0 +1,17 @@
+[
+  {
+    "file": "report.json",
+    "sha256": "66143fed269b90ef0bff90cee5d53d8186c731067ace77f5b32856b9fffc2424",
+    "bytes": 1722
+  },
+  {
+    "file": "node.json",
+    "sha256": "7e7df84a2da8403cc5c9e678a2c35dc661b339686e2a3026a078eb489926dbee",
+    "bytes": 848
+  },
+  {
+    "file": "restricted.json",
+    "sha256": "bbded841c5a0a3fc85f7f6319416614bfb506227e1938d630d20ab5ba43d6159",
+    "bytes": 793
+  }
+]

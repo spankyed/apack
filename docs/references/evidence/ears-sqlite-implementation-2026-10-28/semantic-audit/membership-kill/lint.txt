@@ -1,0 +1,12 @@
+
+> apack@0.3.14 lint:check
+> npm run lint:check -ws --if-present && oxlint . -D correctness --ignore-path .gitignore --ignore-pattern 'docs/**' --ignore-pattern 'packages/apack-cli/templates/**' --ignore-pattern 'packages/apack-ears/vendor/**'
+
+
+> @app/renderer@0.0.0 lint:check
+> oxlint . -D correctness --ignore-path .gitignore && eslint .
+
+Found 0 warnings and 0 errors.
+Finished in 12ms on 91 files with 87 rules using 2 threads.
+Found 0 warnings and 0 errors.
+Finished in 369ms on 2525 files with 87 rules using 2 threads.

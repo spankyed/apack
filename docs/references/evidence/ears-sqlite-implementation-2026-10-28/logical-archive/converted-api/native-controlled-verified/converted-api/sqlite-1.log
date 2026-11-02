@@ -1,0 +1,129 @@
+(node:750) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+[run-history] Removed 1 run(s) older than 30 days
+[pack-loader] Loading 1 pack(s)
+[pack-loader] Registered pack: default-setup (11 systems)
+[app] apack v0.3.14 startupId=sqlite-1
+[backend] Database 1.6 MB on disk, heap 117.9 MB
+[pack-content] Pack apply skipped (unchanged): default-setup
+[brain] Started brain root flow { flowId: 'Flow-root-flow-hth19o' }
+[notes] Bootstrapped REFERENCES relations for 1 notes
+[brain] Registered flow actor: RunNode-0mvtrfrm80000 (registry size: 1)
+[brain] Registered flow actor: RunNode-0mvtrfrmd0000 (registry size: 2)
+[brain] Registered flow actor: RunNode-0mvtrfrmj0000 (registry size: 3)
+[brain] Registered flow actor: RunNode-0mvtrfrlo0000 (registry size: 4)
+[terminal] Terminal restoration complete
+[brain] Executing action node: reconcile {
+  runNodeId: 'RunNode-0mvtrfrn60000',
+  node: {
+    id: 'Node-claude-code-reconcil-docanf',
+    entityType: 'Node',
+    createdAt: 1793291458932,
+    label: 'reconcile',
+    nodeType: 'action',
+    updatedAt: 1793291458932,
+    actionId: 'Action-mvtrflg814yp9wf8ticd1'
+  },
+  nodeAttributeKeys: [ 'actionId' ]
+}
+[brain] Found action: CC: Reconcile State { input: [] }
+[brain] Executing action with resolved params: {}
+[brain] Executing action node: reconcile {
+  runNodeId: 'RunNode-0mvtrfrni0000',
+  node: {
+    id: 'Node-codex-reconcile-t0-e-4hvjw1',
+    entityType: 'Node',
+    createdAt: 1793291458932,
+    label: 'reconcile',
+    nodeType: 'action',
+    updatedAt: 1793291458932,
+    actionId: 'Action-mvtrflgh19ywvlrzhknac'
+  },
+  nodeAttributeKeys: [ 'actionId' ]
+}
+[brain] Found action: CDX: Reconcile State { input: [] }
+[brain] Executing action with resolved params: {}
+[brain] Action completed successfully: {
+  nodeLabel: 'reconcile',
+  actionLabel: 'CC: Reconcile State',
+  result: { success: true, threadsFixed: 0, artifactsFixed: 0 }
+}
+[brain] Child completed in flow - start claude code work mode: {
+  completion: {
+    type: 'CHILD_COMPLETED',
+    stepId: 'Node-claude-code-reconcil-docanf',
+    stepLabel: 'reconcile',
+    runNodeId: 'RunNode-0mvtrfrn60000',
+    result: { success: true, threadsFixed: 0, artifactsFixed: 0 },
+    final: false,
+    eventRunNodeId: 'RunNode-0mvtrfrn30000',
+    isFlow: false
+  }
+}
+[brain] Action completed successfully: {
+  nodeLabel: 'reconcile',
+  actionLabel: 'CDX: Reconcile State',
+  result: { success: true, fixed: 0 }
+}
+[brain] Child completed in flow - start codex work mode: {
+  completion: {
+    type: 'CHILD_COMPLETED',
+    stepId: 'Node-codex-reconcile-t0-e-4hvjw1',
+    stepLabel: 'reconcile',
+    runNodeId: 'RunNode-0mvtrfrni0000',
+    result: { success: true, fixed: 0 },
+    final: false,
+    eventRunNodeId: 'RunNode-0mvtrfrne0000',
+    isFlow: false
+  }
+}
+[brain] Executing action node: start-server {
+  runNodeId: 'RunNode-0mvtrfros0000',
+  node: {
+    id: 'Node-codex-start-server-t-kvinw4',
+    entityType: 'Node',
+    createdAt: 1793291458932,
+    label: 'start-server',
+    nodeType: 'action',
+    updatedAt: 1793291458932,
+    actionId: 'Action-mvtrflgi2lxa2csv98mg1'
+  },
+  nodeAttributeKeys: [ 'actionId' ]
+}
+[brain] Found action: CDX: Start Server { input: [] }
+[brain] Executing action with resolved params: {}
+✅ WebSocket Server listening on ws://localhost:57705 (tRPC endpoint: ws://localhost:57705/trpc)
+[codex-app-server] Starting codex app-server { cliPath: 'codex' }
+[codex-app-server] App-server process error { error: 'spawn codex ENOENT' }
+[action:CDX: Start Server] [codex] failed to start app-server { error: 'App-server spawn failed: spawn codex ENOENT' }
+[brain] Action completed successfully: {
+  nodeLabel: 'start-server',
+  actionLabel: 'CDX: Start Server',
+  result: {
+    success: false,
+    error: 'App-server spawn failed: spawn codex ENOENT'
+  }
+}
+[brain] Child completed in flow - start codex work mode: {
+  completion: {
+    type: 'CHILD_COMPLETED',
+    stepId: 'Node-codex-start-server-t-kvinw4',
+    stepLabel: 'start-server',
+    runNodeId: 'RunNode-0mvtrfros0000',
+    result: {
+      success: false,
+      error: 'App-server spawn failed: spawn codex ENOENT'
+    },
+    final: false,
+    eventRunNodeId: 'RunNode-0mvtrfrne0000',
+    isFlow: false
+  }
+}
+[app-events] → Incoming: "UPDATE_PROMPT" {
+  to: 'default-setup/prompts',
+  event: {
+    type: 'UPDATE_PROMPT',
+    promptId: 'Prompt-converted-api',
+    label: 'updated through real pack'
+  }
+}

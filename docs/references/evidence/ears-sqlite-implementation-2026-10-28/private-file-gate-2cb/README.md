@@ -1,0 +1,7 @@
+# Preserve nine private-file witnesses after master integration
+
+Strict run41212565910 at2cbafd7fb3 fails the final candidate verifier on Linux and Windows: it still expects exactly eight private-file cases after merging master's additional Windows writable-directory barrier regression. Raw reports have all **nine passed** on each platform. Linux EARS has794passes/0skips; Windows789passes plus the five named inherited exclusions. Both graph files have all five cases passed. These are functional results, not a green overall gate; active sibling/consumer jobs keep their original owner.
+
+The corrected verifier requires all nine durability witnesses by name and requires every reported private-file case to pass, with at least nine cases. Additive passing tests no longer break an obsolete exact count. No witness or refusal is removed. A static replay of this exact verifier block against both actual reports passes; omitting, skipping or renaming the newly merged Windows barrier case fails on both, while adding another passing case succeeds. The six negative checks and two real-report results are retained. This is report-validation evidence, not a fresh complete platform run or a claim that later verifier assertions ran.
+
+Raw CI logs, selected test JSON and replay recipe/results accompany uncompressed-byte hash receipts. Final fresh platform/full strict qualification remains required, along with all original goal gates.

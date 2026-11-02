@@ -1,0 +1,17 @@
+[
+  {
+    "file": "node.json.gz",
+    "sha256": "dd2a631fd27f81c36134a012159f7077ceff7c74bb0c1fcafe8bb50308a147ba",
+    "storedSha256": "a454c8ce7667f4420d1e0925b87c61dd878a642030ca774ca350b847afe6661c"
+  },
+  {
+    "file": "report.json.gz",
+    "sha256": "08c915183070380a41cb454bb53ace782b46ebf3a5ea1ca2a86187a6921e8520",
+    "storedSha256": "ceedf3b1436ad53ad28dcb974f628c5549035f460058b75a0004b06f6e0df3eb"
+  },
+  {
+    "file": "workflow.json.gz",
+    "sha256": "072e62584785a81301b3d8d4f37869c9a16af56e6b27c1d5944fc2297f5bf56d",
+    "storedSha256": "5da60c081025544b485db0ab98ba1839038888b30feb9b36f095853525c86ee4"
+  }
+]

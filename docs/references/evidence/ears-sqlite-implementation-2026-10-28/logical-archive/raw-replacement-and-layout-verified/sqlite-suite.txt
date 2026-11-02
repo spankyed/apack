@@ -1,0 +1,77 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/search-recovery.spec.ts (39 tests) 7151ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed before its commit  366ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed after its commit  312ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text owner index in a private background generation  773ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text metadata in a private background generation  2125ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector chunks in a private background generation  318ms
+ ✓ tests/sqlite/search-builds.spec.ts (19 tests) 2481ms
+   ✓ shared background search generations > recovers a search cursor committed by a process killed before readiness  329ms
+   ✓ shared background search generations > lets background-only work exit but keeps an explicit readiness wait alive until complete  559ms
+ ✓ tests/sqlite/text-limits.spec.ts (16 tests) 1074ms
+ ✓ tests/engine/search.spec.ts (11 tests) 691ms
+ ✓ tests/engine/model-based.spec.ts (2 tests) 21781ms
+   ✓ refuses, holds and answers what the model does  4368ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  17411ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 2125ms
+ ✓ tests/engine/watch-schedule.spec.ts (12 tests) 650ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 2620ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  378ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  362ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  350ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  341ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 2391ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 3147ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 2011ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 1158ms
+ ✓ tests/sqlite/text-documents.spec.ts (10 tests) 1148ms
+   ✓ source-string FTS documents > bounds native owner masks without truncating either the masked or fallback answer  581ms
+ ✓ tests/sqlite/query-cost.spec.ts (18 tests) 1355ms
+ ✓ tests/sqlite/index-builds.spec.ts (9 tests) 912ms
+ ✓ tests/sqlite/logical-restore.spec.ts (10 tests) 2112ms
+   ✓ restored logical stores > reopens an audited real store preserving raw values, vectors, order and counters  391ms
+   ✓ restored logical stores > replaces a populated incumbent without re-encoding restored cells or losing dormant embeddings  337ms
+ ✓ tests/sqlite/trigrams.spec.ts (7 tests) 626ms
+ ✓ tests/sqlite/text-typos.spec.ts (20 tests) 1230ms
+ ✓ tests/sqlite/values.spec.ts (10 tests) 279ms
+ ✓ tests/sqlite/schema-validation.spec.ts (49 tests) 1866ms
+ ✓ tests/sqlite/embeddings.spec.ts (9 tests) 558ms
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 338ms
+ ✓ tests/sqlite/commit-outcomes.spec.ts (8 tests) 521ms
+ ✓ tests/engine/calls.spec.ts (9 tests) 475ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 354ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 174ms
+ ✓ tests/engine/vector.spec.ts (17 tests) 1082ms
+ ✓ tests/sqlite/logical-stage.spec.ts (7 tests) 936ms
+ ✓ tests/sqlite/regex.spec.ts (11 tests) 502ms
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 18ms
+ ✓ tests/sqlite/transaction-failures.spec.ts (4 tests) 252ms
+ ✓ tests/sqlite/statement-cache.spec.ts (6 tests) 531ms
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (4 tests) 1225ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  395ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  410ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (unawaited)  303ms
+ ✓ tests/engine/query-values.spec.ts (5 tests) 293ms
+ ✓ tests/engines.spec.ts (4 tests) 317ms
+ ✓ tests/engine/storage-port.spec.ts (3 tests) 232ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 157ms
+ ✓ tests/engine/maintenance.spec.ts (5 tests) 356ms
+ ✓ tests/sqlite/wal-readers.spec.ts (1 test) 139ms
+ ✓ tests/sqlite/schema-admission.spec.ts (2 tests) 185ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 126ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+ ✓ tests/engine/search-relevance.spec.ts (32 tests) 158ms
+ ✓ tests/sqlite/source-node.spec.ts (1 test) 432ms
+   ✓ opens the app-only storage entry with plain Node source conditions and owned regex assets  431ms
+
+ Test Files  44 passed (44)
+      Tests  589 passed (589)
+   Start at  13:58:34
+   Duration  74.61s (transform 652ms, setup 69ms, collect 3.55s, tests 66.17s, environment 4ms, prepare 1.67s)
+

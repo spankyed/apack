@@ -1,0 +1,17 @@
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/values.spec.ts
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/sqlite/values.spec.ts (8 tests) 188ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  05:41:20
+   Duration  468ms (transform 126ms, setup 13ms, collect 144ms, tests 188ms, environment 0ms, prepare 40ms)
+

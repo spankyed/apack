@@ -1,0 +1,270 @@
+# SQLite implementation for EARS
+
+Status: completed candidate experiment, 2026-11-02. Production remains elmdb; adoption is not recommended.
+Branch: `session/ears-sqlite`, draft PR #286. Implementation: `93ed37e67f40faee3fd25a10f3b897c15e55c858`;
+integrated master `461f7bf2cb9f52b968957a423744168740bf37a7`, elmdb `f496470679a7bd9764398108b20f62a73333c701`.
+This archived goal preserves the original delivery requirements. Current behavior belongs to the
+[implementation reference](../../references/ears-sqlite-candidate.md), and the
+[final evaluation](../../references/ears-sqlite-evaluation-report.md) owns the verdict and evidence limits.
+No additional implementation, merge, release, daily-profile conversion or PR closure is authorized.
+
+## Scope
+
+Build a complete, maintainable SQLite implementation of the app's EARS needs, using the prototype's tests,
+fixtures and integration lessons. Replace its experimental execution/transport choices where appropriate.
+The deliverable is a candidate that boots an isolated app profile and supports installed packs, entity and
+relation operations, watches, search, embeddings, live declarations, run history, CLI data operations,
+backup/import/recovery and supported packaging. A benchmark adapter or test-only factory alias is insufficient.
+
+Preserve current data-integrity, transaction, typing, lifecycle and observability contracts, including relevant
+work committed after the original experiment. Search acceptance measures user usefulness and explicit features;
+exact scores and rank order need not reproduce elmdb. Important identifier matching, correct highlights and
+phrase boundaries remain requirements. Typo handling, syntax and language choices must be specified and evaluated.
+
+Use the [feasibility evidence](../../references/evidence/ears-sqlite-evaluation-2026-10-27.md) as historical findings,
+not current acceptance. Existing trial results used an older elmdb/API baseline and low-rank synthetic vectors.
+
+A production cutover is the final adoption decision after a complete reviewable candidate. Until then keep the
+normal production composition on elmdb. Use copied/synthetic profiles for SQLite; never migrate daily-use data
+implicitly. Follow the repository's format-one policy: developer conversion is an explicit operation on a copy,
+not a legacy compatibility layer in normal boot.
+
+## Decisions
+
+- Preserve the pack-facing EARS facade and its current typed contracts. Exported storage/construction types may
+  change with every call site and API report updated together. Introduce a small private structured backend
+  boundary using typed operations/results/transactions. Keep MessagePack where native boundaries or lossless
+  persistence require it; SQLite's JavaScript path must not encode/decode requests and results unnecessarily.
+- Adapt elmdb at that boundary while it remains the baseline. Avoid a general database framework, plugin registry,
+  second query language or permanent dual-backend product. If adopted, SQLite becomes the single supported backend
+  and temporary selection/comparison machinery is removed or retained only as explicit historical fixtures.
+- Give SQLite selective filtering, projection, ordering, pagination, aggregation and traversal wherever compatible
+  with the contract. Define necessary value/collation fallbacks explicitly. Do not promote the prototype's JS scans,
+  per-node/per-row SQL loops, vocabulary scans or full-row rewrites into the final design by default.
+- Choose one storage layout after measuring representative field reads, rows/pages, streaming field updates and
+  typed dynamic declarations. Evaluate the prototype's duplicate MessagePack/JSON/index storage against selective
+  typed storage. Do not assume either per-type SQL tables or a generic field layout is correct without this slice.
+- Keep primary entity/relation data authoritative and derived indexes rebuildable. Derive watch invalidation from
+  successfully committed logical mutations; keep precise commit identity and failed-operation atomicity.
+- Keep backend-specific file/open/backup/recovery knowledge at the host storage boundary. Replace hard-coded
+  `data.mdb` preflight with concrete storage descriptors and real open/validation paths, not marker files.
+- Use a pinned FTS5-capable SQLite distribution and an explicitly chosen vector strategy. The tested
+  better-sqlite3/sqlite-vec combination is a starting candidate, not a settled packaging or ANN choice.
+- Local checks remain targeted EARS/driver/static checks. Compiler/captured-runtime tests and broad gates run in
+  disposable Linux/CI. Packaged-platform checks use disposable runners/VMs. Session-specific compiler caches and
+  independent dependencies/output are required; a Rust build additionally needs an isolated engine checkout and
+  private target/artifacts. Do not borrow a mutable build from the other agent.
+
+## Phases
+
+### 1 Reconcile contracts and pin the integration base
+
+Inventory changes since the prototype and map each current EARS/host requirement to its owning test and backend
+responsibility. Include typed-field enforcement for every ordinary writer and the deliberate unchecked repair/import contract,
+explain diagnostics, call counting,
+watch scheduling/settlement and ongoing search/schema changes. Preserve useful prototype operational cases and
+remove accidental protocol/implementation assumptions from shared assertions only through explicit decisions.
+
+Integrate a pinned committed snapshot of the concurrent branch through the repository's detached integration
+workflow in disposable Linux/CI. Never copy its dirty files or merge a moving branch blindly. Record the commit,
+matching elmdb native artifact and inherited contracts. Reconcile later relevant changes at deliberate checkpoints.
+
+Acceptance: a current contract matrix, a pinned clean integration result, baseline suites and native provenance,
+and explicit search invariants versus approved behavioral flexibility. Source integration is not acceptance by itself.
+
+### 2 Deliver the structured backend and first native SQL slice
+
+Implement the private typed backend/transaction boundary and elmdb adapter. Put the SQLite candidate under normal
+source ownership and production dependency/packaging conventions. Implement its chosen authoritative layout,
+lossless value representation, typed validation, CRUD, relations, nested units and committed change delivery.
+Complete native selective lookup, a representative page and a common graph query through the actual EARS facade.
+
+Measure source-to-SQL mapping, binding calls, decoding/allocation and SQL execution separately. Include small
+field updates in large entities so the layout is not selected by whole-row reads alone. Preserve useful call
+counting; explain must report actual SQLite access paths rather than fabricate LMDB-equivalent work counters.
+
+Acceptance: shared core/model tests pass for both adapters, the slice has verified query plans, and a first honest
+EARS benchmark comparison on the pinned current baseline. Open the draft PR here with a working vertical slice,
+its outstanding requirements and this goal. Keep it updated through the remaining phases.
+
+### 3 Complete live declarations and watches
+
+Implement type/field/index declaration validation and refusal atomically, including stale-handle checks and
+interactions with open units. Define index states, build generations, committed change capture, readiness and
+recovery. Backfill in bounded work, reconcile intervening writes and publish readiness atomically. Define correct
+reads while an index is building, cancellation, reopen and failed-build behavior.
+
+Choose foreground connection and worker ownership explicitly. Our synchronous API cannot become asynchronous
+silently. Moving a long index build to a worker alone does not solve writer-lock contention: foreground calls
+must not sit in a long busy wait. Set and test budgets for index admission, foreground stalls and WAL/disk growth.
+
+Preserve scheduler behavior, watch settlement, commit identity, rollback and notifications for every write path.
+Document same-process ownership and any deliberate cross-process limitation.
+
+Acceptance: declaration changes during realistic read/write/watch load remain correct and within recorded latency
+and resource budgets; interrupted builds recover; model/watch/scheduler tests and meaningful negative proofs pass.
+
+### 4 Deliver search and vector behavior
+
+Build a shared relevance corpus from representative app fixtures: identifiers/camelCase, names, accents, phrases,
+field restrictions, typos, list fields, supported languages and mixed relevance/recency. Record expected useful
+results before tuning. Specify matching, query syntax, language/stemming support, tie-breaking and highlighting.
+Use native FTS indexes/ranking and only justified adaptation. Avoid an unbounded vocabulary scan per query.
+
+Choose vector execution using target corpus sizes, dimensions, update rates and candidate-filter selectivity.
+Use deterministic high-dimensional clustered and mixed corpora plus representative real embeddings from approved
+fixtures. Compare exact ground truth, recall@k, latency and resource/update cost. If exact scan meets the app's
+recorded budget, it is acceptable; otherwise select and qualify an ANN solution. Preserve model/hash/chunk
+freshness, rollback, trash/candidate filtering and hybrid behavior independently of the search algorithm.
+
+Acceptance: explicit relevance and recall targets pass, important search features work, and behavior differences
+are reviewed against user needs rather than exact elmdb score equality. Extensions load in the supported runtime.
+
+### 5 Integrate the complete app lifecycle
+
+Replace test-only aliases with normal host composition for an explicitly isolated SQLite profile. Wire both app
+and run-history stores, dynamic pack registration, SDK testing, CLI data commands, diagnostics, export/import and
+settings/media acceptance. Exercise the actual app and representative streaming, browsing and reactive flows.
+
+Complete storage descriptors, backup publication, read-only access, populated replacement and coordinated rollback
+when database replacement, media installation or acceptance fails. Keep a durable recoverable incumbent when
+restoration fails. Define corruption versus permission/disk-full refusal at run-history boot. Provide required
+logical export, audit and rebuild operations for the app; disposition raw elmdb-only tooling explicitly.
+
+Acceptance: the four known backup-import failures are resolved through the real storage path; complete lifecycle
+and failure scenarios pass on disposable profiles, including a copied-profile developer conversion and reopen.
+
+### 6 Qualify operational behavior and packaging
+
+Map SQLite failures to truthful EARS outcomes. Do not classify an ambiguous COMMIT failure as definitely committed
+or definitely refused without evidence. Qualify disk-full/I/O faults, killed processes, interrupted admission and
+backup/replacement, busy writers, long readers, checkpoint behavior and schema/index corruption. Set durability
+policies and compare matched acknowledgments, including macOS full-device flushing where required.
+
+Package and test the selected binding/extensions with Electron and CLI on supported OS/architectures. Verify
+native loading, signing/distribution, file permissions and actual read-only mounts. Publish supported filesystem
+assumptions without claiming that a few CI hosts certify arbitrary filesystems.
+
+Acceptance: failure-injection and platform evidence on pinned source, complete required CI gates in disposable
+runners, and explicit resource/ownership policies. No residual native-loader or recovery assumption hidden in a helper.
+
+### 7 Review and decide adoption
+
+Before optimization, record app latency/resource budgets from representative flows and current instrumentation.
+Evaluate warm and cold/reopen paths, sustained writes/watches, background work, corpus growth, peak memory,
+disk/WAL growth and search recall/relevance. Preserve samples and variance. Compare matched current elmdb and
+SQLite behavior; microsecond ratios alone are not the cutover criterion.
+
+Review owned invariants, code complexity, native dependencies, upgrade burden and operational recovery. A material
+regression needs a concrete product tradeoff, not a relaxed test added after the result. Produce a complete draft
+with adoption evidence and the remaining decision stated plainly.
+
+Acceptance: all requirements above have evidence or an explicit approved disposition, reference/public docs and
+API reports match the result, and the candidate is ready for a final adoption decision. On adoption remove obsolete
+production elmdb paths and temporary backend selection, finish conversion/recovery instructions and rerun integrated
+validation. If rejected, record why and close the draft without leaving a permanent second backend obligation.
+
+## Validation
+
+Reuse and extend independent EARS contracts/models, transaction/watch/scheduler tests and host lifecycle suites.
+Use differential tests where semantics must match and relevance/recall tests where search is deliberately different.
+Demonstrate new safeguards with mutations or realistic fault injection on disposable copies. Keep fast tests
+independent of native/compiler captures; run the full repository and packaging gates in disposable environments.
+Record source/dependency/native-artifact revisions, conditions and raw results. Benchmark, compatibility and
+platform claims must identify their actual tested scope.
+
+## Current handoff
+
+Use `/private/tmp/ears-sqlite-query-integration`, push only `session/ears-sqlite`, and retain
+[draft PR #286](https://github.com/spankyed/apack/pull/286). Pinned master is `461f7bf2cb9f52b968957a423744168740bf37a7`,
+elmdb `f496470679a7bd9764398108b20f62a73333c701`. Production defaults remain elmdb; no cutover, merge,
+release, daily-profile migration or native-baseline ranking patch is authorized.
+
+Current implementation is `93ed37e67f`; later commits contain documentation only. Keyword search is
+fixed, not waived: [current 64-probe relevance](../../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-93ed/README.md)
+passes the unchanged 25/25 gate for both SQLite none/English modes, all 125 contracts, four effective
+old-source assertion controls and hybrid 25/25 on both engines. Native keyword remains a separately
+recorded 24/25 comparison. Complete source-app lifecycle passes 33 cases and ten discovery cases;
+its one packaged-only exclusion passes in signed macOS.
+
+The preceding final a850-code corpus run failed mean recall@64 in one 99,900-document cohort:
+0.94890625 against 0.95. Query-p95 limits pass; previous passing models do not override the miss.
+Correction `93ed37e67f` probes all 64 trained native buckets instead of 32, preserving owner/chunk
+caps and exact canonical reranking. No stored format, transaction outcome or API changes.
+
+[Full managed corpus/relevance 41503539981](https://github.com/spankyed/apack/actions/runs/41503539981)
+is now TERMINAL SUCCESS at `93ed37e67f`: 1,800 queries/18 groups meet unchanged recall/query-p95
+limits, minimum mean recall 0.988. All 29 safeguards, three reopens per size, full pairing and cleanup
+pass. Eight 16 ms heartbeat misses retain accepted degradation. The pure validator independently
+reproduces all gate outcomes; five summary means differ only by floating-point rounding, with all
+other fields identical. [Original reports and matched same-model probe diagnostic](../../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-93ed/README.md).
+
+[Strict run 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216/attempts/2)
+is now TERMINAL SUCCESS at original implementation 93ed: eight first-attempt passing jobs were
+retained and only integration-1 reran. [Full replay evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/integration-93ed-replay/README.md)
+verifies all 242 tests/31 repository files pass without exclusions; the timed-out case passes in
+146,398 ms under unchanged 200,000 ms. The new artifact is explicitly ID 13175604072; first-attempt
+13173022874 remains separately preserved. Source, producer freshness, two-core budget, assertions
+and deadlines are unchanged. No source fix or causal contention diagnosis is claimed; intermittent
+compiler-test timing remains a follow-up. [Original consumer reports](../../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md)
+verify both native shards and app/rest: host 7,040/95 existing exclusions, pack 989/two, authoring
+seven/two, external app 32, smoke five and six once-passing SQLite witnesses; host pool 489.9 s
+stays under unchanged 600 s. [Producer](../../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-producers/README.md)
+and [three platforms](../../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md)
+also pass. No further strict/model repeat is needed absent a new failure or relevant source change.
+
+The final [current-layout admission suite 41520371169](https://github.com/spankyed/apack/actions/runs/41520371169)
+is terminal success at docs-only descendant `5d80feae991d7bed9452034432f408f256e2706d`.
+All four ordinary value/search × OFF/FULL cohorts pass all 24 fresh-process trials and every original
+budget, with 138 source fingerprints per cohort and raw quantiles independently checked.
+[Original numeric reports and receipt](../../references/evidence/ears-sqlite-implementation-2026-10-28/admission-5d80/README.md)
+retain expected INDEX_BUILDING notifications, eventual readiness, resource scope and privacy omissions.
+No tracing/checkpoint/watch override or resource/latency relaxation was used.
+
+The [final evaluation](../../references/ears-sqlite-evaluation-report.md) maps all seven delivery phases.
+The closing audit is complete; no further unchanged validation is required. Only synchronous foreground
+responsiveness has the user's accepted degradation disposition. Original failed runs and source limits
+remain visible. Production stays elmdb and the PR remains draft for a separate adoption decision.
+
+The prespecified independent managed-model repeat [41508326544](https://github.com/spankyed/apack/actions/runs/41508326544)
+is now TERMINAL SUCCESS at docs-only descendant `67ae01a334`: [full corpus](../../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-67ae/README.md)
+passes all 1,800 queries/18 groups, minimum mean recall 0.990, all original query-p95 limits and
+29 safeguards. The 10k/99.9k trained-model hashes both differ from the first corrected run. Nine
+heartbeat misses retain accepted degradation. Full pairing, cleanup and three reopens per size pass;
+independent validation differs only in nine summary means by floating-point rounding. [Repeat relevance](../../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-repeat-67ae/README.md)
+also passes both SQLite keyword modes 25/25, hybrid 25/25 per backend, 125 contracts and four controls.
+Both corrected full-corpus cohorts are preserved; no further unchanged model repeat is needed.
+
+The [final input audit](../../references/evidence/ears-sqlite-implementation-2026-10-28/final-input-audit/README.md) verifies the two-file runtime delta, 66 unchanged files per 68-file fault fingerprint, unchanged driver/backup/native/dependency inputs, pinned ancestry and elmdb default. Historical runs retain their tested sources.
+
+The [adoption assessment](../plans/ears-sqlite-contracts.md#current-adoption-assessment) maps all seven
+phases and source-pinned evidence, including a850 whole strict/platform, operational faults, signed
+macOS, Linux/Windows native loading, real app flows and full source-app lifecycle. Only foreground
+responsiveness has an approved experimental degradation disposition: retain original 16 ms heartbeat
+misses as failures. Correctness, recall, query latency and resource accounting remain required.
+The recommendation remains retain elmdb; experiment delivery does not authorize adoption or PR closure.
+
+## Outcome (2026-11-02)
+
+Delivered the complete isolated SQLite candidate and source-pinned qualification in draft PR #286.
+The recommendation is **retain elmdb**: feasibility is established in the declared scope, but a net
+performance/maintenance advantage is not. The [final report](../../references/ears-sqlite-evaluation-report.md#requirement-audit)
+maps every original phase; this table disposes of the five former outstanding acceptance items without
+treating historical or unsupported-topology limits as universal certification.
+
+| Former item | Disposition and evidence |
+| --- | --- |
+| 1. Contracts and final integration | Complete at pinned master/native inputs: final 93ed whole strict, API/package/facade freshness, three platforms, independent models and controls. Full source-app and supported installed/signing runs retain their actual sources; the input audit identifies the later two-file retrieval-only delta, directly qualified by current contracts/corpus. The compiler timeout and full unchanged replay remain separately recorded. |
+| 2. Representative search/usefulness | Complete for declared none/English behavior: 214 real guide/content sections, 25 frozen judgments, unchanged keyword 25/25 in both candidate modes, hybrid 25/25 per engine, 125 contracts/four effective controls, multilingual literal feature cases, paired real 1,536-dimensional corpus and two different managed-model cohorts. Actual thread-search/UI controls pass. Remote provider quality, arbitrary languages/models and the dormant semantic Library UI are not supported conclusions; their product owner must qualify them if enabled, rather than infer coverage from literal or controlled-inference tests. |
+| 3. Performance and resources | Complete in recorded workload scope: original query-p95/mean-recall targets pass in both final corpus cohorts; current admission passes 24/24 without budget changes. Matched built reads, sustained durable writes/watches, cold-file/reopen, admission, real app/streaming flows, model variance, process high-water memory and sampled files/WAL/checkpoints are preserved. Only synchronous responsiveness misses have an approved experimental degradation. Whole-process/sampled measurements do not imply isolated allocations or instantaneous disk peaks. |
+| 4. Error outcomes and runtime support | Complete for supported paths through actual I/O/full/ENOMEM/read/worker retry, canonical preservation, held-reader release, eight successful-sync/death witnesses, disabled controls and post-sync uncertain-commit/fenced-reopen cases. Backup/replacement/readonly and all shipping runtime targets have named receipts. Physical device power loss, arbitrary filesystems and independent SQLite binaries sharing a file in one process remain unsupported certification claims, not silently passing outcomes. Operational owners must qualify any newly supported topology. |
+| 5. Ownership and recommendation | Complete: invariant, algorithmic complexity, driver, dependency/native-patch upgrade and recovery reviews feed the final recommendation and current implementation reference. Retained maintenance ownership and workload regressions do not justify adoption. Build-tools owns the observed compiler timing follow-up; terminal-service owns the separately identified natural-exit cleanup concern (probe PTY cleanup is not its fix). Neither is claimed corrected by this candidate. |
+
+The only authorized material degradation is synchronous foreground responsiveness, recorded with the
+original failed measurements. The candidate remains opt-in; merge, release, production conversion,
+backend removal or closing the draft require a separate decision. A future adoption proposal must own
+native upgrades and explicitly qualify its selected product/provider/filesystem targets.
+
+Detailed superseded execution checkpoints and original acceptance wording remain in the
+[historical handoff](../../references/evidence/ears-sqlite-implementation-2026-10-28/checkpoint-before-probe-qualification/README.md).
+They preserve dated failures and do not reopen the completed delivery or authorize production use.

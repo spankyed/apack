@@ -1,0 +1,10 @@
+{
+  "decompressedSha256": {
+    "source.txt": "3d028d24b308c46c4c3915591573f1844ef38c767e76d3b4b6f269bc6ead057b",
+    "runtime.json": "2256836cd119777b8df709312e7194d113c41c8c56cf66ad3aa3c57b505b25d8",
+    "generic/provenance.json": "716324b9d72ebf69c9dbaa8a56f363dd74b9527ab13e5b93c626cf6614743721",
+    "dispatch/provenance.json": "ec7157b45b8f7b46ffc76b229ce2b8554474f5c5058d8370188b6f3f3efb8325",
+    "generic-membership.json": "0fa4c99d0d5ca90cc3a9deaf67eb61b13a96c7958e7aa9b32245141d229a96b4",
+    "dispatch-membership.json": "f3362293390480e25f9ad56cac4278e9894b558f8622f11b99ffaf70843f6286"
+  }
+}

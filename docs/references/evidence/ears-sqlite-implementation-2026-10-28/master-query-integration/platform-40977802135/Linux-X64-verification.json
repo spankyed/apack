@@ -1,0 +1,41 @@
+{
+  "source": "d28e2de39c974a2b7e96cfafdc38185c1a05d75c",
+  "sdkSqliteCasesPassed": 1320,
+  "sdkContentRuntimeCasesPassed": 1,
+  "sdkBackendCasesPassed": 2,
+  "queryWorkCasesPassed": 4,
+  "nativeGenerationCasesPassed": 5,
+  "nativeTrainingCasesPassed": 5,
+  "nativeModelCasesPassed": 7,
+  "nativeGenerationExtensionSha256": "42396fbcceee34f937889c83e2c464008d020a21bec5d41ea440053d53613043",
+  "earsPassed": 625,
+  "sqliteCasesPassed": 315,
+  "selectedTextPassed": 16,
+  "selectedTextTotal": 16,
+  "maintenanceCasesPassed": 9,
+  "logicalCommandCasesPassed": 8,
+  "logicalCrashCasesPassed": 2,
+  "builtLogicalChecks": 5,
+  "profileConversionChecks": 5,
+  "profileCrashCases": 5,
+  "convertedApi": {
+    "source": "d28e2de39c974a2b7e96cfafdc38185c1a05d75c",
+    "nativeBaselineBoots": 1,
+    "sqliteBoots": 2,
+    "livePackUpdates": 3,
+    "postRestartDataRetained": true,
+    "nativeSourceUnchanged": true,
+    "historyRetained": true,
+    "settingsRetained": true,
+    "mediaRetained": true,
+    "environmentDiagnostics": {
+      "missingOptionalCodexExecutable": true
+    }
+  },
+  "nativeDumpCasesPassed": 7,
+  "logicalSnapshotCasesPassed": 5,
+  "logicalHostCasesPassed": 10,
+  "logicalHostSkipped": [],
+  "hostPassed": 135,
+  "recoveryCasesPassed": 34
+}

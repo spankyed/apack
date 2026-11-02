@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/trigrams.spec.ts -t uses FTS5
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/trigrams.spec.ts (7 tests | 6 skipped) 274ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 6 skipped (7)
+   Start at  16:32:11
+   Duration  659ms (transform 188ms, setup 12ms, collect 253ms, tests 274ms, environment 0ms, prepare 40ms)
+

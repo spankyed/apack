@@ -1,0 +1,60 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/query-cost.spec.ts -t missing physical table
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/query-cost.spec.ts (16 tests | 1 failed | 15 skipped) 620ms
+   ↓ SQLite ordering work > orders rank without loading unrelated bodies or issuing per-entity SQL
+   ↓ SQLite ordering work > orders sortText without loading unrelated bodies or issuing per-entity SQL
+   ↓ SQLite ordering work > preserves stable input order and duplicate ids across different physical type layouts
+   ↓ SQLite ordering work > orders actual scalar kinds from unchecked imports, with stable null and signed-zero ties
+   ↓ SQLite ordering work > retains pipeline scope and prior ordering on ties
+   ↓ SQLite ordering work > preserves decoder rounding of large integer ties ('max')
+   ↓ SQLite ordering work > preserves decoder rounding of large integer ties ('min')
+   ↓ SQLite ordering work > preserves corruption refusal: invalid cell
+   ↓ SQLite ordering work > preserves corruption refusal: missing primary
+   ↓ SQLite ordering work > keeps a fallback for embedded-NUL field names
+   ↓ SQLite ordering work > keeps sparse flexible keys and undeclared repair types in native scalar ordering
+   ↓ SQLite ordering work > falls back to decoder date clipping for fractional stored timestamps
+   ↓ SQLite ordering work > matches the ICU fallback on a mixed scalar corpus (asc)
+   ↓ SQLite ordering work > matches the ICU fallback on a mixed scalar corpus (desc)
+   ↓ SQLite ordering work > ignores another type table's stray row but refuses a missing actual primary row
+   × SQLite ordering work > does not inspect another type's missing physical table for a selected or empty candidate set 620ms
+     → expected [Function] to not throw an error but 'SqliteError: no such table: values_t2' was thrown
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/query-cost.spec.ts > SQLite ordering work > does not inspect another type's missing physical table for a selected or empty candidate set
+AssertionError: expected [Function] to not throw an error but 'SqliteError: no such table: values_t2' was thrown
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+"SqliteError: no such table: values_t2"
+
+ ❯ tests/sqlite/query-cost.spec.ts:169:77
+    167|     db.sql.exec(`DROP TABLE ${db.values.layout('Other')!.table}`);
+    168|     let ids: string[] = [];
+    169|     expect(() => { ids = e.query.ids('Row-a').orderBy('rank').ids(); }…
+       |                                                                             ^
+    170|     expect(ids).toEqual(['Row-a']);
+    171|     expect(e.query('Other').limit(0).orderBy('rank').ids()).toEqual([]…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 skipped (16)
+   Start at  13:38:39
+   Duration  2.09s (transform 410ms, setup 31ms, collect 902ms, tests 620ms, environment 0ms, prepare 96ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/query-cost.spec.ts -t 'missing physical table'

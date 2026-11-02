@@ -1,0 +1,259 @@
+{
+  "node": "v23.11.1",
+  "wasmSha256": "d811bfd20cacbca239971303e4a28be40a1fcbf7f35dea2258b519bcd20b8c5d",
+  "nativeSha256": {
+    "/elmdb/crates/elmdb-node/elmdb.linux-arm64-gnu.node": "ded0c7259b8dc7e0d8f5d92950efd9020bd7a06f1ae5009ece1f6f50646155c1",
+    "/seed/node_modules/msgpackr-extract/build/Release/extract.node": "e3540164422742dc5c3e24501d674dd8dfcd5012ab94caa731bff316463c2395"
+  },
+  "patterns": 20,
+  "corpus": 20,
+  "invalid": 5,
+  "answers": [
+    {
+      "pattern": "",
+      "ids": [
+        "Row-0",
+        "Row-1",
+        "Row-2",
+        "Row-3",
+        "Row-4",
+        "Row-5",
+        "Row-6",
+        "Row-7",
+        "Row-8",
+        "Row-9",
+        "Row-10",
+        "Row-11",
+        "Row-12",
+        "Row-13",
+        "Row-16",
+        "Row-17",
+        "Row-18",
+        "Row-19"
+      ]
+    },
+    {
+      "pattern": "^alpha$",
+      "ids": [
+        "Row-1",
+        "Row-12"
+      ]
+    },
+    {
+      "pattern": "(?i)^error",
+      "ids": [
+        "Row-3"
+      ]
+    },
+    {
+      "pattern": "\\p{Greek}+",
+      "ids": [
+        "Row-5",
+        "Row-13"
+      ]
+    },
+    {
+      "pattern": "\\b\\w+\\b",
+      "ids": [
+        "Row-1",
+        "Row-2",
+        "Row-3",
+        "Row-4",
+        "Row-5",
+        "Row-6",
+        "Row-7",
+        "Row-8",
+        "Row-9",
+        "Row-10",
+        "Row-12",
+        "Row-13",
+        "Row-16",
+        "Row-17",
+        "Row-18",
+        "Row-19"
+      ]
+    },
+    {
+      "pattern": "[a-z&&[^b]]+",
+      "ids": [
+        "Row-1",
+        "Row-2",
+        "Row-6",
+        "Row-7",
+        "Row-8",
+        "Row-9",
+        "Row-12",
+        "Row-16",
+        "Row-19"
+      ]
+    },
+    {
+      "pattern": "(?:a+)+$",
+      "ids": [
+        "Row-1",
+        "Row-2",
+        "Row-12",
+        "Row-16"
+      ]
+    },
+    {
+      "pattern": "(?s)a.b",
+      "ids": [
+        "Row-7"
+      ]
+    },
+    {
+      "pattern": "^b$",
+      "ids": [
+        "Row-10",
+        "Row-16"
+      ]
+    },
+    {
+      "pattern": "(?m)^b$",
+      "ids": [
+        "Row-7",
+        "Row-10",
+        "Row-16"
+      ]
+    },
+    {
+      "pattern": "a|beta",
+      "ids": [
+        "Row-1",
+        "Row-2",
+        "Row-6",
+        "Row-7",
+        "Row-8",
+        "Row-9",
+        "Row-12",
+        "Row-16",
+        "Row-19"
+      ]
+    },
+    {
+      "pattern": "(?P<part>alpha)",
+      "ids": [
+        "Row-1",
+        "Row-12"
+      ]
+    },
+    {
+      "pattern": "\\Aalpha\\z",
+      "ids": [
+        "Row-1",
+        "Row-12"
+      ]
+    },
+    {
+      "pattern": "😀",
+      "ids": [
+        "Row-11"
+      ]
+    },
+    {
+      "pattern": "(?i)Σ",
+      "ids": [
+        "Row-5",
+        "Row-13"
+      ]
+    },
+    {
+      "pattern": "(?i)\\p{L}+",
+      "ids": [
+        "Row-1",
+        "Row-2",
+        "Row-3",
+        "Row-4",
+        "Row-5",
+        "Row-6",
+        "Row-7",
+        "Row-8",
+        "Row-9",
+        "Row-10",
+        "Row-12",
+        "Row-13",
+        "Row-16",
+        "Row-17",
+        "Row-18",
+        "Row-19"
+      ]
+    },
+    {
+      "pattern": "^ab$",
+      "ids": []
+    },
+    {
+      "pattern": "a.*b",
+      "ids": [
+        "Row-8",
+        "Row-9"
+      ]
+    },
+    {
+      "pattern": "[[:alpha:]]+",
+      "ids": [
+        "Row-1",
+        "Row-2",
+        "Row-3",
+        "Row-6",
+        "Row-7",
+        "Row-8",
+        "Row-9",
+        "Row-10",
+        "Row-12",
+        "Row-16",
+        "Row-19"
+      ]
+    },
+    {
+      "pattern": "\\x{0130}",
+      "ids": [
+        "Row-17"
+      ]
+    }
+  ],
+  "memory": [
+    {
+      "compiled": 700,
+      "wasmBytes": 2752512,
+      "rss": 87797760
+    },
+    {
+      "compiled": 1200,
+      "wasmBytes": 2752512,
+      "rss": 87797760
+    },
+    {
+      "compiled": 1700,
+      "wasmBytes": 2752512,
+      "rss": 87797760
+    },
+    {
+      "compiled": 2200,
+      "wasmBytes": 2752512,
+      "rss": 87937024
+    },
+    {
+      "compiled": 2700,
+      "wasmBytes": 2752512,
+      "rss": 87801856
+    },
+    {
+      "compiled": 3200,
+      "wasmBytes": 2752512,
+      "rss": 87801856
+    },
+    {
+      "compiled": 3700,
+      "wasmBytes": 2752512,
+      "rss": 87801856
+    },
+    {
+      "compiled": 4200,
+      "wasmBytes": 2752512,
+      "rss": 87801856
+    }
+  ],
+  "criterion": "Last four WASM memory samples equal after 200 warmups and eight 500-compile batches; not an RSS/app latency budget"
+}

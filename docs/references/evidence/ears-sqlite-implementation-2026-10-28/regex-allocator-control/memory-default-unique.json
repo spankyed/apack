@@ -1,0 +1,35 @@
+{
+  "mode": "unique",
+  "samples": [
+    {
+      "compiled": 500,
+      "wasmBytes": 1572864,
+      "rss": 58961920
+    },
+    {
+      "compiled": 1000,
+      "wasmBytes": 1572864,
+      "rss": 62894080
+    },
+    {
+      "compiled": 1500,
+      "wasmBytes": 1572864,
+      "rss": 62865408
+    },
+    {
+      "compiled": 2000,
+      "wasmBytes": 1572864,
+      "rss": 65622016
+    },
+    {
+      "compiled": 2500,
+      "wasmBytes": 1572864,
+      "rss": 65622016
+    },
+    {
+      "compiled": 3000,
+      "wasmBytes": 1572864,
+      "rss": 65622016
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "control": "omit-native-repair",
+    "exitCode": 1,
+    "failedTests": 1
+  },
+  {
+    "control": "ignore-native-page-damage",
+    "exitCode": 1,
+    "failedTests": 1
+  },
+  {
+    "control": "discard-on-io-error",
+    "exitCode": 1,
+    "failedTests": 1
+  },
+  {
+    "control": "discard-foreign-table",
+    "exitCode": 1,
+    "failedTests": 1
+  }
+]

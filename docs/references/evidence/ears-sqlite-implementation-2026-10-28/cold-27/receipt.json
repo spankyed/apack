@@ -1,0 +1,247 @@
+{
+  "run": 41373060681,
+  "source": "27c9cdca4fb2777f4fcc8b04cf0d6816dab5f002",
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "fileSystem": "overlayfs",
+  "kernel": "7.0.0-1017-azure",
+  "declaredEnginePin": "f496470679a7bd9764398108b20f62a73333c701",
+  "schema": "Dynamic Row with group/rank value indexes, no explicit field type declarations; 10k deterministic 2-KiB ASCII bodies",
+  "cacheWitnessesVerified": 80,
+  "scratchRemoved": true,
+  "identityStableAcrossTrials": {
+    "elmdb": {
+      "runtimeSha256": {
+        "index.js": "8e7de42b312b1eb8d1a49e6f12f997ca19d099f8c5f74c0542512f35da6bec38",
+        "lmdb/index.js": "869988e7628c65d787a5ec1c909809efa393fcd9eb4e2e77fc5d6d3ce213b72a"
+      },
+      "nativeBindings": [
+        {
+          "path": "/workspace/node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/node.napi.glibc.node",
+          "sha256": "d144534a0d0cfdeb78e5b79526ea57b0382b2e742b7675bbe5cc3b80741956cd"
+        },
+        {
+          "path": "/workspace/vendor/elmdb/crates/elmdb-node/elmdb.linux-x64-gnu.node",
+          "sha256": "b5bcd0fedb5afca8b1d4502c34404b7fc140730fc032d431f94991e03e0486b3"
+        }
+      ]
+    },
+    "sqlite": {
+      "runtimeSha256": {
+        "index.js": "8e7de42b312b1eb8d1a49e6f12f997ca19d099f8c5f74c0542512f35da6bec38",
+        "sqlite/index.js": "7a2fa7faa2460b65679406d1cb37ac03344f541b09ff86e32e52542a5b6c5688"
+      },
+      "nativeBindings": [
+        {
+          "path": "/workspace/node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/node.napi.glibc.node",
+          "sha256": "d144534a0d0cfdeb78e5b79526ea57b0382b2e742b7675bbe5cc3b80741956cd"
+        },
+        {
+          "path": "/workspace/node_modules/better-sqlite3/prebuilds/linux-x64.node",
+          "sha256": "6fd4292c6c5f352436cd85c9e1cb286978efa43c20ae350973f83414ced9991d"
+        },
+        {
+          "path": "/workspace/packages/apack-ears/dist/sqlite/native/linux-x64/vec1.so",
+          "sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "backend": "elmdb",
+      "cache": "cold-file-pages",
+      "trials": 20,
+      "mainFileBytes": 32702464,
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "timesMs": {
+        "open": {
+          "median": 3.3127284999999986,
+          "min": 3.027011999999999,
+          "max": 4.472344000000007,
+          "p95": 4.451270000000008
+        },
+        "engine": {
+          "median": 1.609145500000004,
+          "min": 1.5364900000000148,
+          "max": 2.1745149999999995,
+          "p95": 1.7217269999999871
+        },
+        "firstField": {
+          "median": 2.587218,
+          "min": 2.403743999999989,
+          "max": 4.022459999999995,
+          "p95": 3.624182999999988
+        },
+        "page50": {
+          "median": 69.51356000000001,
+          "min": 67.13190499999999,
+          "max": 74.73011399999999,
+          "p95": 74.320853
+        },
+        "ordered50": {
+          "median": 63.60419400000001,
+          "min": 59.60784199999998,
+          "max": 78.15871099999998,
+          "p95": 72.13688399999998
+        }
+      },
+      "processMaxRssKiB": {
+        "median": 139196.0,
+        "min": 138532,
+        "max": 139536,
+        "p95": 139512
+      },
+      "scope": "File-cache state verified before child launch; per-process imports excluded from timings, factory initialization included; later reads are successive, not individually cold"
+    },
+    {
+      "backend": "elmdb",
+      "cache": "warm-file-pages",
+      "trials": 20,
+      "mainFileBytes": 32702464,
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "timesMs": {
+        "open": {
+          "median": 0.7473930000000024,
+          "min": 0.6609590000000054,
+          "max": 0.980899000000008,
+          "p95": 0.9641969999999986
+        },
+        "engine": {
+          "median": 1.6340360000000018,
+          "min": 1.591551999999993,
+          "max": 2.2232470000000006,
+          "p95": 2.222025000000002
+        },
+        "firstField": {
+          "median": 2.0986580000000075,
+          "min": 2.0416560000000032,
+          "max": 2.988661999999991,
+          "p95": 2.943847000000005
+        },
+        "page50": {
+          "median": 1.8143909999999934,
+          "min": 1.7602989999999892,
+          "max": 2.5351920000000234,
+          "p95": 2.533818999999994
+        },
+        "ordered50": {
+          "median": 8.242653000000004,
+          "min": 7.964089000000001,
+          "max": 9.82304099999999,
+          "p95": 8.616202000000015
+        }
+      },
+      "processMaxRssKiB": {
+        "median": 139264.0,
+        "min": 139076,
+        "max": 139796,
+        "p95": 139788
+      },
+      "scope": "File-cache state verified before child launch; per-process imports excluded from timings, factory initialization included; later reads are successive, not individually cold"
+    },
+    {
+      "backend": "sqlite",
+      "cache": "cold-file-pages",
+      "trials": 20,
+      "mainFileBytes": 45957120,
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "timesMs": {
+        "open": {
+          "median": 83.6665475,
+          "min": 81.09518499999999,
+          "max": 91.13932499999999,
+          "p95": 91.05789199999998
+        },
+        "engine": {
+          "median": 2.9249224999999797,
+          "min": 2.858727000000016,
+          "max": 3.407496000000009,
+          "p95": 3.402344999999997
+        },
+        "firstField": {
+          "median": 3.4544899999999927,
+          "min": 3.26961799999998,
+          "max": 5.115580000000023,
+          "p95": 4.671044000000052
+        },
+        "page50": {
+          "median": 80.11925350000001,
+          "min": 74.107347,
+          "max": 108.33228199999996,
+          "p95": 86.61276400000003
+        },
+        "ordered50": {
+          "median": 50.7123685,
+          "min": 47.94467300000002,
+          "max": 61.526520999999946,
+          "p95": 55.915884000000005
+        }
+      },
+      "processMaxRssKiB": {
+        "median": 112668.0,
+        "min": 111832,
+        "max": 113420,
+        "p95": 113232
+      },
+      "scope": "File-cache state verified before child launch; per-process imports excluded from timings, factory initialization included; later reads are successive, not individually cold"
+    },
+    {
+      "backend": "sqlite",
+      "cache": "warm-file-pages",
+      "trials": 20,
+      "mainFileBytes": 45957120,
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "timesMs": {
+        "open": {
+          "median": 81.640035,
+          "min": 79.59885700000001,
+          "max": 85.78430499999999,
+          "p95": 83.47749899999997
+        },
+        "engine": {
+          "median": 2.930227500000001,
+          "min": 2.856082000000015,
+          "max": 3.471806000000015,
+          "p95": 3.443464000000006
+        },
+        "firstField": {
+          "median": 1.722952499999991,
+          "min": 1.693945000000042,
+          "max": 2.257501999999988,
+          "p95": 2.146963000000028
+        },
+        "page50": {
+          "median": 13.617724500000008,
+          "min": 13.459417999999971,
+          "max": 14.166416999999967,
+          "p95": 13.994924000000026
+        },
+        "ordered50": {
+          "median": 25.16357049999999,
+          "min": 24.411516000000006,
+          "max": 26.686384000000032,
+          "p95": 25.757834000000003
+        }
+      },
+      "processMaxRssKiB": {
+        "median": 112608.0,
+        "min": 111548,
+        "max": 118448,
+        "p95": 113400
+      },
+      "scope": "File-cache state verified before child launch; per-process imports excluded from timings, factory initialization included; later reads are successive, not individually cold"
+    }
+  ]
+}

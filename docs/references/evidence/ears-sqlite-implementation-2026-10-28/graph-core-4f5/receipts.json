@@ -1,0 +1,62 @@
+{
+  "ears-sqlite-graph-first--sqlite.log": {
+    "sha256": "be09ad3b0b38bf288a41f2b5ed9e9462c458a91e6ea30c7c505a42da0feede7e",
+    "bytes": 353
+  },
+  "ears-sqlite-graph-first--inputs.json": {
+    "sha256": "69fe184fdbb32265ff9877284134d0da3b21b0d3f79c30ed0b3751be2393df13",
+    "bytes": 214169
+  },
+  "ears-sqlite-graph-first--sqlite.json": {
+    "sha256": "c730b79052fc826a0733f0c7cd832c4099c0d18b1ede53717c15e510b3779dc8",
+    "bytes": 10571
+  },
+  "ears-sqlite-graph-first--run.json": {
+    "sha256": "01e2a110748ebbfb0c2973a9731d4ce7456cc3f143d5de4ea3d65c73b16a111e",
+    "bytes": 294
+  },
+  "ears-sqlite-graph-first--host-launch.json": {
+    "sha256": "31b4729a696c39a59415b0542c558cc44bcdf605a7b13e0f131d13deffa3ad27",
+    "bytes": 3307
+  },
+  "ears-sqlite-graph-first--ears-sqlite-graph-first-run.py": {
+    "sha256": "7299dbc094ac9de3c7870a27de68a4f1bd8a92c4da5789c9f363b140032776d0",
+    "bytes": 1589
+  },
+  "ears-sqlite-graph-first--ears-run-sqlite-graph-first.py": {
+    "sha256": "b2a32b2892e64b2eb41763b4971c8648248a6e333d8bfc12cfc318a1d6f7df24",
+    "bytes": 5165
+  },
+  "ears-sqlite-graph-core--types.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-graph-core--sqlite.log": {
+    "sha256": "a701c13c08d86d93be2d6838abf295c8811156b10c28e7980d944d14f2f6aa01",
+    "bytes": 353
+  },
+  "ears-sqlite-graph-core--inputs.json": {
+    "sha256": "2f66dc66cc764104f4949fb278d01c5d9819e3a7a28efe3cd03136780c879549",
+    "bytes": 214169
+  },
+  "ears-sqlite-graph-core--sqlite.json": {
+    "sha256": "5dcb4f14f8cf7a0a5af8339755f68df0d494bc16cf839a00c7547f1c95ab7fc9",
+    "bytes": 10922
+  },
+  "ears-sqlite-graph-core--run.json": {
+    "sha256": "3dd2deaacdf2f5884875154566b6b943d841b0b3f3540cc3a60a35505cec8c97",
+    "bytes": 369
+  },
+  "ears-sqlite-graph-core--host-launch.json": {
+    "sha256": "53d65678c71c53ebb2f12a694bed203ac017a7e0198a79d211bb87e94ed49628",
+    "bytes": 3303
+  },
+  "ears-sqlite-graph-core--ears-sqlite-graph-core-run.py": {
+    "sha256": "70ee3745cd6fefaeeafd8247c31b6e680cbf537cd5987add362d985a674449cd",
+    "bytes": 1761
+  },
+  "ears-sqlite-graph-core--ears-run-sqlite-graph-core.py": {
+    "sha256": "88b37b428ca9ee8b9c20ea4eeec20efa2c6b5f507359b169b246e24c039284ff",
+    "bytes": 5160
+  }
+}

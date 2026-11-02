@@ -1,0 +1,7 @@
+# Native worker I/O probe: incorrect expected extended code
+
+[Run 41354720706](https://github.com/spankyed/apack/actions/runs/41354720706), source `b44d338111`, is terminal failure. The test shim compiles and the built-package probe executes, but its guard expects generic IOERR/IOERR_READ while the worker returns `SQLITE_IOERR_CORRUPTFS`. The guard executes before diagnostics are captured, so the original report has no retained syscall witness, canonical-preservation or retry result. Scratch cleanup succeeds. No successful fault qualification is claimed.
+
+SQLite’s [Unix VFS source](https://github.com/sqlite/sqlite/blob/master/src/os_unix.c) explicitly maps a failed read with POSIX EIO to SQLITE_IOERR_CORRUPTFS; its [result-code documentation](https://sqlite.org/rescode.html#ioerr_corruptfs) identifies this as an extended I/O code. The correction requires this exact observed/mapped code, captures error/syscall diagnostics before assertions, and still requires descriptor-matched non-main-thread EIO, unchanged canonical bytes/commit identity, no publication, successful drained retry and foreground reuse. The public source explains the intended code; it does not replace actual corrected runtime evidence.
+
+The original numeric report is gzip-preserved with decompressed SHA-256, including the failed assumption and cleanup outcome. Private database/source paths and syscall scratch were removed by the original run; the absent witness cannot be reconstructed or counted as passed. Production code and all original acceptance requirements remain unchanged.

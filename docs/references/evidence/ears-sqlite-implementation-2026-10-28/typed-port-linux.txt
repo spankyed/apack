@@ -1,0 +1,171 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc npm run typecheck -w @apackdev/ears && python3 .temp/typed-request-negative.py && npm run typecheck -w @apackdev/ears && npm run api:update -w @apackdev/ears -w @apackdev/sdk && npm test -w @apackdev/ears && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears
+
+    Finished `release` profile [optimized] target(s) in 0.04s
+Published packages are out of date:
+  @apackdev/ears: its inputs changed since the last successful run — changed packages/apack-ears/src/query.ts (and 2 more)
+  @apackdev/testing: its inputs changed since the last successful run — changed packages/apack-ears/src/query.ts (and 2 more)
+  @apackdev/cli: its inputs changed since the last successful run — changed packages/apack-ears/src/query.ts (and 2 more)
+Rebuilding 3 of 5
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+Built @apackdev/testing@0.1.0 into dist/package
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/compiler-pe-environment.ts:38:102:
+      38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+         ╵                                                     ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:19:42:
+      19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+         ╵                                           ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:61:48:
+      61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+         ╵                                            ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+Built @apackdev/cli@0.1.0 into dist/package
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+{"rule": "write-request", "path": "packages/apack-ears/src/database.ts", "before": "readonly ops: readonly Op[];", "after": "readonly ops: readonly ({ op: string } & Record<string, unknown>)[];", "exit": 2, "output": "\n> @apackdev/ears@0.1.0 typecheck\n> tsc --noEmit\n\ntests/storage-types.spec.ts(6,75): error TS2554: Expected 1 arguments, but got 0.\ntests/storage-types.spec.ts(7,65): error TS2554: Expected 1 arguments, but got 0.\ntests/storage-types.spec.ts(8,80): error TS2554: Expected 1 arguments, but got 0.\nnpm error Lifecycle script `typecheck` failed with error:\nnpm error code 2\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c tsc --noEmit\n"}
+{"rule": "read-request", "path": "packages/apack-ears/src/database.ts", "before": "readonly reads: readonly ReadOp[];", "after": "readonly reads: ReadonlyArray<Record<string, unknown>>;", "exit": 2, "output": "\n> @apackdev/ears@0.1.0 typecheck\n> tsc --noEmit\n\nsrc/sqlite/database.ts(964,59): error TS2345: Argument of type 'Record<string, unknown>' is not assignable to parameter of type 'ReadOp'.\n  Type 'Record<string, unknown>' is missing the following properties from type '{ read: \"findLabels\"; query: string; fields: Record<string, string>; limit?: number | undefined; scope?: QueryScope | undefined; }': read, query, fields\ntests/storage-types.spec.ts(10,88): error TS2554: Expected 1 arguments, but got 0.\ntests/storage-types.spec.ts(11,66): error TS2554: Expected 1 arguments, but got 0.\ntests/storage-types.spec.ts(12,160): error TS2554: Expected 1 arguments, but got 0.\nnpm error Lifecycle script `typecheck` failed with error:\nnpm error code 2\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c tsc --noEmit\n"}
+{"rule": "read-result", "path": "packages/apack-ears/src/database.ts", "before": "readSync(reads: ReadRequest): Answer[];", "after": "readSync(reads: ReadRequest): Array<{ kind: string } & Record<string, unknown>>;", "exit": 2, "output": "\n> @apackdev/ears@0.1.0 typecheck\n> tsc --noEmit\n\nsrc/database.ts(370,5): error TS2322: Type '(reads: readonly ReadOp[]) => Answer[] | ({ kind: string; } & Record<string, unknown>)[]' is not assignable to type '(reads: readonly ReadOp[]) => Answer[]'.\n  Type 'Answer[] | ({ kind: string; } & Record<string, unknown>)[]' is not assignable to type 'Answer[]'.\n    Type '({ kind: string; } & Record<string, unknown>)[]' is not assignable to type 'Answer[]'.\n      Type '{ kind: string; } & Record<string, unknown>' is not assignable to type 'Answer'.\n        Type '{ kind: string; } & Record<string, unknown>' is not assignable to type '{ kind: \"explained\"; answer: QueryAnswer; ms: number; } & { backend: \"elmdb\"; visited: number; stages: QueryStage[]; }'.\n          Type '{ kind: string; } & Record<string, unknown>' is missing the following properties from type '{ kind: \"explained\"; answer: QueryAnswer; ms: number; }': answer, ms\nsrc/database.ts(375,37): error TS2345: Argument of type '(answer: Answer) => Answer' is not assignable to parameter of type '((value: { kind: string; } & Record<string, unknown>, index: number, array: ({ kind: string; } & Record<string, unknown>)[]) => Answer) & ((value: Answer, index: number, array: Answer[]) => Answer)'.\n  Type '(answer: Answer) => Answer' is not assignable to type '(value: { kind: string; } & Record<string, unknown>, index: number, array: ({ kind: string; } & Record<string, unknown>)[]) => Answer'.\n    Types of parameters 'answer' and 'value' are incompatible.\n      Type '{ kind: string; } & Record<string, unknown>' is not assignable to type 'Answer'.\n        Type '{ kind: string; } & Record<string, unknown>' is not assignable to type '{ kind: \"explained\"; answer: QueryAnswer; ms: number; } & { backend: \"elmdb\"; visited: number; stages: QueryStage[]; }'.\n          Type '{ kind: string; } & Record<string, unknown>' is missing the following properties from type '{ kind: \"explained\"; answer: QueryAnswer; ms: number; }': answer, ms\ntests/storage-types.spec.ts(18,52): error TS2554: Expected 1 arguments, but got 0.\nnpm error Lifecycle script `typecheck` failed with error:\nnpm error code 2\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c tsc --noEmit\n"}
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/ears@0.1.0 api:update
+> npm run api:build && tsx ../../scripts/api-reports.ts . --local
+
+
+> @apackdev/ears@0.1.0 api:build
+> node -e "require('fs').rmSync('.temp/api-types', { recursive: true, force: true })" && tsc -p tsconfig.api-extractor.json
+
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+@apackdev/ears: 0 of 3 API reports updated
+
+> @apackdev/sdk@0.1.0 api:update
+> npm run api:build && tsx ../../scripts/api-reports.ts . --local
+
+
+> @apackdev/sdk@0.1.0 api:build
+> node -e "require('fs').rmSync('.temp/api-types', { recursive: true, force: true })" && tsc -p tsconfig.api-extractor.json
+
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+Analysis will use the bundled TypeScript version 5.9.3
+@apackdev/sdk: 0 of 30 API reports updated
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/model-based.spec.ts (2 tests) 20853ms
+   ✓ refuses, holds and answers what the model does  5844ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  15007ms
+ ↓ tests/engine/sqlite-operations.spec.ts (18 tests | 18 skipped)
+ ✓ tests/engine/queries.spec.ts (27 tests) 469ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 401ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 720ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 284ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 197ms
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 92ms
+ ↓ tests/sqlite/values.spec.ts (8 tests | 8 skipped)
+ ✓ tests/engine/calls.spec.ts (6 tests) 71ms
+ ✓ tests/engine/search.spec.ts (7 tests) 48ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 37ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 108ms
+ ↓ tests/sqlite/index.spec.ts (3 tests | 3 skipped)
+ ✓ tests/engines.spec.ts (4 tests) 34ms
+ ✓ tests/engine/query-values.spec.ts (4 tests) 31ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 18ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 14ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+
+ Test Files  16 passed | 3 skipped (19)
+      Tests  228 passed | 29 skipped (257)
+   Start at  08:06:10
+   Duration  26.72s (transform 354ms, setup 35ms, collect 1.33s, tests 23.38s, environment 2ms, prepare 685ms)
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/model-based.spec.ts (2 tests) 20091ms
+   ✓ refuses, holds and answers what the model does  4149ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  15941ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 948ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 1778ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  311ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  347ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  301ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 1279ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 920ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 464ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 120ms
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 264ms
+ ✓ tests/engine/calls.spec.ts (6 tests) 139ms
+ ✓ tests/engine/search.spec.ts (7 tests) 138ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 150ms
+ ✓ tests/engines.spec.ts (4 tests) 84ms
+ ✓ tests/engine/query-values.spec.ts (4 tests) 81ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 56ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 45ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 2062ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 159ms
+ ✓ tests/sqlite/values.spec.ts (8 tests) 148ms
+
+ Test Files  19 passed (19)
+      Tests  257 passed (257)
+   Start at  08:06:37
+   Duration  32.47s (transform 364ms, setup 33ms, collect 1.43s, tests 28.93s, environment 2ms, prepare 732ms)
+

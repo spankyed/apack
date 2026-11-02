@@ -1,0 +1,67 @@
+{
+  "run": 41240710307,
+  "source": "da1636c9eadbc7048d4f9c90e2fa081c38a4d5c9",
+  "prefixes": [
+    {
+      "size": 1000,
+      "nativeModel": null,
+      "nativeModelReady": false,
+      "nativeModelRequired": false,
+      "nativeCandidateFloor": 1024,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "oracleSha256": "a127c2c03192357fe339c22a4bbd74bcaa82a8677f17a6c24cbf6583bcf6ae33",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "databaseScratchRemoved": true,
+      "rawSha256": "d539e449123166db1afe9284fe59496edaaffe6f6e89a701c80fbf3f3d1225c1"
+    },
+    {
+      "size": 10000,
+      "nativeModel": {
+        "state": "ready",
+        "samples": 10000,
+        "model_sha256": "3b7a5b67719e965197bdba959b1a7948c915c9111757ae9155c41f5c121915d4",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "nativeModelReady": true,
+      "nativeModelRequired": true,
+      "nativeCandidateFloor": 1024,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "oracleSha256": "a127c2c03192357fe339c22a4bbd74bcaa82a8677f17a6c24cbf6583bcf6ae33",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "databaseScratchRemoved": true,
+      "rawSha256": "c28d23df7dda87f97b96064bf92bda28eba64cafda6699c000d56691d3eb014a"
+    },
+    {
+      "size": 99900,
+      "nativeModel": {
+        "state": "ready",
+        "samples": 20000,
+        "model_sha256": "cc87833848e2809e7424a5677854c66446d7f7958ee8967ea1ae89905e5cdcfd",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "nativeModelReady": true,
+      "nativeModelRequired": true,
+      "nativeCandidateFloor": 1024,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "oracleSha256": "a127c2c03192357fe339c22a4bbd74bcaa82a8677f17a6c24cbf6583bcf6ae33",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "databaseScratchRemoved": true,
+      "rawSha256": "bca28c2378feecf5118d9a2a0421aa89137a7aa615f96352933877f5f5e8be1e"
+    }
+  ],
+  "cleanup": {
+    "privateScratchRemoved": true
+  }
+}

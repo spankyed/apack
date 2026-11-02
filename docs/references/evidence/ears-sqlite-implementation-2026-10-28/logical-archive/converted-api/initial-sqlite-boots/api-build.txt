@@ -1,0 +1,51 @@
+
+> @app/api@0.0.0 build
+> tsc --noEmit && NODE_OPTIONS='--max-old-space-size=8192' tsup
+
+CLI Building entry: src/server.ts, src/types.ts
+CLI Using tsconfig: tsconfig.json
+CLI tsup v9.0.0
+CLI Using tsup config: /metrics/packages/api/tsup.config.ts
+CLI Target: es2022
+CLI Cleaning output folder
+ESM Build start
+CJS Build start
+DTS Build start
+ESM dist/dist-5QRNCISA.js       14.89 KB
+ESM dist/yaml-WNSCTUME.js       139.80 KB
+ESM dist/dist-7P43526L.js       119.03 KB
+ESM dist/prettier-ZODW2JF7.js   315.28 KB
+ESM dist/dist-35KVIIIM.js       175.75 KB
+ESM dist/dist-IPFJ7RFX.js       14.86 KB
+ESM dist/dist-O237HER7.js       146.79 KB
+ESM dist/dist-7RPHBQGE.js       19.61 KB
+ESM dist/estree-GHCWHZ6J.js     207.38 KB
+ESM dist/graphql-77TDA4PV.js    44.28 KB
+ESM dist/glimmer-ZFWH4YKZ.js    136.29 KB
+ESM dist/html-EW6WGQTV.js       165.19 KB
+ESM dist/meriyah-XDZAEFIO.js    123.32 KB
+ESM dist/postcss-X642T76K.js    154.95 KB
+ESM dist/types.js               228.00 B
+ESM dist/markdown-4JOQPB3M.js   285.41 KB
+ESM dist/token-util-HARECX4D.js 212.00 B
+ESM dist/token-ZOFKOOV7.js      1.36 KB
+ESM dist/chunk-VN3ZJJAQ.js      253.11 KB
+ESM dist/chunk-45EZNB64.js      67.12 KB
+ESM dist/chunk-I6C6FTJX.js      9.93 KB
+ESM dist/dist-2YWFAOGG.js       349.18 KB
+ESM dist/angular-M44Z35DC.js    129.80 KB
+ESM dist/acorn-7TOFGJJB.js      150.48 KB
+ESM dist/chunk-DJ3SO5VC.js      1.29 KB
+ESM dist/babel-4FFHWO3P.js      311.22 KB
+ESM dist/typescript-HODLWKV3.js 880.32 KB
+ESM dist/flow-T3G5DZZD.js       1.06 MB
+ESM dist/server.js              1.02 MB
+ESM ⚡️ Build success in 2084ms
+CJS dist/types.cjs  207.24 KB
+CJS dist/server.cjs 6.26 MB
+CJS ⚡️ Build success in 2086ms
+DTS ⚡️ Build success in 5138ms
+DTS dist/server.d.ts  13.00 B
+DTS dist/types.d.ts   6.85 KB
+DTS dist/server.d.cts 13.00 B
+DTS dist/types.d.cts  6.85 KB

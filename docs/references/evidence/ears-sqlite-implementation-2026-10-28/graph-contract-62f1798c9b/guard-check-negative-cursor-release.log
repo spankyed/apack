@@ -1,0 +1,67 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ❯ tests/sqlite/graph-execution.spec.ts (2 tests | 2 failed) 355ms
+   × SQLite graph execution > batches a width-16 frontier and closes an early-return cursor before the next write 202ms
+     → SQLite operation and rollback failed; close and reopen the database
+     → This database connection is busy executing a query
+   × SQLite graph execution > batches a width-256 frontier and closes an early-return cursor before the next write 151ms
+     → SQLite operation and rollback failed; close and reopen the database
+     → This database connection is busy executing a query
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/graph-execution.spec.ts > SQLite graph execution > batches a width-16 frontier and closes an early-return cursor before the next write
+ FAIL  tests/sqlite/graph-execution.spec.ts > SQLite graph execution > batches a width-256 frontier and closes an early-return cursor before the next write
+AggregateError: SQLite operation and rollback failed; close and reopen the database
+ ❯ SqliteDatabase.abortFailedOperation src/sqlite/database.ts:293:37
+    291|       if (command && this.sql.inTransaction) this.sql.exec(command);
+    292|     } catch (rollback) {
+    293|       const problem = Object.assign(new AggregateError([error, rollbac…
+       |                                     ^
+    294|         'SQLite operation and rollback failed; close and reopen the da…
+    295|         { code: (error as { code?: unknown })?.code });
+ ❯ SqliteDatabase.readSync src/sqlite/database.ts:1138:12
+ ❯ src/database.ts:392:78
+ ❯ crossing src/database.ts:155:12
+ ❯ src/database.ts:392:25
+ ❯ counting src/database.ts:351:24
+ ❯ read src/database.ts:389:14
+ ❯ Object.explain src/query.ts:306:29
+ ❯ tests/sqlite/graph-execution.spec.ts:33:64
+
+Caused by: TypeError: This database connection is busy executing a query
+ ❯ Database.exec ../../node_modules/better-sqlite3/lib/methods/wrappers.js:9:14
+ ❯ SqliteDatabase.readSync src/sqlite/database.ts:1135:30
+ ❯ src/database.ts:392:78
+ ❯ crossing src/database.ts:155:12
+ ❯ src/database.ts:392:25
+ ❯ counting src/database.ts:351:24
+ ❯ read src/database.ts:389:14
+ ❯ Object.explain src/query.ts:306:29
+ ❯ tests/sqlite/graph-execution.spec.ts:33:64
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/sqlite/graph-execution.spec.ts > SQLite graph execution > batches a width-16 frontier and closes an early-return cursor before the next write
+ FAIL  tests/sqlite/graph-execution.spec.ts > SQLite graph execution > batches a width-256 frontier and closes an early-return cursor before the next write
+TypeError: This database connection is busy executing a query
+ ❯ Database.close ../../node_modules/better-sqlite3/lib/methods/wrappers.js:14:14
+ ❯ SqliteDatabase.close src/sqlite/database.ts:1544:14
+    1542|     this.indexBuilds.releaseNativeMaintenance();
+    1543|     this.closeController.abort();
+    1544|     this.sql.close();
+       |              ^
+    1545|     this.opened = false;
+    1546|     this.tracks.clear();
+ ❯ tests/sqlite/graph-execution.spec.ts:12:51
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  16:54:56
+   Duration  1.29s (transform 425ms, setup 21ms, collect 621ms, tests 355ms, environment 0ms, prepare 63ms)
+
+JSON report written to /results/negative-cursor-release.json

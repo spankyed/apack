@@ -1,0 +1,22 @@
+[
+  {
+    "file": "integration.json",
+    "sha256": "bf89fc2054c2e5aed72337cf43caa8a267bd459b7440ed9ea2510be2425bb265",
+    "bytes": 18998
+  },
+  {
+    "file": "job.log",
+    "sha256": "d2c9c6520860b556a276b8802c59b22a80b61d55200f570cfbfc4244a5bf08e6",
+    "bytes": 137991
+  },
+  {
+    "file": "workflow.json",
+    "sha256": "063ab8d8c9afbc01e2e726c51f72553f8248be342383e5d9dfef0e2a7b5d1add",
+    "bytes": 7167
+  },
+  {
+    "file": "dispatch.json",
+    "sha256": "1e397a7a4dd18d14f83fe31183bdaa1ab76d709237184f4437d3b84acfd72ff8",
+    "bytes": 2013
+  }
+]

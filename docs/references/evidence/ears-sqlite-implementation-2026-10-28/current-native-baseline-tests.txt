@@ -1,0 +1,26 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+
+ ✓ tests/engine/writes.spec.ts (61 tests) 789ms
+ ✓ tests/engine/queries.spec.ts (26 tests) 621ms
+ ✓ tests/engine/relations.spec.ts (18 tests) 248ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 942ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 557ms
+ ↓ tests/engine/sqlite-operations.spec.ts (12 tests | 12 skipped)
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 281ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 44ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 145ms
+ ✓ tests/engine/search.spec.ts (7 tests) 89ms
+ ✓ tests/engine/calls.spec.ts (6 tests) 101ms
+ ✓ tests/engine/model-based.spec.ts (2 tests) 17764ms
+   ✓ refuses, holds and answers what the model does  5341ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  12422ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 105ms
+ ✓ tests/engines.spec.ts (4 tests) 61ms
+ ✓ tests/engine/query-values.spec.ts (2 tests) 39ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 24ms
+
+ Test Files  15 passed | 1 skipped (16)
+      Tests  221 passed | 12 skipped (233)
+   Start at  00:48:33
+   Duration  26.18s (transform 228ms, setup 32ms, collect 1.59s, tests 21.81s, environment 2ms, prepare 769ms)

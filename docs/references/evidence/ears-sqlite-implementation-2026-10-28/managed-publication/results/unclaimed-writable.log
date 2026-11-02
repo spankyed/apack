@@ -1,0 +1,81 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+ ❯ tests/backup/recovery.spec.ts (44 tests | 2 failed | 42 skipped) 597ms
+   ↓ restores both elmdb/1 stores and media, preserves forensic copies, and never replays completed recovery
+   ↓ restores both sqlite/1 stores and media, preserves forensic copies, and never replays completed recovery
+   ↓ resumes after interruption immediately following move-incumbent
+   ↓ resumes after interruption immediately following publish-incumbent
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=false) at 'complete'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=false) at 'move-incumbent'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=false) at 'publish-incumbent'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=true) at 'complete'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=true) at 'move-incumbent'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=true) at 'publish-incumbent'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'complete'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'move-incumbent'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'publish-incumbent'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'complete'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'move-incumbent'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'publish-incumbent'
+   ↓ parent aliases preserve managed reader exclusion for elmdb/1
+   ↓ parent aliases preserve managed reader exclusion for sqlite/1
+   ↓ does not admit foreign-parent as a recovery destination through an alias
+   ↓ does not admit different-leaf as a recovery destination through an alias
+   ↓ does not admit relative as a recovery destination through an alias
+   ↓ does not admit leaf-symlink as a recovery destination through an alias
+   ↓ restores the original absence of media
+   ↓ refuses a running app and another writer without staging or changing data
+   ↓ validates every incumbent before moving any live store
+   ↓ refuses a changed stage on resume and keeps the preparation
+   ↓ rejects path traversal, foreign profile destinations and mismatched format
+   ↓ excludes an open managed lmdb reader until it closes
+   ↓ excludes an open managed runHistory reader until it closes
+   ↓ refuses new readers during physical replacement and releases failed-open claims
+   ↓ refuses a managed open without writable metadata while direct read-only snapshots remain available
+   ↓ retains a managed handle claim when close fails (readOnly=true)
+   ↓ retains a managed handle claim when close fails (readOnly=false)
+   ↓ refuses unresolved reader ownership (invalid record)
+   ↓ refuses unresolved reader ownership ({"pid":37,"machine":"another-host","what":"reader","since":"now"})
+   × excludes writable elmdb/1 handles from physical recovery until close 143ms
+     → expected [Function] to throw an error
+   × excludes writable sqlite/1 handles from physical recovery until close 453ms
+     → expected [Function] to throw an error
+   ↓ refuses a new writable open during publication (readOnly=false)
+   ↓ refuses a new writable open during publication (readOnly=undefined)
+   ↓ a store-only publication excludes that store but permits an unrelated sibling handle
+   ↓ a store-only publication refuses claims whose database identity is unresolved
+   ↓ refuses managed database-leaf aliases before opening (readOnly=true)
+   ↓ refuses managed database-leaf aliases before opening (readOnly=false)
+   ↓ excludes physical directory identity even when its claim uses another leaf spelling
+ ↓ tests/database/storage.spec.ts (36 tests | 36 skipped)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/backup/recovery.spec.ts > excludes writable elmdb/1 handles from physical recovery until close
+ FAIL  tests/backup/recovery.spec.ts > excludes writable sqlite/1 handles from physical recovery until close
+AssertionError: expected [Function] to throw an error
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+undefined
+
+ ❯ tests/backup/recovery.spec.ts:263:64
+    261|     try {
+    262|       engine.create(type, { id: `${type}-held` });
+    263|       expect(() => restoreImportRecovery(f.target, f.session)).toThrow…
+       |                                                                ^
+    264|       expect(fs.existsSync(path.join(f.dir, 'restore-stage'))).toBe(fa…
+    265|       expect(engine.query(type).ids()).toContain(`${type}-held`);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed | 1 skipped (2)
+      Tests  2 failed | 78 skipped (80)
+   Start at  15:18:19
+   Duration  3.36s (transform 967ms, setup 23ms, collect 2.44s, tests 597ms, environment 0ms, prepare 102ms)
+
+JSON report written to /results/unclaimed-writable.json

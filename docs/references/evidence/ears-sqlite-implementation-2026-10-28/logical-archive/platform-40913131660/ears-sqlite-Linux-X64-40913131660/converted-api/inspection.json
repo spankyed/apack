@@ -1,0 +1,16 @@
+{
+  "source": "ab148afb550245d80cc2f11e5e4c604d6a4315ae",
+  "primary": {
+    "sequence": 6,
+    "label": "updated after API restart",
+    "typedAndLargeFieldsRetained": true,
+    "settingsRetained": true
+  },
+  "historyRetained": true,
+  "mediaSha256": "2f36a18044fe854573fe6b8f0ca00cf19e31a929c8cd0724e647a714f4c5e935",
+  "format": "sqlite/1",
+  "hashes": {
+    "primary": "50cd857982faa6b48fc18a29da031361cab342a1b2a815219bea533bf9f5ae07",
+    "runs": "929d13949c516440966e94f8f1e50e30c14f3a243de7652becae499106e3c7a6"
+  }
+}

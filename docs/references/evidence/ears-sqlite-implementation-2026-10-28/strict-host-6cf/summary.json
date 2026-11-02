@@ -1,0 +1,22 @@
+{
+  "source": "6cfdf32dad574f42799165efea332266154b2e2a",
+  "run": 41236766386,
+  "job": 124650366905,
+  "passed": 6893,
+  "failed": 1,
+  "skipped": 84,
+  "total": 6978,
+  "files": {
+    "passed": 599,
+    "failed": 1,
+    "skipped": 4,
+    "total": 604
+  },
+  "vitestSeconds": 528.52,
+  "chainSeconds": 830.8,
+  "cores": 2,
+  "failedCases": [
+    "@apackdev/ears  tests/engine/real-search-relevance.spec.ts > real repository-content search relevance > 'find generated metadata ownership'"
+  ],
+  "rawLogSha256": "ed200c18e8af8fad0b90b48c3d0387b49112e2709c3080c990afb5ef6fee062e"
+}

@@ -1,0 +1,10 @@
+import pathlib,subprocess,time,json
+r=pathlib.Path('/metrics');o=pathlib.Path('/results')
+p=subprocess.run(['npm','run','packages:build'],cwd=r,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(o/'packages-build.txt').write_text(p.stdout);assert p.returncode==0,p.stdout
+start=time.monotonic()
+try:
+ p=subprocess.run(['npm','run','typecheck:scripts'],cwd=r,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=60)
+ (o/'original-command.txt').write_text(p.stdout);v={'command':'npm run typecheck:scripts','budgetSeconds':60,'elapsedSeconds':time.monotonic()-start,'exitCode':p.returncode,'source':'78eff952020f813d7a25642aa4740a394ed71a5e'};assert p.returncode==0,p.stdout
+except subprocess.TimeoutExpired as e:
+ (o/'original-command.txt').write_bytes(e.stdout or b'');v={'command':'npm run typecheck:scripts','budgetSeconds':60,'elapsedSeconds':time.monotonic()-start,'timeout':True,'source':'78eff952020f813d7a25642aa4740a394ed71a5e'}
+(o/'result.json').write_text(json.dumps(v,indent=2)+'\n');print(json.dumps(v))

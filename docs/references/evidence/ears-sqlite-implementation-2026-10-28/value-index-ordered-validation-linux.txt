@@ -1,0 +1,123 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc npm run typecheck -w @apackdev/ears && npm test -w @apackdev/ears && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears && python3 .temp/index-builds-negative.py && mkdir -p .temp/index-admission-ordered && node --import tsx packages/apack-ears/bench/sqlite/admission.ts 10000 > .temp/index-admission-ordered/10000-smoke.json 2> .temp/index-admission-ordered/10000-smoke.stderr
+
+    Finished `release` profile [optimized] target(s) in 0.06s
+Published packages are out of date:
+  @apackdev/ears: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/query.ts
+  @apackdev/testing: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/query.ts
+  @apackdev/cli: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/query.ts
+Rebuilding 3 of 5
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+Built @apackdev/testing@0.1.0 into dist/package
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/compiler-pe-environment.ts:38:102:
+      38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+         ╵                                                     ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:19:42:
+      19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+         ╵                                           ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:61:48:
+      61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+         ╵                                            ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+Built @apackdev/cli@0.1.0 into dist/package
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ↓ tests/sqlite/index-builds.spec.ts (7 tests | 7 skipped)
+ ✓ tests/engine/model-based.spec.ts (2 tests) 20955ms
+   ✓ refuses, holds and answers what the model does  4652ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  16301ms
+ ↓ tests/engine/sqlite-operations.spec.ts (18 tests | 18 skipped)
+ ✓ tests/engine/queries.spec.ts (27 tests) 1133ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 982ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 729ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 248ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 161ms
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 111ms
+ ✓ tests/engine/storage-port.spec.ts (3 tests) 16ms
+ ↓ tests/sqlite/values.spec.ts (8 tests | 8 skipped)
+ ✓ tests/engine/calls.spec.ts (6 tests) 66ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 41ms
+ ✓ tests/engine/search.spec.ts (7 tests) 62ms
+ ↓ tests/sqlite/index.spec.ts (3 tests | 3 skipped)
+ ✓ tests/engine/query-values.spec.ts (5 tests) 35ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 116ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 24ms
+ ✓ tests/engines.spec.ts (4 tests) 35ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 16ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+
+ Test Files  17 passed | 4 skipped (21)
+      Tests  232 passed | 36 skipped (268)
+   Start at  09:11:18
+   Duration  28.73s (transform 398ms, setup 38ms, collect 1.58s, tests 24.73s, environment 2ms, prepare 836ms)
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/model-based.spec.ts (2 tests) 18766ms
+   ✓ refuses, holds and answers what the model does  4308ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  14456ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 1842ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  348ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  331ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  325ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  305ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 1406ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 937ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 911ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 484ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 115ms
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 289ms
+ ✓ tests/engine/calls.spec.ts (6 tests) 158ms
+ ✓ tests/engine/search.spec.ts (7 tests) 169ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 151ms
+ ✓ tests/engines.spec.ts (4 tests) 100ms
+ ✓ tests/engine/query-values.spec.ts (5 tests) 131ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 51ms
+ ✓ tests/engine/storage-port.spec.ts (3 tests) 69ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 45ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 3001ms
+   ✓ SQLite operational feasibility > replaces logical values when the source and destination have different physical field slots  337ms
+ ✓ tests/sqlite/index-builds.spec.ts (7 tests) 439ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 194ms
+ ✓ tests/sqlite/values.spec.ts (8 tests) 220ms
+
+ Test Files  21 passed (21)
+      Tests  268 passed (268)
+   Start at  09:11:47
+   Duration  33.31s (transform 393ms, setup 36ms, collect 1.50s, tests 29.48s, environment 2ms, prepare 802ms)
+
+{"rule": "partial-readiness", "path": "packages/apack-ears/src/sqlite/index-builds.ts", "before": "WHERE type=? AND field=? AND state='ready'", "after": "WHERE type=? AND field=? AND state IN ('ready','building')", "exit": 1, "output": "\n> @apackdev/ears@0.1.0 test\n> vitest run tests/sqlite/index-builds.spec.ts\n\n\n RUN  v3.2.7 /work/packages/apack-ears\n\n \u276f tests/sqlite/index-builds.spec.ts (7 tests | 2 failed) 598ms\n   \u00d7 yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes 76ms\n     \u2192 expected [] to deeply equal [ 'Row-149' ]\n   \u2713 yielding value-index admission > keeps a single-type fallback page in insertion order without sorting the entire candidate set 68ms\n   \u2713 yielding value-index admission > rolls back failed batches, reports failure, and resumes the committed cursor on reopen 46ms\n   \u2713 yielding value-index admission > cancels removed generations and collects them without deleting a replacement generation 69ms\n   \u00d7 yielding value-index admission > uses authoritative reads on a read-only reopen and never lets a stale builder fail a newer generation 92ms\n     \u2192 expected [] to deeply equal [ 'Row-149' ]\n   \u2713 yielding value-index admission > resumes a committed batch cursor after a real killed process 218ms\n   \u2713 yielding value-index admission > refuses competing foreground writers promptly and retries a busy backfill without failing its job 28ms\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes\nAssertionError: expected [] to deeply equal [ 'Row-149' ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- [\u001b[39m\n\u001b[32m-   \"Row-149\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ []\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:43:29\n     41|     expect(status(db)).toMatchObject({ state: 'building', afterSeq: 0 \u2026\n     42|     const ids = (slug: string) => e.query('Row').where('slug', slug).i\u2026\n     43|     expect(ids('slug-149')).toEqual(['Row-149']);\n       |                             ^\n     44|     expect(e.query('Row').where('slug', 'slug-149').explain()).toMatch\u2026\n     45|     expect(db.indexBuilds.step()).toBe('progress');\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[1/2]\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > uses authoritative reads on a read-only reopen and never lets a stale builder fail a newer generation\nAssertionError: expected [] to deeply equal [ 'Row-149' ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- [\u001b[39m\n\u001b[32m-   \"Row-149\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ []\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:124:97\n    122|     const reader = open(db.path, true);\n    123|     expect(reader.indexBuilds.step()).toBe('paused');\n    124|     expect(createEarsEngine({ database: reader }).query('Row').where('\u2026\n       |                                                                                                 ^\n    125|     reader.close();\n    126|     const resumed = open(db.path); finish(resumed);\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[2/2]\u23af\n\n\n Test Files  1 failed (1)\n      Tests  2 failed | 5 passed (7)\n   Start at  09:12:21\n   Duration  932ms (transform 166ms, setup 14ms, collect 203ms, tests 598ms, environment 0ms, prepare 39ms)\n\nnpm error Lifecycle script `test` failed with error:\nnpm error code 1\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c vitest run tests/sqlite/index-builds.spec.ts\n"}
+{"rule": "intervening-write", "path": "packages/apack-ears/src/sqlite/database.ts", "before": "if (generation !== undefined) this.refileValue(row, seq, field, generation, false);", "after": "if (generation !== undefined && this.indexBuilds.ready(row.entityType, field)) this.refileValue(row, seq, field, generation, false);", "exit": 1, "output": "\n> @apackdev/ears@0.1.0 test\n> vitest run tests/sqlite/index-builds.spec.ts\n\n\n RUN  v3.2.7 /work/packages/apack-ears\n\n \u276f tests/sqlite/index-builds.spec.ts (7 tests | 1 failed) 433ms\n   \u00d7 yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes 58ms\n     \u2192 expected [] to deeply equal [ 'Row-0' ]\n   \u2713 yielding value-index admission > keeps a single-type fallback page in insertion order without sorting the entire candidate set 26ms\n   \u2713 yielding value-index admission > rolls back failed batches, reports failure, and resumes the committed cursor on reopen 31ms\n   \u2713 yielding value-index admission > cancels removed generations and collects them without deleting a replacement generation 37ms\n   \u2713 yielding value-index admission > uses authoritative reads on a read-only reopen and never lets a stale builder fail a newer generation 28ms\n   \u2713 yielding value-index admission > resumes a committed batch cursor after a real killed process 225ms\n   \u2713 yielding value-index admission > refuses competing foreground writers promptly and retries a busy backfill without failing its job 28ms\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes\nAssertionError: expected [] to deeply equal [ 'Row-0' ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- [\u001b[39m\n\u001b[32m-   \"Row-0\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ []\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:62:35\n     60|     expect(ids('slug-0')).toEqual([]);\n     61|     expect(ids('slug-1')).toEqual([]);\n     62|     expect(ids('changed-behind')).toEqual(['Row-0']);\n       |                                   ^\n     63|     expect(ids('changed-ahead')).toEqual(['Row-149']);\n     64|     expect(ids('inserted-after-admission')).toEqual(['Row-new']);\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[1/1]\u23af\n\n\n Test Files  1 failed (1)\n      Tests  1 failed | 6 passed (7)\n   Start at  09:12:22\n   Duration  763ms (transform 162ms, setup 13ms, collect 202ms, tests 433ms, environment 0ms, prepare 40ms)\n\nnpm error Lifecycle script `test` failed with error:\nnpm error code 1\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c vitest run tests/sqlite/index-builds.spec.ts\n"}
+{"rule": "early-publish", "path": "packages/apack-ears/src/sqlite/index-builds.ts", "before": "const ready = processed === rows.length && rows.length < this.batchRows;", "after": "const ready = true;", "exit": 1, "output": "\n> @apackdev/ears@0.1.0 test\n> vitest run tests/sqlite/index-builds.spec.ts\n\n\n RUN  v3.2.7 /work/packages/apack-ears\n\n \u276f tests/sqlite/index-builds.spec.ts (7 tests | 5 failed) 352ms\n   \u00d7 yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes 51ms\n     \u2192 expected [] to deeply equal [ 'Row-149' ]\n   \u2713 yielding value-index admission > keeps a single-type fallback page in insertion order without sorting the entire candidate set 22ms\n   \u00d7 yielding value-index admission > rolls back failed batches, reports failure, and resumes the committed cursor on reopen 25ms\n     \u2192 expected [] to deeply equal [ 'Row-149' ]\n   \u00d7 yielding value-index admission > cancels removed generations and collects them without deleting a replacement generation 23ms\n     \u2192 expected [] to deeply equal [ 'Row-149' ]\n   \u00d7 yielding value-index admission > uses authoritative reads on a read-only reopen and never lets a stale builder fail a newer generation 22ms\n     \u2192 expected [] to deeply equal [ 'Row-149' ]\n   \u00d7 yielding value-index admission > resumes a committed batch cursor after a real killed process 184ms\n     \u2192 expected [] to deeply equal [ 'Row-149' ]\n   \u2713 yielding value-index admission > refuses competing foreground writers promptly and retries a busy backfill without failing its job 25ms\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 5 \u23af\u23af\u23af\u23af\u23af\u23af\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes\nAssertionError: expected [] to deeply equal [ 'Row-149' ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- [\u001b[39m\n\u001b[32m-   \"Row-149\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ []\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:48:29\n     46|     expect(status(db).afterSeq).toBeGreaterThan(0);\n     47|     expect(status(db).afterSeq).toBeLessThanOrEqual(db.indexBuilds.bat\u2026\n     48|     expect(ids('slug-149')).toEqual(['Row-149']);\n       |                             ^\n     49|     e.transact(() => {\n     50|       e.write('Row-0').set('slug', 'changed-behind');\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[1/5]\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > rolls back failed batches, reports failure, and resumes the committed cursor on reopen\nAssertionError: expected [] to deeply equal [ 'Row-149' ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- [\u001b[39m\n\u001b[32m-   \"Row-149\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ []\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:97:99\n     95|     const reopened = open(db.path); finish(reopened);\n     96|     expect(status(reopened).state).toBe('ready');\n     97|     expect(createEarsEngine({ database: reopened }).query('Row').where\u2026\n       |                                                                                                   ^\n     98|   });\n     99| \n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[2/5]\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > cancels removed generations and collects them without deleting a replacement generation\nAssertionError: expected [] to deeply equal [ 'Row-149' ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- [\u001b[39m\n\u001b[32m-   \"Row-149\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ []\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:111:60\n    109|     finish(db);\n    110|     expect(db.get('SELECT count(*) n FROM field_index WHERE field=? AN\u2026\n    111|     expect(e.query('Row').where('slug', 'slug-149').ids()).toEqual(['R\u2026\n       |                                                            ^\n    112|   });\n    113| \n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[3/5]\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > uses authoritative reads on a read-only reopen and never lets a stale builder fail a newer generation\nAssertionError: expected [] to deeply equal [ 'Row-149' ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- [\u001b[39m\n\u001b[32m-   \"Row-149\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ []\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:124:97\n    122|     const reader = open(db.path, true);\n    123|     expect(reader.indexBuilds.step()).toBe('paused');\n    124|     expect(createEarsEngine({ database: reader }).query('Row').where('\u2026\n       |                                                                                                 ^\n    125|     reader.close();\n    126|     const resumed = open(db.path); finish(resumed);\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[4/5]\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > resumes a committed batch cursor after a real killed process\nAssertionError: expected [] to deeply equal [ 'Row-149' ]\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- [\u001b[39m\n\u001b[32m-   \"Row-149\",\u001b[39m\n\u001b[32m- ]\u001b[39m\n\u001b[31m+ []\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:142:98\n    140|     expect(status(resumed).afterSeq).toBe(cursor.afterSeq);\n    141|     finish(resumed);\n    142|     expect(createEarsEngine({ database: resumed }).query('Row').where(\u2026\n       |                                                                                                  ^\n    143|   });\n    144| \n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[5/5]\u23af\n\n\n Test Files  1 failed (1)\n      Tests  5 failed | 2 passed (7)\n   Start at  09:12:23\n   Duration  680ms (transform 166ms, setup 12ms, collect 201ms, tests 352ms, environment 0ms, prepare 37ms)\n\nnpm error Lifecycle script `test` failed with error:\nnpm error code 1\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c vitest run tests/sqlite/index-builds.spec.ts\n"}
+{"rule": "atomic-batch", "path": "packages/apack-ears/src/sqlite/index-builds.ts", "before": "try { this.db.sql.exec('ROLLBACK'); }", "after": "try { /* mutation: leave partial batch writes */ }", "exit": 1, "output": "\n> @apackdev/ears@0.1.0 test\n> vitest run tests/sqlite/index-builds.spec.ts\n\n\n RUN  v3.2.7 /work/packages/apack-ears\n\n \u276f tests/sqlite/index-builds.spec.ts (7 tests | 1 failed) 376ms\n   \u2713 yielding value-index admission > admits without hydrating primary rows, falls back while partial, and reconciles intervening writes 57ms\n   \u2713 yielding value-index admission > keeps a single-type fallback page in insertion order without sorting the entire candidate set 22ms\n   \u00d7 yielding value-index admission > rolls back failed batches, reports failure, and resumes the committed cursor on reopen 27ms\n     \u2192 expected 2 to be +0 // Object.is equality\n   \u2713 yielding value-index admission > cancels removed generations and collects them without deleting a replacement generation 25ms\n   \u2713 yielding value-index admission > uses authoritative reads on a read-only reopen and never lets a stale builder fail a newer generation 25ms\n   \u2713 yielding value-index admission > resumes a committed batch cursor after a real killed process 191ms\n   \u2713 yielding value-index admission > refuses competing foreground writers promptly and retries a busy backfill without failing its job 28ms\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af\n\n FAIL  tests/sqlite/index-builds.spec.ts > yielding value-index admission > rolls back failed batches, reports failure, and resumes the committed cursor on reopen\nAssertionError: expected 2 to be +0 // Object.is equality\n\n\u001b[32m- Expected\u001b[39m\n\u001b[31m+ Received\u001b[39m\n\n\u001b[32m- 0\u001b[39m\n\u001b[31m+ 2\u001b[39m\n\n \u276f tests/sqlite/index-builds.spec.ts:92:125\n     90|     expect(db.indexBuilds.step()).toBe('failed');\n     91|     expect(status(db)).toMatchObject({ state: 'failed', afterSeq: 0, e\u2026\n     92|     expect(db.get('SELECT count(*) n FROM field_index WHERE field=? AN\u2026\n       |                                                                                                                             ^\n     93|     expect(e.query('Row').where('slug', 'slug-149').ids()).toEqual(['R\u2026\n     94|     db.close();\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[1/1]\u23af\n\n\n Test Files  1 failed (1)\n      Tests  1 failed | 6 passed (7)\n   Start at  09:12:24\n   Duration  707ms (transform 165ms, setup 11ms, collect 202ms, tests 376ms, environment 0ms, prepare 39ms)\n\nnpm error Lifecycle script `test` failed with error:\nnpm error code 1\nnpm error path /work/packages/apack-ears\nnpm error workspace @apackdev/ears@0.1.0\nnpm error location /work/packages/apack-ears\nnpm error command failed\nnpm error command sh -c vitest run tests/sqlite/index-builds.spec.ts\n"}

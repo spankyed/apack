@@ -1,0 +1,5 @@
+# Relevance component of the prespecified repeat
+
+The relevance job in [run 41508326544](https://github.com/spankyed/apack/actions/runs/41508326544) succeeds at `67ae01a3340c8df7dafb96f43aaa66a7bbc1e060`, a documentation-only descendant of implementation 93ed. Both SQLite keyword modes pass unchanged 25/25, hybrid usefulness/highlights pass 25/25 per backend, 125 contracts pass without exclusions, and four required actual-old-source AssertionErrors precede verified source restoration. Native keyword remains 24/25 as a separately recorded baseline diagnostic.
+
+Both maintained pure validators reproduce the original summaries byte-for-byte. Eight original numeric/provenance reports are gzip-preserved with decompressed SHA-256, plus minimized control/job hashes. No private payloads, identities, profiles, failure stacks or logs are copied. This job is the repeat's relevance component; its full corpus/model-variance job and whole strict are separate unfinished gates at this checkpoint. No new model-variance or completion claim follows from relevance alone.

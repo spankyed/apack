@@ -1,0 +1,56 @@
+
+> @apackdev/cli@0.1.0 pretest
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @apackdev/cli@0.1.0 test
+> vitest run tests/commands/db-logical.spec.ts tests/commands/backup.spec.ts tests/commands/db-rebuild.spec.ts tests/commands/db-output.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-cli
+
+ ❯ tests/commands/db-logical.spec.ts (8 tests | 1 failed) 4082ms
+   ✓ routes real dump/load commands, validates dry run, restores primary bytes and preserves media  1265ms
+   ✓ dumps and loads history alone without replacing or advancing primary  698ms
+   ✓ validates both selected inputs before replacing primary or history  1818ms
+   ✓ refuses all missing-history selections before creating an output archive 56ms
+   ✓ refuses existing and duplicate output paths before exporting any selected store 40ms
+   ✓ refuses output inside the source profile, including an existing parent alias 38ms
+   × refuses managed writer contention for dump and forced load without changing data 128ms
+     → expected [Function] to throw error including 'other writer' but got 'ENOENT: no such file or directory, op…'
+   ✓ requires explicit files and a named profile, and exposes both help entries 37ms
+ ✓ tests/commands/db-rebuild.spec.ts (9 tests) 1238ms
+ ✓ tests/commands/backup.spec.ts (1 test) 213ms
+ ✓ tests/commands/db-output.spec.ts (18 tests) 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/commands/db-logical.spec.ts > refuses managed writer contention for dump and forced load without changing data
+AssertionError: expected [Function] to throw error including 'other writer' but got 'ENOENT: no such file or directory, op…'
+
+Expected: [32m"other writer"[39m
+Received: [31m"ENOENT: no such file or directory, open '/tmp/apack-db-logical-n12EXA/primary.ears'"[39m
+
+ ❯ tests/commands/db-logical.spec.ts:89:5
+     87|   try {
+     88|     await expect(dbDump(['--data-dir', f.profile, '--primary', f.prima…
+     89|     await expect(dbLoad(['--data-dir', f.profile, '--primary', f.prima…
+       |     ^
+     90|   } finally { lock.release(); }
+     91|   expect(inspect(f)).toEqual(before); expect(fs.existsSync(f.primary))…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 35 passed (36)
+   Start at  14:38:14
+   Duration  8.99s (transform 1.06s, setup 23ms, collect 2.83s, tests 5.54s, environment 0ms, prepare 137ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-cli
+npm error workspace @apackdev/cli@0.1.0
+npm error location /metrics/packages/apack-cli
+npm error command failed
+npm error command sh -c vitest run tests/commands/db-logical.spec.ts tests/commands/backup.spec.ts tests/commands/db-rebuild.spec.ts tests/commands/db-output.spec.ts

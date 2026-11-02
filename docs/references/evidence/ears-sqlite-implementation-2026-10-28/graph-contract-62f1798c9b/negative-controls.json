@@ -1,0 +1,31 @@
+[
+  {
+    "control": "cursor-release",
+    "exitCode": 1,
+    "failedAssertions": [
+      "SQLite graph execution batches a width-16 frontier and closes an early-return cursor before the next write",
+      "SQLite graph execution batches a width-256 frontier and closes an early-return cursor before the next write"
+    ]
+  },
+  {
+    "control": "membership-invalidation",
+    "exitCode": 1,
+    "failedAssertions": [
+      "updates cross-type graph watches when a destination is trashed or restored"
+    ]
+  },
+  {
+    "control": "path-direction-order",
+    "exitCode": 1,
+    "failedAssertions": [
+      "graph boundary contracts breaks shortest-path ties by seed, kind, direction and insertion order"
+    ]
+  },
+  {
+    "control": "iterator-explain",
+    "exitCode": 1,
+    "failedAssertions": [
+      "SQLite operational feasibility bounds explain capture while counting every executed query statement"
+    ]
+  }
+]

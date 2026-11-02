@@ -1,0 +1,14 @@
+{
+  "candidate": "6c29f083f344a2ae4b373c82d0946011e1dbb3a5",
+  "harnessSha256": "055224bc23a084333ef273f2a4e87839cca8407e366759622f39ab6f219ea4f0",
+  "diagnosticOnly": true,
+  "controlWrites": 626,
+  "sourceFiles": {
+    "packages/apack-ears/src/sqlite/database.ts": "54a30a7c3c94538433c1a26f0efbc6fc4c97d3a4ad2e1ed0c1825daa23717617",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "82a7dfec52a7b2f7f00e3cbc70df1892ad3163e1e33f5d3748f022880780da38",
+    "packages/apack-ears/src/sqlite/index.ts": "5a221a00973c656d389eeb892c92ea25883a32d95d972bc7a09fe4c8b74e8b53",
+    "packages/apack-ears/src/sqlite/query.ts": "448f3929f46fa2d22d9458a41911149bb41230ccd60c25e819a1be2b6c579425",
+    "packages/apack-ears/src/sqlite/search.ts": "bbd20bd6dad3f3c05e1128b3cf6d712f418e53d41da1d6ab6565cf6723347701",
+    "packages/apack-ears/src/sqlite/values.ts": "7f4830264437c892451171cc32cd5e70b0eeade3b0852ed4b4eb76710d9528c6"
+  }
+}

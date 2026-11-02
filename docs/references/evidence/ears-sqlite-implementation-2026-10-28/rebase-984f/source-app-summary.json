@@ -1,0 +1,252 @@
+{
+  "run": 41257036820,
+  "source": "4a4b7df5e5c6348be26b3d57355db8fb438961c2",
+  "stats": {
+    "startTime": "2026-11-01T00:53:02.973Z",
+    "duration": 123753.348,
+    "expected": 33,
+    "skipped": 1,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "refuses API connections and reloads without the run token",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "subscribes to the bus again once the API it lost is restarted",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "answer the same verb identically",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "see each other writes, being one app",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "survive the connection going away, which is what a launch cannot",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "reads the running app's data and refuses to change it",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "a rebuilt built-in pack reloads with the content the rebuild changed",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "a surface setting changed in Settings reaches the feature's surface, once",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "a surface setting changed in Settings is what its canvas reads",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "a link to another surface opens it and hands it the events",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "previews a compiled content directory by its content.json and imports the selected items",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "adds, selects and stores API keys without the key strings reaching logs, files or renderer state",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "repairs invalid persisted settings in the app and starts packs only after reopening",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "source SQLite app opens both managed stores with persisted EARS identity",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "packaged SQLite stores hold their model claims across the real API process",
+      "status": "skipped",
+      "attempts": [
+        "skipped"
+      ]
+    },
+    {
+      "title": "the code system's file watcher and terminal output reach the code surface",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "a reloaded pack's browser surface restores what its system saved, asking as it starts",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "app launches without crashing",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "app reaches connected state",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "applicationState is accessible with surfaces loaded",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "runs in an isolated per-worker test data dir",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "publishes no session, though a test app has a debug port open",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "a reference in a stored thread message opens its note in another feature",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "inspect mode shows the brain's panel beside a surface that has none",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "host preferences and shortcuts work with default-setup disabled",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "the host-only editor preserves saved references without activating default-setup",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "an open editor follows installed pack activation without losing its draft",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "shortcut drafts follow another window and preserve the global flag",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "cold Monaco documents follow source-free declarations and share worker libraries",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "opens every surface, and every surface's settings, without a renderer error",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "an open feature form follows its settings being reset",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "pops a built-in surface out into its own window, which renders it",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "Settings Help searches bundled articles and opens feature help",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    },
+    {
+      "title": "unavailable help targets explain the problem and return to the index",
+      "status": "expected",
+      "attempts": [
+        "passed"
+      ]
+    }
+  ]
+}

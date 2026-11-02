@@ -1,0 +1,46 @@
+{
+  "file": ".github/workflows/app-acceptance.yml",
+  "sha256": "093b62cde52702fdb73415b294f491eda9295ce14310c135e39844b173ba51ac",
+  "parsed": true,
+  "repetitionCases": [
+    [
+      "1",
+      true
+    ],
+    [
+      "20",
+      true
+    ],
+    [
+      "0",
+      false
+    ],
+    [
+      "21",
+      false
+    ],
+    [
+      "1.5",
+      false
+    ],
+    [
+      "1; exit 0",
+      false
+    ]
+  ],
+  "installedUsesOrdinaryPreview": true,
+  "installedWitnessGuardCases": [
+    [
+      "passed",
+      true
+    ],
+    [
+      "missing-witness",
+      false
+    ],
+    [
+      "skipped",
+      false
+    ]
+  ]
+}

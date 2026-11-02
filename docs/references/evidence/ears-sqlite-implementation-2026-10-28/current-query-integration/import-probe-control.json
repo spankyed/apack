@@ -1,0 +1,7 @@
+{
+  "candidateSha256": "53cd145023f54a6b5fa71dd80fad5fe9f5ba2d9a6ecff19b1103a2228e5db05e",
+  "controlSha256": "c33e58ec6a9f1d85dd6a5c5598c27c12e3ed88cbc00b2966c43eb6adab982aa2",
+  "controlOnlyChange": "remove SQLite runtime import from test database factory; native selection and selected real tests unchanged; SQLite explicitly refused in control",
+  "order": "candidate, control, control, candidate",
+  "restored": true
+}

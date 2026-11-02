@@ -1,0 +1,46 @@
+{
+  "ears-strict-2cb-linux.log": {
+    "sha256": "7f5402043a6c547d7d56e8b97eb9e68f5a53c1f74d631cf2519c3f8086690bc4",
+    "bytes": 204040
+  },
+  "ears-strict-2cb-windows.log": {
+    "sha256": "9c4cbb7c6fa2415b5cf8fed4761cd24f6677cda00f50f8f95fbfbb01db07d681",
+    "bytes": 504968
+  },
+  "ears-private-file-gate-check.mjs": {
+    "sha256": "6e8bd427ff17e8df1325f02cb14813ce53778fc95c50b0695e3f1a5cff7eda1c",
+    "bytes": 1932
+  },
+  "ears-private-file-gate-check.json": {
+    "sha256": "d2c6422a0152236506b60e24c55f3e13193f43aa3ef07b21cd24f252d6ef62bb",
+    "bytes": 1091
+  },
+  "ears-sqlite-Linux-X64-41212565910--host.json": {
+    "sha256": "657430e89ff4fe728d0d58bacdf600a30218ec8cccc6ff93f6355594cb818ce4",
+    "bytes": 64216
+  },
+  "ears-sqlite-Linux-X64-41212565910--sdk-all-sqlite.json": {
+    "sha256": "e679f149cc2be11c0d7d6209ec0b6b1b296c9f2445f7dc1ad534883a56df82b4",
+    "bytes": 428790
+  },
+  "ears-sqlite-Linux-X64-41212565910--package-types.log": {
+    "sha256": "ff05428f92a869eb8c240c6c8d854f10505dca85d75ff0313d8998076595faab",
+    "bytes": 2363
+  },
+  "ears-sqlite-Linux-X64-41212565910--api-startup.json": {
+    "sha256": "9e4ea50e308b3bc677ae4c79c561ee3dec99b334398251a7a24514a90e123770",
+    "bytes": 2891
+  },
+  "ears-sqlite-Linux-X64-41212565910--ears.json": {
+    "sha256": "ceb22c5a5373dce622db9c9c317054cade42d00c02c9a744f09002956f4795e7",
+    "bytes": 262490
+  },
+  "ears-sqlite-Windows-X64-41212565910--host.json": {
+    "sha256": "77ef59abd8ee86d30c5ecde2ced884a5f5f10352bfb2ed7cab846dde8bbce3df",
+    "bytes": 64434
+  },
+  "ears-sqlite-Windows-X64-41212565910--ears.json": {
+    "sha256": "688d27004aae14cbf2d54ed868c5c7e07aea7a1f0469e9437d4c5fcd8e960ec7",
+    "bytes": 261532
+  }
+}

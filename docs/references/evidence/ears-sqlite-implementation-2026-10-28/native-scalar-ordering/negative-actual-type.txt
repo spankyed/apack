@@ -1,0 +1,63 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/query-cost.spec.ts -t stray row
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/query-cost.spec.ts (16 tests | 1 failed | 15 skipped) 211ms
+   ↓ SQLite ordering work > orders rank without loading unrelated bodies or issuing per-entity SQL
+   ↓ SQLite ordering work > orders sortText without loading unrelated bodies or issuing per-entity SQL
+   ↓ SQLite ordering work > preserves stable input order and duplicate ids across different physical type layouts
+   ↓ SQLite ordering work > orders actual scalar kinds from unchecked imports, with stable null and signed-zero ties
+   ↓ SQLite ordering work > retains pipeline scope and prior ordering on ties
+   ↓ SQLite ordering work > preserves decoder rounding of large integer ties ('max')
+   ↓ SQLite ordering work > preserves decoder rounding of large integer ties ('min')
+   ↓ SQLite ordering work > preserves corruption refusal: invalid cell
+   ↓ SQLite ordering work > preserves corruption refusal: missing primary
+   ↓ SQLite ordering work > keeps a fallback for embedded-NUL field names
+   ↓ SQLite ordering work > keeps sparse flexible keys and undeclared repair types in native scalar ordering
+   ↓ SQLite ordering work > falls back to decoder date clipping for fractional stored timestamps
+   ↓ SQLite ordering work > matches the ICU fallback on a mixed scalar corpus (asc)
+   ↓ SQLite ordering work > matches the ICU fallback on a mixed scalar corpus (desc)
+   × SQLite ordering work > ignores another type table's stray row but refuses a missing actual primary row 210ms
+     → expected [ 'Row-a', 'Other-b', 'Row-a' ] to deeply equal [ 'Row-a', 'Other-b' ]
+   ↓ SQLite ordering work > does not inspect another type's missing physical table for a selected or empty candidate set
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/query-cost.spec.ts > SQLite ordering work > ignores another type table's stray row but refuses a missing actual primary row
+AssertionError: expected [ 'Row-a', 'Other-b', 'Row-a' ] to deeply equal [ 'Row-a', 'Other-b' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "Row-a",[22m
+[2m    "Other-b",[22m
+[31m+   "Row-a",[39m
+[2m  ][22m
+
+ ❯ tests/sqlite/query-cost.spec.ts:158:49
+    156|     const other = db.values.layout('Other')!, slot = other.fields.get(…
+    157|     db.sql.exec(`INSERT INTO ${other.table}(entity_id,k${slot},v${slot…
+    158|     expect(e.query.all().orderBy('rank').ids()).toEqual(['Row-a', 'Oth…
+       |                                                 ^
+    159|     db.sql.exec(`DELETE FROM ${db.values.layout('Row')!.table}`);
+    160|     expect(() => e.query.all().orderBy('rank').ids()).toThrow(expect.o…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 skipped (16)
+   Start at  13:38:36
+   Duration  1.87s (transform 958ms, setup 21ms, collect 1.01s, tests 211ms, environment 0ms, prepare 447ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/query-cost.spec.ts -t 'stray row'

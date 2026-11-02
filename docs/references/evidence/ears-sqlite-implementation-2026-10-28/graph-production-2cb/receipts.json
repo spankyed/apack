@@ -1,0 +1,62 @@
+{
+  "ears-sqlite-api-41211950546--.temp--sqlite-api--graph-report.json": {
+    "sha256": "a65ce75a7bdd030feca0343bba74bcf00bce30cf9c6bca2d1cd22191cf560bcc",
+    "bytes": 725
+  },
+  "ears-sqlite-api-41211950546--.temp--sqlite-api--packages.log": {
+    "sha256": "c099cab8a272ca2c2ba462cb91651d543a034109238718021710ee3def977440",
+    "bytes": 13890
+  },
+  "ears-sqlite-api-41211950546--.temp--sqlite-api--elmdb.rev": {
+    "sha256": "b0db7326338a8ec8a0493285354e26272ea0ae0ca1faead6989866a530480de9",
+    "bytes": 41
+  },
+  "ears-sqlite-api-41211950546--.temp--sqlite-api--source.txt": {
+    "sha256": "b23d290e6f3b694115e3ae7186534e7084458891e76c5f87c8b1f45ed82074ad",
+    "bytes": 41
+  },
+  "ears-sqlite-api-41211950546--.temp--sqlite-api--graph-probe.log": {
+    "sha256": "e6dce5d7782876ebc17c3ffe1d613f3484fbda645e9e1d544c9fd3ccaec0e3df",
+    "bytes": 407
+  },
+  "ears-sqlite-api-41211950546--.temp--sqlite-api--check.log": {
+    "sha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "bytes": 458
+  },
+  "ears-sqlite-api-41211950546--.temp--sqlite-api--update.log": {
+    "sha256": "224f96c2041b05ba898aee0c6a8536e46c687fc36523272ce5a6ea26502306b2",
+    "bytes": 469
+  },
+  "ears-sqlite-api-41211950546--.temp--sqlite-api--reports.patch": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-api-41211950546--packages--apack-ears--etc--index.api.md": {
+    "sha256": "5e1c79104e7ebf80901725400f826b32a2c5b8c9807fa6f0c65941c2662d3c8b",
+    "bytes": 31095
+  },
+  "ears-sqlite-api-41211950546--packages--apack-ears--etc--lmdb.api.md": {
+    "sha256": "dcebf934aeef02e6d5384ac2aa70fba020c11de7f15d9838dcfecbba50883d3d",
+    "bytes": 689
+  },
+  "ears-sqlite-api-41211950546--packages--apack-ears--etc--sqlite.api.md": {
+    "sha256": "c011286ca87cee4b818e9f84b835f85a709cd47b0e7b59916935c9aab1709cab",
+    "bytes": 2629
+  },
+  "ears-graph-production-2cb-metadata.json": {
+    "sha256": "3d8897ef1ec09e6e32b6a24160a2aa29b67ac0a85c0b8e8e0ddac7bfe71f4f4b",
+    "bytes": 3798
+  },
+  "ears-installed-2cb-linux-failed.log": {
+    "sha256": "07e844f2bf9892d969d9ae287a4f6c85b2eb90f89f4cb39d0380b2debdb43a4a",
+    "bytes": 38371
+  },
+  "preview-failed--ears-installed-Linux-X64-41212950283--ears-installed-build--source.txt": {
+    "sha256": "b23d290e6f3b694115e3ae7186534e7084458891e76c5f87c8b1f45ed82074ad",
+    "bytes": 41
+  },
+  "preview-failed--ears-installed-Linux-X64-41212950283--ears-installed-build--build.log": {
+    "sha256": "c5a405a7823bee7c79c1083e53d6619888ce4c62967c13ce6265cc37442136f2",
+    "bytes": 1570
+  }
+}

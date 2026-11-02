@@ -1,0 +1,30 @@
+import os,pathlib,subprocess,json
+r=pathlib.Path('/metrics');o=pathlib.Path('/results');env=os.environ|{'EARS_EVALUATION_BACKEND':'sqlite'}
+def run(name,args):
+ p=subprocess.run(args,cwd=r,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(o/(name+'.txt')).write_text(p.stdout);return p
+p=run('types',['npm','run','typecheck','-w','@apackdev/ears']);assert p.returncode==0,p.stdout
+args=['npm','test','-w','@apackdev/ears','--','tests/engine/search.spec.ts','tests/sqlite/trigrams.spec.ts','tests/sqlite/regex.spec.ts','tests/engine/queries.spec.ts','tests/sqlite/query-cost.spec.ts']
+p=run('focused',args);assert p.returncode==0,p.stdout
+paths={name:r/('packages/apack-ears/src/sqlite/'+name+'.ts') for name in ['trigrams','query','regex']};original={name:p.read_text() for name,p in paths.items()}
+mutations=[
+ ('fts','trigrams','if (input.direct && matcher.literal !== undefined)','if (false)','uses FTS5'),
+ ('elements','trigrams',"value.filter(v => typeof v === 'string')", "[value.filter(v => typeof v === 'string').join('\\n\\n')]",'individual strings'),
+ ('fold','regex','b.containsFolded(value, folded)','b.contains(value, text)','individual strings'),
+ ('updates','trigrams','if (changed && !definition.fields.some(field => changed.has(field))) continue','if (changed) continue','keeps changed fields'),
+ ('cleanup','query','for (const close of cleanup.reverse()) close();','', 'releases every compiled'),
+ ('owner-index','trigrams','CREATE INDEX IF NOT EXISTS ${docs}_entity ON ${docs}(entity_id);','', 'uses FTS5'),
+]
+try:
+ for name,file,before,after,pattern in mutations:
+  assert before in original[file],name;paths[file].write_text(original[file].replace(before,after))
+  p=run('negative-'+name,['npm','test','-w','@apackdev/ears','--','tests/sqlite/trigrams.spec.ts','-t',pattern]);assert p.returncode!=0 and 'AssertionError' in p.stdout,(name,p.stdout)
+  paths[file].write_text(original[file])
+finally:
+ for file,p in paths.items():p.write_text(original[file])
+p=run('restored',args);assert p.returncode==0,p.stdout
+p=run('all-sqlite',['npm','test','-w','@apackdev/ears','--','--reporter=json','--outputFile=/results/sqlite.json']);assert p.returncode==0,p.stdout
+v=json.loads((o/'sqlite.json').read_text());print(json.dumps({'passed':v['numPassedTests'],'failed':v['numFailedTests']}))
+p=run('packages-build',['npm','run','packages:build']);assert p.returncode==0,p.stdout
+p=run('api',['npm','run','api:check','-w','@apackdev/ears']);assert p.returncode==0,p.stdout
+p=run('published-sdk',['npm','run','test:integration','-w','@app/publish-checks','--','tests/published-sdk-types.integration.spec.ts','-t','loads the SDK']);assert p.returncode==0,p.stdout
+p=run('packed-assets',['node','/package-probe.mjs']);assert p.returncode==0,p.stdout

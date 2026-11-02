@@ -1,0 +1,15 @@
+{
+  "trial": 1,
+  "seeded": true,
+  "appStatePresent": true,
+  "loaded": [
+    "default-setup"
+  ],
+  "view": {
+    "firstCommit": 4,
+    "changedCommit": 5,
+    "label": "updated through real pack",
+    "updates": 2
+  },
+  "settingsLeaseOpenedAndClosed": true
+}

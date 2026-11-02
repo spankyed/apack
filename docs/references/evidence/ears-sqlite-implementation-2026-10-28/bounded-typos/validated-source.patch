@@ -1,0 +1,115 @@
+diff --git a/packages/apack-ears/CLAUDE.md b/packages/apack-ears/CLAUDE.md
+index 6c9320f955..0ad39c919f 100644
+--- a/packages/apack-ears/CLAUDE.md
++++ b/packages/apack-ears/CLAUDE.md
+@@ -7,7 +7,7 @@ EARS, the entity-attribute-relation graph store behind apack's data: the engine,
+ - Published like `@apackdev/sdk`: each export in its `package.json` resolves `src/` under the `@apackdev/source` condition and `dist/` otherwise, and the build stages a derived manifest with no source branches under `publish/`, which is what npm publishes. Exports: `.` (the engine and its types) and `./lmdb` (opening elmdb databases). It's in the changesets fixed group (`.changeset/config.json`) and supports TypeScript 5.7 and later (`packages/typescript-floor`).
+ - The app-only `./sqlite` candidate uses pinned `better-sqlite3` and `sqlite-vec`; its scalar/overflow layout, query execution, and constructor live under `src/sqlite/`. `index-builds.ts` owns one persistent queue for value/text/trigram/vector generations. Value reads fall back to authoritative values before readiness; search reports `INDEX_BUILDING` or `INDEX_FAILED`. Owners may await `database.indexesReady()`. Readiness changes rerun watches on that handle without incrementing the logical commit. It is excluded from pack bridges and native storage imports are checked by `database-imports`. Normal app composition remains on elmdb until the SQLite goal is accepted.
+ - SQLite's `schema-validation.ts` validates declaration structure with per-owner Ajv and checks names/references/index compatibility before admission writes. Stored declarations validate before indexes load; malformed metadata refuses as `CORRUPT`. Unsupported lower-level rules refuse explicitly. Incumbent-dependent short-code changes are checked under writer ownership. This remains the candidate's temporary declaration translation; full app admission/IO qualification is tracked in the SQLite goal.
+-- SQLite `text.ts` owns per-source-string FTS documents and their generation-private owner lookup. SQL combines native clause matches by entity, so phrases stay in an element while ordinary AND may cross fields/elements. Original text supports whole identifiers; a derived camelCase/acronym column supports components and maps highlights back through insertion offsets. Per-field hashes keep a small changed field from rereading/replacing unrelated overflow text. The relevance corpus holds useful results; index growth, broader languages, fuzzy bounding and app latency still need qualification.
++- SQLite `text.ts` owns per-source-string FTS documents and their generation-private owner lookup. SQL combines native clause matches by entity, so phrases stay in an element while ordinary AND may cross fields/elements. Original text supports whole identifiers; a derived camelCase/acronym column supports components and maps highlights back through insertion offsets. Per-field hashes keep a small changed field from rereading/replacing unrelated overflow text. Typo alternatives derive only from folded ASCII query tokens of length 5–32 (one insertion/deletion/substitution/transposition); phrases and the final prefix term stay literal. FTS executes alternatives without a vocabulary scan. The relevance corpus holds useful results; index growth, broader languages, typo cost and app latency still need qualification.
+ - SQLite opens inspect physical search groups. Read-only opens refuse missing groups as `CORRUPT`; writable opens admit a fresh private generation and reconstruct only its search inputs through the shared queue. Healthy opens do not take writer ownership. Unchanged embeddings can be reused only with matching content/model/dimensions, and the last complete vector predecessor stays available until replacement readiness. `search-structures.ts` owns physical-object checks; FTS5 owns virtual-table destruction. Cooperative slices, FULL commits and WAL/disk budgets still need qualification.
+ 
+ - App-owned maintenance uses `EarsDatabase.withExclusiveWrites`: the async owner may await/nest writes, while other scopes on that handle receive `WRITE_PAUSED`; reads continue. Both adapters enforce it, including open units and close. Maintenance refuses an already open unit. `withoutWriteAuthority` removes that authority at watch/commit and host settings observer boundaries. `write-lease.ts` is app-only and imports `node:async_hooks`; the pure root entry does not. This is same-handle exclusion, not cross-process locking or atomic reads across stores.
+diff --git a/packages/apack-ears/src/runtime.ts b/packages/apack-ears/src/runtime.ts
+index fcd851ac40..d0c7345e20 100644
+--- a/packages/apack-ears/src/runtime.ts
++++ b/packages/apack-ears/src/runtime.ts
+@@ -139,7 +139,7 @@ export interface Embedding {
+ export interface SearchOptions<F extends string = string> {
+   /** The query's last word matches the words it starts, as a search box does while it is typed in */
+   prefix?: boolean;
+-  /** A word of five letters or more also matches one an edit away, nine or more two; on unless false */
++  /** Expand individual words using the backend's documented typo tolerance; on unless false. Phrases stay literal. */
+   fuzzy?: boolean;
+   /** Any of the query's clauses matching is enough, rather than every one */
+   any?: boolean;
+diff --git a/packages/apack-ears/src/sqlite/text.ts b/packages/apack-ears/src/sqlite/text.ts
+index e5c8e4b7e2..36fb6727e4 100644
+--- a/packages/apack-ears/src/sqlite/text.ts
++++ b/packages/apack-ears/src/sqlite/text.ts
+@@ -10,6 +10,24 @@ const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+ const fold = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+ const fail = (message: string): never => { throw Object.assign(new Error(message), { code: 'CORRUPT' }); };
+ 
++/** Query-derived work stays independent of indexed vocabulary; unsupported tokens retain literal matching. */
++function typoAlternatives(term: string): string[] {
++  if (!/^[a-z0-9]{5,32}$/.test(term)) return [];
++  const alternatives = new Set<string>(), alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
++  for (let i = 0; i <= term.length; i++) {
++    const before = term.slice(0, i), after = term.slice(i);
++    for (const letter of alphabet) {
++      alternatives.add(before + letter + after);
++      if (i < term.length && letter !== term[i]) alternatives.add(before + letter + after.slice(1));
++    }
++    if (i < term.length) alternatives.add(before + after.slice(1));
++    if (i + 1 < term.length && term[i] !== term[i + 1])
++      alternatives.add(before + term[i + 1] + term[i] + term.slice(i + 2));
++  }
++  alternatives.delete(term);
++  return [...alternatives];
++}
++
+ /** Only insert spaces; original UTF-16 offsets are recovered by subtracting preceding insertions. */
+ function identifierParts(source: string): { text: string; spaces: number[] } {
+   const cuts = [...source.matchAll(/(?:\p{Ll}|\p{N})(?=\p{Lu})|\p{Lu}(?=\p{Lu}\p{Ll})/gu)]
+@@ -50,17 +68,16 @@ export class SqliteText {
+   constructor(db: SqliteDatabase) { this.db = db; }
+   structure(job: SqliteIndexJob): SqliteSearchStructure {
+     const table = searchTable(job);
+-    return { types: [job.type], indexes: [job], objects: [['table', table], ['table', table + '_vocab'],
++    return { types: [job.type], indexes: [job], objects: [['table', table],
+       ['table', table + '_docs'], ['index', table + '_docs_entity'],
+       ...['data', 'idx', 'content', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const)],
+-      reset: `DROP TABLE IF EXISTS ${table}_vocab; DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;` };
++      reset: `DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;` };
+   }
+   ensure(job: SqliteIndexJob): void {
+     const table = searchTable(job), index = job.definition;
+     if (index.stem && index.stem !== 'en') throw Object.assign(new Error('SQLite text indexes support English stemming only'), { code: 'UNSUPPORTED' });
+     this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,
+       tokenize='${index.stem ? 'porter ' : ''}unicode61 remove_diacritics 2');
+-      CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},col);
+       CREATE TABLE IF NOT EXISTS ${table}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL);
+       CREATE UNIQUE INDEX IF NOT EXISTS ${table}_docs_entity ON ${table}_docs(entity_id,field,element);`);
+   }
+@@ -119,16 +136,6 @@ export class SqliteText {
+     const nativeLimit = recency && !nativeRecency ? undefined : limit;
+     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
+     if (!tokens.length) return [];
+-    const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT DISTINCT term FROM ${table}_vocab WHERE col IN ('body','aliases')`).map(row => String(row.term));
+-    const distance = (a: string, b: string): number => {
+-      let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+-      for (let i = 1; i <= a.length; i++) {
+-        const row = [i];
+-        for (let j = 1; j <= b.length; j++) row[j] = Math.min(row[j - 1]! + 1, prev[j]! + 1, prev[j - 1]! + Number(a[i - 1] !== b[j - 1]));
+-        prev = row;
+-      }
+-      return prev[b.length]!;
+-    };
+     const clauses: Clause[] = [], groups: number[][] = [[]];
+     for (const [position, rawToken] of tokens.entries()) {
+       if (rawToken === 'OR') { if (groups.at(-1)!.length) groups.push([]); continue; }
+@@ -138,9 +145,8 @@ export class SqliteText {
+       if (colon >= 0) token = token.slice(colon + 1);
+       const phrase = token.startsWith('"'), raw = token.replace(/^"|"$/g, ''), normalized = fold(raw);
+       if (!normalized) continue;
+-      const max = normalized.length >= 9 ? 2 : normalized.length >= 5 ? 1 : 0;
+-      const expanded = !phrase && max ? vocabulary.filter(term => Math.abs(term.length - normalized.length) <= max && distance(term, normalized) <= max) : [];
+       const prefix = options.prefix && !phrase && position === tokens.length - 1 ? '*' : '';
++      const expanded = !phrase && !prefix && options.fuzzy !== false ? typoAlternatives(normalized) : [];
+       const words = prefix || phrase ? [raw] : [...new Set([raw, ...expanded])];
+       const match = words.map(word => `(body : ${quote(word)}${prefix} OR aliases : ${quote(identifierParts(word).text || word)}${prefix})`).join(' OR ');
+       const selected = (field === undefined ? fields : [field]).filter(f => !options.fields?.length || options.fields.includes(f))
+diff --git a/packages/apack-ears/tests/sqlite/search-recovery.spec.ts b/packages/apack-ears/tests/sqlite/search-recovery.spec.ts
+index cc79df7eac..c71cc6d8e2 100644
+--- a/packages/apack-ears/tests/sqlite/search-recovery.spec.ts
++++ b/packages/apack-ears/tests/sqlite/search-recovery.spec.ts
+@@ -39,7 +39,6 @@ const components: Array<[string, 'TABLE' | 'INDEX' | 'TRIGGER', (text: string, t
+   ['trigram owner index', 'INDEX', (_t, g) => g + '_docs_entity'],
+   ...['ai', 'ad', 'au'].map(suffix => ['trigram trigger ' + suffix, 'TRIGGER', (_t: string, g: string) => g + '_docs_' + suffix] as typeof components[number]),
+   ['text table', 'TABLE', t => t],
+-  ['text vocabulary', 'TABLE', t => t + '_vocab'],
+   ['text documents', 'TABLE', t => t + '_docs'],
+   ['text owner index', 'INDEX', t => t + '_docs_entity'],
+   ['text metadata', 'TABLE', () => 'text_meta'],

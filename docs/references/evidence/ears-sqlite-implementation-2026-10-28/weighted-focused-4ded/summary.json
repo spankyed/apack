@@ -1,0 +1,155 @@
+{
+  "run": 41249427239,
+  "source": "4ded696f7996df36d40486b61bedc34461d972ba",
+  "master": "8e2d334e2b1be72a17f010713f4f55589c389977",
+  "native": "1849f6899e3d707ac8e25e7f81fa52b472b2a9a0",
+  "reports": {
+    "sqlite-contracts.json": {
+      "passed": 230,
+      "failed": 1,
+      "pending": 0,
+      "rawSha256": "3fe1a7767ae20542da12a783c6d9ba00701b80351f363a2703d2dc46e1a0b94e",
+      "weightedCases": [
+        {
+          "name": "weighted kinds a link takes a weight, 1 unless given, and rows of a weighted kind answer it",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds refuses a weight outside 0 to 2^960 and a weight on a kind not declared weighted",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds a unique kind relinked takes the new weight; another kind adds an edge whose weight a rank adds to the first",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds updateRelation replaces a weight, with or without a move, and the admin face loads one",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds settles rank watches after committed weight changes and rolls back nested weight edits",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds rank walks and teleports by weight unless told not to, and EXPLAIN reports the weight it read",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds communities count each edge by its weight unless told not to",
+          "status": "passed"
+        },
+        {
+          "name": "restored logical stores preserves dormant weight bytes through a logical round trip and restores their meaning on redeclaration",
+          "status": "passed"
+        }
+      ],
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    "elmdb-contracts.json": {
+      "passed": 195,
+      "failed": 1,
+      "pending": 35,
+      "rawSha256": "8fad515cf8f6faad408a8bdf4f2c607685f20d41469d865ce51f66625452e7b8",
+      "weightedCases": [
+        {
+          "name": "weighted kinds a link takes a weight, 1 unless given, and rows of a weighted kind answer it",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds refuses a weight outside 0 to 2^960 and a weight on a kind not declared weighted",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds a unique kind relinked takes the new weight; another kind adds an edge whose weight a rank adds to the first",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds updateRelation replaces a weight, with or without a move, and the admin face loads one",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds settles rank watches after committed weight changes and rolls back nested weight edits",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds rank walks and teleports by weight unless told not to, and EXPLAIN reports the weight it read",
+          "status": "passed"
+        },
+        {
+          "name": "weighted kinds communities count each edge by its weight unless told not to",
+          "status": "passed"
+        },
+        {
+          "name": "restored logical stores preserves dormant weight bytes through a logical round trip and restores their meaning on redeclaration",
+          "status": "skipped"
+        }
+      ],
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    "native-routing.json": {
+      "passed": 1,
+      "failed": 0,
+      "pending": 35,
+      "rawSha256": "96756e1bf62a67ab0b39012a40e825b0b0c1ac7160007e8ca1a9684f20891313",
+      "weightedCases": [],
+      "failures": []
+    },
+    "lost-ack/report.json": {
+      "completed": true,
+      "rawSha256": "31ea316f6b076ccb9f146c8a4269309e636854d24edfc58a4c6984f35fd62e22",
+      "operations": [
+        {
+          "operation": "write",
+          "passed": true
+        },
+        {
+          "operation": "unit",
+          "passed": true
+        },
+        {
+          "operation": "bulkLoad",
+          "passed": true
+        },
+        {
+          "operation": "schema",
+          "passed": true
+        },
+        {
+          "operation": "disabled-control",
+          "passed": true
+        }
+      ]
+    },
+    "sync-error-no-close/report.json": {
+      "completed": true,
+      "rawSha256": "d44dcff048b374084e4e2ba7a21502ca00e838600de7edaaaf699bd3df7dfcba",
+      "operations": [
+        {
+          "operation": "write",
+          "passed": true
+        },
+        {
+          "operation": "unit",
+          "passed": true
+        },
+        {
+          "operation": "bulkLoad",
+          "passed": true
+        },
+        {
+          "operation": "schema",
+          "passed": true
+        },
+        {
+          "operation": "disabled-control",
+          "passed": true
+        }
+      ]
+    }
+  },
+  "apiPatchBytes": 0
+}

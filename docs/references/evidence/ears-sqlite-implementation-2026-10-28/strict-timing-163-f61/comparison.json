@@ -1,0 +1,51 @@
+{
+  "scope": "Original per-file progress diagnostics; overlapping worker totals are not wall time or exclusive CPU. Timing differences do not prove a code regression or host attribution.",
+  "receipts": [
+    {
+      "source": "16378a24db8463584dbe9fd4a1eb1a4d6c57ca48",
+      "rawSha256": "1a51b4ffb1dafe558e2ce78cdb03e45be61e876ef7bb84c2d717f8dac05f4432",
+      "endedFiles": 612,
+      "queuedFiles": 612
+    },
+    {
+      "source": "f61acd3c7db33ffcc6c4f313efbf7a9a9be60173",
+      "rawSha256": "b428224fc470e48eac2d6e43592b8396f5d8615a3ee4d73b2363fcb7ae426a48",
+      "endedFiles": 517,
+      "queuedFiles": 519
+    }
+  ],
+  "commonEndedFiles": 517,
+  "commonTotals": {
+    "duration": {
+      "baselineMs": 540652.730507,
+      "laterMs": 615742.2540510002,
+      "ratio": 1.138886792402925
+    },
+    "collectDuration": {
+      "baselineMs": 315452.99034799985,
+      "laterMs": 375612.48636099993,
+      "ratio": 1.1907082762050651
+    },
+    "setupDuration": {
+      "baselineMs": 2364.3348810000025,
+      "laterMs": 2694.1260880000036,
+      "ratio": 1.1394858273463
+    },
+    "environmentSetupDuration": {
+      "baselineMs": 94.58282399999982,
+      "laterMs": 111.9468880000008,
+      "ratio": 1.1835858062347664
+    },
+    "prepareDuration": {
+      "baselineMs": 41074.73026900001,
+      "laterMs": 50877.32916999993,
+      "ratio": 1.2386527881449816
+    }
+  },
+  "baselineFailedModules": [
+    {
+      "project": "@apackdev/ears",
+      "file": "tests/engine/real-search-relevance.spec.ts"
+    }
+  ]
+}

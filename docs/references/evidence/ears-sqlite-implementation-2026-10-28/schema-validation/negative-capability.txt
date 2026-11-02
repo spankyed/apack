@@ -1,0 +1,86 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/schema-validation.spec.ts -t relation cardinality
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/schema-validation.spec.ts (49 tests | 1 failed | 48 skipped) 215ms
+   ↓ SQLite structural schema admission > refuses 'language' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'unknown root option' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'array type map' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'null type' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'unknown type option' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'invalid field name' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'reserved field' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'invalid field kind' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'unknown field option' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'nonboolean optional' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'empty enum' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'repeated enum' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'empty reference' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'undeclared reference' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'nested undeclared reference' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'list with no element rule' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'nested nullable flag' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'invalid role name' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'null role' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'invalid relation name' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'nonboolean relation flag' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'undeclared endpoint' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'invalid prefix' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'duplicate prefix' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'unknown index kind' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'engine index name' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'undeclared indexed field' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'unindexable value field' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'zero text weight' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'nontext text source' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'vector with no dimensions' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'blank model' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'extra-field refusal' before changing data, layouts, indexes or revision
+   × SQLite structural schema admission > refuses 'relation cardinality' before changing data, layouts, indexes or revision 213ms
+     → expected function to throw an error, but it didn't
+   ↓ SQLite structural schema admission > refuses 'relation endpoints' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'typed relation info' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'exact text analyzer' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'non-English stemming' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > refuses 'non-cosine vector' before changing data, layouts, indexes or revision
+   ↓ SQLite structural schema admission > checks malformed declarations against the pinned native parser
+   ↓ SQLite structural schema admission > accepts nested supported values and preserves declaration inputs
+   ↓ SQLite structural schema admission > refuses non-JSON declaration metadata: undefined
+   ↓ SQLite structural schema admission > refuses non-JSON declaration metadata: NaN
+   ↓ SQLite structural schema admission > refuses non-JSON declaration metadata: Wed Oct 28 2026 14:25:18 GMT+0000 (Coordinated Universal Time)
+   ↓ SQLite structural schema admission > refuses non-JSON declaration metadata: 1
+   ↓ SQLite structural schema admission > refuses cyclic declarations with a schema error
+   ↓ SQLite structural schema admission > refuses malformed persisted declarations before loading indexes, readOnly=false
+   ↓ SQLite structural schema admission > refuses malformed persisted declarations before loading indexes, readOnly=true
+   ↓ SQLite structural schema admission > uses the admitted locale for ICU text ordering
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/schema-validation.spec.ts > SQLite structural schema admission > refuses 'relation cardinality' before changing data, layouts, indexes or revision
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/sqlite/schema-validation.spec.ts:80:38
+     78|     const before = { schema: db.schema, sequence: db.sequence, objects…
+     79|     const next = raw(); next.types.Added = { fields: { fresh: { type: …
+     80|     expect(() => db.setSchema(next)).toThrow(expect.objectContaining({…
+       |                                      ^
+     81|     expect(db.schema).toEqual(before.schema); expect(db.sequence).toBe…
+     82|     expect(db.all('SELECT type,name,sql FROM sqlite_schema ORDER BY ty…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 48 skipped (49)
+   Start at  14:25:18
+   Duration  828ms (transform 300ms, setup 30ms, collect 395ms, tests 215ms, environment 0ms, prepare 50ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/schema-validation.spec.ts -t 'relation cardinality'

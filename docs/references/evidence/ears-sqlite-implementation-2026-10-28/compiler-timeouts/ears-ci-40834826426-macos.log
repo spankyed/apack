@@ -1,0 +1,1080 @@
+check	Set up job	﻿2026-10-29T07:20:46.0782790Z Current runner version: '2.338.0'
+check	Set up job	2026-10-29T07:20:46.0805360Z ##[group]Runner Image Provisioner
+check	Set up job	2026-10-29T07:20:46.0806080Z Hosted Compute Agent
+check	Set up job	2026-10-29T07:20:46.0806910Z Version: 20261021.618
+check	Set up job	2026-10-29T07:20:46.0808040Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+check	Set up job	2026-10-29T07:20:46.0809380Z Build Date: 2026-10-21T00:45:21Z
+check	Set up job	2026-10-29T07:20:46.0810320Z Worker ID: {c619f2de-09e6-47e5-906d-744a93e0386f}
+check	Set up job	2026-10-29T07:20:46.0811720Z Region: westus
+check	Set up job	2026-10-29T07:20:46.0812150Z Cloud: MacCloud
+check	Set up job	2026-10-29T07:20:46.0812540Z ##[endgroup]
+check	Set up job	2026-10-29T07:20:46.0813890Z ##[group]Operating System
+check	Set up job	2026-10-29T07:20:46.0814300Z macOS
+check	Set up job	2026-10-29T07:20:46.0814650Z 26.6.2
+check	Set up job	2026-10-29T07:20:46.0815060Z 25G83
+check	Set up job	2026-10-29T07:20:46.0815440Z ##[endgroup]
+check	Set up job	2026-10-29T07:20:46.0815820Z ##[group]Runner Image
+check	Set up job	2026-10-29T07:20:46.0816220Z Image: macos-26-arm64
+check	Set up job	2026-10-29T07:20:46.0816620Z Version: 20261021.0445.8
+check	Set up job	2026-10-29T07:20:46.0817380Z Included Software: https://github.com/actions/runner-images/blob/macos-26-arm64/20261021.0445/images/macos/macos-26-arm64-Readme.md
+check	Set up job	2026-10-29T07:20:46.0818610Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-26-arm64%2F20261021.0445
+check	Set up job	2026-10-29T07:20:46.0819300Z ##[endgroup]
+check	Set up job	2026-10-29T07:20:46.0820100Z ##[group]GITHUB_TOKEN Permissions
+check	Set up job	2026-10-29T07:20:46.0821730Z Contents: read
+check	Set up job	2026-10-29T07:20:46.0822110Z Metadata: read
+check	Set up job	2026-10-29T07:20:46.0822490Z ##[endgroup]
+check	Set up job	2026-10-29T07:20:46.0824060Z Secret source: Actions
+check	Set up job	2026-10-29T07:20:46.0824660Z Cache mode: write
+check	Set up job	2026-10-29T07:20:46.0825150Z Prepare workflow directory
+check	Set up job	2026-10-29T07:20:46.1116080Z Prepare all required actions
+check	Set up job	2026-10-29T07:20:46.1154340Z Getting action download info
+check	Set up job	2026-10-29T07:20:46.5076160Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+check	Set up job	2026-10-29T07:20:46.7248170Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+check	Set up job	2026-10-29T07:20:46.8307250Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+check	Set up job	2026-10-29T07:20:47.0477470Z Complete job name: check
+check	Run actions/checkout@v4	﻿2026-10-29T07:20:47.1166160Z ##[group]Run actions/checkout@v4
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1166730Z with:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1167060Z   repository: spankyed/apack
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1169690Z   token: ***
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1170160Z   ssh-strict: true
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1170520Z   ssh-user: git
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1170840Z   persist-credentials: true
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1171200Z   clean: true
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1171530Z   sparse-checkout-cone-mode: true
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1171900Z   fetch-depth: 1
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1172220Z   fetch-tags: false
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1172550Z   show-progress: true
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1172880Z   lfs: false
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1173190Z   submodules: false
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1173520Z   set-safe-directory: true
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1173890Z   allow-unsafe-pr-checkout: false
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1174380Z env:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1174690Z   APACK_CHAIN_CORES: 2
+check	Run actions/checkout@v4	2026-10-29T07:20:47.1175030Z ##[endgroup]
+check	Run actions/checkout@v4	2026-10-29T07:20:47.4790700Z Syncing repository: spankyed/apack
+check	Run actions/checkout@v4	2026-10-29T07:20:47.4792790Z ##[group]Getting Git version info
+check	Run actions/checkout@v4	2026-10-29T07:20:47.4793520Z Working directory is '/Users/runner/work/apack/apack'
+check	Run actions/checkout@v4	2026-10-29T07:20:47.4794450Z [command]/opt/homebrew/bin/git version
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5041060Z git version 2.56.0
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5053880Z ##[endgroup]
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5060530Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/8d849315-113a-45a3-93af-f37055341fc5/.gitconfig'
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5067610Z Temporarily overriding HOME='/Users/runner/work/_temp/8d849315-113a-45a3-93af-f37055341fc5' before making global git config changes
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5068810Z Adding repository directory to the temporary git global config as a safe directory
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5070250Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/apack/apack
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5175110Z Deleting the contents of '/Users/runner/work/apack/apack'
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5194790Z ##[group]Initializing the repository
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5195470Z [command]/opt/homebrew/bin/git init /Users/runner/work/apack/apack
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5381120Z hint: Using 'master' as the name for the initial branch. This default branch name
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5382310Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5383220Z hint: to use in all of your new repositories, which will suppress this warning,
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5383830Z hint: call:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5384190Z hint:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5384630Z hint: 	git config --global init.defaultBranch <name>
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5385160Z hint:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5385770Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5386540Z hint: 'development'. The just-created branch can be renamed via this command:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5387160Z hint:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5387740Z hint: 	git branch -m <name>
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5388250Z hint:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5388830Z hint: Disable this message with "git config set advice.defaultBranchName false"
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5391580Z Initialized empty Git repository in /Users/runner/work/apack/apack/.git/
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5399320Z [command]/opt/homebrew/bin/git remote add origin https://github.com/spankyed/apack
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5494960Z ##[endgroup]
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5495890Z ##[group]Disabling automatic garbage collection
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5496620Z [command]/opt/homebrew/bin/git config --local gc.auto 0
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5545220Z ##[endgroup]
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5547070Z ##[group]Setting up auth
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5549060Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+check	Run actions/checkout@v4	2026-10-29T07:20:47.5617820Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+check	Run actions/checkout@v4	2026-10-29T07:20:47.6510100Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+check	Run actions/checkout@v4	2026-10-29T07:20:47.6571250Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+check	Run actions/checkout@v4	2026-10-29T07:20:47.7335640Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+check	Run actions/checkout@v4	2026-10-29T07:20:47.7399360Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+check	Run actions/checkout@v4	2026-10-29T07:20:47.8196010Z [command]/opt/homebrew/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+check	Run actions/checkout@v4	2026-10-29T07:20:47.8266620Z ##[endgroup]
+check	Run actions/checkout@v4	2026-10-29T07:20:47.8267410Z ##[group]Fetching the repository
+check	Run actions/checkout@v4	2026-10-29T07:20:47.8274500Z [command]/opt/homebrew/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614:refs/remotes/origin/session/ears-sqlite
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0072250Z From https://github.com/spankyed/apack
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0073290Z  * [new ref]         e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614 -> origin/session/ears-sqlite
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0075340Z ##[endgroup]
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0075740Z ##[group]Determining the checkout info
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0077300Z ##[endgroup]
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0081640Z [command]/opt/homebrew/bin/git sparse-checkout disable
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0159200Z [command]/opt/homebrew/bin/git config --local --unset-all extensions.worktreeConfig
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0221060Z ##[group]Checking out the ref
+check	Run actions/checkout@v4	2026-10-29T07:20:50.0224030Z [command]/opt/homebrew/bin/git checkout --progress --force -B session/ears-sqlite refs/remotes/origin/session/ears-sqlite
+check	Run actions/checkout@v4	2026-10-29T07:20:50.7005750Z Switched to a new branch 'session/ears-sqlite'
+check	Run actions/checkout@v4	2026-10-29T07:20:50.7039740Z branch 'session/ears-sqlite' set up to track 'origin/session/ears-sqlite'.
+check	Run actions/checkout@v4	2026-10-29T07:20:50.7069340Z ##[endgroup]
+check	Run actions/checkout@v4	2026-10-29T07:20:50.7150860Z [command]/opt/homebrew/bin/git log -1 --format=%H
+check	Run actions/checkout@v4	2026-10-29T07:20:50.7243140Z e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614
+check	Run actions/setup-node@v4	﻿2026-10-29T07:20:50.7548130Z ##[group]Run actions/setup-node@v4
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7548440Z with:
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7548590Z   node-version: 23.11.1
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7548750Z   cache: npm
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7548940Z   always-auth: false
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7549140Z   check-latest: false
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7551520Z   token: ***
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7551660Z env:
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7551790Z   APACK_CHAIN_CORES: 2
+check	Run actions/setup-node@v4	2026-10-29T07:20:50.7551950Z ##[endgroup]
+check	Run actions/setup-node@v4	2026-10-29T07:20:51.0761720Z Attempting to download 23.11.1...
+check	Run actions/setup-node@v4	2026-10-29T07:20:51.3148260Z (node:1180) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+check	Run actions/setup-node@v4	2026-10-29T07:20:51.3197110Z (Use `node --trace-deprecation ...` to show where the warning was created)
+check	Run actions/setup-node@v4	2026-10-29T07:20:52.1093650Z Not found in manifest. Falling back to download directly from Node
+check	Run actions/setup-node@v4	2026-10-29T07:20:52.1467500Z Acquiring 23.11.1 - arm64 from https://nodejs.org/dist/v23.11.1/node-v23.11.1-darwin-arm64.tar.gz
+check	Run actions/setup-node@v4	2026-10-29T07:20:52.6195610Z Extracting ...
+check	Run actions/setup-node@v4	2026-10-29T07:20:52.6401400Z [command]/usr/bin/tar xz --strip 1 -C /Users/runner/work/_temp/265166e1-f2da-449d-9dcc-d8780ecb93d1 -f /Users/runner/work/_temp/c2287965-e2ed-436e-abe7-782a65720690
+check	Run actions/setup-node@v4	2026-10-29T07:20:53.6864700Z Adding to the cache ...
+check	Run actions/setup-node@v4	2026-10-29T07:20:55.5763470Z Done
+check	Run actions/setup-node@v4	2026-10-29T07:20:55.5766430Z ##[group]Environment details
+check	Run actions/setup-node@v4	2026-10-29T07:20:55.9037480Z node: v23.11.1
+check	Run actions/setup-node@v4	2026-10-29T07:20:55.9038230Z npm: 10.9.2
+check	Run actions/setup-node@v4	2026-10-29T07:20:55.9038670Z yarn: 1.22.22
+check	Run actions/setup-node@v4	2026-10-29T07:20:55.9039340Z ##[endgroup]
+check	Run actions/setup-node@v4	2026-10-29T07:20:55.9054960Z [command]/Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/npm config get cache
+check	Run actions/setup-node@v4	2026-10-29T07:20:56.0570120Z /Users/runner/.npm
+check	Run actions/setup-node@v4	2026-10-29T07:20:56.3345630Z Cache hit for: node-cache-macOS-arm64-npm-4984968ff64a3dcfb4f348c66f10b08ad8644b73733fe138abcf56c8f961cdde
+check	Run actions/setup-node@v4	2026-10-29T07:20:56.3432560Z (node:1180) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+check	Run actions/setup-node@v4	2026-10-29T07:20:57.6293230Z Received 4194304 of 205334979 (2.0%), 4.0 MBs/sec
+check	Run actions/setup-node@v4	2026-10-29T07:20:58.6299830Z Received 96468992 of 205334979 (47.0%), 45.8 MBs/sec
+check	Run actions/setup-node@v4	2026-10-29T07:20:59.6310110Z Received 163577856 of 205334979 (79.7%), 51.8 MBs/sec
+check	Run actions/setup-node@v4	2026-10-29T07:21:00.3881000Z Received 205334979 of 205334979 (100.0%), 52.0 MBs/sec
+check	Run actions/setup-node@v4	2026-10-29T07:21:00.3884310Z Cache Size: ~196 MB (205334979 B)
+check	Run actions/setup-node@v4	2026-10-29T07:21:00.4119370Z [command]/opt/homebrew/bin/gtar -xf /Users/runner/work/_temp/aa0e775a-c4c9-4851-bc2b-00b38bbc7e6d/cache.tzst -P -C /Users/runner/work/apack/apack --delay-directory-restore --use-compress-program unzstd
+check	Run actions/setup-node@v4	2026-10-29T07:21:01.5156020Z Cache restored successfully
+check	Run actions/setup-node@v4	2026-10-29T07:21:01.5214790Z Cache restored from key: node-cache-macOS-arm64-npm-4984968ff64a3dcfb4f348c66f10b08ad8644b73733fe138abcf56c8f961cdde
+check	Record source	﻿2026-10-29T07:21:01.5497280Z ##[group]Run git rev-parse HEAD
+check	Record source	2026-10-29T07:21:01.5497710Z ^[[36;1mgit rev-parse HEAD^[[0m
+check	Record source	2026-10-29T07:21:01.5563150Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+check	Record source	2026-10-29T07:21:01.5563510Z env:
+check	Record source	2026-10-29T07:21:01.5563850Z   APACK_CHAIN_CORES: 2
+check	Record source	2026-10-29T07:21:01.5564120Z ##[endgroup]
+check	Record source	2026-10-29T07:21:01.6617680Z e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614
+check	Run ./.github/actions/elmdb	﻿2026-10-29T07:21:01.6730080Z Prepare all required actions
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:01.6730680Z Getting action download info
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:01.8014060Z Download action repository 'Swatinem/rust-cache@v2' (SHA:d1527c8f67ef9af357290475d4af4b0fab8f12e0)
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2686770Z ##[group]Run ./.github/actions/elmdb
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2687020Z env:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2687190Z   APACK_CHAIN_CORES: 2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2687390Z ##[endgroup]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2736790Z ##[start-action display=Clone elmdb at the pinned commit;id=__self.__run]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2761460Z ##[group]Run rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2766670Z ^[[36;1mrev=$(tr -d '[:space:]' < vendor/elmdb.rev)^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2766920Z ^[[36;1mgit init -q vendor/elmdb^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2767310Z ^[[36;1mgit -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2767720Z ^[[36;1mgit -C vendor/elmdb checkout -q FETCH_HEAD^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2799680Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2800040Z env:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2800200Z   APACK_CHAIN_CORES: 2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.2800370Z ##[endgroup]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9414950Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=667]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9417390Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__self.__Swatinem_rust-cache]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9465100Z ##[group]Run Swatinem/rust-cache@v2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9465350Z with:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9465530Z   workspaces: vendor/elmdb
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9465730Z   prefix-key: v0-rust
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9466090Z   add-job-id-key: true
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9466340Z   add-rust-environment-hash-key: true
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9466610Z   cache-targets: true
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9466790Z   cache-all-crates: false
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9467000Z   cache-workspace-crates: false
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9467210Z   save-if: true
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9467370Z   cache-provider: github
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9467550Z   cache-bin: true
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9467770Z   lookup-only: false
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9467940Z   cmd-format: {0}
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9468110Z env:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9468310Z   APACK_CHAIN_CORES: 2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:02.9468470Z ##[endgroup]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9881280Z ##[group]Cache Configuration
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9883660Z Cache Provider:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9884170Z     github
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9884780Z Workspaces:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9885640Z     /Users/runner/work/apack/apack/vendor/elmdb
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9886250Z Cache Paths:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9896300Z     /Users/runner/.cargo/bin
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9899680Z     /Users/runner/.cargo/.crates.toml
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9901330Z     /Users/runner/.cargo/.crates2.json
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9902790Z     /Users/runner/.cargo/registry
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9903150Z     /Users/runner/.cargo/git
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9903590Z     /Users/runner/work/apack/apack/vendor/elmdb/target
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9906660Z Restore Key:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9909480Z     v0-rust-check-Darwin-arm64-30c62bd1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9922830Z Cache Key:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9925740Z     v0-rust-check-Darwin-arm64-30c62bd1-93401fda
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9926180Z .. Prefix:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9926480Z   - v0-rust-check-Darwin-arm64
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9926920Z .. Environment considered:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9927140Z   - Rust Versions:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9927510Z     - 1.99.1 aarch64-apple-darwin 58cf8f9c35b355199727627d07ae34a4e2846d67
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9927890Z   - CARGO_INCREMENTAL
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9928170Z .. Lockfiles considered:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9928920Z   - /Users/runner/work/apack/apack/vendor/elmdb/.cargo/config.toml
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9929410Z   - /Users/runner/work/apack/apack/vendor/elmdb/Cargo.lock
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9929920Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-cli/Cargo.toml
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9931220Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-node/Cargo.toml
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9931790Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb/Cargo.toml
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9933120Z   - /Users/runner/work/apack/apack/vendor/elmdb/rust-toolchain.toml
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9933680Z   - /Users/runner/work/apack/apack/vendor/elmdb/xtask/Cargo.toml
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9934240Z ##[endgroup]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9934360Z 
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:09.9934590Z ... Restoring cache ...
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2385310Z No cache found.
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2442550Z ##[end-action id=__self.__Swatinem_rust-cache;outcome=success;conclusion=success;duration_ms=7298]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2446870Z ##[start-action display=Build the binding;id=__self.__run_2]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2473050Z ##[group]Run rustup show active-toolchain
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2473350Z ^[[36;1mrustup show active-toolchain^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2473670Z ^[[36;1mnpm ci --no-audit --no-fund^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2474130Z ^[[36;1m# On Windows, @napi-rs/cli's build times out on its own filesystem-reconciliation lock (elmdb's own CI does^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2474680Z ^[[36;1m# the same), so cargo builds the binding and it is named as napi's loader expects^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2475090Z ^[[36;1mif [ "$RUNNER_OS" = Windows ]; then^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2475370Z ^[[36;1m  cargo build -p elmdb-node --release^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2475770Z ^[[36;1m  cp target/release/elmdb_node.dll crates/elmdb-node/elmdb.win32-x64-msvc.node^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2476130Z ^[[36;1melse^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2476290Z ^[[36;1m  npm run build^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2476490Z ^[[36;1mfi^[[0m
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2519080Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2519430Z env:
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2519640Z   APACK_CHAIN_CORES: 2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2519850Z   CACHE_ON_FAILURE: false
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2520040Z   CARGO_INCREMENTAL: 0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.2520230Z ##[endgroup]
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:10.3173620Z 1.99.1-aarch64-apple-darwin (overridden by '/Users/runner/work/apack/apack/vendor/elmdb/rust-toolchain.toml')
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:11.8801730Z 
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:11.8802400Z added 78 packages in 1s
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:12.1192300Z 
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:12.1193130Z > build
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:12.1193650Z > napi build --cwd crates/elmdb-node --platform --release
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:12.1193970Z 
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:17.6839250Z    Compiling proc-macro2 v1.0.107
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:17.6839790Z    Compiling unicode-ident v1.0.27
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:17.6840110Z    Compiling quote v1.0.47
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:17.9709920Z    Compiling libc v0.2.191
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:21.1310610Z    Compiling serde_core v1.0.229
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:21.8202790Z    Compiling serde v1.0.229
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:21.9064780Z    Compiling syn v3.0.9
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:21.9914250Z    Compiling memchr v2.8.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.0447060Z    Compiling shlex v2.0.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.1478740Z    Compiling find-msvc-tools v0.1.15
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.2373370Z    Compiling jobserver v0.1.35
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.2760530Z    Compiling stable_deref_trait v1.2.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.3214120Z    Compiling equivalent v1.0.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.3695560Z    Compiling cc v1.10.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.4660620Z    Compiling crossbeam-utils v0.8.23
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.6274790Z    Compiling allocator-api2 v0.2.21
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:23.8715100Z    Compiling syn v2.0.119
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:24.4631400Z    Compiling synstructure v0.14.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:24.8089050Z    Compiling siphasher v1.0.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:24.9040980Z    Compiling cfg-if v1.0.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:24.9433860Z    Compiling rand_core v0.6.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:25.0416530Z    Compiling serde_derive v1.0.229
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:25.0513540Z    Compiling zerofrom-derive v0.1.8
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:25.8252820Z    Compiling zerofrom v0.1.8
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:25.9432680Z    Compiling yoke-derive v0.8.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:26.7439750Z    Compiling yoke v0.8.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:26.9185510Z    Compiling zerovec-derive v0.11.7
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:27.0581070Z    Compiling displaydoc v0.2.7
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:27.5212830Z    Compiling rand v0.8.8
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:27.6427530Z    Compiling zerovec v0.11.9
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:27.7339390Z    Compiling phf_shared v0.11.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:27.8589340Z    Compiling phf_generator v0.11.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:27.9612450Z    Compiling itoa v1.0.18
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:28.2767110Z    Compiling foldhash v0.2.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:28.2975890Z    Compiling writeable v0.6.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:28.4249940Z    Compiling hashbrown v0.17.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:28.4905660Z    Compiling phf_macros v0.11.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:28.5552540Z    Compiling once_cell v1.21.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:28.6906100Z    Compiling zmij v1.0.23
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:28.8713260Z    Compiling phf v0.11.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:28.9856250Z    Compiling tinystr v0.8.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:29.0255670Z    Compiling indexmap v2.14.2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:29.1357000Z    Compiling autocfg v1.5.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:29.3522250Z    Compiling pin-project-lite v0.2.17
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:29.4059100Z    Compiling serde_json v1.0.154
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:29.6431390Z    Compiling pkg-config v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:29.8248880Z    Compiling crossbeam-epoch v0.9.21
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:29.9336090Z    Compiling litemap v0.8.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:30.0059310Z    Compiling zstd-sys v2.1.2+zstd.1.5.7
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:30.0975560Z    Compiling icu_locale_core v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:30.2414670Z    Compiling csv-core v0.1.13
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:30.3842500Z    Compiling num-traits v0.2.19
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:30.4328850Z    Compiling doxygen-rs v0.4.2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:30.6035610Z    Compiling potential_utf v0.1.6
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:30.7026560Z    Compiling zerotrie v0.2.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:30.7741880Z    Compiling bitflags v2.13.2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:31.0411930Z    Compiling getrandom v0.4.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:31.2154780Z    Compiling typenum v1.20.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:31.4610190Z    Compiling crossbeam-deque v0.8.8
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:31.6226430Z    Compiling ryu v1.0.23
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:31.7153820Z    Compiling rand_core v0.10.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:31.8112840Z    Compiling hybrid-array v0.4.15
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:31.9015030Z    Compiling csv v1.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:32.2168320Z    Compiling icu_provider v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:32.7724800Z    Compiling lmdb-master-sys v0.2.6
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:33.3277940Z    Compiling futures-sink v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:33.4051270Z    Compiling utf8_iter v1.0.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:33.5120890Z    Compiling icu_normalizer_data v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:33.7052970Z    Compiling futures-core v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:33.8032330Z    Compiling napi-build v2.6.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:34.0099420Z    Compiling smallvec v1.16.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:34.1529550Z    Compiling rayon-core v1.13.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:34.2990910Z    Compiling byteorder v1.5.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:34.4450210Z    Compiling icu_locale_fallback_data v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:34.6681510Z    Compiling futures-channel v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:34.7049480Z    Compiling icu_collections v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:35.4607140Z    Compiling irg-kvariants v0.1.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:35.7721240Z    Compiling crossbeam-queue v0.3.14
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:35.8777390Z    Compiling bincode v1.3.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:36.1786880Z    Compiling futures-macro v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:36.6039770Z    Compiling bytemuck_derive v1.12.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:37.1952730Z    Compiling aho-corasick v1.1.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:37.4302410Z    Compiling heed-traits v0.20.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:37.4845340Z    Compiling unicode-segmentation v1.13.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:37.8908000Z    Compiling fst v0.4.7
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:38.0677990Z    Compiling thiserror v2.0.21
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:38.2480180Z    Compiling foldhash v0.1.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:38.3519390Z    Compiling tinyvec v1.13.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:38.6397390Z    Compiling futures-io v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:38.7276200Z    Compiling heed v0.23.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:38.8649530Z    Compiling either v1.19.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:39.0155680Z    Compiling futures-task v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:39.1046570Z    Compiling zstd-safe v8.2.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:39.1372940Z    Compiling rustix v1.1.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:39.3021660Z    Compiling icu_collator_data v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:39.4413160Z    Compiling slab v0.4.12
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:39.5700220Z    Compiling futures-util v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:39.7178230Z    Compiling hashbrown v0.15.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:40.3912170Z    Compiling convert_case v0.8.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:40.9529210Z    Compiling heed-types v0.21.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:41.5744760Z    Compiling bytemuck v1.25.2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:41.8784750Z    Compiling synchronoise v1.0.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:42.0938310Z    Compiling rmp v0.8.15
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:42.5814170Z    Compiling crypto-common v0.2.2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:43.3829450Z    Compiling block-buffer v0.12.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:43.4221890Z    Compiling chacha20 v0.10.2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:43.4872660Z    Compiling tracing-core v0.1.36
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:43.5676550Z    Compiling tracing-attributes v0.1.31
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:44.2426150Z    Compiling thiserror-impl v2.0.21
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:44.4840520Z    Compiling page_size v0.6.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:44.5669280Z    Compiling errno v0.3.14
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:44.6572350Z    Compiling seize v0.5.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:44.9442220Z    Compiling write16 v1.0.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:45.0177050Z    Compiling napi-sys v3.4.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:45.1660430Z    Compiling utf16_iter v1.0.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:45.2529240Z    Compiling rustc-hash v2.1.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:45.2574150Z    Compiling const-oid v0.10.2
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:45.3313290Z    Compiling regex-syntax v0.8.11
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:45.4116920Z    Compiling scopeguard v1.2.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:45.7244730Z    Compiling convert_case v0.12.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:45.9089300Z    Compiling lock_api v0.5.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:46.1751580Z    Compiling digest v0.11.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:46.3057490Z    Compiling icu_normalizer v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:47.4243090Z    Compiling regex-automata v0.4.18
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:49.4688160Z    Compiling papaya v0.2.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:51.8339530Z    Compiling tracing v0.1.44
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:52.0201150Z    Compiling rand v0.10.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:52.2389480Z    Compiling rayon v1.12.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:52.5020240Z    Compiling icu_locale_fallback v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:52.7008220Z    Compiling futures-executor v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:53.0625410Z    Compiling roaring v0.11.5
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:53.2648410Z    Compiling steppe v0.4.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:53.7413830Z    Compiling whatlang v0.18.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:53.8788950Z    Compiling unicode-normalization v0.1.26
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:54.2109370Z    Compiling icu_properties v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:54.9100030Z    Compiling parking_lot_core v0.10.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:54.9903470Z    Compiling napi v3.15.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.1630090Z    Compiling crossbeam-channel v0.5.17
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.2181240Z    Compiling thread_local v1.1.10
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.3861430Z    Compiling libloading v0.9.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.5084400Z    Compiling serde_bytes v0.11.19
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.5909930Z    Compiling cpufeatures v0.3.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.6410610Z    Compiling madvise v0.1.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.6681570Z    Compiling semver v1.0.28
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.7087550Z    Compiling fastrand v2.5.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.8343440Z    Compiling finl_unicode v1.5.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.8631290Z    Compiling min-max-heap v1.3.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:55.9699970Z    Compiling slice-group-by v0.3.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:56.0083130Z    Compiling tempfile v3.27.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:56.1965030Z    Compiling charabia v0.10.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:56.3558120Z    Compiling napi-derive-backend v6.1.6
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:56.9580920Z    Compiling hannoy v0.3.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:57.4100210Z    Compiling sha2 v0.11.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:57.6783620Z    Compiling rmpv v1.3.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:57.9391810Z    Compiling parking_lot v0.13.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:58.3827830Z    Compiling icu_collator v2.4.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:58.4452590Z    Compiling zstd v0.14.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:59.0451230Z    Compiling futures v0.3.34
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:59.1594330Z    Compiling regex v1.13.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:59.2933020Z    Compiling rmp-serde v1.3.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:59.7333300Z    Compiling elmdb-node v0.0.0 (/Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-node)
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:59.8943130Z    Compiling rust-stemmers v1.2.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:21:59.9026360Z    Compiling levenshtein_automata v0.2.1
+check	Run ./.github/actions/elmdb	2026-10-29T07:22:00.4989070Z    Compiling ctor v1.0.13
+check	Run ./.github/actions/elmdb	2026-10-29T07:22:00.5883120Z    Compiling nohash-hasher v0.2.0
+check	Run ./.github/actions/elmdb	2026-10-29T07:22:00.6442090Z    Compiling ryu-js v1.0.3
+check	Run ./.github/actions/elmdb	2026-10-29T07:22:01.4667610Z    Compiling elmdb v0.0.0 (/Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb)
+check	Run ./.github/actions/elmdb	2026-10-29T07:22:01.5883130Z    Compiling napi-derive v3.6.13
+check	Run ./.github/actions/elmdb	2026-10-29T07:22:02.3473810Z    Compiling process_path v0.1.4
+check	Run ./.github/actions/elmdb	2026-10-29T07:23:48.5771370Z     Finished `release` profile [optimized] target(s) in 2m 31s
+check	Run ./.github/actions/elmdb	2026-10-29T07:23:49.3994770Z ##[end-action id=__self.__run_2;outcome=success;conclusion=success;duration_ms=159074]
+check	Install dependencies	﻿2026-10-29T07:23:49.4275640Z ##[group]Run npm ci
+check	Install dependencies	2026-10-29T07:23:49.4276210Z ^[[36;1mnpm ci^[[0m
+check	Install dependencies	2026-10-29T07:23:49.4718180Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+check	Install dependencies	2026-10-29T07:23:49.4727960Z env:
+check	Install dependencies	2026-10-29T07:23:49.4728620Z   APACK_CHAIN_CORES: 2
+check	Install dependencies	2026-10-29T07:23:49.4729190Z   CACHE_ON_FAILURE: false
+check	Install dependencies	2026-10-29T07:23:49.4729850Z   CARGO_INCREMENTAL: 0
+check	Install dependencies	2026-10-29T07:23:49.4736490Z   GITHUB_TOKEN: ***
+check	Install dependencies	2026-10-29T07:23:49.4737200Z ##[endgroup]
+check	Install dependencies	2026-10-29T07:23:50.7448100Z npm warn EBADENGINE Unsupported engine {
+check	Install dependencies	2026-10-29T07:23:50.7448980Z npm warn EBADENGINE   package: 'eslint-visitor-keys@5.0.1',
+check	Install dependencies	2026-10-29T07:23:50.7449610Z npm warn EBADENGINE   required: { node: '^20.19.0 || ^22.13.0 || >=24' },
+check	Install dependencies	2026-10-29T07:23:50.7450140Z npm warn EBADENGINE   current: { node: 'v23.11.1', npm: '10.9.2' }
+check	Install dependencies	2026-10-29T07:23:50.7450630Z npm warn EBADENGINE }
+check	Install dependencies	2026-10-29T07:23:50.7475230Z npm warn EBADENGINE Unsupported engine {
+check	Install dependencies	2026-10-29T07:23:50.7475700Z npm warn EBADENGINE   package: 'tsup@9.0.0',
+check	Install dependencies	2026-10-29T07:23:50.7477600Z npm warn EBADENGINE   required: { node: '^22.18.0 || ^24.11.0 || >=26.0.0' },
+check	Install dependencies	2026-10-29T07:23:50.7481960Z npm warn EBADENGINE   current: { node: 'v23.11.1', npm: '10.9.2' }
+check	Install dependencies	2026-10-29T07:23:50.7483120Z npm warn EBADENGINE }
+check	Install dependencies	2026-10-29T07:23:57.3355540Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+check	Install dependencies	2026-10-29T07:23:57.6123030Z npm warn deprecated rimraf@2.6.3: Rimraf versions prior to v4 are no longer supported
+check	Install dependencies	2026-10-29T07:23:57.6845770Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+check	Install dependencies	2026-10-29T07:23:58.2339350Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+check	Install dependencies	2026-10-29T07:23:58.2971980Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+check	Install dependencies	2026-10-29T07:23:58.9765600Z npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+check	Install dependencies	2026-10-29T07:24:03.1435200Z npm warn deprecated glob@11.1.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+check	Install dependencies	2026-10-29T07:24:03.2463730Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+check	Install dependencies	2026-10-29T07:24:03.2469920Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+check	Install dependencies	2026-10-29T07:24:30.1693400Z 
+check	Install dependencies	2026-10-29T07:24:30.1698120Z > apack@0.3.14 preinstall
+check	Install dependencies	2026-10-29T07:24:30.1712470Z > [ "$NODE_ENV" = 'production' ] && echo '⚠️  NODE_ENV=production — devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true
+check	Install dependencies	2026-10-29T07:24:30.1714320Z 
+check	Install dependencies	2026-10-29T07:24:30.1832130Z 
+check	Install dependencies	2026-10-29T07:24:30.1832890Z > apack@0.3.14 postinstall
+check	Install dependencies	2026-10-29T07:24:30.1833390Z > node scripts/postinstall.mjs
+check	Install dependencies	2026-10-29T07:24:30.1833530Z 
+check	Install dependencies	2026-10-29T07:24:32.4833950Z rebuilt dependencies successfully
+check	Install dependencies	2026-10-29T07:24:32.5335290Z 
+check	Install dependencies	2026-10-29T07:24:32.5339360Z added 1357 packages, and audited 1376 packages in 43s
+check	Install dependencies	2026-10-29T07:24:32.5361970Z 
+check	Install dependencies	2026-10-29T07:24:32.5362680Z 322 packages are looking for funding
+check	Install dependencies	2026-10-29T07:24:32.5556710Z   run `npm fund` for details
+check	Install dependencies	2026-10-29T07:24:32.6313550Z 
+check	Install dependencies	2026-10-29T07:24:32.6318170Z 5 vulnerabilities (1 moderate, 2 high, 2 critical)
+check	Install dependencies	2026-10-29T07:24:32.6319150Z 
+check	Install dependencies	2026-10-29T07:24:32.6319950Z To address all issues (including breaking changes), run:
+check	Install dependencies	2026-10-29T07:24:32.6320910Z   npm audit fix --force
+check	Install dependencies	2026-10-29T07:24:32.6321300Z 
+check	Install dependencies	2026-10-29T07:24:32.6321550Z Run `npm audit` for details.
+check	Build shipped pack	﻿2026-10-29T07:24:32.7672480Z ##[group]Run if [[ "$APACK_ACCEPTANCE_SUITE" == 'build' ]]; then
+check	Build shipped pack	2026-10-29T07:24:32.7673180Z ^[[36;1mif [[ "$APACK_ACCEPTANCE_SUITE" == 'build' ]]; then^[[0m
+check	Build shipped pack	2026-10-29T07:24:32.7673650Z ^[[36;1m  # Diagnostic only: observe build phase costs without running the application suites.^[[0m
+check	Build shipped pack	2026-10-29T07:24:32.7674170Z ^[[36;1m  mkdir -p .apack/tests/results^[[0m
+check	Build shipped pack	2026-10-29T07:24:32.7674820Z ^[[36;1m  node_modules/.bin/tsx scripts/bounded.ts scenario npm run build:default-setup | tee .apack/tests/results/default-build.log^[[0m
+check	Build shipped pack	2026-10-29T07:24:32.7675330Z ^[[36;1melse^[[0m
+check	Build shipped pack	2026-10-29T07:24:32.7675680Z ^[[36;1m  npm run build:default-setup^[[0m
+check	Build shipped pack	2026-10-29T07:24:32.7676010Z ^[[36;1mfi^[[0m
+check	Build shipped pack	2026-10-29T07:24:33.4695580Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+check	Build shipped pack	2026-10-29T07:24:33.4696570Z env:
+check	Build shipped pack	2026-10-29T07:24:33.4697120Z   APACK_CHAIN_CORES: 2
+check	Build shipped pack	2026-10-29T07:24:33.4697830Z   CACHE_ON_FAILURE: false
+check	Build shipped pack	2026-10-29T07:24:33.4698540Z   CARGO_INCREMENTAL: 0
+check	Build shipped pack	2026-10-29T07:24:33.4699190Z   APACK_ACCEPTANCE_SUITE: integration
+check	Build shipped pack	2026-10-29T07:24:33.4700220Z ##[endgroup]
+check	Build shipped pack	2026-10-29T07:24:33.7906040Z 
+check	Build shipped pack	2026-10-29T07:24:33.7906980Z > apack@0.3.14 build:default-setup
+check	Build shipped pack	2026-10-29T07:24:33.7907710Z > npm run packages:ensure && npm run build -w @app/default-setup
+check	Build shipped pack	2026-10-29T07:24:33.7908140Z 
+check	Build shipped pack	2026-10-29T07:24:34.2069370Z 
+check	Build shipped pack	2026-10-29T07:24:34.2070400Z > apack@0.3.14 packages:ensure
+check	Build shipped pack	2026-10-29T07:24:34.2071510Z > tsx scripts/ensure-packages-built.ts
+check	Build shipped pack	2026-10-29T07:24:34.2072080Z 
+check	Build shipped pack	2026-10-29T07:24:34.6617820Z Published packages are out of date:
+check	Build shipped pack	2026-10-29T07:24:34.6618890Z   @apackdev/ears: not built (no packages/apack-ears/dist, packages/apack-ears/publish)
+check	Build shipped pack	2026-10-29T07:24:34.6619840Z   @apackdev/sdk: not built (no packages/apack-sdk/dist, packages/apack-sdk/publish)
+check	Build shipped pack	2026-10-29T07:24:34.6620540Z   @apackdev/ui: not built (no packages/apack-ui/dist, packages/apack-ui/publish)
+check	Build shipped pack	2026-10-29T07:24:34.6624620Z   @apackdev/testing: not built (no packages/apack-testing/dist/package/package.json, packages/apack-testing/dist/package/dist)
+check	Build shipped pack	2026-10-29T07:24:34.6626120Z   @apackdev/cli: not built (no packages/apack-cli/dist/package/package.json, packages/apack-cli/dist/package/dist, packages/apack-cli/dist/package/bin, packages/apack-cli/dist/package/templates)
+check	Build shipped pack	2026-10-29T07:24:34.6627080Z Rebuilding 5 of 5
+check	Build shipped pack	2026-10-29T07:24:34.9635550Z 
+check	Build shipped pack	2026-10-29T07:24:34.9637470Z > @apackdev/ears@0.1.0 build:package
+check	Build shipped pack	2026-10-29T07:24:34.9678070Z > tsx ../../scripts/build-package.ts .
+check	Build shipped pack	2026-10-29T07:24:34.9687550Z 
+check	Build shipped pack	2026-10-29T07:24:41.4000400Z Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+check	Build shipped pack	2026-10-29T07:24:41.7466490Z 
+check	Build shipped pack	2026-10-29T07:24:41.7468240Z > @apackdev/sdk@0.1.0 build:package
+check	Build shipped pack	2026-10-29T07:24:41.7469740Z > tsx ../../scripts/build-package.ts .
+check	Build shipped pack	2026-10-29T07:24:41.7470500Z 
+check	Build shipped pack	2026-10-29T07:24:53.1886040Z Built @apackdev/sdk@0.1.0 into dist, staged for publishing in publish
+check	Build shipped pack	2026-10-29T07:24:53.4725610Z 
+check	Build shipped pack	2026-10-29T07:24:53.4744100Z > @apackdev/ui@0.1.0 build:package
+check	Build shipped pack	2026-10-29T07:24:53.4818480Z > tsx ../../scripts/build-ui-package.ts .
+check	Build shipped pack	2026-10-29T07:24:53.4823430Z 
+check	Build shipped pack	2026-10-29T07:24:56.2013120Z (node:7463) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+check	Build shipped pack	2026-10-29T07:24:56.2014040Z (Use `node --trace-warnings ...` to show where the warning was created)
+check	Build shipped pack	2026-10-29T07:25:11.5055610Z Built @apackdev/ui@0.1.0 into dist, staged for publishing in publish
+check	Build shipped pack	2026-10-29T07:25:11.8102420Z 
+check	Build shipped pack	2026-10-29T07:25:11.8203770Z > @apackdev/testing@0.1.0 build:package
+check	Build shipped pack	2026-10-29T07:25:11.8287250Z > tsx ../../scripts/bundle-package.ts .
+check	Build shipped pack	2026-10-29T07:25:11.8317250Z 
+check	Build shipped pack	2026-10-29T07:25:25.4236830Z Built @apackdev/testing@0.1.0 into dist/package
+check	Build shipped pack	2026-10-29T07:25:25.9707120Z 
+check	Build shipped pack	2026-10-29T07:25:25.9788330Z > @apackdev/cli@0.1.0 build:package
+check	Build shipped pack	2026-10-29T07:25:25.9792520Z > tsx ../../scripts/bundle-package.ts .
+check	Build shipped pack	2026-10-29T07:25:25.9794480Z 
+check	Build shipped pack	2026-10-29T07:25:27.9419050Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+check	Build shipped pack	2026-10-29T07:25:27.9522050Z 
+check	Build shipped pack	2026-10-29T07:25:27.9624500Z     src/build/compiler-pe-environment.ts:38:102:
+check	Build shipped pack	2026-10-29T07:25:27.9702470Z       38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+check	Build shipped pack	2026-10-29T07:25:27.9794580Z          ╵                                                     ~~~~~~~~~~~
+check	Build shipped pack	2026-10-29T07:25:27.9798440Z 
+check	Build shipped pack	2026-10-29T07:25:27.9799080Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+check	Build shipped pack	2026-10-29T07:25:27.9799490Z 
+check	Build shipped pack	2026-10-29T07:25:27.9801750Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+check	Build shipped pack	2026-10-29T07:25:27.9808350Z 
+check	Build shipped pack	2026-10-29T07:25:27.9809020Z     src/build/tool-identity.ts:19:42:
+check	Build shipped pack	2026-10-29T07:25:27.9810630Z       19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+check	Build shipped pack	2026-10-29T07:25:27.9812190Z          ╵                                           ~~~~~~~~~~~
+check	Build shipped pack	2026-10-29T07:25:27.9812880Z 
+check	Build shipped pack	2026-10-29T07:25:27.9813710Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+check	Build shipped pack	2026-10-29T07:25:27.9814700Z 
+check	Build shipped pack	2026-10-29T07:25:27.9816140Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+check	Build shipped pack	2026-10-29T07:25:27.9819780Z 
+check	Build shipped pack	2026-10-29T07:25:27.9820800Z     src/build/tool-identity.ts:61:48:
+check	Build shipped pack	2026-10-29T07:25:27.9822260Z       61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+check	Build shipped pack	2026-10-29T07:25:27.9855040Z          ╵                                            ~~~~~~~~~~~
+check	Build shipped pack	2026-10-29T07:25:27.9861060Z 
+check	Build shipped pack	2026-10-29T07:25:27.9862670Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+check	Build shipped pack	2026-10-29T07:25:27.9869220Z 
+check	Build shipped pack	2026-10-29T07:25:28.0106320Z Built @apackdev/cli@0.1.0 into dist/package
+check	Build shipped pack	2026-10-29T07:25:28.3209650Z 
+check	Build shipped pack	2026-10-29T07:25:28.3310970Z > @app/default-setup@0.1.0 build
+check	Build shipped pack	2026-10-29T07:25:28.3412870Z > apack pack build
+check	Build shipped pack	2026-10-29T07:25:28.3505540Z 
+check	Build shipped pack	2026-10-29T07:25:33.3174630Z 
+check	Build shipped pack	2026-10-29T07:25:33.3281030Z > apack@0.3.14 packages:ensure
+check	Build shipped pack	2026-10-29T07:25:33.3381960Z > tsx scripts/ensure-packages-built.ts
+check	Build shipped pack	2026-10-29T07:25:33.3478300Z 
+check	Build shipped pack	2026-10-29T07:26:36.0042940Z Generated:
+check	Build shipped pack	2026-10-29T07:26:36.0146750Z   src/__generated__/entity-destinations.json
+check	Build shipped pack	2026-10-29T07:26:36.0248690Z   src/__generated__/event-contracts.json
+check	Build shipped pack	2026-10-29T07:26:36.0348690Z   src/__generated__/pack-entry.ts
+check	Build shipped pack	2026-10-29T07:26:36.0446900Z   src/__generated__/pack-entry-fe.ts
+check	Build shipped pack	2026-10-29T07:26:36.0485400Z   src/__generated__/ears.ts
+check	Build shipped pack	2026-10-29T07:26:36.0523490Z   src/__generated__/ref.ts
+check	Build shipped pack	2026-10-29T07:26:36.0530110Z   src/__generated__/paths.ts
+check	Build shipped pack	2026-10-29T07:26:36.0542760Z   src/__generated__/settings.ts
+check	Build shipped pack	2026-10-29T07:26:36.0565760Z   src/__generated__/settings-fe.ts
+check	Build shipped pack	2026-10-29T07:26:36.0575220Z   src/__generated__/fe.ts
+check	Build shipped pack	2026-10-29T07:26:36.0589780Z   src/__generated__/system-specs.ts
+check	Build shipped pack	2026-10-29T07:26:36.0596760Z   src/__generated__/events.ts
+check	Build shipped pack	2026-10-29T07:26:36.0617670Z   src/__generated__/types.ts
+check	Build shipped pack	2026-10-29T07:26:36.0618410Z   src/__generated__/services.ts
+check	Build shipped pack	2026-10-29T07:26:36.0618940Z   src/__generated__/runtime-services.ts
+check	Build shipped pack	2026-10-29T07:26:36.0619590Z   src/__generated__/repository.ts
+check	Build shipped pack	2026-10-29T07:26:36.0620060Z   src/__generated__/repositories.ts
+check	Build shipped pack	2026-10-29T07:26:36.0620550Z   src/__generated__/pack-types.ts
+check	Build shipped pack	2026-10-29T07:26:36.0620950Z   src/__generated__/references.ts
+check	Build shipped pack	2026-10-29T07:26:36.0621430Z   src/__generated__/appliers.ts
+check	Build shipped pack	2026-10-29T07:26:36.0621890Z   src/__generated__/content-runtime.ts
+check	Build shipped pack	2026-10-29T07:26:36.0623520Z   src/__generated__/flow-helpers.ts
+check	Build shipped pack	2026-10-29T07:26:36.0625020Z   src/__generated__/step-types.ts
+check	Build shipped pack	2026-10-29T07:26:36.0626150Z   src/__generated__/steps-build.ts
+check	Build shipped pack	2026-10-29T07:26:37.4659060Z Building pack: Default Setup v0.1.0
+check	Build shipped pack	2026-10-29T07:27:00.8612370Z Compiling pack: default-setup
+check	Build shipped pack	2026-10-29T07:27:08.2777190Z   actions: 70
+check	Build shipped pack	2026-10-29T07:27:08.2781220Z   prompts: 6
+check	Build shipped pack	2026-10-29T07:27:08.2801520Z   flows: 5
+check	Build shipped pack	2026-10-29T07:27:08.2803070Z   notes: 1
+check	Build shipped pack	2026-10-29T07:27:08.2804570Z   commands: 4
+check	Build shipped pack	2026-10-29T07:27:21.8104440Z 
+check	Build shipped pack	2026-10-29T07:27:21.8129640Z Build output:
+check	Build shipped pack	2026-10-29T07:27:21.8228050Z   actions: 70
+check	Build shipped pack	2026-10-29T07:27:21.8269050Z   prompts: 6
+check	Build shipped pack	2026-10-29T07:27:21.8302140Z   flows: 5
+check	Build shipped pack	2026-10-29T07:27:21.8306770Z   notes: 1
+check	Build shipped pack	2026-10-29T07:27:21.8311770Z   commands: 4
+check	Build shipped pack	2026-10-29T07:27:21.8327840Z 
+check	Build shipped pack	2026-10-29T07:27:21.8329840Z Note: 2 entities have no shape declared, so their fields read as unknown values: SearchIndex, IndexedDoc
+check	Build shipped pack	2026-10-29T07:27:21.8849830Z   step build: dist/build/steps.build.mjs
+check	Build shipped pack	2026-10-29T07:27:23.2211160Z   content runtime: dist/build/content-runtime.mjs
+check	Build shipped pack	2026-10-29T07:27:33.7649860Z   dsl defs: dist/defs/monaco/action-defs.d.ts
+check	Build shipped pack	2026-10-29T07:27:33.7738900Z   dsl defs: dist/defs/monaco/prompt-defs.d.ts
+check	Build shipped pack	2026-10-29T07:27:33.7836180Z   dsl defs: dist/defs/monaco/database-defs.d.ts
+check	Build shipped pack	2026-10-29T07:27:36.3298200Z   runtime: dist/runtime/index.cjs
+check	Build shipped pack	2026-10-29T07:28:06.4191560Z ^[[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help^[[39m
+check	Build shipped pack	2026-10-29T07:28:08.7270110Z   fe: dist/runtime/fe.js
+check	Build shipped pack	2026-10-29T07:28:08.7272390Z   fe styles: dist/runtime/fe.css
+check	Build shipped pack	2026-10-29T07:28:33.2070890Z 
+check	Build shipped pack	2026-10-29T07:28:33.2171000Z Output: dist/
+check	Build fixture contracts	﻿2026-10-29T07:28:36.8767670Z ##[group]Run npm run test:external-pack:contract
+check	Build fixture contracts	2026-10-29T07:28:36.8768630Z ^[[36;1mnpm run test:external-pack:contract^[[0m
+check	Build fixture contracts	2026-10-29T07:28:36.9319080Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+check	Build fixture contracts	2026-10-29T07:28:36.9320340Z env:
+check	Build fixture contracts	2026-10-29T07:28:36.9321040Z   APACK_CHAIN_CORES: 2
+check	Build fixture contracts	2026-10-29T07:28:36.9322230Z   CACHE_ON_FAILURE: false
+check	Build fixture contracts	2026-10-29T07:28:36.9322740Z   CARGO_INCREMENTAL: 0
+check	Build fixture contracts	2026-10-29T07:28:36.9324440Z ##[endgroup]
+check	Build fixture contracts	2026-10-29T07:28:37.6495960Z 
+check	Build fixture contracts	2026-10-29T07:28:37.6497380Z > apack@0.3.14 test:external-pack:contract
+check	Build fixture contracts	2026-10-29T07:28:37.6498620Z > npm run packages:ensure && tsx scripts/bounded.ts suite bash tests/scripts/test-external-pack-contract.sh
+check	Build fixture contracts	2026-10-29T07:28:37.6499050Z 
+check	Build fixture contracts	2026-10-29T07:28:37.9223740Z 
+check	Build fixture contracts	2026-10-29T07:28:37.9301090Z > apack@0.3.14 packages:ensure
+check	Build fixture contracts	2026-10-29T07:28:37.9317280Z > tsx scripts/ensure-packages-built.ts
+check	Build fixture contracts	2026-10-29T07:28:37.9321120Z 
+check	Build fixture contracts	2026-10-29T07:28:45.7665010Z Validating pack at: /Users/runner/work/apack/apack/tests/packs/external-pack
+check	Build fixture contracts	2026-10-29T07:28:45.7770380Z 
+check	Build fixture contracts	2026-10-29T07:28:45.7877940Z + Pack is valid
+check	Build fixture contracts	2026-10-29T07:28:47.9607330Z 
+check	Build fixture contracts	2026-10-29T07:28:47.9661950Z > apack@0.3.14 packages:ensure
+check	Build fixture contracts	2026-10-29T07:28:47.9669320Z > tsx scripts/ensure-packages-built.ts
+check	Build fixture contracts	2026-10-29T07:28:47.9674810Z 
+check	Build fixture contracts	2026-10-29T07:29:15.8453340Z Generated:
+check	Build fixture contracts	2026-10-29T07:29:15.8458260Z   src/__generated__/entity-destinations.json
+check	Build fixture contracts	2026-10-29T07:29:15.8464630Z   src/__generated__/event-contracts.json
+check	Build fixture contracts	2026-10-29T07:29:15.8466120Z   src/__generated__/pack-entry.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8468810Z   src/__generated__/pack-entry-fe.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8471480Z   src/__generated__/ears.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8473570Z   src/__generated__/ref.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8480070Z   src/__generated__/paths.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8481720Z   src/__generated__/settings.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8483210Z   src/__generated__/settings-fe.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8484230Z   src/__generated__/fe.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8485690Z   src/__generated__/system-specs.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8486270Z   src/__generated__/events.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8487150Z   src/__generated__/types.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8488940Z   src/__generated__/services.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8489500Z   src/__generated__/runtime-services.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8490530Z   src/__generated__/repository.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8491180Z   src/__generated__/repositories.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8491660Z   src/__generated__/pack-types.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8592010Z   src/__generated__/deps/default-setup.d.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8593420Z   src/__generated__/deps/default-setup.flow-helpers.js
+check	Build fixture contracts	2026-10-29T07:29:15.8594520Z   src/__generated__/deps/default-setup.flow-helpers.d.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8595700Z   src/__generated__/references.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8596620Z   src/__generated__/appliers.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8597370Z   src/__generated__/content-runtime.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8598700Z   src/__generated__/flow-helpers.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8599480Z   src/__generated__/step-types.ts
+check	Build fixture contracts	2026-10-29T07:29:15.8599830Z   src/__generated__/steps-build.ts
+check	Build fixture contracts	2026-10-29T07:29:15.9190400Z Building pack: E2E Fixture v0.1.0
+check	Build fixture contracts	2026-10-29T07:29:28.9898320Z Compiling pack: e2e-fixture
+check	Build fixture contracts	2026-10-29T07:29:31.3854800Z   declared-commands: 1
+check	Build fixture contracts	2026-10-29T07:29:31.3857420Z   actions: 1
+check	Build fixture contracts	2026-10-29T07:29:31.3859160Z   flows: 3
+check	Build fixture contracts	2026-10-29T07:29:31.3871270Z   memos: 1
+check	Build fixture contracts	2026-10-29T07:29:31.3871850Z   quick-memos: 1
+check	Build fixture contracts	2026-10-29T07:29:31.3872430Z   commands: 2
+check	Build fixture contracts	2026-10-29T07:29:40.1352550Z 
+check	Build fixture contracts	2026-10-29T07:29:40.1355520Z Build output:
+check	Build fixture contracts	2026-10-29T07:29:40.1356790Z   declared-commands: 1
+check	Build fixture contracts	2026-10-29T07:29:40.1357780Z   actions: 1
+check	Build fixture contracts	2026-10-29T07:29:40.1358440Z   flows: 3
+check	Build fixture contracts	2026-10-29T07:29:40.1359600Z   memos: 1
+check	Build fixture contracts	2026-10-29T07:29:40.1360020Z   quick-memos: 1
+check	Build fixture contracts	2026-10-29T07:29:40.1360350Z   commands: 2
+check	Build fixture contracts	2026-10-29T07:29:40.1563370Z   step build: dist/build/steps.build.mjs
+check	Build fixture contracts	2026-10-29T07:29:40.5010350Z   content runtime: dist/build/content-runtime.mjs
+check	Build fixture contracts	2026-10-29T07:29:40.5011390Z   content compilers: dist/build/content-compilers.mjs
+check	Build fixture contracts	2026-10-29T07:29:40.6128700Z   runtime: dist/runtime/index.cjs
+check	Build fixture contracts	2026-10-29T07:29:43.1514830Z ^[[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help^[[39m
+check	Build fixture contracts	2026-10-29T07:29:43.1646610Z   fe: dist/runtime/fe.js
+check	Build fixture contracts	2026-10-29T07:29:43.1651000Z   fe styles: dist/runtime/fe.css
+check	Build fixture contracts	2026-10-29T07:29:56.4820600Z 
+check	Build fixture contracts	2026-10-29T07:29:56.4943050Z Output: dist/
+check	Build fixture contracts	2026-10-29T07:30:06.0309210Z 
+check	Build fixture contracts	2026-10-29T07:30:06.0319020Z > apack@0.3.14 packages:ensure
+check	Build fixture contracts	2026-10-29T07:30:06.0320930Z > tsx scripts/ensure-packages-built.ts
+check	Build fixture contracts	2026-10-29T07:30:06.0321130Z 
+check	Build fixture contracts	2026-10-29T07:30:07.8240880Z 
+check	Build fixture contracts	2026-10-29T07:30:07.8247030Z ^[[1m^[[46m RUN ^[[49m^[[22m ^[[36mv3.2.7 ^[[39m^[[90m/Users/runner/work/apack/apack/tests/packs/external-pack^[[39m
+check	Build fixture contracts	2026-10-29T07:30:07.8248290Z 
+check	Build fixture contracts	2026-10-29T07:30:11.9019820Z ^[[90mstdout^[[2m | tests/harness-isolation.spec.ts^[[2m > ^[[22m^[[2mharness isolation between tests^[[2m > ^[[22m^[[2mhas the real logger, and inference that fails naming the fix, in the next test
+check	Build fixture contracts	2026-10-29T07:30:11.9026510Z ^[[22m^[[39m[log-service] real logger
+check	Build fixture contracts	2026-10-29T07:30:11.9027500Z 
+check	Build fixture contracts	2026-10-29T07:30:11.9474620Z  ^[[32m✓^[[39m tests/typed-sends.spec.ts ^[[2m(^[[22m^[[2m6 tests^[[22m^[[2m)^[[22m^[[32m 137^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:12.0398960Z  ^[[32m✓^[[39m tests/harness-isolation.spec.ts ^[[2m(^[[22m^[[2m8 tests^[[22m^[[2m)^[[22m^[[32m 206^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:15.5630340Z  ^[[32m✓^[[39m tests/features/memos/fe/shell.spec.ts ^[[2m(^[[22m^[[2m6 tests^[[22m^[[2m)^[[22m^[[32m 210^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:15.6415090Z ^[[90mstdout^[[2m | tests/content/flows/memo-reminder-flow.spec.ts^[[2m > ^[[22m^[[2mmemo reminder flow^[[2m > ^[[22m^[[2madds the memo on each scheduled tick and branches on the result
+check	Build fixture contracts	2026-10-29T07:30:15.6418130Z ^[[22m^[[39m[flows-repository] Imported DSL flows {
+check	Build fixture contracts	2026-10-29T07:30:15.6419060Z   entityCount: ^[[33m6^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:15.6420110Z   relationCount: ^[[33m10^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:15.6473170Z   roleCount: ^[[33m1^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:15.6473830Z   flowIds: [ ^[[32m'Flow-memo-reminder-flow-9q0qfq'^[[39m ]
+check	Build fixture contracts	2026-10-29T07:30:15.6474310Z }
+check	Build fixture contracts	2026-10-29T07:30:15.6476210Z [brain] Started brain root flow { flowId: ^[[32m'Flow-memo-reminder-flow-9q0qfq'^[[39m }
+check	Build fixture contracts	2026-10-29T07:30:15.6478040Z [brain] Registered flow actor: RunNode-0mvt848280000 (registry size: 1)
+check	Build fixture contracts	2026-10-29T07:30:15.6478680Z 
+check	Build fixture contracts	2026-10-29T07:30:15.6568790Z ^[[90mstderr^[[2m | tests/content/flows/memo-reminder-flow.spec.ts^[[2m > ^[[22m^[[2mmemo reminder flow^[[2m > ^[[22m^[[2madds the memo on each scheduled tick and branches on the result
+check	Build fixture contracts	2026-10-29T07:30:15.6673790Z ^[[22m^[[39mCustom actions should not call `assign()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:15.6747280Z Custom actions should not call `sendTo()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:15.6903470Z 
+check	Build fixture contracts	2026-10-29T07:30:15.6904880Z ^[[90mstdout^[[2m | tests/content/flows/memo-reminder-flow.spec.ts^[[2m > ^[[22m^[[2mmemo reminder flow^[[2m > ^[[22m^[[2madds the memo on each scheduled tick and branches on the result
+check	Build fixture contracts	2026-10-29T07:30:15.7043820Z ^[[90mstderr^[[2m | tests/content/flows/memo-reminder-flow.spec.ts^[[2m > ^[[22m^[[2mmemo reminder flow^[[2m > ^[[22m^[[2madds the memo on each scheduled tick and branches on the result
+check	Build fixture contracts	2026-10-29T07:30:15.7045170Z ^[[22m^[[39m[brain] Broadcasting global event "memo.reminded" to 1 flow actors {
+check	Build fixture contracts	2026-10-29T07:30:15.7143470Z ^[[22m^[[39mCustom actions should not call `sendTo()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:15.7144610Z   eventType: ^[[32m'memo.reminded'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:15.7268830Z Custom actions should not call `sendTo()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:15.7271370Z   actorCount: ^[[33m1^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:15.7396200Z Custom actions should not call `assign()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:15.7405840Z   flowActorIds: [ ^[[32m'RunNode-0mvt848280000'^[[39m ]
+check	Build fixture contracts	2026-10-29T07:30:15.7508300Z Custom actions should not call `assign()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:15.7509220Z }
+check	Build fixture contracts	2026-10-29T07:30:15.7611360Z Custom actions should not call `assign()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:15.7612010Z 
+check	Build fixture contracts	2026-10-29T07:30:15.7713850Z 
+check	Build fixture contracts	2026-10-29T07:30:15.7715970Z  ^[[32m✓^[[39m tests/content/flows/memo-reminder-flow.spec.ts ^[[2m(^[[22m^[[2m3 tests^[[22m^[[2m)^[[22m^[[33m 478^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:15.7824090Z    ^[[33m^[[2m✓^[[22m^[[39m memo reminder flow^[[2m > ^[[22madds the memo on each scheduled tick and branches on the result ^[[33m 426^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:19.3750590Z  ^[[32m✓^[[39m tests/extensions.spec.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[32m 55^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:19.6076190Z  ^[[32m✓^[[39m tests/content/memos.spec.ts ^[[2m(^[[22m^[[2m4 tests^[[22m^[[2m)^[[22m^[[33m 359^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:22.4713750Z  ^[[32m✓^[[39m tests/typed-reads.spec.ts ^[[2m(^[[22m^[[2m1 test^[[22m^[[2m)^[[22m^[[32m 18^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:22.7153650Z  ^[[32m✓^[[39m tests/shared-engine.spec.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[32m 72^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:25.9005600Z  ^[[32m✓^[[39m tests/features/memos/be/system.spec.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[33m 381^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:25.9096630Z    ^[[33m^[[2m✓^[[22m^[[39m memos system^[[2m > ^[[22msends the memos its content wrote when a client connects ^[[33m 334^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:28.7636260Z ^[[90mstdout^[[2m | tests/content/flows/memo-flow.spec.ts^[[2m > ^[[22m^[[2mmemo flow^[[2m > ^[[22m^[[2mstores the memo a memo.requested event carries
+check	Build fixture contracts	2026-10-29T07:30:28.7740150Z ^[[22m^[[39m[flows-repository] Imported DSL flows {
+check	Build fixture contracts	2026-10-29T07:30:28.7843520Z   entityCount: ^[[33m16^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:28.7946110Z   relationCount: ^[[33m23^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:28.8048720Z   roleCount: ^[[33m2^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:28.8164090Z   flowIds: [
+check	Build fixture contracts	2026-10-29T07:30:28.8268280Z     ^[[32m'Flow-memo-flow-am05v0'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:28.8372110Z     ^[[32m'Flow-memo-reminder-flow-9q0qfq'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:28.8475810Z     ^[[32m'Flow-stamp-flow-1pqpbf'^[[39m
+check	Build fixture contracts	2026-10-29T07:30:28.8580880Z   ]
+check	Build fixture contracts	2026-10-29T07:30:28.8682830Z }
+check	Build fixture contracts	2026-10-29T07:30:28.8788120Z 
+check	Build fixture contracts	2026-10-29T07:30:28.9641330Z ^[[90mstdout^[[2m | tests/content/flows/memo-flow.spec.ts^[[2m > ^[[22m^[[2mmemo flow^[[2m > ^[[22m^[[2mstores the memo a memo.requested event carries
+check	Build fixture contracts	2026-10-29T07:30:28.9799880Z ^[[22m^[[39m[flows-repository] Imported DSL flows {
+check	Build fixture contracts	2026-10-29T07:30:28.9974860Z ^[[90mstderr^[[2m | tests/content/flows/memo-flow.spec.ts^[[2m > ^[[22m^[[2mmemo flow^[[2m > ^[[22m^[[2mstores the memo a memo.requested event carries
+check	Build fixture contracts	2026-10-29T07:30:28.9975800Z   entityCount: ^[[33m4^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:28.9976530Z   relationCount: ^[[33m5^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.0142190Z ^[[22m^[[39mCustom actions should not call `sendTo()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:29.0144380Z   roleCount: ^[[33m2^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.0253650Z Custom actions should not call `sendTo()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:29.0256430Z   flowIds: [ ^[[32m'Flow-root-flow-hth19o'^[[39m ]
+check	Build fixture contracts	2026-10-29T07:30:29.0421250Z Custom actions should not call `assign()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:29.0421900Z }
+check	Build fixture contracts	2026-10-29T07:30:29.0586570Z Custom actions should not call `assign()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:29.0587810Z [brain] Started brain root flow { flowId: ^[[32m'Flow-root-flow-hth19o'^[[39m }
+check	Build fixture contracts	2026-10-29T07:30:29.0748110Z Custom actions should not call `assign()` directly, as it is not imperative. See https://stately.ai/docs/actions#built-in-actions for more details.
+check	Build fixture contracts	2026-10-29T07:30:29.0751210Z [brain] Registered flow actor: RunNode-0mvt84ibx0000 (registry size: 1)
+check	Build fixture contracts	2026-10-29T07:30:29.0858100Z 
+check	Build fixture contracts	2026-10-29T07:30:29.0858850Z [brain] Registered flow actor: RunNode-0mvt84ibt0000 (registry size: 2)
+check	Build fixture contracts	2026-10-29T07:30:29.0963970Z 
+check	Build fixture contracts	2026-10-29T07:30:29.1088790Z ^[[90mstdout^[[2m | tests/content/flows/memo-flow.spec.ts^[[2m > ^[[22m^[[2mmemo flow^[[2m > ^[[22m^[[2mstores the memo a memo.requested event carries
+check	Build fixture contracts	2026-10-29T07:30:29.1213440Z ^[[22m^[[39m[brain] Broadcasting global event "memo.requested" to 2 flow actors {
+check	Build fixture contracts	2026-10-29T07:30:29.1347150Z   eventType: ^[[32m'memo.requested'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.1454120Z   actorCount: ^[[33m2^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.1577380Z   flowActorIds: [ ^[[32m'RunNode-0mvt84ibx0000'^[[39m, ^[[32m'RunNode-0mvt84ibt0000'^[[39m ]
+check	Build fixture contracts	2026-10-29T07:30:29.1679820Z }
+check	Build fixture contracts	2026-10-29T07:30:29.1783830Z [brain] Applying field mappings for action node: add-memo { mappingsCount: ^[[33m1^[[39m, isArray: ^[[33mtrue^[[39m }
+check	Build fixture contracts	2026-10-29T07:30:29.1897610Z [brain] Applying field mappings: {
+check	Build fixture contracts	2026-10-29T07:30:29.1999460Z   eventType: ^[[32m'memo.requested'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.2102230Z   eventDataKeys: [ ^[[32m'payload'^[[39m ],
+check	Build fixture contracts	2026-10-29T07:30:29.2211450Z   eventData: { payload: { text: ^[[32m'from a flow'^[[39m } },
+check	Build fixture contracts	2026-10-29T07:30:29.2314750Z   stepsCount: ^[[33m0^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.2420170Z   lastStepLabel: ^[[32m'[Undefined]'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.2523400Z   mappingsCount: ^[[33m1^[[39m
+check	Build fixture contracts	2026-10-29T07:30:29.2658330Z }
+check	Build fixture contracts	2026-10-29T07:30:29.2770670Z [brain] Mapped text: { source: ^[[32m'$.event.data.payload.text'^[[39m, value: ^[[32m'from a flow'^[[39m }
+check	Build fixture contracts	2026-10-29T07:30:29.2900630Z 
+check	Build fixture contracts	2026-10-29T07:30:29.3022750Z ^[[90mstdout^[[2m | tests/content/flows/memo-flow.spec.ts^[[2m > ^[[22m^[[2mmemo flow^[[2m > ^[[22m^[[2mstores the memo a memo.requested event carries
+check	Build fixture contracts	2026-10-29T07:30:29.3126020Z ^[[22m^[[39m[brain] Executing action node: add-memo {
+check	Build fixture contracts	2026-10-29T07:30:29.3242050Z   runNodeId: ^[[32m'RunNode-0mvt84ics0000'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.3242530Z   node: {
+check	Build fixture contracts	2026-10-29T07:30:29.3359460Z     id: ^[[32m'Node-memo-flow-add-memo-t-w0grul'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.3462370Z     entityType: ^[[32m'Node'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.3564890Z     actionId: ^[[32m'Action-mvt84i5s23vt4r77oiu4g'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.3667510Z     createdAt: ^[[33m1793259028730^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.3843990Z     fieldMappings: [ ^[[36m[Object]^[[39m ],
+check	Build fixture contracts	2026-10-29T07:30:29.3960740Z     label: ^[[32m'add-memo'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4082530Z     nodeType: ^[[32m'action'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4188100Z     updatedAt: ^[[33m1793259028730^[[39m
+check	Build fixture contracts	2026-10-29T07:30:29.4290210Z   },
+check	Build fixture contracts	2026-10-29T07:30:29.4290880Z   nodeAttributeKeys: [ ^[[32m'actionId'^[[39m, ^[[32m'text'^[[39m ]
+check	Build fixture contracts	2026-10-29T07:30:29.4291250Z }
+check	Build fixture contracts	2026-10-29T07:30:29.4293250Z [brain] Found action: Memo: Add { input: [ ^[[32m'text'^[[39m ] }
+check	Build fixture contracts	2026-10-29T07:30:29.4294150Z [brain] Executing action with resolved params: { text: ^[[32m'from a flow'^[[39m }
+check	Build fixture contracts	2026-10-29T07:30:29.4294450Z 
+check	Build fixture contracts	2026-10-29T07:30:29.4295170Z ^[[90mstdout^[[2m | tests/content/flows/memo-flow.spec.ts^[[2m > ^[[22m^[[2mmemo flow^[[2m > ^[[22m^[[2mstores the memo a memo.requested event carries
+check	Build fixture contracts	2026-10-29T07:30:29.4295990Z ^[[22m^[[39m[brain] Action completed successfully: {
+check	Build fixture contracts	2026-10-29T07:30:29.4296480Z   nodeLabel: ^[[32m'add-memo'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4296870Z   actionLabel: ^[[32m'Memo: Add'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4297370Z   result: { success: ^[[33mtrue^[[39m, memoId: ^[[32m'Memo-mvt84id73h8g0qs7tdze'^[[39m }
+check	Build fixture contracts	2026-10-29T07:30:29.4297790Z }
+check	Build fixture contracts	2026-10-29T07:30:29.4298150Z [brain] Child completed in flow - Memo Flow: {
+check	Build fixture contracts	2026-10-29T07:30:29.4298440Z   completion: {
+check	Build fixture contracts	2026-10-29T07:30:29.4298870Z     type: ^[[32m'CHILD_COMPLETED'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4400390Z     stepId: ^[[32m'Node-memo-flow-add-memo-t-w0grul'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4502430Z     stepLabel: ^[[32m'add-memo'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4605570Z     runNodeId: ^[[32m'RunNode-0mvt84ics0000'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4709160Z     result: { success: ^[[33mtrue^[[39m, memoId: ^[[32m'Memo-mvt84id73h8g0qs7tdze'^[[39m },
+check	Build fixture contracts	2026-10-29T07:30:29.4812180Z     final: ^[[33mfalse^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.4915080Z     eventRunNodeId: ^[[32m'RunNode-0mvt84ico0000'^[[39m,
+check	Build fixture contracts	2026-10-29T07:30:29.5017970Z     isFlow: ^[[33mfalse^[[39m
+check	Build fixture contracts	2026-10-29T07:30:29.5121700Z   }
+check	Build fixture contracts	2026-10-29T07:30:29.5226210Z }
+check	Build fixture contracts	2026-10-29T07:30:29.5328040Z 
+check	Build fixture contracts	2026-10-29T07:30:29.5430430Z  ^[[32m✓^[[39m tests/content/flows/memo-flow.spec.ts ^[[2m(^[[22m^[[2m1 test^[[22m^[[2m)^[[22m^[[33m 3098^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:29.5532710Z    ^[[33m^[[2m✓^[[22m^[[39m memo flow^[[2m > ^[[22mstores the memo a memo.requested event carries ^[[33m 3094^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:30.2155860Z  ^[[32m✓^[[39m tests/features/memos/be/boot-hooks.spec.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[32m 174^[[2mms^[[22m^[[39m
+check	Build fixture contracts	2026-10-29T07:30:30.2889740Z 
+check	Build fixture contracts	2026-10-29T07:30:30.2892640Z ^[[2m Test Files ^[[22m ^[[1m^[[32m11 passed^[[39m^[[22m^[[90m (11)^[[39m
+check	Build fixture contracts	2026-10-29T07:30:30.2894470Z ^[[2m      Tests ^[[22m ^[[1m^[[32m39 passed^[[39m^[[22m^[[90m (39)^[[39m
+check	Build fixture contracts	2026-10-29T07:30:30.2895830Z ^[[2m   Start at ^[[22m 07:30:07
+check	Build fixture contracts	2026-10-29T07:30:30.2898100Z ^[[2m   Duration ^[[22m 22.45s^[[2m (transform 980ms, setup 33.25s, collect 253ms, tests 5.19s, environment 2ms, prepare 971ms)^[[22m
+check	Build fixture contracts	2026-10-29T07:30:30.2899380Z 
+check	Build fixture contracts	2026-10-29T07:30:33.7164300Z Validating pack at: /Users/runner/work/apack/apack/tests/packs/bundled-ui-pack
+check	Build fixture contracts	2026-10-29T07:30:33.7193730Z 
+check	Build fixture contracts	2026-10-29T07:30:33.7211760Z + Pack is valid
+check	Build fixture contracts	2026-10-29T07:30:35.8935340Z 
+check	Build fixture contracts	2026-10-29T07:30:35.9037240Z > apack@0.3.14 packages:ensure
+check	Build fixture contracts	2026-10-29T07:30:35.9091230Z > tsx scripts/ensure-packages-built.ts
+check	Build fixture contracts	2026-10-29T07:30:35.9095730Z 
+check	Build fixture contracts	2026-10-29T07:30:58.3565830Z Generated:
+check	Build fixture contracts	2026-10-29T07:30:58.3567310Z   src/__generated__/entity-destinations.json
+check	Build fixture contracts	2026-10-29T07:30:58.3567710Z   src/__generated__/event-contracts.json
+check	Build fixture contracts	2026-10-29T07:30:58.3568030Z   src/__generated__/pack-entry.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3568360Z   src/__generated__/pack-entry-fe.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3568700Z   src/__generated__/ears.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3568950Z   src/__generated__/ref.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3569480Z   src/__generated__/paths.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3569790Z   src/__generated__/settings.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3570100Z   src/__generated__/settings-fe.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3570410Z   src/__generated__/fe.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3570690Z   src/__generated__/events.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3570930Z   src/__generated__/types.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3571260Z   src/__generated__/services.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3573900Z   src/__generated__/runtime-services.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3574210Z   src/__generated__/repository.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3574560Z   src/__generated__/pack-types.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3574840Z   src/__generated__/references.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3575210Z   src/__generated__/appliers.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3575540Z   src/__generated__/content-runtime.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3575830Z   src/__generated__/flow-helpers.ts
+check	Build fixture contracts	2026-10-29T07:30:58.3937200Z Building pack: Bundled UI Fixture v0.1.0
+check	Build fixture contracts	2026-10-29T07:30:58.3939430Z No content.sources or content.datasets in manifest. Skipping content compilation.
+check	Build fixture contracts	2026-10-29T07:31:15.7564860Z 
+check	Build fixture contracts	2026-10-29T07:31:15.7671650Z Build output:
+check	Build fixture contracts	2026-10-29T07:31:16.0527160Z   content runtime: dist/build/content-runtime.mjs
+check	Build fixture contracts	2026-10-29T07:31:16.0705060Z   runtime: dist/runtime/index.cjs
+check	Build fixture contracts	2026-10-29T07:31:21.9828110Z ^[[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help^[[39m
+check	Build fixture contracts	2026-10-29T07:31:22.1297100Z   fe: dist/runtime/fe.js
+check	Build fixture contracts	2026-10-29T07:31:22.1398950Z   fe styles: dist/runtime/fe.css
+check	Build fixture contracts	2026-10-29T07:31:37.9244130Z 
+check	Build fixture contracts	2026-10-29T07:31:37.9348890Z Output: dist/
+check	Build fixture contracts	2026-10-29T07:31:44.9681050Z No vitest config in this pack, so there are no contract checks to run. `apack pack init-tests` scaffolds one.
+check	Selected integration files	﻿2026-10-29T07:31:45.3152120Z ##[group]Run read -r -a files <<< "$APACK_INTEGRATION_FILES"
+check	Selected integration files	2026-10-29T07:31:45.3154490Z ^[[36;1mread -r -a files <<< "$APACK_INTEGRATION_FILES"^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3155710Z ^[[36;1mif (( ${#files[@]} == 0 )); then echo 'Name explicit integration or native spec files'; exit 1; fi^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3156950Z ^[[36;1mintegration=(); native=()^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3157630Z ^[[36;1mfor file in "${files[@]}"; do^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3158550Z ^[[36;1m  if [[ ! -f "$file" ]]; then echo "No such spec: $file"; exit 1^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3160590Z ^[[36;1m  elif [[ "$file" == packages/*/*.integration.spec.ts ]]; then integration+=("$file")^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3161490Z ^[[36;1m  elif [[ "$file" == packages/*/*.native.spec.ts ]]; then native+=("$file")^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3162100Z ^[[36;1m  else echo "Not an integration or native spec: $file"; exit 1^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3162540Z ^[[36;1m  fi^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3162750Z ^[[36;1mdone^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3162980Z ^[[36;1mmkdir -p .apack/tests/results^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3163520Z ^[[36;1m# Each half runs under its own root config, which is what includes its files. The native half's live^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3164230Z ^[[36;1m# watchers run one at a time, as the strict gate's native job runs them: two at once on this runner^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3164710Z ^[[36;1m# starve each other's rebuild deadlines^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3165050Z ^[[36;1mrun() {^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3166660Z ^[[36;1m  node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --config "vitest.$1.config.ts" "${@:3}" --poolOptions.threads.maxThreads=$2 --poolOptions.threads.minThreads=1 --poolOptions.forks.maxForks=$2 --poolOptions.forks.minForks=1 --bail=1 --reporter=default --reporter=json --outputFile=".apack/tests/results/$1.json"^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3170190Z ^[[36;1m}^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3170720Z ^[[36;1mif (( ${#integration[@]} )); then run integration 2 "${integration[@]}"; fi^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3172590Z ^[[36;1mif (( ${#native[@]} )); then run native 1 "${native[@]}"; fi^[[0m
+check	Selected integration files	2026-10-29T07:31:45.3787550Z shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+check	Selected integration files	2026-10-29T07:31:45.3787940Z env:
+check	Selected integration files	2026-10-29T07:31:45.3788220Z   APACK_CHAIN_CORES: 2
+check	Selected integration files	2026-10-29T07:31:45.3788510Z   CACHE_ON_FAILURE: false
+check	Selected integration files	2026-10-29T07:31:45.3789930Z   CARGO_INCREMENTAL: 0
+check	Selected integration files	2026-10-29T07:31:45.3791630Z   APACK_INTEGRATION_FILES: packages/apack-cli/tests/build/dependency-graph.integration.spec.ts packages/apack-cli/tests/build/build-registry.integration.spec.ts
+check	Selected integration files	2026-10-29T07:31:45.3793340Z ##[endgroup]
+check	Selected integration files	2026-10-29T07:31:46.3681530Z 
+check	Selected integration files	2026-10-29T07:31:46.3723760Z ^[[1m^[[46m RUN ^[[49m^[[22m ^[[36mv3.2.7 ^[[39m^[[90m/Users/runner/work/apack/apack^[[39m
+check	Selected integration files	2026-10-29T07:31:46.3724340Z 
+check	Selected integration files	2026-10-29T07:32:31.7373200Z ^[[90mstderr^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:32:31.7374560Z ^[[22m^[[39m
+check	Selected integration files	2026-10-29T07:32:31.7375630Z ^[[1m^[[33mwarn^[[39m^[[22m - No utility classes were detected in your source files. If this is unexpected, double-check the `content` option in your Tailwind CSS configuration.
+check	Selected integration files	2026-10-29T07:32:31.7377060Z ^[[1m^[[33mwarn^[[39m^[[22m - https://tailwindcss.com/docs/content-configuration
+check	Selected integration files	2026-10-29T07:32:31.7377480Z 
+check	Selected integration files	2026-10-29T07:32:31.7964020Z ^[[90mstderr^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:32:31.7969870Z ^[[22m^[[39m^[[33m[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help^[[39m
+check	Selected integration files	2026-10-29T07:32:31.7973750Z 
+check	Selected integration files	2026-10-29T07:32:55.0415120Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:32:55.0424510Z ^[[22m^[[39mgenerate-entries: inputs unchanged, skipping (use --force to regenerate)
+check	Selected integration files	2026-10-29T07:32:55.0425200Z 
+check	Selected integration files	2026-10-29T07:32:55.0653550Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:32:55.0656970Z ^[[22m^[[39mBuilding pack: Registry pack v1.0.0
+check	Selected integration files	2026-10-29T07:32:55.0657220Z 
+check	Selected integration files	2026-10-29T07:33:03.6224900Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:33:03.6227430Z ^[[22m^[[39mCompiling pack: registry-pack
+check	Selected integration files	2026-10-29T07:33:03.6228620Z 
+check	Selected integration files	2026-10-29T07:33:03.6270240Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:33:03.6272170Z ^[[22m^[[39m  flows: 1
+check	Selected integration files	2026-10-29T07:33:03.6273840Z 
+check	Selected integration files	2026-10-29T07:33:05.0745440Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:33:05.0858860Z ^[[22m^[[39m  facade types: unchanged, reused
+check	Selected integration files	2026-10-29T07:33:05.0872940Z 
+check	Selected integration files	2026-10-29T07:33:07.8265210Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:33:07.8280430Z ^[[22m^[[39m
+check	Selected integration files	2026-10-29T07:33:07.8287460Z Build output:
+check	Selected integration files	2026-10-29T07:33:07.8287830Z   flows: 1
+check	Selected integration files	2026-10-29T07:33:07.8288100Z 
+check	Selected integration files	2026-10-29T07:33:07.8474140Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:33:07.8477630Z ^[[22m^[[39m  step build: dist/build/steps.build.mjs
+check	Selected integration files	2026-10-29T07:33:07.8479170Z 
+check	Selected integration files	2026-10-29T07:33:08.1595820Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:33:08.1598360Z ^[[22m^[[39m  content runtime: dist/build/content-runtime.mjs
+check	Selected integration files	2026-10-29T07:33:08.1598930Z 
+check	Selected integration files	2026-10-29T07:33:08.1806200Z ^[[90mstdout^[[2m | tests/build/build-registry.integration.spec.ts^[[2m > ^[[22m^[[2ma build^[[2m > ^[[22m^[[2mcompiles flows against the steps it loaded, and leaves the bound registry untouched
+check	Selected integration files	2026-10-29T07:33:08.1839790Z ^[[22m^[[39m  runtime: dist/runtime/index.cjs
+check	Selected integration files	2026-10-29T07:33:08.1840320Z 
+check	Selected integration files	2026-10-29T07:33:41.9902250Z  ^[[32m✓^[[39m ^[[30m^[[43m @apackdev/cli ^[[49m^[[39m tests/build/build-registry.integration.spec.ts ^[[2m(^[[22m^[[2m2 tests^[[22m^[[2m)^[[22m^[[33m 111817^[[2mms^[[22m^[[39m
+check	Selected integration files	2026-10-29T07:33:41.9915950Z    ^[[33m^[[2m✓^[[22m^[[39m a build^[[2m > ^[[22mcompiles flows against the steps it loaded, and leaves the bound registry untouched ^[[33m 95267^[[2mms^[[22m^[[39m
+check	Selected integration files	2026-10-29T07:33:42.0004060Z    ^[[33m^[[2m✓^[[22m^[[39m a build^[[2m > ^[[22mrefuses a flow that names an undeclared step ^[[33m 16456^[[2mms^[[22m^[[39m
+check	Selected integration files	2026-10-29T07:34:53.7176670Z ^[[90mstdout^[[2m | tests/build/dependency-graph.integration.spec.ts^[[2m > ^[[22m^[[2ma collision that is real^[[2m > ^[[22m^[[2mstill fails when two independent packs declare the same entity
+check	Selected integration files	2026-10-29T07:34:53.7210300Z ^[[22m^[[39m[run] /Users/runner/hostedtoolcache/node/23.11.1/arm64/bin/node /Users/runner/work/apack/apack/packages/apack-cli/bin/apack.mjs pack build: 19102ms
+check	Selected integration files	2026-10-29T07:34:53.7217880Z 
+check	Selected integration files	2026-10-29T07:34:53.7750790Z  ^[[32m✓^[[39m ^[[30m^[[43m @apackdev/cli ^[[49m^[[39m tests/build/dependency-graph.integration.spec.ts ^[[2m(^[[22m^[[2m5 tests^[[22m^[[2m)^[[22m^[[33m 182989^[[2mms^[[22m^[[39m
+check	Selected integration files	2026-10-29T07:34:53.7755110Z    ^[[33m^[[2m✓^[[22m^[[39m a collision that is real^[[2m > ^[[22mstill fails when two independent packs declare the same entity ^[[33m 40533^[[2mms^[[22m^[[39m
+check	Selected integration files	2026-10-29T07:34:53.8875280Z 
+check	Selected integration files	2026-10-29T07:34:53.8917570Z ^[[2m Test Files ^[[22m ^[[1m^[[32m2 passed^[[39m^[[22m^[[90m (2)^[[39m
+check	Selected integration files	2026-10-29T07:34:53.8919170Z ^[[2m      Tests ^[[22m ^[[1m^[[32m7 passed^[[39m^[[22m^[[90m (7)^[[39m
+check	Selected integration files	2026-10-29T07:34:53.8921080Z ^[[2m   Start at ^[[22m 07:31:46
+check	Selected integration files	2026-10-29T07:34:53.8941120Z ^[[2m   Duration ^[[22m 187.43s^[[2m (transform 2.16s, setup 60ms, collect 6.75s, tests 294.81s, environment 0ms, prepare 144ms)^[[22m
+check	Selected integration files	2026-10-29T07:34:53.8943150Z 
+check	Selected integration files	2026-10-29T07:34:53.8963700Z JSON report written to /Users/runner/work/apack/apack/.apack/tests/results/integration.json
+check	Retain app suites before the CLI scenario	﻿2026-10-29T07:34:55.2070290Z ##[group]Run actions/upload-artifact@v4
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2070580Z with:
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2070860Z   name: app-acceptance-e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614-suites
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2071190Z   include-hidden-files: true
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2071800Z   path: .apack/tests/results/
+check	Retain app suites before the CLI scenario	tests/packs/*/.apack/tests/results/
+check	Retain app suites before the CLI scenario	tests/packs/*/dist/build-inputs.json
+check	Retain app suites before the CLI scenario	
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2072570Z   if-no-files-found: warn
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2073130Z   compression-level: 6
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2073550Z   overwrite: false
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2073960Z env:
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2074540Z   APACK_CHAIN_CORES: 2
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2074920Z   CACHE_ON_FAILURE: false
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2075230Z   CARGO_INCREMENTAL: 0
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.2075530Z ##[endgroup]
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.7413990Z (node:21895) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.7415060Z (Use `node --trace-deprecation ...` to show where the warning was created)
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.7539080Z Multiple search paths detected. Calculating the least common ancestor of all paths
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.7543420Z The least common ancestor is /Users/runner/work/apack/apack. This will be the root directory of the artifact
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.7545370Z With the provided path, there will be 3 files uploaded
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.7546200Z Artifact name is valid!
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:55.7546680Z Root directory input is valid!
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:56.2202720Z Beginning upload of artifact content to blob storage
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:56.3553230Z (node:21895) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:57.0121840Z Uploaded bytes 1272565
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:57.0833380Z Finished uploading artifact content to blob storage!
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:57.0835310Z SHA256 digest of uploaded artifact zip is 925058a90a2fa60cce002ad6f4a7c2759a5d7af5b689cd8c85666bb4efb10390
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:57.0846130Z Finalizing artifact upload
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:57.7256250Z Artifact app-acceptance-e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614-suites.zip successfully finalized. Artifact ID 12881440020
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:57.7259430Z Artifact app-acceptance-e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614-suites has been successfully uploaded! Final size is 1272565 bytes. Artifact ID is 12881440020
+check	Retain app suites before the CLI scenario	2026-10-29T07:34:57.7261170Z Artifact download URL: https://github.com/spankyed/apack/actions/runs/40834826426/artifacts/12881440020
+check	Retain app evidence	﻿2026-10-29T07:34:57.7610920Z ##[group]Run actions/upload-artifact@v4
+check	Retain app evidence	2026-10-29T07:34:57.7611200Z with:
+check	Retain app evidence	2026-10-29T07:34:57.7611430Z   name: app-acceptance-e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614
+check	Retain app evidence	2026-10-29T07:34:57.7611740Z   include-hidden-files: true
+check	Retain app evidence	2026-10-29T07:34:57.7612150Z   path: .apack/tests/results/
+check	Retain app evidence	tests/packs/*/.apack/tests/results/
+check	Retain app evidence	tests/packs/*/dist/build-inputs.json
+check	Retain app evidence	
+check	Retain app evidence	2026-10-29T07:34:57.7612550Z   if-no-files-found: warn
+check	Retain app evidence	2026-10-29T07:34:57.7612760Z   compression-level: 6
+check	Retain app evidence	2026-10-29T07:34:57.7613030Z   overwrite: false
+check	Retain app evidence	2026-10-29T07:34:57.7613230Z env:
+check	Retain app evidence	2026-10-29T07:34:57.7613390Z   APACK_CHAIN_CORES: 2
+check	Retain app evidence	2026-10-29T07:34:57.7613560Z   CACHE_ON_FAILURE: false
+check	Retain app evidence	2026-10-29T07:34:57.7613730Z   CARGO_INCREMENTAL: 0
+check	Retain app evidence	2026-10-29T07:34:57.7613920Z ##[endgroup]
+check	Retain app evidence	2026-10-29T07:34:58.1854890Z (node:21902) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+check	Retain app evidence	2026-10-29T07:34:58.1906920Z (Use `node --trace-deprecation ...` to show where the warning was created)
+check	Retain app evidence	2026-10-29T07:34:58.1912700Z Multiple search paths detected. Calculating the least common ancestor of all paths
+check	Retain app evidence	2026-10-29T07:34:58.1914150Z The least common ancestor is /Users/runner/work/apack/apack. This will be the root directory of the artifact
+check	Retain app evidence	2026-10-29T07:34:58.1916500Z With the provided path, there will be 3 files uploaded
+check	Retain app evidence	2026-10-29T07:34:58.1918600Z Artifact name is valid!
+check	Retain app evidence	2026-10-29T07:34:58.1919050Z Root directory input is valid!
+check	Retain app evidence	2026-10-29T07:34:58.6419570Z Beginning upload of artifact content to blob storage
+check	Retain app evidence	2026-10-29T07:34:58.7593340Z (node:21902) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+check	Retain app evidence	2026-10-29T07:34:59.4361720Z Uploaded bytes 1272565
+check	Retain app evidence	2026-10-29T07:34:59.5525260Z Finished uploading artifact content to blob storage!
+check	Retain app evidence	2026-10-29T07:34:59.5627200Z SHA256 digest of uploaded artifact zip is 925058a90a2fa60cce002ad6f4a7c2759a5d7af5b689cd8c85666bb4efb10390
+check	Retain app evidence	2026-10-29T07:34:59.5727510Z Finalizing artifact upload
+check	Retain app evidence	2026-10-29T07:35:00.1047900Z Artifact app-acceptance-e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614.zip successfully finalized. Artifact ID 12881410157
+check	Retain app evidence	2026-10-29T07:35:00.1050150Z Artifact app-acceptance-e452d67ae1b9c8ccd9308fa0fe6ae63d0f896614 has been successfully uploaded! Final size is 1272565 bytes. Artifact ID is 12881410157
+check	Retain app evidence	2026-10-29T07:35:00.1051740Z Artifact download URL: https://github.com/spankyed/apack/actions/runs/40834826426/artifacts/12881410157
+check	Post Run ./.github/actions/elmdb	﻿2026-10-29T07:35:00.1180220Z Post job cleanup.
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.1209770Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__cad86bdf-639d-499c-bd60-56708bd395a1.__Swatinem_rust-cache]
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.1275000Z Post job cleanup.
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3714810Z ##[group]Cache Configuration
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3718900Z Cache Provider:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3719380Z     github
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3719760Z Workspaces:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3720180Z     /Users/runner/work/apack/apack/vendor/elmdb
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3720650Z Cache Paths:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3721090Z     /Users/runner/.cargo/bin
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3721560Z     /Users/runner/.cargo/.crates.toml
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3733620Z     /Users/runner/.cargo/.crates2.json
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3734200Z     /Users/runner/.cargo/registry
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3734710Z     /Users/runner/.cargo/git
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3735280Z     /Users/runner/work/apack/apack/vendor/elmdb/target
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3739030Z Restore Key:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3739560Z     v0-rust-check-Darwin-arm64-30c62bd1
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3749780Z Cache Key:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3750270Z     v0-rust-check-Darwin-arm64-30c62bd1-93401fda
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3750750Z .. Prefix:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3751130Z   - v0-rust-check-Darwin-arm64
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3751630Z .. Environment considered:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3752060Z   - Rust Versions:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3752650Z     - 1.99.1 aarch64-apple-darwin 58cf8f9c35b355199727627d07ae34a4e2846d67
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3753200Z   - CARGO_INCREMENTAL
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3753670Z .. Lockfiles considered:
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3754230Z   - /Users/runner/work/apack/apack/vendor/elmdb/.cargo/config.toml
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3754850Z   - /Users/runner/work/apack/apack/vendor/elmdb/Cargo.lock
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3755410Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-cli/Cargo.toml
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3756130Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb-node/Cargo.toml
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3756930Z   - /Users/runner/work/apack/apack/vendor/elmdb/crates/elmdb/Cargo.toml
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3758030Z   - /Users/runner/work/apack/apack/vendor/elmdb/rust-toolchain.toml
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3758660Z   - /Users/runner/work/apack/apack/vendor/elmdb/xtask/Cargo.toml
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3759360Z ##[endgroup]
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:00.3759570Z 
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:03.3937880Z ... Cleaning /Users/runner/work/apack/apack/vendor/elmdb/target ...
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:03.4459090Z ... Cleaning cargo registry (cache-all-crates: false) ...
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:04.8260430Z ... Cleaning cargo/bin ...
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:04.8263500Z ... Cleaning cargo git cache ...
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:04.8265940Z ... Saving cache ...
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:04.8647590Z [command]/opt/homebrew/bin/gtar --posix -cf cache.tzst --exclude cache.tzst -P -C /Users/runner/work/apack/apack --files-from manifest.txt --delay-directory-restore --use-compress-program zstdmt
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:08.7786060Z Sent 0 of 162934004 (0.0%), 0.0 MBs/sec
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:09.7841180Z Sent 28716276 of 162934004 (17.6%), 13.6 MBs/sec
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:10.3904650Z Sent 162934004 of 162934004 (100.0%), 59.4 MBs/sec
+check	Post Run ./.github/actions/elmdb	2026-10-29T07:35:10.7650210Z ##[end-action id=__cad86bdf-639d-499c-bd60-56708bd395a1.__Swatinem_rust-cache;outcome=success;conclusion=success;duration_ms=10637]
+check	Post Run actions/setup-node@v4	﻿2026-10-29T07:35:10.8039940Z Post job cleanup.
+check	Post Run actions/setup-node@v4	2026-10-29T07:35:11.3807440Z (node:22200) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+check	Post Run actions/setup-node@v4	2026-10-29T07:35:11.3820940Z (Use `node --trace-deprecation ...` to show where the warning was created)
+check	Post Run actions/setup-node@v4	2026-10-29T07:35:11.3825680Z Cache hit occurred on the primary key node-cache-macOS-arm64-npm-4984968ff64a3dcfb4f348c66f10b08ad8644b73733fe138abcf56c8f961cdde, not saving cache.
+check	Post Run actions/checkout@v4	﻿2026-10-29T07:35:11.4139980Z Post job cleanup.
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.6391920Z [command]/opt/homebrew/bin/git version
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.6863330Z git version 2.56.0
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.6890170Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/7ecd8a63-aef7-49da-879b-693038ed1447/.gitconfig'
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.6911660Z Temporarily overriding HOME='/Users/runner/work/_temp/7ecd8a63-aef7-49da-879b-693038ed1447' before making global git config changes
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.6912820Z Adding repository directory to the temporary git global config as a safe directory
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.6915000Z [command]/opt/homebrew/bin/git config --global --add safe.directory /Users/runner/work/apack/apack
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.7120290Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp core\.sshCommand
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.7319650Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.8914760Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.8987740Z http.https://github.com/.extraheader
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.9002320Z [command]/opt/homebrew/bin/git config --local --unset-all http.https://github.com/.extraheader
+check	Post Run actions/checkout@v4	2026-10-29T07:35:11.9071850Z [command]/opt/homebrew/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+check	Post Run actions/checkout@v4	2026-10-29T07:35:12.0345980Z [command]/opt/homebrew/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+check	Post Run actions/checkout@v4	2026-10-29T07:35:12.0751580Z [command]/opt/homebrew/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+check	Complete job	﻿2026-10-29T07:35:12.3316420Z Cleaning up orphan processes
+check	Complete job	2026-10-29T07:35:20.5781560Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

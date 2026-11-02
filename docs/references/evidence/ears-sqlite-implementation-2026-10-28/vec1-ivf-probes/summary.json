@@ -1,0 +1,110 @@
+[
+  {
+    "probes": 32,
+    "phase": "initial",
+    "scopePercent": 100,
+    "meanRecall": 0.984,
+    "queryP95Ms": 9.517518000000564,
+    "heartbeatP99Ms": 10.492980000002717,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 32,
+    "phase": "initial",
+    "scopePercent": 10,
+    "meanRecall": 0.9800000000000002,
+    "queryP95Ms": 9.167475999998715,
+    "heartbeatP99Ms": 10.546564000000217,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 32,
+    "phase": "initial",
+    "scopePercent": 1,
+    "meanRecall": 0.9470000000000001,
+    "queryP95Ms": 9.21005900000091,
+    "heartbeatP99Ms": 10.133022000001802,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 32,
+    "phase": "updated",
+    "scopePercent": 100,
+    "meanRecall": 0.9860000000000002,
+    "queryP95Ms": 9.966852000001381,
+    "heartbeatP99Ms": 10.840022000003955,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 32,
+    "phase": "updated",
+    "scopePercent": 10,
+    "meanRecall": 0.9760000000000001,
+    "queryP95Ms": 10.730646000003617,
+    "heartbeatP99Ms": 11.952441000001272,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 32,
+    "phase": "updated",
+    "scopePercent": 1,
+    "meanRecall": 0.9470000000000001,
+    "queryP95Ms": 10.357102999994822,
+    "heartbeatP99Ms": 11.420399000002362,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 64,
+    "phase": "initial",
+    "scopePercent": 100,
+    "meanRecall": 0.9870000000000001,
+    "queryP95Ms": 17.077714999999444,
+    "heartbeatP99Ms": 18.346762999997736,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 64,
+    "phase": "initial",
+    "scopePercent": 10,
+    "meanRecall": 0.9940000000000001,
+    "queryP95Ms": 16.506829999998445,
+    "heartbeatP99Ms": 17.374918000001344,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 64,
+    "phase": "initial",
+    "scopePercent": 1,
+    "meanRecall": 0.9990000000000001,
+    "queryP95Ms": 16.546039000000746,
+    "heartbeatP99Ms": 17.56112700000085,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 64,
+    "phase": "updated",
+    "scopePercent": 100,
+    "meanRecall": 0.9879999999999999,
+    "queryP95Ms": 17.473665999998047,
+    "heartbeatP99Ms": 21.757427999997162,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 64,
+    "phase": "updated",
+    "scopePercent": 10,
+    "meanRecall": 0.9910000000000002,
+    "queryP95Ms": 16.729830000003858,
+    "heartbeatP99Ms": 21.836802999998326,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  },
+  {
+    "probes": 64,
+    "phase": "updated",
+    "scopePercent": 1,
+    "meanRecall": 0.9990000000000001,
+    "queryP95Ms": 16.598038000003726,
+    "heartbeatP99Ms": 17.547293000003265,
+    "modelSha256": "0b222c387acfe5926252644be4158985b3d5e65d91c94e65b2e39e487aaa7b49"
+  }
+]

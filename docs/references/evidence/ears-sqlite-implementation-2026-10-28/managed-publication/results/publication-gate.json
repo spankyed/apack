@@ -1,0 +1,17 @@
+{
+  "sourceSha256": "5e7631a42238ced3895ace15ca195c5b2bc766874f37f83386866170a162dc66",
+  "hostReportSha256": "9944c3a13dc5a9cd5717f8bddf598fa55100ef1b50ca903af6930bb7412b9eaf",
+  "passed": 27,
+  "controls": [
+    {
+      "kind": "missing",
+      "code": "ERR_ASSERTION",
+      "message": "All managed publication and corruption-classification cases must execute\n\n26 !== 27\n"
+    },
+    {
+      "kind": "skipped",
+      "code": "ERR_ASSERTION",
+      "message": "Managed writers, readers and failed-open connections must exclude physical replacement"
+    }
+  ]
+}

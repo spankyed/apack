@@ -1,0 +1,51 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/trigrams.spec.ts -t uses FTS5
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/trigrams.spec.ts (7 tests | 1 failed | 6 skipped) 275ms
+   × SQLite exact trigram filtering > uses FTS5 for a selective literal, preserves duplicates and avoids whole-row hydration 274ms
+     → expected false to be true // Object.is equality
+   ↓ SQLite exact trigram filtering > matches individual strings, Unicode folding and short/NUL literals without crossing element boundaries
+   ↓ SQLite exact trigram filtering > keeps changed fields, units, unchecked repairs, deletes and read-only reopen consistent
+   ↓ SQLite exact trigram filtering > releases every compiled regex on success and failures, including a later invalid pattern
+   ↓ SQLite exact trigram filtering > handles empty/set-based inputs and refuses direct typed missing indexes
+   ↓ SQLite exact trigram filtering > notifies watches on committed text and declaration changes, with no aborted answer
+   ↓ SQLite exact trigram filtering > agrees with the native backend across literal and regex corpora
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/trigrams.spec.ts > SQLite exact trigram filtering > uses FTS5 for a selective literal, preserves duplicates and avoids whole-row hydration
+AssertionError: expected false to be true // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+ ❯ tests/sqlite/trigrams.spec.ts:37:130
+     35|     const subset = e.query.ids(['Row-400']).matching('.*').explain();
+     36|     if (subset.backend !== 'sqlite') throw Error('Expected SQLite');
+     37|     expect(subset.statements.flatMap(s => s.plan).some(p => p.detail.i…
+       |                                                                                                                                  ^
+     38|     const compiler = (db.search.trigrams as unknown as { compiler: Ret…
+     39|     const compile = compiler.compile.bind(compiler); let checked = 0;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  16:36:03
+   Duration  809ms (transform 262ms, setup 14ms, collect 354ms, tests 275ms, environment 0ms, prepare 54ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/trigrams.spec.ts -t 'uses FTS5'

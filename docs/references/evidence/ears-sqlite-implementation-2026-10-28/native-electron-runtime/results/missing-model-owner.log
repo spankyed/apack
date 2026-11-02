@@ -1,0 +1,8 @@
+Error: Start native model ownership before waiting for models
+    at fail (file:///electron/packages/apack-ears/dist/sqlite/index-builds.js:6:55)
+    at SqliteIndexBuilds.indexesReady (file:///electron/packages/apack-ears/dist/sqlite/index-builds.js:282:17)
+    at SqliteDatabase.nativeModelsReady (file:///electron/packages/apack-ears/dist/sqlite/database.js:1178:51)
+    at waitForNativeModels (file:///electron/packages/apack-ears/dist/sqlite/index.js:82:21)
+    at main (/electron/.temp/packaged-sqlite-probe.cjs:54:11) {
+  code: 'BACKGROUND_OWNER_REQUIRED'
+}

@@ -1,0 +1,21 @@
+{
+  "sourceBase": "3cccc4dfa9441b834afc325fddd24f1fb1d06c09",
+  "failedRun": 41034746897,
+  "failedJob": 123999240033,
+  "input": {
+    "packages/publish-checks/tests/published-sdk-types.integration.spec.ts": "5d5a83c4a9e4830bb8eaeb064ff1a9a11a8746e53143f827c741d36747d1e294"
+  },
+  "image": "sha256:0146a4490634fe153ec35c63e7075a4b3e31b1d1a2996d29c77506c5d07b6507",
+  "fullLimits": {
+    "cpus": 2,
+    "memoryGiB": 6,
+    "swapGiB": 0
+  },
+  "commands": [
+    "node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts --project @app/publish-checks packages/publish-checks/tests/published-sdk-types.integration.spec.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=/results/inventory-all.json",
+    "npm run typecheck -w @app/publish-checks",
+    "node node_modules/oxlint/bin/oxlint packages/publish-checks/tests/published-sdk-types.integration.spec.ts -D correctness",
+    "python3 /check.py"
+  ],
+  "network": "none"
+}

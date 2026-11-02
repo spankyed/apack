@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ✓ tests/engine/relations.spec.ts (29 tests) 1206ms
+   ✓ matches an explicit relation end even when unchecked data has no entity at that end  398ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 141ms
+
+ Test Files  2 passed (2)
+      Tests  36 passed (36)
+   Start at  16:43:11
+   Duration  2.32s (transform 383ms, setup 23ms, collect 632ms, tests 1.35s, environment 0ms, prepare 110ms)
+
+JSON report written to /results/focused-elmdb.json

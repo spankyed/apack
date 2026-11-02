@@ -1,0 +1,10 @@
+{
+  "omit-inner-signature-verification.log": {
+    "rawSha256": "355a658cd3dc3da81ddb1fefbabc17c7b8a5ae81a93fdcc31e235f767de06c1c",
+    "normalization": "Trailing whitespace only"
+  },
+  "allow-skipped-library.log": {
+    "rawSha256": "9474221295367860da077d5502812580d348b1b76187f3874d8e8f0cd0445769",
+    "normalization": "Trailing whitespace only"
+  }
+}

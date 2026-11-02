@@ -1,0 +1,10 @@
+In file included from /usr/include/unistd.h:1217,
+2026-11-01T21:53:36.8947961Z                  from packages/apack-ears/bench/sqlite/worker-read-fault.c:2:
+2026-11-01T21:53:36.8948704Z /usr/include/x86_64-linux-gnu/bits/unistd.h: In function ‘pread64’:
+2026-11-01T21:53:36.8949517Z /usr/include/x86_64-linux-gnu/bits/unistd.h:36:1: error: inlining failed in call to ‘always_inline’ ‘pread.localalias’: function not inlinable
+2026-11-01T21:53:36.8950292Z    36 | pread (int __fd, void *__buf, size_t __nbytes, __off_t __offset)
+2026-11-01T21:53:36.8950545Z       | ^~~~~
+2026-11-01T21:53:36.8951036Z /usr/include/x86_64-linux-gnu/bits/unistd.h:54:1: note: called from this function
+2026-11-01T21:53:36.8951537Z    54 | pread64 (int __fd, void *__buf, size_t __nbytes, __off64_t __offset)
+2026-11-01T21:53:36.8951800Z       | ^~~~~~~
+2026-11-01T21:53:36.8977926Z 

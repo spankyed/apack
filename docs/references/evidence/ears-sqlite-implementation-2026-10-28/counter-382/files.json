@@ -1,0 +1,30 @@
+{
+  "sqlite-contracts.json": {
+    "sha256": "cdf85ad8e6400851dd4dd28876722aac4a37ae41c4c289f15e66cf2cc67229a7",
+    "bytes": 138668
+  },
+  "elmdb-contracts.json": {
+    "sha256": "8fc541f7dd4256635329bf8aa7f3ad49a7dc407f848ea861efc93ebb8b9294de",
+    "bytes": 134357
+  },
+  "profile-conversion.json": {
+    "sha256": "e084091b09d949883ac92d563a34b1f33097ce89f6ed52689415ca9643629cd2",
+    "bytes": 2657
+  },
+  "source.txt": {
+    "sha256": "0623df2f6ba6a5b83a12774ea32af0658ff8f09f908d76967c49321e4ac7da9a",
+    "bytes": 41
+  },
+  "elmdb.rev": {
+    "sha256": "a5a5fd172947dca970a0433224911f7e0f7de3e39dce508ef9e00548fba2bcf9",
+    "bytes": 41
+  },
+  "reports.patch": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "run.json": {
+    "sha256": "2420a601aaef711f435201eb5f705286376697533e117f5c2932d9320d899bd2",
+    "bytes": 7804
+  }
+}

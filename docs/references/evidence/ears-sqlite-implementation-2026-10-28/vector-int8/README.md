@@ -1,0 +1,35 @@
+# Int8 candidate counterfactual
+
+Protocol and first driver were committed before execution at a75f1f3ceff1e66f894a1af6e1ee17413ae887aa. No production or dependency change is included. The first setup omitted package builds; the import checker could not resolve the SDK dist, and no vector measurements ran. Adding that prerequisite passed builds/lint/imports, then the tiny transaction control refused a vec0 rowid bound as a JS number: the virtual table requires an integer SQLite binding. Both outcomes and exact source/archive identity are retained.
+
+The corrected driver binds virtual-table rowids, boolean metadata and k explicitly as BigInt, preserving the fixed 64 candidates and all thresholds. It also records the extension hash while a database is open: collecting loaded libraries only after close can miss a library unloaded by SQLite. This is a diagnostic provenance correction, not an extension failure. Raw failures remain unchanged. At that checkpoint no corpus profile had run.
+
+
+At c8c6a911873be7bb141855efa11a9a6cab5f5ed1 the integer binding correction passes lint. Two thin-runner attempts failed before controls because the dependency volume was mounted one directory too deep (first missing lint, then missing tsx). Correcting that layout supplies the session's immutable seed read-only and all needed modules; no new package version or source change was made for that setup correction.
+
+The corrected-layout control then reached direct int8 UPDATE and failed: its three-byte encoded vector was parsed as a Float32 BLOB. Corpus profiles remain UNRUN. Source changes now use atomic DELETE/INSERT for the derived row, preserving the caller's SQLite transaction, rather than direct virtual-table vector/metadata UPDATE. Original candidate count, quantization and targets stay fixed. The native binary was captured while open: sqlite-vec v0.1.9 at SHA-256 0b84cbd06418ca3040827deddd650539be05be0f657952426b926c8606217437; the binding remains 8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485. The after-close report correctly no longer lists the unloaded extension. All control/setup failures remain retained; they are not performance samples.
+
+
+## Cosine cohort outcome
+
+At 0567ad6934c11d7574f32ffe3c8914ae545d42e5, lint and all seven controls pass: direct own-write, savepoint deletion/rollback, metadata rollback, two-handle snapshot, VACUUM INTO and reopen. Both 1k clustered/mixed profiles pass (384 requests total) and the first 10k clustered profile matches exact truth on all 192 calls, before and after updating 31 vectors. The 10k unfiltered warm median/p95 are 17.96/18.74 ms, candidate stage median 16.88 ms, rerank 0.88 ms. 10%/1% medians are 6.51/3.00 ms. Heartbeat p99 17.23 ms misses the unchanged 16 ms ceiling. The cohort stops: mixed 10k and all 100k work are UNRUN. No retry or candidate-count tuning follows this miss.
+
+The next preregistered variant is l2-unit in bench/sqlite/README.md: stateless unit-normalized signed-int8 coordinates plus exact constant-norm integer padding for stored vectors, zero padding for queries, native L2 candidates and unchanged Float32 cosine reranking. Source [v0.1.9 distance dispatch](https://github.com/asg017/sqlite-vec/blob/v0.1.9/sqlite-vec.c) has a conditional NEON int8 L2 path, while cosine uses its separate kernel. This is a mechanism hypothesis, not a claim about the selected binary or a measured SIMD cause. Analytic norm/distance checks and all native controls precede timing; targets and 64 candidates stay fixed. No production integration is chosen.
+
+
+## L2-unit outcome and native configuration control
+
+At 74d58baa95734d5f45b3b325a77f5c366742ea73, lint, integer norm/distance checks, all seven native controls and both 1k profiles pass. The first 10k clustered profile again has exact sampled recall but misses heartbeat: p99 22.34 ms, maximum 60.08 ms. Unfiltered warm median/p95 22.81/24.24 ms; candidate median 21.88 ms, rerank 0.90 ms. No causal attribution is made for the 67.99 ms query outlier. Mixed 10k and 100k are UNRUN after the first miss. This is not an improvement over the prior cosine attempt.
+
+Actual npm-binary debug output identifies the same source commit e9f598ab with blank Build flags (retained as npm-binary-debug.json). [Upstream Makefile](https://github.com/asg017/sqlite-vec/blob/v0.1.9/Makefile) enables NEON automatically on Darwin arm64, not Linux arm64. Next compare private -O3 builds of the exact released source with/without SQLITE_VEC_ENABLE_NEON, using the unchanged L2-unit workload. Verify archive digest/source/compiler/binary hashes and runtime flags. No source patch, dependency bump or production loader change is selected; the diagnostic-only explicit extension path is part of the frozen next source. Full goal criteria, including platform/recovery and actual EARS/app resource qualification, remain required.
+
+
+## Exact-source SIMD control and range failure
+
+The official v0.1.9 amalgamation archive matches GitHub's SHA-256 3acd67cb4aff080c7050926fd3cf8227905fe5b7ee3829d8ee5024ab1283cf61; source/header hashes are retained. Private Linux GCC builds use exact unpatched source. Strict GCC first refused signed/unsigned vector conversions in the upstream L1 code. Adding its suggested -flax-vector-conversions to BOTH plain and NEON builds compiled both; flags, compiler version and binaries' hashes are in the retained native.json.
+
+The NEON L2-unit run fails the tiny own-write control before any corpus profile: the opposite vector still ranks nearest. The paired plain 10k diagnostic remains correct but slow (22.01 ms unfiltered warm median; heartbeat p99 20.55 ms), consistent with the npm-binary diagnostic. No NEON performance or recall acceptance is claimed.
+
+A minimal direct-distance check isolates valid int8 range handling: for +127 versus -127, scalar returns 254 while NEON returns NULL, at 8/35/1568 dimensions. Both correctly return 180 for +90 versus -90. Source l2_sqr_int8_neon squares in signed 16-bit lanes before widening, so a difference of 254 cannot fit. This is numerical correctness, not evidence of authoritative transaction corruption. The tested NEON SHA is 41b5f6164513599d3949885f608e14023ed51aaf8c0a6505e3962ddf7dfc3979; plain is 34f4dc8acc0fe5e98b1c8f09d3f9c82c5144118e3ac88f626d6fc8b90f1f66d1. Both report the exact e9f598ab commit, with NEON advertised only by the optimized build.
+
+The next preregistered l2-safe encoding uses floor(sqrt(INT16_MAX)/2)=90 for all internal coordinates, including norm padding. Its maximum difference 180 squares to 32400, inside the native lane range. Unit normalization, constant stored norm, zero query padding and Float32 reranking remain; candidate count/recall/latency/scope/transaction targets are unchanged. The full-range strategy stays rejected. No optimized production artifact, native patch or dependency change is chosen. Cross-platform and real corpus qualification remain open even if this controlled variant passes.

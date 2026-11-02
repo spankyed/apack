@@ -1,0 +1,92 @@
+[
+  {
+    "file": "windows-unsafe-rename.log.gz",
+    "originalBytes": 401853,
+    "originalSha256": "b8a9f7601def68693769b7e62cb1aec09ed8777ee21e456060d03a982671cc2a",
+    "storedSha256": "d08a22c7fb0f7358cdf8294510ecddb4437eadeb69cc5a2bf3d72f62e67a4570"
+  },
+  {
+    "file": "platform-unsafe-rename.json.gz",
+    "originalBytes": 18717,
+    "originalSha256": "0e33314f816d03816d11b6782fe2fc86ede6fe70d76ebca9d5acba9abe6bedd4",
+    "storedSha256": "13dffa5675e8dcabf3f69e7f1adf6d256f9aa3ea4d293dd991b9653b41a325c4"
+  },
+  {
+    "file": "focused-linux.json.gz",
+    "originalBytes": 4102,
+    "originalSha256": "28f2fce175361c629481e42c86f7e198d7c5c4aca25b25fd7d02b774bfd415b9",
+    "storedSha256": "b3e67de2250d92d74d2b6d3b225efa9eff2124ce06e8d7510c4b054565fdadb8"
+  },
+  {
+    "file": "host-types-default-heap.log.gz",
+    "originalBytes": 1827,
+    "originalSha256": "40356a874767618e730a4555b7048df278eaec0718a067c7a4a27fa2a89ad89c",
+    "storedSha256": "9da32546de6029c48fdd534caf8b6a332300c43efec8971c1c736f39f00d29ec"
+  },
+  {
+    "file": "cli-types-512.log.gz",
+    "originalBytes": 1772,
+    "originalSha256": "52045e5955476277bbdf4b4f16db2ff66876400a5329c25a5b9d3422b8939748",
+    "storedSha256": "bc0bc7ba901ae56dd783a6f35052a6294c70990634942cd3e392687127458b63"
+  },
+  {
+    "file": "platform-cli-linux.json.gz",
+    "originalBytes": 9070,
+    "originalSha256": "af46104b2c5385f3f0c185200c76c93ef457f61ab4e9fc1914641b56ccc4cb13",
+    "storedSha256": "d2d6ed8502fd807f0eca0c15d73dbe299259b696a6d59a718cd9b02cf8b89930"
+  },
+  {
+    "file": "platform-cli-linux.log.gz",
+    "originalBytes": 2123,
+    "originalSha256": "ce09e97018d186e5171c4c04b7651c93163e0b0eb5da19bc9c72d40b66e5b9d7",
+    "storedSha256": "304261aa3dbaf46c474346a1d25e8810c3148c61757a97ccef1b14de1eca0688"
+  },
+  {
+    "file": "changed-lint.log.gz",
+    "originalBytes": 90,
+    "originalSha256": "d688590976b4c1ddb1a695b33d4decd600605845c57e119dd08a1697640faf09",
+    "storedSha256": "9f256987d0c7fe9605217603a2b71ee57c351f1cd38f6b15076f1c65dfabf1b9"
+  },
+  {
+    "file": "host-types-512.log.gz",
+    "originalBytes": 0,
+    "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "storedSha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+  },
+  {
+    "file": "backup-verifier-controls.json.gz",
+    "originalBytes": 1783,
+    "originalSha256": "461549e6e0dcf8569e6060b11939d9624319627df7fc8a34d5e05b78568be3ee",
+    "storedSha256": "2da3578f36dea4f86a6ad5418958272a7908f626646d878d0f377e1af2446104"
+  },
+  {
+    "file": "backup-verifier-control.cjs.gz",
+    "originalBytes": 2692,
+    "originalSha256": "c7e59e64429da40aec3ca3e14abefca89c676872802097bf954fb86f48ff2763",
+    "storedSha256": "a3324769ea9bf7a61e813da1f386c6e8a42af9ffacfd9700f72a907481ff5344"
+  },
+  {
+    "file": "platform-41130505526.json.gz",
+    "originalBytes": 18717,
+    "originalSha256": "880f9640b733aeed340a7ee71b2c3bd372f3498b6e7ef451210dc44b120f1c88",
+    "storedSha256": "85d08d2f81edae7d7e80740654c275d8bc5ca984006c1607d47c63588cec5cca"
+  },
+  {
+    "file": "platform-windows-41130505526.log.gz",
+    "originalBytes": 624814,
+    "originalSha256": "fe1ba846b15d402fe06431ddc5309428b510b3e52285b7772bde81c63c92546c",
+    "storedSha256": "84929635a7a543cae33d1caa8fa8af17eae26636ec25e99a2d58512fa17e57fc"
+  },
+  {
+    "file": "platform-macos-41130505526.log.gz",
+    "originalBytes": 175891,
+    "originalSha256": "cb62f68fe1436702620c18267c56f981d79343a71c6042f2255fd3418933ad5d",
+    "storedSha256": "ec70fcb7e27f977f9d9b5b97fe76669bbc49cd3a5ac461324efcc0c7c2693b0a"
+  },
+  {
+    "file": "platform-linux-41130505526.log.gz",
+    "originalBytes": 262612,
+    "originalSha256": "5a13c8a7c52d4fc2f83cb398dddeba263271eac5268e20743d2904da957c0eeb",
+    "storedSha256": "ea52d85383f9963817b7e62e9141e82a381267f3f27bea3d61a760f51398a14b"
+  }
+]

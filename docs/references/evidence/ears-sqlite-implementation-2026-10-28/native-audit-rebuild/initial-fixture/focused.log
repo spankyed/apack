@@ -1,0 +1,39 @@
+(node:19) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@apackdev/ears| tests/sqlite/vector-models.spec.ts (35 tests | 34 skipped) 1992ms
+   ✓ durable native model admission > drains training during rebuild and resumes the retained service with fresh logical generations  1991ms
+ ❯ |@apackdev/ears| tests/sqlite/vector-audit.spec.ts (8 tests | 1 failed) 2084ms
+   × native projection maintenance > audits model identity, canonical vectors, owner visibility and triggers without modifying the source 299ms
+     → e.trash is not a function
+   ✓ native projection maintenance > reports missing-row drift independently of intact native pages 199ms
+   ✓ native projection maintenance > reports owner drift independently of intact native pages 188ms
+   ✓ native projection maintenance > reports model-hash drift independently of intact native pages 212ms
+   ✓ native projection maintenance > reports trigger drift independently of intact native pages 204ms
+   ✓ native projection maintenance > allows an incomplete private projection but detects missing rows behind its committed cursor  500ms
+   ✓ native projection maintenance > rebuilds offline under the native claim and retires invalidated models without changing canonical data  302ms
+   ✓ native projection maintenance > refuses rebuild while an independent handle owns native work before admitting any generation 180ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@apackdev/ears| tests/sqlite/vector-audit.spec.ts > native projection maintenance > audits model identity, canonical vectors, owner visibility and triggers without modifying the source
+TypeError: e.trash is not a function
+ ❯ tests/sqlite/vector-audit.spec.ts:30:41
+     28| describe.runIf(process.env.EARS_EVALUATION_BACKEND==='sqlite'&&!!proce…
+     29|   it('audits model identity, canonical vectors, owner visibility and t…
+     30|     const {db,e,name}=await fixture();e.trash('Row-1');
+       |                                         ^
+     31|     const sequence=e.lastCommit(),before=db.all(`SELECT * FROM ${name}…
+     32|     expect(await auditDatabase(db)).toMatchObject({ok:true,comparedNat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 8 passed | 34 skipped (43)
+   Start at  11:48:18
+   Duration  6.89s (transform 1.13s, setup 14ms, collect 2.08s, tests 4.08s, environment 0ms, prepare 325ms)
+
+JSON report written to /results/focused.json

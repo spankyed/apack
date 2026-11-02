@@ -1,0 +1,219 @@
+{
+  "candidate": "sqliteai/sqlite-vector 1.1.2",
+  "observations": {
+    "version": {
+      "version": "1.1.2"
+    },
+    "exactInitial": [
+      {
+        "rowid": 1,
+        "distance": 0
+      },
+      {
+        "rowid": 3,
+        "distance": 0.006116271018981934
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      }
+    ],
+    "exactInsideUnit": [
+      {
+        "rowid": 3,
+        "distance": 0.006116271018981934
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      },
+      {
+        "rowid": 1,
+        "distance": 2
+      }
+    ],
+    "exactAfterRollback": [
+      {
+        "rowid": 1,
+        "distance": 0
+      },
+      {
+        "rowid": 3,
+        "distance": 0.006116271018981934
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      }
+    ],
+    "quantizeInitial": {
+      "vector_quantize('items','embedding','qtype=INT8')": 4
+    },
+    "quantizedInitial": [
+      {
+        "rowid": 1,
+        "distance": 0
+      },
+      {
+        "rowid": 3,
+        "distance": 0.006439268589019775
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      }
+    ],
+    "preloadInitial": {
+      "vector_quantize_preload('items','embedding')": null
+    },
+    "preloadedInitial": [
+      {
+        "rowid": 1,
+        "distance": 0
+      },
+      {
+        "rowid": 3,
+        "distance": 0.006439268589019775
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      }
+    ],
+    "exactAfterCommit": [
+      {
+        "rowid": 3,
+        "distance": 0.006116271018981934
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      },
+      {
+        "rowid": 1,
+        "distance": 2
+      }
+    ],
+    "quantizedAfterCommit": [
+      {
+        "rowid": 1,
+        "distance": 0
+      },
+      {
+        "rowid": 3,
+        "distance": 0.006439268589019775
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      }
+    ],
+    "refreshCommitted": {
+      "vector_quantize('items','embedding','qtype=INT8')": 4
+    },
+    "preloadCommitted": {
+      "vector_quantize_preload('items','embedding')": null
+    },
+    "quantizedAfterExplicitRefresh": [
+      {
+        "rowid": 3,
+        "distance": 0.006439268589019775
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      },
+      {
+        "rowid": 1,
+        "distance": 2
+      }
+    ],
+    "refreshInsideUnit": {
+      "vector_quantize('items','embedding','qtype=INT8')": 4
+    },
+    "preloadInsideUnit": {
+      "vector_quantize_preload('items','embedding')": null
+    },
+    "quantizedInsideUnit": [
+      {
+        "rowid": 1,
+        "distance": 0
+      },
+      {
+        "rowid": 3,
+        "distance": 0.006439268589019775
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      }
+    ],
+    "exactAfterQuantizedRollback": [
+      {
+        "rowid": 3,
+        "distance": 0.006116271018981934
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      },
+      {
+        "rowid": 1,
+        "distance": 2
+      }
+    ],
+    "quantizedAfterRollback": [
+      {
+        "rowid": 1,
+        "distance": 0
+      },
+      {
+        "rowid": 3,
+        "distance": 0.006439268589019775
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      }
+    ],
+    "secondHandleQuantized": [
+      {
+        "rowid": 3,
+        "distance": 0.006439268589019775
+      },
+      {
+        "rowid": 2,
+        "distance": 1
+      },
+      {
+        "rowid": 1,
+        "distance": 2
+      }
+    ]
+  },
+  "checks": {
+    "exactOwnWrite": true,
+    "exactRollback": true,
+    "quantizedInitial": true,
+    "quantizedTracksCommittedWrite": false,
+    "explicitRefresh": true,
+    "preloadedRollback": false
+  },
+  "sourceSha256": "3ed002ea3039d9ef11fd195aeb0cc3cec118e5131ef5657a5e5cbab1c9ad4136",
+  "constraints": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "loaded": [
+    {
+      "path": "/seed/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+      "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+    },
+    {
+      "path": "/extension/vector.so",
+      "sha256": "3c485977eca0cd52c664b31ccf0a5c80af66ade16b0a2921f1413bac3f4f5668"
+    }
+  ],
+  "compatibleWithoutAdditionalInvalidation": false
+}

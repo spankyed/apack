@@ -1,0 +1,29 @@
+{
+  "inputs": {
+    "packages/apack-ears/src/sqlite/vector-owner.ts": "6f0c42506b34d53e362747036b8e6e96f583a2a445ea011831198f00e7a40930",
+    "packages/apack-ears/src/sqlite/fs-native-extensions.d.ts": "e257bccca26570bee977266f42313d3a70e54586f3434c1511001f38cdb301cb",
+    "packages/apack-ears/tests/sqlite/vector-owner.spec.ts": "d731c7d644cc67a0f0af64f3711b056b849f07650cf3350194bb94f7f1df4cd9"
+  },
+  "args": [
+    "node",
+    "scripts/with-source.mjs",
+    "node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--project",
+    "@apackdev/ears",
+    "packages/apack-ears/tests/sqlite/vector-owner.spec.ts",
+    "--maxWorkers=1",
+    "--reporter=default",
+    "--reporter=json",
+    "--outputFile=/results/guard.json"
+  ],
+  "exitCode": 0,
+  "seconds": 3.8575814180076122,
+  "limits": {
+    "cpu.max": "50000 100000",
+    "memory.max": "805306368",
+    "memory.swap.max": "0"
+  },
+  "scope": "Focused advisory-lock contracts only, no compiler or full validation"
+}

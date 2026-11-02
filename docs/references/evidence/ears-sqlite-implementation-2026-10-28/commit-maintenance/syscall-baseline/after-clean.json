@@ -1,0 +1,16 @@
+{
+  "mode": "after",
+  "exitMode": "clean",
+  "before": 2,
+  "error": {
+    "name": "SqliteError",
+    "code": "SQLITE_IOERR_FSYNC",
+    "message": "disk I/O error"
+  },
+  "inTransaction": false,
+  "liveSequence": 2,
+  "liveIds": [
+    "Row-before"
+  ],
+  "closed": true
+}

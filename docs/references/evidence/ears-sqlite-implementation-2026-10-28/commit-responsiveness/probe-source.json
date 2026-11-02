@@ -1,0 +1,10 @@
+{
+  "source": "a95039a8c78092f93d69b5573e11e8e541636e1a",
+  "historicalProbeSha256": "ffa6df000750bace0833dbd392bac749c2a03f0abec440af798a9a6583371373",
+  "probeSha256": "251124d95629cd80b5f06c75bc3c9a43c705b0909fe077cdf1d9a8ead0e4b47a",
+  "differences": [
+    "use current nativeModelsReady completion contract",
+    "add Linux main-thread schedstat and cgroup throttle deltas around COMMIT"
+  ],
+  "qualification": false
+}

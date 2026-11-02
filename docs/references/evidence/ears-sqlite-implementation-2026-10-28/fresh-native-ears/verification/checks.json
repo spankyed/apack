@@ -1,0 +1,1 @@
+[{"size":1000,"exitCode":0,"expectedExitCode":0},{"size":99900,"exitCode":1,"expectedExitCode":1},{"mutation":"recall","rejected":true},{"mutation":"eligibility","rejected":true},{"mutation":"heartbeat","rejected":true}]

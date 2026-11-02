@@ -1,0 +1,201 @@
+{
+  "source": "37463f942215f8501335531a0bc0cd66d3192747",
+  "scope": "Single macOS runner, fixed native-first order, fresh processes/closed copied profiles, warm filesystem; not cold disk or engine-only attribution",
+  "backends": {
+    "elmdb": {
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 4586.584,
+        "minMs": 3950.682291,
+        "maxMs": 7061.458583
+      },
+      "preparation": {
+        "source": "37463f942215f8501335531a0bc0cd66d3192747",
+        "storageFormat": "elmdb/1",
+        "phase": "seed-import",
+        "expectedThreads": 12,
+        "importCompleted": true,
+        "importMs": 1547.9519579999996,
+        "scope": "Seed preparation outside measured startup; not an ingestion latency or foreground-budget pass"
+      },
+      "originalTraceSha256": {
+        "0": "bde9f9c88631ce0a032588d8ff26779e9d3f01bccad7cfedee6747ad8bfcb411",
+        "1": "6de5c7d1a7b132c6125d6075095824b37822cd530aa2c454bac302e9ff6a56cd",
+        "2": "f08e1113f366b9b0c7750adbcd61be0c60de6e048e8ee171c1d2a0391c262e11",
+        "3": "2b33cf84b684e89eb757f5ac6de53f129110aa469508b3dab31852729c11f01e",
+        "4": "72d96dfc0d4dd497f1445836e9ccdda80b57eaa002f58de43b19f90d4d8e2c6d",
+        "5": "f26566f879cfca1729e36942d0fc7fb31a0ac87d7f5b7c717063ffbd2999fbc1",
+        "6": "7f320fafba0298cb8ab71f635f126b15751c5cacbe23d8c8e7e8b970c48ac068",
+        "7": "e353bb8ffa14d0f6c3b74f40ad7e0d7a07e8d30741b848a377029378a34e3314",
+        "8": "21a94e9c7098bced8b1080e28b56042537831e848faa2cc2fe873043e127c88e",
+        "9": "4e6777d0601401b011404a83788e3c7be01263077dcba821c5a49de273bd4600",
+        "10": "68a6564fd0d2fce4036950311f67d8df2175b187b0d9b732e51996e40c51b0d5",
+        "11": "dec2d47b7ae908813199a91061291dd3a56f88e901ac7d674651d799b8dff02f",
+        "12": "d472e5c6eb677cd065fa019c0762c15a70e9d10cf47907d1614cd65381e3a49e",
+        "13": "a6e6f778def4645fcea98f290bfcbb99f4fbb4d863b95b8a4baeb152d6b79bb6",
+        "14": "5e7caad797e97ba6b819853f5563fdd4f7d98ecfc0702938ad30fc28158740d6",
+        "15": "ed2d30dff89aa0dc1501147450429d18da6cc28432dbc9b6372d3e70296c67eb",
+        "16": "2b2a9e13e3ad4f81169c4932f7187bb528b4d9a9262081d913d71e225135e03d",
+        "17": "eded8c173f0caea0cea752fb83759b5da2a93fd160bf00b9b17fb705087fd3c8",
+        "18": "f9d574f1137b62460eb33966e4ccd099786dd2a14a6da1da4843192192710458",
+        "19": "9f73beed35cb4610618944d0920a2371167ba933ce866fe19d3685967919865d",
+        "20": "ece0ed4b61844a3c07a4d3bd3522b01f3b8ee2c5e6d58de4c5a773216ac6385e",
+        "21": "befa962761c22664da93725fa34456bc92fd3efdd28ec3b1159aae4d92e08a90",
+        "22": "4679c94ac92748541d5c336e12c57bd141ad2e62c420c40e5481d1f4b94f37d4",
+        "23": "8600785a037b72f4bc48b9f618b22643de54bbc72ab9e57f7f214e3e6254cab1",
+        "24": "3734613237e672e65f95c846ff9699b1bff9117e812186b6acc581f7ad073e51"
+      },
+      "diagnosticSpans": {
+        "app.index.admission": {
+          "medianSumMs": 347.43287499999997,
+          "minCount": 1,
+          "maxCount": 1
+        },
+        "app.view.deliver": {
+          "medianSumMs": 0.7647050000000001,
+          "minCount": 56,
+          "maxCount": 56
+        },
+        "app.view.read": {
+          "medianSumMs": 9.756124,
+          "minCount": 56,
+          "maxCount": 56
+        },
+        "app.view.ready": {
+          "medianSumMs": 0.2,
+          "minCount": 1,
+          "maxCount": 1
+        },
+        "ears.read": {
+          "medianSumMs": 68.548146,
+          "minCount": 309,
+          "maxCount": 309
+        },
+        "ears.unit": {
+          "medianSumMs": 2.7810205000000003,
+          "minCount": 2,
+          "maxCount": 2
+        },
+        "ears.write": {
+          "medianSumMs": 6.610874000000001,
+          "minCount": 30,
+          "maxCount": 30
+        }
+      },
+      "startupSpans": {
+        "driver": {
+          "n": 20,
+          "medianMs": 4822.5893335
+        },
+        "renderer": {
+          "n": 20,
+          "medianMs": 1279.9
+        },
+        "backend": {
+          "n": 20,
+          "medianMs": 918.049021
+        }
+      }
+    },
+    "sqlite": {
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 7140.739396,
+        "minMs": 4848.671334000001,
+        "maxMs": 12532.639958
+      },
+      "preparation": {
+        "source": "37463f942215f8501335531a0bc0cd66d3192747",
+        "storageFormat": "sqlite/1",
+        "phase": "seed-import",
+        "expectedThreads": 12,
+        "importCompleted": true,
+        "importMs": 9501.837916,
+        "scope": "Seed preparation outside measured startup; not an ingestion latency or foreground-budget pass"
+      },
+      "originalTraceSha256": {
+        "0": "33d7b2e0fe07750f0ec8c1a9d7a9140fba7f01998126d22074a8da1ac40b32e3",
+        "1": "a71a86ccc6c2cb7b6fdd5510b4b131dd87f9235663d43d7b81faafe8fa2a13c0",
+        "2": "1586f5712431b24b1bd357ad78b6d2df17e1c84578f751ddd9c8a0358617cc41",
+        "3": "52c047ec6da527fbc149e6869b4fe89de63d58e8c6363a552da4554869bc899d",
+        "4": "45b0eea479b32085087ad8d72fe09682178c140c9bf81cb0b9b7f2672d8a9217",
+        "5": "51f9fd7d8e768b377402bec06fd875c9ea2995c9acab7f4c1883db0656479feb",
+        "6": "df097710980d7d198dec7bddb37d00cc5b2de7ddfdb4efe2b1ea2780f794af11",
+        "7": "b934b801337af73dfb2eb76e55b8ddec62d5639203b55798f8ceb6636001f62a",
+        "8": "d0426881047e70159841f0517c0ae820400b8ce8fcabda1cf07bff450704dec4",
+        "9": "484a752a083ca12b7c58328e88d6e64d124b9a8b013927613b45a0d69f33e7d2",
+        "10": "e7f0fa06da0a06cbfc6194c5b7540c734e6a1ec49438f5fc3257489a16f09907",
+        "11": "351badfe7e974bd37f42a6e514715ccc6434afcf8c632508d1e3a567b4af602d",
+        "12": "da0d1c84f4772f8be3f00ef441675f011b39f17c1f3a66abea4244e124ec2a80",
+        "13": "cb17408aec2b216e71335a17616858c110cd4387de88ebd65107319145255f1b",
+        "14": "5f7bbe8b6cfb3be0f31cf4801de75211658c9302db8b531086aff056f08853fb",
+        "15": "e191457e3e4754e279c8719f6a9f59737abfdcbf357dbd0e9b76523aaecee1ac",
+        "16": "bb3b70efa3f062f7ab89358d3195c7b06d572666e304287b178e270bec0b8041",
+        "17": "68a23d49fd216257920c9babf2525052c7b200109801aa8fb2065c59b2477d69",
+        "18": "780731f8e9cbe1c37af1af709c2af03832c83c1b02a4a931c3fd4f73c87d1668",
+        "19": "21edbfb810e32949d14b298f7dbe7d571f1ee013fa1e2a305150fdbe8bda4f8b",
+        "20": "315d5ddc413fc985eb23244508e3d3b65bb219dd386d88110f83cbd976560d8f",
+        "21": "8cc26b2b9cc39a5b37ef71cc3782264b5db050a54d87b31cb44ac44352116333",
+        "22": "3654c03406c2372c0e157f07b22d21014d5130450b8bded0a92805f150c3dd5c",
+        "23": "98a6b01a5ada05c28218b9d0f984c7f3fd75744e8d141a0872f2f9b61dd918bd",
+        "24": "319797f350e1a43eef3da314f25c85db274e1995a16da2a5f4c03ebd31e2335a"
+      },
+      "diagnosticSpans": {
+        "app.index.admission": {
+          "medianSumMs": 562.9486875,
+          "minCount": 1,
+          "maxCount": 1
+        },
+        "app.view.deliver": {
+          "medianSumMs": 1.2167305000000002,
+          "minCount": 56,
+          "maxCount": 56
+        },
+        "app.view.read": {
+          "medianSumMs": 25.698100999999994,
+          "minCount": 56,
+          "maxCount": 56
+        },
+        "app.view.ready": {
+          "medianSumMs": 0.2,
+          "minCount": 1,
+          "maxCount": 1
+        },
+        "ears.read": {
+          "medianSumMs": 180.33543299999997,
+          "minCount": 309,
+          "maxCount": 309
+        },
+        "ears.unit": {
+          "medianSumMs": 3.9712705,
+          "minCount": 2,
+          "maxCount": 2
+        },
+        "ears.write": {
+          "medianSumMs": 125.83102149999999,
+          "minCount": 30,
+          "maxCount": 30
+        }
+      },
+      "startupSpans": {
+        "driver": {
+          "n": 20,
+          "medianMs": 7377.064375
+        },
+        "renderer": {
+          "n": 20,
+          "medianMs": 2094.5
+        },
+        "backend": {
+          "n": 20,
+          "medianMs": 1791.9082705
+        }
+      }
+    }
+  },
+  "sqliteMedianIncreasePercent": 55.687531199690234
+}

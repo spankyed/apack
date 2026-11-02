@@ -1,0 +1,44 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/vector-models.spec.ts -t expands repeated chunk owners --maxWorkers=1
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/vector-models.spec.ts (7 tests | 1 failed | 6 skipped) 1163ms
+   ↓ durable native model admission > uses the shared scheduler to train, project and publish readiness without logical commits
+   ↓ durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility
+   × durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions 1162ms
+     → expected [ 256 ] to include 512
+   ↓ durable native model admission > retains a completed model when its result transaction rolls back before acknowledgement
+   ↓ durable native model admission > recovers abandoned attempts and resumes committed model work after reopening
+   ↓ durable native model admission > persists failure and supports explicit retry after additional primary embeddings
+   ↓ durable native model admission > enforces one owner and drains workers before allowing file close and a new owner
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/vector-models.spec.ts > durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions
+AssertionError: expected [ 256 ] to include 512
+ ❯ tests/sqlite/vector-models.spec.ts:92:50
+     90|     expect(hits.map(hit=>hit.id)).toEqual([first,repeated,tied]);
+     91|     expect(hits.every(hit=>Math.abs(hit.score-1)<1e-5)).toBe(true);
+     92|     expect(native.mock.calls.map(call=>call[2])).toContain(512);
+       |                                                  ^
+     93|     expect(native.mock.calls.map(call=>call[2])).toContain(1024);
+     94|     expect(native.mock.calls.every(call=>call[2]<=4096)).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  22:50:20
+   Duration  1.60s (transform 233ms, setup 11ms, collect 304ms, tests 1.16s, environment 0ms, prepare 39ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/vector-models.spec.ts -t 'expands repeated chunk owners' --maxWorkers=1

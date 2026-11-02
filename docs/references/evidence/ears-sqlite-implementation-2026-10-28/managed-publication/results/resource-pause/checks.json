@@ -1,0 +1,41 @@
+{
+  "base": "098d479157aaf9c7cfa363f01a8a8a371c1473d5",
+  "inputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "e964dd99ba2acf63a606def366bdee187a7ec641f331fef08323d13fb524afcb",
+    "packages/apack-host/src/database/recovery-lock.ts": "0106c7b109a8be42809a53163968ce77f2c60807be1e38617146a2e0387fa8ad",
+    "packages/apack-host/src/database/open.ts": "58270811047abdf5b0b240637e9f003d0c2225383516f6da533b398bf2c68710",
+    "packages/apack-host/src/database/storage.ts": "1b2e076803883b80191ef5bea3cc6695d9b4bfb72b299be7da0e66f512464c4d",
+    "packages/apack-ears/src/sqlite/database.ts": "9a516b6c4e48d97a5599bff7a9577a71391f0dc6dd9f96a7dbece0cd0c42ebf3",
+    "packages/apack-host/tests/backup/recovery.spec.ts": "cee393bbb563be18a8437c3cc36df7e4b508e7b9639a94d3bc6960b6b4642ffc",
+    "packages/apack-host/tests/backup/recovery-crash.spec.ts": "23131488da57ba85359e5512ea473135eacb08ea0c0525d609c8fd013d20fbfc",
+    "packages/apack-host/tests/database/storage.spec.ts": "2eee489ba7074e628021e491bc2fb897496ae71923771f945279eefdf494737e",
+    "packages/apack-host/tests/services/run-history.spec.ts": "027d5f64c094a280644d7276b78cfba20b429f6711d91c806dc64ffde1b61d86",
+    "packages/apack-host/tests/backup/storage.spec.ts": "216afd3ff1bafe90bdeeb352696d2f05537085362567d5582da732c2c370b39e"
+  },
+  "checks": [
+    {
+      "label": "matching-ears-package",
+      "args": [
+        "npm",
+        "run",
+        "build:package",
+        "-w",
+        "@apackdev/ears"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "shipped-generated-fixture",
+      "args": [
+        "npm",
+        "run",
+        "generate:entries",
+        "-w",
+        "@app/default-setup"
+      ],
+      "exitCode": 0,
+      "negative": false
+    }
+  ]
+}

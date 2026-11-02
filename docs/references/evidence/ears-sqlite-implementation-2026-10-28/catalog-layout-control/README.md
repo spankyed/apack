@@ -1,0 +1,7 @@
+# Catalog-only layout control, not promoted
+
+SQLite's [WITHOUT ROWID guidance](https://www.sqlite.org/withoutrowid.html) identifies potential benefits for small rows with non-integer primary keys and notes that secondary indexes complicate the tradeoff. A 10k-row in-memory Python SQLite 3.51.0 control compares the actual five-column entity catalog and its four secondary/unique indexes with/without rowid, using numeric and hash-suffixed IDs. No application table or data format is changed.
+
+Answers agree for point metadata, live ordered pages and scoped owner lookup. WITHOUT ROWID reduces VM instructions from 32 to 30, 310 to 259 and 23,481 to 21,570 for those samples. Catalog allocation increases from 1,028,096 to 1,118,208 bytes for numeric IDs, and 1,368,064 to 2,043,904 for hash-suffixed IDs. Repeated primary-key bytes in secondary indexes matter; this is not a blanket space win. Point timings change only slightly, while scoped lookup improves in this small control. Raw samples and query plans are retained.
+
+This is not an EARS/better-sqlite3/production workload or proof of a frame-budget improvement. The larger catalog and small point benefit do not justify promoting it without full-workload measurement. The application keeps its current layout. control.py is the original scratch experiment and writes its results under /private/tmp; it is retained as an experiment record rather than a supported production command.

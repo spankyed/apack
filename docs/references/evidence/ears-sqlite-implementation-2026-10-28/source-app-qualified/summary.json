@@ -1,0 +1,20 @@
+{
+  "run": 41148535620,
+  "source": "f05eda527ce471e975e480e469a3b33d30e2c580",
+  "platform": "macOS arm64 source app",
+  "passed": 33,
+  "skipped": [
+    "packaged SQLite stores hold their model claims across the real API process"
+  ],
+  "unexpected": 0,
+  "flaky": 0,
+  "retries": 0,
+  "verifiedWitnesses": [
+    "source SQLite app opens both managed stores with persisted EARS identity",
+    "repairs invalid persisted settings in the app and starts packs only after reopening",
+    "the code system's file watcher and terminal output reach the code surface",
+    "subscribes to the bus again once the API it lost is restarted",
+    "reads the running app's data and refuses to change it"
+  ],
+  "fullGoalAcceptance": false
+}

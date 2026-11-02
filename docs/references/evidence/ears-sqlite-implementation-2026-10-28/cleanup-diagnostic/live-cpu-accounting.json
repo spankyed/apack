@@ -1,0 +1,7 @@
+{
+  "observedAtUtc": "2026-10-28T19:27:40.281206+00:00",
+  "scope": "container cumulative, includes setup; one mid-first-process observation; not causal attribution",
+  "exitCode": 0,
+  "cpuStat": "usage_usec 213486888\nuser_usec 183059165\nsystem_usec 30427723\nnice_usec 0\nnr_periods 2138\nnr_throttled 12\nthrottled_usec 497041\nnr_bursts 0\nburst_usec 0\n",
+  "stderr": ""
+}

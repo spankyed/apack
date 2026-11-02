@@ -1,0 +1,11 @@
+{
+  "version": {
+    "v": "3.53.4"
+  },
+  "bindings": [
+    {
+      "name": "/work/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+      "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+    }
+  ]
+}

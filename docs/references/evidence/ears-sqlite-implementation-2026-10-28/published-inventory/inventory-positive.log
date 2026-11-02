@@ -1,0 +1,12 @@
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@app/publish-checks| tests/published-sdk-types.integration.spec.ts (10 tests | 9 skipped) 1612ms
+   ✓ published @apackdev/sdk > ships no host-only module  447ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  10:15:51
+   Duration  1.95s (transform 108ms, setup 17ms, collect 202ms, tests 1.61s, environment 0ms, prepare 39ms)
+
+JSON report written to /results/inventory-positive.json

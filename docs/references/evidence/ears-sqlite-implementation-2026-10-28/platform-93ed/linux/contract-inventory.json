@@ -1,0 +1,1643 @@
+{
+  "source": "93ed37e67f40faee3fd25a10f3b897c15e55c858",
+  "run": 41503546216,
+  "job": 125476905599,
+  "scope": "Per-file actual runtime contract coverage in four complete Linux reports; compiler/publish, other OSes, fault/installed/app scopes remain separately qualified",
+  "files": [
+    {
+      "path": "packages/apack-ears/tests/engines.spec.ts",
+      "sourceSha256": "0687c72c1aead17729eb331d03aea46fea65e9e3c398c239131ed8e4d021e972",
+      "report": "ears.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/no-module-state.spec.ts",
+      "sourceSha256": "b7ddf08c8bd2cdda2968bb3d6e16b846d24c80b1d151c7b09b2e4b910574973b",
+      "report": "ears.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/storage-types.spec.ts",
+      "sourceSha256": "1be004d48ea0dc2d2172de268969c4737c4732c1d91fb07e8ff959128d6f23ab",
+      "report": "ears.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/vocabulary.spec.ts",
+      "sourceSha256": "b7b02e09f75602f932ace9df4bc37a9f56a8b8d5b97c09ce1660227290dc7ee7",
+      "report": "ears.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/watch-causes.spec.ts",
+      "sourceSha256": "bfe05e017b78b68f9181d9b3442aab93c0c380c722b11656df329d870d3391e9",
+      "report": "ears.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/bulk-load.spec.ts",
+      "sourceSha256": "784482db3de89479fd44b265cbb967d930d3484ba19cf9e84e9356f5edebc2fb",
+      "report": "ears.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/calls.spec.ts",
+      "sourceSha256": "4a321c609e242ee3003610945f80bb6f771b6a37978d27233665916dee87a7cc",
+      "report": "ears.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/graph-similarity.spec.ts",
+      "sourceSha256": "8d517612f2e466f709c837111d910aa0cb24e2c03de249ce3a797e0e2f6ae5a9",
+      "report": "ears.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/maintenance.spec.ts",
+      "sourceSha256": "d3bd4fc157948c15e84b62d6d8b9ea667621adbd9340e3fe390dd062c3d46894",
+      "report": "ears.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/model-based.spec.ts",
+      "sourceSha256": "44d46df8023d5ec9ea46123b0d8cd13a649b0a6c267e10e573a28df85c586c95",
+      "report": "ears.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/observation.spec.ts",
+      "sourceSha256": "a0bc589dfc83991043fe29f8f7fc06d53941f6b2099b20d0bd36182de9820967",
+      "report": "ears.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/queries.spec.ts",
+      "sourceSha256": "4ec56cfaab310b1c5c4e2ad93ab9e803ec343a0930e7ec466e30a28d30c7e37d",
+      "report": "ears.json",
+      "passedCases": 29,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/query-values.spec.ts",
+      "sourceSha256": "aee6e0a1b84933b2d608ee4ad633006bcbd6cf8022299460eed00dc43ef84773",
+      "report": "ears.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/real-search-relevance.spec.ts",
+      "sourceSha256": "60162f62aa0d93daf966990ea23896f6081161b8027ed60f74a10c546974d854",
+      "report": "ears.json",
+      "passedCases": 25,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/relations.spec.ts",
+      "sourceSha256": "f134a03010029337fd94829ca41f17409a0ed27efff0b9a0b41d5131acd082b1",
+      "report": "ears.json",
+      "passedCases": 44,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/search-languages.spec.ts",
+      "sourceSha256": "9b9962dbf9dd4a3e021f44647f1ebb062998b976ef6cd2778a1d73c2883f9332",
+      "report": "ears.json",
+      "passedCases": 8,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/search-relevance.spec.ts",
+      "sourceSha256": "b18a663cf75125ec12696c157be17679a03b8a9be82e20ad2e885a6a855c2944",
+      "report": "ears.json",
+      "passedCases": 36,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/search.spec.ts",
+      "sourceSha256": "cc9c069d6c4e6aaf4bd2e179a44a4bee5a19b8dfe0a539f56bed8bbac2e69a53",
+      "report": "ears.json",
+      "passedCases": 13,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/sqlite-operations.spec.ts",
+      "sourceSha256": "8c2a8c212ed4f0a9103d733b24dbc190974c8ba733c10f8da8ec22968a74fdcd",
+      "report": "ears.json",
+      "passedCases": 18,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/storage-port.spec.ts",
+      "sourceSha256": "36f6b4436374f5f271ea732d101d18e8408a93eb1fb70bf687ed2c17a9415228",
+      "report": "ears.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/transact.spec.ts",
+      "sourceSha256": "340d18a8a3c705193961a49ecc695fc9a05548403ee1766cd8425f779ae7b62c",
+      "report": "ears.json",
+      "passedCases": 46,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/vector.spec.ts",
+      "sourceSha256": "59a14d246d8e9771aaf29c381ad836a4ff591e66f4b67de275e378eae025b6be",
+      "report": "ears.json",
+      "passedCases": 25,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/watch-schedule.spec.ts",
+      "sourceSha256": "a52080a339a5558f4c494be58dc8078cc30b9f7d9ab9247ac6172aadda07ee96",
+      "report": "ears.json",
+      "passedCases": 12,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/watch.spec.ts",
+      "sourceSha256": "4a356a5bd22748cbccc65e9c7d60cccde8882c9670c1ffdb0fd1156177eaa419",
+      "report": "ears.json",
+      "passedCases": 31,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/engine/writes.spec.ts",
+      "sourceSha256": "68d7385160091a1043c7f4db08e314113e271099189920d30379fcbefab8447c",
+      "report": "ears.json",
+      "passedCases": 62,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/lmdb/index-readiness.spec.ts",
+      "sourceSha256": "eaa7e1ce4ef7b5fef268cfa75066715ca7f1630f82fb7e4b217cafbd149355c7",
+      "report": "ears.json",
+      "passedCases": 8,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/commit-outcomes.spec.ts",
+      "sourceSha256": "7179e564ead9276206c3865b6a062b0f9ccc7a4b698ba8e9f7aa12cbe96f20f9",
+      "report": "ears.json",
+      "passedCases": 19,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/community-core.spec.ts",
+      "sourceSha256": "de140bd689d29e09cfc4db49bc78f41e3c42d3adb7668a809c2605e42dc38fb4",
+      "report": "ears.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/database-identity.spec.ts",
+      "sourceSha256": "75b3dd5a4f9b64b522da10569f3abaae9a6fa00bf0f3aeb081abeef1bac24ea3",
+      "report": "ears.json",
+      "passedCases": 19,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/elmdb-conversion.spec.ts",
+      "sourceSha256": "64e7ed5b44def2957a81052816f475b1f580451e4eee30b694f56427ab33d919",
+      "report": "ears.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/embeddings.spec.ts",
+      "sourceSha256": "9cae64002ad38ea52aaef4c3f7e4ef32d337ee44a6076ef3dbc51f44b5754e98",
+      "report": "ears.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/file-ownership.spec.ts",
+      "sourceSha256": "ecdcbabfc2c2ae1f2b56c1533624cc009463a04be996c734656b1b158d921e6a",
+      "report": "ears.json",
+      "passedCases": 42,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/graph-algorithms.spec.ts",
+      "sourceSha256": "1289ffeb0b2e8e1df5073ed51a0e5f9d8daa8c48423f73160e1128f4c2c6073e",
+      "report": "ears.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/graph-execution.spec.ts",
+      "sourceSha256": "7082121a72f49e9dd4563b60b504cb8af98bdf64cbd9528cd35f333110fe94d1",
+      "report": "ears.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/hybrid-highlights.spec.ts",
+      "sourceSha256": "92006e4b7d929c1ef4640ab741e5598b8a9f15139fbef6a6bf1a4050d69b4637",
+      "report": "ears.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/index-builds.spec.ts",
+      "sourceSha256": "3fe95450c4876470faab5c7557c1a2383122c1cb76d7e98d0a259ba772c4da01",
+      "report": "ears.json",
+      "passedCases": 12,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/index.spec.ts",
+      "sourceSha256": "9325deb42e6ced606b00e8454bacae4f2b9fc037b8bc59d3ea001e5e8b3e3537",
+      "report": "ears.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/logical-export.spec.ts",
+      "sourceSha256": "5dcc80ebbb4a15b4b6272a9c6b22f8cd63a8fbe8b8e712f2b19561e6750309f9",
+      "report": "ears.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/logical-format.spec.ts",
+      "sourceSha256": "65f63ea400fc3989ab8b8a9bd2a8c4e79fe16ba5f44ef114d0a308290562d978",
+      "report": "ears.json",
+      "passedCases": 13,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/logical-restore.spec.ts",
+      "sourceSha256": "d3b4b6b8d3c9e8bc49487951f8b82709815f5457a139a0a7eaf462fcfd2a948e",
+      "report": "ears.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/logical-snapshot.spec.ts",
+      "sourceSha256": "18da224362d38013a36d7da76b2e74e7918d5a699f4044c6380f93ce0677b6fb",
+      "report": "ears.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/logical-stage.spec.ts",
+      "sourceSha256": "663b32b0bd840ca946f83a659ab3f687ad2f873b387ea184f153c257f68618a5",
+      "report": "ears.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/native-extension.spec.ts",
+      "sourceSha256": "d985373e8d793d5f8ff7c9af37b2e1700869a2a56d6199e3d6d0a726f01b41f1",
+      "report": "ears.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/query-cost.spec.ts",
+      "sourceSha256": "aef8f52c7eec6c917a7f62260de6d76648bef60e136069118763c4424b5ab81f",
+      "report": "ears.json",
+      "passedCases": 29,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/read-tracking.spec.ts",
+      "sourceSha256": "45bbf68b41f3a1ef4e90dfe4e2811ec85503065ec031f6f681ebda715f23f60f",
+      "report": "ears.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/regex.spec.ts",
+      "sourceSha256": "01fa66aec3ed8c19cf47ed3061c9f2b18b0c0ab6aa5665388b67369a3871bbeb",
+      "report": "ears.json",
+      "passedCases": 11,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/relation-audit.spec.ts",
+      "sourceSha256": "96f29cd4c4f82aaf7bf3fdf33cd6b770a29df39a891b9e34812d4f254a96f066",
+      "report": "ears.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/relation-identity.spec.ts",
+      "sourceSha256": "d6dda86a7258a075dcfe2d830b64334d86782ca27880135db5b2e3b6933f71fc",
+      "report": "ears.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/schema-admission.spec.ts",
+      "sourceSha256": "6eb8a03af6da2d9b17b71db945c2ea4458220d55abfb0ee6ad9a904d89af3c5b",
+      "report": "ears.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/schema-validation.spec.ts",
+      "sourceSha256": "cb56791dd2bc12e94cde1ac211049973e6fab24695a7a532914ba4405a2b3c62",
+      "report": "ears.json",
+      "passedCases": 57,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/search-builds.spec.ts",
+      "sourceSha256": "59026e517256d4f9b601640a7209c3d4c3411a0753c12201b7d4869b7cb65429",
+      "report": "ears.json",
+      "passedCases": 20,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/search-recovery.spec.ts",
+      "sourceSha256": "76457c74fe09abc0842cd0e3b25d9053990b228992d5edca73fdf3118274db79",
+      "report": "ears.json",
+      "passedCases": 40,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/source-node.spec.ts",
+      "sourceSha256": "43f7bd203850f58c73d99a4f9ba131af77a06f6758a4fba8676779d441e76d12",
+      "report": "ears.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/statement-cache.spec.ts",
+      "sourceSha256": "ff28b56287701bec3ae55bb7ea63598194c4494b13cc10203f87b5b40cb9bcfd",
+      "report": "ears.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/text-documents.spec.ts",
+      "sourceSha256": "934000055d75ab8a5b0ea29ca8b255ca17e57a8b8e63f500bce3d045e3168f7f",
+      "report": "ears.json",
+      "passedCases": 20,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/text-limits.spec.ts",
+      "sourceSha256": "a1d338bf381f284c1d4ae89670e098349b495b3c117fb93338ba12cf7513a567",
+      "report": "ears.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/text-scope.spec.ts",
+      "sourceSha256": "94cd9a0b64e9d0533905d640da2066443123e45726819c0bd1afaa95ab8d1c6a",
+      "report": "ears.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/text-typos.spec.ts",
+      "sourceSha256": "e6aa4b1098613b916da4c8a512dcd361f065066f278cfc06d646ce656ea6f589",
+      "report": "ears.json",
+      "passedCases": 20,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/transaction-failures.spec.ts",
+      "sourceSha256": "80a02e6b1ea2adb97b6559edb1acc7693d3925be3d4e32d5002b81a59411fe91",
+      "report": "ears.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/trigrams.spec.ts",
+      "sourceSha256": "f521b6cf8822d1ba05dd71eb333d278cafb59e5ee6b0c46fc460f36f1ca87c3a",
+      "report": "ears.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/values.spec.ts",
+      "sourceSha256": "d21f0ef41cdb2388a1977b6c7223c46db82775c7652786a47ea8d6b477a22be4",
+      "report": "ears.json",
+      "passedCases": 11,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/vector-audit.spec.ts",
+      "sourceSha256": "fba6ed0d4a350aa91c2c86a6c82c327fcab38349c4b5280f3b46549d472ecbab",
+      "report": "ears.json",
+      "passedCases": 25,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/vector-candidates.spec.ts",
+      "sourceSha256": "da684f3cc608eaa4a35827c60674142edaba8072663f412b7c92435a1c341239",
+      "report": "ears.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/vector-cosine.spec.ts",
+      "sourceSha256": "76cd27225ebc5770882a028a07345c70a1249b53e418bad4ebe5e4943d15e055",
+      "report": "ears.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/vector-execution.spec.ts",
+      "sourceSha256": "60ca9847de5ebe7c810a6919efc59100177e4c9dc93d34af90cf5eecac660548",
+      "report": "ears.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+      "sourceSha256": "fd346af1e47c0702424c4dfdfba0518c42e37079805264d13fe6afdd90d4b223",
+      "report": "ears.json",
+      "passedCases": 10,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "sourceSha256": "857983fcb05f9f6ccd5ec34ef7454809f9e45bdbb23a5e39955d60a78fd10fff",
+      "report": "ears.json",
+      "passedCases": 36,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/vector-owner.spec.ts",
+      "sourceSha256": "d731c7d644cc67a0f0af64f3711b056b849f07650cf3350194bb94f7f1df4cd9",
+      "report": "ears.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/vector-training.spec.ts",
+      "sourceSha256": "41bd0a18558359ee968d34c5d791ef9ebcf07fc0474fbc59b6e1724658ed946e",
+      "report": "ears.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/wal-readers.spec.ts",
+      "sourceSha256": "3c6c09b348f1f0bcde799b0b4e32def1ca43a3693087a0a41d1898088113caa0",
+      "report": "ears.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-ears/tests/sqlite/watch-lifecycle.spec.ts",
+      "sourceSha256": "921f80dd7aa5912fe28d7a784afe04551bd8d540037359298dd297a561c942c2",
+      "report": "ears.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/private-file.spec.ts",
+      "sourceSha256": "dd8d383177db4a4c5e786bbadfd40d531a6fa9511cc1caa631f7f4e91417e99b",
+      "report": "host.json",
+      "passedCases": 10,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/backup/import-transaction.spec.ts",
+      "sourceSha256": "0c7ecc7cd8446385e11a1cb9bcabe8170f658ee2307d9e59f981ad7cb5f178be",
+      "report": "host.json",
+      "passedCases": 10,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/backup/import.spec.ts",
+      "sourceSha256": "5c8b471cda6b73baac88d506108516220edb6b3674a819336166d0732d35cb9e",
+      "report": "host.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/backup/logical.spec.ts",
+      "sourceSha256": "ce853198aedcf216846b2797d49b3347646b7fcd1209be303f6a386342517e8f",
+      "report": "host.json",
+      "passedCases": 10,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/backup/recovery.spec.ts",
+      "sourceSha256": "ebbb2c42526e1bd3d22c3241dd9fbd6ec3c3472efc9b4cb5138d45ae86c5e72c",
+      "report": "host.json",
+      "passedCases": 44,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/backup/storage.spec.ts",
+      "sourceSha256": "216afd3ff1bafe90bdeeb352696d2f05537085362567d5582da732c2c370b39e",
+      "report": "host.json",
+      "passedCases": 27,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/database/open-app-database.spec.ts",
+      "sourceSha256": "b9a68a5a0b2e3397f8d85452f1d0f76908fb0d76b6a175d61b15b3dbf5eddae1",
+      "report": "host.json",
+      "passedCases": 14,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/database/quarantine-publication.spec.ts",
+      "sourceSha256": "615c4dc29d6306f4f6c22108d080ffcf8c86531d9a484744fb160d12f0940fd7",
+      "report": "host.json",
+      "passedCases": 8,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/database/recovery-exclusion.spec.ts",
+      "sourceSha256": "f349007630a54442ac543326acb529beda1247fdb0bfb8f8006b2ca7fb5394fc",
+      "report": "host.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/database/storage.spec.ts",
+      "sourceSha256": "b6822ddda9337a36529957c7628c87f04023075cf746f895df1683589876dd62",
+      "report": "host.json",
+      "passedCases": 39,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/database/write-lock.spec.ts",
+      "sourceSha256": "e73fcc5e8d6eea4d8bf1f52540138cbfb78da9f28ab8cc8f55ccb5668aaf7cb0",
+      "report": "host.json",
+      "passedCases": 15,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/packs/registration.spec.ts",
+      "sourceSha256": "58799f583a9f23c271e0ad3e8b6d05eb9ceb2e24da0f71a64753ddf8acdd6b06",
+      "report": "host.json",
+      "passedCases": 64,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/packs/runtime/lifecycle.spec.ts",
+      "sourceSha256": "f162914a433a6bb0834a1f51ed148db7ebb90e8ae4e83a901f2d87bbe25d4afd",
+      "report": "host.json",
+      "passedCases": 29,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-host/tests/packs/runtime/reload.spec.ts",
+      "sourceSha256": "d0859ed0f9c7d75294b86113229064d1b113b9ce5a8d2ddb8d35e05888175a19",
+      "report": "host.json",
+      "passedCases": 21,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/code-literals.spec.ts",
+      "sourceSha256": "5b8cdf5e3af24312a5c95c784816c2dc4643ee7892815d86850ec6ede8b3d16b",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/compile-engine.spec.ts",
+      "sourceSha256": "6ac377a1f705ca8afaa01de5cdc0f8eeb48f1e4c90c7e6fabb27e52facd55367",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/content-compiler.spec.ts",
+      "sourceSha256": "842693b2d2cdfef22457b255ab62c49401fc2520179198ebb0e56f7c7095854b",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 24,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/content-index.spec.ts",
+      "sourceSha256": "6c4372d1aebf12dd7a0e93d0355b1da3b45d395abb20fc1ac0b11311820248fb",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/content-references.spec.ts",
+      "sourceSha256": "34a4a4c35f07792a69bb3488a5bc1613725e387f811c84a5fb1669adf9c856e4",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/declaration-records.spec.ts",
+      "sourceSha256": "a25a86e9198b89b3706191096fd785fa3e9259d3dcdf4e6ca661053924c2b2d7",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/declaration-revision.spec.ts",
+      "sourceSha256": "2eca1c8fd7718e97fc5031c1e3713920a5586c18c322ab4c6c2e43d7c3d0ecf5",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/declared-type-of.spec.ts",
+      "sourceSha256": "3e9ecbd863dd5edadddf20aaa64072aa1ce0817dddd963dd2d959b9b5cf61bba",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 25,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/dependency-source.spec.ts",
+      "sourceSha256": "2ced8c6171a52535edeaca7e6f5ba479cc9239aa9f02816c3928864313ae4db0",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 33,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/diagnostics.spec.ts",
+      "sourceSha256": "6a08341e3d83cc42c7553325d7c39cc96eeddee711b1e931981cf8365a867b6d",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/flow-compiler.spec.ts",
+      "sourceSha256": "af66b58357820a622e4df093f90a24f89400464013a36af498fac34f076d471c",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 49,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/flow-dsl-validator.spec.ts",
+      "sourceSha256": "2d88710fc6e11b167982cb48cedd08028d0a418b052d84104c164e8bfc8ddf06",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 13,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/flow-round-trip.spec.ts",
+      "sourceSha256": "732aa77f8a9cc6d8c002be38bbdb30c7569d3844336ea97b40f134d92915a352",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 35,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/help.spec.ts",
+      "sourceSha256": "9f145730de576031253357c61e41961732a4b41cf17c4e8002d0b7122ddca3c0",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 13,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/manifest-editor.spec.ts",
+      "sourceSha256": "496a465b1fc405058a8868a53c984a31e207f877cfc888c79e45c6cb228438cc",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 11,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/manifest-schema.spec.ts",
+      "sourceSha256": "7136c8d208ebe4bc0698949456fe31b796b89133a945dbc8f1da5c96f72351e7",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 62,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/module-configuration.spec.ts",
+      "sourceSha256": "395d7c88949e807d3a5d609bed0a1dde4429a2f4be27375a8eb5cd33ed3409b0",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/no-pack-content-specifics.spec.ts",
+      "sourceSha256": "028164fc8dbc5038c80b45b3d4118d51ba2ee4b136c1b8563300ffed9f2a43e7",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/no-phantom-contract.spec.ts",
+      "sourceSha256": "155d11bff2ae3c9e764b27d791a1ee5c846f9a012f89cce08620f77034795a04",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 10,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/provenance.spec.ts",
+      "sourceSha256": "b1b0001b103f4032292d8fa8bc559b3b5d01d1548f5586ca62bd15cd9f4d76a9",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 21,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/relation-declarations.spec.ts",
+      "sourceSha256": "917b1fa2f847660611fe049401c284672c6890dbf02ca4f64fe047d19dc5a377",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/settings-declarations.spec.ts",
+      "sourceSha256": "f9e71238290ed6b7fd1d52376386cc7ee1eab4bf182b9dd8a1921289d09e28fa",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 18,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/settings-types.spec.ts",
+      "sourceSha256": "df728a48810174048fed0ba8318ac61f65b0a708f6786ecda861c51471bdebb9",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/shipped-settings.spec.ts",
+      "sourceSha256": "133312f9abc8b55da738eed7a79b62fdf3d6e2e08e4055b91d04b654429589a3",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 18,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/snapshot.spec.ts",
+      "sourceSha256": "a20433a2dbe9d85ffecdcfdf5dcc293bbb5b8d35bfc0fad1a3292e7d4a74c305",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 41,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/surface-declarations.spec.ts",
+      "sourceSha256": "932394b9a28f374ae2e14f9a98e606497ebf6c445e2904ffada16346dea11bcd",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 8,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/validate-pack-sources.spec.ts",
+      "sourceSha256": "113233818ab5fc83a10e09223f6465f096f73770b7710f1cce0dbc4a26f1d83c",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 18,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/content/flow-applier.spec.ts",
+      "sourceSha256": "303c3112ac47aa1e1712388363b2ec183ceaaacf0d4a31591ddec6daa8e86551",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 14,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/content/format-applier.spec.ts",
+      "sourceSha256": "b54e6320f0bac7d1571560eb593bf3d71daa0d4791cd649ebcdf504a68e3e4e9",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 51,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/content/merge.spec.ts",
+      "sourceSha256": "0c116c3d798af7f30e4793fa0224ea815794998c8490f1cf9ecda907c37f12c3",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 26,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/content/preview.spec.ts",
+      "sourceSha256": "0434789ef13c5776d7b5fc922d1eb44717c51f5efd82c6626036ae2985aa6cf2",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/database-console/database-console.spec.ts",
+      "sourceSha256": "f7239670fd0de4cdb54536300ae24e19e8e13782fe2439c46eaac8429b6c8cd3",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/ears/bound-ears.spec.ts",
+      "sourceSha256": "3538fb4e142d06f9446c78af68c49ffc72e0140565a15602d405ab6554932f80",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/env/app-context.spec.ts",
+      "sourceSha256": "79c50854ef39094d4c3f58df0837e0880f7c2ce98a56467b1998ffe55218aceb",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 13,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/events/calls.spec.ts",
+      "sourceSha256": "15493061c4c70843f511ce7a808b473e996fd74637a8badf2d6dd40cc35e9353",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 17,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/events/define-events.spec.ts",
+      "sourceSha256": "aa476b5a6c270abb5e55570d9bfe13dcb71951b02dadc9ecf1d8acf4f9714a87",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/events/envelope.spec.ts",
+      "sourceSha256": "066962c90cd6c33a6651e3012541af4ae784b34446ee4b4029a5fabaa0481476",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/events/event-types.spec.ts",
+      "sourceSha256": "b28489ddf27387b61d9f6c988f2c6a3b44871c4e40897c08f39be465edee75d4",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/events/performance.spec.ts",
+      "sourceSha256": "f17507bbb38f8dca6cfece967cd837c1dd60aef5b4371de2eac59a077c4bd0a3",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/events/qualified-maps.spec.ts",
+      "sourceSha256": "c50da327ac93fd304093eee199225eba2f237d0f012e1228a6bde8b703fe1826",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/events/typed-sends.spec.ts",
+      "sourceSha256": "4b4e47904505aaf9074ab6d2c144257a5ae4b98e143a3cf420ace3e7a6aacb22",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/dsl-reader.spec.ts",
+      "sourceSha256": "7b7b0d0ad5debf94d2ea70d9d9e23bce08518868319cd54fb35b3fa1bec06782",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/navigation.spec.ts",
+      "sourceSha256": "121b9970e210eaadb6aaf0521b93151feb311ac920d2e00c17c0c6797c15d941",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/open-link.spec.ts",
+      "sourceSha256": "4494c6a99c2cf5bd3825fa394694c520c3a3b29adfb42632d4bca261944737d1",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/open-surface.spec.ts",
+      "sourceSha256": "1256d35ceab4409b80f3ee5d5a8828157f22a393b04099d9ef9a675f9c0138ab",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/reference-catalog.spec.ts",
+      "sourceSha256": "bbf2eeff5149cd5afd4f62a5b9330d2ebcc928bce1b0588eb2c36266f4cbc73d",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/reference-link.spec.ts",
+      "sourceSha256": "dd6f075d8f514e945575fd8320409abc6babceff5f455610a57f96a53af03319",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 20,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/reference-reader.spec.ts",
+      "sourceSha256": "1401132760e385c631a9c71934a31a7cc41b0f05aac09341b1070ba7269364fe",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 20,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/settings-draft.spec.ts",
+      "sourceSha256": "15c16f7f7b9eb53585014f6a926f470ddef13d82f5b78c5933869d76ec6e4cd0",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/settings.spec.ts",
+      "sourceSha256": "9ba4814a9226d232142696fb1aff75b5ae6ba44109b1886e4610d4e08d9a90d7",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/shell-envelope-parity.spec.ts",
+      "sourceSha256": "36d9167399b2e2e8065a9e5571181e0d507a8d96f4a1c4bc9f47ec84313b896c",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/step-reader.spec.ts",
+      "sourceSha256": "9c602d153f36c03316228ec981d0c1a1ffc18bb5b00d0b3fb612dc7d250458c7",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 22,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/surface-draft.spec.ts",
+      "sourceSha256": "0436c444a5be9a02ccfd688f782a7c0500299a6b63fe7f2e0c509afd98c8dcc6",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/surface-scope-lifetime.spec.ts",
+      "sourceSha256": "e1f50b2bb7f1eb80aab525d85bad929de6f9b826b2f66ad80b2ac93d2b60e46e",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/surface-scope.spec.ts",
+      "sourceSha256": "2861e5483d746f0926e2915cb2162e3bc93b4cedbbe6becd9fcb0e5a31b7a047",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/surface-send-scope.spec.ts",
+      "sourceSha256": "388687f8086e823e3d71306062103bae321b8cb316d75ca5cbd57a4e0afc92e5",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/surface-state.spec.ts",
+      "sourceSha256": "b97efb3ba0370869814525ea83f52e865a422fdf955750d94ef73461c8b63ec9",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/use-shell.spec.ts",
+      "sourceSha256": "34451690ca03c61c1d8b6f19fc84093267b6f4d9a88bed42a7d69418fb1cff64",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/view-actor.spec.ts",
+      "sourceSha256": "9c318303a572316963af21b501e7573beb40aa46ee109ff66267a2c90925f7de",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/view-writes.spec.ts",
+      "sourceSha256": "738f6e6ea6830ace7cfc7bdf29f2395b3671196195b1d49dd76bfb09960a9188",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/fe/views.spec.ts",
+      "sourceSha256": "34c648050024560c81d58c23bf2febb430dc98509b0d7712e11b9824c5df8e1c",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/declaration-binding.spec.ts",
+      "sourceSha256": "11eaedfb3a118e84d4fea6baab18d1c88a458e210da8a120aa80691c08d5e6af",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/declaration-record.spec.ts",
+      "sourceSha256": "8158fd0b81dadc6a2dcc43829d54658aea831ddde33d587f300928c5cd7446cf",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 11,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/define-system-actions.spec.ts",
+      "sourceSha256": "db828fde7bc00d32951dc61abf4938d3185cf1868dcf77b8feea7d90714f1d46",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 14,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/module-reference.spec.ts",
+      "sourceSha256": "ac117c4c0de6891be6bf7a4b3ceb4e32536e23587a8354d9ff92da971d7294ab",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/native-declarations.spec.ts",
+      "sourceSha256": "e6fe8d66f2c7682aa6d85b6515f2873d69c21da58a304a23e34d1b5185fbe16c",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/pack-settings.spec.ts",
+      "sourceSha256": "a718e7c97607120a8235806ae3cde23ff4b9f75d57fc7ebda82a4d24b6f992cb",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/pack-system.spec.ts",
+      "sourceSha256": "8dcbdbdd3f3f0be8bf8a243ed951e8c579a76cac3f10a6e6b060e3c9feb932ea",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/service-consumption.spec.ts",
+      "sourceSha256": "4728e2a0e7d7a519dbfa658f27ad71cbe9196a4126d3f7e060c6480cdfdffcb6",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/settings-definition.spec.ts",
+      "sourceSha256": "3a7794a844f18aa5df9f2409a8f6c3dea6021198e441ed868627034377547ce2",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 32,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/framework/short-code-types.spec.ts",
+      "sourceSha256": "0f4966e4499d358f295e1980ed18cf8a26484a5b5dbcf00fc93462a7abd086c1",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/ids/feature-ref.spec.ts",
+      "sourceSha256": "39f3a57aac82dc97d7112a52c9de3fce9fd1038044e5f0dcd42dbd49e6a5b39c",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/ids/resolve-name.spec.ts",
+      "sourceSha256": "2bdb1f9f212400b207de287ce50db8ed33b6b210f726480359942e3e89ab4a23",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 12,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/logger/report-error.spec.ts",
+      "sourceSha256": "fefe538c0788e6fbe15aa56c4714dc36f287f50a015345091ebf0e8702573a61",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 8,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/repositories/repositories.spec.ts",
+      "sourceSha256": "366b58d676c271b96ca31d15870c60a1643289b3650bf14352c0b2489a74ee95",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 21,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/runtime/bound-redaction.spec.ts",
+      "sourceSha256": "5a33d36ec5a852ac788a91a584628d2434270aef919e298379a086cc772daa09",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/runtime/bound-transport.spec.ts",
+      "sourceSha256": "1f6b3c0d66be39e9ba7f49ceb8800648301f13d6e575948c42c3e3a98aac9768",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/runtime/internals-entry.spec.ts",
+      "sourceSha256": "e104c6301349e47abde95f1bf0a70b9815d616f35060164a59b71971a4209312",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/runtime/unbound.spec.ts",
+      "sourceSha256": "7a4842114a75596224f6dc931da36bbbd39c6cb2a9ad2df6be89eb6ae7c12260",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 10,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/services/embeddings.spec.ts",
+      "sourceSha256": "578570d9e05f11fad9f9157b88b29911470f1763accea291164a1f990c5103d2",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/services/emitter.spec.ts",
+      "sourceSha256": "f6b714b80bb9b5c0dc248c3e2e94afdaa2ce7d34c01f501a8d21c604dfc55dfc",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 8,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/services/models.spec.ts",
+      "sourceSha256": "f9d85b83df0fa3cc801814dc566e2cd5e58181e65cdb5711a15ebee629e09cbc",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/services/secrets-client.spec.ts",
+      "sourceSha256": "6b3fbdfaed19501f44f5fd70a29057c5e007dd2f73afb4cc80ab4e3d0c9cfa0e",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/services/secrets-rules.spec.ts",
+      "sourceSha256": "f16b38d08b69e37759dfb824be8d054707daadbba04b0f96433d7bd5a85934b2",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/services/settings-handle.spec.ts",
+      "sourceSha256": "85929d6c493b630cdb10d46d112c9f89173c110e7f388f3e9008a4f27abba961",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/steps/catalog.spec.ts",
+      "sourceSha256": "93450bd95eaae873656455bfc00e4c959b3b483bf5a88d6f4b1bccb3dc1725d5",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 15,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/steps/merge.spec.ts",
+      "sourceSha256": "22ff2a78fe5607dfc0c3ba821af1c210147aeac27cc10bbcd100705a5959215f",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/steps/result-truncator.spec.ts",
+      "sourceSha256": "5db745dcf46a307724856016f7212b08ced523a528326242309669f855caafc3",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 16,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/steps/utils.spec.ts",
+      "sourceSha256": "e2337d6d6fb90d000bf6d3b33e9534eb84814e3345737cbc445d946800ac0a09",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 20,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/testing/content-runtime.spec.ts",
+      "sourceSha256": "193f16b0b735dd95b6db940592ec58280b57a473ba1833de28c9a94af1749ea1",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 1,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/testing/database-backend.spec.ts",
+      "sourceSha256": "a46eaec16d97c763203764208fad555f90aeb186b4403c3b59a7810dd2053fc8",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/testing/fake-inference.spec.ts",
+      "sourceSha256": "b0da86cd1584902ed6f3eba493bad523638057d78455838827272d6f89ffb000",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 22,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/testing/pack-fixture.spec.ts",
+      "sourceSha256": "bef04376c992d7fb64921524cd7524930ec2b78c9e613d430f125a2dc8ad68ba",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/testing/population.spec.ts",
+      "sourceSha256": "dbe531286b7c9d1498cdfce7d3f2f3a97d4cbaae27c7ff143d50e1040b981dfc",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/testing/serialisation-matrix.spec.ts",
+      "sourceSha256": "41ff6b4a3d246d90c050908ec8d9d70dd24713162bf01f771b620e1b9bd96453",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 21,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/testing/test-host.spec.ts",
+      "sourceSha256": "1e5c5bbcf2513a87ad44daf50e0b8e1c5648e81e7e0f38be239fd6b7e8ad88e4",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 11,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/testing/test-packs.spec.ts",
+      "sourceSha256": "c743393b72f8a058301ce351844f9d62b22090c3381b1d4a226c8dbbd4fe3d1b",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/utils/applier-registry.spec.ts",
+      "sourceSha256": "9ee423e74de8e9739c599b948e1442723da2c92f71dfae9d756c6fddfcd3e860",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/utils/compare-versions.spec.ts",
+      "sourceSha256": "1b048fd6c66bb825ffc7de20f96a2e96e11ec00fc0551efa586333cc8d6adf5a",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/utils/cron.spec.ts",
+      "sourceSha256": "f0135a0dfed94224f510609eb4780539cf935f8fb73d930020c4515d372f5ab6",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/utils/deep-merge.spec.ts",
+      "sourceSha256": "abb026f5abf2af618946feebb76ab78b5eaa270d3efbf89299d997dc38bb23c9",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/utils/escape-html.spec.ts",
+      "sourceSha256": "402f11d760ebf4723e12b8fbf294cb9c44d61d988e2da88078b78dd58d92cfbb",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/utils/paths.spec.ts",
+      "sourceSha256": "197d60c2eeaf93449bc74ac492e4638ac76e56286a71d291a08940e84eeb9974",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 7,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/utils/redact.spec.ts",
+      "sourceSha256": "f807bb42b65134e775493c2666c3b815745897ab08c3a8489a208e4f7fa31eb4",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 17,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/utils/secret-matcher-reach.spec.ts",
+      "sourceSha256": "4a01d27557e260a44b4d1d20695866afe220376f13d6de3e1330c4f3d9c87935",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 2,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/compilers/documents.spec.ts",
+      "sourceSha256": "d0b5bb57f97429cab53dd64557c53a85f57ba3e76e067c3413818db1b4995911",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 3,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/content/resolve.spec.ts",
+      "sourceSha256": "ba3d636f1c22f14b5fc00573b5cf0f4939ec23ecb707c65e651e13fdb7789015",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 6,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/generate-entries/compiles.spec.ts",
+      "sourceSha256": "11abd08ad353447fbdaf9b926c6194d254da7215a9735a655f09b548e7b8cc99",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 14,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/generate-entries/destinations.spec.ts",
+      "sourceSha256": "c5bb2d13927994aa7653645fd52cf0b31cc4b33b2feda856d398245ea717c61a",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 4,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/generate-entries/entries.spec.ts",
+      "sourceSha256": "1e6a910c9961aac6f0cf5b38f1beef8abb6556a7e9ad00f827bc4b8b437ecd42",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 44,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/generate-entries/events.spec.ts",
+      "sourceSha256": "ebb8e06ea791adf14ed7ed8f3f4e9891896ca8316081d9a9b30b5da8d3212d6d",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 29,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/generate-entries/migrations.spec.ts",
+      "sourceSha256": "9f6d5db8f7e7140032808d890b17cfc82b33fc345c38d00896ede2392b117d7f",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 5,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/generate-entries/modules.spec.ts",
+      "sourceSha256": "bdfa24354a60774408a9a61e8699168f4ed99acff47d4cafc21bc3fd2ba41698",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 45,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/generate-entries/references.spec.ts",
+      "sourceSha256": "aa123c92a7bfcc3302db8caaef179abfb7f506c7d079c47931a1623f0e490dd1",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 13,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-sdk/tests/build/generate-entries/shapes.spec.ts",
+      "sourceSha256": "bcc8eff5e62a5dd006d3ad2ce178928ebe893c1b796b5e2bb1b00ea00cf64123",
+      "report": "sdk-all-sqlite.json",
+      "passedCases": 45,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-cli/tests/commands/db-logical.spec.ts",
+      "sourceSha256": "0b59d2dd1d83371cace526b35721d760e66d1a3fd86b87924c7bd3cdba7608bb",
+      "report": "cli-maintenance.json",
+      "passedCases": 8,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-cli/tests/commands/db-rebuild.spec.ts",
+      "sourceSha256": "65207684246191575804d58c21a815dfbb5fddea417a7ac53776e4048d4f9990",
+      "report": "cli-maintenance.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-cli/tests/commands/db-target.spec.ts",
+      "sourceSha256": "b723ac125e7a644fb5cd27d338ce6a1c3bfdb0b184e59666160969f2a17278f4",
+      "report": "cli-maintenance.json",
+      "passedCases": 9,
+      "failedCases": 0,
+      "excludedCases": 0
+    },
+    {
+      "path": "packages/apack-cli/tests/commands/sqlite-profile.spec.ts",
+      "sourceSha256": "5f975db29443cf126e57ddd7f012c0ff0073044b5c6c03d5663f91c5057d95a1",
+      "report": "cli-maintenance.json",
+      "passedCases": 15,
+      "failedCases": 0,
+      "excludedCases": 0
+    }
+  ],
+  "fileCount": 204,
+  "passedCases": 2630,
+  "derivation": "Every assertionResult is passed, each report sum agrees, and every repository fixture file exists and is hashed. No errors, private runner paths or profile data copied."
+}

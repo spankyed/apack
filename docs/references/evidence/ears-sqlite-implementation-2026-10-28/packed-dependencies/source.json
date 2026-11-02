@@ -1,0 +1,13 @@
+{
+  "base": "1860dd2eb141fc1d3f3b8b5d3e7b0a7a5f2fe332",
+  "overlay": {
+    "packages/publish-checks/src/published-packages.ts": "ac9ee05ad51ece2c9be0a763ab07230b04f52fd301e4adfc394f59101e712f46",
+    "packages/publish-checks/tests/published-exports.integration.spec.ts": "bfdb06980c9e6227faa2f6dc32a844b937d328cb28617f1df24798acfa3a2684"
+  },
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "metadata": "synthetic Git metadata only for source classification"
+}

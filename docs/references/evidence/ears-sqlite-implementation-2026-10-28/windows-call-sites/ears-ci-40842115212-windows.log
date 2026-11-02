@@ -1,0 +1,1033 @@
+﻿2026-10-29T08:26:20.7394776Z Current runner version: '2.338.0'
+2026-10-29T08:26:20.7592449Z ##[group]Runner Image Provisioner
+2026-10-29T08:26:20.7593427Z Hosted Compute Agent
+2026-10-29T08:26:20.7594078Z Version: 20261021.618
+2026-10-29T08:26:20.7594800Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-10-29T08:26:20.7595709Z Build Date: 2026-10-21T00:45:21Z
+2026-10-29T08:26:20.7596469Z Worker ID: {8f6937df-a9f3-49a6-9c74-d9feb897b47c}
+2026-10-29T08:26:20.7597203Z Region: westus2
+2026-10-29T08:26:20.7597718Z Cloud: Azure
+2026-10-29T08:26:20.7598349Z ##[endgroup]
+2026-10-29T08:26:20.7600469Z ##[group]Operating System
+2026-10-29T08:26:20.7601166Z Microsoft Windows Server 2025
+2026-10-29T08:26:20.7601788Z 10.0.26100
+2026-10-29T08:26:20.7602356Z Datacenter
+2026-10-29T08:26:20.7602881Z ##[endgroup]
+2026-10-29T08:26:20.7603699Z ##[group]Runner Image
+2026-10-29T08:26:20.7604341Z Image: windows-2025-vs2026
+2026-10-29T08:26:20.7604948Z Version: 20261021.278.1
+2026-10-29T08:26:20.7606479Z Included Software: https://github.com/actions/runner-images/blob/win25-vs2026/20261021.278/images/windows/Windows2025-VS2026-Readme.md
+2026-10-29T08:26:20.7608117Z Image Release: https://github.com/actions/runner-images/releases/tag/win25-vs2026%2F20261021.278
+2026-10-29T08:26:20.7609093Z ##[endgroup]
+2026-10-29T08:26:20.7610237Z ##[group]GITHUB_TOKEN Permissions
+2026-10-29T08:26:20.7612209Z Contents: read
+2026-10-29T08:26:20.7612822Z Metadata: read
+2026-10-29T08:26:20.7613359Z ##[endgroup]
+2026-10-29T08:26:20.7615649Z Secret source: Actions
+2026-10-29T08:26:20.7616579Z Cache mode: write
+2026-10-29T08:26:20.7617302Z Prepare workflow directory
+2026-10-29T08:26:20.8684806Z Prepare all required actions
+2026-10-29T08:26:20.8738518Z Getting action download info
+2026-10-29T08:26:21.2349644Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-29T08:26:21.3981048Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-29T08:26:22.0109813Z Uses: spankyed/apack/.github/workflows/ears-sqlite.yml@refs/heads/session/ears-sqlite (b25a985c8cebdf898b86cb915bca2600ba03782a)
+2026-10-29T08:26:22.0115987Z Complete job name: sqlite-candidate / sqlite (windows-latest)
+2026-10-29T08:26:22.3442493Z ##[group]Run actions/checkout@v4
+2026-10-29T08:26:22.3443749Z with:
+2026-10-29T08:26:22.3444293Z   repository: spankyed/apack
+2026-10-29T08:26:22.3451364Z   token: ***
+2026-10-29T08:26:22.3451913Z   ssh-strict: true
+2026-10-29T08:26:22.3452472Z   ssh-user: git
+2026-10-29T08:26:22.3453047Z   persist-credentials: true
+2026-10-29T08:26:22.3453711Z   clean: true
+2026-10-29T08:26:22.3454279Z   sparse-checkout-cone-mode: true
+2026-10-29T08:26:22.3455002Z   fetch-depth: 1
+2026-10-29T08:26:22.3455572Z   fetch-tags: false
+2026-10-29T08:26:22.3456073Z   show-progress: true
+2026-10-29T08:26:22.3456546Z   lfs: false
+2026-10-29T08:26:22.3456959Z   submodules: false
+2026-10-29T08:26:22.3457423Z   set-safe-directory: true
+2026-10-29T08:26:22.3457981Z   allow-unsafe-pr-checkout: false
+2026-10-29T08:26:22.3460857Z env:
+2026-10-29T08:26:22.3461342Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:22.3461856Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:22.3462339Z   npm_config_jobs: 2
+2026-10-29T08:26:22.3462890Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:22.3463486Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:22.3463991Z ##[endgroup]
+2026-10-29T08:26:22.4927094Z Syncing repository: spankyed/apack
+2026-10-29T08:26:22.4928958Z ##[group]Getting Git version info
+2026-10-29T08:26:22.4930152Z Working directory is 'D:\a\apack\apack'
+2026-10-29T08:26:22.5811944Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-10-29T08:26:23.0853690Z git version 2.56.0.windows.2
+2026-10-29T08:26:23.0909541Z ##[endgroup]
+2026-10-29T08:26:23.0930676Z Temporarily overriding HOME='D:\a\_temp\5b368383-be6f-46bd-9267-0e8bc70ab1a9' before making global git config changes
+2026-10-29T08:26:23.0933058Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-29T08:26:23.0941928Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\apack\apack
+2026-10-29T08:26:23.1610281Z Deleting the contents of 'D:\a\apack\apack'
+2026-10-29T08:26:23.1617283Z ##[group]Initializing the repository
+2026-10-29T08:26:23.1628976Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\apack\apack
+2026-10-29T08:26:23.3289080Z Initialized empty Git repository in D:/a/apack/apack/.git/
+2026-10-29T08:26:23.3341928Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/spankyed/apack
+2026-10-29T08:26:23.4956638Z ##[endgroup]
+2026-10-29T08:26:23.4957811Z ##[group]Disabling automatic garbage collection
+2026-10-29T08:26:23.4964852Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-10-29T08:26:23.5376801Z ##[endgroup]
+2026-10-29T08:26:23.5377921Z ##[group]Setting up auth
+2026-10-29T08:26:23.5388903Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-29T08:26:23.5805399Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-29T08:26:25.4899608Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-29T08:26:25.5301139Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-29T08:26:26.0947960Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-29T08:26:26.1328105Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-29T08:26:26.7165811Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-10-29T08:26:26.7588394Z ##[endgroup]
+2026-10-29T08:26:26.7592018Z ##[group]Fetching the repository
+2026-10-29T08:26:26.7611513Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +b25a985c8cebdf898b86cb915bca2600ba03782a:refs/remotes/origin/session/ears-sqlite
+2026-10-29T08:26:29.2346860Z From https://github.com/spankyed/apack
+2026-10-29T08:26:29.2347538Z  * [new ref]         b25a985c8cebdf898b86cb915bca2600ba03782a -> origin/session/ears-sqlite
+2026-10-29T08:26:29.2389735Z ##[endgroup]
+2026-10-29T08:26:29.2390774Z ##[group]Determining the checkout info
+2026-10-29T08:26:29.2392418Z ##[endgroup]
+2026-10-29T08:26:29.2403074Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-10-29T08:26:29.2911512Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-10-29T08:26:29.3300446Z ##[group]Checking out the ref
+2026-10-29T08:26:29.3309984Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force -B session/ears-sqlite refs/remotes/origin/session/ears-sqlite
+2026-10-29T08:26:30.3888491Z Updating files:  70% (3473/4896)
+2026-10-29T08:26:30.4017935Z Updating files:  71% (3477/4896)
+2026-10-29T08:26:30.4169149Z Updating files:  72% (3526/4896)
+2026-10-29T08:26:30.4289619Z Updating files:  73% (3575/4896)
+2026-10-29T08:26:30.4409755Z Updating files:  74% (3624/4896)
+2026-10-29T08:26:30.4541173Z Updating files:  75% (3672/4896)
+2026-10-29T08:26:30.4658102Z Updating files:  76% (3721/4896)
+2026-10-29T08:26:30.4812301Z Updating files:  77% (3770/4896)
+2026-10-29T08:26:30.4944110Z Updating files:  78% (3819/4896)
+2026-10-29T08:26:30.5089939Z Updating files:  79% (3868/4896)
+2026-10-29T08:26:30.5255190Z Updating files:  80% (3917/4896)
+2026-10-29T08:26:30.5388015Z Updating files:  81% (3966/4896)
+2026-10-29T08:26:30.5535314Z Updating files:  82% (4015/4896)
+2026-10-29T08:26:30.5707151Z Updating files:  83% (4064/4896)
+2026-10-29T08:26:30.5935706Z Updating files:  84% (4113/4896)
+2026-10-29T08:26:30.6084903Z Updating files:  85% (4162/4896)
+2026-10-29T08:26:30.6216727Z Updating files:  86% (4211/4896)
+2026-10-29T08:26:30.6368261Z Updating files:  87% (4260/4896)
+2026-10-29T08:26:30.6524979Z Updating files:  88% (4309/4896)
+2026-10-29T08:26:30.6650710Z Updating files:  89% (4358/4896)
+2026-10-29T08:26:30.6767962Z Updating files:  90% (4407/4896)
+2026-10-29T08:26:30.6905670Z Updating files:  91% (4456/4896)
+2026-10-29T08:26:30.7037989Z Updating files:  92% (4505/4896)
+2026-10-29T08:26:30.7168773Z Updating files:  93% (4554/4896)
+2026-10-29T08:26:30.7318779Z Updating files:  94% (4603/4896)
+2026-10-29T08:26:30.7920910Z Updating files:  95% (4652/4896)
+2026-10-29T08:26:30.8059879Z Updating files:  96% (4701/4896)
+2026-10-29T08:26:30.8194025Z Updating files:  97% (4750/4896)
+2026-10-29T08:26:30.8328871Z Updating files:  98% (4799/4896)
+2026-10-29T08:26:30.8459428Z Updating files:  99% (4848/4896)
+2026-10-29T08:26:30.8462574Z Updating files: 100% (4896/4896)
+2026-10-29T08:26:30.8463004Z Updating files: 100% (4896/4896), done.
+2026-10-29T08:26:30.8671273Z Switched to a new branch 'session/ears-sqlite'
+2026-10-29T08:26:30.8694598Z branch 'session/ears-sqlite' set up to track 'origin/session/ears-sqlite'.
+2026-10-29T08:26:30.8788134Z ##[endgroup]
+2026-10-29T08:26:30.9269102Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-10-29T08:26:30.9619069Z b25a985c8cebdf898b86cb915bca2600ba03782a
+2026-10-29T08:26:31.0150204Z Prepare all required actions
+2026-10-29T08:26:31.0150844Z Getting action download info
+2026-10-29T08:26:31.1480641Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-10-29T08:26:31.2944533Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-10-29T08:26:31.6108413Z ##[group]Run ./.github/actions/node-runtime
+2026-10-29T08:26:31.6108708Z with:
+2026-10-29T08:26:31.6108879Z   node-version: 23.11.1
+2026-10-29T08:26:31.6109066Z env:
+2026-10-29T08:26:31.6109220Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:31.6109413Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:31.6109594Z   npm_config_jobs: 2
+2026-10-29T08:26:31.6109793Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:31.6110024Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:31.6110685Z ##[endgroup]
+2026-10-29T08:26:31.6169112Z ##[start-action display=Restore Node toolchain;id=__self.toolchain]
+2026-10-29T08:26:31.6362179Z ##[group]Run actions/cache/restore@v4
+2026-10-29T08:26:31.6362420Z with:
+2026-10-29T08:26:31.6363058Z   path: C:\hostedtoolcache\windows/node/23.11.1
+2026-10-29T08:26:31.6363376Z   key: node-toolchain-v1-Windows-X64-23.11.1
+2026-10-29T08:26:31.6363648Z   enableCrossOsArchive: false
+2026-10-29T08:26:31.6363872Z   fail-on-cache-miss: false
+2026-10-29T08:26:31.6364076Z   lookup-only: false
+2026-10-29T08:26:31.6364270Z env:
+2026-10-29T08:26:31.6364436Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:31.6364619Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:31.6364796Z   npm_config_jobs: 2
+2026-10-29T08:26:31.6364989Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:31.6365404Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:31.6365742Z ##[endgroup]
+2026-10-29T08:26:31.7715420Z (node:3992) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T08:26:31.7716139Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T08:26:32.1991439Z Cache hit for: node-toolchain-v1-Windows-X64-23.11.1
+2026-10-29T08:26:32.2140613Z (node:3992) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-29T08:26:33.5292561Z Received 25527181 of 33915789 (75.3%), 24.3 MBs/sec
+2026-10-29T08:26:33.7126339Z Received 33915789 of 33915789 (100.0%), 27.3 MBs/sec
+2026-10-29T08:26:33.7128849Z Cache Size: ~32 MB (33915789 B)
+2026-10-29T08:26:33.7158732Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/5850046c-8d48-44d2-80b9-9a9d8dfa1662/cache.tzst -P -C D:/a/apack/apack --force-local --use-compress-program "zstd -d"
+2026-10-29T08:26:38.6330573Z Cache restored successfully
+2026-10-29T08:26:38.6461761Z Cache restored from key: node-toolchain-v1-Windows-X64-23.11.1
+2026-10-29T08:26:38.6610418Z ##[end-action id=__self.toolchain;outcome=success;conclusion=success;duration_ms=7044]
+2026-10-29T08:26:38.6615462Z ##[start-action display=Run actions/setup-node@v4;id=__self.__actions_setup-node]
+2026-10-29T08:26:38.6799279Z ##[group]Run actions/setup-node@v4
+2026-10-29T08:26:38.6799510Z with:
+2026-10-29T08:26:38.6799682Z   node-version: 23.11.1
+2026-10-29T08:26:38.6799871Z   cache: npm
+2026-10-29T08:26:38.6800039Z   always-auth: false
+2026-10-29T08:26:38.6800226Z   check-latest: false
+2026-10-29T08:26:38.6802703Z   token: ***
+2026-10-29T08:26:38.6802869Z env:
+2026-10-29T08:26:38.6803025Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:38.6803223Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:38.6803407Z   npm_config_jobs: 2
+2026-10-29T08:26:38.6803606Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:38.6803836Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:38.6804036Z ##[endgroup]
+2026-10-29T08:26:38.8557018Z Found in cache @ C:\hostedtoolcache\windows\node\23.11.1\x64
+2026-10-29T08:26:38.8567674Z (node:6252) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T08:26:38.8568746Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T08:26:38.8569517Z ##[group]Environment details
+2026-10-29T08:26:40.2148020Z node: v23.11.1
+2026-10-29T08:26:40.2148368Z npm: 10.9.2
+2026-10-29T08:26:40.2149052Z yarn: 1.22.22
+2026-10-29T08:26:40.2149963Z ##[endgroup]
+2026-10-29T08:26:40.2992428Z [command]C:\Windows\system32\cmd.exe /D /S /C "C:\hostedtoolcache\windows\node\23.11.1\x64\npm.cmd config get cache"
+2026-10-29T08:26:40.6022651Z C:\npm\cache
+2026-10-29T08:26:41.0222424Z npm cache is not found
+2026-10-29T08:26:41.0376017Z ##[end-action id=__self.__actions_setup-node;outcome=success;conclusion=success;duration_ms=2375]
+2026-10-29T08:26:41.0378367Z ##[start-action display=Retain Node toolchain;id=__self.__actions_cache]
+2026-10-29T08:26:41.0388718Z ##[end-action id=__self.__actions_cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-29T08:26:41.0579234Z ##[group]Run node -e "require('node:fs').mkdirSync('.temp/sqlite-platform',{recursive:true})"
+2026-10-29T08:26:41.0579962Z [36;1mnode -e "require('node:fs').mkdirSync('.temp/sqlite-platform',{recursive:true})"[0m
+2026-10-29T08:26:41.0601754Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:26:41.0602166Z env:
+2026-10-29T08:26:41.0602335Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:41.0602537Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:41.0602739Z   npm_config_jobs: 2
+2026-10-29T08:26:41.0602952Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:41.0603192Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:41.0603391Z ##[endgroup]
+2026-10-29T08:26:41.3315490Z Prepare all required actions
+2026-10-29T08:26:41.3316198Z Getting action download info
+2026-10-29T08:26:41.4566096Z Download action repository 'Swatinem/rust-cache@v2' (SHA:d1527c8f67ef9af357290475d4af4b0fab8f12e0)
+2026-10-29T08:26:41.6862799Z ##[group]Run ./.github/actions/elmdb
+2026-10-29T08:26:41.6863044Z env:
+2026-10-29T08:26:41.6863203Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:41.6863393Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:41.6863576Z   npm_config_jobs: 2
+2026-10-29T08:26:41.6863780Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:41.6864013Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:41.6864209Z ##[endgroup]
+2026-10-29T08:26:41.6868458Z ##[start-action display=Clone elmdb at the pinned commit;id=__self_2.__run]
+2026-10-29T08:26:41.7001448Z ##[group]Run rev=$(tr -d '[:space:]' < vendor/elmdb.rev)
+2026-10-29T08:26:41.7001814Z [36;1mrev=$(tr -d '[:space:]' < vendor/elmdb.rev)[0m
+2026-10-29T08:26:41.7002114Z [36;1mgit init -q vendor/elmdb[0m
+2026-10-29T08:26:41.7002576Z [36;1mgit -C vendor/elmdb fetch -q --depth 1 https://github.com/spankyed/elmdb.git "$rev"[0m
+2026-10-29T08:26:41.7003048Z [36;1mgit -C vendor/elmdb checkout -q FETCH_HEAD[0m
+2026-10-29T08:26:41.7018741Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:26:41.7019134Z env:
+2026-10-29T08:26:41.7019307Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:41.7019504Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:41.7019689Z   npm_config_jobs: 2
+2026-10-29T08:26:41.7019894Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:41.7020138Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:41.7020342Z ##[endgroup]
+2026-10-29T08:26:42.4637681Z ##[end-action id=__self_2.__run;outcome=success;conclusion=success;duration_ms=776]
+2026-10-29T08:26:42.4640371Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__self_2.__Swatinem_rust-cache]
+2026-10-29T08:26:42.4802729Z ##[group]Run Swatinem/rust-cache@v2
+2026-10-29T08:26:42.4802981Z with:
+2026-10-29T08:26:42.4803179Z   workspaces: vendor/elmdb
+2026-10-29T08:26:42.4803398Z   prefix-key: v0-rust
+2026-10-29T08:26:42.4803616Z   add-job-id-key: true
+2026-10-29T08:26:42.4803838Z   add-rust-environment-hash-key: true
+2026-10-29T08:26:42.4804091Z   cache-targets: true
+2026-10-29T08:26:42.4804288Z   cache-all-crates: false
+2026-10-29T08:26:42.4804537Z   cache-workspace-crates: false
+2026-10-29T08:26:42.4804757Z   save-if: true
+2026-10-29T08:26:42.4804937Z   cache-provider: github
+2026-10-29T08:26:42.4805136Z   cache-bin: true
+2026-10-29T08:26:42.4805311Z   lookup-only: false
+2026-10-29T08:26:42.4805499Z   cmd-format: {0}
+2026-10-29T08:26:42.4805663Z env:
+2026-10-29T08:26:42.4805818Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:42.4806007Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:42.4806195Z   npm_config_jobs: 2
+2026-10-29T08:26:42.4806404Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:42.4806639Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:42.4806834Z ##[endgroup]
+2026-10-29T08:26:59.4049103Z ##[group]Cache Configuration
+2026-10-29T08:26:59.4077219Z Cache Provider:
+2026-10-29T08:26:59.4077917Z     github
+2026-10-29T08:26:59.4079642Z Workspaces:
+2026-10-29T08:26:59.4080115Z     D:\a\apack\apack\vendor\elmdb
+2026-10-29T08:26:59.4081162Z Cache Paths:
+2026-10-29T08:26:59.4081848Z     C:\Users\runneradmin\.cargo\bin
+2026-10-29T08:26:59.4082744Z     C:\Users\runneradmin\.cargo\.crates.toml
+2026-10-29T08:26:59.4085121Z     C:\Users\runneradmin\.cargo\.crates2.json
+2026-10-29T08:26:59.4086277Z     C:\Users\runneradmin\.cargo\registry
+2026-10-29T08:26:59.4087234Z     C:\Users\runneradmin\.cargo\git
+2026-10-29T08:26:59.4088089Z     D:\a\apack\apack\vendor\elmdb\target
+2026-10-29T08:26:59.4088946Z Restore Key:
+2026-10-29T08:26:59.4089716Z     v0-rust-sqlite-Windows_NT-x64-fa34519b
+2026-10-29T08:26:59.4091200Z Cache Key:
+2026-10-29T08:26:59.4091727Z     v0-rust-sqlite-Windows_NT-x64-fa34519b-57f67632
+2026-10-29T08:26:59.4093494Z .. Prefix:
+2026-10-29T08:26:59.4094215Z   - v0-rust-sqlite-Windows_NT-x64
+2026-10-29T08:26:59.4099434Z .. Environment considered:
+2026-10-29T08:26:59.4099973Z   - Rust Versions:
+2026-10-29T08:26:59.4101497Z     - 1.99.1 x86_64-pc-windows-msvc 58cf8f9c35b355199727627d07ae34a4e2846d67
+2026-10-29T08:26:59.4102691Z   - CARGO_BUILD_JOBS
+2026-10-29T08:26:59.4103300Z   - CARGO_INCREMENTAL
+2026-10-29T08:26:59.4104217Z .. Lockfiles considered:
+2026-10-29T08:26:59.4104942Z   - D:\a\apack\apack\vendor\elmdb\.cargo\config.toml
+2026-10-29T08:26:59.4105863Z   - D:\a\apack\apack\vendor\elmdb\Cargo.lock
+2026-10-29T08:26:59.4108971Z   - D:\a\apack\apack\vendor\elmdb\crates\elmdb-cli\Cargo.toml
+2026-10-29T08:26:59.4110638Z   - D:\a\apack\apack\vendor\elmdb\crates\elmdb-node\Cargo.toml
+2026-10-29T08:26:59.4111721Z   - D:\a\apack\apack\vendor\elmdb\crates\elmdb\Cargo.toml
+2026-10-29T08:26:59.4115329Z   - D:\a\apack\apack\vendor\elmdb\rust-toolchain.toml
+2026-10-29T08:26:59.4116266Z   - D:\a\apack\apack\vendor\elmdb\xtask\Cargo.toml
+2026-10-29T08:26:59.4117575Z ##[endgroup]
+2026-10-29T08:26:59.4118087Z 
+2026-10-29T08:26:59.4118508Z ... Restoring cache ...
+2026-10-29T08:26:59.8018911Z No cache found.
+2026-10-29T08:26:59.8147480Z ##[end-action id=__self_2.__Swatinem_rust-cache;outcome=success;conclusion=success;duration_ms=17350]
+2026-10-29T08:26:59.8150277Z ##[start-action display=Build the binding;id=__self_2.__run_2]
+2026-10-29T08:26:59.8303292Z ##[group]Run rustup show active-toolchain
+2026-10-29T08:26:59.8303641Z [36;1mrustup show active-toolchain[0m
+2026-10-29T08:26:59.8303923Z [36;1mnpm ci --no-audit --no-fund[0m
+2026-10-29T08:26:59.8304432Z [36;1m# On Windows, @napi-rs/cli's build times out on its own filesystem-reconciliation lock (elmdb's own CI does[0m
+2026-10-29T08:26:59.8305078Z [36;1m# the same), so cargo builds the binding and it is named as napi's loader expects[0m
+2026-10-29T08:26:59.8305521Z [36;1mif [ "$RUNNER_OS" = Windows ]; then[0m
+2026-10-29T08:26:59.8305818Z [36;1m  cargo build -p elmdb-node --release[0m
+2026-10-29T08:26:59.8306253Z [36;1m  cp target/release/elmdb_node.dll crates/elmdb-node/elmdb.win32-x64-msvc.node[0m
+2026-10-29T08:26:59.8306646Z [36;1melse[0m
+2026-10-29T08:26:59.8306833Z [36;1m  npm run build[0m
+2026-10-29T08:26:59.8307031Z [36;1mfi[0m
+2026-10-29T08:26:59.8324756Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:26:59.8325841Z env:
+2026-10-29T08:26:59.8326034Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:26:59.8326242Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:26:59.8326440Z   npm_config_jobs: 2
+2026-10-29T08:26:59.8326648Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:26:59.8326892Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:26:59.8327110Z   CACHE_ON_FAILURE: false
+2026-10-29T08:26:59.8327332Z   CARGO_INCREMENTAL: 0
+2026-10-29T08:26:59.8327521Z ##[endgroup]
+2026-10-29T08:26:59.9391371Z 1.99.1-x86_64-pc-windows-msvc (overridden by 'D:\a\apack\apack\vendor\elmdb\rust-toolchain.toml')
+2026-10-29T08:27:05.7754357Z npm warn cleanup Failed to remove some directories [
+2026-10-29T08:27:05.7755036Z npm warn cleanup   [
+2026-10-29T08:27:05.7755687Z npm warn cleanup     'D:\\a\\apack\\apack\\vendor\\elmdb\\node_modules\\@napi-rs\\tar-wasm32-wasi',
+2026-10-29T08:27:05.7757119Z npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'D:\a\apack\apack\vendor\elmdb\node_modules\@napi-rs\tar-wasm32-wasi\node_modules\@emnapi\wasi-threads'] {
+2026-10-29T08:27:05.7758121Z npm warn cleanup       errno: -4048,
+2026-10-29T08:27:05.7758440Z npm warn cleanup       code: 'EPERM',
+2026-10-29T08:27:05.7758770Z npm warn cleanup       syscall: 'rmdir',
+2026-10-29T08:27:05.7759499Z npm warn cleanup       path: 'D:\\a\\apack\\apack\\vendor\\elmdb\\node_modules\\@napi-rs\\tar-wasm32-wasi\\node_modules\\@emnapi\\wasi-threads'
+2026-10-29T08:27:05.7760113Z npm warn cleanup     }
+2026-10-29T08:27:05.7760356Z npm warn cleanup   ]
+2026-10-29T08:27:05.7760568Z npm warn cleanup ]
+2026-10-29T08:27:05.8000033Z 
+2026-10-29T08:27:05.8000369Z added 78 packages in 5s
+2026-10-29T08:27:07.1466316Z     Updating crates.io index
+2026-10-29T08:27:08.4892569Z  Downloading crates ...
+2026-10-29T08:27:08.6278932Z   Downloaded digest v0.11.3
+2026-10-29T08:27:08.7384536Z   Downloaded crossbeam-utils v0.8.23
+2026-10-29T08:27:08.7667451Z   Downloaded itoa v1.0.18
+2026-10-29T08:27:08.7849547Z   Downloaded cfg-if v1.0.5
+2026-10-29T08:27:08.7965716Z   Downloaded idna_adapter v1.2.2
+2026-10-29T08:27:08.8053807Z   Downloaded doxygen-rs v0.4.2
+2026-10-29T08:27:08.8222315Z   Downloaded icu_locale_fallback v2.4.0
+2026-10-29T08:27:08.8303913Z   Downloaded bincode v1.3.3
+2026-10-29T08:27:08.8506076Z   Downloaded either v1.19.0
+2026-10-29T08:27:08.8669085Z   Downloaded phf v0.11.3
+2026-10-29T08:27:08.8782449Z   Downloaded block-buffer v0.12.1
+2026-10-29T08:27:08.8953247Z   Downloaded futures-sink v0.3.34
+2026-10-29T08:27:08.9069907Z   Downloaded autocfg v1.5.1
+2026-10-29T08:27:08.9244138Z   Downloaded futures-core v0.3.34
+2026-10-29T08:27:08.9397014Z   Downloaded crossbeam-deque v0.8.8
+2026-10-29T08:27:08.9531534Z   Downloaded crypto-common v0.2.2
+2026-10-29T08:27:08.9636099Z   Downloaded byteorder v1.5.0
+2026-10-29T08:27:08.9808437Z   Downloaded chacha20 v0.10.2
+2026-10-29T08:27:08.9998534Z   Downloaded form_urlencoded v1.2.2
+2026-10-29T08:27:09.0092299Z   Downloaded futures-macro v0.3.34
+2026-10-29T08:27:09.0175214Z   Downloaded futures-task v0.3.34
+2026-10-29T08:27:09.0293067Z   Downloaded bytemuck_derive v1.12.1
+2026-10-29T08:27:09.0391625Z   Downloaded allocator-api2 v0.2.21
+2026-10-29T08:27:09.0595348Z   Downloaded equivalent v1.0.3
+2026-10-29T08:27:09.0678393Z   Downloaded futures-io v0.3.34
+2026-10-29T08:27:09.0752684Z   Downloaded heed-traits v0.20.0
+2026-10-29T08:27:09.0810364Z   Downloaded proc-macro2 v1.0.107
+2026-10-29T08:27:09.1087175Z   Downloaded rayon-core v1.13.0
+2026-10-29T08:27:09.1434616Z   Downloaded cpufeatures v0.3.1
+2026-10-29T08:27:09.1545616Z   Downloaded displaydoc v0.2.7
+2026-10-29T08:27:09.1748369Z   Downloaded fastrand v2.5.0
+2026-10-29T08:27:09.1888409Z   Downloaded jobserver v0.1.35
+2026-10-29T08:27:09.2044317Z   Downloaded napi-sys v3.4.1
+2026-10-29T08:27:09.2143646Z   Downloaded zerofrom-derive v0.1.8
+2026-10-29T08:27:09.2221351Z   Downloaded bitflags v2.13.2
+2026-10-29T08:27:09.2627809Z   Downloaded convert_case v0.8.0
+2026-10-29T08:27:09.2748246Z   Downloaded crossbeam-queue v0.3.14
+2026-10-29T08:27:09.2847960Z   Downloaded foldhash v0.2.0
+2026-10-29T08:27:09.2969970Z   Downloaded futures-executor v0.3.34
+2026-10-29T08:27:09.3093402Z   Downloaded levenshtein_automata v0.2.1
+2026-10-29T08:27:09.3212761Z   Downloaded phf_shared v0.11.3
+2026-10-29T08:27:09.3287530Z   Downloaded heed-types v0.21.0
+2026-10-29T08:27:09.3394271Z   Downloaded phf_generator v0.11.3
+2026-10-29T08:27:09.3481647Z   Downloaded potential_utf v0.1.6
+2026-10-29T08:27:09.3562054Z   Downloaded napi-build v2.6.0
+2026-10-29T08:27:09.3681065Z   Downloaded ctor v1.0.13
+2026-10-29T08:27:09.3900643Z   Downloaded find-msvc-tools v0.1.15
+2026-10-29T08:27:09.4071763Z   Downloaded futures-channel v0.3.34
+2026-10-29T08:27:09.4223421Z   Downloaded icu_locale_fallback_data v2.4.0
+2026-10-29T08:27:09.4324164Z   Downloaded icu_normalizer_data v2.4.0
+2026-10-29T08:27:09.4458641Z   Downloaded min-max-heap v1.3.0
+2026-10-29T08:27:09.4600654Z   Downloaded nohash-hasher v0.2.0
+2026-10-29T08:27:09.4678507Z   Downloaded once_cell v1.21.4
+2026-10-29T08:27:09.4919854Z   Downloaded percent-encoding v2.3.2
+2026-10-29T08:27:09.4997865Z   Downloaded phf_macros v0.11.3
+2026-10-29T08:27:09.5070306Z   Downloaded serde_bytes v0.11.19
+2026-10-29T08:27:09.5225619Z   Downloaded synchronoise v1.0.1
+2026-10-29T08:27:09.5320588Z   Downloaded const-oid v0.10.2
+2026-10-29T08:27:09.5500273Z   Downloaded csv-core v0.1.13
+2026-10-29T08:27:09.5596867Z   Downloaded hybrid-array v0.4.15
+2026-10-29T08:27:09.5773380Z   Downloaded napi-derive v3.6.13
+2026-10-29T08:27:09.5900999Z   Downloaded page_size v0.6.0
+2026-10-29T08:27:09.5984767Z   Downloaded pin-project-lite v0.2.17
+2026-10-29T08:27:09.6641180Z   Downloaded pkg-config v0.3.34
+2026-10-29T08:27:09.6787943Z   Downloaded bytemuck v1.25.2
+2026-10-29T08:27:09.7104384Z   Downloaded convert_case v0.12.0
+2026-10-29T08:27:09.7252132Z   Downloaded crossbeam-epoch v0.9.21
+2026-10-29T08:27:09.7483617Z   Downloaded foldhash v0.1.5
+2026-10-29T08:27:09.7580123Z   Downloaded getrandom v0.4.3
+2026-10-29T08:27:09.7916827Z   Downloaded icu_provider v2.4.0
+2026-10-29T08:27:09.8109538Z   Downloaded libloading v0.9.0
+2026-10-29T08:27:09.8352244Z   Downloaded litemap v0.8.3
+2026-10-29T08:27:09.8561757Z   Downloaded lock_api v0.5.0
+2026-10-29T08:27:09.8672400Z   Downloaded num-traits v0.2.19
+2026-10-29T08:27:09.8884635Z   Downloaded parking_lot v0.13.0
+2026-10-29T08:27:09.9101095Z   Downloaded parking_lot_core v0.10.0
+2026-10-29T08:27:09.9295397Z   Downloaded rustc-hash v2.1.3
+2026-10-29T08:27:09.9423126Z   Downloaded serde_core v1.0.229
+2026-10-29T08:27:09.9626488Z   Downloaded siphasher v1.0.4
+2026-10-29T08:27:09.9752331Z   Downloaded steppe v0.4.1
+2026-10-29T08:27:09.9847636Z   Downloaded tempfile v3.27.0
+2026-10-29T08:27:10.0041694Z   Downloaded yoke v0.8.4
+2026-10-29T08:27:10.5337227Z   Downloaded crossbeam-channel v0.5.17
+2026-10-29T08:27:10.5655332Z   Downloaded futures v0.3.34
+2026-10-29T08:27:10.6132749Z   Downloaded icu_locale_core v2.4.0
+2026-10-29T08:27:10.6795855Z   Downloaded napi-derive-backend v6.1.6
+2026-10-29T08:27:10.6963881Z   Downloaded papaya v0.2.5
+2026-10-29T08:27:10.7181278Z   Downloaded process_path v0.1.4
+2026-10-29T08:27:10.7308280Z   Downloaded rand_core v0.10.1
+2026-10-29T08:27:10.7457035Z   Downloaded zerovec-derive v0.11.7
+2026-10-29T08:27:10.7657604Z   Downloaded finl_unicode v1.5.0
+2026-10-29T08:27:10.7849879Z   Downloaded heed v0.23.0
+2026-10-29T08:27:10.8141492Z   Downloaded icu_collections v2.4.0
+2026-10-29T08:27:10.8702365Z   Downloaded memchr v2.8.3
+2026-10-29T08:27:10.9130368Z   Downloaded rand_core v0.6.4
+2026-10-29T08:27:10.9237438Z   Downloaded sha2 v0.11.1
+2026-10-29T08:27:10.9578574Z   Downloaded lmdb-master-sys v0.2.6
+2026-10-29T08:27:10.9889189Z   Downloaded scopeguard v1.2.0
+2026-10-29T08:27:10.9985789Z   Downloaded semver v1.0.28
+2026-10-29T08:27:11.0186124Z   Downloaded tinyvec v1.13.3
+2026-10-29T08:27:11.0459339Z   Downloaded tracing-attributes v0.1.31
+2026-10-29T08:27:11.0718135Z   Downloaded yoke-derive v0.8.4
+2026-10-29T08:27:11.0803129Z   Downloaded hashbrown v0.17.1
+2026-10-29T08:27:11.1156236Z   Downloaded indexmap v2.14.2
+2026-10-29T08:27:11.1487494Z   Downloaded irg-kvariants v0.1.1
+2026-10-29T08:27:11.1602277Z   Downloaded aho-corasick v1.1.5
+2026-10-29T08:27:11.1970760Z   Downloaded hashbrown v0.15.5
+2026-10-29T08:27:11.2305268Z   Downloaded icu_properties v2.4.0
+2026-10-29T08:27:11.2502885Z   Downloaded idna v1.1.0
+2026-10-29T08:27:11.2695230Z   Downloaded stable_deref_trait v1.2.1
+2026-10-29T08:27:11.2774636Z   Downloaded write16 v1.0.0
+2026-10-29T08:27:11.2858300Z   Downloaded cc v1.10.0
+2026-10-29T08:27:11.3134411Z   Downloaded thread_local v1.1.10
+2026-10-29T08:27:11.3240747Z   Downloaded zerofrom v0.1.8
+2026-10-29T08:27:11.3313903Z   Downloaded icu_properties_data v2.4.0
+2026-10-29T08:27:11.8523655Z   Downloaded futures-util v0.3.34
+2026-10-29T08:27:11.9908449Z   Downloaded slice-group-by v0.3.1
+2026-10-29T08:27:12.0144541Z   Downloaded rmp v0.8.15
+2026-10-29T08:27:12.0523824Z   Downloaded seize v0.5.1
+2026-10-29T08:27:12.0755303Z   Downloaded ryu v1.0.23
+2026-10-29T08:27:12.1026624Z   Downloaded shlex v2.0.1
+2026-10-29T08:27:12.1130521Z   Downloaded slab v0.4.12
+2026-10-29T08:27:12.1250823Z   Downloaded synstructure v0.14.0
+2026-10-29T08:27:12.1322250Z   Downloaded utf16_iter v1.0.5
+2026-10-29T08:27:12.1408585Z   Downloaded utf8_iter v1.0.4
+2026-10-29T08:27:12.1497453Z   Downloaded windows-link v0.2.1
+2026-10-29T08:27:12.1581854Z   Downloaded writeable v0.6.4
+2026-10-29T08:27:12.1749945Z   Downloaded quote v1.0.47
+2026-10-29T08:27:12.2015480Z   Downloaded thiserror v2.0.21
+2026-10-29T08:27:12.2735285Z   Downloaded rmpv v1.3.1
+2026-10-29T08:27:12.2959946Z   Downloaded zmij v1.0.23
+2026-10-29T08:27:12.3092385Z   Downloaded zstd-safe v8.2.0
+2026-10-29T08:27:12.3271137Z   Downloaded napi v3.15.0
+2026-10-29T08:27:12.3846848Z   Downloaded smallvec v1.16.4
+2026-10-29T08:27:12.3942736Z   Downloaded ryu-js v1.0.3
+2026-10-29T08:27:12.4369025Z   Downloaded serde v1.0.229
+2026-10-29T08:27:12.4622519Z   Downloaded thiserror-impl v2.0.21
+2026-10-29T08:27:12.4752627Z   Downloaded tinystr v0.8.5
+2026-10-29T08:27:12.4919993Z   Downloaded tracing-core v0.1.36
+2026-10-29T08:27:12.5142061Z   Downloaded rmp-serde v1.3.1
+2026-10-29T08:27:12.5296843Z   Downloaded serde_derive v1.0.229
+2026-10-29T08:27:12.5564150Z   Downloaded unicode-ident v1.0.27
+2026-10-29T08:27:12.5795052Z   Downloaded zstd v0.14.3
+2026-10-29T08:27:12.6136867Z   Downloaded icu_collator_data v2.4.0
+2026-10-29T08:27:12.6339557Z   Downloaded rand v0.8.8
+2026-10-29T08:27:12.6618501Z   Downloaded url v2.5.8
+2026-10-29T08:27:12.6793143Z   Downloaded icu_normalizer v2.4.0
+2026-10-29T08:27:12.7149656Z   Downloaded whatlang v0.18.0
+2026-10-29T08:27:12.7447334Z   Downloaded zerotrie v0.2.5
+2026-10-29T08:27:13.1922552Z   Downloaded unicode-segmentation v1.13.3
+2026-10-29T08:27:13.2078480Z   Downloaded typenum v1.20.1
+2026-10-29T08:27:13.2280024Z   Downloaded unicode-normalization v0.1.26
+2026-10-29T08:27:13.2477121Z   Downloaded rand v0.10.3
+2026-10-29T08:27:13.2766267Z   Downloaded zerovec v0.11.9
+2026-10-29T08:27:13.3252425Z   Downloaded libc v0.2.191
+2026-10-29T08:27:13.6852825Z   Downloaded csv v1.4.0
+2026-10-29T08:27:13.7465543Z   Downloaded roaring v0.11.5
+2026-10-29T08:27:13.8038218Z   Downloaded regex v1.13.1
+2026-10-29T08:27:13.8426147Z   Downloaded charabia v0.10.0
+2026-10-29T08:27:13.8910659Z   Downloaded rayon v1.12.0
+2026-10-29T08:27:13.9814438Z   Downloaded serde_json v1.0.154
+2026-10-29T08:27:14.0465231Z   Downloaded icu_collator v2.4.0
+2026-10-29T08:27:14.0831448Z   Downloaded syn v3.0.9
+2026-10-29T08:27:14.1604105Z   Downloaded fst v0.4.7
+2026-10-29T08:27:14.2124690Z   Downloaded regex-syntax v0.8.11
+2026-10-29T08:27:14.7764058Z   Downloaded syn v2.0.119
+2026-10-29T08:27:14.8529835Z   Downloaded hannoy v0.3.0
+2026-10-29T08:27:14.9170405Z   Downloaded tracing v0.1.44
+2026-10-29T08:27:14.9918958Z   Downloaded regex-automata v0.4.18
+2026-10-29T08:27:15.0792233Z   Downloaded zstd-sys v2.1.2+zstd.1.5.7
+2026-10-29T08:27:15.1811478Z   Downloaded winapi v0.3.9
+2026-10-29T08:27:15.4406226Z   Downloaded rust-stemmers v1.2.0
+2026-10-29T08:27:15.5251726Z   Downloaded windows-sys v0.61.2
+2026-10-29T08:27:16.7587791Z    Compiling proc-macro2 v1.0.107
+2026-10-29T08:27:16.7588309Z    Compiling quote v1.0.47
+2026-10-29T08:27:18.5045070Z    Compiling unicode-ident v1.0.27
+2026-10-29T08:27:18.6375138Z    Compiling serde_core v1.0.229
+2026-10-29T08:27:19.6982833Z    Compiling syn v3.0.9
+2026-10-29T08:27:21.5572867Z    Compiling stable_deref_trait v1.2.1
+2026-10-29T08:27:21.6094630Z    Compiling serde v1.0.229
+2026-10-29T08:27:21.8396342Z    Compiling memchr v2.8.3
+2026-10-29T08:27:23.1469235Z    Compiling synstructure v0.14.0
+2026-10-29T08:27:23.7540424Z    Compiling getrandom v0.4.3
+2026-10-29T08:27:23.9527770Z    Compiling cfg-if v1.0.5
+2026-10-29T08:27:24.1407356Z    Compiling writeable v0.6.4
+2026-10-29T08:27:24.6382470Z    Compiling jobserver v0.1.35
+2026-10-29T08:27:24.9016150Z    Compiling equivalent v1.0.3
+2026-10-29T08:27:24.9586759Z    Compiling find-msvc-tools v0.1.15
+2026-10-29T08:27:25.0600896Z    Compiling zerofrom-derive v0.1.8
+2026-10-29T08:27:25.8135441Z    Compiling yoke-derive v0.8.4
+2026-10-29T08:27:26.4876508Z    Compiling zerofrom v0.1.8
+2026-10-29T08:27:26.5976128Z    Compiling zerovec-derive v0.11.7
+2026-10-29T08:27:26.9674664Z    Compiling yoke v0.8.4
+2026-10-29T08:27:27.1554568Z    Compiling serde_derive v1.0.229
+2026-10-29T08:27:27.6977619Z    Compiling zerovec v0.11.9
+2026-10-29T08:27:28.8030541Z    Compiling displaydoc v0.2.7
+2026-10-29T08:27:29.5095125Z    Compiling shlex v2.0.1
+2026-10-29T08:27:29.6525975Z    Compiling cc v1.10.0
+2026-10-29T08:27:30.3413162Z    Compiling tinystr v0.8.5
+2026-10-29T08:27:30.5621532Z    Compiling crossbeam-utils v0.8.23
+2026-10-29T08:27:30.7913598Z    Compiling allocator-api2 v0.2.21
+2026-10-29T08:27:31.1785330Z    Compiling litemap v0.8.3
+2026-10-29T08:27:31.4137673Z    Compiling icu_locale_core v2.4.0
+2026-10-29T08:27:32.4320603Z    Compiling zerotrie v0.2.5
+2026-10-29T08:27:34.2611687Z    Compiling potential_utf v0.1.6
+2026-10-29T08:27:34.3995640Z    Compiling syn v2.0.119
+2026-10-29T08:27:37.5514221Z    Compiling windows-link v0.2.1
+2026-10-29T08:27:37.5979875Z    Compiling siphasher v1.0.4
+2026-10-29T08:27:37.7552184Z    Compiling rand_core v0.6.4
+2026-10-29T08:27:37.8785092Z    Compiling rand v0.8.8
+2026-10-29T08:27:38.3697054Z    Compiling phf_shared v0.11.3
+2026-10-29T08:27:38.5402626Z    Compiling icu_provider v2.4.0
+2026-10-29T08:27:39.9013436Z    Compiling icu_normalizer_data v2.4.0
+2026-10-29T08:27:40.0632138Z    Compiling icu_properties_data v2.4.0
+2026-10-29T08:27:40.1971264Z    Compiling utf8_iter v1.0.4
+2026-10-29T08:27:40.2193922Z    Compiling smallvec v1.16.4
+2026-10-29T08:27:40.3371662Z    Compiling icu_collections v2.4.0
+2026-10-29T08:27:40.4716171Z    Compiling phf_generator v0.11.3
+2026-10-29T08:27:40.6167484Z    Compiling itoa v1.0.18
+2026-10-29T08:27:40.8283011Z    Compiling foldhash v0.2.0
+2026-10-29T08:27:41.1129626Z    Compiling hashbrown v0.17.1
+2026-10-29T08:27:41.3039300Z    Compiling phf_macros v0.11.3
+2026-10-29T08:27:41.9539350Z    Compiling libc v0.2.191
+2026-10-29T08:27:42.0686522Z    Compiling utf16_iter v1.0.5
+2026-10-29T08:27:42.1729620Z    Compiling once_cell v1.21.4
+2026-10-29T08:27:42.3852281Z    Compiling write16 v1.0.0
+2026-10-29T08:27:42.3995439Z    Compiling zmij v1.0.23
+2026-10-29T08:27:42.4495182Z    Compiling icu_normalizer v2.4.0
+2026-10-29T08:27:42.6726743Z    Compiling icu_properties v2.4.0
+2026-10-29T08:27:44.6824722Z    Compiling phf v0.11.3
+2026-10-29T08:27:44.7153534Z    Compiling indexmap v2.14.2
+2026-10-29T08:27:45.6322889Z    Compiling pkg-config v0.3.34
+2026-10-29T08:27:46.1532490Z    Compiling crossbeam-epoch v0.9.21
+2026-10-29T08:27:46.3567677Z    Compiling serde_json v1.0.154
+2026-10-29T08:27:46.5178878Z    Compiling winapi v0.3.9
+2026-10-29T08:27:47.1529048Z    Compiling pin-project-lite v0.2.17
+2026-10-29T08:27:47.2220474Z    Compiling autocfg v1.5.1
+2026-10-29T08:27:47.5097385Z    Compiling csv-core v0.1.13
+2026-10-29T08:27:47.5858794Z    Compiling num-traits v0.2.19
+2026-10-29T08:27:47.7618922Z    Compiling zstd-sys v2.1.2+zstd.1.5.7
+2026-10-29T08:27:47.7755477Z    Compiling doxygen-rs v0.4.2
+2026-10-29T08:27:48.5270153Z    Compiling ryu v1.0.23
+2026-10-29T08:27:48.5818204Z    Compiling crossbeam-deque v0.8.8
+2026-10-29T08:27:48.6611373Z    Compiling typenum v1.20.1
+2026-10-29T08:27:48.7820684Z    Compiling rand_core v0.10.1
+2026-10-29T08:27:49.0548077Z    Compiling csv v1.4.0
+2026-10-29T08:27:49.6940368Z    Compiling hybrid-array v0.4.15
+2026-10-29T08:27:52.7107003Z    Compiling lmdb-master-sys v0.2.6
+2026-10-29T08:27:54.8922762Z    Compiling idna_adapter v1.2.2
+2026-10-29T08:27:55.2230674Z    Compiling windows-sys v0.61.2
+2026-10-29T08:27:56.8028969Z    Compiling futures-core v0.3.34
+2026-10-29T08:27:56.9455779Z    Compiling icu_locale_fallback_data v2.4.0
+2026-10-29T08:27:57.3467081Z    Compiling byteorder v1.5.0
+2026-10-29T08:27:57.6277958Z    Compiling cpufeatures v0.3.1
+2026-10-29T08:27:57.8017363Z    Compiling napi-build v2.6.0
+2026-10-29T08:27:58.2599050Z    Compiling futures-sink v0.3.34
+2026-10-29T08:27:58.3810074Z    Compiling rayon-core v1.13.0
+2026-10-29T08:27:58.9700686Z    Compiling percent-encoding v2.3.2
+2026-10-29T08:27:59.5205483Z    Compiling form_urlencoded v1.2.2
+2026-10-29T08:27:59.9381465Z    Compiling futures-channel v0.3.34
+2026-10-29T08:28:00.4735917Z    Compiling idna v1.1.0
+2026-10-29T08:28:08.6160862Z    Compiling irg-kvariants v0.1.1
+2026-10-29T08:28:09.3165643Z    Compiling crossbeam-queue v0.3.14
+2026-10-29T08:28:09.5372867Z    Compiling bincode v1.3.3
+2026-10-29T08:28:09.6959598Z    Compiling futures-macro v0.3.34
+2026-10-29T08:28:10.0119957Z    Compiling bytemuck_derive v1.12.1
+2026-10-29T08:28:10.7082025Z    Compiling aho-corasick v1.1.5
+2026-10-29T08:28:11.2150221Z    Compiling bitflags v2.13.2
+2026-10-29T08:28:11.5653418Z    Compiling tinyvec v1.13.3
+2026-10-29T08:28:12.0183684Z    Compiling fst v0.4.7
+2026-10-29T08:28:12.2376939Z    Compiling futures-io v0.3.34
+2026-10-29T08:28:12.3700357Z    Compiling either v1.19.0
+2026-10-29T08:28:12.5702286Z    Compiling zstd-safe v8.2.0
+2026-10-29T08:28:12.7375043Z    Compiling foldhash v0.1.5
+2026-10-29T08:28:12.8946335Z    Compiling thiserror v2.0.21
+2026-10-29T08:28:13.1686027Z    Compiling unicode-segmentation v1.13.3
+2026-10-29T08:28:14.0094527Z    Compiling heed v0.23.0
+2026-10-29T08:28:14.1754059Z    Compiling futures-task v0.3.34
+2026-10-29T08:28:14.2966211Z    Compiling heed-traits v0.20.0
+2026-10-29T08:28:14.3666031Z    Compiling icu_collator_data v2.4.0
+2026-10-29T08:28:14.5326293Z    Compiling slab v0.4.12
+2026-10-29T08:28:14.6704722Z    Compiling futures-util v0.3.34
+2026-10-29T08:28:14.6912573Z    Compiling heed-types v0.21.0
+2026-10-29T08:28:15.6641539Z    Compiling convert_case v0.8.0
+2026-10-29T08:28:16.6049187Z    Compiling hashbrown v0.15.5
+2026-10-29T08:28:17.3386178Z    Compiling bytemuck v1.25.2
+2026-10-29T08:28:17.6138037Z    Compiling synchronoise v1.0.1
+2026-10-29T08:28:17.8611004Z    Compiling rmp v0.8.15
+2026-10-29T08:28:18.2208422Z    Compiling url v2.5.8
+2026-10-29T08:28:19.3333748Z    Compiling chacha20 v0.10.2
+2026-10-29T08:28:19.5932367Z    Compiling seize v0.5.1
+2026-10-29T08:28:20.0102703Z    Compiling page_size v0.6.0
+2026-10-29T08:28:20.0884327Z    Compiling block-buffer v0.12.1
+2026-10-29T08:28:20.2268853Z    Compiling crypto-common v0.2.2
+2026-10-29T08:28:20.8873040Z    Compiling tracing-core v0.1.36
+2026-10-29T08:28:21.5056493Z    Compiling tracing-attributes v0.1.31
+2026-10-29T08:28:21.9051786Z    Compiling thiserror-impl v2.0.21
+2026-10-29T08:28:22.8227173Z    Compiling rustc-hash v2.1.3
+2026-10-29T08:28:22.9078190Z    Compiling regex-syntax v0.8.11
+2026-10-29T08:28:23.5934611Z    Compiling const-oid v0.10.2
+2026-10-29T08:28:23.8126759Z    Compiling napi-sys v3.4.1
+2026-10-29T08:28:23.9678952Z    Compiling scopeguard v1.2.0
+2026-10-29T08:28:24.0271267Z    Compiling lock_api v0.5.0
+2026-10-29T08:28:24.4464014Z    Compiling digest v0.11.3
+2026-10-29T08:28:24.5844420Z    Compiling convert_case v0.12.0
+2026-10-29T08:28:24.8902437Z    Compiling regex-automata v0.4.18
+2026-10-29T08:28:28.4269212Z    Compiling tracing v0.1.44
+2026-10-29T08:28:30.5138548Z    Compiling papaya v0.2.5
+2026-10-29T08:28:31.1015849Z    Compiling rand v0.10.3
+2026-10-29T08:28:31.8721542Z    Compiling icu_locale_fallback v2.4.0
+2026-10-29T08:28:32.2503380Z    Compiling rayon v1.12.0
+2026-10-29T08:28:33.7892213Z    Compiling roaring v0.11.5
+2026-10-29T08:28:34.8643224Z    Compiling futures-executor v0.3.34
+2026-10-29T08:28:36.0090213Z    Compiling whatlang v0.18.0
+2026-10-29T08:28:38.0613014Z    Compiling steppe v0.4.1
+2026-10-29T08:28:38.2132073Z    Compiling unicode-normalization v0.1.26
+2026-10-29T08:28:38.7538471Z    Compiling napi v3.15.0
+2026-10-29T08:28:38.9346587Z    Compiling thread_local v1.1.10
+2026-10-29T08:28:39.1982639Z    Compiling parking_lot_core v0.10.0
+2026-10-29T08:28:39.4723397Z    Compiling crossbeam-channel v0.5.17
+2026-10-29T08:28:40.1740842Z    Compiling libloading v0.9.0
+2026-10-29T08:28:40.3769607Z    Compiling serde_bytes v0.11.19
+2026-10-29T08:28:40.5294447Z    Compiling semver v1.0.28
+2026-10-29T08:28:40.5707713Z    Compiling slice-group-by v0.3.1
+2026-10-29T08:28:40.8046255Z    Compiling finl_unicode v1.5.0
+2026-10-29T08:28:40.9147296Z    Compiling fastrand v2.5.0
+2026-10-29T08:28:41.0598558Z    Compiling min-max-heap v1.3.0
+2026-10-29T08:28:41.1706810Z    Compiling tempfile v3.27.0
+2026-10-29T08:28:41.2117156Z    Compiling hannoy v0.3.0
+2026-10-29T08:28:41.8266948Z    Compiling charabia v0.10.0
+2026-10-29T08:28:43.7133237Z    Compiling napi-derive-backend v6.1.6
+2026-10-29T08:28:44.1161972Z    Compiling rmpv v1.3.1
+2026-10-29T08:28:45.4480307Z    Compiling parking_lot v0.13.0
+2026-10-29T08:28:45.9524334Z    Compiling icu_collator v2.4.0
+2026-10-29T08:28:46.4259821Z    Compiling futures v0.3.34
+2026-10-29T08:28:46.4850872Z    Compiling zstd v0.14.3
+2026-10-29T08:28:46.9013245Z    Compiling regex v1.13.1
+2026-10-29T08:28:47.8138103Z    Compiling sha2 v0.11.1
+2026-10-29T08:28:49.2803663Z    Compiling rmp-serde v1.3.1
+2026-10-29T08:28:49.7548697Z    Compiling elmdb-node v0.0.0 (D:\a\apack\apack\vendor\elmdb\crates\elmdb-node)
+2026-10-29T08:28:49.9037696Z    Compiling rust-stemmers v1.2.0
+2026-10-29T08:28:50.3897181Z    Compiling ryu-js v1.0.3
+2026-10-29T08:28:50.7042974Z    Compiling ctor v1.0.13
+2026-10-29T08:28:50.9155860Z    Compiling nohash-hasher v0.2.0
+2026-10-29T08:28:50.9791577Z    Compiling levenshtein_automata v0.2.1
+2026-10-29T08:28:51.9788401Z    Compiling elmdb v0.0.0 (D:\a\apack\apack\vendor\elmdb\crates\elmdb)
+2026-10-29T08:29:02.1498646Z    Compiling napi-derive v3.6.13
+2026-10-29T08:29:03.4368045Z    Compiling process_path v0.1.4
+2026-10-29T08:31:30.9463933Z     Finished `release` profile [optimized] target(s) in 4m 23s
+2026-10-29T08:31:31.0767635Z ##[end-action id=__self_2.__run_2;outcome=success;conclusion=success;duration_ms=271262]
+2026-10-29T08:31:31.0947191Z ##[group]Run npm ci
+2026-10-29T08:31:31.0947616Z [36;1mnpm ci[0m
+2026-10-29T08:31:31.0964686Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:31:31.0965154Z env:
+2026-10-29T08:31:31.0965340Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:31:31.0965630Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:31:31.0965886Z   npm_config_jobs: 2
+2026-10-29T08:31:31.0966164Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:31:31.0966492Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:31:31.0966785Z   CACHE_ON_FAILURE: false
+2026-10-29T08:31:31.0967020Z   CARGO_INCREMENTAL: 0
+2026-10-29T08:31:31.0970389Z   GITHUB_TOKEN: ***
+2026-10-29T08:31:31.0970692Z ##[endgroup]
+2026-10-29T08:31:32.5842526Z npm warn EBADENGINE Unsupported engine {
+2026-10-29T08:31:32.5843639Z npm warn EBADENGINE   package: 'eslint-visitor-keys@5.0.1',
+2026-10-29T08:31:32.5844855Z npm warn EBADENGINE   required: { node: '^20.19.0 || ^22.13.0 || >=24' },
+2026-10-29T08:31:32.5846150Z npm warn EBADENGINE   current: { node: 'v23.11.1', npm: '10.9.2' }
+2026-10-29T08:31:32.5846979Z npm warn EBADENGINE }
+2026-10-29T08:31:32.5886585Z npm warn EBADENGINE Unsupported engine {
+2026-10-29T08:31:32.5887219Z npm warn EBADENGINE   package: 'tsup@9.0.0',
+2026-10-29T08:31:32.5887767Z npm warn EBADENGINE   required: { node: '^22.18.0 || ^24.11.0 || >=26.0.0' },
+2026-10-29T08:31:32.5888357Z npm warn EBADENGINE   current: { node: 'v23.11.1', npm: '10.9.2' }
+2026-10-29T08:31:32.5888840Z npm warn EBADENGINE }
+2026-10-29T08:31:35.8547977Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+2026-10-29T08:31:36.7085813Z npm warn deprecated rimraf@2.6.3: Rimraf versions prior to v4 are no longer supported
+2026-10-29T08:31:37.9692161Z npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-10-29T08:31:44.1315679Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T08:31:44.6911045Z npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+2026-10-29T08:31:44.7341930Z npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T08:31:51.4604353Z npm warn deprecated glob@11.1.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T08:31:52.1666684Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T08:31:52.1860815Z npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+2026-10-29T08:32:54.7160544Z 
+2026-10-29T08:32:54.7161263Z > apack@0.3.14 preinstall
+2026-10-29T08:32:54.7166199Z > [ "$NODE_ENV" = 'production' ] && echo '⚠️  NODE_ENV=production — devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true
+2026-10-29T08:32:54.7167039Z 
+2026-10-29T08:32:54.7808518Z 
+2026-10-29T08:32:54.7811511Z > apack@0.3.14 postinstall
+2026-10-29T08:32:54.7812082Z > node scripts/postinstall.mjs
+2026-10-29T08:32:54.7812283Z 
+2026-10-29T08:32:57.0261926Z rebuilt dependencies successfully
+2026-10-29T08:32:57.0769912Z 
+2026-10-29T08:32:57.0771115Z added 1356 packages, and audited 1375 packages in 1m
+2026-10-29T08:32:57.0771684Z 
+2026-10-29T08:32:57.0771952Z 322 packages are looking for funding
+2026-10-29T08:32:57.0772369Z   run `npm fund` for details
+2026-10-29T08:32:57.1614950Z 
+2026-10-29T08:32:57.1615619Z 5 vulnerabilities (1 moderate, 2 high, 2 critical)
+2026-10-29T08:32:57.1615951Z 
+2026-10-29T08:32:57.1616221Z To address all issues (including breaking changes), run:
+2026-10-29T08:32:57.1616631Z   npm audit fix --force
+2026-10-29T08:32:57.1616821Z 
+2026-10-29T08:32:57.1616949Z Run `npm audit` for details.
+2026-10-29T08:32:57.2113514Z ##[group]Run npm run packages:build
+2026-10-29T08:32:57.2114000Z [36;1mnpm run packages:build[0m
+2026-10-29T08:32:57.2130689Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:32:57.2131146Z env:
+2026-10-29T08:32:57.2131386Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:32:57.2131680Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:32:57.2131932Z   npm_config_jobs: 2
+2026-10-29T08:32:57.2132204Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:32:57.2132515Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:32:57.2132827Z   CACHE_ON_FAILURE: false
+2026-10-29T08:32:57.2133102Z   CARGO_INCREMENTAL: 0
+2026-10-29T08:32:57.2133374Z ##[endgroup]
+2026-10-29T08:32:57.7634191Z 
+2026-10-29T08:32:57.7634686Z > apack@0.3.14 packages:build
+2026-10-29T08:32:57.7635641Z > npm run build:package -w @apackdev/ears -w @apackdev/sdk -w @apackdev/ui -w @apackdev/testing -w @apackdev/cli
+2026-10-29T08:32:57.7636234Z 
+2026-10-29T08:32:58.1234716Z 
+2026-10-29T08:32:58.1235421Z > @apackdev/ears@0.1.0 build:package
+2026-10-29T08:32:58.1236016Z > tsx ../../scripts/build-package.ts .
+2026-10-29T08:32:58.1236336Z 
+2026-10-29T08:33:03.3546471Z Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+2026-10-29T08:33:03.4012858Z 
+2026-10-29T08:33:03.4013546Z > @apackdev/sdk@0.1.0 build:package
+2026-10-29T08:33:03.4014046Z > tsx ../../scripts/build-package.ts .
+2026-10-29T08:33:03.4014293Z 
+2026-10-29T08:33:14.0394991Z Built @apackdev/sdk@0.1.0 into dist, staged for publishing in publish
+2026-10-29T08:33:14.1615085Z 
+2026-10-29T08:33:14.1615766Z > @apackdev/ui@0.1.0 build:package
+2026-10-29T08:33:14.1616584Z > tsx ../../scripts/build-ui-package.ts .
+2026-10-29T08:33:14.1617027Z 
+2026-10-29T08:33:16.1858220Z (node:7408) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+2026-10-29T08:33:16.1859762Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-29T08:33:29.4495554Z Built @apackdev/ui@0.1.0 into dist, staged for publishing in publish
+2026-10-29T08:33:29.5383396Z 
+2026-10-29T08:33:29.5384037Z > @apackdev/testing@0.1.0 build:package
+2026-10-29T08:33:29.5384556Z > tsx ../../scripts/bundle-package.ts .
+2026-10-29T08:33:29.5384772Z 
+2026-10-29T08:33:40.1675715Z Built @apackdev/testing@0.1.0 into dist\package
+2026-10-29T08:33:40.2080560Z 
+2026-10-29T08:33:40.2081903Z > @apackdev/cli@0.1.0 build:package
+2026-10-29T08:33:40.2083086Z > tsx ../../scripts/bundle-package.ts .
+2026-10-29T08:33:40.2083835Z 
+2026-10-29T08:33:41.7482593Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+2026-10-29T08:33:41.7483807Z 
+2026-10-29T08:33:41.7484065Z     src/build/compiler-pe-environment.ts:38:102:
+2026-10-29T08:33:41.7485162Z       38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+2026-10-29T08:33:41.7486250Z          ╵                                                     ~~~~~~~~~~~
+2026-10-29T08:33:41.7486740Z 
+2026-10-29T08:33:41.7487336Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+2026-10-29T08:33:41.7487950Z 
+2026-10-29T08:33:41.7506885Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+2026-10-29T08:33:41.7507701Z 
+2026-10-29T08:33:41.7508008Z     src/build/tool-identity.ts:19:42:
+2026-10-29T08:33:41.7508890Z       19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+2026-10-29T08:33:41.7510321Z          ╵                                           ~~~~~~~~~~~
+2026-10-29T08:33:41.7510718Z 
+2026-10-29T08:33:41.7511031Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+2026-10-29T08:33:41.7511627Z 
+2026-10-29T08:33:41.7512493Z ▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+2026-10-29T08:33:41.7513022Z 
+2026-10-29T08:33:41.7513337Z     src/build/tool-identity.ts:61:48:
+2026-10-29T08:33:41.7517061Z       61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+2026-10-29T08:33:41.7518177Z          ╵                                            ~~~~~~~~~~~
+2026-10-29T08:33:41.7518674Z 
+2026-10-29T08:33:41.7519178Z   You need to set the output format to "esm" for "import.meta" to work correctly.
+2026-10-29T08:33:41.7520036Z 
+2026-10-29T08:33:41.8226015Z Built @apackdev/cli@0.1.0 into dist\package
+2026-10-29T08:33:41.9248041Z ##[group]Run node .github/scripts/ears-sqlite-platform.mjs probe 2>&1 | tee .temp/sqlite-platform/runtime.log
+2026-10-29T08:33:41.9249001Z [36;1mnode .github/scripts/ears-sqlite-platform.mjs probe 2>&1 | tee .temp/sqlite-platform/runtime.log[0m
+2026-10-29T08:33:41.9266530Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:33:41.9266998Z env:
+2026-10-29T08:33:41.9267247Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:33:41.9267583Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:33:41.9267872Z   npm_config_jobs: 2
+2026-10-29T08:33:41.9268142Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:33:41.9268449Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:33:41.9268723Z   CACHE_ON_FAILURE: false
+2026-10-29T08:33:41.9269015Z   CARGO_INCREMENTAL: 0
+2026-10-29T08:33:41.9269276Z ##[endgroup]
+2026-10-29T08:33:42.1478303Z (node:4380) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+2026-10-29T08:33:42.1479776Z (Use `node --trace-warnings ...` to show where the warning was created)
+2026-10-29T08:33:42.6536191Z ##[group]Run npm test -w @apackdev/ears -- --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/ears.json 2>&1 | tee .temp/sqlite-platform/ears.log
+2026-10-29T08:33:42.6537455Z [36;1mnpm test -w @apackdev/ears -- --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/ears.json 2>&1 | tee .temp/sqlite-platform/ears.log[0m
+2026-10-29T08:33:42.6553687Z shell: C:\Program Files\Git\bin\bash.EXE --noprofile --norc -e -o pipefail {0}
+2026-10-29T08:33:42.6554173Z env:
+2026-10-29T08:33:42.6554371Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:33:42.6554610Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:33:42.6554839Z   npm_config_jobs: 2
+2026-10-29T08:33:42.6555096Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:33:42.6555409Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:33:42.6555684Z   CACHE_ON_FAILURE: false
+2026-10-29T08:33:42.6555948Z   CARGO_INCREMENTAL: 0
+2026-10-29T08:33:42.6556196Z ##[endgroup]
+2026-10-29T08:33:43.2575125Z 
+2026-10-29T08:33:43.2575803Z > @apackdev/ears@0.1.0 test
+2026-10-29T08:33:43.2577236Z > vitest run --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/ears.json
+2026-10-29T08:33:43.2578286Z 
+2026-10-29T08:33:43.8264848Z 
+2026-10-29T08:33:43.8266071Z [1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mD:/a/apack/apack/packages/apack-ears[39m
+2026-10-29T08:33:43.8266692Z 
+2026-10-29T08:33:52.0066538Z  [32m✓[39m tests/sqlite/search-builds.spec.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 7079[2mms[22m[39m
+2026-10-29T08:33:52.0068752Z    [33m[2m✓[22m[39m shared background search generations[2m > [22madmits without row hydration, refuses partial answers and reconciles writes behind and ahead of each cursor [33m 438[2mms[22m[39m
+2026-10-29T08:33:52.0077207Z    [33m[2m✓[22m[39m shared background search generations[2m > [22mindexes retirement by generation and keeps embedding payloads out of secondary keys [33m 321[2mms[22m[39m
+2026-10-29T08:33:52.0083219Z    [33m[2m✓[22m[39m shared background search generations[2m > [22mkeeps unrelated generations and embeddings ready when one text declaration changes [33m 307[2mms[22m[39m
+2026-10-29T08:33:52.0086795Z    [33m[2m✓[22m[39m shared background search generations[2m > [22mdefers the last complete vector generation on failure without spinning and reuses it after reopen [33m 319[2mms[22m[39m
+2026-10-29T08:33:52.0089496Z    [33m[2m✓[22m[39m shared background search generations[2m > [22mrejects readiness and stops cleanly if status inspection fails after a committed batch [33m 341[2mms[22m[39m
+2026-10-29T08:33:52.0091990Z    [33m[2m✓[22m[39m shared background search generations[2m > [22mrecovers a search cursor committed by a process killed before readiness [33m 1102[2mms[22m[39m
+2026-10-29T08:33:52.0094504Z    [33m[2m✓[22m[39m shared background search generations[2m > [22mlets background-only work exit but keeps an explicit readiness wait alive until complete [33m 1570[2mms[22m[39m
+2026-10-29T08:33:52.0097358Z    [33m[2m✓[22m[39m shared background search generations[2m > [22minvalidates stale owners when physical recovery replaces cached generations without inventing a data commit [33m 320[2mms[22m[39m
+2026-10-29T08:33:52.8903243Z  [32m✓[39m tests/engine/writes.spec.ts [2m([22m[2m61 tests[22m[2m)[22m[33m 7941[2mms[22m[39m
+2026-10-29T08:33:52.8905246Z    [33m[2m✓[22m[39m create[2m > [22mcreates an entity of a type with a new id and createdAt [33m 307[2mms[22m[39m
+2026-10-29T08:33:53.3226704Z  [32m✓[39m tests/engine/queries.spec.ts [2m([22m[2m27 tests[22m[2m)[22m[33m 8389[2mms[22m[39m
+2026-10-29T08:33:53.3228090Z    [33m[2m✓[22m[39m starts[2m > [22ma type, types, ids, and every entity [33m 312[2mms[22m[39m
+2026-10-29T08:33:53.3229848Z    [33m[2m✓[22m[39m declared indexes[2m > [22ma where on a declared field reads its index; on any other, it filters the rows and finds the same matches [33m 1388[2mms[22m[39m
+2026-10-29T08:33:53.3235352Z    [33m[2m✓[22m[39m declared indexes[2m > [22mwarns once per call site, and not for a type small enough to walk [33m 1286[2mms[22m[39m
+2026-10-29T08:33:53.3237565Z    [33m[2m✓[22m[39m declared indexes[2m > [22mkeeps a declared index through writes, trash and a unit that throws [33m 1164[2mms[22m[39m
+2026-10-29T08:33:53.3239546Z    [33m[2m✓[22m[39m declared indexes[2m > [22mfinds a long string, which no index holds, and stores no infinite number [33m 1197[2mms[22m[39m
+2026-10-29T08:33:55.5150974Z  [32m✓[39m tests/sqlite/text-limits.spec.ts [2m([22m[2m16 tests[22m[2m)[22m[33m 2913[2mms[22m[39m
+2026-10-29T08:33:55.5158575Z    [33m[2m✓[22m[39m native text prefixes[2m > [22mreturns only the adjacent ranked prefix from native SQL and preserves counts and first terminals [33m 352[2mms[22m[39m
+2026-10-29T08:33:56.9727055Z  [32m✓[39m tests/engine/relations.spec.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 3048[2mms[22m[39m
+2026-10-29T08:33:56.9729723Z    [33m[2m✓[22m[39m links[2m > [22ma kind declared unique keeps one edge between two ends, which linking again replaces the info of; updateRelation moves one, keeping its id, and refuses an id no relation has [33m 320[2mms[22m[39m
+2026-10-29T08:34:01.0645050Z  [32m✓[39m tests/engine/sqlite-operations.spec.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 7520[2mms[22m[39m
+2026-10-29T08:34:01.0647298Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mselects adjacency and relation payloads without a binding call per source or edge [33m 506[2mms[22m[39m
+2026-10-29T08:34:01.0649718Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mreads and updates a scalar through EARS without decoding or encoding its large neighbors [33m 378[2mms[22m[39m
+2026-10-29T08:34:01.0659295Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mreplaces logical values when the source and destination have different physical field slots [33m 695[2mms[22m[39m
+2026-10-29T08:34:01.0669861Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mbounds explain capture while counting every executed query statement [33m 421[2mms[22m[39m
+2026-10-29T08:34:01.0672137Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mreopens lossless payloads, FTS and embeddings, including read-only access [33m 509[2mms[22m[39m
+2026-10-29T08:34:01.0674567Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mbacks up and replaces a populated destination with text, relations and vectors intact [33m 402[2mms[22m[39m
+2026-10-29T08:34:01.0677377Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22madmits new types and value indexes over existing data, and refuses stale handles [33m 303[2mms[22m[39m
+2026-10-29T08:34:01.0679513Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mkeeps the incumbent intact when replacement fails midway [33m 555[2mms[22m[39m
+2026-10-29T08:34:01.0681719Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mgives a consistent multi-statement snapshot while another handle commits [33m 480[2mms[22m[39m
+2026-10-29T08:34:01.0684190Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mpreserves the declared schema and data after unsupported index admission [33m 363[2mms[22m[39m
+2026-10-29T08:34:01.0686874Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mallows another process to read a committed snapshot and refuses its competing writer [33m 811[2mms[22m[39m
+2026-10-29T08:34:01.0689375Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22madmits required fields over old data and checks only changed fields [33m 437[2mms[22m[39m
+2026-10-29T08:34:01.0691467Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mpreserves array-element and UTF-16 highlight locations [33m 322[2mms[22m[39m
+2026-10-29T08:34:01.0695202Z    [33m[2m✓[22m[39m SQLite operational feasibility[2m > [22mreports its own commit sequence when another writer commits immediately after it [33m 573[2mms[22m[39m
+2026-10-29T08:34:01.5434999Z  [32m✓[39m tests/engine/watch.spec.ts [2m([22m[2m25 tests[22m[2m)[22m[33m 5412[2mms[22m[39m
+2026-10-29T08:34:01.5437554Z    [33m[2m✓[22m[39m watch[2m > [22mdelivers the first result after the call returns, not during it [33m 307[2mms[22m[39m
+2026-10-29T08:34:01.5442341Z    [33m[2m✓[22m[39m admin committed errors[2m > [22mnotifies a committed bulkLoad before rethrowing [33m 325[2mms[22m[39m
+2026-10-29T08:34:01.5462338Z    [33m[2m✓[22m[39m admin committed errors[2m > [22mdoes not notify an uncommitted reset refusal [33m 319[2mms[22m[39m
+2026-10-29T08:34:01.5464581Z    [33m[2m✓[22m[39m admin committed errors[2m > [22mnotifies a replacement that commits and then reports failed sync [33m 379[2mms[22m[39m
+2026-10-29T08:34:03.5716709Z  [32m✓[39m tests/engine/transact.spec.ts [2m([22m[2m46 tests[22m[2m)[22m[33m 6081[2mms[22m[39m
+2026-10-29T08:34:03.9705987Z  [32m✓[39m tests/engine/watch-schedule.spec.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 1816[2mms[22m[39m
+2026-10-29T08:34:03.9708339Z    [33m[2m✓[22m[39m the watch scheduler[2m > [22mcosts a bounded number of runs for a thousand commits on separate turns, and delivers the last result [33m 784[2mms[22m[39m
+2026-10-29T08:34:05.5044719Z  [32m✓[39m tests/sqlite/text-documents.spec.ts [2m([22m[2m10 tests[22m[2m)[22m[33m 3798[2mms[22m[39m
+2026-10-29T08:34:05.5069560Z    [33m[2m✓[22m[39m source-string FTS documents[2m > [22mbounds native owner masks without truncating either the masked or fallback answer [33m 2237[2mms[22m[39m
+2026-10-29T08:34:06.1101340Z  [32m✓[39m tests/sqlite/index-builds.spec.ts [2m([22m[2m9 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 1516[2mms[22m[39m
+2026-10-29T08:34:06.5712349Z  [32m✓[39m tests/sqlite/query-cost.spec.ts [2m([22m[2m18 tests[22m[2m)[22m[33m 2375[2mms[22m[39m
+2026-10-29T08:34:06.5715013Z    [33m[2m✓[22m[39m SQLite ordering work[2m > [22morders rank without loading unrelated bodies or issuing per-entity SQL [33m 391[2mms[22m[39m
+2026-10-29T08:34:07.6954173Z  [32m✓[39m tests/sqlite/trigrams.spec.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 1605[2mms[22m[39m
+2026-10-29T08:34:07.6956264Z    [33m[2m✓[22m[39m SQLite exact trigram filtering[2m > [22muses FTS5 for a selective literal, preserves duplicates and avoids whole-row hydration [33m 788[2mms[22m[39m
+2026-10-29T08:34:10.5779723Z  [32m✓[39m tests/sqlite/text-typos.spec.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 3367[2mms[22m[39m
+2026-10-29T08:34:10.5785097Z    [33m[2m✓[22m[39m bounded candidate typos[2m > [22muses native MATCH with query work independent of unrelated vocabulary growth [33m 727[2mms[22m[39m
+2026-10-29T08:34:12.6959828Z  [32m✓[39m tests/engine/search.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 1544[2mms[22m[39m
+2026-10-29T08:34:13.1738924Z  [32m✓[39m tests/sqlite/schema-validation.spec.ts [2m([22m[2m49 tests[22m[2m)[22m[33m 4873[2mms[22m[39m
+2026-10-29T08:34:13.4422096Z  [32m✓[39m tests/sqlite/search-recovery.spec.ts [2m([22m[2m22 tests[22m[2m)[22m[33m 6747[2mms[22m[39m
+2026-10-29T08:34:13.4424727Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs trigram table in a private background generation [33m 561[2mms[22m[39m
+2026-10-29T08:34:13.4427565Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs trigram documents in a private background generation [33m 300[2mms[22m[39m
+2026-10-29T08:34:13.4430442Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs trigram owner index in a private background generation [33m 410[2mms[22m[39m
+2026-10-29T08:34:13.4437788Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs trigram trigger ai in a private background generation [33m 343[2mms[22m[39m
+2026-10-29T08:34:13.4441804Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs trigram trigger ad in a private background generation [33m 370[2mms[22m[39m
+2026-10-29T08:34:13.4451302Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs trigram trigger au in a private background generation [33m 348[2mms[22m[39m
+2026-10-29T08:34:13.4453774Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs text table in a private background generation [33m 354[2mms[22m[39m
+2026-10-29T08:34:13.4456122Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs text documents in a private background generation [33m 338[2mms[22m[39m
+2026-10-29T08:34:13.4459285Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs vector reuse index in a private background generation [33m 335[2mms[22m[39m
+2026-10-29T08:34:13.4462852Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mrefuses read-only and reconstructs text shadow content in a private background generation [33m 415[2mms[22m[39m
+2026-10-29T08:34:13.4465306Z    [33m[2m✓[22m[39m SQLite missing search storage recovery[2m > [22mpages only affected search inputs and leaves a healthy reopen free of hydration [33m 522[2mms[22m[39m
+2026-10-29T08:34:13.8073862Z  [32m✓[39m tests/sqlite/values.spec.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 568[2mms[22m[39m
+2026-10-29T08:34:14.1589983Z  [32m✓[39m tests/vocabulary.spec.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 427[2mms[22m[39m
+2026-10-29T08:34:15.3284580Z  [32m✓[39m tests/engine/vector.spec.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 919[2mms[22m[39m
+2026-10-29T08:34:15.3970670Z  [32m✓[39m tests/sqlite/commit-outcomes.spec.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 1382[2mms[22m[39m
+2026-10-29T08:34:15.3972881Z    [33m[2m✓[22m[39m SQLite commit outcome handling[2m > [22mdoes not invent a committed/refused answer after an ended commit error (applied: false) [33m 365[2mms[22m[39m
+2026-10-29T08:34:15.3975382Z    [33m[2m✓[22m[39m SQLite commit outcome handling[2m > [22mstops a background commit without replaying it or writing a false failure marker [33m 302[2mms[22m[39m
+2026-10-29T08:34:15.9311514Z  [32m✓[39m tests/sqlite/regex.spec.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 1305[2mms[22m[39m
+2026-10-29T08:34:15.9314492Z    [33m[2m✓[22m[39m SQLite Rust regex bridge[2m > [22mimports and constructs a compiler without loading the WASM runtime [33m 371[2mms[22m[39m
+2026-10-29T08:34:15.9318279Z    [33m[2m✓[22m[39m SQLite Rust regex bridge[2m > [22mpreserves missing-asset errors instead of reporting a pattern refusal [33m 486[2mms[22m[39m
+2026-10-29T08:34:16.5498802Z  [32m✓[39m tests/engine/storage-port.spec.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 469[2mms[22m[39m
+2026-10-29T08:34:16.7238485Z  [32m✓[39m tests/engine/maintenance.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 751[2mms[22m[39m
+2026-10-29T08:34:17.1687997Z  [32m✓[39m tests/sqlite/transaction-failures.spec.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 635[2mms[22m[39m
+2026-10-29T08:34:18.1676789Z  [31m❯[39m tests/engine/calls.spec.ts [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 807[2mms[22m[39m
+2026-10-29T08:34:18.1678594Z    [32m✓[39m admin.calls[2m > [22mcounts nothing until started, and nothing after it stops[32m 240[2mms[22m[39m
+2026-10-29T08:34:18.1680821Z [31m   [31m×[31m admin.calls[2m > [22mcounts a read, a write outside a unit and a unit with its writes, each at the code that made it[39m[32m 171[2mms[22m[39m
+2026-10-29T08:34:18.1684340Z [31m     → expected 'D:/a/apack/apack/packages/apack-ears/…' to contain 'tests/engine/calls.spec.ts'[39m
+2026-10-29T08:34:18.1686352Z    [32m✓[39m admin.calls[2m > [22msums repeated calls from one line into one site, which is what a loop of one-entity reads looks like[32m 88[2mms[22m[39m
+2026-10-29T08:34:18.1692423Z    [32m✓[39m admin.calls[2m > [22mcounts no unit for a transact that wrote nothing, and counts one that threw with what it wrote[32m 85[2mms[22m[39m
+2026-10-29T08:34:18.1694393Z    [32m✓[39m admin.calls[2m > [22mcounts a watch's runs, and marks the reads a re-run made[32m 117[2mms[22m[39m
+2026-10-29T08:34:18.1695819Z    [32m✓[39m admin.calls[2m > [22mstarts from nothing each time[32m 88[2mms[22m[39m
+2026-10-29T08:34:18.4481039Z  [32m✓[39m tests/sqlite/statement-cache.spec.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 1307[2mms[22m[39m
+2026-10-29T08:34:18.4483503Z    [33m[2m✓[22m[39m SQLite statement cache resource policy[2m > [22mevicts old query shapes while retaining frequently reused statements [33m 323[2mms[22m[39m
+2026-10-29T08:34:18.4488742Z    [33m[2m✓[22m[39m SQLite statement cache resource policy[2m > [22mkeeps real EARS answers correct while dynamic field predicates churn the cache [33m 409[2mms[22m[39m
+2026-10-29T08:34:18.4847297Z  [32m✓[39m tests/engine/query-values.spec.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 691[2mms[22m[39m
+2026-10-29T08:34:20.0667604Z  [32m✓[39m tests/no-module-state.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 366[2mms[22m[39m
+2026-10-29T08:34:20.0671387Z    [33m[2m✓[22m[39m @apackdev/ears module state[2m > [22mno engine module holds data at module scope [33m 362[2mms[22m[39m
+2026-10-29T08:34:21.3002858Z  [32m✓[39m tests/engines.spec.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 605[2mms[22m[39m
+2026-10-29T08:34:21.3004682Z    [33m[2m✓[22m[39m defineEars[2m > [22macts on the engine its getter returns at each call [33m 332[2mms[22m[39m
+2026-10-29T08:34:22.2213255Z  [32m✓[39m tests/sqlite/watch-lifecycle.spec.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 3029[2mms[22m[39m
+2026-10-29T08:34:22.2214991Z    [33m[2m✓[22m[39m SQLite watch ownership[2m > [22mowns only explicit settlement waits (caller) [33m 1109[2mms[22m[39m
+2026-10-29T08:34:22.2216759Z    [33m[2m✓[22m[39m SQLite watch ownership[2m > [22mowns only explicit settlement waits (observer) [33m 831[2mms[22m[39m
+2026-10-29T08:34:22.2218522Z    [33m[2m✓[22m[39m SQLite watch ownership[2m > [22mowns only explicit settlement waits (unawaited) [33m 810[2mms[22m[39m
+2026-10-29T08:34:22.6031904Z  [32m✓[39m tests/sqlite/index.spec.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 712[2mms[22m[39m
+2026-10-29T08:34:23.0312820Z  [32m✓[39m tests/storage-types.spec.ts [2m([22m[2m1 test[22m[2m)[22m[32m 3[2mms[22m[39m
+2026-10-29T08:34:23.1426350Z  [32m✓[39m tests/sqlite/schema-admission.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 345[2mms[22m[39m
+2026-10-29T08:34:23.9356021Z  [32m✓[39m tests/engine/search-relevance.spec.ts [2m([22m[2m32 tests[22m[2m)[22m[33m 303[2mms[22m[39m
+2026-10-29T08:34:24.0146182Z  [32m✓[39m tests/engine/bulk-load.spec.ts [2m([22m[2m1 test[22m[2m)[22m[32m 253[2mms[22m[39m
+2026-10-29T08:34:24.8537066Z  [32m✓[39m tests/sqlite/source-node.spec.ts [2m([22m[2m1 test[22m[2m)[22m[33m 565[2mms[22m[39m
+2026-10-29T08:34:24.8538269Z    [33m[2m✓[22m[39m opens the app-only storage entry with plain Node source conditions and owned regex assets [33m 563[2mms[22m[39m
+2026-10-29T08:34:52.8665158Z  [32m✓[39m tests/engine/model-based.spec.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 33841[2mms[22m[39m
+2026-10-29T08:34:52.8666623Z    [33m[2m✓[22m[39m refuses, holds and answers what the model does [33m 10848[2mms[22m[39m
+2026-10-29T08:34:52.8668315Z    [33m[2m✓[22m[39m keeps every watch at what its read answers afresh, after every write, whatever wrote [33m 22991[2mms[22m[39m
+2026-10-29T08:34:52.8985675Z 
+2026-10-29T08:34:52.8988689Z [31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+2026-10-29T08:34:52.8989811Z 
+2026-10-29T08:34:52.8991328Z [41m[1m FAIL [22m[49m tests/engine/calls.spec.ts[2m > [22madmin.calls[2m > [22mcounts a read, a write outside a unit and a unit with its writes, each at the code that made it
+2026-10-29T08:34:52.8993589Z [31m[1mAssertionError[22m: expected 'D:/a/apack/apack/packages/apack-ears/…' to contain 'tests/engine/calls.spec.ts'[39m
+2026-10-29T08:34:52.8994489Z 
+2026-10-29T08:34:52.8994939Z Expected: [32m"tests/engine/calls.spec.ts"[39m
+2026-10-29T08:34:52.8995922Z Received: [31m"D:/a/apack/apack/packages/apack-ears/src/calls.ts:106"[39m
+2026-10-29T08:34:52.9013174Z 
+2026-10-29T08:34:52.9013774Z [36m [2m❯[22m tests/engine/calls.spec.ts:[2m46:64[22m[39m
+2026-10-29T08:34:52.9017336Z     [90m 44| [39m    expect(sitesOf('unit', report.sites)).toEqual([expect.objectContai…
+2026-10-29T08:34:52.9019153Z     [90m 45| [39m    [35mfor[39m ([35mconst[39m site [35mof[39m report[33m.[39msites) {
+2026-10-29T08:34:52.9020330Z     [90m 46| [39m      expect(site.site.split(' < ')[0]!.replaceAll('\\', '/')).toConta…
+2026-10-29T08:34:52.9022098Z     [90m   | [39m                                                               [31m^[39m
+2026-10-29T08:34:52.9023722Z     [90m 47| [39m      [34mexpect[39m(site[33m.[39mms)[33m.[39m[34mtoBeGreaterThanOrEqual[39m([34m0[39m)[33m;[39m
+2026-10-29T08:34:52.9024655Z     [90m 48| [39m    }
+2026-10-29T08:34:52.9024867Z 
+2026-10-29T08:34:52.9025260Z [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+2026-10-29T08:34:52.9025617Z 
+2026-10-29T08:34:52.9025626Z 
+2026-10-29T08:34:52.9026358Z [2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m37 passed[39m[22m[90m (38)[39m
+2026-10-29T08:34:52.9029516Z [2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m509 passed[39m[22m[2m | [22m[33m1 skipped[39m[90m (511)[39m
+2026-10-29T08:34:52.9031057Z [2m   Start at [22m 08:33:43
+2026-10-29T08:34:52.9175673Z [2m   Duration [22m 69.06s[2m (transform 1.10s, setup 192ms, collect 10.12s, tests 125.31s, environment 12ms, prepare 5.64s)[22m
+2026-10-29T08:34:52.9209771Z 
+2026-10-29T08:34:52.9236991Z JSON report written to D:/a/apack/apack/.temp/sqlite-platform/ears.json
+2026-10-29T08:34:53.0731498Z npm error Lifecycle script `test` failed with error:
+2026-10-29T08:34:53.0734379Z npm error code 1
+2026-10-29T08:34:53.0736067Z npm error path D:\a\apack\apack\packages\apack-ears
+2026-10-29T08:34:53.0737556Z npm error workspace @apackdev/ears@0.1.0
+2026-10-29T08:34:53.0739045Z npm error location D:\a\apack\apack\packages\apack-ears
+2026-10-29T08:34:53.0739759Z npm error command failed
+2026-10-29T08:34:53.0741499Z npm error command C:\Windows\system32\cmd.exe /d /s /c vitest run --reporter=default --reporter=json --outputFile=../../.temp/sqlite-platform/ears.json
+2026-10-29T08:34:53.0787446Z ##[error]Process completed with exit code 1.
+2026-10-29T08:34:53.0986253Z ##[group]Run actions/upload-artifact@v4
+2026-10-29T08:34:53.0986584Z with:
+2026-10-29T08:34:53.0986811Z   name: ears-sqlite-Windows-X64-40842115212
+2026-10-29T08:34:53.0987106Z   path: .temp/sqlite-platform/
+2026-10-29T08:34:53.0987372Z   include-hidden-files: true
+2026-10-29T08:34:53.0987602Z   if-no-files-found: warn
+2026-10-29T08:34:53.0987824Z   compression-level: 6
+2026-10-29T08:34:53.0988020Z   overwrite: false
+2026-10-29T08:34:53.0988197Z env:
+2026-10-29T08:34:53.0988783Z   APACK_CHAIN_CORES: 2
+2026-10-29T08:34:53.0988991Z   CARGO_BUILD_JOBS: 2
+2026-10-29T08:34:53.0989175Z   npm_config_jobs: 2
+2026-10-29T08:34:53.0989378Z   EARS_EVALUATION_BACKEND: sqlite
+2026-10-29T08:34:53.0989622Z   EARS_PLATFORM_ARCH: x64
+2026-10-29T08:34:53.0989830Z   CACHE_ON_FAILURE: false
+2026-10-29T08:34:53.0990031Z   CARGO_INCREMENTAL: 0
+2026-10-29T08:34:53.0990214Z ##[endgroup]
+2026-10-29T08:34:53.2877388Z (node:2780) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-29T08:34:53.2878813Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-29T08:34:53.2956741Z With the provided path, there will be 4 files uploaded
+2026-10-29T08:34:53.2962899Z Artifact name is valid!
+2026-10-29T08:34:53.2964576Z Root directory input is valid!
+2026-10-29T08:34:53.7422922Z Beginning upload of artifact content to blob storage
+2026-10-29T08:34:53.7731129Z (node:2780) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-29T08:34:54.1280165Z Uploaded bytes 28954
+2026-10-29T08:34:54.2118140Z Finished uploading artifact content to blob storage!
+2026-10-29T08:34:54.2120101Z SHA256 digest of uploaded artifact zip is 463cbe002ca91c5e7be972f50c4a100d32376f3602c47e90572246f68ab2f7f2
+2026-10-29T08:34:54.2122548Z Finalizing artifact upload
+2026-10-29T08:34:54.7237215Z Artifact ears-sqlite-Windows-X64-40842115212.zip successfully finalized. Artifact ID 12883612156
+2026-10-29T08:34:54.7238930Z Artifact ears-sqlite-Windows-X64-40842115212 has been successfully uploaded! Final size is 28954 bytes. Artifact ID is 12883612156
+2026-10-29T08:34:54.7248788Z Artifact download URL: https://github.com/spankyed/apack/actions/runs/40842115212/artifacts/12883612156
+2026-10-29T08:34:54.7599053Z Post job cleanup.
+2026-10-29T08:34:54.7603818Z ##[start-action display=Run Swatinem/rust-cache@v2;id=__b3d897c1-918d-460e-868d-4cff5cb4bb74.__Swatinem_rust-cache]
+2026-10-29T08:34:54.7609069Z ##[end-action id=__b3d897c1-918d-460e-868d-4cff5cb4bb74.__Swatinem_rust-cache;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-29T08:34:54.7791953Z Post job cleanup.
+2026-10-29T08:34:54.7795006Z ##[start-action display=Run actions/setup-node@v4;id=__dfaf22dd-6cd1-40e4-8cf0-20f8d557e408.__actions_setup-node]
+2026-10-29T08:34:54.7797186Z ##[end-action id=__dfaf22dd-6cd1-40e4-8cf0-20f8d557e408.__actions_setup-node;outcome=skipped;conclusion=skipped;duration_ms=0]
+2026-10-29T08:34:54.7977270Z Post job cleanup.
+2026-10-29T08:34:55.0041659Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-10-29T08:34:55.0389746Z git version 2.56.0.windows.2
+2026-10-29T08:34:55.0453742Z Temporarily overriding HOME='D:\a\_temp\0a7176bf-b547-4995-b47b-837a12123b9a' before making global git config changes
+2026-10-29T08:34:55.0455158Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-29T08:34:55.0464698Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\apack\apack
+2026-10-29T08:34:55.0854456Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-10-29T08:34:55.1242054Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-10-29T08:34:55.6646065Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-29T08:34:55.6975634Z http.https://github.com/.extraheader
+2026-10-29T08:34:55.7018097Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-10-29T08:34:55.7392506Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-10-29T08:34:56.3116355Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-29T08:34:56.3553421Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-10-29T08:34:56.9336520Z Cleaning up orphan processes
+2026-10-29T08:34:56.9828320Z Terminate orphan process: pid (5452) (vctip)
+2026-10-29T08:34:56.9900563Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache/restore@v4, actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

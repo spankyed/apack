@@ -1,0 +1,92 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc npm run typecheck -w @apackdev/ears && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears && python3 packages/apack-ears/bench/sqlite/run-bench.py .temp/sqlite-rowid-api --trials 3 && python3 packages/apack-ears/bench/sqlite/run-bench.py .temp/sqlite-rowid-durable --trials 3 --durable
+
+    Finished `release` profile [optimized] target(s) in 0.05s
+Published packages are out of date:
+  @apackdev/ears: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/values.ts
+  @apackdev/testing: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/values.ts
+  @apackdev/cli: its inputs changed since the last successful run — changed packages/apack-ears/src/sqlite/values.ts
+Rebuilding 3 of 5
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+Built @apackdev/testing@0.1.0 into dist/package
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/compiler-pe-environment.ts:38:102:
+      38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+         ╵                                                     ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:19:42:
+      19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+         ╵                                           ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:61:48:
+      61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+         ╵                                            ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+Built @apackdev/cli@0.1.0 into dist/package
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/model-based.spec.ts (2 tests) 19392ms
+   ✓ refuses, holds and answers what the model does  4560ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  14829ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 2341ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 1764ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  334ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  312ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  336ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 1140ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 918ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 766ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 410ms
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 237ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 124ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 116ms
+ ✓ tests/sqlite/values.spec.ts (8 tests) 148ms
+ ✓ tests/engine/calls.spec.ts (6 tests) 145ms
+ ✓ tests/engine/search.spec.ts (7 tests) 128ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 107ms
+ ✓ tests/engines.spec.ts (4 tests) 81ms
+ ✓ tests/engine/query-values.spec.ts (4 tests) 76ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 42ms
+ ✓ tests/engine/storage-port.spec.ts (1 test) 26ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 50ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+
+ Test Files  20 passed (20)
+      Tests  258 passed (258)
+   Start at  08:23:36
+   Duration  31.63s (transform 378ms, setup 35ms, collect 1.43s, tests 28.01s, environment 2ms, prepare 748ms)
+
+Running sqlite-1, durable=False
+Running elmdb-1, durable=False
+Running elmdb-2, durable=False
+Running sqlite-2, durable=False
+Running sqlite-3, durable=False
+Running elmdb-3, durable=False
+Running sqlite-1, durable=True
+Running elmdb-1, durable=True
+Running elmdb-2, durable=True
+Running sqlite-2, durable=True
+Running sqlite-3, durable=True
+Running elmdb-3, durable=True

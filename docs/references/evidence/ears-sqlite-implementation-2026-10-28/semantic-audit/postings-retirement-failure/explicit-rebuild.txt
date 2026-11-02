@@ -1,0 +1,67 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/search-recovery.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/search-recovery.spec.ts (27 tests | 1 failed) 3051ms
+   ✓ SQLite missing search storage recovery > rebuilds damaged postings in fresh generations without changing primary commits 139ms
+   ✓ SQLite missing search storage recovery > audits private reconstructed contents without repairing the incumbent 236ms
+   × SQLite missing search storage recovery > detects missing external-content postings even when stored documents are unchanged 126ms
+     → database disk image is malformed
+   ✓ SQLite missing search storage recovery > refuses rebuild on read-only, open-unit and stopped owners without changing the catalog 46ms
+   ✓ SQLite missing search storage recovery > rolls back failed rebuild admission and keeps current generations usable 44ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram table in a private background generation 102ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram documents in a private background generation 108ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram owner index in a private background generation 121ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ai in a private background generation 97ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ad in a private background generation 99ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger au in a private background generation 98ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text table in a private background generation 95ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text documents in a private background generation 99ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text owner index in a private background generation 110ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text metadata in a private background generation 133ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector chunks in a private background generation 105ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs pending vector index in a private background generation 105ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector reuse index in a private background generation 92ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector retirement index in a private background generation 97ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text retirement index in a private background generation 155ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram shadow index in a private background generation 106ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text shadow content in a private background generation 176ms
+   ✓ SQLite missing search storage recovery > rebuilds stale external-content postings after a missing update trigger 112ms
+   ✓ SQLite missing search storage recovery > rolls back partial postings on a background repair failure, refuses incomplete reads and retries cleanly 112ms
+   ✓ SQLite missing search storage recovery > preserves repair and rollback errors, stops scheduling and discards the transaction on close 86ms
+   ✓ SQLite missing search storage recovery > opens healthy storage while another handle owns a write unit and reads only its committed state 54ms
+   ✓ SQLite missing search storage recovery > pages only affected search inputs and leaves a healthy reopen free of hydration 196ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/search-recovery.spec.ts > SQLite missing search storage recovery > detects missing external-content postings even when stored documents are unchanged
+SqliteError: database disk image is malformed
+ ❯ SqliteDatabase.run src/sqlite/database.ts:317:32
+    315|   }
+    316|   run(sql: string, parameters: any[] = []) {
+    317|     return this.statement(sql).run(...parameters);
+       |                                ^
+    318|   }
+    319|   pack(value: unknown): Buffer {
+ ❯ SqliteSearch.collectIndex src/sqlite/search.ts:156:24
+ ❯ SqliteIndexBuilds.step src/sqlite/index-builds.ts:247:40
+ ❯ Immediate.<anonymous> src/sqlite/index-builds.ts:192:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 26 passed (27)
+   Start at  12:12:10
+   Duration  3.48s (transform 222ms, setup 12ms, collect 297ms, tests 3.05s, environment 0ms, prepare 40ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/search-recovery.spec.ts

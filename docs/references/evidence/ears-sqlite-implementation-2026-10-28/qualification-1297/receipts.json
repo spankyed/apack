@@ -1,0 +1,32 @@
+[
+  {
+    "file": "linux/verification.json",
+    "sha256": "d4b2653dec833ff5f63af69e3216de1944e31c0cdc5a9f9961babfe1b44eb121",
+    "bytes": 1723
+  },
+  {
+    "file": "linux/host.json",
+    "sha256": "078ba3591410f342d428d890bfc55bfb278e3ea45e00688fc6b93890c5fc3f14",
+    "bytes": 63337
+  },
+  {
+    "file": "windows/verification.json",
+    "sha256": "6a2abc0fd8e29ab36074fcf98ae047a712c07a725dfd68d8a24bf4780721946a",
+    "bytes": 1354
+  },
+  {
+    "file": "windows/host.json",
+    "sha256": "a443255b0602452582c5b8d4bcaea3cf9761ab6959c0842c757edc8191860908",
+    "bytes": 63506
+  },
+  {
+    "file": "macos/verification.json",
+    "sha256": "7b61d64f21b73fad4e865587b5e3000fcfd2b5ec412a71b04428e79ebc8e7c44",
+    "bytes": 1354
+  },
+  {
+    "file": "macos/host.json",
+    "sha256": "6e1c288f1aa50c7f32f2b6ccda0d3afdc81ced11621478f40dfa0f59bebe6476",
+    "bytes": 63414
+  }
+]

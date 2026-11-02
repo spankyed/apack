@@ -1,0 +1,382 @@
+{
+  "source": "f61acd3c7db33ffcc6c4f313efbf7a9a9be60173",
+  "method": "Tracked .spec.ts candidates under the twelve declared host projects; explicit integration/native exclusions checked against pinned configs. Not actual Vitest discovery; does not establish total planned cases or completeness of extension/glob handling.",
+  "trackedSpecCandidates": 612,
+  "queuedFiles": 519,
+  "candidateFilesNotQueued": 93,
+  "queuedOutsideCandidates": 0,
+  "notQueued": [
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/app/playwright.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/build/build-outputs.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/build/build-watch-inputs.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/build/compiler-module-path.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/build/compiler-paths.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/build/compiler-process-group.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/build/compiler-test-runner.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/build/content-runtime-check.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/build/trigger-track-helpers.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/db-target.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/debug-port-gate.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/doctor-json.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/list-json.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/logs.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/open.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/pack-mutation.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/pack-provenance.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/reclaim.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/commands/status.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/harness/isolated-data-dir.spec.ts"
+    },
+    {
+      "project": "@apackdev/cli",
+      "file": "tests/target-selection.spec.ts"
+    },
+    {
+      "project": "@apackdev/ears",
+      "file": "tests/engine/bulk-load.spec.ts"
+    },
+    {
+      "project": "@apackdev/ears",
+      "file": "tests/engine/search-relevance.spec.ts"
+    },
+    {
+      "project": "@apackdev/ears",
+      "file": "tests/sqlite/source-node.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/bus/startup-sends.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/database/settings.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/diagnostics/buffer.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/features/packs/fe/breadcrumb.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/features/settings/fe/feature-select.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/features/settings/fe/reset.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/packs/host-compatibility.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/packs/host-info.spec.ts"
+    },
+    {
+      "project": "@apackdev/host",
+      "file": "tests/packs/shutdown-hooks.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/build/code-literals.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/build/content-index.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/build/declaration-revision.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/build/module-configuration.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/events/envelope.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/events/event-types.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/events/qualified-maps.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/fe/navigation.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/fe/open-link.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/fe/reference-link.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/fe/surface-draft.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/fe/surface-scope-lifetime.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/fe/use-shell.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/framework/declaration-binding.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/framework/module-reference.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/framework/pack-settings.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/framework/pack-system.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/framework/short-code-types.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/ids/feature-ref.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/runtime/internals-entry.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/services/models.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/services/secrets-client.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/services/settings-handle.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/testing/database-backend.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/testing/population.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/utils/compare-versions.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/utils/cron.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/utils/deep-merge.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/utils/escape-html.spec.ts"
+    },
+    {
+      "project": "@apackdev/sdk",
+      "file": "tests/utils/secret-matcher-reach.spec.ts"
+    },
+    {
+      "project": "@apackdev/testing",
+      "file": "tests/app-version.spec.ts"
+    },
+    {
+      "project": "@apackdev/testing",
+      "file": "tests/fixture-registration.spec.ts"
+    },
+    {
+      "project": "@app/api",
+      "file": "tests/runtime/db-write-lock.spec.ts"
+    },
+    {
+      "project": "@app/api",
+      "file": "tests/runtime/restart-persistence.spec.ts"
+    },
+    {
+      "project": "@app/api",
+      "file": "tests/transport/entities.spec.ts"
+    },
+    {
+      "project": "@app/main",
+      "file": "tests/performance-startup.spec.ts"
+    },
+    {
+      "project": "@app/main",
+      "file": "tests/protocol-handler.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/adapters/pack-frontends.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/boot/errors.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/runtime/index.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/runtime/performance.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/runtime/renderer-observations.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/runtime/settings.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/runtime/shell.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/runtime/text-editor.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/source-layout.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/transport/client.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/app.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/layout/contribution-boundary.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/layout/toolbar.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/packs/content-offer-notice.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/packs/pack-detail.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/settings/json-editor.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/settings/packs.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/settings/personal.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/settings/projects.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/settings/recovery.spec.ts"
+    },
+    {
+      "project": "@app/renderer",
+      "file": "tests/views/settings/schema.spec.ts"
+    },
+    {
+      "project": "@app/repo-checks",
+      "file": "tests/spec-plan-collect.spec.ts"
+    },
+    {
+      "project": "@app/repo-checks",
+      "file": "tests/workspace-dirs.spec.ts"
+    }
+  ]
+}

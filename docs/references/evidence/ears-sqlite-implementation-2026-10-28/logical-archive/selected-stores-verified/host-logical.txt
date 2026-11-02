@@ -1,0 +1,85 @@
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/backup/logical.spec.ts tests/backup/storage.spec.ts tests/backup/import.spec.ts tests/backup/import-transaction.spec.ts tests/backup/recovery.spec.ts tests/backup/recovery-crash.spec.ts tests/database/storage.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/backup/recovery.spec.ts (34 tests) 7265ms
+   ✓ restores both sqlite/1 stores and media, preserves forensic copies, and never replays completed recovery  464ms
+   ✓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'complete'  496ms
+   ✓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'publish-incumbent'  305ms
+   ✓ parent aliases preserve managed reader exclusion for sqlite/1  307ms
+stderr | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Imported lmdb
+[database:backup] Imported runHistory
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Restored media assets
+
+stdout | tests/backup/storage.spec.ts > Host backup storage elmdb/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Import completed
+
+stderr | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Imported lmdb
+[database:backup] Imported runHistory
+
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Restored media assets
+
+stdout | tests/backup/storage.spec.ts > Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings
+[database:backup] Import completed
+
+ ✓ tests/backup/storage.spec.ts (23 tests) 8238ms
+   ✓ Host backup storage elmdb/1 > refuses cross-format import before validation, replacement or media changes  412ms
+   ✓ Host backup storage elmdb/1 > checks the second store format before validating or replacing the primary  304ms
+   ✓ Host backup storage sqlite/1 > opens real primary/run-history backups and uses the files even when metadata claims another format  684ms
+   ✓ Host backup storage sqlite/1 > restores both populated stores and media when application acceptance refuses  668ms
+   ✓ Host backup storage sqlite/1 > restores the primary when replacing the second store refuses  618ms
+   ✓ Host backup storage sqlite/1 > restores a replacement which committed before reporting NOT_DURABLE  672ms
+   ✓ Host backup storage sqlite/1 > keeps readable incumbent copies when replacement and restoration both fail  640ms
+   ✓ Host backup storage sqlite/1 > refuses cross-format import before validation, replacement or media changes  643ms
+   ✓ Host backup storage sqlite/1 > checks the second store format before validating or replacing the primary  592ms
+   ✓ Host backup storage sqlite/1 > imports through the actual appData service and refreshes the accepted settings  755ms
+   ✓ Host backup storage sqlite/1 > refuses invalid settings through appData before replacing either live store  593ms
+   ✓ Host backup storage sqlite/1 > refuses ambiguous physical files regardless of backup metadata  497ms
+ ✓ tests/backup/logical.spec.ts (10 tests) 5427ms
+   ✓ exclusively publishes a complete private archive readable through the app-only staging API  517ms
+   ✓ reports a published but unsynchronized directory truthfully and retains its complete archive  389ms
+   ✓ replaces a populated store through the existing coordinator and preserves separately owned media  466ms
+   ✓ validates all selected stores before replacing either, then imports primary and run history together  1903ms
+   ✓ restores the incumbent when acceptance refuses a logical import  372ms
+   ✓ imports only run history without replacing or advancing the primary database  678ms
+   ✓ fully validates preview archives and primary acceptance without touching either live store  605ms
+ ✓ tests/backup/recovery-crash.spec.ts (9 tests) 34831ms
+   ✓ recovers elmdb/1 after SIGKILL at move (alias=false) without exposing a partially restored profile  3394ms
+   ✓ recovers elmdb/1 after SIGKILL at move (alias=true) without exposing a partially restored profile  3702ms
+   ✓ recovers elmdb/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile  3398ms
+   ✓ recovers elmdb/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile  3315ms
+   ✓ recovers sqlite/1 after SIGKILL at move (alias=false) without exposing a partially restored profile  4432ms
+   ✓ recovers sqlite/1 after SIGKILL at move (alias=true) without exposing a partially restored profile  4419ms
+   ✓ recovers sqlite/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile  4260ms
+   ✓ recovers sqlite/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile  4354ms
+   ✓ refuses a separate live reader and reclaims its claim after SIGKILL  3554ms
+ ✓ tests/backup/import-transaction.spec.ts (6 tests) 123ms
+stderr | tests/backup/import.spec.ts > restores the incumbent when installing the imported data fails
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stderr | tests/backup/import.spec.ts > preserves the recovery error and a durable copy when import and restoring both fail
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+ ✓ tests/backup/import.spec.ts (6 tests) 510ms
+ ✓ tests/database/storage.spec.ts (16 tests) 696ms
+   ✓ blocks writable recovery opens without salvaging either sqlite/1 store  304ms
+
+ Test Files  7 passed (7)
+      Tests  104 passed (104)
+   Start at  14:23:57
+   Duration  61.57s (transform 1.05s, setup 19ms, collect 3.69s, tests 57.09s, environment 1ms, prepare 261ms)
+

@@ -1,0 +1,132 @@
+{
+  "source": "5cde3fc26de94a4e6bc2e5910e425aaa2190b735",
+  "scope": "All five current-runtime consumers are terminal. Four integration/native shards pass; app-and-rest retains the keyword failure. Later CI-only fault/startup/admission recipes are not covered.",
+  "consumers": [
+    {
+      "name": "app-and-rest",
+      "endedFiles": 612,
+      "passedTests": 7010,
+      "failedTests": 1,
+      "skippedTests": 95,
+      "unitSeconds": 304.7,
+      "unitCeilingSeconds": 600,
+      "failure": "retained keyword relevance judgment"
+    },
+    {
+      "name": "integration-2",
+      "endedFiles": 31,
+      "passedTests": 580,
+      "skippedTests": 1,
+      "chainSeconds": 1241.4,
+      "cache": "Inputs changed; no reusable successful stamp"
+    },
+    {
+      "name": "native-2",
+      "endedFiles": 8,
+      "passedFiles": 7,
+      "skippedFiles": 1,
+      "passedTests": 47,
+      "skippedTests": 26,
+      "chainSeconds": 1404.0,
+      "cache": "Inputs changed; no reusable successful stamp"
+    },
+    {
+      "name": "native-1",
+      "endedFiles": 9,
+      "fileStates": {
+        "passed": 8,
+        "skipped": 1
+      },
+      "chainSeconds": 1714.2,
+      "cache": "Inputs changed; no reusable successful stamp"
+    },
+    {
+      "name": "integration-1",
+      "endedFiles": 31,
+      "fileStates": {
+        "passed": 31
+      },
+      "chainSeconds": 1995.5,
+      "cache": "Inputs changed; no reusable successful stamp"
+    }
+  ],
+  "independentApp": {
+    "originalSha256": "a8667c962aa026d6557941f83c6edde90129358a476498d17bbd1eb7965ed5b4",
+    "stats": {
+      "startTime": "2026-11-01T22:09:29.640Z",
+      "duration": 10664.414999999999,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "cases": [
+      {
+        "name": "app-integration/sqlite-source-storage.spec.ts > source SQLite app opens both managed stores with persisted EARS identity",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 7994
+          }
+        ]
+      },
+      {
+        "name": "smoke/smoke.spec.ts > app launches without crashing",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 169
+          }
+        ]
+      },
+      {
+        "name": "smoke/smoke.spec.ts > app reaches connected state",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 77
+          }
+        ]
+      },
+      {
+        "name": "smoke/smoke.spec.ts > applicationState is accessible with surfaces loaded",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 19
+          }
+        ]
+      },
+      {
+        "name": "smoke/smoke.spec.ts > runs in an isolated per-worker test data dir",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 20
+          }
+        ]
+      },
+      {
+        "name": "smoke/smoke.spec.ts > publishes no session, though a test app has a debug port open",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "retry": 0,
+            "duration": 37
+          }
+        ]
+      }
+    ]
+  }
+}

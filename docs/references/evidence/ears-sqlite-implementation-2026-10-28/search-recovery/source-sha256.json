@@ -1,0 +1,10 @@
+{
+  "parent": "78eff952020f813d7a25642aa4740a394ed71a5e",
+  "files": {
+    "packages/apack-ears/src/sqlite/database.ts": "d5c8ccca223714d519b7a7b03bd216d8f664337e3944066de4446110ce6a7de6",
+    "packages/apack-ears/src/sqlite/search.ts": "005639869613739719679b75521414fc418860fc4562e95b6a2a0d17ebf4f6fa",
+    "packages/apack-ears/src/sqlite/search-structures.ts": "e6e2d800a5f953e513a7fc389b1a868630378466a21b9a85fdb2f2c9b284e39c",
+    "packages/apack-ears/src/sqlite/trigrams.ts": "033d99b68d05faeac8d2402c0531fd382cd184b5a4cf4bcf097c18ae8f8c230d",
+    "packages/apack-ears/tests/sqlite/search-recovery.spec.ts": "8063d9f116400e177b892be470576a5d660e2dc6375aa9c815c2c370941a8489"
+  }
+}

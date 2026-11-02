@@ -1,0 +1,65 @@
+{
+  "scope": "Mock child protocol/cleanup only; no native execution, timing, resource or container qualification",
+  "checked": [
+    {
+      "mode": "pass",
+      "spawned": 6,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "release-layout",
+      "spawned": 6,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "bad-exit",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "wrong-source",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "missing-driver",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "missing-memory",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "bad-memory",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "missing-compiled",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "missing-rows",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "sampling-error",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "wrong-owner",
+      "spawned": 1,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "throws-undefined",
+      "spawned": 0,
+      "scratchRemoved": true
+    }
+  ]
+}

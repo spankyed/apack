@@ -1,0 +1,18 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/vector-index.spec.ts tests/sqlite/vector-training.spec.ts tests/sqlite/vector-models.spec.ts --maxWorkers=1 --reporter=default --reporter=json --outputFile=/results/native-admission.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/vector-index.spec.ts (5 tests) 725ms
+   ✓ generation-owned native vector projection > captures foreground changes behind the cursor before readiness without logical commits  469ms
+ ✓ tests/sqlite/vector-training.spec.ts (5 tests) 810ms
+ ✓ tests/sqlite/vector-models.spec.ts (5 tests) 1051ms
+
+ Test Files  3 passed (3)
+      Tests  15 passed (15)
+   Start at  22:18:00
+   Duration  3.36s (transform 235ms, setup 15ms, collect 435ms, tests 2.59s, environment 0ms, prepare 112ms)
+
+JSON report written to /results/native-admission.json

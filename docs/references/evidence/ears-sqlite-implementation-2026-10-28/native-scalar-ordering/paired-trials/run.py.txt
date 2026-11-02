@@ -1,0 +1,22 @@
+import hashlib,json,pathlib,shutil,subprocess,tarfile
+root=pathlib.Path('/metrics');out=pathlib.Path('/results');expected=json.loads(pathlib.Path('/expected.json').read_text())
+def select(state):
+ shutil.rmtree(root/'packages/apack-ears/src',ignore_errors=True)
+ subprocess.run(['tar','-xf','/source-'+state+'.tar','-C',str(root)],check=True)
+ actual={str(q.relative_to(root)):hashlib.sha256(q.read_bytes()).hexdigest() for q in (root/'packages/apack-ears/src').rglob('*.ts')}
+ assert actual==expected[state]['sourceSha256'],state
+try:
+ for state in ['before','after']:
+  select(state)
+  subprocess.run(['python3','packages/apack-ears/bench/sqlite/run-bench.py',str(out/('source-'+state)),'--trials','0'],cwd=root,check=True)
+ for trial,order in enumerate([['before','after','native'],['native','after','before'],['before','native','after']],1):
+  for state in order:
+   select('before' if state=='before' else 'after')
+   name=f'{state}-{trial}';print(name,flush=True)
+   result=subprocess.run(['node','--import','tsx','--expose-gc','packages/apack-ears/bench/sqlite/bench.ts','elmdb' if state=='native' else 'sqlite'],cwd=root,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=300)
+   (out/(name+'.stdout')).write_text(result.stdout);(out/(name+'.stderr')).write_text(result.stderr)
+   assert result.returncode==0,(name,result.returncode,result.stderr)
+   value=json.loads(result.stdout);(out/(name+'.json')).write_text(json.dumps(value,indent=2)+'\n')
+   print(json.dumps({'name':name,'sort10kUs':value['samples']['sort10k']}),flush=True)
+finally:select('after')
+(out/'expected-source.json').write_text(json.dumps(expected,indent=2)+'\n')

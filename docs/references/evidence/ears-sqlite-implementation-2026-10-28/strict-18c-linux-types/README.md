@@ -1,0 +1,5 @@
+# Linux strict-platform typecheck catches checkpoint-test API mismatch
+
+The Linux platform leg of [strict run 41304436381](https://github.com/spankyed/apack/actions/runs/41304436381), source `18c9069d70a1b1b9a1172f9600f06ba8c37a3600`, stops at candidate typecheck after building packages. The new worker snapshot test calls better-sqlite3's pragma method on the narrower DatabaseSync interface, which exposes SQL statements instead. The original log is retained here; its SHA-256 is `886a13f0bbb6d58d3b56eab2d00cd22d98bb27a94dcda12a152dea7728fe66b3`.
+
+The source correction uses the database wrapper's get/all methods with SQL PRAGMA busy_timeout and wal_checkpoint(TRUNCATE). The zero busy timeout, busy refusal, foreground commits, source snapshot and post-exit truncation assertions are unchanged. This is a diagnosed test type error, not a passing runtime claim. Remaining strict/platform jobs continue; this partial receipt does not summarize or replace their eventual reports. Corrected-source type/runtime qualification remains required.

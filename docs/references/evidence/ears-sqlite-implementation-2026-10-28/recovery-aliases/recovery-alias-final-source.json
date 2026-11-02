@@ -1,0 +1,10 @@
+{
+  "base": "76b1aa2765beabf80ea4260ec7565105facc7153",
+  "changedFiles": [
+    "packages/apack-host/CLAUDE.md",
+    "packages/apack-host/src/backup/restore.ts",
+    "packages/apack-host/tests/backup/recovery-crash.spec.ts",
+    "packages/apack-host/tests/backup/recovery.spec.ts"
+  ],
+  "sha256": "629f982dadf404e0556f77fb015b79a9ed53076d3ccd4b3dc9181bdc17e9a951"
+}

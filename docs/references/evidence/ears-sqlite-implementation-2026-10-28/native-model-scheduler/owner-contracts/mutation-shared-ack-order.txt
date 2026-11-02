@@ -1,0 +1,51 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/vector-models.spec.ts -t retains a completed model --maxWorkers=1
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/vector-models.spec.ts (7 tests | 1 failed | 6 skipped) 234ms
+   ↓ durable native model admission > uses the shared scheduler to train, project and publish readiness without logical commits
+   ↓ durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility
+   ↓ durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions
+   × durable native model admission > retains a completed model when its result transaction rolls back before acknowledgement 233ms
+     → expected false to be true // Object.is equality
+   ↓ durable native model admission > recovers abandoned attempts and resumes committed model work after reopening
+   ↓ durable native model admission > persists failure and supports explicit retry after additional primary embeddings
+   ↓ durable native model admission > enforces one owner and drains workers before allowing file close and a new owner
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/vector-models.spec.ts > durable native model admission > retains a completed model when its result transaction rolls back before acknowledgement
+AssertionError: expected false to be true // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+ ❯ tests/sqlite/vector-models.spec.ts:124:93
+    122|     expect(db.indexBuilds.step()).toBe('busy');expect(refused).toBe(tr…
+    123|     expect(db.get('SELECT state FROM vector_training')!.state).toBe('t…
+    124|     db.sql.exec('BEGIN IMMEDIATE');const retained=models.step();expect…
+       |                                                                                             ^
+    125|     await db.indexesReady();expect(db.get('SELECT state FROM vector_tr…
+    126|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 skipped (7)
+   Start at  22:46:49
+   Duration  659ms (transform 227ms, setup 11ms, collect 303ms, tests 234ms, environment 0ms, prepare 40ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/vector-models.spec.ts -t 'retains a completed model' --maxWorkers=1

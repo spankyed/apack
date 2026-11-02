@@ -1,0 +1,113 @@
+{
+  "run": 41508326544,
+  "source": "67ae01a3340c8df7dafb96f43aaa66a7bbc1e060",
+  "queriesVerified": 1800,
+  "groups": 18,
+  "minimumMeanRecall": 0.99,
+  "queryP95Failures": 0,
+  "heartbeatMissGroups": 9,
+  "heartbeatDisposition": "Accepted synchronous responsiveness degradation; original misses retained as failures",
+  "safeguards": {
+    "passed": 29,
+    "failed": 0,
+    "excluded": 0
+  },
+  "independentValidation": {
+    "validator": "packages/apack-ears/bench/sqlite/qualify-real-hybrid.py",
+    "validatorSha256": "8c602c5144d5a4b5a710b00df2f9e79b19eace1f7bb4d2be32ad7c3b562154d9",
+    "allOtherFieldsIdentical": true,
+    "summaryMeanRoundingDifferences": [
+      {
+        "field": "/groups/6/meanVectorRecall/10",
+        "absoluteDifference": 2.220446049250313e-16
+      },
+      {
+        "field": "/groups/6/meanVectorRecall/40",
+        "absoluteDifference": 3.3306690738754696e-16
+      },
+      {
+        "field": "/groups/12/meanVectorRecall/10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/12/meanVectorRecall/40",
+        "absoluteDifference": 2.220446049250313e-16
+      },
+      {
+        "field": "/groups/13/meanFullRankingOverlapAt10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/16/meanVectorRecall/10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/16/meanVectorRecall/40",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/17/meanVectorRecall/10",
+        "absoluteDifference": 1.1102230246251565e-16
+      },
+      {
+        "field": "/groups/17/meanVectorRecall/40",
+        "absoluteDifference": 2.220446049250313e-16
+      }
+    ],
+    "maximumAbsoluteDifference": 3.3306690738754696e-16
+  },
+  "sealedCorpusFilesAndRecipeMatch94cf": true,
+  "largeCorpus": {
+    "loadMs": 77839.603899,
+    "admissionMs": 47825.171132,
+    "processMaxRssKiB": 1534444,
+    "maximumSampledFileBytes": 1972244512,
+    "reopenPasses": 3
+  },
+  "originalJobMetadataSha256": "df24b9ea427e28a3da0c6b9298682b0a481f1898cc6a4e0bd2cbffecdee35dae",
+  "scope": "One prespecified independent corrected-policy repeat with different actual models at both native sizes; no arbitrary-model or causal timing guarantee",
+  "nativeProbes": 64,
+  "implementation": "93ed37e67f40faee3fd25a10f3b897c15e55c858",
+  "modelComparison": [
+    {
+      "size": 10000,
+      "first": {
+        "state": "ready",
+        "samples": 10000,
+        "model_sha256": "5b130816ad1404767793e54f5f804168c0b08aba59a071068be19e4ddc89b957",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+        "native_version": "version 0.8 (Scalar, multi-threaded)",
+        "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+      },
+      "repeat": {
+        "state": "ready",
+        "samples": 10000,
+        "model_sha256": "ea75a75f752c378dbb00126f3fa2f833612b6080aaa0f2218d667dc6b9b6be94",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+        "native_version": "version 0.8 (Scalar, multi-threaded)",
+        "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+      },
+      "differentTrainedModel": true
+    },
+    {
+      "size": 99900,
+      "first": {
+        "state": "ready",
+        "samples": 20000,
+        "model_sha256": "445c3498344aaa69018a056982ada02cd246343e131eef6939c1a99182924aa0",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+        "native_version": "version 0.8 (Scalar, multi-threaded)",
+        "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+      },
+      "repeat": {
+        "state": "ready",
+        "samples": 20000,
+        "model_sha256": "85830dc9ff1ebe331b9aa4aab75b1b754129c03a2b53f659247c0ceb7eef63d2",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+        "native_version": "version 0.8 (Scalar, multi-threaded)",
+        "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+      },
+      "differentTrainedModel": true
+    }
+  ]
+}

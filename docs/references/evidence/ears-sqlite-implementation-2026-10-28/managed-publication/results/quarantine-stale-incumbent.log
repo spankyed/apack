@@ -1,0 +1,72 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+ ↓ tests/backup/recovery.spec.ts (44 tests | 44 skipped)
+stderr | tests/database/storage.spec.ts > refuses stale elmdb/1 history publication after another directory was installed
+[run-history] The run history at /tmp/apack-sqlite-profile-LVisAq/runs couldn't be opened (/tmp/apack-sqlite-profile-LVisAq/runs/data.mdb isn't a file this LMDB reads: MDB_INVALID: File is not an LMDB file. Files lmdb-js wrote are in its own LMDB data version, which elmdb doesn't read; re-create the database with elmdb): it was moved to /tmp/apack-sqlite-profile-LVisAq/runs.unreadable-2026-10-30T15-18-40-005Z, and a new one started
+
+stderr | tests/database/storage.spec.ts > refuses stale sqlite/1 history publication after another directory was installed
+[run-history] The run history at /tmp/apack-sqlite-profile-bGFcTh/runs couldn't be opened (file is not a database): it was moved to /tmp/apack-sqlite-profile-bGFcTh/runs.unreadable-2026-10-30T15-18-40-067Z, and a new one started
+
+ ❯ tests/database/storage.spec.ts (36 tests | 2 failed | 34 skipped) 442ms
+   ↓ keeps elmdb as the normal default
+   ↓ refuses unknown boot formats
+   ↓ requires explicit absolute candidate storage (undefined)
+   ↓ requires explicit absolute candidate storage (relative/profile)
+   ↓ refuses the default production profile without opening it
+   ↓ refuses the default beta profile without opening it
+   ↓ refuses the default preview profile without opening it
+   ↓ refuses the default development profile without opening it
+   ↓ refuses the default test profile without opening it
+   ↓ selects both real stores and preserves the profile when selection is omitted on reopen
+   ↓ uses the explicitly supplied CLI profile for the isolation check
+   ↓ refuses children of a default profile and symlink aliases without creating their targets
+   ↓ blocks writable recovery opens without salvaging either elmdb/1 store
+   ↓ blocks writable recovery opens without salvaging either sqlite/1 store
+   ↓ routes explicit SQLite rebuild through maintenance ownership and waits for readiness
+   ↓ refuses unreadable run history without replacement when maintenance disables salvage
+   ↓ starts optional models on managed SQLite stores and releases both owners on shutdown
+   ↓ does not start native services for forensic SQLite readers or the normal elmdb backend
+   ↓ quarantines corrupt elmdb/1 history while an unrelated primary handle stays open
+   ↓ quarantines corrupt sqlite/1 history while an unrelated primary handle stays open
+   ↓ refuses elmdb/1 history quarantine while a managed reader still holds the directory
+   ↓ refuses sqlite/1 history quarantine while a managed reader still holds the directory
+   ↓ never treats SQLITE_IOERR_READ as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_IOERR_FSYNC as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CANTOPEN as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_PERM as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_FULL as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_BUSY as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CORRUPT_INDEX as permission to replace a SQLite history directory
+   ↓ never treats SQLITE_CORRUPT_VTAB as permission to replace a SQLite history directory
+   ↓ never treats CORRUPT as permission to replace a SQLite history directory
+   ↓ never treats NATIVE_CHANGED as permission to replace a SQLite history directory
+   ↓ retains the directory claim when a failed SQLite constructor could not close its connection
+   ↓ preserves failed SQLite constructor authority without an AggregateError prototype
+   × refuses stale elmdb/1 history publication after another directory was installed 81ms
+     → expected function to throw an error, but it didn't
+   × refuses stale sqlite/1 history publication after another directory was installed 360ms
+     → expected function to throw an error, but it didn't
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/database/storage.spec.ts > refuses stale elmdb/1 history publication after another directory was installed
+ FAIL  tests/database/storage.spec.ts > refuses stale sqlite/1 history publication after another directory was installed
+AssertionError: expected function to throw an error, but it didn't
+ ❯ tests/database/storage.spec.ts:229:64
+    227|   syncBuiltinESMExports();
+    228|   try {
+    229|     expect(() => openRunHistory(directory, { storageFormat })).toThrow…
+       |                                                                ^
+    230|     expect(installed).toBe(true);
+    231|     expect(fs.readFileSync(path.join(directory, 'new-publication'), 'u…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed | 1 skipped (2)
+      Tests  2 failed | 78 skipped (80)
+   Start at  15:18:37
+   Duration  3.23s (transform 922ms, setup 16ms, collect 2.51s, tests 442ms, environment 0ms, prepare 81ms)
+
+JSON report written to /results/quarantine-stale-incumbent.json

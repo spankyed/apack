@@ -1,0 +1,63 @@
+[
+  {
+    "label": "syntax-build",
+    "args": [
+      "node",
+      "--check",
+      "native/vectors/build.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 0.07445354698575102
+  },
+  {
+    "label": "syntax-membership-test",
+    "args": [
+      "node",
+      "--check",
+      "native/vectors/membership-test.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 0.016631037986371666
+  },
+  {
+    "label": "syntax-ears-vec1-build",
+    "args": [
+      "node",
+      "--check",
+      ".github/scripts/ears-vec1-build.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 0.01918108598329127
+  },
+  {
+    "label": "syntax-ears-sqlite-platform",
+    "args": [
+      "node",
+      "--check",
+      ".github/scripts/ears-sqlite-platform.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 0.01979600399499759
+  },
+  {
+    "label": "ci-wrapper",
+    "args": [
+      "node",
+      ".github/scripts/ears-vec1-build.mjs",
+      "/metrics/wrapper-native",
+      "/upstream.c"
+    ],
+    "exitCode": 0,
+    "seconds": 2.624616554006934
+  },
+  {
+    "label": "specifiers",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 1,
+    "seconds": 0.8617688209924381
+  }
+]

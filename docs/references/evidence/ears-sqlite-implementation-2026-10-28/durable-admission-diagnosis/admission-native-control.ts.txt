@@ -1,0 +1,74 @@
+// Run in a disposable environment. Every process owns a fresh synthetic profile; no application data is opened.
+import assert from 'node:assert/strict';
+import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createEarsEngine, type EARS, type EngineSchema } from '../../src/index.ts';
+import { toElmdbSchema } from '../../src/schema.ts';
+import { openDatabase } from '../../src/lmdb/index.ts';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+const n = Number(process.argv[2] ?? 10000);
+const durable = process.argv.includes('--durable');
+assert(Number.isInteger(n) && n >= 1000 && n <= 100000);
+const schema: EngineSchema = { types: { Row: { required: ['slug'], fields: {
+  slug: { type: 'string' }, counter: { type: 'number', optional: true }, payload: { type: 'string' },
+} } }, relations: {}, roles: [] };
+const path = mkdtempSync(join(tmpdir(), 'ears-admission-load-'));
+const db = openDatabase({ path, schema, syncs: durable });
+const e = createEarsEngine({ database: db });
+const id = (i: number) => `Row-${i}` as EARS.EntityId;
+const turn = () => new Promise<void>(resolve => setImmediate(resolve));
+const quantile = (values: readonly number[], q: number) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] ?? 0;
+};
+const summary = (values: readonly number[]) => ({ count: values.length, p50: quantile(values, .5), p95: quantile(values, .95), p99: quantile(values, .99), max: Math.max(0, ...values) });
+const files = () => Object.fromEntries(readdirSync(path).map(name => [name, statSync(join(path, name)).size]));
+const total = (values: Record<string, number>) => Object.values(values).reduce((a, b) => a + b, 0);
+const heard = new Map<string, unknown>(), errors: unknown[] = [];
+const watches: Array<{ stop(): void }> = [];
+try {
+  for (let offset = 0; offset < n; offset += 256) e.transact(() => {
+    for (let i = offset; i < Math.min(n, offset + 256); i++) e.create('Row', {
+      id: id(i), slug: `bucket-${i % 100}`, payload: i % 128 === 0 ? 'large body '.repeat(1500) : 'body '.repeat(100),
+    });
+  }, { durable });
+  for (let i = 0; i < 50; i++) {
+    const watched = id(n - 1 - i);
+    watches.push(e.watch(() => e.getAttr(watched, 'counter'), { next: value => heard.set(watched, value), error: error => errors.push(String(error)) }));
+  }
+  const expected = Array.from({ length: 10 }, (_, i) => id(7 + i * 100));
+  for (let i = 0; i < 3; i++) watches.push(e.watch(() => e.query('Row').where('slug', 'bucket-7').limit(10).ids(), {
+    next: value => assert.deepEqual(value, expected), error: error => errors.push(String(error)),
+  }));
+  await e.admin.watchesSettled();
+  const operations: number[] = [], stalls: number[] = [], lookup: number[] = [];
+  const beforeSequence = db.sequence;
+  for (let writes = 0; writes < 626; writes++) {
+    const waiting = performance.now(); await turn(); stalls.push(performance.now() - waiting);
+    const index = n - 1 - writes % 50;
+    const started = performance.now();
+    e.transact(() => {
+      e.write(id(index)).set('counter', writes);
+      if (writes % 4 === 0) e.write(id(index)).set('slug', `changed-${writes}`);
+    }, { durable });
+    assert.equal(e.getAttr(id(index), 'counter'), writes);
+    operations.push(performance.now() - started);
+    const query = performance.now();
+    assert.deepEqual(e.query('Row').where('slug', 'bucket-7').limit(10).ids(), expected);
+    lookup.push(performance.now() - query);
+  }
+  assert.equal(db.sequence, beforeSequence + 626);
+  await e.admin.watchesSettled();
+  assert.deepEqual(errors, []);
+  for (let i = 0; i < 50; i++) assert.equal(heard.get(id(n - 1 - i)), e.getAttr(id(n - 1 - i), 'counter'));
+  console.log(JSON.stringify({ backend: 'elmdb', n, syncs: durable, writes: 626, operationMs: summary(operations), lookupMs: summary(lookup), timerStallMs: summary(stalls), samples: { operations, lookup, stalls },
+    nativeBindings: (process.report.getReport() as { sharedObjects: string[] }).sharedObjects.filter(name => /elmdb|better[-_]sqlite3|vec0/.test(name)).map(name => ({name,sha256:createHash('sha256').update(readFileSync(name)).digest('hex')})),
+    memory: process.memoryUsage(), resourceUsage: process.resourceUsage(), node: process.version, platform: process.platform, arch: process.arch,
+    scope: 'diagnostic idle foreground control, same 10k fixture, 53 watches and 626 durable units; no index admission; not qualification' }));
+} finally {
+  for (const watch of watches) watch.stop();
+  db.close(); rmSync(path, { recursive: true, force: true });
+}

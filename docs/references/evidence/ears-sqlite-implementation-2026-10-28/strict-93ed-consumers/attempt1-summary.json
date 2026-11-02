@@ -1,0 +1,62 @@
+{
+  "run": 41503546216,
+  "attempt": 1,
+  "source": "93ed37e67f40faee3fd25a10f3b897c15e55c858",
+  "conclusion": "failure",
+  "jobs": [
+    {
+      "name": "producers",
+      "job": 125476904574,
+      "conclusion": "success"
+    },
+    {
+      "name": "sqlite-candidate / sqlite (windows-latest)",
+      "job": 125476905128,
+      "conclusion": "success"
+    },
+    {
+      "name": "sqlite-candidate / sqlite (ubuntu-24.04)",
+      "job": 125476905599,
+      "conclusion": "success"
+    },
+    {
+      "name": "sqlite-candidate / sqlite (macos-26)",
+      "job": 125476905761,
+      "conclusion": "success"
+    },
+    {
+      "name": "native-1",
+      "job": 125488939807,
+      "conclusion": "success"
+    },
+    {
+      "name": "native-2",
+      "job": 125488939884,
+      "conclusion": "success"
+    },
+    {
+      "name": "integration-2",
+      "job": 125488939981,
+      "conclusion": "success"
+    },
+    {
+      "name": "integration-1",
+      "job": 125488939987,
+      "conclusion": "failure"
+    },
+    {
+      "name": "app-and-rest",
+      "job": 125488940066,
+      "conclusion": "success"
+    }
+  ],
+  "originalWholeRunMetadataSha256": "573a012af225774c39e95ca83771c3b38989fb2fa32921159788affa21145d48",
+  "originalArtifactsMetadataSha256": "09192df0d3ec71f7af4ab6aa1e29832e05673763243cdc6580ac6536994f0283",
+  "failedShardReplay": {
+    "attempt": 2,
+    "job": 125510874345,
+    "scope": "Only original integration-1 and its full 31-file selection; original source, producer freshness, budget, assertions and deadlines unchanged",
+    "statusAtCheckpoint": "in_progress",
+    "notYetQualified": true
+  }
+}

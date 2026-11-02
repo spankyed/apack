@@ -1,0 +1,20 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ✓ tests/sqlite/database-identity.spec.ts (7 tests) 3919ms
+   ✓ SQLite database identity > refuses an owned-looking database with application_id=0 without repairing its identity  1023ms
+   ✓ SQLite database identity > refuses an owned-looking database with application_id=305419896 without repairing its identity  896ms
+   ✓ SQLite database identity > refuses an owned-looking database with user_version=0 without repairing its identity  899ms
+   ✓ SQLite database identity > refuses an owned-looking database with user_version=2 without repairing its identity  893ms
+ ✓ tests/sqlite/embeddings.spec.ts (9 tests) 1303ms
+   ✓ primary embedding storage > retains exactly one payload when generations are rebuilt and collected  495ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 620ms
+   ✓ the SQLite package entry > opens an engine through the public factory and reopens it read-only  310ms
+ ✓ tests/sqlite/transaction-failures.spec.ts (4 tests) 690ms
+
+ Test Files  4 passed (4)
+      Tests  23 passed (23)
+   Start at  17:14:53
+   Duration  10.10s (transform 1.04s, setup 20ms, collect 2.18s, tests 6.53s, environment 0ms, prepare 605ms)
+
+JSON report written to /results/focused.json

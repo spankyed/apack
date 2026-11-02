@@ -1,0 +1,1073 @@
+{
+  "completed": true,
+  "protocol": "ears-real-hybrid-matrix-receipt/1",
+  "source": "54228d840736fbee175e449f660f3f52982b78ff",
+  "queriesVerified": 1800,
+  "groups": [
+    {
+      "size": 1000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 6.140722000000096,
+      "p95Ms": 6.628920000001017,
+      "p99Ms": 7.012743999999657,
+      "maxMs": 8.30539300000055,
+      "heartbeatP99Ms": 6.042148999998972,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 5.313528000000588,
+          "40": 5.4355369999975665,
+          "64": 5.444833999999901
+        },
+        "1024": {
+          "10": 5.306303999999727,
+          "40": 5.42951499999981,
+          "64": 5.6056250000001455
+        },
+        "2048": {
+          "10": 5.2542670000002545,
+          "40": 5.531596000000718,
+          "64": 5.426931000001787
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 5.69362000000001,
+      "p95Ms": 8.128012000001036,
+      "p99Ms": 8.757408999999825,
+      "maxMs": 10.411353999999847,
+      "heartbeatP99Ms": 7.784639999999854,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 5.329142999999931,
+          "40": 5.394664999999804,
+          "64": 5.522495000000163
+        },
+        "1024": {
+          "10": 5.287630000000263,
+          "40": 5.2812370000001465,
+          "64": 5.410245000000941
+        },
+        "2048": {
+          "10": 5.353097999999591,
+          "40": 5.246267999999873,
+          "64": 5.384260000000268
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "candidate-1-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 1.1715000000003783,
+      "p95Ms": 2.108703999998397,
+      "p99Ms": 2.517077000000427,
+      "maxMs": 3.2841719999996712,
+      "heartbeatP99Ms": 1.5255029999971157,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 0.4872319999994943,
+          "40": 0.49771099999998114,
+          "64": 0.4861689999997907
+        },
+        "1024": {
+          "10": 0.4852869999995164,
+          "40": 0.4802380000000994,
+          "64": 0.4837050000023737
+        },
+        "2048": {
+          "10": 0.485117000000173,
+          "40": 0.4947349999965809,
+          "64": 0.48154000000067754
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "candidate-1-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 0.934227000001556,
+      "p95Ms": 2.2244600000012724,
+      "p99Ms": 5.105257999999594,
+      "maxMs": 8.031040000001667,
+      "heartbeatP99Ms": 7.044044000002032,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 0.49051699999836273,
+          "40": 0.4913090000009106,
+          "64": 0.48546799999894574
+        },
+        "1024": {
+          "10": 0.5223479999986012,
+          "40": 0.5239900000015041,
+          "64": 0.5099550000013551
+        },
+        "2048": {
+          "10": 0.5193510000026436,
+          "40": 0.5171870000012859,
+          "64": 0.5080699999998615
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 2.5259290000030887,
+      "p95Ms": 3.0739750000029744,
+      "p99Ms": 3.193277999998827,
+      "maxMs": 3.504471000000194,
+      "heartbeatP99Ms": 2.2112730000008014,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 1.2281499999990046,
+          "40": 1.168418000001111,
+          "64": 1.16666400000031
+        },
+        "1024": {
+          "10": 1.1042670000024373,
+          "40": 1.1356860000014422,
+          "64": 1.1859909999984666
+        },
+        "2048": {
+          "10": 1.1137650000018766,
+          "40": 1.1683980000016163,
+          "64": 1.1778050000029907
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 1.7746829999996407,
+      "p95Ms": 4.725977999998577,
+      "p99Ms": 5.73336399999971,
+      "maxMs": 8.184391999999207,
+      "heartbeatP99Ms": 4.74829200000022,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 1.1511149999969348,
+          "40": 1.2050259999996342,
+          "64": 1.241253999996843
+        },
+        "1024": {
+          "10": 1.1466370000016468,
+          "40": 1.143872000000556,
+          "64": 1.17537099999754
+        },
+        "2048": {
+          "10": 1.1457450000016252,
+          "40": 1.1872330000005604,
+          "64": 1.1829450000004726
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 26.345335000005434,
+      "p95Ms": 29.511504999987665,
+      "p99Ms": 33.22322200000053,
+      "maxMs": 40.457852999999886,
+      "heartbeatP99Ms": 32.25538200000301,
+      "meanFullRankingOverlapAt10": 0.988,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 0.9849999999999999,
+          "40": 0.94,
+          "64": 0.90125
+        },
+        "1024": {
+          "10": 0.9889999999999999,
+          "40": 0.9737500000000001,
+          "64": 0.9640625
+        },
+        "2048": {
+          "10": 0.9889999999999999,
+          "40": 0.975,
+          "64": 0.9665625
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 7.323711999997613,
+          "40": 7.373721999996633,
+          "64": 7.2303069999979925
+        },
+        "1024": {
+          "10": 15.219561999998405,
+          "40": 14.927896000008332,
+          "64": 14.788927000001422
+        },
+        "2048": {
+          "10": 25.42298899999878,
+          "40": 24.90980999999738,
+          "64": 25.333451999991667
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.9889999999999999,
+        "40": 0.975,
+        "64": 0.9665625
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 25.842187999998714,
+      "p95Ms": 31.06932300000335,
+      "p99Ms": 34.181211000002804,
+      "maxMs": 34.82210099999793,
+      "heartbeatP99Ms": 33.21422199999506,
+      "meanFullRankingOverlapAt10": 0.978,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 0.9740000000000001,
+          "40": 0.929,
+          "64": 0.879375
+        },
+        "1024": {
+          "10": 0.981,
+          "40": 0.9695,
+          "64": 0.95703125
+        },
+        "2048": {
+          "10": 0.981,
+          "40": 0.97125,
+          "64": 0.96140625
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 7.4404820000054315,
+          "40": 7.328910000000178,
+          "64": 7.139476000000286
+        },
+        "1024": {
+          "10": 15.707470000001194,
+          "40": 15.044064000001526,
+          "64": 14.958760000001348
+        },
+        "2048": {
+          "10": 26.94477299999562,
+          "40": 25.44784300000174,
+          "64": 25.09893700000248
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.981,
+        "40": 0.97125,
+        "64": 0.96140625
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 10000,
+      "cohort": "candidate-1-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 3.4216060000035213,
+      "p95Ms": 7.352035999996588,
+      "p99Ms": 8.0757309999899,
+      "maxMs": 10.908754999996745,
+      "heartbeatP99Ms": 7.084297000008519,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 1.2261759999964852,
+          "40": 1.2533170000097016,
+          "64": 1.4075659999944037
+        },
+        "1024": {
+          "10": 1.2046050000062678,
+          "40": 1.3663779999915278,
+          "64": 1.3153929999971297
+        },
+        "2048": {
+          "10": 1.1858400000055553,
+          "40": 1.3744230000011157,
+          "64": 1.3269140000047628
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 10000,
+      "cohort": "candidate-1-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 2.1480719999963185,
+      "p95Ms": 7.371933000002173,
+      "p99Ms": 10.17610299999069,
+      "maxMs": 19.430240000001504,
+      "heartbeatP99Ms": 9.191021000006003,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 1.3563100000028498,
+          "40": 1.2446209999907296,
+          "64": 1.2786639999976614
+        },
+        "1024": {
+          "10": 1.2374969999946188,
+          "40": 1.2409039999911329,
+          "64": 1.2773719999968307
+        },
+        "2048": {
+          "10": 1.244619999997667,
+          "40": 1.2549889999936568,
+          "64": 1.2873700000054669
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 10000,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 14.473578999997699,
+      "p95Ms": 16.02801899999031,
+      "p99Ms": 18.063399999999092,
+      "maxMs": 18.115497999999207,
+      "heartbeatP99Ms": 17.092214000003878,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 8.282116999995196,
+          "40": 8.146873000005144,
+          "64": 8.345115000003716
+        },
+        "1024": {
+          "10": 7.961957000006805,
+          "40": 8.14859699999215,
+          "64": 8.326430000000983
+        },
+        "2048": {
+          "10": 8.138126999998349,
+          "40": 8.215663000009954,
+          "64": 8.203690000009374
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 10000,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 10.863301000004867,
+      "p95Ms": 17.130055000001448,
+      "p99Ms": 19.368184999999357,
+      "maxMs": 26.06963199999882,
+      "heartbeatP99Ms": 18.397729999996955,
+      "meanFullRankingOverlapAt10": 0.9990000000000001,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 8.160008999999263,
+          "40": 8.518790999994962,
+          "64": 8.337790999998106
+        },
+        "1024": {
+          "10": 8.489194000008865,
+          "40": 8.796210000000428,
+          "64": 9.126487999994424
+        },
+        "2048": {
+          "10": 8.486048999999184,
+          "40": 8.575847000000067,
+          "64": 8.4730639999907
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 47.47870600002352,
+      "p95Ms": 88.92419700004393,
+      "p99Ms": 142.28595099999802,
+      "maxMs": 338.80336499999976,
+      "heartbeatP99Ms": 141.33929100004025,
+      "meanFullRankingOverlapAt10": 0.9910000000000001,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 0.982,
+          "40": 0.93,
+          "64": 0.88921875
+        },
+        "1024": {
+          "10": 0.9940000000000001,
+          "40": 0.9834999999999999,
+          "64": 0.97453125
+        },
+        "2048": {
+          "10": 0.9940000000000001,
+          "40": 0.98725,
+          "64": 0.9846875
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 20.289970999991056,
+          "40": 20.363228000001982,
+          "64": 20.164242000028025
+        },
+        "1024": {
+          "10": 31.361754000012297,
+          "40": 31.299860999977682,
+          "64": 31.616053999983706
+        },
+        "2048": {
+          "10": 45.48541799999657,
+          "40": 44.74039299998549,
+          "64": 44.850511999975424
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.9940000000000001,
+        "40": 0.98725,
+        "64": 0.9846875
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 47.13904999999795,
+      "p95Ms": 91.1366300000227,
+      "p99Ms": 108.59116700000595,
+      "maxMs": 125.61265700001968,
+      "heartbeatP99Ms": 107.65341299999272,
+      "meanFullRankingOverlapAt10": 0.973,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 0.9889999999999999,
+          "40": 0.9257500000000001,
+          "64": 0.87578125
+        },
+        "1024": {
+          "10": 0.992,
+          "40": 0.97925,
+          "64": 0.97015625
+        },
+        "2048": {
+          "10": 0.9939999999999999,
+          "40": 0.9852500000000001,
+          "64": 0.9809375
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 21.08646900000167,
+          "40": 21.07864999998128,
+          "64": 21.072405999992043
+        },
+        "1024": {
+          "10": 33.30642400000943,
+          "40": 34.307740000018384,
+          "64": 33.59956999999122
+        },
+        "2048": {
+          "10": 48.06769200001145,
+          "40": 47.74899100000039,
+          "64": 48.45767299999716
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.9939999999999999,
+        "40": 0.9852500000000001,
+        "64": 0.9809375
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-1-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 20.366811000043526,
+      "p95Ms": 28.05562200001441,
+      "p99Ms": 31.795373999979347,
+      "maxMs": 36.923921999987215,
+      "heartbeatP99Ms": 30.830148999928497,
+      "meanFullRankingOverlapAt10": 0.9990000000000001,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 12.745357000036165,
+          "40": 13.281319999950938,
+          "64": 13.153089000028558
+        },
+        "1024": {
+          "10": 12.815417999983765,
+          "40": 12.898892999975942,
+          "64": 13.110820000059903
+        },
+        "2048": {
+          "10": 13.151817000005394,
+          "40": 13.540714000002481,
+          "64": 12.828632000018843
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-1-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 18.376086000003852,
+      "p95Ms": 37.202925999998115,
+      "p99Ms": 43.19475200003944,
+      "maxMs": 57.03947600000538,
+      "heartbeatP99Ms": 42.22393700003158,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "1024": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        },
+        "2048": {
+          "10": 1.0,
+          "40": 1.0,
+          "64": 1.0
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 12.911038000020199,
+          "40": 13.467058000038378,
+          "64": 13.254300000029616
+        },
+        "1024": {
+          "10": 13.136529000010341,
+          "40": 13.10058199998457,
+          "64": 13.324991000001319
+        },
+        "2048": {
+          "10": 12.88862500002142,
+          "40": 12.810880000004545,
+          "64": 12.9656889999751
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 128.63550500001293,
+      "p95Ms": 184.19509200000903,
+      "p99Ms": 211.19630199996755,
+      "maxMs": 268.8208590000868,
+      "heartbeatP99Ms": 210.2386510000797,
+      "meanFullRankingOverlapAt10": 0.983,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 0.98,
+          "40": 0.9325,
+          "64": 0.89140625
+        },
+        "1024": {
+          "10": 0.9840000000000001,
+          "40": 0.96875,
+          "64": 0.95984375
+        },
+        "2048": {
+          "10": 0.9840000000000001,
+          "40": 0.9697499999999999,
+          "64": 0.96265625
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 62.26256199995987,
+          "40": 62.263974000001326,
+          "64": 62.48648600000888
+        },
+        "1024": {
+          "10": 74.91282800002955,
+          "40": 74.82062400004361,
+          "64": 74.41659399995115
+        },
+        "2048": {
+          "10": 87.45880600006785,
+          "40": 86.45320500002708,
+          "64": 87.02397100010421
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.9840000000000001,
+        "40": 0.9697499999999999,
+        "64": 0.96265625
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 121.24496199999703,
+      "p95Ms": 195.07936899998458,
+      "p99Ms": 229.25172399997246,
+      "maxMs": 270.802463,
+      "heartbeatP99Ms": 228.29357200005325,
+      "meanFullRankingOverlapAt10": 0.986,
+      "modelMode": "managed",
+      "nativeCandidateFloor": 2048,
+      "matchedMeanVectorRecall": {
+        "production": {
+          "10": 0.983,
+          "40": 0.92025,
+          "64": 0.87125
+        },
+        "1024": {
+          "10": 0.988,
+          "40": 0.9645,
+          "64": 0.9546875
+        },
+        "2048": {
+          "10": 0.988,
+          "40": 0.9655,
+          "64": 0.958125
+        }
+      },
+      "matchedVectorP95Ms": {
+        "production": {
+          "10": 61.60891599999741,
+          "40": 61.616700000013225,
+          "64": 61.71599499997683
+        },
+        "1024": {
+          "10": 73.2160670000012,
+          "40": 73.12877700000536,
+          "64": 73.39534099999582
+        },
+        "2048": {
+          "10": 86.45661900000414,
+          "40": 87.61966600001324,
+          "64": 87.42291799996747
+        }
+      },
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.988,
+        "40": 0.9655,
+        "64": 0.958125
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    }
+  ],
+  "qualification": false,
+  "scope": "Complete warm fusion diagnostic under recorded execution conditions; not full relevance/app/resource certification",
+  "vectorRecallAccepted": true
+}

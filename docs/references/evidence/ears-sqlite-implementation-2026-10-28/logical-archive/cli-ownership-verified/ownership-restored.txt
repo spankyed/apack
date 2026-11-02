@@ -1,0 +1,14 @@
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/database/write-lock.spec.ts -t preserves an incumbent after repeated|does not release a later acquisition
+
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/database/write-lock.spec.ts (15 tests | 13 skipped) 5ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 13 skipped (15)
+   Start at  14:43:23
+   Duration  1.47s (transform 669ms, setup 12ms, collect 1.34s, tests 5ms, environment 0ms, prepare 35ms)
+

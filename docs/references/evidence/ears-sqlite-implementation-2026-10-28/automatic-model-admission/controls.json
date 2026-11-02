@@ -1,0 +1,32 @@
+[
+  {
+    "mutation": "disabled-admission",
+    "failedTests": 1,
+    "failedCase": "durable native model admission automatically admits an eligible committed generation, while small scopes and rolled-back growth stay exact",
+    "expectedAssertion": "expected undefined"
+  },
+  {
+    "mutation": "missing-import-invalidation",
+    "failedTests": 1,
+    "failedCase": "durable native model admission admits canonical embeddings imported after an initially ineligible generation",
+    "expectedAssertion": "expected undefined"
+  },
+  {
+    "mutation": "reset-active-scan",
+    "failedTests": 1,
+    "failedCase": "durable native model admission bounds eligibility to metadata pages and retries the same enqueue after its commit is refused",
+    "expectedAssertion": "expected false to be true"
+  },
+  {
+    "mutation": "retry-failed-logical",
+    "failedTests": 1,
+    "failedCase": "durable native model admission does not enqueue or keep polling a failed logical generation with a large partial projection",
+    "expectedAssertion": "expected true to be false"
+  },
+  {
+    "mutation": "owner-floor-256-to-2",
+    "failedTests": 1,
+    "failedCase": "durable native model admission requires enough live distinct owners and rechecks eligibility after restoring trashed chunks",
+    "expectedAssertion": "to be undefined"
+  }
+]

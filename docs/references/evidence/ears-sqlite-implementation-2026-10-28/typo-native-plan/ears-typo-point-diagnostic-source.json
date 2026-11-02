@@ -1,0 +1,5 @@
+{
+  "runtime": "9beb23ebc9a73c0860c7e8053c9be85814ff1929",
+  "fixtureSha256": "8d78332e4ad7e90938c842648fb020c465a4d6896932e978d17428429a7cf45b",
+  "purpose": "Native FTS5 vocabulary point lookup versus MATCH presence oracle; nonstemmed only; no production edits"
+}

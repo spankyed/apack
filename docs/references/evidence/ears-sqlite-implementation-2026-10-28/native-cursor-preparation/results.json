@@ -1,0 +1,68 @@
+[
+  {
+    "name": "reject-missing-empty-preparation",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+      "-t",
+      "prepares ordinary empty stores",
+      "--outputFile=/results/rejected.json"
+    ],
+    "exitCode": 1,
+    "seconds": 1.3948740840132814
+  },
+  {
+    "name": "all-ears",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/all-ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 52.7089389830071
+  },
+  {
+    "name": "types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 1.8604368359956425
+  },
+  {
+    "name": "lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/sqlite/vector-cursor.ts",
+      "packages/apack-ears/src/sqlite/search.ts",
+      "packages/apack-ears/src/sqlite/vector-index.ts",
+      "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.0397016039933078
+  }
+]

@@ -1,0 +1,15 @@
+set -eu
+mkdir -p /metrics
+cp -a /src/. /metrics/
+cd /seed
+tar --exclude='node_modules/.cache' --exclude='node_modules/.tmp' --exclude='node_modules/.vite' -cf - node_modules | tar -xf - -C /metrics
+for dependency in /seed/packages/*/node_modules; do
+  [ -d "$dependency" ] || continue
+  destination=/metrics/packages/$(basename "$(dirname "$dependency")")
+  mkdir -p "$destination"
+  tar --exclude='node_modules/.cache' --exclude='node_modules/.tmp' --exclude='node_modules/.vite' -C "$(dirname "$dependency")" -cf - node_modules | tar -xf - -C "$destination"
+done
+ln -sfn /elmdb /metrics/vendor/elmdb
+cd /metrics
+npm install --ignore-scripts --no-audit --no-fund > /results/dependencies.txt 2>&1
+python3 /validation.py

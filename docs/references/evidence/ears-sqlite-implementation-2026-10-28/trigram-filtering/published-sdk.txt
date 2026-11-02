@@ -1,0 +1,18 @@
+
+> @app/publish-checks@0.0.0 pretest:integration
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @app/publish-checks@0.0.0 test:integration
+> vitest run --config vitest.integration.config.ts tests/published-sdk-types.integration.spec.ts -t loads the SDK
+
+
+ RUN  v3.2.7 /metrics/packages/publish-checks
+
+ ✓ tests/published-sdk-types.integration.spec.ts (10 tests | 9 skipped) 3468ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 9 skipped (10)
+   Start at  16:38:34
+   Duration  4.21s (transform 270ms, setup 34ms, collect 500ms, tests 3.47s, environment 0ms, prepare 67ms)
+

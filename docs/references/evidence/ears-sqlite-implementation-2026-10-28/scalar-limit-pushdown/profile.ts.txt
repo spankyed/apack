@@ -1,0 +1,25 @@
+import { mkdtempSync,rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import assert from 'node:assert/strict';
+import { createEarsEngine } from '/metrics/packages/apack-ears/src/index.ts';
+import { SqliteDatabase } from '/metrics/packages/apack-ears/src/sqlite/database.ts';
+import { toElmdbSchema } from '/metrics/packages/apack-ears/src/schema.ts';
+const results=[];
+for(const typed of [false,true]) {
+ const path=mkdtempSync(join(tmpdir(),'ears-order-profile-'));
+ const db=new SqliteDatabase({path,syncs:false,schema:toElmdbSchema({types:{Row:{required:[],...(typed?{fields:{rank:{type:'number'}}}:{})}},relations:{},roles:[]})});
+ try {
+  const e=createEarsEngine({database:db});
+  e.transact(()=>{for(let i=0;i<10000;i++)e.create('Row',{id:`Row-${i}`,rank:9999-i});});
+  for(let i=0;i<5;i++)e.query('Row').orderBy('rank').limit(50).ids();
+  const trials=[];
+  for(let i=0;i<10;i++) {
+   const x=e.query('Row').orderBy('rank').limit(50).explain();
+   assert.equal(x.backend,'sqlite');assert.deepEqual(x.ids,Array.from({length:50},(_,j)=>`Row-${9999-j}`));
+   if(x.backend==='sqlite')trials.push({ms:x.ms,statementCount:x.statementCount,statements:x.statements.map(s=>({...s,parameters:s.parameters.map(p=>typeof p==='string'&&p.length>128?`<${p.length} chars>`:p)}))});
+  }
+  results.push({typed,trials});
+ } finally {db.close();rmSync(path,{recursive:true,force:true});}
+}
+console.log(JSON.stringify(results,null,2));

@@ -1,0 +1,8 @@
+{
+  "decompressedSha256": {
+    "limits.json": "a0cc01781ddf4a703b9ebbc4edd30287d5f688976078bd2e8ee856a5182b6c9a",
+    "source.txt": "990ae2b2f65f6f917a0199b620caf6aa409fdfeb3618e788148b3e78aad6bb0f",
+    "image.txt": "f93f2e686abe192998d6f76769d617906519a990b68f83b4d52c997c95ec799c",
+    "failed.log": "63776789d26540a008c8ffd1d0e42e1f7d93d4a33cf1463a59739cd93811c2a2"
+  }
+}

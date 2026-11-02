@@ -1,0 +1,14 @@
+{
+  "base": "9a2771ec257dcde88cf4dcbab36e7a3f036b1d14",
+  "changedFiles": [
+    "packages/apack-ears/bench/sqlite/README.md",
+    "packages/apack-ears/bench/sqlite/vitest.config.ts",
+    "packages/apack-ears/src/sqlite/search.ts",
+    "packages/apack-ears/tests/sqlite/search-recovery.spec.ts",
+    "packages/apack-ears/vitest.config.ts",
+    "packages/apack-ears/bench/sqlite/text-shape.mjs",
+    "packages/apack-ears/src/sqlite/text.ts",
+    "packages/apack-ears/tests/sqlite/text-documents.spec.ts"
+  ],
+  "sha256": "d54301dc8ed6550677d51a1824bee3f8b377d6086af45e27fa02ad0a52c483b6"
+}

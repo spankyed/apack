@@ -1,0 +1,10 @@
+
+> @apackdev/ears@0.1.0 build:package
+> tsx ../../scripts/build-package.ts .
+
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+
+> @apackdev/sdk@0.1.0 build:package
+> tsx ../../scripts/build-package.ts .
+
+Built @apackdev/sdk@0.1.0 into dist, staged for publishing in publish

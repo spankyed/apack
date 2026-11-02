@@ -1,0 +1,61 @@
+[
+  {
+    "label": "prepare-ui-api-types",
+    "args": [
+      "npm",
+      "run",
+      "api:build",
+      "-w",
+      "@apackdev/ui"
+    ],
+    "exitCode": 0,
+    "seconds": 7.0099237189861014
+  },
+  {
+    "label": "chain-input-contracts",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@app/repo-checks",
+      "packages/repo-checks/tests/chain-inputs.spec.ts",
+      "packages/repo-checks/tests/chain-graph.spec.ts",
+      "packages/repo-checks/tests/unused-code-gate.spec.ts",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/chain-contracts.json"
+    ],
+    "exitCode": 0,
+    "seconds": 4.971204522997141
+  },
+  {
+    "label": "changed-source-lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "native/vectors",
+      "scripts/lib/chain-steps.ts",
+      "scripts/lib/spec-durations-reporter.ts",
+      "packages/repo-checks/tests/spec-durations-reporter.integration.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.03745101401000284
+  },
+  {
+    "label": "chain-scripts-types",
+    "args": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "scripts"
+    ],
+    "exitCode": 0,
+    "seconds": 2.3238775830250233
+  }
+]

@@ -1,0 +1,27 @@
+import os,pathlib,subprocess,json,hashlib,time
+r=pathlib.Path('/metrics');o=pathlib.Path('/results')
+files=list((r/'packages/apack-ears/src').rglob('*.ts'))+[r/'packages/apack-ears/bench/sqlite/admission.ts']
+(o/'source-sha256.json').write_text(json.dumps({str(p.relative_to(r)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},indent=2)+'\n')
+for label,args in [
+ ('packages-build',['npm','run','packages:build']),
+ ('types-sdk',['npm','run','typecheck:sdk']),('types-host',['npm','run','typecheck:host']),
+ ('types-api',['npm','run','typecheck:api']),('types-cli',['npm','run','typecheck:cli']),
+]:
+ start=time.monotonic();p=subprocess.run(args,cwd=r,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=180)
+ (o/(label+'.txt')).write_text(p.stdout);assert p.returncode==0,(label,p.stdout)
+ print(json.dumps({'check':label,'seconds':time.monotonic()-start,'exitCode':p.returncode}),flush=True)
+planned=[(10000,False,i) for i in range(1,4)]+[(100000,False,i) for i in range(1,4)]+[(10000,True,1)]
+results=[]
+for n,durable,trial in planned:
+ label=f'{n}-'+('FULL' if durable else 'OFF')+f'-{trial}'
+ args=['node','--import','tsx','packages/apack-ears/bench/sqlite/admission.ts',str(n),'--search']+(['--durable'] if durable else [])
+ p=subprocess.run(args,cwd=r,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=240)
+ (o/(label+'.stdout')).write_text(p.stdout);(o/(label+'.stderr')).write_text(p.stderr)
+ try:v=json.loads(p.stdout)
+ except Exception:
+  results.append({'n':n,'durable':durable,'trial':trial,'exitCode':p.returncode,'parseFailure':True});break
+ item={'n':n,'durable':durable,'trial':trial,'exitCode':p.returncode,'passed':v['passed'],'budgets':v['budgets'],'buildMs':v['buildMs'],'gcMs':v['gcMs'],'writes':v['writes']}
+ results.append(item);print(json.dumps(item),flush=True)
+ (o/'cohort.json').write_text(json.dumps({'planned':planned,'results':results,'stoppedAtFirstMiss':p.returncode!=0 or not v['passed']},indent=2)+'\n')
+ if p.returncode!=0 or not v['passed']:break
+(o/'cohort.json').write_text(json.dumps({'planned':planned,'results':results,'completed':len(results)==len(planned)},indent=2)+'\n')

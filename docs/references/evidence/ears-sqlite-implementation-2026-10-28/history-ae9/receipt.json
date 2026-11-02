@@ -1,0 +1,52 @@
+{
+  "run": 41371017552,
+  "source": "ae9fc403e54d60c27720b929f2bfd82195a5d827",
+  "specificHistoryFaultPolicyPassed": true,
+  "scope": "One main-thread metadata-page EIO during actual host history open; observes recovery policy, not all corruption/I/O or physical storage regimes",
+  "suites": [
+    {
+      "suite": "history-policy",
+      "originalSha256": "124d65cabbb8599b69e0db3d5ddba86196211f145c0216ad47f724b441569b66",
+      "passed": 47,
+      "failed": 0,
+      "excluded": 0,
+      "failedCases": []
+    },
+    {
+      "suite": "native-index-readiness",
+      "originalSha256": "9732ba1b23b445a077fc1c5009650bb94cba4d223647a395d30c0cb56b9d9933",
+      "passed": 8,
+      "failed": 0,
+      "excluded": 0,
+      "failedCases": []
+    },
+    {
+      "suite": "pack-readiness",
+      "originalSha256": "adce8f7f5621fdd82d8c31cfed56220a18f49af1c968821c05d42fe25a7262f8",
+      "passed": 114,
+      "failed": 0,
+      "excluded": 0,
+      "failedCases": []
+    },
+    {
+      "suite": "sqlite-contracts",
+      "originalSha256": "bee6b53cc81e646435b326c1cb4abecdc5e471a149fca8678a50c6a1d4278536",
+      "passed": 454,
+      "failed": 1,
+      "excluded": 0,
+      "failedCases": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    {
+      "suite": "elmdb-contracts",
+      "originalSha256": "2d08dfbbaaf4bc9b433732881773fac5823b1aa97e1e7046078f4653e45cfd3c",
+      "passed": 263,
+      "failed": 1,
+      "excluded": 191,
+      "failedCases": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    }
+  ]
+}

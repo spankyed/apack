@@ -1,0 +1,11 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/vector-index.spec.ts (10 tests) 1504ms
+
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  10:19:29
+   Duration  3.59s (transform 978ms, setup 183ms, collect 1.51s, tests 1.50s, environment 0ms, prepare 115ms)
+
+JSON report written to /results/index-followup.json

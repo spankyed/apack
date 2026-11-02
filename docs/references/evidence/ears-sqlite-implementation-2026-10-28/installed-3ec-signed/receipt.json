@@ -1,0 +1,171 @@
+{
+  "source": "3ec277e39374976d6cc9fd14079387c034ed8ddb",
+  "run": 41380790738,
+  "scope": "Private Developer ID/hardened-runtime Preview; six installed cases and post-sign native probe. No timestamp/notarization/distribution/performance claim.",
+  "signingStep": "success",
+  "temporaryKeychainCleanupStep": "success",
+  "cleanupScope": "Observed command/step outcome; no independent keychain-absence snapshot.",
+  "stats": {
+    "startTime": "2026-11-02T03:15:19.734Z",
+    "duration": 11978.671,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "name": "packaged SQLite stores hold their model claims across the real API process",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 7971
+        }
+      ]
+    },
+    {
+      "name": "app launches without crashing",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 26
+        }
+      ]
+    },
+    {
+      "name": "app reaches connected state",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 42
+        }
+      ]
+    },
+    {
+      "name": "applicationState is accessible with surfaces loaded",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 36
+        }
+      ]
+    },
+    {
+      "name": "runs in an isolated per-worker test data dir",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 53
+        }
+      ]
+    },
+    {
+      "name": "publishes no session, though a test app has a debug port open",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 53
+        }
+      ]
+    }
+  ],
+  "native": {
+    "versions": {
+      "node": "22.17.1",
+      "acorn": "8.14.1",
+      "ada": "2.9.2",
+      "amaro": "0.4.1",
+      "ares": "1.34.5",
+      "brotli": "1.0.9",
+      "cjs_module_lexer": "2.1.0",
+      "cldr": "44.1",
+      "icu": "74.2",
+      "llhttp": "9.3.0",
+      "modules": "136",
+      "napi": "10",
+      "nbytes": "0.1.1",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.64.0",
+      "openssl": "0.0.0",
+      "simdjson": "3.12.3",
+      "simdutf": "7.0.0",
+      "sqlite": "3.50.0",
+      "tz": "2025b",
+      "undici": "6.21.2",
+      "unicode": "15.1",
+      "uv": "1.51.0",
+      "uvwasi": "0.0.21",
+      "v8": "13.8.258.26-electron.0",
+      "zlib": "1.3.1",
+      "zstd": "1.5.8",
+      "electron": "37.2.4",
+      "chrome": "138.0.7204.157"
+    },
+    "platform": "darwin",
+    "arch": "arm64",
+    "addons": [
+      {
+        "file": "node_modules/elmdb/elmdb.darwin-arm64.node",
+        "sha256": "d4d8746001b52b9ab9ce0b7ed5e47e928df0c23d256686c3fb01d72162c82d19"
+      },
+      {
+        "file": "node_modules/@msgpackr-extract/msgpackr-extract-darwin-arm64/node.napi.glibc.node",
+        "sha256": "3db9cc1eac3fe53e1b28fcf8b9bbb80ee40048811151bd8856f539e500272715"
+      },
+      {
+        "file": "node_modules/better-sqlite3/prebuilds/darwin-arm64.node",
+        "sha256": "77ff70e98a4e3210af9e5f9539eb646ba6ef28894eb7fbc0b6e778f8028e08c2"
+      },
+      {
+        "file": "node_modules/fs-native-extensions/prebuilds/darwin-arm64/fs-native-extensions.node",
+        "sha256": "bc977fd13681c5b5f1f87754611a8372de0a80adda591c6886b13e867d2ed819"
+      },
+      {
+        "file": "node_modules/node-pty/build/Release/pty.node",
+        "sha256": "bd2f2814cffb411d8be72cdc53464c6902dcc3e4e581c12678f9cc02a641db5e"
+      },
+      {
+        "file": "node_modules/@napi-rs/keyring-darwin-arm64/keyring.darwin-arm64.node",
+        "sha256": "dfebe464faca791ea82f82f76e6c9f3e2d02e0c38e8aab44892cbf944a8b83da"
+      }
+    ]
+  },
+  "earsSqlite": {
+    "entry": "node_modules/@apackdev/ears/dist/sqlite/index.js",
+    "driverVersion": "13.0.3",
+    "sqliteVersion": "3.53.4",
+    "nativeManifest": {
+      "format": 1,
+      "platform": "darwin",
+      "arch": "arm64",
+      "upstream": "814fd8ef4d42d6567f1613a66f556c8194764d06",
+      "sourceSha256": "04043ede29b2998b2cd0e7735cc696dba2158554a0bf9036e2a77849dec0425a",
+      "patchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+      "headersPackage": "13.0.3",
+      "extensionSha256": "ce4bc69a3569d0d1f420134e530604c3141f579ab013541570be8c2c90380d98"
+    },
+    "graphManifest": {
+      "format": 1,
+      "leidenVersion": "0.8.1",
+      "toolchain": "1.99.1",
+      "bindgenVersion": "0.2.105",
+      "sourceSha256": "540011397304601fea362342a273728d9f3c6539ebc06370562bb72c1a75e2de",
+      "loaderSha256": "51dca864da108c2491474c92d888cadc0697966e40ad623f7cb185cd0ed43b0f",
+      "wasmSha256": "83e0de2bd7d3df8e8956733dba3584d5ab5d155e92ae68591b33cb5b9c0023d5"
+    }
+  },
+  "originalAppReportSha256": "fd2f74ec79feb2e84485c19ac8f783ef126d423a326e711341a1fd386ff343f5",
+  "originalPostSignNativeLogSha256": "5777ed12a76ba549be44045196b6e70a7cb1deb52e1cff08a3cae3f8352b9c69"
+}

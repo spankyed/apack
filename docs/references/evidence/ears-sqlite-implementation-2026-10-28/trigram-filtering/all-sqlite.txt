@@ -1,0 +1,5 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run --reporter=json --outputFile=/results/sqlite.json
+
+JSON report written to /results/sqlite.json

@@ -1,0 +1,12 @@
+{
+  "compiler-excerpt.log": {
+    "sha256": "48b39f8605e48da81cefaee94838aae5fe7b1d26deb693a88f3a37b838d8c1cc",
+    "bytes": 3210,
+    "originalFailedLogSha256": "2ac21fbb173963007f9e8a7c838f5c0692de6746b2c674ae3a4009db7ed2ecc0",
+    "lineRange": [
+      24,
+      43
+    ],
+    "excerpt": true
+  }
+}

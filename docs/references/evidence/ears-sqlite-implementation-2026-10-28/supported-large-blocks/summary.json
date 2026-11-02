@@ -1,0 +1,119 @@
+{
+  "source": "49d6426961b7e02a361e3c115474f28aae89389e",
+  "qualification": false,
+  "queryExecutions": 21600,
+  "model": {
+    "sha256": "5f90eea4ed59a1d018753a4f80e29ce58a40aec9c823382cdc051abce7a823b6",
+    "origin": "read-only retained prior owner model; no retraining"
+  },
+  "retainedSnapshotUnchanged": true,
+  "pauseWindowsMs": [
+    [
+      1793402926438.203,
+      1793402955182.5972
+    ],
+    [
+      1793403067536.578,
+      1793403118639.602
+    ],
+    [
+      1793403192131.1182,
+      1793403206569.687
+    ],
+    [
+      1793403247422.757,
+      1793403262347.2131
+    ],
+    [
+      1793403331804.589,
+      1793403432089.7478
+    ],
+    [
+      1793403485112.27,
+      1793403505628.103
+    ],
+    [
+      1793403513800.652,
+      1793403530133.364
+    ],
+    [
+      1793403589257.064,
+      1793403714504.0012
+    ]
+  ],
+  "maxRssIsCumulative": true,
+  "variants": [
+    {
+      "minimum": 16384,
+      "canonicalRowsVerified": 99900,
+      "minimumMeanRecall": 0.9730000000000003,
+      "nativeCandidateCalls": 2400,
+      "orderedAnswerDifferencesFrom16k": 0,
+      "frozenGatesPassed": false,
+      "timedQueryGatesPassed": false,
+      "admissionMs": 25251.55601,
+      "admissionHeartbeatP99Ms": 97.56350100001146,
+      "admissionPauseOverlapMs": 0,
+      "pauseOverlappingPasses": 2,
+      "databaseBytesBeforeClose": 1798082560,
+      "walBytesBeforeClose": 7148232,
+      "maxRssKiBCumulative": 1016016,
+      "initial10k": {
+        "medianOfWarmPassMediansMs": 48.784381999998004,
+        "metadataBlocksPerNativeQuery": 656.56
+      },
+      "updated10k": {
+        "medianOfWarmPassMediansMs": 48.920481999986805,
+        "metadataBlocksPerNativeQuery": 664.8
+      }
+    },
+    {
+      "minimum": 65536,
+      "canonicalRowsVerified": 99900,
+      "minimumMeanRecall": 0.9730000000000003,
+      "nativeCandidateCalls": 2400,
+      "orderedAnswerDifferencesFrom16k": 0,
+      "frozenGatesPassed": false,
+      "timedQueryGatesPassed": false,
+      "admissionMs": 33177.058011000045,
+      "admissionHeartbeatP99Ms": 66.97368200001074,
+      "admissionPauseOverlapMs": 4477.213134765625,
+      "pauseOverlappingPasses": 3,
+      "databaseBytesBeforeClose": 1794043904,
+      "walBytesBeforeClose": 8540792,
+      "maxRssKiBCumulative": 1016016,
+      "initial10k": {
+        "medianOfWarmPassMediansMs": 38.71707100002095,
+        "metadataBlocksPerNativeQuery": 180.04
+      },
+      "updated10k": {
+        "medianOfWarmPassMediansMs": 39.791868999949656,
+        "metadataBlocksPerNativeQuery": 180.42
+      }
+    },
+    {
+      "minimum": 262144,
+      "canonicalRowsVerified": 99900,
+      "minimumMeanRecall": 0.9730000000000003,
+      "nativeCandidateCalls": 2400,
+      "orderedAnswerDifferencesFrom16k": 0,
+      "frozenGatesPassed": false,
+      "timedQueryGatesPassed": false,
+      "admissionMs": 221567.48125199997,
+      "admissionHeartbeatP99Ms": 175.1927090000827,
+      "admissionPauseOverlapMs": 125246.93725585938,
+      "pauseOverlappingPasses": 0,
+      "databaseBytesBeforeClose": 1793368064,
+      "walBytesBeforeClose": 10806792,
+      "maxRssKiBCumulative": 1016016,
+      "initial10k": {
+        "medianOfWarmPassMediansMs": 38.073778000078164,
+        "metadataBlocksPerNativeQuery": 57.74
+      },
+      "updated10k": {
+        "medianOfWarmPassMediansMs": 38.09623600007035,
+        "metadataBlocksPerNativeQuery": 57.74
+      }
+    }
+  ]
+}

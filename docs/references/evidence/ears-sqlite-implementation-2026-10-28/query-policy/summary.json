@@ -1,0 +1,51 @@
+{
+  "qualification": false,
+  "source": "1eb47d88e11e17e897056173b3e147c328008453",
+  "partition": "updated-only diagnostic; full initial/update acceptance remains required",
+  "model": {
+    "generation": 1,
+    "model_sha256": "5f90eea4ed59a1d018753a4f80e29ce58a40aec9c823382cdc051abce7a823b6",
+    "state": "ready"
+  },
+  "databaseSha256": "4e7b922650edb9bacefdda9fcb9b0c5a04f91e5919510c1b03d0b6f1971de935",
+  "databaseUnchanged": true,
+  "canonicalRowsVerified": 99900,
+  "helperEquivalencePairs": 900,
+  "controlQueryExecutions": 1800,
+  "policyQueryExecutions": 14400,
+  "timingsPaused": true,
+  "policies": [
+    {
+      "target": 256,
+      "nprobe": 32,
+      "minimumMeanRecall": 0.9740000000000002,
+      "frozenGatesPassed": false,
+      "pauseOverlappingPasses": 2,
+      "recallFailedPasses": 0
+    },
+    {
+      "target": 128,
+      "nprobe": 32,
+      "minimumMeanRecall": 0.9480000000000005,
+      "frozenGatesPassed": false,
+      "pauseOverlappingPasses": 0,
+      "recallFailedPasses": 4
+    },
+    {
+      "target": 256,
+      "nprobe": 16,
+      "minimumMeanRecall": 0.9150000000000001,
+      "frozenGatesPassed": false,
+      "pauseOverlappingPasses": 0,
+      "recallFailedPasses": 8
+    },
+    {
+      "target": 128,
+      "nprobe": 16,
+      "minimumMeanRecall": 0.8930000000000002,
+      "frozenGatesPassed": false,
+      "pauseOverlappingPasses": 0,
+      "recallFailedPasses": 12
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+
+> apack@0.3.14 packages:build
+> npm run build:package -w @apackdev/ears -w @apackdev/sdk -w @apackdev/ui -w @apackdev/testing -w @apackdev/cli
+
+
+> @apackdev/ears@0.1.0 build:package
+> tsx ../../scripts/build-package.ts .
+
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+
+> @apackdev/sdk@0.1.0 build:package
+> tsx ../../scripts/build-package.ts .
+
+Built @apackdev/sdk@0.1.0 into dist, staged for publishing in publish
+
+> @apackdev/ui@0.1.0 build:package
+> tsx ../../scripts/build-ui-package.ts .
+
+(node:211) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Built @apackdev/ui@0.1.0 into dist, staged for publishing in publish
+
+> @apackdev/testing@0.1.0 build:package
+> tsx ../../scripts/bundle-package.ts .
+
+Built @apackdev/testing@0.1.0 into dist/package
+
+> @apackdev/cli@0.1.0 build:package
+> tsx ../../scripts/bundle-package.ts .
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/compiler-pe-environment.ts:38:102:
+      38 │ ... === 'string' ? pathToFileURL(__filename).href : import.meta.url);
+         ╵                                                     ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:19:42:
+      19 │ export function buildToolHash(moduleUrl = import.meta.url): string {
+         ╵                                           ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+▲ [WARNING] "import.meta" is not available with the "cjs" output format and will be empty [empty-import-meta]
+
+    src/build/tool-identity.ts:61:48:
+      61 │ ...unction cliPackageDirectory(moduleUrl = import.meta.url): string {
+         ╵                                            ~~~~~~~~~~~
+
+  You need to set the output format to "esm" for "import.meta" to work correctly.
+
+Built @apackdev/cli@0.1.0 into dist/package

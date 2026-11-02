@@ -1,0 +1,123 @@
+
+ RUN  v3.2.7 /electron
+
+ ❯ |@apackdev/cli| tests/commands/db.integration.spec.ts (77 tests | 2 failed | 68 skipped) 5386ms
+   ↓ apack db query > prints the result, after the data dir it targets
+   ↓ apack db query > reads code from a file, and writes CSV to a file
+   ↓ apack db query > can't write, and changes nothing
+   ↓ apack db query > reads nonwritable data while preserving writable reader registration
+   ↓ apack db query > reports how to restore reader registration when the lock file cannot be written
+   ↓ apack db query > warns while an app runs on the data dir, and still reads
+   ↓ apack db query > reads a database another process holds open in a unit it is writing, as a running app does
+   ↓ apack db query > refuses bad arguments with its usage
+   ↓ naming the data dir > refuses an empty --data-dir rather than falling back to the default data dir
+   ↓ naming the data dir > resolves each flag to that app's data dir, and --data-dir to the path given
+   ↓ naming the data dir > takes a named data dir over APACK_USER_DATA_DIR, and takes the variable when nothing is named
+   ↓ naming the data dir > resolves --profile to that profile's data dir, ephemeral ones included
+   ↓ naming the data dir > names the profiles there are when --profile matches none
+   ↓ naming the data dir > refuses two data dirs
+   ↓ naming the data dir > makes a command that changes the database name its data dir, and opens none until it does
+   ↓ naming the data dir > lets a command that only reads take the production app's data without being told, dry runs included
+   ↓ naming the data dir > names a data dir for a change, and writes what the code returns to it
+   ↓ the lock a change holds > is held while a change runs and released after, so an app that starts meanwhile refuses to open the database
+   ↓ the lock a change holds > is not taken by a command that only reads
+   ↓ the lock a change holds > refuses a second command, and is released when one fails
+   ↓ apack db runs > lists the runs, newest first, and prints one run's tree
+   ↓ apack db runs > says when a data dir has no run history, and leaves it without one
+   ↓ apack db exec > writes with the transaction helpers
+   ↓ apack db exec > refuses while an app holds the data dir or its API answers, changing nothing
+   ↓ apack db exec > keeps none of what the code wrote when it throws part way
+   ↓ apack db repl > runs each line, reporting errors without stopping
+   ↓ apack db repl > refuses a --write session while an app runs on the data dir, changing nothing
+   ↓ apack db repl > reads while an app runs, warning as the other commands do
+   ↓ apack db repl > saves the writes of a --write session
+   ↓ apack db script > waits for a script that awaits, before the process exits
+   ↓ apack db script > runs a file with the open database, its arguments and a printer, and prints what it returns
+   ↓ apack db script > runs a plain module too, and writes what it returns to a file
+   ↓ apack db script > runs a TypeScript script through the real CLI, with its own imports, as a user does
+   ↓ apack db script > runs a script in a directory it can't write, importing a package from beside it
+   ↓ apack db script > waits for an async script, printing everything it logged and saving what it wrote
+   ↓ apack db script > waits for a script that asks the user something
+   ↓ apack db script > fails, naming the script, when it throws or rejects, keeping what it printed first
+   ↓ apack db script > refuses a file that is missing, or exports no function, changing nothing
+   ↓ apack db script > writes by default, and only reads with --read-only, which works while an app runs
+   ↓ apack db inspect > shows an entity's roles and relations, in the directions asked
+   ↓ apack db inspect > shows only incoming relations with --incoming, and only the first five of a crowded type
+   ↓ apack db inspect > counts relations per entity type, or shows the first entities of one
+   ↓ apack db inspect > counts a database no app has opened, which holds no schema, as a load of a dump leaves one
+   ↓ apack db export > writes a file per entity type with entities, the relations, and a summary
+   ↓ apack db export > exports the types asked, as CSV, and refuses a type no pack declares
+   ↓ apack db clear-settings > lists the Settings rows, and destroys them only with --force
+   ↓ apack db clear-settings > leaves every other entity, its roles and its relations where they were
+   ↓ apack db clear-settings > refuses while an app runs on the data dir
+   ↓ a dry run of a command that changes data > reads, so it works while an app runs on the data dir and against nonwritable data with reader registration
+   ↓ a dry run of a command that changes data > takes no lock, so two dry runs can run at once
+   ✓ apack db reset > lists what it would delete, and deletes the data and stored keys only with --force  891ms
+   ✓ apack db reset > refuses an open history handle before deleting primary data or keys (readOnly=false)  566ms
+   ✓ apack db reset > refuses an open history handle before deleting primary data or keys (readOnly=true)  541ms
+   ✓ apack db reset > resets primary data when history is absent without excluding its own primary handle  420ms
+   × apack db reset > keeps new managed history opens excluded until deletion finishes 235ms
+     → Cannot spy on export "rmSync". Module namespace is not configurable in ESM. See: https://vitest.dev/guide/browser/#limitations
+   × apack db reset > releases history exclusion after deletion fails, leaving history available for retry 235ms
+     → Cannot spy on export "rmSync". Module namespace is not configurable in ESM. See: https://vitest.dev/guide/browser/#limitations
+   ✓ apack db reset > can resume a reset killed after primary clear and before history deletion  1663ms
+   ✓ apack db reset > keeps the stored keys with --keep-keys, and says so  506ms
+   ✓ apack db reset > refuses while an app runs on the data dir  327ms
+   ↓ apack db import > lists the backup and what it replaces, and replaces the database and media only with --force
+   ↓ apack db import > says what made the backup, and names it when the files are in a format it cannot read
+   ↓ apack db import > refuses a backup whose run history this version cannot read, before replacing anything
+   ↓ apack db import > brings back the run history the backup holds
+   ↓ apack db import > restores a backup whose metadata claims a format its databases aren't in
+   ↓ apack db import > restores a backup made before what wrote it was recorded
+   ↓ apack db import > keeps the backup's own progress lines off stdout, so only the command's output is there
+   ↓ apack db import > refuses a backup that is not one or lacks a database, changing nothing
+   ↓ apack db import > says when the backup lists a store it holds nothing for, rather than dropping it quietly
+   ↓ apack db import > says when the backup holds rows of a type no installed pack declares, and keeps them
+   ↓ apack db import > refuses a backup from a newer apack, saying how to import it without what this one can't hold
+   ↓ apack db import > refuses while an app runs on the data dir
+   ↓ apack db > prints its usage, and each command its own
+   ↓ a data dir whose packs are gone > answers a query that names an undeclared type with that type, not with everything
+   ↓ a data dir whose packs are gone > says which types nothing declares, and how many rows each has
+   ↓ a data dir whose packs are gone > does not invent a relation kind, whose alias no row holds
+   ↓ a data dir whose packs are gone > declares them again when --schema-from names the pack, and stops warning
+   ↓ a data dir whose packs are gone > lets a declared name keep its declared value
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@apackdev/cli| tests/commands/db.integration.spec.ts > apack db reset > keeps new managed history opens excluded until deletion finishes
+TypeError: Cannot spy on export "rmSync". Module namespace is not configurable in ESM. See: https://vitest.dev/guide/browser/#limitations
+ ❯ tests/commands/db.integration.spec.ts:991:20
+    989|     const dir = await appDataDir(), paths = _appDataPaths(dir), remove…
+    990|     let checked = false;
+    991|     const spy = vi.spyOn(fs, 'rmSync').mockImplementation((file, optio…
+       |                    ^
+    992|       if (file === paths.runHistory) {
+    993|         checked = true;
+
+Caused by: TypeError: Cannot redefine property: rmSync
+ ❯ tests/commands/db.integration.spec.ts:991:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@apackdev/cli| tests/commands/db.integration.spec.ts > apack db reset > releases history exclusion after deletion fails, leaving history available for retry
+TypeError: Cannot spy on export "rmSync". Module namespace is not configurable in ESM. See: https://vitest.dev/guide/browser/#limitations
+ ❯ tests/commands/db.integration.spec.ts:1006:20
+    1004|     const dir = await appDataDir(), paths = _appDataPaths(dir), remove…
+    1005|     const failure = Object.assign(new Error('injected history deletion…
+    1006|     const spy = vi.spyOn(fs, 'rmSync').mockImplementation((file, optio…
+       |                    ^
+    1007|       if (file === paths.runHistory) throw failure;
+    1008|       return remove(file, options);
+
+Caused by: TypeError: Cannot redefine property: rmSync
+ ❯ tests/commands/db.integration.spec.ts:1006:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 7 passed | 68 skipped (77)
+   Start at  19:50:57
+   Duration  7.70s (transform 1.22s, setup 17ms, collect 1.99s, tests 5.39s, environment 0ms, prepare 41ms)
+
+JSON report written to /results/cli-reset.json

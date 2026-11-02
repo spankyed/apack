@@ -1,0 +1,182 @@
+{
+  "sourceParent": "862b5af400d4e6be038860df1c8fa159509091b0",
+  "native": "2441af4658d961f547c7094cd041c2ac246668c5",
+  "inputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "661854b489f33a6d50d40f2445efc3c6dc96b3e447dee51c15aea0eadb1827c3",
+    ".github/workflows/ears-sqlite.yml": "2cafcbb6154c04d4366136a4a477425327b8a2095c01a3da0313b0121b09f672",
+    "packages/apack-cli/src/commands/db/destructive.ts": "3364d442d7b84ba04135298ae589eea017f3cd7e8d0c5a14f00a1a6223cdddf1",
+    "packages/apack-cli/tests/commands/db.integration.spec.ts": "bed75a5a7d82badac0f1f7d0e070d30cd738d0308d5fe3cbc1edd9b280c6881a",
+    "packages/apack-cli/tests/commands/sqlite-profile.spec.ts": "cb40aa9d061ac4038f60c560aee6a88b1a6e60ef114830f3efd3ba122586e850",
+    "packages/apack-host/src/database/index.ts": "3a57ddaad2503b9ece2a4d0674ccec7217ad4b089cde583a5d134a1c7a1de21b",
+    "packages/apack-host/src/database/open.ts": "f3450f9ce7129657320870e712d5056ce55fb04695681f193990d25b18720bba",
+    "packages/apack-host/src/database/recovery-lock.ts": "6bc3a3f20a8895739c00a9389fd0315a8dd12146b1a577d67a1badf9bb1e8885",
+    "packages/apack-host/tests/database/recovery-exclusion.spec.ts": "f349007630a54442ac543326acb529beda1247fdb0bfb8f8006b2ca7fb5394fc",
+    "packages/apack-host/tests/database/quarantine-publication.spec.ts": "615c4dc29d6306f4f6c22108d080ffcf8c86531d9a484744fb160d12f0940fd7"
+  },
+  "commands": [
+    {
+      "label": "host-types",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/apack-host",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 14.62243938446045
+    },
+    {
+      "label": "cli-types",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/apack-cli",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 4.579064607620239
+    },
+    {
+      "label": "reset-lint",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/oxlint/bin/oxlint",
+        "packages/apack-cli/src/commands/db/destructive.ts",
+        "packages/apack-cli/tests/commands/db.integration.spec.ts",
+        "packages/apack-cli/tests/commands/sqlite-profile.spec.ts",
+        "packages/apack-host/src/database/index.ts",
+        "packages/apack-host/src/database/open.ts",
+        "packages/apack-host/src/database/recovery-lock.ts",
+        "packages/apack-host/tests/database/recovery-exclusion.spec.ts",
+        "packages/apack-host/tests/database/quarantine-publication.spec.ts",
+        "-D",
+        "correctness"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.038770437240600586
+    },
+    {
+      "label": "focused-host",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-host",
+        "tests/database/recovery-exclusion.spec.ts",
+        "tests/database/quarantine-publication.spec.ts",
+        "tests/database/storage.spec.ts",
+        "tests/backup/recovery.spec.ts",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/focused-host-final.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 15.343564748764038
+    },
+    {
+      "label": "platform-syntax",
+      "backend": null,
+      "args": [
+        "node",
+        "--check",
+        ".github/scripts/ears-sqlite-platform.mjs"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.01822066307067871
+    },
+    {
+      "label": "sqlite-profile",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-cli",
+        "tests/commands/sqlite-profile.spec.ts",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/sqlite-profile.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 4.391335964202881
+    },
+    {
+      "label": "packages-build",
+      "backend": null,
+      "args": [
+        "npm",
+        "run",
+        "packages:build"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 31.23290514945984
+    },
+    {
+      "label": "default-setup-build",
+      "backend": null,
+      "args": [
+        "npm",
+        "run",
+        "build:default-setup"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 77.69372606277466
+    },
+    {
+      "label": "cli-reset",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "vitest.integration.config.ts",
+        "--maxWorkers=1",
+        "packages/apack-cli/tests/commands/db.integration.spec.ts",
+        "-t",
+        "apack db reset",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/cli-reset.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 8.676229000091553
+    },
+    {
+      "label": "host-full",
+      "backend": "sqlite",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-host",
+        "--maxWorkers",
+        "2",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/host-full.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 116.86771297454834
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "mode": "compile-only",
+  "samples": [
+    {
+      "compiled": 500,
+      "wasmBytes": 21102592,
+      "rss": 111144960
+    },
+    {
+      "compiled": 1000,
+      "wasmBytes": 37486592,
+      "rss": 127528960
+    },
+    {
+      "compiled": 1500,
+      "wasmBytes": 54329344,
+      "rss": 144175104
+    },
+    {
+      "compiled": 2000,
+      "wasmBytes": 70713344,
+      "rss": 160690176
+    },
+    {
+      "compiled": 2500,
+      "wasmBytes": 87228416,
+      "rss": 177344512
+    },
+    {
+      "compiled": 3000,
+      "wasmBytes": 103677952,
+      "rss": 196349952
+    }
+  ]
+}

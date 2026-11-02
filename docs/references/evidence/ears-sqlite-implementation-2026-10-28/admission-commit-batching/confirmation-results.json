@@ -1,0 +1,42 @@
+[
+  {
+    "label": "sliced-confirm",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/checkpoint-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "/results/sliced-confirm.json",
+      "native-diagnose"
+    ],
+    "sourceOverlay": {
+      "packages/apack-ears/src/sqlite/vector-index.ts": "1bd955a7f509943bf86e98d68006a494f1163951f5fc8df976d4f796a9089e4b",
+      "packages/apack-ears/src/sqlite/vector-models.ts": "a8be009044a03598186c9c4ff7dee71776827b1384b2d290cdcadbcfcdba1ee6"
+    },
+    "exitCode": 0,
+    "seconds": 66.37732062098803
+  },
+  {
+    "label": "baseline-confirm",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/checkpoint-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "/results/baseline-confirm.json",
+      "native-diagnose"
+    ],
+    "sourceOverlay": {
+      "packages/apack-ears/src/sqlite/vector-index.ts": "d624b6f291137d6fe7fc8b999eb34611c6d6ce82deb1fbb4fc1672bfb842820c",
+      "packages/apack-ears/src/sqlite/vector-models.ts": "d4aae496daf919a55b4298c34e67b1a54b414d8daa07ace7a65416f01eb2a825"
+    },
+    "exitCode": 0,
+    "seconds": 80.96884333097842
+  }
+]

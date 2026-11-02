@@ -1,0 +1,9 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/sqlite-evaluation/packages/apack-ears
+
+ ✓ tests/engine/query-values.spec.ts (2 tests) 46ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  00:31:57
+   Duration  384ms (transform 122ms, setup 10ms, collect 164ms, tests 46ms, environment 0ms, prepare 51ms)

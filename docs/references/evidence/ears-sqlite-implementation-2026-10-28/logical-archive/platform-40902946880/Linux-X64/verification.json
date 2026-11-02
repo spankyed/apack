@@ -1,0 +1,16 @@
+{
+  "source": "29c2cf746cc6f421c5036465c2b983bfde9eec37",
+  "earsPassed": 596,
+  "sqliteCasesPassed": 287,
+  "selectedTextPassed": 16,
+  "selectedTextTotal": 16,
+  "maintenanceCasesPassed": 9,
+  "logicalCommandCasesPassed": 8,
+  "logicalCrashCasesPassed": 2,
+  "builtLogicalChecks": 5,
+  "logicalSnapshotCasesPassed": 5,
+  "logicalHostCasesPassed": 10,
+  "logicalHostSkipped": [],
+  "hostPassed": 135,
+  "recoveryCasesPassed": 34
+}

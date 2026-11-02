@@ -1,0 +1,37 @@
+[
+  {
+    "file": "acquire.log",
+    "bytes": 2255,
+    "sha256": "ec571e021f96a843d2208f98d3bd2d56cbf17fae0c1028f699eb643b3b8baf17"
+  },
+  {
+    "file": "cleanup.json",
+    "bytes": 31,
+    "sha256": "0387430e60186bbca1d4272dc3465d3d2be68d68142f2e044d42bf57e85d59ac"
+  },
+  {
+    "file": "corpus-manifest.json",
+    "bytes": 2888,
+    "sha256": "6b9522653a8ae2adddd194fe628e404785e778eb604304ffb3d70ac78e7f4291"
+  },
+  {
+    "file": "image.json",
+    "bytes": 83,
+    "sha256": "9ed3db5207e48b0aaba92054c2cfbc59cebc703f97b6d7c1d6bf4e1c875a23cd"
+  },
+  {
+    "file": "install.log",
+    "bytes": 938,
+    "sha256": "f89924d42fcf79c9b3e4d166c849463327e0ba20a3c99ce9b2d3e5df9ff9ad53"
+  },
+  {
+    "file": "qualification.json",
+    "bytes": 578,
+    "sha256": "9b25bd659edadc571a1a8e1b58637d202a5341b89aeb027e17e5f536cc5f3458"
+  },
+  {
+    "file": "source.txt",
+    "bytes": 41,
+    "sha256": "b972b7cd76cba27368a9d0c46d08affa1b88cdf6febd225fa171c54dc322d037"
+  }
+]

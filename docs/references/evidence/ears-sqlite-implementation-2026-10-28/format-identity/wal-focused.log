@@ -1,0 +1,27 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ✓ tests/sqlite/database-identity.spec.ts (19 tests) 12592ms
+   ✓ SQLite database identity > refuses an owned-looking database with application_id=0 without repairing its identity  1057ms
+   ✓ SQLite database identity > refuses an owned-looking database with application_id=305419896 without repairing its identity  928ms
+   ✓ SQLite database identity > refuses an owned-looking database with user_version=0 without repairing its identity  796ms
+   ✓ SQLite database identity > refuses an owned-looking database with user_version=2 without repairing its identity  886ms
+   ✓ SQLite database identity > refuses missing authoritative meta without recreating it  1102ms
+   ✓ SQLite database identity > refuses missing authoritative entities without recreating it  1068ms
+   ✓ SQLite database identity > refuses missing authoritative relations without recreating it  932ms
+   ✓ SQLite database identity > refuses missing authoritative embedding_values without recreating it  1005ms
+   ✓ SQLite database identity > refuses missing authoritative value_types without recreating it  1107ms
+   ✓ SQLite database identity > refuses missing authoritative value_fields without recreating it  1062ms
+   ✓ SQLite database identity > refuses missing authoritative value_overflow without recreating it  1005ms
+   ✓ SQLite database identity > refuses missing authoritative admitted type values without recreating it  1210ms
+ ✓ tests/sqlite/embeddings.spec.ts (9 tests) 1494ms
+   ✓ primary embedding storage > retains exactly one payload when generations are rebuilt and collected  499ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 669ms
+ ✓ tests/sqlite/transaction-failures.spec.ts (4 tests) 602ms
+
+ Test Files  4 passed (4)
+      Tests  35 passed (35)
+   Start at  17:27:57
+   Duration  19.00s (transform 1.16s, setup 93ms, collect 2.16s, tests 15.36s, environment 0ms, prepare 506ms)
+
+JSON report written to /results/wal-focused.json

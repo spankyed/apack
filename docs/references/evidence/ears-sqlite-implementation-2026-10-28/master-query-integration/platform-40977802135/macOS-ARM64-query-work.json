@@ -1,0 +1,84 @@
+{
+  "numTotalTestSuites": 2,
+  "numPassedTestSuites": 2,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 4,
+  "numPassedTests": 4,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "snapshot": {
+    "added": 0,
+    "failure": false,
+    "filesAdded": 0,
+    "filesRemoved": 0,
+    "filesRemovedList": [],
+    "filesUnmatched": 0,
+    "filesUpdated": 0,
+    "matched": 0,
+    "total": 0,
+    "unchecked": 0,
+    "uncheckedKeysByFile": [],
+    "unmatched": 0,
+    "updated": 0,
+    "didUpdate": false
+  },
+  "startTime": 1793319892277,
+  "success": true,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": [
+            "what a view costs as the data grows"
+          ],
+          "fullName": "what a view costs as the data grows reads as much at \u00d71: the chat page, the list, both searches",
+          "status": "passed",
+          "title": "reads as much at \u00d71: the chat page, the list, both searches",
+          "duration": 1113.219083,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "what a view costs as the data grows"
+          ],
+          "fullName": "what a view costs as the data grows reads as much at \u00d72: the chat page, the list, both searches",
+          "status": "passed",
+          "title": "reads as much at \u00d72: the chat page, the list, both searches",
+          "duration": 1422.0823339999997,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "what a view costs as the data grows"
+          ],
+          "fullName": "what a view costs as the data grows pages a thread shorter than its limit whole, an empty one empty, and keeps the queued last after a bulk add",
+          "status": "passed",
+          "title": "pages a thread shorter than its limit whole, an empty one empty, and keeps the queued last after a bulk add",
+          "duration": 300.8020830000005,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": [
+            "what a view costs as the data grows"
+          ],
+          "fullName": "what a view costs as the data grows runs the chat page again for a change on the page, not for one to a message before it",
+          "status": "passed",
+          "title": "runs the chat page again for a change on the page, not for one to a message before it",
+          "duration": 856.0465839999997,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ],
+      "startTime": 1793319898717,
+      "endTime": 1793319902410.0466,
+      "status": "passed",
+      "message": "",
+      "name": "/Users/runner/work/apack/apack/packages/default-setup/tests/features/threads/be/query-work.spec.ts"
+    }
+  ]
+}

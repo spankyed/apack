@@ -1,0 +1,706 @@
+{
+  "scope": "Scratch native FTS5 using actual SqliteText search execution through Python SQLite 3.53.0; not packaged driver, performance or adoption qualification",
+  "prefixChars": 256,
+  "groups": [
+    {
+      "variant": "baseline",
+      "weight": 0,
+      "passed": 24,
+      "failed": [
+        "generate-entries"
+      ],
+      "cases": [
+        {
+          "query": "encrypted keys",
+          "passed": true,
+          "ids": [
+            "Document-2ee66ab53cb42d37",
+            "Document-d64f19987bd3a976",
+            "Document-6cba5b1ed5638a99"
+          ],
+          "scores": [
+            16.55331805380642,
+            15.202943605415065,
+            10.864681382683036
+          ]
+        },
+        {
+          "query": "importBackup",
+          "passed": true,
+          "ids": [
+            "Document-c1a451c50491abce",
+            "Document-f684052b41583665",
+            "Document-1c9201fb3c2dcac7"
+          ],
+          "scores": [
+            9.6562012867877,
+            6.268100555442646,
+            0.7721126203214665
+          ]
+        },
+        {
+          "query": "resolveAppEnvironment",
+          "passed": true,
+          "ids": [
+            "Document-6cba5b1ed5638a99"
+          ],
+          "scores": [
+            8.666040064150087
+          ]
+        },
+        {
+          "query": "setupBackend",
+          "passed": true,
+          "ids": [
+            "Document-8bac138037c0da91",
+            "Document-ac39f64e29199cad"
+          ],
+          "scores": [
+            7.6130946817551255,
+            6.699167468948013
+          ]
+        },
+        {
+          "query": "import map",
+          "passed": true,
+          "ids": [
+            "Document-58e11491ba41674f",
+            "Document-8fa40bf215e0021f",
+            "Document-97fd701f8972feb1",
+            "Document-e24b802307b62c0e",
+            "Document-94cc269d77c3135e"
+          ],
+          "scores": [
+            24.17116171432511,
+            10.639568213548266,
+            8.73534577200418,
+            7.906354729291044,
+            6.549280474409606
+          ]
+        },
+        {
+          "query": "module bridge",
+          "passed": true,
+          "ids": [
+            "Document-fde2819c1657a48a",
+            "Document-ac39f64e29199cad"
+          ],
+          "scores": [
+            33.432101058470764,
+            6.906505091796765
+          ]
+        },
+        {
+          "query": "generate-entries",
+          "passed": false,
+          "ids": [
+            "Document-c8f693b8fe82c18d",
+            "Document-78bdb1d2596bad31",
+            "Document-755f56b77b00c1bb",
+            "Document-ec142b688b133f70",
+            "Document-f7ab80523c6bb5bb"
+          ],
+          "scores": [
+            8.935904092102952,
+            8.664315213815465,
+            7.3399755924953896,
+            6.573462932345408,
+            5.825366409184799
+          ]
+        },
+        {
+          "query": "PageRank",
+          "passed": true,
+          "ids": [
+            "Document-21edaadc011edaaf"
+          ],
+          "scores": [
+            6.158492366687252
+          ]
+        },
+        {
+          "query": "withTrashed",
+          "passed": true,
+          "ids": [
+            "Document-96153fcb75a17e19",
+            "Document-5718fcab699ab0e6",
+            "Document-ff3eb43cc6f2e9e7",
+            "Document-1c9201fb3c2dcac7"
+          ],
+          "scores": [
+            11.252179335828435,
+            6.9866806238309005,
+            2.729161156037453,
+            1.462625533364144
+          ]
+        },
+        {
+          "query": "subscribes",
+          "passed": true,
+          "ids": [
+            "Document-f01a5595e0fe8c82",
+            "Document-97b147fdd1d43530",
+            "Document-51437f497ad67834",
+            "Document-96a5ca0996950f85"
+          ],
+          "scores": [
+            6.576592671864587,
+            5.984376472097836,
+            3.2535551401219482,
+            2.8645054972901067
+          ]
+        },
+        {
+          "query": "EntityId",
+          "passed": true,
+          "ids": [
+            "Document-cc8d0d116a820ff6",
+            "Document-955dc2d9f45cc47c",
+            "Document-6d62c5a6150d9d61",
+            "Document-785cc2e8c5ea344b",
+            "Document-e9347215ae2de3dc"
+          ],
+          "scores": [
+            12.314521395474191,
+            8.49640598135789,
+            4.891988162933316,
+            3.194042761624269,
+            3.000517034444225
+          ]
+        },
+        {
+          "query": "descendants",
+          "passed": true,
+          "ids": [
+            "Document-5718fcab699ab0e6",
+            "Document-7cb6ecd6bc475fc6"
+          ],
+          "scores": [
+            11.706098719900696,
+            8.203111840373579
+          ]
+        },
+        {
+          "query": "mockInference",
+          "passed": true,
+          "ids": [
+            "Document-1e6881b93e347cf6",
+            "Document-e9dda76da8f1165e",
+            "Document-804ac84d19d914ae",
+            "Document-e5e46752eba4c774"
+          ],
+          "scores": [
+            12.05124680528503,
+            6.473270519774672,
+            6.4540755723390095,
+            2.3530274679614704
+          ]
+        },
+        {
+          "query": "importContent",
+          "passed": true,
+          "ids": [
+            "Document-85386c08f3e3ef39",
+            "Document-804ac84d19d914ae",
+            "Document-a4be950c3be5a23f",
+            "Document-e9dda76da8f1165e",
+            "Document-f01a5595e0fe8c82"
+          ],
+          "scores": [
+            12.930527764208055,
+            9.882499292913586,
+            6.5415597394780365,
+            5.943021986988205,
+            3.6127496030031065
+          ]
+        },
+        {
+          "query": "startShell",
+          "passed": true,
+          "ids": [
+            "Document-2053381a423fda92",
+            "Document-804ac84d19d914ae",
+            "Document-f01a5595e0fe8c82"
+          ],
+          "scores": [
+            14.112496246514226,
+            11.364771486427893,
+            4.154624499214969
+          ]
+        },
+        {
+          "query": "ArtifactDefinition",
+          "passed": true,
+          "ids": [
+            "Document-375c10b221486a66",
+            "Document-bb0f9b9691497b6b",
+            "Document-355c5f0a5a13d5ac"
+          ],
+          "scores": [
+            9.862754996922359,
+            7.0803225779868875,
+            5.797119355834561
+          ]
+        },
+        {
+          "query": "getDslDeclarations",
+          "passed": true,
+          "ids": [
+            "Document-21b0cda2e44cfe7d"
+          ],
+          "scores": [
+            12.340629643048743
+          ]
+        },
+        {
+          "query": "ContentApplier",
+          "passed": true,
+          "ids": [
+            "Document-437f2c2c80f9db17",
+            "Document-bb0f9b9691497b6b",
+            "Document-a4be950c3be5a23f"
+          ],
+          "scores": [
+            44.612673423027964,
+            6.706185285966854,
+            5.554944596351316
+          ]
+        },
+        {
+          "query": "edited shipping",
+          "passed": true,
+          "ids": [
+            "Document-340ecd0847180d73",
+            "Document-ee34eb72b5ac1aa2",
+            "Document-1fd3e52e3751fe84"
+          ],
+          "scores": [
+            27.43127249020303,
+            22.819350981420143,
+            8.067660234528296
+          ]
+        },
+        {
+          "query": "\"Graph algorithms\"",
+          "passed": true,
+          "ids": [
+            "Document-21edaadc011edaaf"
+          ],
+          "scores": [
+            25.213021523605203
+          ]
+        },
+        {
+          "query": "mockInfernece",
+          "passed": true,
+          "ids": [
+            "Document-1e6881b93e347cf6",
+            "Document-e9dda76da8f1165e",
+            "Document-804ac84d19d914ae",
+            "Document-e5e46752eba4c774"
+          ],
+          "scores": [
+            6.025623402642515,
+            3.236635259887336,
+            3.2270377861695048,
+            1.1765137339807352
+          ]
+        },
+        {
+          "query": "cdx-resume",
+          "passed": true,
+          "ids": [
+            "Document-67f2e8deba08db0d"
+          ],
+          "scores": [
+            7.450786995572959
+          ]
+        },
+        {
+          "query": "cdx-res",
+          "passed": true,
+          "ids": [
+            "Document-67f2e8deba08db0d"
+          ],
+          "scores": [
+            7.450786995572959
+          ]
+        },
+        {
+          "query": "pr2md",
+          "passed": true,
+          "ids": [
+            "Document-6b075cbebbe5ac22",
+            "Document-28118f23b61afae3",
+            "Document-1fd3e52e3751fe84"
+          ],
+          "scores": [
+            14.979682785819854,
+            5.372337893189563,
+            4.6555710992325565
+          ]
+        },
+        {
+          "query": "kanban",
+          "passed": true,
+          "ids": [
+            "Document-5204529ebc718513"
+          ],
+          "scores": [
+            7.613206942611795
+          ]
+        }
+      ]
+    },
+    {
+      "variant": "opening-passage",
+      "weight": 0,
+      "passed": 24,
+      "failed": [
+        "generate-entries"
+      ],
+      "cases": [
+        {
+          "query": "encrypted keys",
+          "passed": true,
+          "ids": [
+            "Document-d64f19987bd3a976",
+            "Document-2ee66ab53cb42d37",
+            "Document-6cba5b1ed5638a99"
+          ],
+          "scores": [
+            19.386856898607085,
+            16.706739427364237,
+            9.75488330217222
+          ]
+        },
+        {
+          "query": "importBackup",
+          "passed": true,
+          "ids": [
+            "Document-c1a451c50491abce",
+            "Document-f684052b41583665",
+            "Document-1c9201fb3c2dcac7"
+          ],
+          "scores": [
+            9.09482959995876,
+            5.513900690590121,
+            0.6403330190407014
+          ]
+        },
+        {
+          "query": "resolveAppEnvironment",
+          "passed": true,
+          "ids": [
+            "Document-6cba5b1ed5638a99"
+          ],
+          "scores": [
+            15.423977244467437
+          ]
+        },
+        {
+          "query": "setupBackend",
+          "passed": true,
+          "ids": [
+            "Document-ac39f64e29199cad",
+            "Document-8bac138037c0da91"
+          ],
+          "scores": [
+            15.518280484738591,
+            6.4597591825974385
+          ]
+        },
+        {
+          "query": "import map",
+          "passed": true,
+          "ids": [
+            "Document-58e11491ba41674f",
+            "Document-8fa40bf215e0021f",
+            "Document-97fd701f8972feb1",
+            "Document-e24b802307b62c0e",
+            "Document-94cc269d77c3135e"
+          ],
+          "scores": [
+            25.252550622261797,
+            11.95773172440126,
+            10.886437265034765,
+            7.216630424785452,
+            6.394270996034102
+          ]
+        },
+        {
+          "query": "module bridge",
+          "passed": true,
+          "ids": [
+            "Document-fde2819c1657a48a",
+            "Document-ac39f64e29199cad"
+          ],
+          "scores": [
+            34.90667251990939,
+            6.02623386620521
+          ]
+        },
+        {
+          "query": "generate-entries",
+          "passed": false,
+          "ids": [
+            "Document-f7ab80523c6bb5bb",
+            "Document-755f56b77b00c1bb",
+            "Document-c8f693b8fe82c18d",
+            "Document-78bdb1d2596bad31",
+            "Document-ec142b688b133f70"
+          ],
+          "scores": [
+            9.843151100564528,
+            9.45763842194988,
+            8.362510677373137,
+            8.27000666112152,
+            5.947846116256574
+          ]
+        },
+        {
+          "query": "PageRank",
+          "passed": true,
+          "ids": [
+            "Document-21edaadc011edaaf"
+          ],
+          "scores": [
+            5.360126802550199
+          ]
+        },
+        {
+          "query": "withTrashed",
+          "passed": true,
+          "ids": [
+            "Document-96153fcb75a17e19",
+            "Document-5718fcab699ab0e6",
+            "Document-ff3eb43cc6f2e9e7",
+            "Document-1c9201fb3c2dcac7"
+          ],
+          "scores": [
+            10.897842065603767,
+            6.401971249782048,
+            2.321249027261844,
+            1.2180059236925487
+          ]
+        },
+        {
+          "query": "subscribes",
+          "passed": true,
+          "ids": [
+            "Document-97b147fdd1d43530",
+            "Document-f01a5595e0fe8c82",
+            "Document-51437f497ad67834",
+            "Document-96a5ca0996950f85"
+          ],
+          "scores": [
+            6.844958712094208,
+            5.7795157898111515,
+            2.7345120137510985,
+            2.3916997027713878
+          ]
+        },
+        {
+          "query": "EntityId",
+          "passed": true,
+          "ids": [
+            "Document-cc8d0d116a820ff6",
+            "Document-955dc2d9f45cc47c",
+            "Document-0750b6f7ca8f9f20",
+            "Document-6d62c5a6150d9d61",
+            "Document-785cc2e8c5ea344b"
+          ],
+          "scores": [
+            12.515730407946958,
+            8.300359580817597,
+            5.304745926212481,
+            4.361118310986891,
+            2.7812909603284877
+          ]
+        },
+        {
+          "query": "descendants",
+          "passed": true,
+          "ids": [
+            "Document-5718fcab699ab0e6",
+            "Document-7cb6ecd6bc475fc6"
+          ],
+          "scores": [
+            11.067825361863422,
+            7.48625996455602
+          ]
+        },
+        {
+          "query": "mockInference",
+          "passed": true,
+          "ids": [
+            "Document-1e6881b93e347cf6",
+            "Document-804ac84d19d914ae",
+            "Document-e9dda76da8f1165e",
+            "Document-e5e46752eba4c774"
+          ],
+          "scores": [
+            12.32438989313212,
+            5.616276562463783,
+            5.560187509153518,
+            1.9068959013118167
+          ]
+        },
+        {
+          "query": "importContent",
+          "passed": true,
+          "ids": [
+            "Document-85386c08f3e3ef39",
+            "Document-804ac84d19d914ae",
+            "Document-f01a5595e0fe8c82",
+            "Document-a4be950c3be5a23f",
+            "Document-e9dda76da8f1165e"
+          ],
+          "scores": [
+            14.314207828308723,
+            13.204136701595086,
+            11.434163656676915,
+            5.5150064852764,
+            4.90788065300462
+          ]
+        },
+        {
+          "query": "startShell",
+          "passed": true,
+          "ids": [
+            "Document-2053381a423fda92",
+            "Document-804ac84d19d914ae",
+            "Document-f01a5595e0fe8c82"
+          ],
+          "scores": [
+            13.158650431611187,
+            10.308905433282613,
+            3.416394127115684
+          ]
+        },
+        {
+          "query": "ArtifactDefinition",
+          "passed": true,
+          "ids": [
+            "Document-375c10b221486a66",
+            "Document-bb0f9b9691497b6b",
+            "Document-355c5f0a5a13d5ac"
+          ],
+          "scores": [
+            13.656588005003599,
+            6.11380094191746,
+            4.898178829734369
+          ]
+        },
+        {
+          "query": "getDslDeclarations",
+          "passed": true,
+          "ids": [
+            "Document-21b0cda2e44cfe7d"
+          ],
+          "scores": [
+            15.423977244467437
+          ]
+        },
+        {
+          "query": "ContentApplier",
+          "passed": true,
+          "ids": [
+            "Document-437f2c2c80f9db17",
+            "Document-bb0f9b9691497b6b",
+            "Document-a4be950c3be5a23f"
+          ],
+          "scores": [
+            45.74874187733528,
+            5.862248053265812,
+            4.756916263338515
+          ]
+        },
+        {
+          "query": "edited shipping",
+          "passed": true,
+          "ids": [
+            "Document-340ecd0847180d73",
+            "Document-ee34eb72b5ac1aa2",
+            "Document-1fd3e52e3751fe84"
+          ],
+          "scores": [
+            28.149235707612068,
+            22.595524376379235,
+            6.911135399396068
+          ]
+        },
+        {
+          "query": "\"Graph algorithms\"",
+          "passed": true,
+          "ids": [
+            "Document-21edaadc011edaaf"
+          ],
+          "scores": [
+            25.083189263090965
+          ]
+        },
+        {
+          "query": "mockInfernece",
+          "passed": true,
+          "ids": [
+            "Document-1e6881b93e347cf6",
+            "Document-804ac84d19d914ae",
+            "Document-e9dda76da8f1165e",
+            "Document-e5e46752eba4c774"
+          ],
+          "scores": [
+            6.16219494656606,
+            2.8081382812318916,
+            2.780093754576759,
+            0.9534479506559084
+          ]
+        },
+        {
+          "query": "cdx-resume",
+          "passed": true,
+          "ids": [
+            "Document-67f2e8deba08db0d"
+          ],
+          "scores": [
+            8.37762770241577
+          ]
+        },
+        {
+          "query": "cdx-res",
+          "passed": true,
+          "ids": [
+            "Document-67f2e8deba08db0d"
+          ],
+          "scores": [
+            8.37762770241577
+          ]
+        },
+        {
+          "query": "pr2md",
+          "passed": true,
+          "ids": [
+            "Document-6b075cbebbe5ac22",
+            "Document-1fd3e52e3751fe84",
+            "Document-28118f23b61afae3"
+          ],
+          "scores": [
+            14.649547666121936,
+            13.597339376553263,
+            7.301303961904302
+          ]
+        },
+        {
+          "query": "kanban",
+          "passed": true,
+          "ids": [
+            "Document-5204529ebc718513"
+          ],
+          "scores": [
+            7.59695047284588
+          ]
+        }
+      ]
+    }
+  ]
+}

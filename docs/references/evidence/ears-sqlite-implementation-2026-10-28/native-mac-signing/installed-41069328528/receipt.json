@@ -1,0 +1,8 @@
+{
+  "rawLogSha256": "54130d6bfe0a83c59ffb2f5408ee41dc2191072939d7753130b840a6eb25dcf8",
+  "normalization": "Trailing whitespace only",
+  "source": "2558de0d9d8910c611fcaa179c5dadf666b4fbff",
+  "vectorUnsignedSha256": "3bf657a9adea0584351a29232690f8b3a1e909a7439d0c6aaafdab7e594cc4ba",
+  "vectorSignedSha256": "4a1488d63b5142986c6682b73a3013cde143d22b95aad7d4fde3066c119a594e",
+  "actualAppCasesPassed": 6
+}

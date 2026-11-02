@@ -1,0 +1,7 @@
+{
+  "source": "4cafaec5d66ce8d63ef6ee1bf5f8f7215221c4cd",
+  "enginePin": "6ab2f69fa13289ed4f02952253c58b4d41922c98",
+  "producerSha256": "2c997f55e1e8a6b93c02c3167f190076884df4df57b1dce1b5d32c22423b5440",
+  "apiSha256": "f47500cedbda190d65d5650b4cac4d206c516f72ee65e99896c4645771c63912",
+  "scope": "Synthetic copied native profile, real built starter pack and Node API/RPC/live view; not Electron, renderer, installed distributions, large resources or power loss"
+}

@@ -1,0 +1,48 @@
+{
+  "source": "6cfdf32dad574f42799165efea332266154b2e2a",
+  "run": 41237293070,
+  "prefixes": [
+    {
+      "size": 1000,
+      "rawReportSha256": "4f125e5b6f17697e7a479c779241727ccfd9730aed2245b81557b72460d43010",
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "maxRssKiB": 340452,
+      "loadMs": 594.7582180000002,
+      "synchronous": 2,
+      "nativeModelOwnerStarted": false,
+      "databaseScratchRemoved": true
+    },
+    {
+      "size": 10000,
+      "rawReportSha256": "838f724c476ac94a5ed424544367f4b015bf0efaec8601a0d98ef3bd2b79ce91",
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "maxRssKiB": 495252,
+      "loadMs": 5526.169509,
+      "synchronous": 2,
+      "nativeModelOwnerStarted": false,
+      "databaseScratchRemoved": true
+    },
+    {
+      "size": 99900,
+      "rawReportSha256": "0b42ae90566b75e279819ceb04e429021dcdc592ae423c52fabde940b27575f6",
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "maxRssKiB": 1480628,
+      "loadMs": 59678.766217000004,
+      "synchronous": 2,
+      "nativeModelOwnerStarted": false,
+      "databaseScratchRemoved": true
+    }
+  ]
+}

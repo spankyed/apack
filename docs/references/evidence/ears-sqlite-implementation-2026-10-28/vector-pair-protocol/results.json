@@ -1,0 +1,75 @@
+{
+  "protocol": "ears-vector-pair-protocol-control/1",
+  "completed": true,
+  "scope": "Historical numeric receipts plus synthetic build metadata; no native execution or performance evidence",
+  "outcomes": [
+    {
+      "case": "complete synthetic pair, original heartbeat failures retained",
+      "passed": true
+    },
+    {
+      "case": "different CPU",
+      "passed": true
+    },
+    {
+      "case": "different run",
+      "passed": true
+    },
+    {
+      "case": "different source",
+      "passed": true
+    },
+    {
+      "case": "different limits",
+      "passed": true
+    },
+    {
+      "case": "different oracle",
+      "passed": true
+    },
+    {
+      "case": "same artifact",
+      "passed": true
+    },
+    {
+      "case": "invalid artifact hash",
+      "passed": true
+    },
+    {
+      "case": "wrong baseline",
+      "passed": true
+    },
+    {
+      "case": "missing provenance",
+      "passed": true
+    },
+    {
+      "case": "wrong actual backend",
+      "passed": true
+    },
+    {
+      "case": "wrong worker",
+      "passed": true
+    },
+    {
+      "case": "wrong worker artifact",
+      "passed": true
+    },
+    {
+      "case": "wrong worker backend",
+      "passed": true
+    },
+    {
+      "case": "missing sample",
+      "passed": true
+    },
+    {
+      "case": "changed candidate policy",
+      "passed": true
+    },
+    {
+      "case": "low recall refuses CLI success and retains receipt",
+      "passed": true
+    }
+  ]
+}

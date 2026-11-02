@@ -1,0 +1,75 @@
+{
+  "source": "b814f7722da442a9c4e1fda88014ee11e0859672",
+  "producerSha256": "07c18fb8c4d2f492a47c1dd20a35c5d4e00da89d9b54a57b9b78d17629482021",
+  "enginePin": "6ab2f69fa13289ed4f02952253c58b4d41922c98",
+  "scope": "Parent-issued process termination; no physical power-loss or large-resource guarantee",
+  "records": [
+    {
+      "point": "during-primary",
+      "witness": {
+        "point": "during-primary",
+        "finalExists": false,
+        "primaryExists": false,
+        "historyExists": false,
+        "loadedEntities": 1000
+      },
+      "signal": "SIGKILL",
+      "nativeSourceUnchanged": true,
+      "oldOutputBytesUnchanged": true,
+      "newContainerRetryVerified": true
+    },
+    {
+      "point": "before-primary",
+      "witness": {
+        "point": "before-primary",
+        "finalExists": false,
+        "primaryExists": false,
+        "historyExists": false
+      },
+      "signal": "SIGKILL",
+      "nativeSourceUnchanged": true,
+      "oldOutputBytesUnchanged": true,
+      "newContainerRetryVerified": true
+    },
+    {
+      "point": "after-primary",
+      "witness": {
+        "point": "after-primary",
+        "finalExists": false,
+        "primaryExists": true,
+        "historyExists": false
+      },
+      "signal": "SIGKILL",
+      "nativeSourceUnchanged": true,
+      "oldOutputBytesUnchanged": true,
+      "newContainerRetryVerified": true
+    },
+    {
+      "point": "before-profile",
+      "witness": {
+        "point": "before-profile",
+        "finalExists": false,
+        "primaryExists": true,
+        "historyExists": true
+      },
+      "signal": "SIGKILL",
+      "nativeSourceUnchanged": true,
+      "oldOutputBytesUnchanged": true,
+      "newContainerRetryVerified": true
+    },
+    {
+      "point": "after-profile",
+      "witness": {
+        "point": "after-profile",
+        "finalExists": true,
+        "primaryExists": true,
+        "historyExists": true
+      },
+      "signal": "SIGKILL",
+      "nativeSourceUnchanged": true,
+      "oldOutputBytesUnchanged": true,
+      "newContainerRetryVerified": true,
+      "completedProfileReopened": true
+    }
+  ]
+}

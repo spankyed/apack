@@ -1,0 +1,88 @@
+{
+  "run": 41250027986,
+  "source": "cda3ebace5802d02439259722d616184174162a9",
+  "platform": "linux-x64",
+  "qualification": false,
+  "reports": {
+    "ears.json": {
+      "passed": 869,
+      "failed": 1,
+      "pending": 0,
+      "rawSha256": "ca5cfe41e2cd0420daf5565233db6eb9e5425646c58e8bd4982ea334abbe2691"
+    },
+    "host.json": {
+      "passed": 197,
+      "failed": 0,
+      "pending": 0,
+      "rawSha256": "a707ed202683310d84e3d54935ed0884ad9d255fae5cb0f5fa21d88383fdd1b0"
+    },
+    "host-crash.json": {
+      "passed": 12,
+      "failed": 0,
+      "pending": 0,
+      "rawSha256": "16c0de1c7bb52ace8018944daf3972e65a9d8a7072e3bef5eae68f0a70ec874a"
+    },
+    "cli-maintenance.json": {
+      "passed": 41,
+      "failed": 0,
+      "pending": 0,
+      "rawSha256": "a34d5fed5cec08f49993672e33de3c3f334733d3ec4a213044da0a6dfa676adc"
+    },
+    "sdk-all-sqlite.json": {
+      "passed": 1330,
+      "failed": 0,
+      "pending": 0,
+      "rawSha256": "c67fc5e8e0c85e5358232b988a33cc5e386cb6a9d499b9cad0aadb6a96b6a27d"
+    },
+    "api-startup.json": {
+      "passed": 7,
+      "failed": 0,
+      "pending": 0,
+      "rawSha256": "ee315013ecf13ff9f94cfa047d94e4e4491c58abb6b3dd37c8b086a20991c6c0"
+    },
+    "filesystem-full.json": {
+      "rawSha256": "4d7544b964a1c6f52fcda0ced7d0fa64d696a2d4a8e343d1a4ca6b1277a2e71b",
+      "source": "cda3ebace5802d02439259722d616184174162a9",
+      "completed": true,
+      "caseCount": 4
+    },
+    "logical-cli.json": {
+      "rawSha256": "2e0b778c5f5be05fc3b1166d8969225cb9194573d8c419a9d0f9ea0ebacd8aae",
+      "source": "cda3ebace5802d02439259722d616184174162a9",
+      "checks": [
+        "built dump both stores",
+        "built dry run preserves both commits and values",
+        "built late input refusal preserves both stores",
+        "built populated restore preserves bytes, embeddings and monotonic commit",
+        "built overwrite refusal preserves both archives"
+      ]
+    },
+    "profile-conversion.json": {
+      "rawSha256": "33832a6eb5e1685267c8903547caaec040de36fd47d7f65d0ed82722621c0f46",
+      "source": "cda3ebace5802d02439259722d616184174162a9",
+      "checks": [
+        "both native stores converted and reopened through host; settings, typed/search/vector data, history, media, secrets and pack-owned bytes retained; post-conversion write survives reopen",
+        "absent history remains absent until normal host boot creates it",
+        "late native history refusal removes owned output after primary conversion and preserves source",
+        "active managed writer and running app refuse without deleting incumbent claims",
+        "existing outputs, source overlap/aliases and linked source content refuse"
+      ]
+    },
+    "profile-crash.json": {
+      "rawSha256": "48e55561b06ac0a91258191293e5c7ab88dc4ce3c576a750b449b9b6b58e6764",
+      "source": "cda3ebace5802d02439259722d616184174162a9",
+      "caseCount": 5
+    }
+  },
+  "convertedApi": {
+    "source": "cda3ebace5802d02439259722d616184174162a9",
+    "nativeBaselineBoots": 1,
+    "sqliteBoots": 2,
+    "livePackUpdates": 3,
+    "postRestartDataRetained": true,
+    "nativeSourceUnchanged": true,
+    "historyRetained": true,
+    "settingsRetained": true,
+    "mediaRetained": true
+  }
+}

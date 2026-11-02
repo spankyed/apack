@@ -1,0 +1,12 @@
+
+ RUN  v3.2.7 /electron/packages/repo-checks
+
+ ✓ tests/chain-inputs.spec.ts (64 tests) 1387ms
+ ✓ tests/repro.spec.ts (14 tests) 23ms
+
+ Test Files  2 passed (2)
+      Tests  78 passed (78)
+   Start at  15:11:51
+   Duration  3.14s (transform 542ms, setup 14ms, collect 1.48s, tests 1.41s, environment 0ms, prepare 78ms)
+
+JSON report written to /results/coverage-routing.json

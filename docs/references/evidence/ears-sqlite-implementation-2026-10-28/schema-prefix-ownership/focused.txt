@@ -1,0 +1,27 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/schema-admission.spec.ts tests/sqlite/index-builds.spec.ts tests/engine/sqlite-operations.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 14358ms
+   ✓ SQLite operational feasibility > selects adjacency and relation payloads without a binding call per source or edge  7415ms
+   ✓ SQLite operational feasibility > does not serialize transport envelopes or read answers  995ms
+   ✓ SQLite operational feasibility > replaces logical values when the source and destination have different physical field slots  997ms
+   ✓ SQLite operational feasibility > explains actual FTS and vector statements with their original bindings  620ms
+   ✓ SQLite operational feasibility > bounds explain capture while counting every executed query statement  421ms
+   ✓ SQLite operational feasibility > reopens lossless payloads, FTS and embeddings, including read-only access  448ms
+   ✓ SQLite operational feasibility > backs up and replaces a populated destination with text, relations and vectors intact  411ms
+   ✓ SQLite operational feasibility > rolls back primary, FTS and pending-vector changes together  635ms
+   ✓ SQLite operational feasibility > admits new types and value indexes over existing data, and refuses stale handles  706ms
+   ✓ SQLite operational feasibility > keeps the incumbent intact when replacement fails midway  614ms
+ ✓ tests/sqlite/index-builds.spec.ts (9 tests) 999ms
+   ✓ yielding value-index admission > resumes a committed batch cursor after a real killed process  344ms
+ ✓ tests/sqlite/schema-admission.spec.ts (2 tests) 182ms
+
+ Test Files  3 passed (3)
+      Tests  29 passed (29)
+   Start at  14:07:02
+   Duration  16.64s (transform 456ms, setup 20ms, collect 698ms, tests 15.54s, environment 0ms, prepare 142ms)
+

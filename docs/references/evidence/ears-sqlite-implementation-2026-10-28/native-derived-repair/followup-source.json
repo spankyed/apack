@@ -1,0 +1,65 @@
+{
+  "base": "212b819db6f505a87e44cc93cb3d3d0967c424e8",
+  "nativePin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+  "broadValidatedInputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "d7b44e606cc058b6f8a6d5c51bf5f8becbd843feff57567aca7cf8783622f9c1",
+    "packages/apack-ears/src/sqlite/audit.ts": "e283bb1b9c4e8934b407876ecd7640782a49e227bd39ca3788967da207d8a335",
+    "packages/apack-ears/src/sqlite/database.ts": "dc0c5776f838eb44ed4312bf0d89a97e72e0135adcc9b8d736108f0498e1fbfa",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "79c6d80bb680b1ce8005894dabb28f5bd8bdb7819f01c13ffc8f921a471f1616",
+    "packages/apack-ears/src/sqlite/index.ts": "02214f037435299de097f78c60dd8982d55064466c049ae8f1d1df7bb808b977",
+    "packages/apack-ears/src/sqlite/vector-audit.ts": "4fd6308ad42e51a46fd7d87ce1e417144d6d4b6799890fa3817832856d1f03ae",
+    "packages/apack-ears/tests/sqlite/vector-audit.spec.ts": "f3f7ea7930be0a9f72d5fb97ebdc586826bc25d87e3675f8dbbee902949d98d7",
+    "packages/apack-ears/src/sqlite/vector-repair.ts": "74505664affc7b4656e2acd6bb9156b96979d0dbd82256d303cd781624e1ba76"
+  },
+  "finalInputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "48c6d96339979dce9d3908ff43f625482edb388a70b81f28c2ea25fe23ffdb1a",
+    "packages/apack-ears/src/sqlite/audit.ts": "e283bb1b9c4e8934b407876ecd7640782a49e227bd39ca3788967da207d8a335",
+    "packages/apack-ears/src/sqlite/database.ts": "dc0c5776f838eb44ed4312bf0d89a97e72e0135adcc9b8d736108f0498e1fbfa",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "79c6d80bb680b1ce8005894dabb28f5bd8bdb7819f01c13ffc8f921a471f1616",
+    "packages/apack-ears/src/sqlite/index.ts": "02214f037435299de097f78c60dd8982d55064466c049ae8f1d1df7bb808b977",
+    "packages/apack-ears/src/sqlite/vector-audit.ts": "4fd6308ad42e51a46fd7d87ce1e417144d6d4b6799890fa3817832856d1f03ae",
+    "packages/apack-ears/tests/sqlite/vector-audit.spec.ts": "fba6ed0d4a350aa91c2c86a6c82c327fcab38349c4b5280f3b46549d472ecbab",
+    "packages/apack-ears/src/sqlite/vector-repair.ts": "74505664affc7b4656e2acd6bb9156b96979d0dbd82256d303cd781624e1ba76"
+  },
+  "followupChecks": [
+    {
+      "label": "all-native-recovery",
+      "exitCode": 0,
+      "args": [
+        "node",
+        "scripts/with-source.mjs",
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--maxWorkers=1",
+        "--reporter=default",
+        "--reporter=json",
+        "--project",
+        "@apackdev/ears",
+        "packages/apack-ears/tests/sqlite/vector-audit.spec.ts",
+        "--outputFile=/results/all-native-recovery.json"
+      ]
+    },
+    {
+      "label": "api-normalized-check",
+      "exitCode": 0,
+      "args": [
+        "node",
+        "node_modules/tsx/dist/cli.mjs",
+        "scripts/api-reports.ts",
+        "packages/apack-ears"
+      ]
+    },
+    {
+      "label": "ears-types-followup",
+      "exitCode": 0,
+      "args": [
+        "npm",
+        "run",
+        "typecheck",
+        "-w",
+        "@apackdev/ears"
+      ]
+    }
+  ]
+}

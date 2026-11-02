@@ -1,0 +1,8 @@
+{
+  "recipeSource": "290b902f2ca6d001fd522d040fc911397bfc207f",
+  "image": "python@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159",
+  "platformImage": "sha256:ff710677e697054c516f12c53c92166f1aef075f21b2a593f4c615e522112b4e",
+  "arch": "arm64",
+  "privateCache": "/private/tmp/ears-vector-corpus-cache/qdrant-3small-v1",
+  "rawPayloadCommitted": false
+}

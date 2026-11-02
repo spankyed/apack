@@ -1,0 +1,18 @@
+{
+  "source": "31c6c751b5ae7f3206a6a2948bf4c44d36a24e0e",
+  "earsPassed": 595,
+  "sqliteCasesPassed": 286,
+  "selectedTextPassed": 16,
+  "selectedTextTotal": 16,
+  "maintenanceCasesPassed": 9,
+  "logicalSnapshotCasesPassed": 5,
+  "logicalHostCasesPassed": 9,
+  "logicalHostSkipped": [
+    {
+      "name": "reports a published but unsynchronized directory truthfully and retains its complete archive",
+      "status": "skipped"
+    }
+  ],
+  "hostPassed": 118,
+  "recoveryCasesPassed": 33
+}

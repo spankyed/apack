@@ -1,0 +1,751 @@
+[
+  {
+    "control": "full-watch-workload",
+    "qualification": false,
+    "budgets": {
+      "admissionMs": {
+        "actual": 4.144222000000809,
+        "limit": 100
+      },
+      "searchLookupP99Ms": {
+        "actual": 5.306311000007554,
+        "limit": 16
+      },
+      "operationP99Ms": {
+        "actual": 8.306238999997731,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 38.031228000007104,
+        "limit": 16
+      },
+      "turnWaitP99Ms": {
+        "actual": 30.920074999998178,
+        "limit": 16
+      },
+      "heartbeatDelayP99Ms": {
+        "actual": 97.40293900000688,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 5314832,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 163895568,
+        "limit": 208858464
+      }
+    },
+    "spanStats": [
+      {
+        "phase": "seed",
+        "kind": "watch-point",
+        "count": 50,
+        "totalMs": 2.6039700000055745,
+        "p99Ms": 0.7701280000001134,
+        "maxMs": 0.7701280000001134
+      },
+      {
+        "phase": "seed",
+        "kind": "watch-query",
+        "count": 3,
+        "totalMs": 9.54136699999981,
+        "p99Ms": 5.039934999998877,
+        "maxMs": 5.039934999998877
+      },
+      {
+        "phase": "build",
+        "kind": "watch-point",
+        "count": 9627,
+        "totalMs": 796.2898069998773,
+        "p99Ms": 0.3959599999943748,
+        "maxMs": 40.914363000003505
+      },
+      {
+        "phase": "build",
+        "kind": "watch-search",
+        "count": 9387,
+        "totalMs": 2903.6655860002847,
+        "p99Ms": 3.4930549999990035,
+        "maxMs": 177.30800299999828
+      },
+      {
+        "phase": "build",
+        "kind": "background",
+        "count": 9578,
+        "totalMs": 15639.200987999995,
+        "p99Ms": 22.284750999999233,
+        "maxMs": 126.96056200000749
+      },
+      {
+        "phase": "build",
+        "kind": "foreground-write",
+        "count": 9577,
+        "totalMs": 8903.81825399981,
+        "p99Ms": 15.253641000002972,
+        "maxMs": 158.2463049999933
+      },
+      {
+        "phase": "build",
+        "kind": "foreground-lookup",
+        "count": 9577,
+        "totalMs": 39241.582915999716,
+        "p99Ms": 53.252409000000625,
+        "maxMs": 156.34734000000026
+      },
+      {
+        "phase": "build",
+        "kind": "watch-query",
+        "count": 6167,
+        "totalMs": 22900.60768900028,
+        "p99Ms": 43.60358100000303,
+        "maxMs": 220.28208199999062
+      },
+      {
+        "phase": "gc",
+        "kind": "watch-point",
+        "count": 12553,
+        "totalMs": 1311.2941969995882,
+        "p99Ms": 0.4720439999946393,
+        "maxMs": 60.88423299998976
+      },
+      {
+        "phase": "gc",
+        "kind": "background",
+        "count": 12503,
+        "totalMs": 5180.449532997911,
+        "p99Ms": 3.555804999981774,
+        "maxMs": 74.32749199998216
+      },
+      {
+        "phase": "gc",
+        "kind": "foreground-write",
+        "count": 12503,
+        "totalMs": 4876.278287000809,
+        "p99Ms": 3.2822209999721963,
+        "maxMs": 96.03799200002686
+      },
+      {
+        "phase": "gc",
+        "kind": "foreground-lookup",
+        "count": 12503,
+        "totalMs": 35831.08130199932,
+        "p99Ms": 25.077927999998792,
+        "maxMs": 109.47853799999575
+      },
+      {
+        "phase": "gc",
+        "kind": "watch-query",
+        "count": 6780,
+        "totalMs": 20142.893680000052,
+        "p99Ms": 23.707173000002513,
+        "maxMs": 104.26318500000343
+      }
+    ],
+    "stallsAbove16ms": 1595,
+    "stallsByPhase": {
+      "build": 1092,
+      "gc": 503
+    },
+    "stallOverlapTotalMs": {
+      "foreground-write": 5260.627348999882,
+      "background": 6119.175197000019,
+      "watch-search": 1775.8172680001517,
+      "foreground-lookup": 26254.240310999983,
+      "watch-point": 554.4195839996428,
+      "watch-query": 18072.384615000774
+    },
+    "worstStalls": [
+      {
+        "phase": "build",
+        "delayMs": 260.654555000001,
+        "at": 67517.485967,
+        "overlapMs": {
+          "background": 59.087085999999545,
+          "foreground-write": 158.2463049999933,
+          "foreground-lookup": 8.996200999987195,
+          "watch-query": 33.873377999989316
+        },
+        "uncoveredMs": 0.4515850000316277
+      },
+      {
+        "phase": "build",
+        "delayMs": 252.83115100000578,
+        "at": 117445.919618,
+        "overlapMs": {
+          "background": 6.761232999997446,
+          "foreground-write": 0.9862119999888819,
+          "foreground-lookup": 2.702592999994522,
+          "watch-search": 34.70129799999995
+        },
+        "uncoveredMs": 207.67981500002497
+      },
+      {
+        "phase": "build",
+        "delayMs": 224.03754299999855,
+        "at": 98304.665182,
+        "overlapMs": {
+          "foreground-write": 0.019906000001356006,
+          "foreground-lookup": 1.8418410000012955,
+          "watch-query": 221.8848799999978
+        },
+        "uncoveredMs": 0.2909159999981057
+      },
+      {
+        "phase": "build",
+        "delayMs": 206.6071430000011,
+        "at": 72437.284157,
+        "overlapMs": {
+          "background": 4.265098999996553,
+          "foreground-write": 0.324084000007133,
+          "foreground-lookup": 2.1532589999987977,
+          "watch-search": 0.2312510000047041,
+          "watch-query": 62.339569000017946
+        },
+        "uncoveredMs": 137.29388099997595
+      },
+      {
+        "phase": "build",
+        "delayMs": 205.09530400000222,
+        "at": 75540.870701,
+        "overlapMs": {
+          "background": 1.2019629999995232,
+          "foreground-write": 0.2841259999986505,
+          "foreground-lookup": 100.71871400000236,
+          "watch-search": 0.24620999999751803,
+          "watch-query": 4.958477000007406,
+          "watch-point": 0.07479199999943376
+        },
+        "uncoveredMs": 97.61102199999732
+      },
+      {
+        "phase": "build",
+        "delayMs": 198.2969030000022,
+        "at": 60636.717253,
+        "overlapMs": {
+          "background": 64.87244199999986,
+          "foreground-write": 103.92801699999836,
+          "foreground-lookup": 2.649635000001581,
+          "watch-search": 0.23579199999949196,
+          "watch-query": 26.047763999995368
+        },
+        "uncoveredMs": 0.5632530000075349
+      },
+      {
+        "phase": "build",
+        "delayMs": 192.3944230000052,
+        "at": 76574.081558,
+        "overlapMs": {
+          "watch-query": 192.25654800000484
+        },
+        "uncoveredMs": 0.13787500000034925
+      },
+      {
+        "phase": "build",
+        "delayMs": 185.86044000000402,
+        "at": 65813.29137,
+        "overlapMs": {
+          "background": 78.02915800000483,
+          "watch-search": 0.4630840000027092,
+          "watch-query": 73.2527759999939,
+          "foreground-write": 30.831949999992503,
+          "foreground-lookup": 2.7179270000051474
+        },
+        "uncoveredMs": 0.5655450000049314
+      },
+      {
+        "phase": "build",
+        "delayMs": 184.8644370000111,
+        "at": 95182.69061,
+        "overlapMs": {
+          "watch-query": 184.72714400000405
+        },
+        "uncoveredMs": 0.13729300000704825
+      },
+      {
+        "phase": "build",
+        "delayMs": 183.482222000006,
+        "at": 77158.475055,
+        "overlapMs": {
+          "background": 1.2875050000002375,
+          "foreground-write": 0.29450099999667145,
+          "foreground-lookup": 2.5365510000119684,
+          "watch-query": 4.60101699999359,
+          "watch-point": 0.09637600000132807,
+          "watch-search": 0.35791899998730514
+        },
+        "uncoveredMs": 174.3083530000149
+      },
+      {
+        "phase": "gc",
+        "delayMs": 181.52659100000164,
+        "at": 128228.494972,
+        "overlapMs": {
+          "background": 32.47166399999696,
+          "foreground-write": 0.8700870000029681,
+          "foreground-lookup": 6.295106999998097,
+          "watch-query": 28.45577400000184
+        },
+        "uncoveredMs": 113.43395900000178
+      },
+      {
+        "phase": "build",
+        "delayMs": 179.59216600000218,
+        "at": 103049.944796,
+        "overlapMs": {
+          "foreground-write": 0.24108399999386165,
+          "foreground-lookup": 1.6398390000103973,
+          "watch-search": 177.30800299999828
+        },
+        "uncoveredMs": 0.40323999999964144
+      },
+      {
+        "phase": "build",
+        "delayMs": 177.92478500001016,
+        "at": 72081.919483,
+        "overlapMs": {
+          "background": 6.5764409999974305,
+          "foreground-write": 1.5156310000020312,
+          "foreground-lookup": 13.764219000004232,
+          "watch-query": 7.3440279999922495,
+          "watch-search": 0.27291800000239164
+        },
+        "uncoveredMs": 148.45154800001183
+      },
+      {
+        "phase": "build",
+        "delayMs": 177.8288259999972,
+        "at": 73714.541101,
+        "overlapMs": {
+          "foreground-write": 0.10428100000717677,
+          "foreground-lookup": 148.0349339999957,
+          "watch-search": 0.27333599999838043,
+          "watch-query": 28.61706600000616
+        },
+        "uncoveredMs": 0.7992089999897871
+      },
+      {
+        "phase": "build",
+        "delayMs": 173.0168080000003,
+        "at": 66156.670457,
+        "overlapMs": {
+          "watch-query": 172.85701599999447
+        },
+        "uncoveredMs": 0.1597920000058366
+      },
+      {
+        "phase": "build",
+        "delayMs": 172.8958070000008,
+        "at": 52025.155175,
+        "overlapMs": {
+          "background": 0.7514200000005076,
+          "foreground-write": 0.33941699999559205,
+          "foreground-lookup": 7.3217769999973825,
+          "watch-point": 0.22487500000715954,
+          "watch-search": 0.3427930000034394
+        },
+        "uncoveredMs": 163.9155249999967
+      },
+      {
+        "phase": "build",
+        "delayMs": 166.62245000000257,
+        "at": 65253.7638,
+        "overlapMs": {
+          "background": 0.9973670000035781,
+          "foreground-write": 0.39541800000006333,
+          "foreground-lookup": 156.34734000000026,
+          "watch-query": 2.494509999996808,
+          "watch-search": 0.30016800000157673,
+          "watch-point": 0.06583400000090478
+        },
+        "uncoveredMs": 6.0218129999993835
+      },
+      {
+        "phase": "build",
+        "delayMs": 166.1642819999979,
+        "at": 94336.817626,
+        "overlapMs": {
+          "foreground-write": 19.680853999991086,
+          "foreground-lookup": 139.65977700000803,
+          "watch-search": 0.24108399999386165,
+          "watch-point": 0.07649999999557622,
+          "watch-query": 6.050480999998399
+        },
+        "uncoveredMs": 0.4555860000109533
+      },
+      {
+        "phase": "build",
+        "delayMs": 164.0303159999894,
+        "at": 116070.740679,
+        "overlapMs": {
+          "background": 18.306695000006584,
+          "watch-search": 0.21645899998839013,
+          "watch-query": 80.92922200000612,
+          "foreground-write": 5.200436999992235,
+          "foreground-lookup": 47.12326100000064
+        },
+        "uncoveredMs": 12.254241999995429
+      },
+      {
+        "phase": "build",
+        "delayMs": 162.49414400001115,
+        "at": 70844.498772,
+        "overlapMs": {
+          "background": 1.7935489999945275,
+          "foreground-write": 0.29258500000287313,
+          "foreground-lookup": 8.642407000006642,
+          "watch-search": 0.24504199999500997,
+          "watch-query": 10.614956000004895
+        },
+        "uncoveredMs": 140.9056050000072
+      }
+    ]
+  },
+  {
+    "control": "no-query-watches",
+    "qualification": false,
+    "budgets": {
+      "admissionMs": {
+        "actual": 7.595821000000797,
+        "limit": 100
+      },
+      "searchLookupP99Ms": {
+        "actual": 2.1957580000016605,
+        "limit": 16
+      },
+      "operationP99Ms": {
+        "actual": 3.5409709999948973,
+        "limit": 16
+      },
+      "lookupP99Ms": {
+        "actual": 20.45974500000011,
+        "limit": 16
+      },
+      "turnWaitP99Ms": {
+        "actual": 9.409993999994185,
+        "limit": 16
+      },
+      "heartbeatDelayP99Ms": {
+        "actual": 44.73228399999789,
+        "limit": 16
+      },
+      "maxObservedWalBytes": {
+        "actual": 4507312,
+        "limit": 16777216
+      },
+      "maxObservedFilesBytes": {
+        "actual": 163006128,
+        "limit": 208858464
+      }
+    },
+    "spanStats": [
+      {
+        "phase": "seed",
+        "kind": "watch-point",
+        "count": 50,
+        "totalMs": 2.5151760000007926,
+        "p99Ms": 0.6499610000009852,
+        "maxMs": 0.6499610000009852
+      },
+      {
+        "phase": "build",
+        "kind": "background",
+        "count": 9468,
+        "totalMs": 10488.382683000487,
+        "p99Ms": 8.874782999999297,
+        "maxMs": 83.22323200000392
+      },
+      {
+        "phase": "build",
+        "kind": "foreground-write",
+        "count": 9468,
+        "totalMs": 5626.963827999947,
+        "p99Ms": 5.639687999995658,
+        "maxMs": 103.25714100000187
+      },
+      {
+        "phase": "build",
+        "kind": "foreground-lookup",
+        "count": 9468,
+        "totalMs": 26925.240096999616,
+        "p99Ms": 21.43770599999698,
+        "maxMs": 87.53545699999813
+      },
+      {
+        "phase": "build",
+        "kind": "watch-point",
+        "count": 9517,
+        "totalMs": 690.4100109999617,
+        "p99Ms": 0.36300199999823235,
+        "maxMs": 28.38864900000044
+      },
+      {
+        "phase": "gc",
+        "kind": "watch-point",
+        "count": 12553,
+        "totalMs": 1186.3510259993127,
+        "p99Ms": 0.5326269999932265,
+        "maxMs": 28.237399000005098
+      },
+      {
+        "phase": "gc",
+        "kind": "background",
+        "count": 12503,
+        "totalMs": 4553.2178109989545,
+        "p99Ms": 2.734593000001041,
+        "maxMs": 86.18636799999513
+      },
+      {
+        "phase": "gc",
+        "kind": "foreground-write",
+        "count": 12503,
+        "totalMs": 4103.0805040013365,
+        "p99Ms": 2.2837169999984326,
+        "maxMs": 136.07584900000074
+      },
+      {
+        "phase": "gc",
+        "kind": "foreground-lookup",
+        "count": 12503,
+        "totalMs": 33244.50361999975,
+        "p99Ms": 18.790030000003753,
+        "maxMs": 107.86645100000896
+      }
+    ],
+    "stallsAbove16ms": 433,
+    "stallsByPhase": {
+      "build": 255,
+      "gc": 178
+    },
+    "stallOverlapTotalMs": {
+      "foreground-lookup": 8363.815340000006,
+      "foreground-write": 1577.4590370000296,
+      "background": 1681.816581999974,
+      "watch-point": 247.18193699999028
+    },
+    "worstStalls": [
+      {
+        "phase": "build",
+        "delayMs": 189.72763099999793,
+        "at": 18193.396209,
+        "overlapMs": {
+          "background": 1.4720889999989595,
+          "foreground-write": 42.78874699999869,
+          "foreground-lookup": 2.527635000002192,
+          "watch-point": 0.0796249999984866
+        },
+        "uncoveredMs": 142.8595349999996
+      },
+      {
+        "phase": "gc",
+        "delayMs": 150.40989199999603,
+        "at": 71959.660248,
+        "overlapMs": {
+          "foreground-write": 134.9620409999916,
+          "foreground-lookup": 15.225349000000278,
+          "watch-point": 0.16083399999479298
+        },
+        "uncoveredMs": 0.061668000009376556
+      },
+      {
+        "phase": "build",
+        "delayMs": 126.92842799999926,
+        "at": 45076.058244,
+        "overlapMs": {
+          "watch-point": 0.638544000001275
+        },
+        "uncoveredMs": 126.28988399999798
+      },
+      {
+        "phase": "build",
+        "delayMs": 119.02710600000137,
+        "at": 52252.283731,
+        "overlapMs": {
+          "background": 68.43220599999768,
+          "foreground-write": 10.615707000004477,
+          "foreground-lookup": 13.480968000003486,
+          "watch-point": 0.16124999999738066
+        },
+        "uncoveredMs": 26.336974999998347
+      },
+      {
+        "phase": "build",
+        "delayMs": 112.62458199999674,
+        "at": 43873.811272,
+        "overlapMs": {
+          "foreground-write": 101.99212499999703,
+          "foreground-lookup": 2.827051999993273,
+          "watch-point": 0.08929200000420678
+        },
+        "uncoveredMs": 7.716113000002224
+      },
+      {
+        "phase": "gc",
+        "delayMs": 106.91114399999788,
+        "at": 71670.751111,
+        "overlapMs": {
+          "foreground-lookup": 106.70922699999937,
+          "watch-point": 0.14487600000575185
+        },
+        "uncoveredMs": 0.057040999992750585
+      },
+      {
+        "phase": "gc",
+        "delayMs": 105.97563999998965,
+        "at": 86357.78506,
+        "overlapMs": {
+          "background": 14.305554999999003,
+          "foreground-write": 0.3420429999969201,
+          "foreground-lookup": 22.255709999997634,
+          "watch-point": 0.14533400000073016
+        },
+        "uncoveredMs": 68.92699799999536
+      },
+      {
+        "phase": "build",
+        "delayMs": 100.7917460000026,
+        "at": 41905.770314,
+        "overlapMs": {
+          "foreground-lookup": 52.71564700000454,
+          "watch-point": 28.38864900000044
+        },
+        "uncoveredMs": 19.687449999997625
+      },
+      {
+        "phase": "build",
+        "delayMs": 100.7613280000005,
+        "at": 30554.99234,
+        "overlapMs": {
+          "background": 8.932575000002544,
+          "foreground-write": 0.29016799999953946,
+          "foreground-lookup": 13.838802000002033,
+          "watch-point": 0.08154199999989942
+        },
+        "uncoveredMs": 77.61824099999649
+      },
+      {
+        "phase": "gc",
+        "delayMs": 94.10717899999872,
+        "at": 93258.856914,
+        "overlapMs": {
+          "foreground-lookup": 93.90342799999053,
+          "watch-point": 0.15487600000051316
+        },
+        "uncoveredMs": 0.04887500000768341
+      },
+      {
+        "phase": "build",
+        "delayMs": 89.19516000000294,
+        "at": 61266.524308,
+        "overlapMs": {
+          "background": 61.60255600000528,
+          "foreground-write": 0.949837000000116,
+          "foreground-lookup": 26.165765999998257,
+          "watch-point": 0.09145799999532755
+        },
+        "uncoveredMs": 0.38554300000396324
+      },
+      {
+        "phase": "build",
+        "delayMs": 86.27789900000062,
+        "at": 56657.273341,
+        "overlapMs": {
+          "foreground-lookup": 84.3497669999997,
+          "watch-point": 0.24650100000144448
+        },
+        "uncoveredMs": 1.68163099999947
+      },
+      {
+        "phase": "build",
+        "delayMs": 85.49697899999592,
+        "at": 61010.627963,
+        "overlapMs": {
+          "background": 4.468266999996558,
+          "foreground-write": 0.6835019999998622,
+          "foreground-lookup": 12.600422999996226,
+          "watch-point": 0.07550100000662496
+        },
+        "uncoveredMs": 67.66928599999665
+      },
+      {
+        "phase": "gc",
+        "delayMs": 85.2279370000033,
+        "at": 87882.05171,
+        "overlapMs": {
+          "background": 82.16909199999645,
+          "foreground-write": 0.47637599999143276,
+          "foreground-lookup": 2.4124679999949876,
+          "watch-point": 0.07474999999976717
+        },
+        "uncoveredMs": 0.09525100002065301
+      },
+      {
+        "phase": "gc",
+        "delayMs": 84.09180700000434,
+        "at": 73662.521742,
+        "overlapMs": {
+          "foreground-lookup": 83.862432000009,
+          "watch-point": 0.17445900000166148
+        },
+        "uncoveredMs": 0.05491599999368191
+      },
+      {
+        "phase": "build",
+        "delayMs": 82.94259500000044,
+        "at": 39288.275686,
+        "overlapMs": {
+          "foreground-lookup": 82.49917699999787,
+          "watch-point": 0.08283300000039162
+        },
+        "uncoveredMs": 0.36058500000217464
+      },
+      {
+        "phase": "build",
+        "delayMs": 82.31984200000443,
+        "at": 44138.293357,
+        "overlapMs": {
+          "background": 75.22985700000572,
+          "foreground-write": 0.9702949999991688,
+          "foreground-lookup": 5.652562999996007,
+          "watch-point": 0.07749999999941792
+        },
+        "uncoveredMs": 0.3896270000041113
+      },
+      {
+        "phase": "build",
+        "delayMs": 81.99759099999937,
+        "at": 50080.841419,
+        "overlapMs": {
+          "background": 6.425358000000415,
+          "foreground-write": 0.33141800000157673,
+          "foreground-lookup": 2.4303429999999935,
+          "watch-point": 0.054499999998370185
+        },
+        "uncoveredMs": 72.75597199999902
+      },
+      {
+        "phase": "build",
+        "delayMs": 81.79742400000396,
+        "at": 62882.374515,
+        "overlapMs": {
+          "foreground-write": 57.44120700000349,
+          "foreground-lookup": 23.089712000000873,
+          "watch-point": 0.09458299999823794
+        },
+        "uncoveredMs": 1.1719220000013593
+      },
+      {
+        "phase": "build",
+        "delayMs": 80.34462599999824,
+        "at": 49351.511155,
+        "overlapMs": {
+          "background": 1.2450459999963641,
+          "foreground-write": 1.3269220000001951,
+          "foreground-lookup": 11.598544000000402,
+          "watch-point": 0.09079200000269338
+        },
+        "uncoveredMs": 66.08332199999859
+      }
+    ]
+  }
+]

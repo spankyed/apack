@@ -1,0 +1,140 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/search-recovery.spec.ts (39 tests | 1 failed) 7605ms
+   ✓ SQLite missing search storage recovery > rebuilds damaged postings in fresh generations without changing primary commits 160ms
+   ✓ SQLite missing search storage recovery > audits private reconstructed contents without repairing the incumbent 224ms
+   ✓ SQLite missing search storage recovery > detects missing external-content postings even when stored documents are unchanged 127ms
+   ✓ SQLite missing search storage recovery > reports undecodable primary values outside every search input 57ms
+   ✓ SQLite missing search storage recovery > counts all orphan primary values while retaining at most 100 issue messages 63ms
+   ✓ SQLite missing search storage recovery > reports malformed stored embeddings instead of accepting identical corrupted copies 57ms
+   ✓ SQLite missing search storage recovery > reports an identity counter that could reuse existing primary sequences 73ms
+   ✓ SQLite missing search storage recovery > detects stale list membership independently of the copied acceleration table 297ms
+   ✓ SQLite missing search storage recovery > proves absent value fields ready offline while preserving backfill of present fields 49ms
+   ✓ SQLite missing search storage recovery > does not certify an absent field when its authoritative primary row is missing 42ms
+   ✓ SQLite missing search storage recovery > rolls membership reconstruction back if later index admission fails 42ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed before its commit  349ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed after its commit 283ms
+   ✓ SQLite missing search storage recovery > removes failed audit scratch and releases write ownership after a snapshot failure 44ms
+   ✓ SQLite missing search storage recovery > preserves the audit failure together with snapshot close failure and still removes scratch 81ms
+   ✓ SQLite missing search storage recovery > refuses rebuild on read-only, open-unit and stopped owners without changing the catalog 55ms
+   ✓ SQLite missing search storage recovery > rolls back failed rebuild admission and keeps current generations usable 56ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram table in a private background generation 116ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram documents in a private background generation 112ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram owner index in a private background generation 101ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ai in a private background generation 103ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ad in a private background generation 99ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger au in a private background generation 100ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text table in a private background generation 106ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text documents in a private background generation  1252ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text owner index in a private background generation  2099ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text metadata in a private background generation  319ms
+   × SQLite missing search storage recovery > refuses read-only and reconstructs vector chunks in a private background generation 131ms
+     → expected +0 to be 2 // Object.is equality
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs pending vector index in a private background generation 98ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector reuse index in a private background generation 98ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector retirement index in a private background generation 97ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text retirement index in a private background generation 98ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram shadow index in a private background generation 109ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text shadow content in a private background generation 107ms
+   ✓ SQLite missing search storage recovery > rebuilds stale external-content postings after a missing update trigger 59ms
+   ✓ SQLite missing search storage recovery > rolls back partial postings on a background repair failure, refuses incomplete reads and retries cleanly 69ms
+   ✓ SQLite missing search storage recovery > preserves repair and rollback errors, stops scheduling and discards the transaction on close 66ms
+   ✓ SQLite missing search storage recovery > opens healthy storage while another handle owns a write unit and reads only its committed state 55ms
+   ✓ SQLite missing search storage recovery > pages only affected search inputs and leaves a healthy reopen free of hydration 149ms
+ ✓ tests/sqlite/search-builds.spec.ts (19 tests) 2490ms
+   ✓ shared background search generations > recovers a search cursor committed by a process killed before readiness  316ms
+   ✓ shared background search generations > lets background-only work exit but keeps an explicit readiness wait alive until complete  530ms
+ ✓ tests/sqlite/text-limits.spec.ts (16 tests) 1002ms
+ ✓ tests/engine/search.spec.ts (11 tests) 610ms
+ ✓ tests/engine/model-based.spec.ts (2 tests) 19911ms
+   ✓ refuses, holds and answers what the model does  4633ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  15276ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 1868ms
+ ✓ tests/engine/watch-schedule.spec.ts (12 tests) 686ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 2861ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  427ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  398ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  393ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  405ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 2908ms
+   ✓ SQLite operational feasibility > replaces logical values when the source and destination have different physical field slots  305ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 3625ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 2371ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 1236ms
+ ✓ tests/sqlite/text-documents.spec.ts (10 tests) 1254ms
+   ✓ source-string FTS documents > bounds native owner masks without truncating either the masked or fallback answer  609ms
+ ✓ tests/sqlite/query-cost.spec.ts (18 tests) 1004ms
+ ✓ tests/sqlite/index-builds.spec.ts (9 tests) 886ms
+   ✓ yielding value-index admission > resumes a committed batch cursor after a real killed process  303ms
+ ✓ tests/sqlite/trigrams.spec.ts (7 tests) 606ms
+ ✓ tests/sqlite/text-typos.spec.ts (20 tests) 1187ms
+ ✓ tests/sqlite/values.spec.ts (10 tests) 321ms
+ ✓ tests/sqlite/schema-validation.spec.ts (49 tests) 2126ms
+ ✓ tests/sqlite/embeddings.spec.ts (8 tests) 543ms
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 417ms
+ ✓ tests/sqlite/commit-outcomes.spec.ts (8 tests) 537ms
+ ✓ tests/sqlite/logical-stage.spec.ts (7 tests) 1131ms
+ ✓ tests/engine/calls.spec.ts (9 tests) 538ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 541ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 167ms
+ ✓ tests/engine/vector.spec.ts (17 tests) 853ms
+ ✓ tests/sqlite/regex.spec.ts (11 tests) 455ms
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 16ms
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (4 tests) 1224ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  416ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  366ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (unawaited)  306ms
+ ✓ tests/engine/query-values.spec.ts (5 tests) 299ms
+ ✓ tests/engines.spec.ts (4 tests) 307ms
+ ✓ tests/engine/storage-port.spec.ts (3 tests) 199ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 176ms
+ ✓ tests/engine/maintenance.spec.ts (5 tests) 339ms
+ ✓ tests/sqlite/transaction-failures.spec.ts (4 tests) 280ms
+ ✓ tests/sqlite/statement-cache.spec.ts (6 tests) 461ms
+ ✓ tests/sqlite/wal-readers.spec.ts (1 test) 127ms
+ ✓ tests/sqlite/schema-admission.spec.ts (2 tests) 172ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 117ms
+ ✓ tests/storage-types.spec.ts (1 test) 3ms
+ ✓ tests/engine/search-relevance.spec.ts (32 tests) 131ms
+ ✓ tests/sqlite/source-node.spec.ts (1 test) 346ms
+   ✓ opens the app-only storage entry with plain Node source conditions and owned regex assets  345ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/search-recovery.spec.ts > SQLite missing search storage recovery > refuses read-only and reconstructs vector chunks in a private background generation
+AssertionError: expected +0 to be 2 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 0[39m
+
+ ❯ tests/sqlite/search-recovery.spec.ts:334:48
+    332|     expect(e.query('Row').search('databse').ids()).toEqual([]);
+    333|     if (name(text, tri) === 'chunks') {
+    334|       expect(e.pendingEmbeddings('Row').count).toBe(2);
+       |                                                ^
+    335|     } else {
+    336|       expect(e.pendingEmbeddings('Row').count).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 42 passed (43)
+      Tests  1 failed | 577 passed (578)
+   Start at  13:44:03
+   Duration  72.40s (transform 696ms, setup 67ms, collect 3.57s, tests 63.94s, environment 4ms, prepare 1.72s)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run

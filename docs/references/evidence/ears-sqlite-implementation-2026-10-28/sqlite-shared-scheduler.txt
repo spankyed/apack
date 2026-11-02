@@ -1,0 +1,10 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 203ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  01:11:30
+   Duration  701ms (transform 148ms, setup 10ms, collect 202ms, tests 203ms, environment 0ms, prepare 64ms)
+

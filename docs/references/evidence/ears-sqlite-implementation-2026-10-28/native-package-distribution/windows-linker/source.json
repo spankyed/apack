@@ -1,0 +1,12 @@
+{
+  "source": "38aecfe554134374be79621d971bf8e83a659d01",
+  "run": 41012481990,
+  "job": 123921247698,
+  "jobConclusion": "failure",
+  "failedStep": "Run ./.github/actions/elmdb",
+  "rawLogSha256": "be424992134f544a3f08f7d39759853d2ad2f6ecd88ab64448064ad9b8f93586",
+  "gzipSha256": "d31f0684542f2f55b7def065cd96edbbfcb748e6d1d9624f824c38a26b70ae12",
+  "evidence": "Rust invokes C:\\Program Files\\Git\\usr\\bin\\link.exe for quote/proc-macro2 before package production",
+  "fix": "Set the architecture-specific CARGO_TARGET linker to the absolute Microsoft linker from VCToolsInstallDir and the prepared host/target environment",
+  "qualification": "Exact Windows execution of the fix remains pending; sibling jobs in the original run continue"
+}

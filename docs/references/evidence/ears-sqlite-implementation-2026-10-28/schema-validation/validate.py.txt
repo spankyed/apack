@@ -1,0 +1,31 @@
+import json,os,pathlib,subprocess
+r=pathlib.Path('/metrics');o=pathlib.Path('/results');env=os.environ|{'EARS_EVALUATION_BACKEND':'sqlite'}
+def run(name,args):
+ p=subprocess.run(args,cwd=r,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(o/(name+'.txt')).write_text(p.stdout);return p
+p=run('types',['npm','run','typecheck','-w','@apackdev/ears']);assert p.returncode==0,p.stdout
+args=['npm','test','-w','@apackdev/ears','--','tests/sqlite/schema-validation.spec.ts','tests/sqlite/schema-admission.spec.ts','tests/sqlite/index-builds.spec.ts','tests/engine/sqlite-operations.spec.ts','tests/no-module-state.spec.ts']
+p=run('focused',args);assert p.returncode==0,p.stdout
+f=r/'packages/apack-ears/src/sqlite/schema-validation.ts';source=f.read_text()
+db=r/'packages/apack-ears/src/sqlite/database.ts';dbsource=db.read_text()
+mutations=[
+ ('shape','if (!compiled(input))','if (false)','unknown field option'),
+ ('reference','if (!Object.hasOwn(schema.types, type))','if (false)','undeclared reference'),
+ ('capability',"definition.cardinality !== 'many-to-many'",'false','relation cardinality'),
+ ('prefix','if (prefixes.has(prefix))','if (false)','duplicate prefix'),
+ ('json',"json(input, 'schema');",'/* mutation omits JSON-only validation */','non-JSON declaration metadata'),
+]
+try:
+ for name,before,after,pattern in mutations:
+  assert before in source;f.write_text(source.replace(before,after))
+  p=run('negative-'+name,['npm','test','-w','@apackdev/ears','--','tests/sqlite/schema-validation.spec.ts','-t',pattern]);assert p.returncode!=0 and 'AssertionError' in p.stdout,(name,p.stdout)
+  f.write_text(source)
+finally:f.write_text(source)
+try:
+ db.write_text(dbsource.replace('if (this.schemaPresent) {','if (false) {'))
+ p=run('negative-persisted',['npm','test','-w','@apackdev/ears','--','tests/sqlite/schema-validation.spec.ts','-t','malformed persisted']);assert p.returncode!=0 and 'AssertionError' in p.stdout,p.stdout
+finally:db.write_text(dbsource)
+p=run('restored',args);assert p.returncode==0,p.stdout
+p=run('all-sqlite',['npm','test','-w','@apackdev/ears','--','--reporter=json','--outputFile=/results/sqlite.json'])
+v=json.loads((o/'sqlite.json').read_text());failed=[a['fullName'] for t in v['testResults'] for a in t['assertionResults'] if a['status']=='failed']
+assert p.returncode==1 and len(failed)==3 and all('containing and matching' in n for n in failed),(p.returncode,failed,p.stdout)
+print(json.dumps({'passed':v['numPassedTests'],'failed':v['numFailedTests'],'knownFailures':failed}))

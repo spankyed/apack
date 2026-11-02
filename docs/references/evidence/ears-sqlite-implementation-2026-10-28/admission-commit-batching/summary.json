@@ -1,0 +1,192 @@
+{
+  "runs": [
+    {
+      "label": "auto-1000",
+      "size": 1000,
+      "admissionMs": 325.925111,
+      "commitCount": 36,
+      "commitTotalMs": 160.4449810000001,
+      "commitMaxMs": 14.41735000000017,
+      "projectionTotalMs": 41.10175000000049,
+      "projectionMaxMs": 1.662465000000111,
+      "heartbeat": {
+        "count": 115,
+        "p50": 0.3623800000000301,
+        "p95": 8.84774799999991,
+        "p99": 13.815102000000024,
+        "max": 14.516354999999749
+      },
+      "maxWalBytes": 4655632,
+      "finalCheckpointMs": 0.05208400000037727,
+      "maxRssKiB": 801332,
+      "modelSha256": "fc50da30b3ebd72ec44ad748882d5cd0d1d0667fab096801eb3d7a10a739d720",
+      "frozenHeartbeatPassed": true
+    },
+    {
+      "label": "manual-1000",
+      "size": 1000,
+      "admissionMs": 295.43265399999996,
+      "commitCount": 36,
+      "commitTotalMs": 142.3222860000003,
+      "commitMaxMs": 5.649272999999994,
+      "projectionTotalMs": 40.791540999999825,
+      "projectionMaxMs": 1.9716330000001108,
+      "heartbeat": {
+        "count": 106,
+        "p50": 0.3675879999998415,
+        "p95": 5.419443000000001,
+        "p99": 6.7238230000000385,
+        "max": 9.619627000000037
+      },
+      "maxWalBytes": 17419392,
+      "finalCheckpointMs": 16.397899999999936,
+      "maxRssKiB": 793504,
+      "modelSha256": "4e92cc6058cdb50e4f95418202ca2eea49728517f168028045164e1247e5f153",
+      "frozenHeartbeatPassed": true
+    },
+    {
+      "label": "sliced-auto-1000",
+      "size": 1000,
+      "admissionMs": 216.40112299999987,
+      "commitCount": 14,
+      "commitTotalMs": 77.38187500000004,
+      "commitMaxMs": 13.823161999999911,
+      "projectionTotalMs": 40.40160700000047,
+      "projectionMaxMs": 4.219761000000062,
+      "heartbeat": {
+        "count": 70,
+        "p50": 0.6111300000000028,
+        "p95": 9.179360000000088,
+        "p99": 17.22538200000008,
+        "max": 17.22538200000008
+      },
+      "maxWalBytes": 5141792,
+      "finalCheckpointMs": 8.332981000000018,
+      "maxRssKiB": 793628,
+      "modelSha256": "72b9788ec4af522560479ea6e274879d95bd1da56607f31a10919485c1c59de5",
+      "frozenHeartbeatPassed": false
+    },
+    {
+      "label": "auto-99900",
+      "size": 99900,
+      "admissionMs": 46189.726957,
+      "commitCount": 3126,
+      "commitTotalMs": 36941.19747299985,
+      "commitMaxMs": 374.7313490000088,
+      "projectionTotalMs": 6194.745528999978,
+      "projectionMaxMs": 25.06303800000751,
+      "heartbeat": {
+        "count": 4458,
+        "p50": 4.720055999998294,
+        "p95": 36.945080000004964,
+        "p99": 80.88113600001088,
+        "max": 376.14898100000573
+      },
+      "maxWalBytes": 4923432,
+      "finalCheckpointMs": 76.70403700000315,
+      "maxRssKiB": 1057776,
+      "modelSha256": "d3afc7d7ead5e1b273fbe20ceafd1b5285e6e4f4836acf1573836a4ac5568396",
+      "frozenHeartbeatPassed": false
+    },
+    {
+      "label": "manual-99900",
+      "size": 99900,
+      "admissionMs": 39346.74441200001,
+      "commitCount": 3126,
+      "commitTotalMs": 30241.761668999905,
+      "commitMaxMs": 2392.053291000004,
+      "projectionTotalMs": 6173.493523999976,
+      "projectionMaxMs": 18.068432999993092,
+      "heartbeat": {
+        "count": 4466,
+        "p50": 5.805812999999034,
+        "p95": 22.518534000002546,
+        "p99": 55.51734700000088,
+        "max": 2393.4407150000043
+      },
+      "maxWalBytes": 2158311472,
+      "finalCheckpointMs": 4558.637239000003,
+      "maxRssKiB": 1076780,
+      "modelSha256": "86d2b1683e0cb4ca683157383e2888128370b833c45269b2955655f51da673b4",
+      "frozenHeartbeatPassed": false
+    },
+    {
+      "label": "sliced-auto-99900",
+      "size": 99900,
+      "admissionMs": 17740.050292,
+      "commitCount": 1185,
+      "commitTotalMs": 10535.444094000195,
+      "commitMaxMs": 85.9654389999996,
+      "projectionTotalMs": 4777.863995000102,
+      "projectionMaxMs": 17.737339999999676,
+      "heartbeat": {
+        "count": 2414,
+        "p50": 0.7078800000017509,
+        "p95": 21.39693499999703,
+        "p99": 26.44011500000488,
+        "max": 94.54983999999968
+      },
+      "maxWalBytes": 5763912,
+      "finalCheckpointMs": 13.977662999997847,
+      "maxRssKiB": 1066516,
+      "modelSha256": "81b15f4c02ea5efba726e7409c59166d50942293b1fbdc3bc514d1493ca97098",
+      "frozenHeartbeatPassed": false
+    },
+    {
+      "label": "sliced-confirm",
+      "size": 99900,
+      "admissionMs": 18258.992600999998,
+      "commitCount": 1075,
+      "commitTotalMs": 11593.676675999894,
+      "commitMaxMs": 116.38531400000647,
+      "projectionTotalMs": 4319.273381999941,
+      "projectionMaxMs": 5.740014999995765,
+      "heartbeat": {
+        "count": 2276,
+        "p50": 0.6712550000011106,
+        "p95": 22.922898000004352,
+        "p99": 50.60022200000094,
+        "max": 119.726241999997
+      },
+      "maxWalBytes": 5714472,
+      "finalCheckpointMs": 0.08250100000441307,
+      "maxRssKiB": 1068856,
+      "modelSha256": "ae18ea81f970fec50bedf0296673c35dc017dfe18f802d1e1546d01d37cb0bfc",
+      "frozenHeartbeatPassed": false
+    },
+    {
+      "label": "baseline-confirm",
+      "size": 99900,
+      "admissionMs": 26570.796064999995,
+      "commitCount": 3126,
+      "commitTotalMs": 19185.13160499972,
+      "commitMaxMs": 216.12004099999467,
+      "projectionTotalMs": 4723.732533999879,
+      "projectionMaxMs": 10.405611000001954,
+      "heartbeat": {
+        "count": 4525,
+        "p50": 3.658845999991172,
+        "p95": 16.72521499999857,
+        "p99": 23.27035700000124,
+        "max": 216.94675400000415
+      },
+      "maxWalBytes": 4894592,
+      "finalCheckpointMs": 7.421477999989293,
+      "maxRssKiB": 1091684,
+      "modelSha256": "5ef58154b41c0f33566caaf486f48428b9822e8bef8e953f6e406b91fa699375",
+      "frozenHeartbeatPassed": false
+    }
+  ],
+  "comparisonOrderAt99900": [
+    "auto-99900",
+    "manual-99900",
+    "sliced-auto-99900",
+    "sliced-confirm",
+    "baseline-confirm"
+  ],
+  "comparisonLimitations": [
+    "fixed chronology, independent trained models, observed IO variability; not paired same-model or statistically certified speedups",
+    "manual checkpoint mode is diagnostic only and fails WAL/responsiveness requirements",
+    "admission-only diagnostics do not establish full query/recall or application acceptance"
+  ]
+}

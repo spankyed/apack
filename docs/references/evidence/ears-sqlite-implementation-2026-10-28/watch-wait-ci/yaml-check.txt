@@ -1,0 +1,2 @@
+Parsed .github/actions/node-runtime/action.yml
+Parsed .github/workflows/strict-chain.yml

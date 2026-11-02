@@ -1,0 +1,5 @@
+
+> apack@0.3.14 typecheck:api
+> cd packages/api && npx tsc -p . --noEmit && npx tsc -p tsconfig.test.json && npx tsc -p tsconfig.scripts.json && echo '✅ Backend type check passed'
+
+✅ Backend type check passed

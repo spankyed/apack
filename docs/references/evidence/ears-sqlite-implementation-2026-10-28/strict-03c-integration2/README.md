@@ -1,0 +1,7 @@
+# Full integration shard 2 at 03c
+
+The integration-2 consumer of [41312762268](https://github.com/spankyed/apack/actions/runs/41312762268), source `03c852400df6e466cc59e7e11a63c8f67158d6e9`, passes all 31 files: 580 cases pass, one Windows-only retained-dev-server publication case is excluded on macOS. All five dependency-graph cases pass in the full shard, including the previously timed-out setup regime; total file time is 263.5s and total shard wall time is 967.5s on the unchanged two-core budget. No deadline/assertion/retry is changed. This is a non-reproduction in a complete shard, not proof of the older timeout's cause or final-source acceptance.
+
+The chain prints a generic missing-stamp/inputs-changed warning. `scripts/chain.ts` runAndStamp deliberately bypasses stamps when shard arguments are present; no-stamp is expected for a partial pool. The warning is not evidence that source changed. Its wording is a tooling follow-up, not grounds to claim an exact unmeasured source mutation or a cache pass.
+
+Only the inspected 26-line chain summary and two identified excerpts of the original test log are retained, gzip-compressed unchanged with hashes/lengths and original full-log hash/ranges. The excerpts include the five-case dependency result and overall case counts; they are not the complete test log. Full logs remain in CI/private download. Source predates the conditional cosine selection and independent app-build repair; later full strict qualification remains required.

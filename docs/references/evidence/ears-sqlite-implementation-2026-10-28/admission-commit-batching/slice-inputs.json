@@ -1,0 +1,6 @@
+{
+  "packages/apack-ears/src/sqlite/vector-index.ts": "1bd955a7f509943bf86e98d68006a494f1163951f5fc8df976d4f796a9089e4b",
+  "packages/apack-ears/src/sqlite/vector-models.ts": "a8be009044a03598186c9c4ff7dee71776827b1384b2d290cdcadbcfcdba1ee6",
+  "packages/apack-ears/tests/sqlite/vector-index.spec.ts": "81d87d195f7780ae69db519f19bb38a359d5c904838d2c456a1cb2a305f7ee35",
+  ".github/scripts/ears-sqlite-platform.mjs": "59138bb3a9551faba6840e0235225b402a87d753f4f205b884b3ecdafa1d50c7"
+}

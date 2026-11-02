@@ -1,0 +1,569 @@
+{
+  "backend": "sqlite",
+  "durable": false,
+  "n": 10000,
+  "node": "v23.11.1",
+  "versions": {
+    "version": "3.53.4"
+  },
+  "setupMs": 8319.950258,
+  "fileBytes": 80490568,
+  "memory": {
+    "rss": 258011136,
+    "heapTotal": 47210496,
+    "heapUsed": 12814984,
+    "external": 5725204,
+    "arrayBuffers": 3183170
+  },
+  "resourceUsage": {
+    "userCPUTime": 18388596,
+    "systemCPUTime": 9713916,
+    "maxRSS": 266268,
+    "sharedMemorySize": 0,
+    "unsharedDataSize": 0,
+    "unsharedStackSize": 0,
+    "minorPageFault": 28770,
+    "majorPageFault": 0,
+    "swappedOut": 0,
+    "fsRead": 216,
+    "fsWrite": 245088,
+    "ipcSent": 0,
+    "ipcReceived": 0,
+    "signalsCount": 0,
+    "voluntaryContextSwitches": 6838,
+    "involuntaryContextSwitches": 580
+  },
+  "files": {
+    "data.sqlite3": 43118592,
+    "data.sqlite3-shm": 98304,
+    "data.sqlite3-wal": 37273672
+  },
+  "samples": {
+    "field": [
+      24.45187249999981,
+      23.066586500000085,
+      24.20645650000006,
+      23.771312499999112,
+      23.04921149999973
+    ],
+    "smallFieldLargeRow": [
+      285.8707510000004,
+      280.4352330000001,
+      287.24611999999973,
+      280.44910700000037,
+      282.6171399999985
+    ],
+    "projectedLargePage": [
+      14162.061840000006,
+      14404.77370999999,
+      14297.505839999993,
+      14301.592490000003,
+      14444.243940000015
+    ],
+    "updateSmallRepeatedBody": [
+      1092.9229300000043,
+      1132.9508850000002,
+      1293.889554999987,
+      1150.5149750000055,
+      1115.5240849999973
+    ],
+    "updateSmallVariedBody": [
+      1052.3008149999987,
+      1125.0259199999982,
+      1116.7659549999917,
+      1089.9973149999823,
+      1083.4281799999917
+    ],
+    "streamBody16Chunks": [
+      24698.527499999727,
+      27202.0164999999,
+      24947.85950000005,
+      24785.47499999968,
+      25447.41999999951
+    ],
+    "row": [
+      26.883631999999125,
+      28.68958300000122,
+      32.49556599999778,
+      28.42145900000105,
+      26.673674999998184
+    ],
+    "unique": [
+      72.1285733333328,
+      73.38599833333319,
+      68.93178166666985,
+      69.80657000000065,
+      68.59011833333473
+    ],
+    "page50": [
+      539.4109799999933,
+      558.8671400000021,
+      555.5621600000086,
+      553.4917499999938,
+      559.0438100000028
+    ],
+    "all10k": [
+      72860.20933333323,
+      71640.81199999964,
+      72945.95900000058,
+      73940.35733333294,
+      87004.78633333357
+    ],
+    "sort10k": [
+      147319.79349999983,
+      149378.15950000004,
+      149430.67999999947,
+      150119.26049999965,
+      148803.93300000107
+    ],
+    "edges50": [
+      603.342360000006,
+      623.3339400000114,
+      617.0997999999963,
+      607.3706799999854,
+      640.0146999999924
+    ],
+    "walk299": [
+      1334.0969333333608,
+      1342.5483000000288,
+      1378.6273000000317,
+      1334.208033333319,
+      1327.5956000000103
+    ],
+    "text": [
+      349.33389999999537,
+      347.99916666664404,
+      343.68043333330814,
+      331.5249333333365,
+      340.5339333333056
+    ],
+    "vector1k256": [
+      2426.961600000019,
+      2119.4684999999786,
+      2323.0676333332667,
+      2090.8616999999745,
+      2252.547099999962
+    ],
+    "write": [
+      160.51367500000197,
+      151.88975500000197,
+      156.313695000008,
+      144.2070799999965,
+      151.5035050000006
+    ],
+    "writeBatch100": [
+      10384.267100000034,
+      10356.946299999981,
+      9932.764899999893,
+      9889.423499999975,
+      10260.230199999933
+    ],
+    "watch20": [
+      1130.756720000063
+    ]
+  },
+  "diagnostics": {
+    "field": {
+      "iterations": 10,
+      "totalMs": 0.6712880000013683,
+      "driverMs": 0.33891599999697064,
+      "codecMs": 0.03149900000062189,
+      "driverCalls": 40,
+      "codecCalls": 10,
+      "remainingMs": 0.3008730000037758
+    },
+    "unique": {
+      "iterations": 10,
+      "totalMs": 0.9927879999995639,
+      "driverMs": 0.39020600000731065,
+      "codecMs": 0.024081999996269587,
+      "driverCalls": 40,
+      "codecCalls": 10,
+      "remainingMs": 0.5784999999959837
+    },
+    "page50": {
+      "iterations": 10,
+      "totalMs": 7.341593000001012,
+      "driverMs": 4.326060999999754,
+      "codecMs": 0.03916600000229664,
+      "driverCalls": 40,
+      "codecCalls": 10,
+      "remainingMs": 2.9763659999989613
+    },
+    "edges50": {
+      "iterations": 10,
+      "totalMs": 6.294556000000739,
+      "driverMs": 3.978192999988096,
+      "codecMs": 0.030249000003095716,
+      "driverCalls": 40,
+      "codecCalls": 10,
+      "remainingMs": 2.2861140000095475
+    },
+    "smallFieldLargeRow": {
+      "iterations": 10,
+      "totalMs": 3.573318000002473,
+      "driverMs": 3.27452600001925,
+      "codecMs": 0.036752999996679137,
+      "driverCalls": 40,
+      "codecCalls": 10,
+      "remainingMs": 0.2620389999865438
+    },
+    "projectedLargePage": {
+      "iterations": 10,
+      "totalMs": 145.88477899999998,
+      "driverMs": 142.20995699999912,
+      "codecMs": 0.1572500000038417,
+      "driverCalls": 40,
+      "codecCalls": 10,
+      "remainingMs": 3.517571999997017
+    },
+    "updateSmallVariedBody": {
+      "iterations": 10,
+      "totalMs": 11.526032999998279,
+      "driverMs": 9.994390000021667,
+      "codecMs": 0.2549150000049849,
+      "driverCalls": 170,
+      "codecCalls": 60,
+      "remainingMs": 1.2767279999716266
+    },
+    "uniquePlan": {
+      "backend": "sqlite",
+      "statementCount": 1,
+      "ids": [
+        "Message-7"
+      ],
+      "ms": 0.23529100000087055,
+      "statements": [
+        {
+          "sql": "SELECT p.id FROM (SELECT p.* FROM field_index x CROSS JOIN (SELECT e.id,CASE e.type WHEN 'Message' THEN 0 END major,e.seq ord FROM entities e WHERE e.type IN (SELECT value FROM json_each(?)) AND e.trashed=0) p WHERE x.entity_id=p.id AND x.type IN ('Message') AND x.field=? AND x.value=?) p ORDER BY p.major,p.ord",
+          "parameters": [
+            "[\"Message\"]",
+            "slug",
+            "string:slug-7"
+          ],
+          "returnedRows": 1,
+          "ms": 0.16774900000018533,
+          "plan": [
+            {
+              "id": 6,
+              "parent": 0,
+              "detail": "SEARCH x USING INDEX field_lookup (type=? AND field=? AND value=?)"
+            },
+            {
+              "id": 16,
+              "parent": 0,
+              "detail": "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)"
+            },
+            {
+              "id": 24,
+              "parent": 0,
+              "detail": "LIST SUBQUERY 1"
+            },
+            {
+              "id": 27,
+              "parent": 24,
+              "detail": "SCAN json_each VIRTUAL TABLE INDEX 1:"
+            },
+            {
+              "id": 36,
+              "parent": 24,
+              "detail": "CREATE BLOOM FILTER"
+            },
+            {
+              "id": 57,
+              "parent": 0,
+              "detail": "USE TEMP B-TREE FOR ORDER BY"
+            }
+          ]
+        }
+      ]
+    },
+    "pagePlan": {
+      "backend": "sqlite",
+      "statementCount": 1,
+      "ids": [
+        "Message-7",
+        "Message-107",
+        "Message-207",
+        "Message-307",
+        "Message-407",
+        "Message-507",
+        "Message-607",
+        "Message-707",
+        "Message-807",
+        "Message-907",
+        "Message-1007",
+        "Message-1107",
+        "Message-1207",
+        "Message-1307",
+        "Message-1407",
+        "Message-1507",
+        "Message-1607",
+        "Message-1707",
+        "Message-1807",
+        "Message-1907",
+        "Message-2007",
+        "Message-2107",
+        "Message-2207",
+        "Message-2307",
+        "Message-2407",
+        "Message-2507",
+        "Message-2607",
+        "Message-2707",
+        "Message-2807",
+        "Message-2907",
+        "Message-3007",
+        "Message-3107",
+        "Message-3207",
+        "Message-3307",
+        "Message-3407",
+        "Message-3507",
+        "Message-3607",
+        "Message-3707",
+        "Message-3807",
+        "Message-3907",
+        "Message-4007",
+        "Message-4107",
+        "Message-4207",
+        "Message-4307",
+        "Message-4407",
+        "Message-4507",
+        "Message-4607",
+        "Message-4707",
+        "Message-4807",
+        "Message-4907"
+      ],
+      "ms": 0.3624569999992673,
+      "statements": [
+        {
+          "sql": "SELECT p.id FROM (SELECT p.* FROM (SELECT p.* FROM field_index x CROSS JOIN (SELECT e.id,CASE e.type WHEN 'Message' THEN 0 END major,e.seq ord FROM entities e WHERE e.type IN (SELECT value FROM json_each(?)) AND e.trashed=0) p WHERE x.entity_id=p.id AND x.type IN ('Message') AND x.field=? AND x.value=?) p ORDER BY p.major,p.ord LIMIT ?) p ORDER BY p.major,p.ord",
+          "parameters": [
+            "[\"Message\"]",
+            "thread",
+            "string:thread-7",
+            50
+          ],
+          "returnedRows": 50,
+          "ms": 0.3424979999981588,
+          "plan": [
+            {
+              "id": 2,
+              "parent": 0,
+              "detail": "CO-ROUTINE p"
+            },
+            {
+              "id": 11,
+              "parent": 2,
+              "detail": "SEARCH x USING INDEX field_lookup (type=? AND field=? AND value=?)"
+            },
+            {
+              "id": 21,
+              "parent": 2,
+              "detail": "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)"
+            },
+            {
+              "id": 29,
+              "parent": 2,
+              "detail": "LIST SUBQUERY 1"
+            },
+            {
+              "id": 32,
+              "parent": 29,
+              "detail": "SCAN json_each VIRTUAL TABLE INDEX 1:"
+            },
+            {
+              "id": 41,
+              "parent": 29,
+              "detail": "CREATE BLOOM FILTER"
+            },
+            {
+              "id": 67,
+              "parent": 2,
+              "detail": "USE TEMP B-TREE FOR ORDER BY"
+            },
+            {
+              "id": 76,
+              "parent": 0,
+              "detail": "SCAN p"
+            }
+          ]
+        }
+      ]
+    },
+    "graphPlan": {
+      "backend": "sqlite",
+      "statementCount": 1,
+      "ids": [
+        "Message-1",
+        "Message-2",
+        "Message-3",
+        "Message-4",
+        "Message-5",
+        "Message-6",
+        "Message-7",
+        "Message-8",
+        "Message-9",
+        "Message-10",
+        "Message-11",
+        "Message-12",
+        "Message-13",
+        "Message-14",
+        "Message-15",
+        "Message-16",
+        "Message-17",
+        "Message-18",
+        "Message-19",
+        "Message-20",
+        "Message-21",
+        "Message-22",
+        "Message-23",
+        "Message-24",
+        "Message-25",
+        "Message-26",
+        "Message-27",
+        "Message-28",
+        "Message-29",
+        "Message-30",
+        "Message-31",
+        "Message-32",
+        "Message-33",
+        "Message-34",
+        "Message-35",
+        "Message-36",
+        "Message-37",
+        "Message-38",
+        "Message-39",
+        "Message-40",
+        "Message-41",
+        "Message-42",
+        "Message-43",
+        "Message-44",
+        "Message-45",
+        "Message-46",
+        "Message-47",
+        "Message-48",
+        "Message-49",
+        "Message-50"
+      ],
+      "ms": 0.2729570000010426,
+      "statements": [
+        {
+          "sql": "SELECT p.id FROM (SELECT id,0 major,ROW_NUMBER() OVER (ORDER BY major,ord,kind_ord,edge_seq) ord FROM (\n            SELECT far.id,p.major,p.ord,kind.key kind_ord,r.seq edge_seq,\n              ROW_NUMBER() OVER (PARTITION BY far.id ORDER BY p.major,p.ord,kind.key,r.seq) encounter\n            FROM (SELECT e.id,0 major,j.key ord FROM json_each(?) j JOIN entities e ON e.id=j.value WHERE e.trashed=0) p JOIN relations r ON r.source=p.id\n            JOIN json_each(?) kind ON kind.value=r.kind\n            JOIN entities far ON far.id=r.target\n            WHERE far.id!=p.id AND far.trashed=0\n            AND far.type IN (SELECT value FROM json_each(?))\n          ) WHERE encounter=1) p ORDER BY p.major,p.ord",
+          "parameters": [
+            "[\"Message-0\"]",
+            "[\"in\"]",
+            "[\"Message\"]"
+          ],
+          "returnedRows": 50,
+          "ms": 0.25270699999964563,
+          "plan": [
+            {
+              "id": 2,
+              "parent": 0,
+              "detail": "CO-ROUTINE p"
+            },
+            {
+              "id": 5,
+              "parent": 2,
+              "detail": "CO-ROUTINE (subquery-6)"
+            },
+            {
+              "id": 7,
+              "parent": 5,
+              "detail": "CO-ROUTINE (subquery-3)"
+            },
+            {
+              "id": 10,
+              "parent": 7,
+              "detail": "CO-ROUTINE (subquery-7)"
+            },
+            {
+              "id": 22,
+              "parent": 10,
+              "detail": "SCAN j VIRTUAL TABLE INDEX 1:"
+            },
+            {
+              "id": 27,
+              "parent": 10,
+              "detail": "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)"
+            },
+            {
+              "id": 35,
+              "parent": 10,
+              "detail": "SEARCH r USING INDEX relations_source (source=?)"
+            },
+            {
+              "id": 41,
+              "parent": 10,
+              "detail": "SEARCH far USING INDEX sqlite_autoindex_entities_1 (id=?)"
+            },
+            {
+              "id": 54,
+              "parent": 10,
+              "detail": "LIST SUBQUERY 2"
+            },
+            {
+              "id": 57,
+              "parent": 54,
+              "detail": "SCAN json_each VIRTUAL TABLE INDEX 1:"
+            },
+            {
+              "id": 66,
+              "parent": 54,
+              "detail": "CREATE BLOOM FILTER"
+            },
+            {
+              "id": 74,
+              "parent": 10,
+              "detail": "SCAN kind VIRTUAL TABLE INDEX 1:"
+            },
+            {
+              "id": 99,
+              "parent": 10,
+              "detail": "USE TEMP B-TREE FOR ORDER BY"
+            },
+            {
+              "id": 122,
+              "parent": 7,
+              "detail": "SCAN (subquery-7)"
+            },
+            {
+              "id": 177,
+              "parent": 5,
+              "detail": "SCAN (subquery-3)"
+            },
+            {
+              "id": 190,
+              "parent": 5,
+              "detail": "USE TEMP B-TREE FOR ORDER BY"
+            },
+            {
+              "id": 207,
+              "parent": 2,
+              "detail": "SCAN (subquery-6)"
+            },
+            {
+              "id": 248,
+              "parent": 0,
+              "detail": "SCAN p"
+            },
+            {
+              "id": 257,
+              "parent": 0,
+              "detail": "USE TEMP B-TREE FOR ORDER BY"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "largeFixture": {
+    "rows": 64,
+    "bodyBytes": 262144,
+    "streamChunks": 16,
+    "streamChunkBytes": 16384
+  },
+  "timingUnit": "microseconds per task (stream task includes 16 commits)",
+  "durabilityPolicy": "syncs disabled fixture; not a production durability comparison",
+  "consumed": true
+}

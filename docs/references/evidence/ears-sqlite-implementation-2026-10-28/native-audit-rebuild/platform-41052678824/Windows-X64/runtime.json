@@ -1,0 +1,43 @@
+{
+  "source": "212b819db6f505a87e44cc93cb3d3d0967c424e8",
+  "entries": {
+    "@apackdev/ears": "file:///D:/a/apack/apack/packages/apack-ears/dist/index.js",
+    "@apackdev/ears/sqlite": "file:///D:/a/apack/apack/packages/apack-ears/dist/sqlite/index.js"
+  },
+  "node": "v23.11.1",
+  "platform": "win32",
+  "arch": "x64",
+  "release": "10.0.26100",
+  "cpus": 4,
+  "enginePin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+  "sqlite": "3.53.4",
+  "nativeBindings": [
+    {
+      "path": "\\\\?\\D:\\a\\apack\\apack\\node_modules\\@msgpackr-extract\\msgpackr-extract-win32-x64\\node.napi.node",
+      "sha256": "e09816f0c305936ce1061c46a35e7d1883a08acf81f94793d9d07455421761dd"
+    },
+    {
+      "path": "\\\\?\\D:\\a\\apack\\apack\\node_modules\\better-sqlite3\\prebuilds\\win32-x64.node",
+      "sha256": "e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a"
+    },
+    {
+      "path": "D:\\a\\apack\\apack\\node_modules\\sqlite-vec-windows-x64\\vec0.dll",
+      "sha256": "fcf98662a7ad9dce394b96a88f91032047823831b951c76636787c312a6476e6"
+    }
+  ],
+  "extension": {
+    "path": "D:\\a\\apack\\apack\\node_modules\\sqlite-vec-windows-x64\\vec0.dll",
+    "sha256": "fcf98662a7ad9dce394b96a88f91032047823831b951c76636787c312a6476e6"
+  },
+  "regexAssets": [
+    {
+      "path": "D:\\a\\apack\\apack\\packages\\apack-ears\\vendor\\rregex\\rregex.cjs",
+      "sha256": "5a8b72e18f1f25df12ec19499168be74caaa4a2476c6c098283887b5718d3e1a"
+    },
+    {
+      "path": "D:\\a\\apack\\apack\\packages\\apack-ears\\vendor\\rregex\\rregex_bg.wasm",
+      "sha256": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525"
+    }
+  ],
+  "qualification": "Built Node packages, FTS/recency/regex/vec and read-only backup; no recall, packaging or durability claim"
+}

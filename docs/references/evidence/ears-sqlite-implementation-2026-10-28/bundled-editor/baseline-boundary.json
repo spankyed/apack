@@ -1,0 +1,14 @@
+{
+  "candidate": "507e92fe85",
+  "master": "98386b36a18d244c19ffb501830b990ed49f7653",
+  "unchangedPaths": [
+    "packages/apack-ui/src/components/tiptap/internal/use-contributed-editor.ts",
+    "packages/apack-ui/src/components/tiptap/TiptapEditor.vue",
+    "tests/packs/bundled-ui-pack/tests/e2e/scribbles.spec.ts",
+    "tests/packs/bundled-ui-pack/src/features/scribbles/fe/canvas/editor.vue"
+  ],
+  "meaning": "These editor and fixture sources are unchanged from pinned master. This does not by itself prove a baseline failure or its cause.",
+  "failedRun": 40842115212,
+  "failedRunSource": "b25a985c8cebdf898b86cb915bca2600ba03782a",
+  "failedAssertion": "scribbles-text remains Bundled editor after editor.fill(Bundled editor typed)"
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "file": "source-app.json.gz",
+    "sha256": "26a99206281cbb9f9531fffd95db016bbdfa989ad6098d36864dec66e2a7d6f8",
+    "storedSha256": "9aa70d19269b9143ec03f6735baa86c37a78ac3184cca453cfbb304f34d29902"
+  },
+  {
+    "file": "app-2.log.gz",
+    "sha256": "cfecd85d045c065dc617ff11203f19e953a2811075b2bd3f2eda0dfa073d8965",
+    "storedSha256": "4a301db44c9ce1f6c42778ac86eb030fcb65d6a37f0556433410c0050bcd7a2c"
+  },
+  {
+    "file": "app-0.log.gz",
+    "sha256": "02e97a0418a9280dabe270fee027428ad6d089cc081486bd1c40ceeb2f209be8",
+    "storedSha256": "356500370000dce759b411e9adef5fc362797de07c267b1425771f75b4eb0f09"
+  },
+  {
+    "file": "app-1.log.gz",
+    "sha256": "e36bb3e2e846c833438173f7d62792e0a8eed8cb96c66c30fc0512397777ac35",
+    "storedSha256": "1c755cde699aec21b0d524f0623816a878d74c5562704252f5997b2be441699a"
+  },
+  {
+    "file": "ears-editor-elmdb-897-41157076346.log.gz",
+    "sha256": "fddbb25b6f0d716ad670b54c64ee2b95f2cfca4b410bb0604397024042245f74",
+    "storedSha256": "ccf65c681af1a20180ae1946c34b3e251e4f2d40231b2641e11273b219f3f119"
+  },
+  {
+    "file": "ears-editor-elmdb-897-41157076346-current.json.gz",
+    "sha256": "ba2a964873d36f36e70e5f739380b7466d407908b33e35d0022e45fae5cb10f6",
+    "storedSha256": "536cafa88979d18b52bee2aee6288c034595f8de679d67c14de12a9d996a12cd"
+  }
+]

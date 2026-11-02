@@ -1,0 +1,37 @@
+import json,os,pathlib,subprocess
+root=pathlib.Path('/metrics');out=pathlib.Path('/results');env=os.environ|{'EARS_EVALUATION_BACKEND':'sqlite'}
+def test(name,paths,pattern=None):
+ cmd=['npm','test','-w','@apackdev/ears','--',*paths]
+ if pattern:cmd+=['-t',pattern]
+ result=subprocess.run(cmd,cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True)
+ (out/(name+'.txt')).write_text(result.stdout)
+ return result
+cost=['tests/sqlite/query-cost.spec.ts']
+r=test('focused',cost+['tests/engine/queries.spec.ts','tests/engine/query-values.spec.ts']);assert r.returncode==0,r.stdout
+helper=root/'packages/apack-ears/src/sqlite/numeric-order.ts';db=root/'packages/apack-ears/src/sqlite/database.ts'
+query=root/'packages/apack-ears/src/sqlite/query.ts'
+original={helper:helper.read_text(),db:db.read_text(),query:query.read_text()}
+mutations=[
+ ('hydrate-fallback',helper,"  if (input.field === 'id'", "  return undefined;\n  if (input.field === 'id'",'orders rank'),
+ ('integer-rounding',helper,'CAST(p._sort_value AS REAL) ${direction}','p._sort_value ${direction}','large integer ties'),
+ ('primary-marker',helper,'p._sort_entity IS NULL\n    OR ', '', 'missing primary'),
+ ('sparse-source',helper,'db.fieldSource(input.field, types, true)','db.fieldSource(input.field, types, false)','sparse flexible'),
+ ('date-clipping',helper,"p._sort_value<>CAST(p._sort_value AS INTEGER)", '0', 'fractional stored'),
+ ('actual-type',db,'AND e.type=${text(type)}','',"stray row"),
+ ('candidate-types',helper,"db.all(`SELECT DISTINCT e.type FROM (${input.sql}) p\n    JOIN entities e ON e.id=p.id`, input.parameters).map(row => String(row.type))", "db.all('SELECT name FROM value_types').map(row => String(row.name))", 'missing physical table')
+]
+mutations += [('limit-pushdown',helper,'const limited = input.limit !== undefined','const limited = false','adjacent limit'), ('limit-boundary',query,'const next = steps[stepIndex + 1]','const next = steps.slice(stepIndex + 1).find(s => s.step === \'limit\')','adjacent limit')]
+try:
+ for name,path,before,after,pattern in mutations:
+  assert before in original[path],name
+  path.write_text(original[path].replace(before,after))
+  r=test('negative-'+name,cost,pattern)
+  assert r.returncode!=0 and 'AssertionError' in r.stdout,(name,r.stdout)
+  path.write_text(original[path])
+finally:
+ for path,source in original.items():path.write_text(source)
+r=test('restored',cost);assert r.returncode==0,r.stdout
+r=test('all-sqlite',['--reporter=json','--outputFile=/results/sqlite.json'])
+v=json.loads((out/'sqlite.json').read_text());failed=[a['fullName'] for t in v['testResults'] for a in t['assertionResults'] if a['status']=='failed']
+assert r.returncode==1 and len(failed)==3 and all('containing and matching' in n for n in failed),(r.returncode,failed,r.stdout)
+print(json.dumps({'passed':v['numPassedTests'],'failed':v['numFailedTests'],'knownFailures':failed}))

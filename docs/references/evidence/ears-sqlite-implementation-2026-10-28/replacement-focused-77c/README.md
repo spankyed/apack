@@ -1,0 +1,9 @@
+# Replacement outcome qualification at 77cbd28f38
+
+[Run 41255361459](https://github.com/spankyed/apack/actions/runs/41255361459), source `77cbd28f38e121d93583fd62a6d95d00daee0454`, executes all 13 real-driver commit-outcome cases successfully. These include source-close refusal before destination commit with unchanged data/sequence/watch state, preservation of primary plus cleanup errors (including thrown undefined), and both committed and rolled-back lost-acknowledgement replacement outcomes verified after fresh reopen. The correction's concrete database/error/watch behavior is now qualified within this injected source/commit-error scope.
+
+The complete selected cohort has SQLite 244 pass/one retained relevance failure/no skips; elmdb 195 pass/one retained relevance failure/49 SQLite-only skips. Both overall gates remain failed. Package/API generation completes with a zero-byte report patch; the actual portable graph probe passes, native routing has its one required pass/35 deliberately unselected cases, and inventory/input ownership has 78 passes/no skips.
+
+Both real WAL probes complete all four operation families plus the disabled-injector negative control. Successful fsync followed by lost acknowledgement, and successful fsync returned as EIO followed by application COMMIT_UNKNOWN quarantine and kill before close, both reopen complete committed data with correct sequence progression. Those injected process-death boundaries do not certify power loss or arbitrary filesystems. Raw numeric/synthetic reports and hashes retain the evidence without native binaries or database payloads.
+
+This predates the scoped vector eligibility correction at c80289641c. Its query regression and real-corpus measurement remain separate required checks. Final exact-source strict/app/operational/packaging/resource qualification remains incomplete.

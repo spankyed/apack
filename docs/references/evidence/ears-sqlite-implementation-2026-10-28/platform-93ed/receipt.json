@@ -1,0 +1,136 @@
+{
+  "run": 41503546216,
+  "source": "93ed37e67f40faee3fd25a10f3b897c15e55c858",
+  "scope": "Per-job complete supported-platform qualification; overall strict consumers/signing remain separate",
+  "platforms": {
+    "linux": {
+      "job": 125476905599,
+      "conclusion": "success",
+      "finalGuardPassed": true,
+      "originalJobMetadataSha256": "f5b39a33571a42d6efbbd1c951f4d9327fc61385d7624bbe7035992a2d1b1d7b",
+      "contracts": {
+        "ears.json": {
+          "passed": 946,
+          "failed": 0,
+          "excluded": 0
+        },
+        "host.json": {
+          "passed": 313,
+          "failed": 0,
+          "excluded": 0
+        },
+        "host-crash.json": {
+          "passed": 12,
+          "failed": 0,
+          "excluded": 0
+        },
+        "cli-maintenance.json": {
+          "passed": 41,
+          "failed": 0,
+          "excluded": 0
+        },
+        "sdk-all-sqlite.json": {
+          "passed": 1330,
+          "failed": 0,
+          "excluded": 0
+        },
+        "package-build-coverage.json": {
+          "passed": 78,
+          "failed": 0,
+          "excluded": 0
+        },
+        "sdk-backend.json": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 0
+        },
+        "api-startup.json": {
+          "passed": 7,
+          "failed": 0,
+          "excluded": 0
+        },
+        "query-work.json": {
+          "passed": 9,
+          "failed": 0,
+          "excluded": 0
+        }
+      }
+    },
+    "macos": {
+      "job": 125476905761,
+      "conclusion": "success",
+      "finalGuardPassed": true,
+      "originalJobMetadataSha256": "f71c7faea9dfe534e89249c448ac0ec71c7b545e1fd577720ef78794ca008900",
+      "contracts": {
+        "ears.json": {
+          "passed": 946,
+          "failed": 0,
+          "excluded": 0
+        },
+        "host.json": {
+          "passed": 313,
+          "failed": 0,
+          "excluded": 0
+        },
+        "host-crash.json": {
+          "passed": 12,
+          "failed": 0,
+          "excluded": 0
+        },
+        "cli-maintenance.json": {
+          "passed": 41,
+          "failed": 0,
+          "excluded": 0
+        },
+        "sdk-backend.json": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 0
+        },
+        "query-work.json": {
+          "passed": 9,
+          "failed": 0,
+          "excluded": 0
+        }
+      }
+    },
+    "windows": {
+      "job": 125476905128,
+      "conclusion": "success",
+      "finalGuardPassed": true,
+      "originalJobMetadataSha256": "99934545231b321490d9dbe06671c039f556d9365d6d0df9036234a211d6abcd",
+      "contracts": {
+        "ears.json": {
+          "passed": 942,
+          "failed": 0,
+          "excluded": 4
+        },
+        "host.json": {
+          "passed": 310,
+          "failed": 0,
+          "excluded": 6
+        },
+        "host-crash.json": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 10
+        },
+        "cli-maintenance.json": {
+          "passed": 41,
+          "failed": 0,
+          "excluded": 0
+        },
+        "sdk-backend.json": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 0
+        },
+        "query-work.json": {
+          "passed": 9,
+          "failed": 0,
+          "excluded": 0
+        }
+      }
+    }
+  }
+}

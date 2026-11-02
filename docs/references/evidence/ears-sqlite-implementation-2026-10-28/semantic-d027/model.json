@@ -1,0 +1,24 @@
+{
+  "completed": true,
+  "protocol": "ears-local-relevance-embeddings/1",
+  "modelRevision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "fixtureSha256": "29d79b6060b21ca68d3bb5dd491cc2e3cfff36a11c2f10b28d6df62c9acc3527",
+  "recipeSha256": "fa977d893cf72ddaeda8743094d469033adf79723bb0f76731f146dca4cafca2",
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "documents": 214,
+  "queries": 25,
+  "dimensions": 384,
+  "maxTokens": 256,
+  "pooling": "attention-mask mean, then L2 normalization",
+  "documentInput": "blank-line field join, then trim",
+  "containsPayload": false,
+  "truncatedInputs": 141,
+  "vectorsSha256": "44674c73b2010234e91adb5a77608a4ac927f4aea5a857a1f9c0cd34481fe7d0",
+  "onnxruntime": "1.31.1",
+  "tokenizers": "0.23.3",
+  "modelCacheRemoved": true
+}

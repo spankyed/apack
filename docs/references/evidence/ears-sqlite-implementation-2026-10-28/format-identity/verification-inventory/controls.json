@@ -1,0 +1,49 @@
+{
+  "sourceSha256": "8f2e14978934f97f49e97679ddb13cf03953d3cb1ce0aedf6c69109e28f76d8a",
+  "checks": [
+    {
+      "name": "all actual passing witnesses",
+      "passed": true,
+      "result": {
+        "publication": 29,
+        "identity": 19
+      }
+    },
+    {
+      "name": "missing foreign-history refusal",
+      "refused": true
+    },
+    {
+      "name": "skipped WRONG_FORMAT classification",
+      "refused": true
+    },
+    {
+      "name": "missing foreign WAL identity",
+      "refused": true
+    },
+    {
+      "name": "skipped primary refusal",
+      "refused": true
+    },
+    {
+      "name": "duplicate safety witness",
+      "refused": true
+    },
+    {
+      "name": "additional passing case does not break inventory",
+      "passed": true,
+      "result": {
+        "publication": 30,
+        "identity": 19
+      }
+    },
+    {
+      "name": "Windows separator normalization",
+      "passed": true,
+      "result": {
+        "publication": 29,
+        "identity": 19
+      }
+    }
+  ]
+}

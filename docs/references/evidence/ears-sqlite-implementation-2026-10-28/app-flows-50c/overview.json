@@ -1,0 +1,101 @@
+{
+  "source": "50cf9d6980d417fbb17eacf5ede17eb9798e68e7",
+  "run": 41341760226,
+  "measuredActions": 120,
+  "warmups": 30,
+  "captureAdmissionPassed": true,
+  "runs": [
+    {
+      "backend": "elmdb",
+      "scenario": "thread-open",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 430.20000000001164,
+        "minMs": 367.79999999993015,
+        "maxMs": 613
+      }
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "search",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 16.150000000023283,
+        "minMs": 12.20000000006985,
+        "maxMs": 30
+      }
+    },
+    {
+      "backend": "elmdb",
+      "scenario": "streaming",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 786.0999999999767,
+        "minMs": 760.0999999999767,
+        "maxMs": 820.5999999999767
+      },
+      "visibleProgress": {
+        "firstVisibleMs": {
+          "medianMs": 144.29999999993015,
+          "maximumMs": 171
+        },
+        "maxVisibleGapMs": {
+          "medianMs": 85.90000000002328,
+          "maximumMs": 111.90000000002328
+        }
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "thread-open",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 546.5500000000466,
+        "minMs": 431.0999999999767,
+        "maxMs": 1022.0999999999767
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "search",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 27.70000000001164,
+        "minMs": 20.900000000023283,
+        "maxMs": 36.699999999953434
+      }
+    },
+    {
+      "backend": "sqlite",
+      "scenario": "streaming",
+      "summary": {
+        "measured": 20,
+        "passed": 20,
+        "unsuccessful": 0,
+        "medianMs": 847.2000000000116,
+        "minMs": 815.5,
+        "maxMs": 960.7000000000698
+      },
+      "visibleProgress": {
+        "firstVisibleMs": {
+          "medianMs": 218.0,
+          "maximumMs": 288.5999999999767
+        },
+        "maxVisibleGapMs": {
+          "medianMs": 92.0,
+          "maximumMs": 108
+        }
+      }
+    }
+  ]
+}

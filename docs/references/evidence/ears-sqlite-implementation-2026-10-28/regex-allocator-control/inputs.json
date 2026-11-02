@@ -1,0 +1,31 @@
+{
+  "sourceCommit": "ffdc766d0ce78c2bad3eb9ce5f02229e5a47bd8a",
+  "sourceArchiveSha256": "9826b3aeaa336b58af24b30cedb5891a9b7ef88d096a68c03551f3120461c740",
+  "publishedNpm": {
+    "name": "rregex",
+    "version": "1.13.1",
+    "gitHead": "ffdc766d0ce78c2bad3eb9ce5f02229e5a47bd8a",
+    "dist": {
+      "shasum": "d1cf21c381c653537e6a68995e860c62b0a6c00a",
+      "tarball": "https://registry.npmjs.org/rregex/-/rregex-1.13.1.tgz",
+      "fileCount": 17,
+      "integrity": "sha512-Q09btkj4Omzu9Yy/gJ2f+G22gHzL2/ZPqgMgaoQJ1JwfyjQumQd+ZcjOwqmvCGSEkB++30fe8HREgRHVFeGF9A==",
+      "signatures": [
+        {
+          "sig": "MEUCIDpP4BQIVh9CF/AbdiASZhIivy4upz/cQef8ccEYPZwYAiEA7yFQPsvWFj9kBsBgDjNrcYg1uxdpsVdHiWsBSNjrOnI=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/rregex@1.13.1",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 1549679
+    }
+  },
+  "cargoLockSha256": "a708d03f32a9cfbd660e550038f57f8a962872e24aadf3da444c968db102ee59",
+  "artifactVolume": "apack-ears-regex-ffdc766d",
+  "scope": "read-only controlled artifacts on Linux; no target/artifact tree copied to daily Mac"
+}

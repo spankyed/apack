@@ -1,0 +1,7 @@
+# Complete combined-source SQLite app qualification
+
+[Run 41351406783](https://github.com/spankyed/apack/actions/runs/41351406783), source `5cde3fc26de94a4e6bc2e5910e425aaa2190b735`, passes all 33 source-app cases once, with one explicitly packaged-only exclusion, no unexpected failures/flakes and no retries. This source includes the numeric-order and projected-hit batching/dependency corrections plus corrected source-reversion harness. SQLite selection is explicit in the dispatch; the real source-app store-identity case passes for both managed stores.
+
+The suite includes API/bus reconnection, CLI attached reads/refusals, content reload/import, cross-window surfaces/settings, reference/editor lifecycle, host-only operation and pack activation. It records actual lifecycle behavior, not per-feature performance or every storage-fault regime. Packaged process-claim coverage remains separately required; it is the one excluded source-app case.
+
+The derived receipt retains only exact source/run, original report SHA-256, aggregate scalar stats and public case titles/status/retry/duration. Original configuration, user-data paths, profiles, stdout/stderr, key-handling payload, traces/screenshots and attachments are omitted. This passing app suite does not waive keyword, corpus/admission/sustained heartbeat failures or qualify current installed/signing, provider/device variance and remaining worker/storage-fault requirements.

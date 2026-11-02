@@ -1,0 +1,152 @@
+{
+  "protocol": "ears-existing-snapshot-worker-qualification/1",
+  "source": "06106d18ddc61e0792b9faa1f64a302ffe1f7fdd",
+  "runtimeAndSqliteTestsUnchangedAt": "47bce9cf6df01b79a0f2fc335c8778381cee0b5f",
+  "scope": "One independent-writer hybrid highlight snapshot test and nine native worker ownership tests on each OS; not allocation failure, corpus performance or arbitrary storage qualification",
+  "platforms": {
+    "linux": {
+      "originalReportSha256": "7a533fb3702650e4af68e79001a576fd2b4232d95b6505822aca678f2e8dfb03",
+      "passed": 10,
+      "failed": 0,
+      "excluded": 0,
+      "cases": [
+        {
+          "name": "hybrid winner highlights keeps deferred text details in the ranking snapshot when an independent writer commits between phases",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership yields the foreground, preserves logical commits and returns an installable identified model",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (false syncs)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (true syncs)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses a malformed derived vector in the real worker and retries after repair (1 bytes)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses a malformed derived vector in the real worker and retries after repair (8 bytes)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership rejects stale work after declaration changes without installing it",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership serializes workers, drains cancellation and permits a fresh attempt",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership rejects close and drains the worker before fixture cleanup",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses foreground transaction ownership and insufficient input without poisoning the database",
+          "status": "passed"
+        }
+      ]
+    },
+    "macos": {
+      "originalReportSha256": "3fb1bcb5bb1dc3fe4ccc173472a1ad21b828fb5ed6d918e1d63dbd0d9a30a5d1",
+      "passed": 10,
+      "failed": 0,
+      "excluded": 0,
+      "cases": [
+        {
+          "name": "hybrid winner highlights keeps deferred text details in the ranking snapshot when an independent writer commits between phases",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership yields the foreground, preserves logical commits and returns an installable identified model",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (false syncs)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (true syncs)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses a malformed derived vector in the real worker and retries after repair (1 bytes)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses a malformed derived vector in the real worker and retries after repair (8 bytes)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership rejects stale work after declaration changes without installing it",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership serializes workers, drains cancellation and permits a fresh attempt",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership rejects close and drains the worker before fixture cleanup",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses foreground transaction ownership and insufficient input without poisoning the database",
+          "status": "passed"
+        }
+      ]
+    },
+    "windows": {
+      "originalReportSha256": "b4f21dba59de147a4c01826daeaa114dc3d3936a81c5587cd6d4cc3385940f2e",
+      "passed": 10,
+      "failed": 0,
+      "excluded": 0,
+      "cases": [
+        {
+          "name": "hybrid winner highlights keeps deferred text details in the ranking snapshot when an independent writer commits between phases",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership yields the foreground, preserves logical commits and returns an installable identified model",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (false syncs)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (true syncs)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses a malformed derived vector in the real worker and retries after repair (1 bytes)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses a malformed derived vector in the real worker and retries after repair (8 bytes)",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership rejects stale work after declaration changes without installing it",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership serializes workers, drains cancellation and permits a fresh attempt",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership rejects close and drains the worker before fixture cleanup",
+          "status": "passed"
+        },
+        {
+          "name": "native vector training ownership refuses foreground transaction ownership and insufficient input without poisoning the database",
+          "status": "passed"
+        }
+      ]
+    }
+  }
+}

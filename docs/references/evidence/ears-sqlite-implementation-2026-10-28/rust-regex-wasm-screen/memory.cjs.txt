@@ -1,0 +1,13 @@
+const {createRequire}=require('node:module');
+const req=createRequire('/regex/probe.cjs');
+const {RRegex,__wasm}=req('rregex');
+const mode=process.argv[2],samples=[];
+for(let batch=0;batch<6;batch++) {
+ for(let i=0;i<500;i++) {
+  const pattern=mode==='same'?'(?i)foo':'(?i)foo'+(batch*500+i);
+  const regex=new RRegex(pattern);
+  try {if(mode!=='compile-only')regex.isMatch('FOO'+i);}finally{regex.free();}
+ }
+ global.gc?.();samples.push({compiled:(batch+1)*500,wasmBytes:__wasm.memory.buffer.byteLength,rss:process.memoryUsage().rss});
+}
+console.log(JSON.stringify({mode,samples},null,2));

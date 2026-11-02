@@ -1,0 +1,141 @@
+{
+  "run": 41371206316,
+  "source": "81e8ab4fe5be727872e36de5853fc49fe5a9e70e",
+  "producer": "success",
+  "overall": "failure at retained keyword judgment",
+  "consumers": [
+    {
+      "consumer": "app-rest",
+      "completedFiles": 613,
+      "fileStates": {
+        "passed": 607,
+        "skipped": 5,
+        "failed": 1
+      },
+      "failedFiles": [
+        {
+          "project": "@apackdev/ears",
+          "file": "tests/engine/real-search-relevance.spec.ts"
+        }
+      ],
+      "testSummary": {
+        "failed": 1,
+        "passed": 7019,
+        "skipped": 95
+      },
+      "chainSeconds": 748.4,
+      "changedInputsNoReusableStamp": false,
+      "originalChainLogSha256": "b5e94da3bb622390180a49321f18eefd7ebd884c52072a23e22aff7b2fe1d65f",
+      "originalStepLogSha256": "a77acf86039de7098db398759d425b8ea8f4e149bcd7d06ea427fb2b0bd73839"
+    },
+    {
+      "consumer": "integration-1",
+      "completedFiles": 31,
+      "fileStates": {
+        "passed": 31
+      },
+      "failedFiles": [],
+      "testSummary": {
+        "passed": 242
+      },
+      "chainSeconds": 1773.1,
+      "changedInputsNoReusableStamp": true,
+      "originalChainLogSha256": "7eb24bb99b979396fd8c4e65a95c49ba71e058a0a3057867312e79cb3564ec1e",
+      "originalStepLogSha256": "1075bc30ac592e1cf77239561c9325d125523cef470a13d5e4929d15c856df5f"
+    },
+    {
+      "consumer": "integration-2",
+      "completedFiles": 31,
+      "fileStates": {
+        "passed": 31
+      },
+      "failedFiles": [],
+      "testSummary": {
+        "passed": 580,
+        "skipped": 1
+      },
+      "chainSeconds": 784.8,
+      "changedInputsNoReusableStamp": true,
+      "originalChainLogSha256": "4c4c4238600d543bbb74f42ef6e384e5f2df8b73fbb805dafaf72490e3785538",
+      "originalStepLogSha256": "d8a96d4791430ff401b2ee34dc851dfbed6e3d4fc83c9f5d09bc7a384d1fd56b"
+    },
+    {
+      "consumer": "native-1",
+      "completedFiles": 9,
+      "fileStates": {
+        "passed": 8,
+        "skipped": 1
+      },
+      "failedFiles": [],
+      "testSummary": {
+        "passed": 26,
+        "skipped": 2
+      },
+      "chainSeconds": 1792.8,
+      "changedInputsNoReusableStamp": true,
+      "originalChainLogSha256": "d9daef66fb149f4cf525e65df772481f48501029289a9d51777c315bd6f38d71",
+      "originalStepLogSha256": "7d63881ff35a85ca82d4d15276bd1670ade40f94c2614691eef3dda315ca5f44"
+    },
+    {
+      "consumer": "native-2",
+      "completedFiles": 8,
+      "fileStates": {
+        "skipped": 1,
+        "passed": 7
+      },
+      "failedFiles": [],
+      "testSummary": {
+        "passed": 47,
+        "skipped": 26
+      },
+      "chainSeconds": 852.1,
+      "changedInputsNoReusableStamp": true,
+      "originalChainLogSha256": "caadf97ffdce96a82b9b1654d2df6ecaec9dcba7caee886f36ae50cf2efb565e",
+      "originalStepLogSha256": "895a66ecf4fe433c59d9e40565a762e120d680fd45e5c3e6f4ca5d51946b300f"
+    }
+  ],
+  "hostPoolSeconds": 518.61,
+  "hostLimitSeconds": 600,
+  "independentApp": {
+    "originalReportSha256": "375aca4d9484db38f1c8a959cd925d2d08e3cb27abbb6d973b4f1231e3c5d743",
+    "cases": [
+      {
+        "name": "source SQLite app opens both managed stores with persisted EARS identity",
+        "status": "passed",
+        "retry": 0,
+        "durationMs": 18266
+      },
+      {
+        "name": "app launches without crashing",
+        "status": "passed",
+        "retry": 0,
+        "durationMs": 321
+      },
+      {
+        "name": "app reaches connected state",
+        "status": "passed",
+        "retry": 0,
+        "durationMs": 378
+      },
+      {
+        "name": "applicationState is accessible with surfaces loaded",
+        "status": "passed",
+        "retry": 0,
+        "durationMs": 105
+      },
+      {
+        "name": "runs in an isolated per-worker test data dir",
+        "status": "passed",
+        "retry": 0,
+        "durationMs": 42
+      },
+      {
+        "name": "publishes no session, though a test app has a debug port open",
+        "status": "passed",
+        "retry": 0,
+        "durationMs": 309
+      }
+    ]
+  },
+  "scope": "Strict at history-policy runtime before shared window-discovery fix; raw logs/configuration/attachments omitted; main progress excludes embedded fixture runs"
+}

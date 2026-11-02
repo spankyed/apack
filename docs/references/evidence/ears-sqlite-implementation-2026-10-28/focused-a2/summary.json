@@ -1,0 +1,26 @@
+{
+  "run": 41228681137,
+  "source": "a2c9edf80dec50c8362b9be19b7852953393420f",
+  "overall": "failure",
+  "backends": {
+    "elmdb": {
+      "numTotalTests": 108,
+      "numPassedTests": 107,
+      "numFailedTests": 1,
+      "numPendingTests": 0
+    },
+    "sqlite": {
+      "numTotalTests": 108,
+      "numPassedTests": 107,
+      "numFailedTests": 1,
+      "numPendingTests": 0
+    }
+  },
+  "remainingFailure": "Frozen generate-entries overview top-five relevance judgment",
+  "inventory": {
+    "numTotalTests": 14,
+    "numPassedTests": 14,
+    "numFailedTests": 0
+  },
+  "rawReports": "Original workflow artifacts and local-only reports; digests recorded in receipt.json"
+}

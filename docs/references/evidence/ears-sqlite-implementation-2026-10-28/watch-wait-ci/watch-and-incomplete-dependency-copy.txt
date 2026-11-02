@@ -1,0 +1,87 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/watch-lifecycle.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (4 tests) 2475ms
+   ✓ SQLite watch ownership > releases tracked dependencies when closing under a pending watch  678ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  603ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  674ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (unawaited)  519ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  12:05:26
+   Duration  4.63s (transform 268ms, setup 16ms, collect 2.00s, tests 2.47s, environment 0ms, prepare 51ms)
+
+
+> @app/repo-checks@0.0.0 pretest
+> tsx ../../scripts/ensure-packages-built.ts
+
+Published packages are out of date:
+  @apackdev/ears: not built (no packages/apack-ears/dist, packages/apack-ears/publish)
+  @apackdev/sdk: not built (no packages/apack-sdk/dist, packages/apack-sdk/publish)
+  @apackdev/ui: not built (no packages/apack-ui/dist, packages/apack-ui/publish)
+  @apackdev/testing: not built (no packages/apack-testing/dist/package/package.json, packages/apack-testing/dist/package/dist)
+  @apackdev/cli: not built (no packages/apack-cli/dist/package/package.json, packages/apack-cli/dist/package/dist, packages/apack-cli/dist/package/bin, packages/apack-cli/dist/package/templates)
+Rebuilding 5 of 5
+
+> @apackdev/ears@0.1.0 build:package
+> tsx ../../scripts/build-package.ts .
+
+Built @apackdev/ears@0.1.0 into dist, staged for publishing in publish
+
+> @apackdev/sdk@0.1.0 build:package
+> tsx ../../scripts/build-package.ts .
+
+src/framework/settings-validation.ts(1,10): error TS1484: 'Ajv' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/framework/settings-validation.ts(1,10): error TS6133: 'Ajv' is declared but its value is never read.
+src/framework/settings-validation.ts(31,19): error TS2693: 'Ajv' only refers to a type, but is being used as a value here.
+src/framework/settings-validation.ts(84,22): error TS2339: Property 'instancePath' does not exist on type 'ErrorObject'.
+src/framework/settings-validation.ts(84,55): error TS2339: Property 'instancePath' does not exist on type 'ErrorObject'.
+src/framework/settings-validation.ts(84,92): error TS7006: Parameter 'part' implicitly has an 'any' type.
+src/framework/settings-validation.ts(85,73): error TS2339: Property 'missingProperty' does not exist on type 'ErrorParameters'.
+  Property 'missingProperty' does not exist on type 'RefParams'.
+src/framework/settings-validation.ts(85,147): error TS2339: Property 'additionalProperty' does not exist on type 'ErrorParameters'.
+  Property 'additionalProperty' does not exist on type 'RefParams'.
+node:internal/errors:983
+  const err = new Error(message);
+              ^
+
+Error: Command failed: /usr/local/bin/node /metrics/node_modules/typescript/bin/tsc -p /metrics/packages/apack-sdk/tsconfig.package.json --outDir /metrics/packages/apack-sdk/.temp/build
+    at genericNodeError (node:internal/errors:983:15)
+    at wrappedFn (node:internal/errors:537:14)
+    at checkExecSyncError (node:child_process:882:11)
+    at execFileSync (node:child_process:918:15)
+    at main (/metrics/scripts/build-package.ts:43:3)
+    at stampedRunAll (/metrics/packages/apack-host/src/build/packages-built.ts:1304:11)
+    at stampedRun (/metrics/packages/apack-host/src/build/packages-built.ts:1325:9)
+    at withBuildLock (/metrics/packages/apack-host/src/build/packages-built.ts:1257:11)
+    at withBuildLock (/metrics/packages/apack-host/src/build/packages-built.ts:1230:18)
+    at stampedBuild (/metrics/packages/apack-host/src/build/packages-built.ts:1250:9) {
+  status: 1,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 307,
+  stdout: null,
+  stderr: null
+}
+
+Node.js v23.11.1
+npm error Lifecycle script `build:package` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-sdk
+npm error workspace @apackdev/sdk@0.1.0
+npm error location /metrics/packages/apack-sdk
+npm error command failed
+npm error command sh -c tsx ../../scripts/build-package.ts .
+building @apackdev/sdk failed — the packages are not built.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/repo-checks
+npm error workspace @app/repo-checks@0.0.0
+npm error location /metrics/packages/repo-checks
+npm error command failed
+npm error command sh -c tsx ../../scripts/ensure-packages-built.ts

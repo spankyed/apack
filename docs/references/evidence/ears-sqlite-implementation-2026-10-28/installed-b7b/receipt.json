@@ -1,0 +1,66 @@
+{
+  "source": "b7bfb366716ba71d9a93ea540efc3327c8a011b7",
+  "scope": "Unpacked unsigned Preview native/API runtime; not renderer, installer, signing, physical safety or performance acceptance",
+  "platforms": [
+    {
+      "platform": "linux",
+      "electron": "37.2.4",
+      "driverVersion": "13.0.3",
+      "sqliteVersion": "3.53.4",
+      "nativeAddons": 6,
+      "previewOriginalSha256": "0c09d668e4cd96dce4476607af25084a64f1a168ec895eccf66f713574d58aee",
+      "previewCases": [
+        {
+          "name": "local preview builds versions previews without changing release metadata",
+          "status": "passed",
+          "durationMs": 3.7249239999999872
+        },
+        {
+          "name": "local preview builds gives the builders one version and identity and disables inherited publishing/signing",
+          "status": "passed",
+          "durationMs": 1.2847559999999874
+        },
+        {
+          "name": "local preview builds isolates channels and rejects incomplete or changed outputs before packaging",
+          "status": "passed",
+          "durationMs": 16.067543999999998
+        },
+        {
+          "name": "local preview builds names beta release files with characters GitHub preserves, using the staged manifest",
+          "status": "passed",
+          "durationMs": 53.25259799999998
+        }
+      ]
+    },
+    {
+      "platform": "windows",
+      "electron": "37.2.4",
+      "driverVersion": "13.0.3",
+      "sqliteVersion": "3.53.4",
+      "nativeAddons": 6,
+      "previewOriginalSha256": "66a9ec20fbc00c55e6034e060907ea2b31c5e48ef4bda9a36a9c56112f0b2837",
+      "previewCases": [
+        {
+          "name": "local preview builds versions previews without changing release metadata",
+          "status": "passed",
+          "durationMs": 3.232900000000029
+        },
+        {
+          "name": "local preview builds gives the builders one version and identity and disables inherited publishing/signing",
+          "status": "passed",
+          "durationMs": 1.488999999999976
+        },
+        {
+          "name": "local preview builds isolates channels and rejects incomplete or changed outputs before packaging",
+          "status": "passed",
+          "durationMs": 35.247299999999996
+        },
+        {
+          "name": "local preview builds names beta release files with characters GitHub preserves, using the staged manifest",
+          "status": "passed",
+          "durationMs": 78.66379999999998
+        }
+      ]
+    }
+  ]
+}

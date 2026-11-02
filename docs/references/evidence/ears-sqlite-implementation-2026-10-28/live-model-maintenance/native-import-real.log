@@ -1,0 +1,16 @@
+(node:20) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@apackdev/host| tests/backup/storage.spec.ts (26 tests | 23 skipped) 14811ms
+   ✓ coordinates real native services through populated SQLite import and success  4855ms
+   ✓ coordinates real native services through populated SQLite import and acceptance  5187ms
+   ✓ coordinates real native services through populated SQLite import and media  4768ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 23 skipped (26)
+   Start at  11:05:28
+   Duration  22.11s (transform 3.10s, setup 14ms, collect 6.77s, tests 14.81s, environment 0ms, prepare 189ms)
+
+JSON report written to /results/native-import-real.json

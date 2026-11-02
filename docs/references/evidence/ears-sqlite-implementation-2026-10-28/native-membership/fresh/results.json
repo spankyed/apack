@@ -1,0 +1,153 @@
+[
+  {
+    "label": "packages-build",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 30.734032087988453
+  },
+  {
+    "label": "compile-original",
+    "args": [
+      "cc",
+      "-O3",
+      "-DNDEBUG",
+      "-Werror=implicit-function-declaration",
+      "-shared",
+      "-fPIC",
+      "-I/metrics/node_modules/better-sqlite3/deps/sqlite3",
+      "/upstream.c",
+      "-lm",
+      "-o",
+      "/metrics/original.so"
+    ],
+    "exitCode": 0,
+    "seconds": 2.5943716330220923
+  },
+  {
+    "label": "compile-patched",
+    "args": [
+      "node",
+      "native/vectors/build.mjs",
+      "/metrics/patched",
+      "/upstream.c"
+    ],
+    "exitCode": 0,
+    "seconds": 2.6136610959947575
+  },
+  {
+    "label": "original-1000",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/real-vector-ears.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "1000",
+      "/results/original-1000.json",
+      "native-fresh"
+    ],
+    "exitCode": 0,
+    "seconds": 11.750705425976776
+  },
+  {
+    "label": "original-1000-verification",
+    "args": [
+      "python3",
+      "packages/apack-ears/bench/sqlite/verify-fresh-vector.py",
+      "/results/original-1000.json",
+      "/truth/truth.json",
+      "/results/original-1000-verification.json"
+    ],
+    "exitCode": 1,
+    "seconds": 0.12047120701754466
+  },
+  {
+    "label": "original-99900",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/real-vector-ears.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "/results/original-99900.json",
+      "native-fresh"
+    ],
+    "exitCode": 0,
+    "seconds": 369.8321847539919
+  },
+  {
+    "label": "original-99900-verification",
+    "args": [
+      "python3",
+      "packages/apack-ears/bench/sqlite/verify-fresh-vector.py",
+      "/results/original-99900.json",
+      "/truth/truth.json",
+      "/results/original-99900-verification.json"
+    ],
+    "exitCode": 1,
+    "seconds": 0.18379678699420765
+  },
+  {
+    "label": "patched-1000",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/real-vector-ears.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "1000",
+      "/results/patched-1000.json",
+      "native-fresh"
+    ],
+    "exitCode": 0,
+    "seconds": 11.480550744978245
+  },
+  {
+    "label": "patched-1000-verification",
+    "args": [
+      "python3",
+      "packages/apack-ears/bench/sqlite/verify-fresh-vector.py",
+      "/results/patched-1000.json",
+      "/truth/truth.json",
+      "/results/patched-1000-verification.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.07252571498975158
+  },
+  {
+    "label": "patched-99900",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/real-vector-ears.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "/results/patched-99900.json",
+      "native-fresh"
+    ],
+    "exitCode": 0,
+    "seconds": 234.50058551199618
+  },
+  {
+    "label": "patched-99900-verification",
+    "args": [
+      "python3",
+      "packages/apack-ears/bench/sqlite/verify-fresh-vector.py",
+      "/results/patched-99900.json",
+      "/truth/truth.json",
+      "/results/patched-99900-verification.json"
+    ],
+    "exitCode": 1,
+    "seconds": 0.1229797120031435
+  }
+]

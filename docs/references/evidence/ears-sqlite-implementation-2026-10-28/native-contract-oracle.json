@@ -1,0 +1,122 @@
+{
+  "whereNull": [
+    {
+      "kind": "ids",
+      "ids": [
+        "Row-missing",
+        "Row-nil",
+        "Row-arrayNil",
+        "Row-arrayMixed"
+      ]
+    }
+  ],
+  "whereFalse": [
+    {
+      "kind": "ids",
+      "ids": [
+        "Row-arrayFalse",
+        "Row-flag"
+      ]
+    }
+  ],
+  "whereZero": [
+    {
+      "kind": "ids",
+      "ids": [
+        "Row-zero",
+        "Row-negativeZero",
+        "Row-arrayZero"
+      ]
+    }
+  ],
+  "has": [
+    {
+      "kind": "ids",
+      "ids": [
+        "Row-nil",
+        "Row-arrayNil",
+        "Row-empty",
+        "Row-arrayOne",
+        "Row-arrayFalse",
+        "Row-flag",
+        "Row-zero",
+        "Row-negativeZero",
+        "Row-textZero",
+        "Row-arrayZero",
+        "Row-arrayMixed",
+        "Row-nestedNil"
+      ]
+    }
+  ],
+  "lacks": [
+    {
+      "kind": "ids",
+      "ids": [
+        "Row-missing"
+      ]
+    }
+  ],
+  "admitIncompatible": {
+    "ok": true,
+    "result": [
+      {
+        "path": "types.Row.fields.n",
+        "change": "changed",
+        "effect": "enforced"
+      },
+      {
+        "path": "types.Row.fields.required",
+        "change": "added",
+        "effect": "enforced"
+      }
+    ]
+  },
+  "changeUnrelatedOnOldData": {
+    "ok": true,
+    "result": {
+      "results": [
+        {
+          "kind": "done"
+        }
+      ],
+      "changes": {
+        "entities": {
+          "Row-flag": {
+            "type": "Row",
+            "created": false,
+            "destroyed": false,
+            "trashed": false,
+            "restored": false,
+            "fields": [
+              "other",
+              "updatedAt"
+            ]
+          }
+        },
+        "relations": {},
+        "types": [
+          "Row"
+        ],
+        "kinds": [],
+        "sequence": 4,
+        "touched": []
+      },
+      "sequence": 4
+    }
+  },
+  "changeTypedInvalid": {
+    "ok": false,
+    "code": "FIELD_TYPE",
+    "message": "Row.n is a number: it got a string"
+  },
+  "uncheckedLoad": {
+    "ok": true
+  },
+  "negativeZero": [
+    {
+      "kind": "field",
+      "present": true,
+      "value": 0
+    }
+  ]
+}

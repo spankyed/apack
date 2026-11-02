@@ -1,0 +1,128 @@
+{
+  "run": 41371206316,
+  "source": "81e8ab4fe5be727872e36de5853fc49fe5a9e70e",
+  "platformJobs": "terminal failure only at retained keyword usefulness gate",
+  "strictConsumers": "still live or queued when this platform checkpoint was recorded",
+  "platforms": [
+    {
+      "platform": "linux",
+      "suites": {
+        "ears": {
+          "passed": 930,
+          "failed": 1,
+          "excluded": 0,
+          "failedCases": [
+            "real repository-content search relevance 'find generated metadata ownership'"
+          ]
+        },
+        "nativeReadinessPassed": 8,
+        "host": {
+          "passed": 313,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": []
+        },
+        "host-crash": {
+          "passed": 12,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": []
+        }
+      },
+      "requiredHistoryCases": [
+        {
+          "name": "never treats SQLITE_CORRUPT as permission to replace a SQLite history directory",
+          "status": "passed"
+        },
+        {
+          "name": "refuses sqlite/1 history quarantine while a managed reader still holds the directory",
+          "status": "passed"
+        },
+        {
+          "name": "quarantines corrupt sqlite/1 history while an unrelated primary handle stays open",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "platform": "macos",
+      "suites": {
+        "ears": {
+          "passed": 930,
+          "failed": 1,
+          "excluded": 0,
+          "failedCases": [
+            "real repository-content search relevance 'find generated metadata ownership'"
+          ]
+        },
+        "nativeReadinessPassed": 8,
+        "host": {
+          "passed": 313,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": []
+        },
+        "host-crash": {
+          "passed": 12,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": []
+        }
+      },
+      "requiredHistoryCases": [
+        {
+          "name": "never treats SQLITE_CORRUPT as permission to replace a SQLite history directory",
+          "status": "passed"
+        },
+        {
+          "name": "refuses sqlite/1 history quarantine while a managed reader still holds the directory",
+          "status": "passed"
+        },
+        {
+          "name": "quarantines corrupt sqlite/1 history while an unrelated primary handle stays open",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "platform": "windows",
+      "suites": {
+        "ears": {
+          "passed": 926,
+          "failed": 1,
+          "excluded": 4,
+          "failedCases": [
+            "real repository-content search relevance 'find generated metadata ownership'"
+          ]
+        },
+        "nativeReadinessPassed": 8,
+        "host": {
+          "passed": 310,
+          "failed": 0,
+          "excluded": 6,
+          "failedCases": []
+        },
+        "host-crash": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 10,
+          "failedCases": []
+        }
+      },
+      "requiredHistoryCases": [
+        {
+          "name": "never treats SQLITE_CORRUPT as permission to replace a SQLite history directory",
+          "status": "passed"
+        },
+        {
+          "name": "refuses sqlite/1 history quarantine while a managed reader still holds the directory",
+          "status": "passed"
+        },
+        {
+          "name": "quarantines corrupt sqlite/1 history while an unrelated primary handle stays open",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

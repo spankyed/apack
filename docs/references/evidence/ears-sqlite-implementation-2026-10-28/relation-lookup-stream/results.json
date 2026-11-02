@@ -1,0 +1,21 @@
+{
+  "scope": "Actual helper/equality over controlled cursor rows; not native SQL/type or memory qualification",
+  "summaries": [
+    {
+      "slot": 0,
+      "visited": 1,
+      "cursorClosed": true
+    },
+    {
+      "slot": 127,
+      "visited": 128,
+      "cursorClosed": true
+    },
+    {
+      "slot": 128,
+      "visited": 128,
+      "cursorClosed": true
+    }
+  ],
+  "exclusionAndDecodeFailureClose": true
+}

@@ -1,0 +1,16 @@
+--- correlated-point-diagnostic.mjs
++++ batched-point-diagnostic.mjs
+@@ -99,10 +99,10 @@
+           probePlan: db.sql.prepare('EXPLAIN QUERY PLAN '+probe).all(input), samples: [] };
+         profile.nativeDiagnostic[name] = state;
+         const terms = alternatives.map(expression => /body : "([^"]+)"/.exec(expression)[1]);
+-        const lookup = `SELECT alternative.value FROM json_each(?) alternative WHERE EXISTS
+-          (SELECT 1 FROM temp.typo_dictionary v WHERE v.term=alternative.value AND v.col IN ('body','aliases'))`;
++        const lookup = `SELECT DISTINCT v.term AS value FROM temp.typo_dictionary v
++          WHERE v.term IN (SELECT value FROM json_each(?)) AND v.col IN ('body','aliases')`;
+         const words = JSON.stringify(terms), point = db.sql.prepare(lookup);
+-        state.pointPlan = db.sql.prepare('EXPLAIN QUERY PLAN '+lookup).all(words); state.pointMs = [];
++        state.pointPlan = db.sql.prepare('EXPLAIN QUERY PLAN '+lookup).all(words); state.pointBytecode = db.sql.prepare('EXPLAIN '+lookup).all(words); state.pointMs = [];
+         for (let ordinal=0;ordinal<13;ordinal++) {
+           await new Promise(resolve=>setImmediate(resolve)); const begin=performance.now(),rows=point.all(words);
+           state.pointMs.push(performance.now()-begin);

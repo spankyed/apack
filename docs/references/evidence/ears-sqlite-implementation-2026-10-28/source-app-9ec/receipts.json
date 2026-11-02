@@ -1,0 +1,12 @@
+[
+  {
+    "file": "source-app.json",
+    "sha256": "67c56106d89626a49408eec6d828888eef3622ecf334dbf216a7bf622554c9da",
+    "bytes": 54257
+  },
+  {
+    "file": "workflow.json",
+    "sha256": "359639bb9d6f8dddba290556a3019adfe6dbff2f454d2e768d860a792b4873f6",
+    "bytes": 7434
+  }
+]

@@ -1,0 +1,14 @@
+(node:29831) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ captures a final foreground stall even without yielding afterward (37.686375ms)
+✔ samples independently during a workload and stops cleanly (62.781709ms)
+✔ does not own process lifetime (86.861666ms)
+✔ captures a generically named prebuild and an explicitly loaded extension (2.851375ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 295.650625

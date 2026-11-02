@@ -1,0 +1,66 @@
+{
+  "run": 41487611128,
+  "source": "f6d938d190da827c2cf13c716264cfe05d71f081",
+  "productionCode": "a8500818f6",
+  "job": 125430092892,
+  "overallConclusion": "failure",
+  "onlyFailedStep": "Focused shared graph, observation and search contracts on both backends",
+  "contracts": {
+    "sqlite-contracts.json": {
+      "passed": 460,
+      "failed": 0,
+      "excluded": 0
+    },
+    "pack-readiness.json": {
+      "passed": 114,
+      "failed": 0,
+      "excluded": 0
+    },
+    "native-index-readiness.json": {
+      "passed": 8,
+      "failed": 0,
+      "excluded": 0
+    },
+    "history-policy.json": {
+      "passed": 47,
+      "failed": 0,
+      "excluded": 0
+    },
+    "subprocess-inventory.json": {
+      "passed": 78,
+      "failed": 0,
+      "excluded": 0
+    }
+  },
+  "nativeComparison": {
+    "passed": 268,
+    "failed": 1,
+    "excludedSqliteOnly": 191,
+    "failedCase": "real repository-content search relevance 'find generated metadata ownership'",
+    "originalReportSha256": "23893958666ac841f68a91e67b836bfd91616c437a2ddb7e21674aad20a9c27f",
+    "disposition": "Unchanged native frozen-keyword comparison misses case 6; preserved as failed, not a candidate failure or baseline pass."
+  },
+  "walSync": {
+    "successfulSyncDeathCases": 8,
+    "disabledInjectorControls": 2,
+    "sourceHashesVerifiedPerReport": 68,
+    "actualErrorReturnCases": 4,
+    "errorOutcome": "COMMIT_UNKNOWN/SQLITE_IOERR_FSYNC; fenced before process death; exactly one commit on fresh reopen"
+  },
+  "workerFaults": {
+    "modelAllocationRequestedBytes": 32800,
+    "modelBytes": 32792,
+    "errno": 12,
+    "heldWalBytes": 57712,
+    "releasedWalBytes": 0,
+    "retrySamples": 512
+  },
+  "copiedProfileConversion": {
+    "originalReportSha256": "4cf039f21f1e25a05f1f7ee6873412f3c3767854ca2f8b4f6afe5ee6c76b8dfa",
+    "checksCompleted": 5,
+    "format": "sqlite/1",
+    "scope": "Actual copied-source conversion and host reopen; no paths/data persisted in receipt."
+  },
+  "originalJobMetadataSha256": "eacc90b9369abddce00c6e1e1ee16cee2fc9c4d0c7eac50e005a0f1c995a22cb",
+  "scope": "Named current-code operational/contract evidence; not a passing overall API workflow, physical power-loss certification or general native search parity."
+}

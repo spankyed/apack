@@ -1,0 +1,9 @@
+# Complete real hybrid matrix: correct fusion, failing responsiveness
+
+[Run 41230754746](https://github.com/spankyed/apack/actions/runs/41230754746) succeeds as a diagnostic at exact source a77e75a743b96fb63e6d9a6270e88aa6d6206ffc. The later independent verifier at e45d03d82f accepts all 1,800 cases: three real paired corpus prefixes, three candidate scopes, two explicitly distinct query families and 100 queries per group. FULL=2, complete source/manifest identity, exact fusion reference, unique cases, expected vector counts, lexical controls and private database cleanup all pass. Acquired payload cleanup also passes.
+
+Performance does not pass. At 10k, all-live p95 is 57.47–57.71ms and heartbeat p99 59.58–59.76ms. At 99.9k, all-live p95 is 683.24–695.37ms and heartbeat p99 727.91–811.96ms. All six 99.9k groups miss the 16ms heartbeat diagnostic; both all-live groups also miss 200ms query p95. The 1k groups pass the heartbeat diagnostic. See matrix.json for all groups and retained numeric samples for the full distribution.
+
+These are warm queries after independent reference reads on an uncapped disposable runner. The acquisition container's two-CPU/6-GiB limits do not apply to Node queries. This is not capped-resource, cold-store, sustained app, semantic-relevance or adoption qualification. Corpus-derived controls are not held-out relevance judgments. The run predates later global cross-type fusion/highlight and like fixes; its single-type correctness does not qualify them.
+
+Current complete-ranking hybrid bypasses ANN and scales poorly. Preserve this baseline while evaluating a declared bounded candidate policy against correctness, independent usefulness/recall and the unchanged budgets. Do not relabel a policy change as an equivalent exact optimization. Compressed reports contain inspected numeric samples and fixed protocol/source metadata only, with uncompressed receipts; no text, dataset IDs, vectors or databases are published.

@@ -1,0 +1,24 @@
+[
+  {
+    "mutation": "missing-connection-load",
+    "failedAssertions": [
+      {
+        "name": "durable native model admission loads trusted native candidates on independent readers and writers without creating training owners",
+        "messages": [
+          "AssertionError: expected \"candidates\" to be called at least once\n    at Proxy.<anonymous> (file:///metrics/node_modules/@vitest/expect/dist/index.js:1335:10)\n    at Proxy.<anonymous> (file:///metrics/node_modules/@vitest/expect/dist/index.js:1029:14)\n    at Proxy.methodWrapper (file:///metrics/node_modules/chai/index.js:1686:25)\n    at /metrics/packages/apack-ears/tests/sqlite/vector-models.spec.ts:242:92\n    at file:///metrics/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20"
+        ]
+      }
+    ]
+  },
+  {
+    "mutation": "missing-audit-loader",
+    "failedAssertions": [
+      {
+        "name": "durable native model admission retains the trusted connection loader in native-bearing export and private audit copies",
+        "messages": [
+          "Error: no such module: vec1\n    at SqliteIndexBuilds.settle (/metrics/packages/apack-ears/src/sqlite/index-builds.ts:226:79)\n    at SqliteIndexBuilds.step (/metrics/packages/apack-ears/src/sqlite/index-builds.ts:341:17)\n    at Immediate.<anonymous> (/metrics/packages/apack-ears/src/sqlite/index-builds.ts:236:28)\n    at processImmediate (node:internal/timers:505:21)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)"
+        ]
+      }
+    ]
+  }
+]

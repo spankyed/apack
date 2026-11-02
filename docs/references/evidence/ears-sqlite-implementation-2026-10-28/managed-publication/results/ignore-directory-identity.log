@@ -1,0 +1,79 @@
+
+ RUN  v3.2.7 /electron/packages/apack-host
+
+ ↓ tests/database/storage.spec.ts (36 tests | 36 skipped)
+ ❯ tests/backup/recovery.spec.ts (44 tests | 1 failed | 43 skipped) 247ms
+   ↓ restores both elmdb/1 stores and media, preserves forensic copies, and never replays completed recovery
+   ↓ restores both sqlite/1 stores and media, preserves forensic copies, and never replays completed recovery
+   ↓ resumes after interruption immediately following move-incumbent
+   ↓ resumes after interruption immediately following publish-incumbent
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=false) at 'complete'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=false) at 'move-incumbent'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=false) at 'publish-incumbent'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=true) at 'complete'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=true) at 'move-incumbent'
+   ↓ restores 'elmdb/1' through parent aliases (recordAlias=true) at 'publish-incumbent'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'complete'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'move-incumbent'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=false) at 'publish-incumbent'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'complete'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'move-incumbent'
+   ↓ restores 'sqlite/1' through parent aliases (recordAlias=true) at 'publish-incumbent'
+   ↓ parent aliases preserve managed reader exclusion for elmdb/1
+   ↓ parent aliases preserve managed reader exclusion for sqlite/1
+   ↓ does not admit foreign-parent as a recovery destination through an alias
+   ↓ does not admit different-leaf as a recovery destination through an alias
+   ↓ does not admit relative as a recovery destination through an alias
+   ↓ does not admit leaf-symlink as a recovery destination through an alias
+   ↓ restores the original absence of media
+   ↓ refuses a running app and another writer without staging or changing data
+   ↓ validates every incumbent before moving any live store
+   ↓ refuses a changed stage on resume and keeps the preparation
+   ↓ rejects path traversal, foreign profile destinations and mismatched format
+   ↓ excludes an open managed lmdb reader until it closes
+   ↓ excludes an open managed runHistory reader until it closes
+   ↓ refuses new readers during physical replacement and releases failed-open claims
+   ↓ refuses a managed open without writable metadata while direct read-only snapshots remain available
+   ↓ retains a managed handle claim when close fails (readOnly=true)
+   ↓ retains a managed handle claim when close fails (readOnly=false)
+   ↓ refuses unresolved reader ownership (invalid record)
+   ↓ refuses unresolved reader ownership ({"pid":493,"machine":"another-host","what":"reader","since":"now"})
+   ↓ excludes writable elmdb/1 handles from physical recovery until close
+   ↓ excludes writable sqlite/1 handles from physical recovery until close
+   ↓ refuses a new writable open during publication (readOnly=false)
+   ↓ refuses a new writable open during publication (readOnly=undefined)
+   ↓ a store-only publication excludes that store but permits an unrelated sibling handle
+   ↓ a store-only publication refuses claims whose database identity is unresolved
+   ↓ refuses managed database-leaf aliases before opening (readOnly=true)
+   ↓ refuses managed database-leaf aliases before opening (readOnly=false)
+   × excludes physical directory identity even when its claim uses another leaf spelling 245ms
+     → expected [Function] to throw an error
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/backup/recovery.spec.ts > excludes physical directory identity even when its claim uses another leaf spelling
+AssertionError: expected [Function] to throw an error
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+undefined
+
+ ❯ tests/backup/recovery.spec.ts:329:88
+    327|   let unexpected: ReturnType<typeof holdRecoveryExclusion> | undefined;
+    328|   try {
+    329|     expect(() => { unexpected = holdRecoveryExclusion(f.paths.runHisto…
+       |                                                                                        ^
+    330|   } finally { unexpected?.release(); database.close(); }
+    331| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 skipped (2)
+      Tests  1 failed | 79 skipped (80)
+   Start at  15:18:34
+   Duration  2.88s (transform 904ms, setup 15ms, collect 2.30s, tests 247ms, environment 0ms, prepare 90ms)
+
+JSON report written to /results/ignore-directory-identity.json

@@ -1,0 +1,83 @@
+[
+  {
+    "sample": "admission-1",
+    "writes": 626,
+    "operationP99Ms": 362.71837199998845,
+    "turnWaitP99Ms": 298.3438240000032,
+    "lookupP99Ms": 9.437925000005635,
+    "foregroundWriteCommitP99Ms": 362.12953500000003,
+    "backgroundWriteCommitP99Ms": 297.65369499999724,
+    "passedOriginalBudgets": false
+  },
+  {
+    "sample": "admission-2",
+    "writes": 628,
+    "operationP99Ms": 254.6374680000008,
+    "turnWaitP99Ms": 272.20647800000734,
+    "lookupP99Ms": 9.428799999994226,
+    "foregroundWriteCommitP99Ms": 254.01546499999677,
+    "backgroundWriteCommitP99Ms": 272.0480180000013,
+    "passedOriginalBudgets": false
+  },
+  {
+    "sample": "admission-3",
+    "writes": 627,
+    "operationP99Ms": 237.4899609999993,
+    "turnWaitP99Ms": 279.63664199999766,
+    "lookupP99Ms": 9.406966000002285,
+    "foregroundWriteCommitP99Ms": 236.44820600000094,
+    "backgroundWriteCommitP99Ms": 279.30347299999266,
+    "passedOriginalBudgets": false
+  },
+  {
+    "sample": "control-1",
+    "writes": 626,
+    "operationP99Ms": 307.18532499999856,
+    "turnWaitP99Ms": 2.8703910000003816,
+    "lookupP99Ms": 8.274835000000166,
+    "foregroundWriteCommitP99Ms": 306.73803000000044,
+    "backgroundWriteCommitP99Ms": null,
+    "passedOriginalBudgets": false
+  },
+  {
+    "sample": "control-2",
+    "writes": 626,
+    "operationP99Ms": 216.6546419999995,
+    "turnWaitP99Ms": 3.2706840000028023,
+    "lookupP99Ms": 12.062731000005442,
+    "foregroundWriteCommitP99Ms": 216.1449309999989,
+    "backgroundWriteCommitP99Ms": null,
+    "passedOriginalBudgets": false
+  },
+  {
+    "sample": "control-3",
+    "writes": 626,
+    "operationP99Ms": 233.998942000002,
+    "turnWaitP99Ms": 10.881306999999651,
+    "lookupP99Ms": 26.12534599999708,
+    "foregroundWriteCommitP99Ms": 226.82553000000007,
+    "backgroundWriteCommitP99Ms": null,
+    "passedOriginalBudgets": false
+  },
+  {
+    "sample": "native-control-1",
+    "writes": 626,
+    "operationP99Ms": 217.30293800000072,
+    "turnWaitP99Ms": 2.059843999995792,
+    "lookupP99Ms": 6.574035000005097
+  },
+  {
+    "sample": "native-control-2",
+    "writes": 626,
+    "operationP99Ms": 114.94248100000004,
+    "turnWaitP99Ms": 0.5342109999983222,
+    "lookupP99Ms": 1.5671750000001339
+  },
+  {
+    "sample": "native-control-3",
+    "writes": 626,
+    "operationP99Ms": 75.3896480000003,
+    "turnWaitP99Ms": 0.4806699999999182,
+    "lookupP99Ms": 1.3327989999997953
+  }
+]

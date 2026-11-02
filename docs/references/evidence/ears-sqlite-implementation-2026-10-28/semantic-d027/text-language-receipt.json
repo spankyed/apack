@@ -1,0 +1,38 @@
+{
+  "protocol": "ears-text-language-receipt/1",
+  "completed": true,
+  "qualification": false,
+  "source": "d02734516973c930533ec1b7bd7fdbbd1f1a2205",
+  "fixtureSha256": "29d79b6060b21ca68d3bb5dd491cc2e3cfff36a11c2f10b28d6df62c9acc3527",
+  "scope": "All frozen judgments under two explicit language configurations; no acceptance waiver",
+  "groups": [
+    {
+      "backend": "elmdb",
+      "stem": "none",
+      "passed": 24,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "backend": "elmdb",
+      "stem": "en",
+      "passed": 24,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "backend": "sqlite",
+      "stem": "none",
+      "passed": 24,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "backend": "sqlite",
+      "stem": "en",
+      "passed": 24,
+      "failed": 1,
+      "skipped": 0
+    }
+  ]
+}

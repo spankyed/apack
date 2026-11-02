@@ -1,0 +1,23 @@
+{
+  "source": "1860dd2eb141fc1d3f3b8b5d3e7b0a7a5f2fe332",
+  "unchangedGates": true,
+  "comparison": "same app/corpus/settings/resources, independently trained models and fixed original-then-patched order",
+  "variants": {
+    "original-99900": {
+      "queryGatesPassed": false,
+      "allLatencyGatesPassed": false,
+      "minimumMeanRecall": 0.9690000000000002,
+      "admissionHeartbeatP99Ms": 20.754761000003782,
+      "maxRssKiB": 1065064,
+      "modelSha256": "3b9de97aeab59d9e9ea0e06664dc123be0f33001daac33801a17a1a4386dbb63"
+    },
+    "patched-99900": {
+      "queryGatesPassed": false,
+      "allLatencyGatesPassed": true,
+      "minimumMeanRecall": 0.9740000000000002,
+      "admissionHeartbeatP99Ms": 30.02180600000429,
+      "maxRssKiB": 1066812,
+      "modelSha256": "e729cc4ad4c9b8361a24aaa245c085ea5e296a1edd40780592e849510f8828c9"
+    }
+  }
+}

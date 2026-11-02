@@ -1,0 +1,153 @@
+{
+  "base": "ff16d3b9467ee3f0c115ac3bc60d1798651d7c31",
+  "inputs": {
+    ".github/workflows/app-acceptance.yml": "093b62cde52702fdb73415b294f491eda9295ce14310c135e39844b173ba51ac",
+    "build/prod/sign-mac.mjs": "e42e641d59a6c7d5032b931ca1c4da9c5bdefa545055e65b2794c3aaaf60b2c5",
+    "electron-builder.mjs": "2464f43065a679066b2a8f6c66ab91e146290890eacc32f9c3e26da535e75580",
+    "scripts/build-preview.ts": "5741b16f1e2d90ab54e71aa737e8baf1c4581bbfb3e48d6de76fa96e6277e383",
+    "build/build.sh": "d03a6249121d0d8d3914678bd0c4b7f673b814cc5c4be9d1e54f4cfe1406603a",
+    "packages/repo-checks/tests/native-signing.spec.ts": "16dbdb915f15a090f98ad88041482376cebc42e7444f5b3af37c444b6f54b715"
+  },
+  "checks": [
+    {
+      "label": "tests",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/repo-checks",
+        "tests/native-signing.spec.ts",
+        "tests/preview-build.spec.ts",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/tests.json"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "types",
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/repo-checks",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "lint",
+      "args": [
+        "node",
+        "node_modules/oxlint/bin/oxlint",
+        "build/prod/sign-mac.mjs",
+        "packages/repo-checks/tests/native-signing.spec.ts",
+        "scripts/build-preview.ts",
+        "-D",
+        "correctness"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "workflow",
+      "args": [
+        "node",
+        ".temp/signing-workflow-check.cjs"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "shell-syntax",
+      "args": [
+        "bash",
+        "-n",
+        "build/build.sh"
+      ],
+      "exitCode": 0,
+      "negative": false
+    },
+    {
+      "label": "omit-manifest-publication",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/repo-checks",
+        "tests/native-signing.spec.ts",
+        "tests/preview-build.spec.ts",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/omit-manifest-publication.json"
+      ],
+      "exitCode": 1,
+      "negative": true,
+      "failedAssertions": [
+        "native manifest signing before outer app sealing preserves signing options and finalizes signed library bytes before the outer seal",
+        "native manifest signing before outer app sealing retries signing after an outer-seal failure and hashes the newly signed bytes each time"
+      ]
+    },
+    {
+      "label": "omit-inner-signature-verification",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/repo-checks",
+        "tests/native-signing.spec.ts",
+        "tests/preview-build.spec.ts",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/omit-inner-signature-verification.json"
+      ],
+      "exitCode": 1,
+      "negative": true,
+      "failedAssertions": [
+        "native manifest signing before outer app sealing preserves signing options and finalizes signed library bytes before the outer seal",
+        "native manifest signing before outer app sealing does not bless a failed inner signature or a concurrently changed manifest"
+      ]
+    },
+    {
+      "label": "allow-skipped-library",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/repo-checks",
+        "tests/native-signing.spec.ts",
+        "tests/preview-build.spec.ts",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/allow-skipped-library.json"
+      ],
+      "exitCode": 1,
+      "negative": true,
+      "failedAssertions": [
+        "native manifest signing before outer app sealing refuses a preexisting valid signature when the library was skipped in this signing pass"
+      ]
+    }
+  ]
+}

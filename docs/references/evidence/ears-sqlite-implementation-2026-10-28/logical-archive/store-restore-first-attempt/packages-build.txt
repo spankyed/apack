@@ -1,0 +1,36 @@
+
+> @apackdev/ears@0.1.0 build:package
+> tsx ../../scripts/build-package.ts .
+
+src/sqlite/logical-restore.ts(28,67): error TS2571: Object is of type 'unknown'.
+node:internal/errors:983
+  const err = new Error(message);
+              ^
+
+Error: Command failed: /usr/local/bin/node /metrics/node_modules/typescript/bin/tsc -p /metrics/packages/apack-ears/tsconfig.package.json --outDir /metrics/packages/apack-ears/.temp/build
+    at genericNodeError (node:internal/errors:983:15)
+    at wrappedFn (node:internal/errors:537:14)
+    at checkExecSyncError (node:child_process:882:11)
+    at execFileSync (node:child_process:918:15)
+    at main (/metrics/scripts/build-package.ts:43:3)
+    at stampedRunAll (/metrics/packages/apack-host/src/build/packages-built.ts:1304:11)
+    at stampedRun (/metrics/packages/apack-host/src/build/packages-built.ts:1325:9)
+    at withBuildLock (/metrics/packages/apack-host/src/build/packages-built.ts:1257:11)
+    at withBuildLock (/metrics/packages/apack-host/src/build/packages-built.ts:1230:18)
+    at stampedBuild (/metrics/packages/apack-host/src/build/packages-built.ts:1250:9) {
+  status: 1,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 91,
+  stdout: null,
+  stderr: null
+}
+
+Node.js v23.11.1
+npm error Lifecycle script `build:package` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c tsx ../../scripts/build-package.ts .

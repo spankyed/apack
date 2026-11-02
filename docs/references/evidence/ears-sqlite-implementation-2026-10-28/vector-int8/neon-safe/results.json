@@ -1,0 +1,37 @@
+[
+  {
+    "name": "lint",
+    "exitCode": 0,
+    "seconds": 0.08684402200742625
+  },
+  {
+    "name": "compile-plain",
+    "exitCode": 0,
+    "seconds": 1.3058187529968563
+  },
+  {
+    "name": "compile-neon",
+    "exitCode": 0,
+    "seconds": 1.4078450240049278
+  },
+  {
+    "name": "neon-1000",
+    "exitCode": 0,
+    "seconds": 1.9412396050029201
+  },
+  {
+    "name": "neon-10000",
+    "exitCode": 0,
+    "seconds": 11.710535881997203
+  },
+  {
+    "name": "neon-100000",
+    "exitCode": 1,
+    "seconds": 58.879450749009266
+  },
+  {
+    "name": "plain-10000",
+    "exitCode": 1,
+    "seconds": 7.815190820998396
+  }
+]

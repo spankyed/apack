@@ -1,0 +1,11 @@
+{
+  "source": "e1652e2fb4ee32c0a54de31557c19c8bf2adc73f",
+  "run": "https://github.com/spankyed/apack/actions/runs/41352778422",
+  "stage": "test shim compile",
+  "compileExitCode": 1,
+  "runtimeExecuted": false,
+  "syscallWitness": false,
+  "scope": "Preparation failure only; no native-worker I/O or retry outcome was exercised",
+  "originalCompletedJobLogSha256": "be30d48e138d1bb7c8f047d3d9095342b80cf9c21c22fc4c0cb79461894e3f1e",
+  "diagnosticSha256": "bf664bf082e6fb1df21cc6985aba32e04ae85a1082a72c06405140b50ae47ccb"
+}

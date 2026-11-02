@@ -1,0 +1,7 @@
+# Complete pre-integration native models on three platforms
+
+[Run 41245968059](https://github.com/spankyed/apack/actions/runs/41245968059), source `631a832a0b5c325e54978d4e3f2cba49a9be1762`, is a terminal failed gate. Linux and macOS pass 860 EARS tests with one failure and no skips. Windows passes 856 with the same failure and four POSIX FIFO skips. All 36 native model cases execute and pass on every platform, including scoped/duplicate owners, independent readers/writers, updates/rollback, model refresh, cancellation and reopen. This extends the earlier single-case routing witness to the complete model suite for this source.
+
+Every EARS failure is the unchanged generated-metadata overview relevance judgment. Linux additionally executes all 1,327 SDK contracts, seven API startup/shutdown cases, five repository query cases and package/type/API ownership checks successfully. Current failed runs stop at EARS, so later filesystem-full, host, CLI and copied-profile conversion steps are not evidence. The subsequent workflow correction preserves the failed gate while allowing those independent checks to run; it requires execution.
+
+The numeric summary retains report hashes and actual dispositions, without copying binaries or fixture payloads. These runs predate master 8e2d334e2b and native pin 1849f689, so they do not qualify weighted integration 6c3087ebea, final packaging/signing, app behavior or performance.

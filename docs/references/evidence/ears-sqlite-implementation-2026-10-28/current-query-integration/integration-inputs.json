@@ -1,0 +1,18 @@
+{
+  "dir": "/Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-3AEBRl",
+  "inputs": [
+    {
+      "ref": "HEAD",
+      "commit": "fbd3c1c441a02a7a481d788ec9d776b6453affd1"
+    },
+    {
+      "ref": "master",
+      "commit": "debeddc3a6a26d770163666434cccc6048b7ea0c"
+    }
+  ],
+  "conflictsResolved": [
+    "packages/apack-ears/CLAUDE.md",
+    "packages/default-setup/tests/features/threads/be/query-work.spec.ts"
+  ],
+  "resolution": "retain SQLite explanations/backend assertion and master reverse-walk clarification, runtime EARS/query/write imports, all five current query cases"
+}

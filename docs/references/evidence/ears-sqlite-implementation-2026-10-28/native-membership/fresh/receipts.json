@@ -1,0 +1,22 @@
+[
+  {
+    "file": "original-1000.json.gz",
+    "uncompressedSha256": "34c58dfadc6db5fa46622b695cd1685e74ac3cfce28fefdc2d699467c175b27f",
+    "compressedSha256": "fa5c60348495022fb33d494df32461f5c8d05970c0c388714d443837c3697070"
+  },
+  {
+    "file": "original-99900.json.gz",
+    "uncompressedSha256": "a3c5639f45a2809ab8ed8e32fbef4db121d730be586389775bca9a04ac82ec0f",
+    "compressedSha256": "a7da2e3119490781ead0f4b922c6456b973b014db22d0c5d0832d973e23f2cf2"
+  },
+  {
+    "file": "patched-1000.json.gz",
+    "uncompressedSha256": "90fc57d7c14b863de12dfcb2153762b0033ace0d6b9d09a5fef388a4c6decab3",
+    "compressedSha256": "bbe638d7bc68d90aacf74305e265d40fbad7e03cbcb1f8a4da702ad3d95a46cb"
+  },
+  {
+    "file": "patched-99900.json.gz",
+    "uncompressedSha256": "0d1846fc28a8988d88e188470b806d18539c27d4919a121a5b4a5287daeff4c4",
+    "compressedSha256": "b4f9bbc33df6d3aa29888e28265fbac2409e9707a57b9f3c25cee8f76708de64"
+  }
+]

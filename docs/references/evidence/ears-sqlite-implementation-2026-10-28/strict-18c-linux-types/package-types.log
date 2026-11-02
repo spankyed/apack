@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+tests/sqlite/vector-training.spec.ts(78,21): error TS2339: Property 'pragma' does not exist on type 'DatabaseSync'.
+tests/sqlite/vector-training.spec.ts(79,33): error TS2339: Property 'pragma' does not exist on type 'DatabaseSync'.
+tests/sqlite/vector-training.spec.ts(88,19): error TS2339: Property 'pragma' does not exist on type 'DatabaseSync'.
+npm error Lifecycle script `typecheck` failed with error:
+npm error code 2
+npm error path /home/runner/work/apack/apack/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /home/runner/work/apack/apack/packages/apack-ears
+npm error command failed
+npm error command sh -c tsc --noEmit

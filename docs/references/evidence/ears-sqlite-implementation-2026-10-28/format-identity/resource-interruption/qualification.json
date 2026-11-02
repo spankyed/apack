@@ -1,0 +1,118 @@
+{
+  "sourceParent": "836d3d1d1ffedf85f1ae2dd8baa40be4e488276b",
+  "inputs": {
+    "docs/goals/goal-ears-sqlite.md": "fad479f0e0346574564fc1fd029748e586935f3dd50048573b7e62b4faf6e505",
+    "docs/plans/ears-sqlite-storage.md": "99a09c8e559c781f1e8204a2bd6322b335faef2592cdac45d51392e52f57a2e9",
+    "packages/apack-ears/src/sqlite/database.ts": "d6fea2e0372302b7e489fc357cacfe3d9af06bcd83cdaa9bde6eefc1dd8be8eb",
+    "packages/apack-ears/src/sqlite/embeddings.ts": "a4b5dd4c583eac4e729dc293bfea2d8530a87fa39cc6a347abcd27ec84e4229b",
+    "packages/apack-ears/src/sqlite/format.ts": "3fe30e4defae9759880ee2f4c0fde0b3180cb10cb0619ac9ac7eb99aee69a0c0",
+    "packages/apack-host/tests/database/storage.spec.ts": "9e995d2c721ad455ecf487f27e0b2ac551f8323238f175b0c43f46423ea70fc9",
+    "packages/apack-ears/tests/sqlite/database-identity.spec.ts": "75b3dd5a4f9b64b522da10569f3abaae9a6fa00bf0f3aeb081abeef1bac24ea3"
+  },
+  "commands": [
+    {
+      "label": "ears-types",
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/apack-ears",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 4.636682987213135
+    },
+    {
+      "label": "host-types",
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/apack-host",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 7.155806541442871
+    },
+    {
+      "label": "focused-host",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-host",
+        "tests/database/storage.spec.ts",
+        "--maxWorkers",
+        "1",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/focused-host.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 4.986862897872925
+    },
+    {
+      "label": "packages-build",
+      "args": [
+        "npm",
+        "run",
+        "packages:build"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 37.81115961074829
+    },
+    {
+      "label": "ears-api",
+      "args": [
+        "npm",
+        "run",
+        "api:check",
+        "-w",
+        "@apackdev/ears"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 4.459783554077148
+    },
+    {
+      "label": "ears-full",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-ears",
+        "--maxWorkers",
+        "2",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/ears-full.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 59.6117582321167
+    },
+    {
+      "label": "host-full",
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-host",
+        "--maxWorkers",
+        "2",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/host-full.json"
+      ],
+      "exitCode": 1,
+      "elapsedSeconds": 218.14745163917542
+    }
+  ]
+}

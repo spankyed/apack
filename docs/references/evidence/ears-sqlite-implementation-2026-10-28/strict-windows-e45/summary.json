@@ -1,0 +1,23 @@
+{
+  "run": 41231483821,
+  "job": 124626441102,
+  "source": "e45d03d82f",
+  "platform": "Windows x64",
+  "overall": "failure",
+  "counts": {
+    "numTotalTests": 845,
+    "numPassedTests": 839,
+    "numFailedTests": 1,
+    "numPendingTests": 5
+  },
+  "skips": [
+    "refuses a FIFO at data.sqlite3 without blocking the native opener",
+    "refuses a FIFO at data.sqlite3-wal without blocking the native opener",
+    "refuses a FIFO at data.sqlite3-shm without blocking the native opener",
+    "refuses a FIFO at data.sqlite3-journal without blocking the native opener",
+    "resumes a committed batch cursor after a real killed process"
+  ],
+  "rawReportSha256": "b6ddc0f6b8988e7c1570266843793b1a403978d933691bc3177cc62a18462d79",
+  "remainingFailure": "Unchanged generated-files overview relevance judgment",
+  "followup": "Four POSIX FIFO cases are inapplicable; real cursor-recovery skip removed at 6df9dca005 and requires actual Windows execution"
+}

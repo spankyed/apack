@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/query-values.spec.ts
+
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+
+ ✓ tests/engine/query-values.spec.ts (4 tests) 52ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  02:04:36
+   Duration  558ms (transform 169ms, setup 11ms, collect 207ms, tests 52ms, environment 0ms, prepare 71ms)
+

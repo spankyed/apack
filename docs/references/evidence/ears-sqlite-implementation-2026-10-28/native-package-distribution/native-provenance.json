@@ -1,0 +1,33 @@
+{
+  "upstream": {
+    "commit": "814fd8ef4d42d6567f1613a66f556c8194764d06",
+    "sha256": "b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1",
+    "url": "https://raw.githubusercontent.com/sqlite/sqlite/814fd8ef4d42d6567f1613a66f556c8194764d06/ext/vec1/vec1.c"
+  },
+  "patchSha256": "33cabeb716827e1c2cfaa0db963cd94a2494dd8b000dd4e628559f0ee3047923",
+  "sourceSha256": "5d49d5ea17fbeaa1f22141305a81a5aeac8feb1af652a0d8229ea906bd5c973b",
+  "compiler": "cc",
+  "args": [
+    "-O3",
+    "-DNDEBUG",
+    "-Werror=implicit-function-declaration",
+    "-shared",
+    "-fPIC",
+    "-I/metrics/node_modules/better-sqlite3/deps/sqlite3",
+    "/metrics/.temp/native-package-independent/vec1.c",
+    "-lm",
+    "-o",
+    "/metrics/.temp/native-package-independent/vec1.so"
+  ],
+  "headersPackage": "13.0.3",
+  "extension": "/metrics/.temp/native-package-independent/vec1.so",
+  "extensionSha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d",
+  "node": "v23.11.1",
+  "platform": "linux",
+  "arch": "arm64",
+  "source": "ac62d9ae53bbafd34f513062d30d065abff6777a",
+  "patchApplied": true,
+  "packagedExtension": "/metrics/packages/apack-ears/dist/sqlite/native/linux-arm64/vec1.so",
+  "packagedExtensionSha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d",
+  "qualification": "Pinned membership patch for the SQLite candidate; packaging, signing and performance remain separate gates"
+}

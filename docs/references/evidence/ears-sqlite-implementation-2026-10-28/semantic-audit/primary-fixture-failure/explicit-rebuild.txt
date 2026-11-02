@@ -1,0 +1,82 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/search-recovery.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/search-recovery.spec.ts (29 tests | 1 failed) 4670ms
+   ✓ SQLite missing search storage recovery > rebuilds damaged postings in fresh generations without changing primary commits  2008ms
+   ✓ SQLite missing search storage recovery > audits private reconstructed contents without repairing the incumbent 229ms
+   ✓ SQLite missing search storage recovery > detects missing external-content postings even when stored documents are unchanged 143ms
+   × SQLite missing search storage recovery > reports undecodable primary values outside every search input 114ms
+     → expected { …(8) } to match object { ok: false, checkedEntities: 3, …(2) }
+(4 matching properties omitted from actual)
+   ✓ SQLite missing search storage recovery > counts all orphan primary values while retaining at most 100 issue messages 48ms
+   ✓ SQLite missing search storage recovery > refuses rebuild on read-only, open-unit and stopped owners without changing the catalog 50ms
+   ✓ SQLite missing search storage recovery > rolls back failed rebuild admission and keeps current generations usable 48ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram table in a private background generation 107ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram documents in a private background generation 90ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram owner index in a private background generation 93ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ai in a private background generation 94ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ad in a private background generation 98ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger au in a private background generation 94ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text table in a private background generation 107ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text documents in a private background generation 91ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text owner index in a private background generation 99ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text metadata in a private background generation 96ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector chunks in a private background generation 111ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs pending vector index in a private background generation 94ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector reuse index in a private background generation 97ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector retirement index in a private background generation 103ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text retirement index in a private background generation 97ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram shadow index in a private background generation 99ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text shadow content in a private background generation 104ms
+   ✓ SQLite missing search storage recovery > rebuilds stale external-content postings after a missing update trigger 47ms
+   ✓ SQLite missing search storage recovery > rolls back partial postings on a background repair failure, refuses incomplete reads and retries cleanly 62ms
+   ✓ SQLite missing search storage recovery > preserves repair and rollback errors, stops scheduling and discards the transaction on close 61ms
+   ✓ SQLite missing search storage recovery > opens healthy storage while another handle owns a write unit and reads only its committed state 46ms
+   ✓ SQLite missing search storage recovery > pages only affected search inputs and leaves a healthy reopen free of hydration 139ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/search-recovery.spec.ts > SQLite missing search storage recovery > reports undecodable primary values outside every search input
+AssertionError: expected { …(8) } to match object { ok: false, checkedEntities: 3, …(2) }
+(4 matching properties omitted from actual)
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "checkedEntities": 3,[22m
+[32m-   "comparedIndexes": 0,[39m
+[32m-   "issueCount": 1,[39m
+[32m-   "ok": false,[39m
+[31m+   "comparedIndexes": 7,[39m
+[31m+   "issueCount": 0,[39m
+[31m+   "ok": true,[39m
+[2m  }[22m
+
+ ❯ tests/sqlite/search-recovery.spec.ts:112:20
+    110|       [Buffer.from([0xc1]), 'Other-large']).changes).toBe(1);
+    111|     const report = await auditSqliteDatabase(db);
+    112|     expect(report).toMatchObject({ ok: false, checkedEntities: 3, issu…
+       |                    ^
+    113|     expect(report.issues).toEqual(['Other-large: primary values cannot…
+    114|     expect(e.lastCommit()).toBe(before);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 28 passed (29)
+   Start at  12:15:54
+   Duration  5.07s (transform 206ms, setup 17ms, collect 272ms, tests 4.67s, environment 0ms, prepare 38ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/search-recovery.spec.ts

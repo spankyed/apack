@@ -1,0 +1,60 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/vector-models.spec.ts (26 tests | 1 failed | 25 skipped) 2605ms
+   ↓ durable native model admission > automatically admits an eligible committed generation, while small scopes and rolled-back growth stay exact
+   ↓ durable native model admission > admits canonical embeddings imported after an initially ineligible generation
+   ↓ durable native model admission > discovers another connection's committed embeddings when readiness is polled
+   ↓ durable native model admission > requires enough live distinct owners and rechecks eligibility after restoring trashed chunks
+   ↓ durable native model admission > bounds eligibility to metadata pages and retries the same enqueue after its commit is refused
+   ↓ durable native model admission > discovers rebuilt generations without a logical commit and skips unsupported training dimensions
+   ↓ durable native model admission > does not enqueue or keep polling a failed logical generation with a large partial projection
+   ↓ durable native model admission > uses the shared scheduler to train, project and publish readiness without logical commits
+   ↓ durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility
+   ↓ durable native model admission > loads trusted native candidates on independent readers and writers without creating training owners
+   ↓ durable native model admission > retains the trusted connection loader in native-bearing export and private audit copies
+   ↓ durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions
+   × durable native model admission > keeps native candidates available to owners and peer readers during pending and failed physical refresh 2604ms
+     → expected false to be true // Object.is equality
+   ↓ durable native model admission > resumes an interrupted private projection after reopening without sacrificing the incumbent
+   ↓ durable native model admission > admits public refresh durably without holding write exclusion through background training
+   ↓ durable native model admission > retains a completed model when its result transaction rolls back before acknowledgement
+   ↓ durable native model admission > recovers abandoned attempts and resumes committed model work after reopening
+   ↓ durable native model admission > persists failure and supports explicit retry after additional primary embeddings
+   ↓ durable native model admission > recovers abandoned attempts only after claiming managed model ownership
+   ↓ durable native model admission > releases a failed managed startup claim and preserves its original recovery error
+   ↓ durable native model admission > refuses native ownership on a read-only connection without creating a service
+   ↓ durable native model admission > keeps logical readiness usable while optional native work is pending or failed
+   ↓ durable native model admission > settles logical backfill independently when a native waiter is cancelled by stopping its owner
+   ↓ durable native model admission > does not misreport a committed primary write when a background readiness probe fails
+   ↓ durable native model admission > excludes independent connections until the owning native worker actually drains
+   ↓ durable native model admission > enforces one owner and drains workers before allowing file close and a new owner
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/vector-models.spec.ts > durable native model admission > keeps native candidates available to owners and peer readers during pending and failed physical refresh
+AssertionError: expected false to be true // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+ ❯ tests/sqlite/vector-models.spec.ts:318:149
+    316|     try {
+    317|       const reader=createEarsEngine({database:peer}),candidate=vi.spyO…
+    318|       expect(reader.query('Row').near(vector,{k:1}).ids()).toEqual(bef…
+       |                                                                                                                                                     ^
+    319|     }finally{peer.close();}
+    320|     const training=vi.spyOn(SqliteVectorTraining.prototype,'train').mo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 25 skipped (26)
+   Start at  09:51:08
+   Duration  4.49s (transform 1.03s, setup 82ms, collect 1.42s, tests 2.60s, environment 0ms, prepare 110ms)
+
+JSON report written to /results/gate-incumbent-on-training.json

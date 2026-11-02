@@ -1,0 +1,62 @@
+[
+  {
+    "file": "source.json.gz",
+    "originalBytes": 584,
+    "originalSha256": "93c48ed728f4c594c85d14b36aa32bb24453a442a70dd3a1b2c85530048aea89",
+    "storedSha256": "caa2ba99bc2272a64887c71047889265d6c00613ee2d43f9ecc1cad79bcd1888"
+  },
+  {
+    "file": "query-attribution.json.gz",
+    "originalBytes": 30046541,
+    "originalSha256": "d48c2bb6a5a42e0622df36a9434a6e90d11523da73847d4942d1264e69da7d8d",
+    "storedSha256": "f2a9ffc8c249c223628e228bc64274c141f32e46f733cc437522fa6de70439a2"
+  },
+  {
+    "file": "query-attribution.log.gz",
+    "originalBytes": 15031,
+    "originalSha256": "b465b675eeddf6191a78d3c1ad79215394a1bbfae88baf225bc871fba611ea36",
+    "storedSha256": "02f819c012cb108b97b18cb0bb0254a31448c6c04a925f9daeda535f529c067b"
+  },
+  {
+    "file": "inputs.json.gz",
+    "originalBytes": 6963,
+    "originalSha256": "bcae04dc7b2cbeb5b40c5916ffd6f62ddc36cd11603a6d123008b15b18706fa4",
+    "storedSha256": "ffb90795a037c63c80e35bba47e40b5d8c55dddd89d22054f7a1eb514236bcff"
+  },
+  {
+    "file": "run.json.gz",
+    "originalBytes": 7632,
+    "originalSha256": "5ea36cd531bc607683b3bdb74347043c356b6698c5ffadd117ed1abd1ba535d6",
+    "storedSha256": "d124c3b74469ef28526a643ce2ff6fe7987c4e019263774a8f5315a6b4ba667f"
+  },
+  {
+    "file": "ears-query-attribution.mjs.gz",
+    "originalBytes": 18915,
+    "originalSha256": "9850ad14cd7cc0f86cabd0714f7a9573589b4bddf81480cc4b5f54b1d45b6b46",
+    "storedSha256": "b8655b133f7f2e670535155dd1103fb99cf6f14885790b11c6e1215f651ad915"
+  },
+  {
+    "file": "ears-make-query-attribution.py.gz",
+    "originalBytes": 7332,
+    "originalSha256": "b7564886d5bb8c741e8064cfe9b5fdb5a6d0b73c2e96ab296810876ed4e69080",
+    "storedSha256": "b82244179b5ac1d40a12c243676566b8f893bbc567d0701ef1084b53080bad0a"
+  },
+  {
+    "file": "ears-query-attribution-run.py.gz",
+    "originalBytes": 2154,
+    "originalSha256": "e3de3694e3f6e71ee2efb03ad30d1bd2dc779a657a308f53858f07f42346a22f",
+    "storedSha256": "d9576e934b3d0d05b620f3101c75a42eae58acab9c6ffca81e13257a9d69c769"
+  },
+  {
+    "file": "ears-run-query-attribution.py.gz",
+    "originalBytes": 1879,
+    "originalSha256": "e9b902a7d470668584095943a668c80950ac828c92c81754d015e7e16b1ad0b4",
+    "storedSha256": "7d9ddbce68812612557542b9ce6bf592af5b69575efebf2d6a60496c712af5eb"
+  },
+  {
+    "file": "ears-wait-query-attribution.py.gz",
+    "originalBytes": 1368,
+    "originalSha256": "3de512177610b43f5ee6132237f022f718bf9201e1a1dd790ea4c339c5b647eb",
+    "storedSha256": "6d7f1bde995008a20a7bc05bdee10dbc82d87bb65e71fea73f1901602b3d0047"
+  }
+]

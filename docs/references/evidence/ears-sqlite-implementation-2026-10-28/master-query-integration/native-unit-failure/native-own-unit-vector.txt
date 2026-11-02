@@ -1,0 +1,67 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/vector.spec.ts -t ranks own embeddings in a unit --maxWorkers=1 --reporter=default --reporter=json --outputFile=/results/native-own-unit.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/engine/vector.spec.ts (18 tests | 1 failed | 17 skipped) 66ms
+   ↓ vector search > refuses zero cosine embeddings and queries without changing pending work
+   ↓ vector search > refuses negative zero cosine embeddings and queries without changing pending work
+   ↓ vector search > refuses Float32 underflow to zero cosine embeddings and queries without changing pending work
+   ↓ vector search > refuses positive Float32 overflow cosine embeddings and queries without changing pending work
+   ↓ vector search > refuses negative Float32 overflow cosine embeddings and queries without changing pending work
+   ↓ vector search > refuses NaN cosine embeddings and queries without changing pending work
+   ↓ vector search > refuses infinity cosine embeddings and queries without changing pending work
+   ↓ vector search > refuses wrong dimensions cosine embeddings and queries without changing pending work
+   ↓ vector search > refuses another model or invalid vector before answering an obsolete chunk stale
+   ↓ vector search > rolls back the whole embedding batch and publishes no watch result on invalid input
+   ↓ vector search > holds a written entity pending until its vectors are stored, and again when its text changes
+   ↓ vector search > refuses a vector whose chunk changed since it was pending, leaving the chunk pending under its new text
+   ↓ vector search > counts a vector for an entity deleted since it was pending as stale, and stores the rest of the batch
+   ↓ vector search > ranks the nearest first, combines with the steps before it, and finds more like an entity
+   ↓ vector search > preserves native owner scopes through filters, earlier limits, graph traversal and like
+   × vector search > ranks own embeddings in a unit and restores them across nested and outer rollback 65ms
+     → outer unit sees its embedding replacement: expected [ 'Note-mvu7labg2p85m165ibjt2' ] to deeply equal [ 'Note-mvu7labj1lvm72of9ykzs' ]
+   ↓ vector search > merges the text and vector rankings on a fixed corpus: what both find ranks above what one finds first
+   ↓ vector search > refuses the vector steps on a type with no vector index, and names the types holding one
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/vector.spec.ts > vector search > ranks own embeddings in a unit and restores them across nested and outer rollback
+AssertionError: outer unit sees its embedding replacement: expected [ 'Note-mvu7labg2p85m165ibjt2' ] to deeply equal [ 'Note-mvu7labj1lvm72of9ykzs' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "Note-mvu7labj1lvm72of9ykzs",[39m
+[31m+   "Note-mvu7labg2p85m165ibjt2",[39m
+[2m  ][22m
+
+ ❯ tests/engine/vector.spec.ts:159:70
+    157|     try { e.transact(() => {
+    158|       e.embed([{ ...firstChunk, model, vector: [0, 0, 1] }, { ...secon…
+    159|       expect(nearest(), 'outer unit sees its embedding replacement').t…
+       |                                                                      ^
+    160|       try { e.transact(() => {
+    161|         e.embed([{ ...firstChunk, model, vector: [1, 0, 0] }, { ...sec…
+ ❯ Object.transact src/database.ts:293:15
+ ❯ tests/engine/vector.spec.ts:157:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 skipped (18)
+   Start at  00:03:17
+   Duration  513ms (transform 223ms, setup 12ms, collect 301ms, tests 66ms, environment 0ms, prepare 38ms)
+
+JSON report written to /results/native-own-unit.json
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/engine/vector.spec.ts -t 'ranks own embeddings in a unit' --maxWorkers=1 --reporter=default --reporter=json --outputFile=/results/native-own-unit.json

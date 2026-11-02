@@ -1,0 +1,13 @@
+{
+  "appInput": "a1b6603e5ae628ccbb90ea125a9822b7f178931f",
+  "planningInput": "8a1bf789d3468effbea500cb92f1437636729d1c",
+  "initialCandidate": "3f4c54b7a92c47aafd9d661fc551b6393b1f7765",
+  "engine": "933aa19f04355784412cadf4938f9b49e35e564d",
+  "nativeSha256": "846e5e2bd97f35e6070c71b7207dc5bb8e210d637875aee58492eb85cad93d5d",
+  "sourceRun": "https://github.com/spankyed/apack/actions/runs/40630566649",
+  "artifact": "strict-producers-3f4c54b7a92c47aafd9d661fc551b6393b1f7765",
+  "member": "vendor/elmdb/crates/elmdb-node/elmdb.darwin-arm64.node",
+  "isolatedEngineCheckout": "elmdb-worktrees.noindex/sqlite-baseline",
+  "localRustBuild": false,
+  "scope": "Producer artifact and targeted baseline checks; full integration not yet accepted"
+}

@@ -1,0 +1,42 @@
+{
+  "types.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "sqlite.log": {
+    "sha256": "bf862bb00482ef55109592e01a51536ccb597009f95d0bb39f20295ff366b440",
+    "bytes": 883
+  },
+  "elmdb.log": {
+    "sha256": "124c2d3ade2a56c98786104bac12e920321f11baf4678c320ffd524b57f7ca4e",
+    "bytes": 1433
+  },
+  "elmdb.json": {
+    "sha256": "6ee33275db9cdd12997f1997222165b63fcd74a784e87553b5274fd8840ab992",
+    "bytes": 9150
+  },
+  "inputs.json": {
+    "sha256": "dc11a6dc7e359980a85f8a6dba3bfaed196168072ca1db01c8c476b2e0a7459b",
+    "bytes": 213921
+  },
+  "sqlite.json": {
+    "sha256": "541137c28db40292fadd0cf99b04ea63bdbad300495ed539b66f54a6dd70cfcb",
+    "bytes": 18284
+  },
+  "run.json": {
+    "sha256": "ed60a2c73ee3073a10edd68da94404809357423ee2499f5afc477758cf23cc42",
+    "bytes": 408
+  },
+  "host-launch.json": {
+    "sha256": "9974c4ae6f95b21a2eb75f4a5b8eb2877e1351724844d29573658677a40b5a59",
+    "bytes": 2540
+  },
+  "ears-sqlite-scalar-sql-v2-run.py": {
+    "sha256": "1b0ea5797dc585ca4448474d1c598a7d79fbe644727789e5c0b401ff8e88698a",
+    "bytes": 1970
+  },
+  "ears-run-sqlite-scalar-sql-v2.py": {
+    "sha256": "09af2e9e5941a4d5df44dffa8cf3d1890c2d8ad7ee0dde8b88ade029a5583a5f",
+    "bytes": 4440
+  }
+}

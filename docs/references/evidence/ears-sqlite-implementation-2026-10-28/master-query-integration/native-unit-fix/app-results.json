@@ -1,0 +1,56 @@
+[
+  {
+    "label": "dependencies",
+    "exitCode": 0,
+    "seconds": 13.746268604008947
+  },
+  {
+    "label": "sqlite-binding",
+    "exitCode": 0,
+    "seconds": 1.051814745995216
+  },
+  {
+    "label": "packages-build",
+    "exitCode": 0,
+    "seconds": 27.97316100000171
+  },
+  {
+    "label": "native-own-unit-vector",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@apackdev/ears",
+      "--",
+      "tests/engine/vector.spec.ts",
+      "-t",
+      "ranks own embeddings in a unit",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/native-own-unit.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.8773829209967516
+  },
+  {
+    "label": "cli-refused-facade",
+    "args": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--config",
+      "vitest.integration.config.ts",
+      "packages/apack-cli/tests/build/build-output-swap.integration.spec.ts",
+      "-t",
+      "does not reuse facade files from an incumbent with stamps from a refused replacement",
+      "--maxWorkers=1",
+      "--reporter=default",
+      "--reporter=json",
+      "--reporter=/reporter.mjs",
+      "--outputFile=/results/cli-refused-facade.json"
+    ],
+    "exitCode": 0,
+    "seconds": 33.63764996800455
+  }
+]

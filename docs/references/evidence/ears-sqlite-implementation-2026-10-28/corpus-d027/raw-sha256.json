@@ -1,0 +1,26 @@
+{
+  "hybrid-1000.json": {
+    "bytes": 278313,
+    "sha256": "12913fe6e6d61654def1340876f9e30f32d03640d915b27de94cd3d7f1858a12"
+  },
+  "hybrid-10000.json": {
+    "bytes": 579512,
+    "sha256": "f3d007c784af5ba6397d07bc1e2dff3d7fe555d1f2d68cae144556726903cfc9"
+  },
+  "hybrid-99900.json": {
+    "bytes": 1094604,
+    "sha256": "e762c0c364c477c58ed1b5d7825867b713adcc6ac3ba4143fc7bfb85c354b410"
+  },
+  "hybrid-matrix.json": {
+    "bytes": 15960,
+    "sha256": "9a4a548bcee803de39098d6eecea55e9b60c91c06ba5c97698897778c84c41a1"
+  },
+  "qualification.json": {
+    "bytes": 578,
+    "sha256": "bfa8dd6cd21fee9f7cae7cb84faddaf3c7e6ee97022a0850967d8e88b4215045"
+  },
+  "cleanup.json": {
+    "bytes": 31,
+    "sha256": "0387430e60186bbca1d4272dc3465d3d2be68d68142f2e044d42bf57e85d59ac"
+  }
+}

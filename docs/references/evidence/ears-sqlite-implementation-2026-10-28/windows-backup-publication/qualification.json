@@ -1,0 +1,73 @@
+{
+  "sourceParent": "a95039a8c78092f93d69b5573e11e8e541636e1a",
+  "native": "2441af4658d961f547c7094cd041c2ac246668c5",
+  "inputs": {
+    "packages/apack-cli/src/commands/db/backup.ts": "9da94cb14dba6877fa48d8ddacffa06aa3a8d35f36b270ab0aa818a8f9a41768",
+    "packages/apack-cli/tests/commands/sqlite-profile.spec.ts": "6366276ba9d3c5d5b29bfd0ab037ba07e7eaf7ad2b8d56a0132d54aa3bce529c"
+  },
+  "commands": [
+    {
+      "label": "cli-types",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "packages/apack-cli",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 4.318988561630249
+    },
+    {
+      "label": "cli-lint",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/oxlint/bin/oxlint",
+        "packages/apack-cli/src/commands/db/backup.ts",
+        "packages/apack-cli/tests/commands/sqlite-profile.spec.ts",
+        "-D",
+        "correctness"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 0.06990933418273926
+    },
+    {
+      "label": "cli-build",
+      "backend": null,
+      "args": [
+        "npm",
+        "run",
+        "build:package",
+        "-w",
+        "@apackdev/cli"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 1.230262041091919
+    },
+    {
+      "label": "platform-cli",
+      "backend": null,
+      "args": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--root",
+        "packages/apack-cli",
+        "tests/commands/db-rebuild.spec.ts",
+        "tests/commands/db-logical.spec.ts",
+        "tests/commands/sqlite-profile.spec.ts",
+        "--maxWorkers",
+        "2",
+        "--minWorkers",
+        "1",
+        "--reporter=default",
+        "--reporter=json",
+        "--outputFile=/results/platform-cli.json"
+      ],
+      "exitCode": 0,
+      "elapsedSeconds": 7.899714469909668
+    }
+  ]
+}

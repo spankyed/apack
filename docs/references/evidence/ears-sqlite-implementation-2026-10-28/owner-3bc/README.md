@@ -1,0 +1,7 @@
+# Dependency ownership across scoped readiness
+
+[Focused run 41328067375](https://github.com/spankyed/apack/actions/runs/41328067375), source `3bc228d5803dc5b7f84453bd74d4f69e1a264f7b`, completes with all 97 host cases passing and no exclusions. This includes the real installed-pack SQLite fixture and five new owner-race cases: same-type replacement, added-type replacement, replacement before an immediately-ready continuation, admitted inactive declaration changes and unrelated registration/catalog cloning. The relevant replacements reject CANCELLED; unrelated changes remain usable. Scope discovery is iterative and uses indexed catalog lookup.
+
+Complete host and EARS source/test typechecks, matching package/API generation and targeted lint pass. The API diff is zero bytes. SQLite shared contracts retain 424 passes/one original keyword failure/no exclusions; native retains 262 passes/one original keyword failure/162 SQLite-only exclusions. All mandatory model/relation/readiness witnesses pass. This is focused Linux qualification, not full latest-source platform/app/installed/signing/resource acceptance. The host old-global-behavior mutation control still requires its platform route.
+
+Four original test/witness reports are compressed unchanged with decompressed SHA-256 hashes; profiles, traces and database/corpus payload are omitted. The workflow remains red on the retained keyword judgment; no relevance or responsiveness waiver is inferred.

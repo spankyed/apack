@@ -1,0 +1,40 @@
+{
+  "source": "f05eda527ce471e975e480e469a3b33d30e2c580",
+  "qualification": false,
+  "queryExecutions": 14400,
+  "identicalOrderedAnswerPairs": 7200,
+  "separateNodeProcesses": true,
+  "model": {
+    "sha256": "5f90eea4ed59a1d018753a4f80e29ce58a40aec9c823382cdc051abce7a823b6",
+    "origin": "read-only retained prior owner model; no retraining"
+  },
+  "retainedSnapshotUnchanged": true,
+  "variants": [
+    {
+      "library": "baseline",
+      "minimumMeanRecall": 0.9730000000000003,
+      "nativeCalls": 2400,
+      "canonicalRowsVerified": 99900,
+      "frozenGatesPassed": false,
+      "timedQueryGatesPassed": false,
+      "processMaxRssKiB": 903164,
+      "admissionMs": 113214.883748,
+      "admissionHeartbeatP99Ms": 59.94658600000548,
+      "databaseBytesBeforeClose": 1798074368,
+      "walBytesBeforeClose": 7181192
+    },
+    {
+      "library": "direct",
+      "minimumMeanRecall": 0.9730000000000003,
+      "nativeCalls": 2400,
+      "canonicalRowsVerified": 99900,
+      "frozenGatesPassed": false,
+      "timedQueryGatesPassed": false,
+      "processMaxRssKiB": 905488,
+      "admissionMs": 18207.196201,
+      "admissionHeartbeatP99Ms": 72.03192200000103,
+      "databaseBytesBeforeClose": 1798049792,
+      "walBytesBeforeClose": 6868072
+    }
+  ]
+}

@@ -2,6 +2,22 @@
 
 Host-only modules shared by the API, the renderer, the Electron main process, the CLI and `@apackdev/testing`. This package is the app runtime: the app's own state (`AppState`), pack registration, discovery, install and update, the pack runtime the app runs (loading, lifecycle, reload, writing), the backend bus, the migrations runners, the user's API keys, host service implementations and the one place the app's `HostRuntime` is assembled, backups and build-time helpers. The API (`packages/api`) keeps only transport, process boot and composition, and calls into it. Packs never import it, and it never imports transport (`fastify`, `@trpc/*`, `ws`) or `virtual:*` modules: the CLI and the pack test harness run it without a server. The root `CLAUDE.md` ("SDK packages") lists the subpaths and their one-line roles. This file covers how each area works. For the pack runtime (loader, `SDK_BRIDGE`, lifecycle, reload, writing, boot sequence), see [`src/packs/runtime/CLAUDE.md`](src/packs/runtime/CLAUDE.md).
 
+The candidate uses `APACK_STORAGE_FORMAT=sqlite/1` with an explicit isolated absolute app profile or a
+resolved named CLI target; omission preserves elmdb. `database/storage.ts` rejects default profile paths,
+children and symlink aliases before opening. Explicit `storageFormat` constructor options also serve fixtures.
+The database port's format identity drives backup provenance and host-owned file/open descriptors.
+Import checks every destination format before validation/replacement. Recognized foreign storage refuses
+as `STORAGE_MISMATCH`, outside run-history corruption salvage. Real host/API/CLI workflow tests cover both
+implementations. Live startup awaits registry index readiness; full renderer lifecycle, physical recovery and
+platform qualification remain in the SQLite goal.
+
+SQLite backup stores suspend native model work while holding write exclusion through replacement,
+acceptance or restoration, retaining their cross-process claims. Settings replacement encloses that whole
+scope, so completion is announced only after native work can resume. Background recovery or outer settings
+cleanup failure preserves the prepared incumbent with truthful `dataInstalled`/`recoveryPath`, suppresses
+replacement announcements and drains/closes both app stores. A clean refusal still restores and announces
+the incumbent. These cooperating claims do not authorize arbitrary external directory deletion or rename.
+
 ## Package basics
 
 - The package is private and has no build step. Every `exports` entry in `package.json` points at `src/*.ts`, so consumers compile or bundle it: the API's tsup build, and `scripts/bundle-package.ts` for the CLI and `@apackdev/testing`. `bundle-package.ts` inlines `@apackdev/host` and removes it from the published dependencies.
@@ -27,6 +43,55 @@ A feature's halves sit together: `features/packs/be/system.ts` answers `features
 `bus/`, `packs/runtime/` and `fe/` before, which is why `bus/` used to export a feature's system. Folders are named
 for what they hold, never for a layer — no `core/`, `shared/`, `lib/` or `utils/`, at any depth, as in the API and
 the renderer.
+
+`database/close.ts` owns graceful app-store shutdown: hold each handle's write exclusion, await its
+optional background drain, then close it. Stores settle independently and failures are aggregated;
+a failed drain leaves that handle open for explicit failure handling. This is terminal shutdown,
+not live import suspension or filesystem publication authority.
+
+SQLite's app-only logical archive API is composed by `backup/logical.ts` and `backup/index.ts`.
+`exportLogicalDatabase(database, file)` synchronizes a private 0600 archive before exclusive hard-link
+publication; existing/racing targets survive, unsupported hard-link filesystems refuse, and a published
+artifact whose directory sync fails is retained with `NOT_DURABLE`/`publishedPath`. Directory barriers request a real flush through a writable Windows descriptor. Unsupported barriers
+refuse; Windows ACL, ordinary-user and physical durability remain platform qualification, not portable guarantees. The parent must exist.
+`readLogicalBackup(stores, archives)` stages, rebuilds, audits and validates selected primary/history archives
+without replacing live data. `importLogicalDatabase` uses the same staging path and ordinary import coordinator,
+including write leases, incumbent copies, rollback and uncertain-outcome recovery. Logical archives do not own
+media, packs or secrets; incumbent media is preserved. Every selected archive validates before replacement.
+Physical `readBackup` still requires the primary database; a history-only logical import does not replace it.
+
+Database import acquires same-handle write leases before copying incumbents and keeps them through acceptance
+or rollback. The app-data service also leases primary/history for reset and export. A preparation in the owned
+`.apack-import-*` directory precedes live replacement; an unknown commit preserves it and the incumbent copies
+without replay. Host composition closes affected stores and suppresses settled settings/data publication.
+`database/open.ts` refuses writable startup while a preparation exists; read-only forensic opens remain available.
+`backup/restore.ts` owns explicit offline restoration: stage/validate retained incumbents, persist a restore plan,
+quarantine interrupted live directories, publish verified stages and rename the preparation only after every entry
+settles. Recovery matches the selected profile by physical parent and fixed destination leaf, allowing ancestor
+aliases while refusing foreign profiles and database-leaf symlinks. Publication uses the selected profile paths.
+The CLI exposes it as `db recover`; completed sessions are never replayed. Full crash/filesystem
+qualification remains in the SQLite goal; never delete a preparation simply to bypass that refusal.
+In-process write leases serialize a handle's logical mutations. A coordinated cross-store snapshot requires
+its own protocol.
+
+Every managed writable or read-only open registers a private directory-lifetime claim through
+`database/recovery-lock.ts`. Recovery publishes exclusion before checking claims; opens publish claims
+before checking exclusion. Claims remain until synchronous close succeeds; a failed constructor whose
+connection could not close retains its claim until process exit. Managed background owners use
+`closeDatabases` to drain workers before closing. Dead claims use existing host/PID liveness; unreadable,
+foreign-host or unresolved identity claims refuse. Profile metadata must be writable for every managed open.
+
+Full-profile recovery excludes every managed handle. Corrupt-history quarantine excludes that store,
+allowing an unrelated primary handle to stay open. Scoped checks compare directory device/inode identity
+and leaf name, so another spelling cannot hide the same physical directory. Unavailable identities refuse
+conservatively. Managed database-leaf symlinks refuse; ancestor aliases retain their supported behavior.
+A quarantine diagnosis cannot replace a newer directory installed before exclusion was acquired.
+
+`database/storage.ts` owns unreadable-open classification. SQLite permits quarantine for `SQLITE_NOTADB`
+and generic `SQLITE_CORRUPT`; known derived-index, I/O, permission, busy, full-disk and native-library errors
+refuse. Aggregate or unclosed-connection errors also refuse. Direct backend opens are lower-level tools;
+the caller owns namespace coordination. Arbitrary external rename/delete and aliased data files remain
+outside this protocol's qualification. The profile parent namespace must remain stable.
 
 ## Module map (`src/`)
 
@@ -343,7 +408,7 @@ through the supplied provider because a test reset replaces it.
 - `allowUnprotected()` re-encrypts the readable values under a new key in the file vault, sets `protection: 'unprotected'` and deletes the old OS vault entries.
 - `clearAll()` empties the key list but keeps `keyId`. If the file can't be read or emptied, it deletes the file.
 - A data key created for a write that then fails is removed from the vault again (`pendingKeys`).
-- `writePrivateFile` (`./private-file`) writes a unique temp file with mode `0600`, fsyncs it, renames it into place and fsyncs the directory. On Windows it retries renames that fail with `EPERM`, `EBUSY` or `EACCES`, and skips the directory sync.
+- `writePrivateFile` (`./private-file`) writes a unique temp file with mode `0600`, fsyncs it, renames it into place and fsyncs the directory. On Windows it retries renames that fail with `EPERM`, `EBUSY` or `EACCES`, and opens the parent with `r+` for its actual flush. A postpublication sync failure retains the installed file and reports `NOT_DURABLE`, `publishedPath` and the original cause; a failed temporary cleanup is aggregated with the original installation error. Windows permissions inherit the enclosing profile ACL.
 - `secretsSnapshot()` is the `SecretsSnapshot` (`list()` and `status()`) the API's procedures return. `forwardSecretsChanges(registry)`, which the API's boot calls once, sends `SECRETS_CHANGED` (no values) on the bound `rootEvents` to every system that declares it takes it, on every store change.
 - Only the API's `transport/secrets.ts` tRPC procedures (`add`, `replaceValue`, `allowUnprotected`, ...) and `services/inference.ts` (`keyFor`) touch values. `services/secrets.ts` exposes only `status`, `list`, `select`, `rename` and `delete` to packs.
 
@@ -373,7 +438,7 @@ Neither predicate is exact, and the module's header says what exact would take: 
 
 ## Persistence and backup
 
-- EARS persistence isn't host code. Both databases are elmdb's, opened through `@apackdev/ears/lmdb`'s `openDatabase`: the app's (`openDatabaseStore` in `database/open.ts`) and the run history's (`openRunHistory` there, held to the SDK's `_RUN_HISTORY_SCHEMA`); host takes each database as an argument and never imports `elmdb` or `lmdb` (`check:specifiers`, `findElmdbImports`).
+- EARS persistence isn't host code. Both databases are elmdb's, opened through `@apackdev/ears/lmdb`'s `openDatabase`: the app's (`openDatabaseStore` in `database/open.ts`) and the run history's (`openRunHistory` there, held to the SDK's `_RUN_HISTORY_SCHEMA`); host takes each database as an argument and never imports `elmdb` or `lmdb` (`check:specifiers`, `findDatabaseImports`).
 - `backup/index.ts`: progress lines go through a `log` sink (`BackupLog`), the app's logger by default and the command's stderr for `apack db import`, so they never land in output something else reads. A backup holds a folder per database (`BackupStores`): `lmdb`, the app's, and `runHistory`, the run history's, which the app's import and reset cover with the app's. `exportDatabase` copies the requested ones (`['lmdb']` by default) through each store's `copyTo`, elmdb's compacted copy (`databaseBackupStore`), so a backup taken from the running app holds one moment of each store instead of files read while a commit was landing; it then writes `metadata.json`: `timestamp`, `databases`, `includesMedia`, and what wrote it — the `appVersion` it is given (the app passes `getAppVersion()`) and each database's format (`storageFormats`). Those two are provenance only: whether a backup restores is settled by opening its databases, so one whose metadata claims a format its files aren't in still restores, and the refusal a genuinely unreadable database raises names the apack that made it. `readBackupSummary` returns `appVersion` too, so a backup folder says where it came from. It also copies the media folder it's given when `lmdb` is included and the folder exists. On import (`importDatabase(stores, path, mediaPath)`) it captures a private candidate and retains rollback files in `.apack-import-*` beside the database. The rollback copy survives until the replacement and the caller's acceptance succeed. Failure puts the incumbent back (`replaceWith`); failed recovery retains the durable copy and reports both failures with its path. App-data reset/import refuse overlapping replacement requests, and hold every pack's operation claim while they run, so no install, update or removal overlaps them. It validates the backup first (`readBackup`), so one this app can't restore — data in another storage format, or a missing main database — is refused before the user's files are touched. A store the backup lists but holds nothing for comes back as `missingDatabases`, which the app's import reports to the user and the CLI prints, rather than dropping it in silence. A backup holding stores this app doesn't have (a newer version's) throws `UnknownBackupDatabasesError` (`@apackdev/sdk/services`, so pack code can recognise it) unless `skipUnknownDatabases` says the user chose to import it without them: the Database settings ask, and `apack db import` takes `--skip-unknown`. `readBackup(dir, entityTypes)` checks a backup restores into this app (known databases, the primary one included, each present, and each opening in a storage format this version reads — every database the import would put in place, not only the primary one) and counts, without changing it, its entities per type. Types it holds that none of `entityTypes` names come back as `unknownEntityTypes` (a pack that was installed when the backup was made and isn't now): the rows are restored, not dropped, and the import says so — `services.appData.importBackup` returns them (the Database settings put it in the success message, so the user knows why nothing shows them), and `apack db import` prints a line. `services.appData` passes the app's media folder (`_getMediaPath()`); `apack db import` the target data dir's.
 
 ## Database (`database/`)
@@ -422,3 +487,5 @@ What opening an app's database needs, shared by the API's boot and `apack db`, s
 - `writeInstalledPacks` reports a failed write rather than throwing; the enable/disable path turns that into an error the user sees. A background write (a content item outcome, an update check) still only logs.
 - External pack FE code can't reach the renderer's `createFePackRegistry()` instance: the renderer calls `registerPackFE` on its behalf (see the pack runtime doc's FE entry section), and pack frontends read it through the SDK's lookups.
 - Adding a host service means updating `HostServices` and `HostRuntimeServices` in the SDK, `_HOST_SERVICE_NAMES` (SDK `framework/service-consumption.ts`), `createHostRuntime`'s `services` (`services/index.ts`, with the implementation in `services/<kebab-case key>.ts`) and `HOST_SERVICE_KEYS` in `tests/boundaries.spec.ts`. All are type-checked against the SDK types. Helpers that aren't a service don't go in `services/`.
+
+Process-death backup/recovery scenarios live in `tests/backup/*.integration.spec.ts` and run in the shared integration pool. The fast host config excludes them; the SQLite platform workflow runs their integration config explicitly and verifies both publication and physical recovery witnesses.

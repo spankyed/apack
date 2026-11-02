@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/relations.spec.ts
+
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/integration-ddxGkz/packages/apack-ears
+
+ ✓ tests/engine/relations.spec.ts (21 tests) 217ms
+
+ Test Files  1 passed (1)
+      Tests  21 passed (21)
+   Start at  01:29:38
+   Duration  576ms (transform 123ms, setup 10ms, collect 156ms, tests 217ms, environment 0ms, prepare 44ms)
+

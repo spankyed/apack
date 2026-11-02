@@ -1,0 +1,215 @@
+{
+  "protocol": "ears-app-hybrid-usefulness/1",
+  "completed": true,
+  "qualification": false,
+  "backend": "sqlite",
+  "source": "6cfdf32dad574f42799165efea332266154b2e2a",
+  "fixtureSha256": "29d79b6060b21ca68d3bb5dd491cc2e3cfff36a11c2f10b28d6df62c9acc3527",
+  "vectorsSha256": "f5ed2b965b6cc949964b01fc571490076ebe98618ff4b0f2a14935102c6dc384",
+  "modelRevision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "scope": "Frozen 214-section public app corpus, original 25 top-five judgments; small-corpus model-specific usefulness, not performance or complete search acceptance",
+  "containsPayload": false,
+  "cases": [
+    {
+      "ordinal": 0,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 13.997433999999998
+    },
+    {
+      "ordinal": 1,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 7.6003240000000005
+    },
+    {
+      "ordinal": 2,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 1.7277119999999968
+    },
+    {
+      "ordinal": 3,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 2.053989999999999
+    },
+    {
+      "ordinal": 4,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 14.516712999999982
+    },
+    {
+      "ordinal": 5,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 3.8714800000000196
+    },
+    {
+      "ordinal": 6,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 9.621503999999959
+    },
+    {
+      "ordinal": 7,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 2.091609999999946
+    },
+    {
+      "ordinal": 8,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 5.046270999999933
+    },
+    {
+      "ordinal": 9,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 5.625642000000084
+    },
+    {
+      "ordinal": 10,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 7.641431000000011
+    },
+    {
+      "ordinal": 11,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 1.7353160000000116
+    },
+    {
+      "ordinal": 12,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 3.631573000000003
+    },
+    {
+      "ordinal": 13,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 4.206234999999992
+    },
+    {
+      "ordinal": 14,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 2.307282999999984
+    },
+    {
+      "ordinal": 15,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 1.9273249999999962
+    },
+    {
+      "ordinal": 16,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 1.3913949999999886
+    },
+    {
+      "ordinal": 17,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 2.024306000000024
+    },
+    {
+      "ordinal": 18,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 3.624430000000075
+    },
+    {
+      "ordinal": 19,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 1.4821239999999989
+    },
+    {
+      "ordinal": 20,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 18.11372099999994
+    },
+    {
+      "ordinal": 21,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": true,
+      "highlightPassed": true,
+      "ms": 1.505186999999978
+    },
+    {
+      "ordinal": 22,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 1.6095719999999574
+    },
+    {
+      "ordinal": 23,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 2.103813999999943
+    },
+    {
+      "ordinal": 24,
+      "matchedRelevant": true,
+      "returned": 5,
+      "highlightExpected": false,
+      "highlightPassed": true,
+      "ms": 1.2032239999999774
+    }
+  ],
+  "usefulnessPassed": true
+}

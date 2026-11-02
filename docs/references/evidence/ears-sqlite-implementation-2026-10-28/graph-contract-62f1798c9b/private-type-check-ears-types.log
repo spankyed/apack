@@ -1,0 +1,1 @@
+packages/apack-ears/tests/sqlite/graph-execution.spec.ts(44,98): error TS2339: Property 'busy' does not exist on type 'StatementSync'.

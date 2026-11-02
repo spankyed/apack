@@ -1,0 +1,9 @@
+import os,pathlib,subprocess,json,hashlib,time
+r=pathlib.Path('/metrics');o=pathlib.Path('/results')
+files=list((r/'packages/apack-ears/src').rglob('*.ts'))+[r/'packages/apack-ears/bench/sqlite/admission.ts']
+(o/'source-sha256.json').write_text(json.dumps({str(p.relative_to(r)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},indent=2)+'\n')
+p=subprocess.run(['npm','run','typecheck','-w','@apackdev/ears'],cwd=r,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(o/'types.txt').write_text(p.stdout);assert p.returncode==0,p.stdout
+# Exactly one fresh process and the prewritten budgets. A budget miss is data, not an automatic retry.
+p=subprocess.run(['node','--import','tsx','packages/apack-ears/bench/sqlite/admission.ts','1000','--search'],cwd=r,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=120)
+(o/'first-1k-off.stdout').write_text(p.stdout);(o/'first-1k-off.stderr').write_text(p.stderr);(o/'exit.json').write_text(json.dumps({'exitCode':p.returncode,'n':1000,'syncs':False,'attempt':1})+'\n')
+v=json.loads(p.stdout);print(json.dumps({'passed':v['passed'],'budgets':v['budgets'],'writes':v['writes'],'buildMs':v['buildMs'],'gcMs':v['gcMs'],'samples':{'operations':v['operationMs']['count'],'heartbeat':v['heartbeatDelayMs']['count']}}))

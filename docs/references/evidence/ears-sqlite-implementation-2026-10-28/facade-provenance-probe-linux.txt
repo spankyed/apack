@@ -1,0 +1,6 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc python3 packages/apack-ears/bench/sqlite/run-bench.py .temp/sqlite-provenance-check --trials 0
+
+    Finished `release` profile [optimized] target(s) in 0.04s
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help

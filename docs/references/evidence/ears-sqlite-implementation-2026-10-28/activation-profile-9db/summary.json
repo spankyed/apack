@@ -1,0 +1,96 @@
+{
+  "sqlite": {
+    "backendReadyMs": 5357.929459,
+    "observedWallMs": 5416.657667000001,
+    "processCpuMicroseconds": {
+      "user": 4228441,
+      "system": 572396
+    },
+    "observedSqliteCommits": 197,
+    "observedSqliteCommitMs": 421.1552079999947,
+    "selectedFrames": [
+      {
+        "function": "refreshCatalog",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 62807,
+        "column": 25,
+        "inclusiveSampledWallMs": 3392.336
+      },
+      {
+        "function": "_compileSettingsDefinition",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 42296,
+        "column": 35,
+        "inclusiveSampledWallMs": 2752.749
+      },
+      {
+        "function": "compileSchema",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 5512,
+        "column": 26,
+        "inclusiveSampledWallMs": 2538.041
+      },
+      {
+        "function": "parseSnapshotData",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 56971,
+        "column": 26,
+        "inclusiveSampledWallMs": 2454.375
+      },
+      {
+        "function": "_compileMetaSchema",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 7382,
+        "column": 24,
+        "inclusiveSampledWallMs": 2052.54
+      }
+    ]
+  },
+  "elmdb": {
+    "backendReadyMs": 4257.873125,
+    "observedWallMs": 4305.160833,
+    "processCpuMicroseconds": {
+      "user": 4287688,
+      "system": 429268
+    },
+    "observedSqliteCommits": 0,
+    "observedSqliteCommitMs": 0,
+    "selectedFrames": [
+      {
+        "function": "refreshCatalog",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 62807,
+        "column": 25,
+        "inclusiveSampledWallMs": 3173.085
+      },
+      {
+        "function": "_compileSettingsDefinition",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 42296,
+        "column": 35,
+        "inclusiveSampledWallMs": 2570.75
+      },
+      {
+        "function": "compileSchema",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 5512,
+        "column": 26,
+        "inclusiveSampledWallMs": 2369.707
+      },
+      {
+        "function": "parseSnapshotData",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 56971,
+        "column": 26,
+        "inclusiveSampledWallMs": 2274.753
+      },
+      {
+        "function": "_compileMetaSchema",
+        "file": "file:///Users/runner/work/apack/apack/packages/api/dist/server.js",
+        "line": 7382,
+        "column": 24,
+        "inclusiveSampledWallMs": 1887.0
+      }
+    ]
+  }
+}

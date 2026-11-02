@@ -1,0 +1,5 @@
+# Actual corrected graph and ownership checks pass; relevance judgment remains
+
+[41224867085](https://github.com/spankyed/apack/actions/runs/41224867085), exact source `ea3386d550`, is terminal failure solely in the preserved generated-files overview relevance judgment. Each real backend executes 103 focused cases: **102 pass, one fails**. Both the seeded neighbour-set reference and explicit trash-start/live-traversal regression pass on elmdb and SQLite. All 14 subprocess-inventory checks pass. Production packages, emitted Leiden quality and API freshness pass; all three API reports are current with an empty regenerated patch.
+
+Each adapter still passes 24/25 frozen real-content judgments. The query `generate-entries` finds useful narrower reference/command sections but misses its specifically predeclared generated-files overview in the first five. The judgment and bound remain unchanged pending product clarification. This is not full strict, final platform/signing, performance, multilingual or hybrid qualification. Raw reports retain the remaining failure instead of relabeling partial success as green.

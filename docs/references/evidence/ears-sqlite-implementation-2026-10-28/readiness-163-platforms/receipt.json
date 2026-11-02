@@ -1,0 +1,134 @@
+{
+  "source": "16378a24db8463584dbe9fd4a1eb1a4d6c57ca48",
+  "run": 41326246856,
+  "scope": "selected terminal predecessor platform reports; predates schema-admission repair",
+  "platforms": {
+    "macos": {
+      "ears": {
+        "originalSha256": "0f875e3465748c2ba71d62bfc3e4f013c720cd72a350a57f1749afbdbc4060d1",
+        "passed": 919,
+        "failed": 1,
+        "pending": 0,
+        "failures": [
+          "real repository-content search relevance 'find generated metadata ownership'"
+        ],
+        "excluded": []
+      },
+      "host": {
+        "originalSha256": "54ea11ef67e168686a52cba1eaa799b2eb2f684c801c0a271715cfe3d06264d0",
+        "passed": 289,
+        "failed": 0,
+        "pending": 0,
+        "failures": [],
+        "excluded": []
+      },
+      "host-crash": {
+        "originalSha256": "54d8de54e05b2eaead50696851e9352f373641e20a575b3b72f8ffc0b5fa569d",
+        "passed": 12,
+        "failed": 0,
+        "pending": 0,
+        "failures": [],
+        "excluded": []
+      },
+      "cli-maintenance": {
+        "originalSha256": "263402108264a6893e2eddf5fbb8cc40ff0475ef3652c8562c82178020a033e0",
+        "passed": 41,
+        "failed": 0,
+        "pending": 0,
+        "failures": [],
+        "excluded": []
+      },
+      "sdk-backend": {
+        "originalSha256": "03bd333d56369a4f64452cd4f7b4920e308141cc59c2a5156ee7bec97705ad7e",
+        "passed": 2,
+        "failed": 0,
+        "pending": 0,
+        "failures": [],
+        "excluded": []
+      },
+      "query-work": {
+        "originalSha256": "2fe236652459af8a3eb5286c069e611eaf3ac1c68b18d02fdc7750ce4d3a0d95",
+        "passed": 9,
+        "failed": 0,
+        "pending": 0,
+        "failures": [],
+        "excluded": []
+      }
+    },
+    "windows": {
+      "ears": {
+        "originalSha256": "dfa688b1c15737cfd83b3c48dba88d2b35e96a9ee6ee11d71f6087f0c5e260f6",
+        "passed": 915,
+        "failed": 1,
+        "pending": 4,
+        "failures": [
+          "real repository-content search relevance 'find generated metadata ownership'"
+        ],
+        "excluded": [
+          "SQLite file ownership refuses a FIFO at data.sqlite3 without blocking the native opener",
+          "SQLite file ownership refuses a FIFO at data.sqlite3-wal without blocking the native opener",
+          "SQLite file ownership refuses a FIFO at data.sqlite3-shm without blocking the native opener",
+          "SQLite file ownership refuses a FIFO at data.sqlite3-journal without blocking the native opener"
+        ]
+      },
+      "host": {
+        "originalSha256": "90306daac21f8642fb3de75738abd5b772c820ebc57978a8651c9d20805389f3",
+        "passed": 286,
+        "failed": 0,
+        "pending": 6,
+        "failures": [],
+        "excluded": [
+          "refuses before replacement when syncing the recovery copy fails",
+          "refuses before replacement when syncing the recovery parent fails",
+          "refuses a managed open without writable metadata while direct read-only snapshots remain available",
+          "the database write lock releases the lock when the tool is interrupted with POSIX SIGINT",
+          "the database write lock releases the lock when the tool is interrupted with POSIX SIGTERM",
+          "the database write lock releases the lock when the tool is interrupted with POSIX SIGHUP"
+        ]
+      },
+      "host-crash": {
+        "originalSha256": "24c7558756db7ee64ad2a7b09dfe61ec2db8133797fd2f2249222b56dada0aa7",
+        "passed": 2,
+        "failed": 0,
+        "pending": 10,
+        "failures": [],
+        "excluded": [
+          "recovers elmdb/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+          "recovers elmdb/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+          "recovers elmdb/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+          "recovers elmdb/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+          "recovers sqlite/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+          "recovers sqlite/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+          "recovers sqlite/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+          "recovers sqlite/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+          "refuses a separate live reader and reclaims its claim after SIGKILL",
+          "refuses a separate live writer and reclaims its claim after SIGKILL"
+        ]
+      },
+      "cli-maintenance": {
+        "originalSha256": "6a6513b0b94b44098de1bbcf0e84b112fd3f4f45f4c9dd5837e7b85036e9baff",
+        "passed": 41,
+        "failed": 0,
+        "pending": 0,
+        "failures": [],
+        "excluded": []
+      },
+      "sdk-backend": {
+        "originalSha256": "c7b17adc35fdf7f0b25ec1293d66477997daa0624752ca5ea86057072032a7d0",
+        "passed": 2,
+        "failed": 0,
+        "pending": 0,
+        "failures": [],
+        "excluded": []
+      },
+      "query-work": {
+        "originalSha256": "216bfb9be48a552404a3b2b44916d2a86f44e462261364bbdf6b050b6e107b2a",
+        "passed": 9,
+        "failed": 0,
+        "pending": 0,
+        "failures": [],
+        "excluded": []
+      }
+    }
+  }
+}

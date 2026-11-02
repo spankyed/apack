@@ -1,0 +1,38 @@
+--- native-diagnostic.mjs
++++ point-diagnostic.mjs
+@@ -83,6 +83,7 @@
+       profile.nativeDiagnostic = {};
+       const table = db.all("SELECT name FROM sqlite_schema WHERE type='table'").map(row => row.name).find(name => /^fts_[a-f0-9]{24}$/.test(name));
+       assert(table);
++      db.sql.exec(`CREATE VIRTUAL TABLE temp.typo_dictionary USING fts5vocab(main,${table},col)`);
+       for (const [name, text] of [['broad', 'sharedword'], ['maxToken', 'abcdefghijklmnopqrstuvwxyz01234x']]) {
+         const originalAll = db.all.bind(db); let captured;
+         db.all = (sql, args) => { const rows = originalAll(sql, args); if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) captured = {sql, args, rows}; return rows; };
+@@ -97,17 +98,17 @@
+         const state = { full, present, generatedAlternatives: alternatives.length, probeMs,
+           probePlan: db.sql.prepare('EXPLAIN QUERY PLAN '+probe).all(input), samples: [] };
+         profile.nativeDiagnostic[name] = state;
+-        const count = db.sql.prepare(`SELECT count(*) n FROM ${table} WHERE ${table} MATCH ?`), scored = db.sql.prepare(captured.sql);
+-        for (const label of ['full','pruned','pruned','full']) {
+-          const match = label === 'full' ? full : present.join(' OR '), args = [match, ...captured.args.slice(1)];
+-          for (let ordinal = 0; ordinal < 10; ordinal++) {
+-            await new Promise(resolve => setImmediate(resolve));
+-            let begin = performance.now(); const matches = count.get(match).n, countMs = performance.now() - begin;
+-            begin = performance.now(); const rows = scored.all(...args), scoredMs = performance.now() - begin;
+-            assert.equal(matches, name === 'broad' ? n : 1); assert.deepEqual(rows,captured.rows);
+-            state.samples.push({label,ordinal,countMs,scoredMs,matches});
+-          }
++        const terms = alternatives.map(expression => /body : "([^"]+)"/.exec(expression)[1]);
++        const lookup = `SELECT alternative.value FROM json_each(?) alternative WHERE EXISTS
++          (SELECT 1 FROM temp.typo_dictionary v WHERE v.term=alternative.value AND v.col IN ('body','aliases'))`;
++        const words = JSON.stringify(terms), point = db.sql.prepare(lookup);
++        state.pointPlan = db.sql.prepare('EXPLAIN QUERY PLAN '+lookup).all(words); state.pointMs = [];
++        for (let ordinal=0;ordinal<13;ordinal++) {
++          await new Promise(resolve=>setImmediate(resolve)); const begin=performance.now(),rows=point.all(words);
++          state.pointMs.push(performance.now()-begin);
++          assert.deepEqual(rows.map(row=>`(body : "${row.value}" OR aliases : "${row.value}")`),present);
+         }
++
+       }
+       await new Promise(resolve => setTimeout(resolve, 16)); heartbeat.stop(); heartbeat = undefined;
+       profile.filesAfterQueries = files(); profile.memoryAfterQueries = process.memoryUsage();

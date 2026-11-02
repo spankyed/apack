@@ -1,0 +1,9 @@
+# Projected-hit controls: real failures, abbreviated diagnostic
+
+[Run 41348852847](https://github.com/spankyed/apack/actions/runs/41348852847), source `feff76c9af`, is terminal failure. Matching package/API generation and EARS source/test types pass. The corrected 128-hit/two-type cost witness passes, including one batch call, exactly two selective reads, semantic equivalence and empty-result checks. Reintroducing a per-hit row query fails exactly that witness, reporting 128 row calls.
+
+The ordinary graph-ranked projected-hit watch witness also passes. Removing only returned-row dependency tracking fails the exact post-write projected-row equality assertion (`watch.spec.ts:44` in that source), while the ordinary initial projection and later-title refresh both pass with tracking present. This is actual targeted runtime/reversion evidence, not a full shared-suite pass.
+
+The harness rejects the latter result because Vitest abbreviates the nested-object diff to `expected [ { …(2) } ] to deeply equal [ { …(2) } ]`, omitting the `renamed destination` substring used by its diagnostic guard. Its verification remains `completed: false` with only the first control accepted, and original/restored source hashes match. Dependent host/shared steps do not run after the control fails. The correction adds an explicit intent message to the unchanged row equality assertion and matches that message, instead of relying on payload display formatting. Actual corrected harness and full-suite qualification remain required.
+
+The original verification and four exact test reports are gzip-preserved with decompressed SHA-256. Logs, database/profile payloads and duplicate outputs are excluded. Earlier fixture failures and original keyword/resource failures remain retained, not replaced by these narrow witnesses.

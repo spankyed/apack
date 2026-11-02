@@ -1,0 +1,7 @@
+# Healthy indexes beside a failed vector replacement
+
+Exact b035b537d4, capped disposable Linux ARM64, scripts-disabled lockfile-reconciled dependencies with unchanged lockfile, pinned native 6ab2f69. Build, EARS types, the one selected real-EARS test and root lint pass. Eighteen neighboring cases were intentionally not selected; this is not a whole-suite result.
+
+The fixture fully admits text/trigram/vector indexes and stores 150 embeddings. It replaces only the vector declaration, injects a backfill exception, and verifies INDEX_FAILED for vector reads/global readiness. Healthy text/trigram counts remain correct. A text watch sees a later title mutation, primary reads reflect it, and healthy searches exclude the old term/include the new one. The last complete vector generation remains retained and the queue idles without retirement spinning. Reopen retries the failed generation; unchanged vectors are reused and exactly the changed owner requires a fresh embedding. No production code change or relaxed failure behavior was needed.
+
+This closes the focused unrelated-index availability proof for this failure path. It does not qualify arbitrary physical corruption, failure-marker IO errors, sustained contention/resource limits or complete app lifecycle. The separate new shared vector unit test still exposes a pinned-native discrepancy; this focused pass does not make the unpublished source's full gate green.

@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Session } from 'node:inspector/promises';
+import { createEarsEngine, type EARS } from './packages/apack-ears/src/index.ts';
+import { toElmdbSchema } from './packages/apack-ears/src/schema.ts';
+import { SqliteDatabase } from './packages/apack-ears/src/sqlite/database.ts';
+import { loadedNativeBindings } from './packages/apack-ears/bench/sqlite/load-metrics.ts';
+const n=100000, needle='bucket-7-value';
+const path=mkdtempSync(join(tmpdir(),'ears-lookup-probe-'));
+const schema={types:{Row:{required:['slug'],fields:{slug:{type:'string' as const},counter:{type:'number' as const,optional:true},payload:{type:'string' as const}}}},relations:{},roles:[]};
+const db=new SqliteDatabase({path,schema:toElmdbSchema(schema),syncs:false});
+const e=createEarsEngine({database:db});
+try {
+ for(let offset=0;offset<n;offset+=256)e.transact(()=>{for(let i=offset;i<Math.min(n,offset+256);i++)e.create('Row',{id:`Row-${i}` as EARS.EntityId,slug:`bucket-${i%100}-value`,payload:i%128===0?'large body '.repeat(1500):'body '.repeat(100)});},{durable:false});
+ const expected=Array.from({length:10},(_,i)=>`Row-${7+i*100}`);
+ const traced:Array<{sql:string;parameters:any[];plan:unknown}> = [];
+ const all=db.all.bind(db),get=db.get.bind(db);
+ db.all=(sql,parameters=[])=>{const rows=all(sql,parameters);traced.push({sql,parameters,plan:all('EXPLAIN QUERY PLAN '+sql,parameters)});return rows;};
+ db.get=(sql,parameters=[])=>{const row=get(sql,parameters);traced.push({sql,parameters,plan:all('EXPLAIN QUERY PLAN '+sql,parameters)});return row;};
+ assert.deepEqual(e.query('Row').where('slug',needle).limit(10).ids(),expected);
+ db.all=all;db.get=get;
+ const selection=traced.filter(s=>s.sql.includes('ORDER BY')&&s.sql.includes('FROM entities')).at(-1);
+ assert(selection,'Actual terminal selection was not captured');
+ const original=selection.sql;
+ const start=original.indexOf('EXISTS(SELECT 1 FROM (SELECT v.entity_id');
+ const end=original.indexOf('probe.value))',start)+'probe.value))'.length;
+ assert(start>=0 && end>start);
+ const old=original.slice(start,end);
+ const source=old.slice(old.indexOf('SELECT v.entity_id'),old.indexOf(') f WHERE'));
+ const guarded=original.replace(old,`EXISTS(SELECT 1 FROM (${source}) f WHERE f.id=e.id AND
+   ((f.kind IN ('text') AND f.value IS probe.value) OR (f.kind='array' AND
+   EXISTS(SELECT 1 FROM value_members m WHERE m.entity_id=e.id AND m.field='slug' AND m.kind IN ('text') AND m.value IS probe.value)))))`);
+ const slot=/v\.k(\d+) IS NULL/.exec(original)![1];
+ const conditional=(sql:string)=>sql.replace("o.field='slug'",`o.field='slug' AND (v.k${slot} IS NULL OR v.k${slot}='@')`);
+ const variants={baseline:original,guarded,conditional:conditional(original),combined:conditional(guarded)};
+ const modes=Object.fromEntries(Object.entries(variants).map(([name,sql])=>[name,()=>all(sql,selection.parameters).map(r=>r.id)]));
+ for(const [name,sql] of Object.entries(variants)){
+   assert.deepEqual(modes[name](),expected);
+   traced.push({sql,parameters:selection.parameters,plan:all('EXPLAIN QUERY PLAN '+sql,selection.parameters)});
+ }
+ const samples:{mode:string;ms:number;cpuMicros:number}[]=[];
+ // Alternating equal-size blocks measure actual generated SQL versus the facade around that same SQL.
+ for(let round=0;round<20;round++)for(const mode of (round%2?Object.keys(modes).reverse():Object.keys(modes))){
+  for(let i=0;i<25;i++){
+   const cpu=process.cpuUsage(),start=performance.now();const rows=modes[mode]();const ms=performance.now()-start;const used=process.cpuUsage(cpu);
+   assert.deepEqual(rows,expected);samples.push({mode,ms,cpuMicros:used.user+used.system});
+  }
+ }
+ console.log(JSON.stringify({scope:'one independent 100k profile; four predicate variants, 500 samples each with forward/reverse blocks; diagnostic string-only fixture, not mixed-value acceptance or qualification',node:process.version,sqlite:get('SELECT sqlite_version() version')!.version,traced,samples,nativeBindings:loadedNativeBindings(),resourceUsage:process.resourceUsage(),memory:process.memoryUsage()}));
+}finally{db.close();rmSync(path,{recursive:true,force:true});}

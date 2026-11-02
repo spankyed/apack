@@ -1,0 +1,110 @@
+{
+  "source": "1eb47d88e11e17e897056173b3e147c328008453",
+  "qualification": false,
+  "queries": 900,
+  "databaseUnchanged": true,
+  "databaseSha256": "4e7b922650edb9bacefdda9fcb9b0c5a04f91e5919510c1b03d0b6f1971de935",
+  "model": {
+    "generation": 1,
+    "model_sha256": "5f90eea4ed59a1d018753a4f80e29ce58a40aec9c823382cdc051abce7a823b6"
+  },
+  "counterUnit": "upstream hardware timer; relative ticks, not asserted CPU time",
+  "cohorts": [
+    {
+      "size": 1000,
+      "scopePercent": 100,
+      "eligible": 988,
+      "nativeCandidateCalls": 0,
+      "meanRecall": 1
+    },
+    {
+      "size": 1000,
+      "scopePercent": 10,
+      "eligible": 99,
+      "nativeCandidateCalls": 0,
+      "meanRecall": 1
+    },
+    {
+      "size": 1000,
+      "scopePercent": 1,
+      "eligible": 9,
+      "nativeCandidateCalls": 0,
+      "meanRecall": 1
+    },
+    {
+      "size": 10000,
+      "scopePercent": 100,
+      "eligible": 9886,
+      "nativeCandidateCalls": 100,
+      "meanRecall": 0.9800000000000001,
+      "fractionOfNativeTotalTicks": {
+        "init": 0.00021875810172617815,
+        "coarse": 0.0005769790912691416,
+        "idxread": 0.15806212586457313,
+        "metaread": 0.024451004131916476,
+        "metascan": 0.5078735488139463,
+        "lut": 0.0242420024768763,
+        "pqscan": 0.26610182854202763,
+        "finalsort": 0.0005814632032110025
+      },
+      "metadataBlocksPerQuery": 665.14
+    },
+    {
+      "size": 10000,
+      "scopePercent": 10,
+      "eligible": 989,
+      "nativeCandidateCalls": 0,
+      "meanRecall": 1
+    },
+    {
+      "size": 10000,
+      "scopePercent": 1,
+      "eligible": 98,
+      "nativeCandidateCalls": 0,
+      "meanRecall": 1
+    },
+    {
+      "size": 99900,
+      "scopePercent": 100,
+      "eligible": 98770,
+      "nativeCandidateCalls": 100,
+      "meanRecall": 0.9790000000000001,
+      "fractionOfNativeTotalTicks": {
+        "init": 0.0004677329750237236,
+        "coarse": 0.0011812060367719138,
+        "idxread": 0.32311804868251187,
+        "metaread": 0.04284349482497956,
+        "metascan": 0.001394779807028529,
+        "lut": 0.05041432065551329,
+        "pqscan": 0.5759305721017234,
+        "finalsort": 0.0011471142717830994
+      },
+      "metadataBlocksPerQuery": 665.14
+    },
+    {
+      "size": 99900,
+      "scopePercent": 10,
+      "eligible": 9878,
+      "nativeCandidateCalls": 100,
+      "meanRecall": 0.9740000000000002,
+      "fractionOfNativeTotalTicks": {
+        "init": 0.0002050405734319292,
+        "coarse": 0.0005355819444122216,
+        "idxread": 0.1516302982093156,
+        "metaread": 0.023403609652537936,
+        "metascan": 0.5367005519363129,
+        "lut": 0.022598648221345934,
+        "pqscan": 0.24742347823888183,
+        "finalsort": 0.000503485803795543
+      },
+      "metadataBlocksPerQuery": 665.14
+    },
+    {
+      "size": 99900,
+      "scopePercent": 1,
+      "eligible": 987,
+      "nativeCandidateCalls": 0,
+      "meanRecall": 1
+    }
+  ]
+}

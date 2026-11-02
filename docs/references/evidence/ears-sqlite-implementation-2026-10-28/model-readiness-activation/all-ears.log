@@ -1,0 +1,104 @@
+(node:2095) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@apackdev/ears| tests/engine/writes.spec.ts (61 tests) 3499ms
+ ✓ |@apackdev/ears| tests/sqlite/search-recovery.spec.ts (40 tests) 4685ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed before its commit  521ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed after its commit  353ms
+ ✓ |@apackdev/ears| tests/sqlite/search-builds.spec.ts (20 tests) 2811ms
+   ✓ shared background search generations > recovers a search cursor committed by a process killed before readiness  380ms
+   ✓ shared background search generations > lets background-only work exit but keeps an explicit readiness wait alive until complete  690ms
+ ✓ |@apackdev/ears| tests/engine/queries.spec.ts (27 tests) 2971ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  445ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  489ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  423ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  388ms
+ ✓ |@apackdev/ears| tests/sqlite/vector-models.spec.ts (23 tests) 14872ms
+   ✓ durable native model admission > automatically admits an eligible committed generation, while small scopes and rolled-back growth stay exact  947ms
+   ✓ durable native model admission > admits canonical embeddings imported after an initially ineligible generation  909ms
+   ✓ durable native model admission > discovers another connection's committed embeddings when readiness is polled  862ms
+   ✓ durable native model admission > requires enough live distinct owners and rechecks eligibility after restoring trashed chunks  614ms
+   ✓ durable native model admission > bounds eligibility to metadata pages and retries the same enqueue after its commit is refused  930ms
+   ✓ durable native model admission > discovers rebuilt generations without a logical commit and skips unsupported training dimensions  1823ms
+   ✓ durable native model admission > does not enqueue or keep polling a failed logical generation with a large partial projection  1497ms
+   ✓ durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility  986ms
+   ✓ durable native model admission > loads trusted native candidates on independent readers and writers without creating training owners  959ms
+   ✓ durable native model admission > retains the trusted connection loader in native-bearing export and private audit copies  2279ms
+   ✓ durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions  1044ms
+   ✓ durable native model admission > recovers abandoned attempts and resumes committed model work after reopening  308ms
+ ✓ |@apackdev/ears| tests/sqlite/text-limits.spec.ts (16 tests) 1125ms
+ ✓ |@apackdev/ears| tests/engine/relations.spec.ts (21 tests) 1075ms
+ ✓ |@apackdev/ears| tests/engine/sqlite-operations.spec.ts (18 tests) 2246ms
+ ✓ |@apackdev/ears| tests/engine/watch.spec.ts (25 tests) 1943ms
+ ✓ |@apackdev/ears| tests/engine/transact.spec.ts (46 tests) 2055ms
+ ✓ |@apackdev/ears| tests/sqlite/vector-index.spec.ts (8 tests) 525ms
+ ✓ |@apackdev/ears| tests/sqlite/text-documents.spec.ts (10 tests) 1327ms
+   ✓ source-string FTS documents > bounds native owner masks without truncating either the masked or fallback answer  676ms
+ ✓ |@apackdev/ears| tests/engine/vector.spec.ts (18 tests) 938ms
+ ✓ |@apackdev/ears| tests/engine/watch-schedule.spec.ts (12 tests) 718ms
+ ✓ |@apackdev/ears| tests/sqlite/query-cost.spec.ts (18 tests) 957ms
+ ✓ |@apackdev/ears| tests/sqlite/index-builds.spec.ts (9 tests) 972ms
+   ✓ yielding value-index admission > resumes a committed batch cursor after a real killed process  378ms
+ ✓ |@apackdev/ears| tests/sqlite/trigrams.spec.ts (7 tests) 684ms
+ ✓ |@apackdev/ears| tests/sqlite/text-typos.spec.ts (20 tests) 1220ms
+ ✓ |@apackdev/ears| tests/sqlite/logical-restore.spec.ts (10 tests) 2456ms
+   ✓ restored logical stores > reopens an audited real store preserving raw values, vectors, order and counters  452ms
+   ✓ restored logical stores > replaces a populated incumbent without re-encoding restored cells or losing dormant embeddings  406ms
+   ✓ restored logical stores > keeps mismatched restored vectors primary but pending until current content is embedded  323ms
+   ✓ restored logical stores > preserves an existing destination and keeps the verified spool reusable after an IO refusal  302ms
+ ✓ |@apackdev/ears| tests/sqlite/values.spec.ts (10 tests) 321ms
+ ✓ |@apackdev/ears| tests/sqlite/vector-execution.spec.ts (4 tests) 1465ms
+   ✓ native vector execution > bounds exact reranking by candidate owners, filters before K and reads unit/savepoint changes  996ms
+   ✓ native vector execution > audits missing or corrupt projections and rebuilds without changing primary bytes or commit identity  319ms
+ ✓ |@apackdev/ears| tests/sqlite/schema-validation.spec.ts (49 tests) 2375ms
+ ✓ |@apackdev/ears| tests/sqlite/embeddings.spec.ts (9 tests) 613ms
+ ✓ |@apackdev/ears| tests/vocabulary.spec.ts (7 tests) 154ms
+ ✓ |@apackdev/ears| tests/engine/search.spec.ts (11 tests) 631ms
+ ✓ |@apackdev/ears| tests/sqlite/vector-training.spec.ts (5 tests) 959ms
+ ✓ |@apackdev/ears| tests/sqlite/logical-export.spec.ts (4 tests) 419ms
+ ✓ |@apackdev/ears| tests/sqlite/elmdb-conversion.spec.ts (7 tests) 2124ms
+   ✓ explicit elmdb dump conversion > reopens an audited store, retains typed values, trash/order/relations/counters and leaves input unchanged  423ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late truncated failure  394ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late trailing failure  386ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late count failure  364ms
+ ✓ |@apackdev/ears| tests/sqlite/commit-outcomes.spec.ts (8 tests) 573ms
+ ✓ |@apackdev/ears| tests/sqlite/regex.spec.ts (11 tests) 475ms
+ ✓ |@apackdev/ears| tests/sqlite/logical-stage.spec.ts (7 tests) 928ms
+ ✓ |@apackdev/ears| tests/sqlite/logical-format.spec.ts (13 tests) 17ms
+ ✓ |@apackdev/ears| tests/engine/calls.spec.ts (9 tests) 519ms
+ ✓ |@apackdev/ears| tests/engine/maintenance.spec.ts (5 tests) 345ms
+ ✓ |@apackdev/ears| tests/engine/storage-port.spec.ts (3 tests) 257ms
+ ✓ |@apackdev/ears| tests/sqlite/transaction-failures.spec.ts (4 tests) 320ms
+ ✓ |@apackdev/ears| tests/sqlite/statement-cache.spec.ts (6 tests) 494ms
+ ✓ |@apackdev/ears| tests/sqlite/native-extension.spec.ts (5 tests) 78ms
+ ✓ |@apackdev/ears| tests/sqlite/logical-snapshot.spec.ts (5 tests) 1238ms
+   ✓ app-only logical snapshot API > returns only a closed audited child store, preserves the source and removes its ingestion spool  540ms
+   ✓ app-only logical snapshot API > removes its container and retains the input error before any store can be published  442ms
+ ✓ |@apackdev/ears| tests/engine/query-values.spec.ts (5 tests) 302ms
+ ✓ |@apackdev/ears| tests/sqlite/watch-lifecycle.spec.ts (4 tests) 1462ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  526ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  389ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (unawaited)  401ms
+ ✓ |@apackdev/ears| tests/no-module-state.spec.ts (2 tests) 260ms
+ ✓ |@apackdev/ears| tests/engines.spec.ts (4 tests) 299ms
+ ✓ |@apackdev/ears| tests/sqlite/vector-owner.spec.ts (3 tests) 139ms
+ ✓ |@apackdev/ears| tests/sqlite/index.spec.ts (3 tests) 348ms
+ ✓ |@apackdev/ears| tests/sqlite/wal-readers.spec.ts (1 test) 136ms
+ ✓ |@apackdev/ears| tests/sqlite/schema-admission.spec.ts (2 tests) 171ms
+ ✓ |@apackdev/ears| tests/storage-types.spec.ts (1 test) 2ms
+ ✓ |@apackdev/ears| tests/engine/search-relevance.spec.ts (32 tests) 144ms
+ ✓ |@apackdev/ears| tests/engine/bulk-load.spec.ts (1 test) 143ms
+ ✓ |@apackdev/ears| tests/engine/model-based.spec.ts (2 tests) 21724ms
+   ✓ refuses, holds and answers what the model does  5718ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  16005ms
+ ✓ |@apackdev/ears| tests/sqlite/source-node.spec.ts (1 test) 452ms
+   ✓ opens the app-only storage entry with plain Node source conditions and owned regex assets  451ms
+
+ Test Files  52 passed (52)
+      Tests  652 passed (652)
+   Start at  09:28:30
+   Duration  58.13s (transform 876ms, setup 89ms, collect 5.60s, tests 86.96s, environment 5ms, prepare 2.42s)
+
+JSON report written to /results/all-ears.json

@@ -1,0 +1,200 @@
+diff --git a/packages/apack-ears/src/sqlite/text.ts b/packages/apack-ears/src/sqlite/text.ts
+index 56fbb14df2..7043ff2701 100644
+--- a/packages/apack-ears/src/sqlite/text.ts
++++ b/packages/apack-ears/src/sqlite/text.ts
+@@ -114,8 +114,9 @@ export class SqliteText {
+     const table = searchTable(job), fields = Object.keys(job.definition.fields);
+     const recency = options.recency?.halfLife > 0 ? options.recency : undefined;
+     const now = recency ? recency.now ?? Date.now() : undefined;
+-    // Decay can change the prefix. Its generic-value path ranks before limiting in JS.
+-    const nativeLimit = recency ? undefined : limit;
++    // Scalar timestamps are losslessly represented in SQL. Nonfinite query options keep their JS semantics.
++    const nativeRecency = recency && Number.isFinite(now) && Number.isFinite(recency.halfLife);
++    const nativeLimit = recency && !nativeRecency ? undefined : limit;
+     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
+     if (!tokens.length) return [];
+     const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT DISTINCT term FROM ${table}_vocab WHERE col IN ('body','aliases')`).map(row => String(row.term));
+@@ -203,13 +204,21 @@ export class SqliteText {
+         `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
+          clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner,min(seq) seq FROM matches WHERE negative=0 GROUP BY clause,id),
+          accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
++      const decayed = nativeRecency ? `, decayed AS (
++        SELECT a.id,a.owner,a.seq,a.score base_score,
++          a.score * CASE WHEN r.kind IN ('num','zero','date') THEN pow(0.5,max(0,? - r.value)/?) ELSE 1 END score
++        FROM accepted a LEFT JOIN (${this.db.fieldSource(recency.field, [job.type])}) r ON r.id=a.id)` : '';
++      if (nativeRecency) args.push(now, recency.halfLife);
++      // Stable JS decay ties previously retained the base-score order, then entity insertion order.
++      const scored = nativeRecency ? 'decayed' : 'accepted';
++      const order = `a.score DESC,${nativeRecency ? 'a.base_score DESC,' : ''}a.seq`;
+       const ranked = nativeLimit === undefined ? '' : `, ranked AS MATERIALIZED
+-        (SELECT a.id,a.score,a.owner,a.seq FROM accepted a ORDER BY a.score DESC,a.seq LIMIT ?)`;
++        (SELECT a.* FROM ${scored} a ORDER BY ${order} LIMIT ?)`;
+       if (nativeLimit !== undefined) args.push(nativeLimit);
+-      return this.db.all(`WITH ${ctes.join(',')}, ${combined}${ranked}
+-        SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? 'accepted' : 'ranked'} a
++      return this.db.all(`WITH ${ctes.join(',')}, ${combined}${decayed}${ranked}
++        SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? scored : 'ranked'} a
+         ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
+-        ORDER BY a.score DESC,a.seq${details ? ',m.docid,m.clause' : ''}`, args);
++        ORDER BY ${order}${details ? ',m.docid,m.clause' : ''}`, args);
+     };
+     let open = '\u0001', close = '\u0002';
+     // The read request owns a snapshot across both statements. Score the entity prefix before fetching
+@@ -239,7 +248,7 @@ export class SqliteText {
+       }
+       if (ranges.length) Object.defineProperty(hit.highlights, field, { value: mergeRanges(ranges), enumerable: true, configurable: true, writable: true });
+     }
+-    if (recency) {
++    if (recency && !nativeRecency) {
+       const payloads = new Map(this.db.rows([...hits.keys()], [recency.field]).map(row => [row.id, row]));
+       for (const hit of hits.values()) {
+         const value = payloads.get(hit.id)?.[recency.field], at = value instanceof Date ? value.getTime() : value;
+diff --git a/packages/apack-ears/tests/sqlite/text-limits.spec.ts b/packages/apack-ears/tests/sqlite/text-limits.spec.ts
+index 54edb52b14..247c5c114f 100644
+--- a/packages/apack-ears/tests/sqlite/text-limits.spec.ts
++++ b/packages/apack-ears/tests/sqlite/text-limits.spec.ts
+@@ -11,9 +11,9 @@ const schema: EngineSchema = { types: {
+ }, relations: {}, roles: [] };
+ const stores: SqliteDatabase[] = [], paths: string[] = [];
+ afterEach(() => { vi.restoreAllMocks(); for (const db of stores.splice(0)) db.close(); for (const path of paths.splice(0)) rmSync(path, { recursive: true, force: true }); });
+-function open() {
++function open(definition: EngineSchema = schema) {
+   const path = mkdtempSync(join(tmpdir(), 'ears-text-limits-')); paths.push(path);
+-  const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema(schema) });
++  const db = new SqliteDatabase({ path, syncs: false, schema: toElmdbSchema(definition) });
+   stores.push(db); return { db, e: createEarsEngine({ database: db }) };
+ }
+ function seed(e: EarsEngine, type = 'Row', n = 128) {
+@@ -85,6 +85,105 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native text pr
+     expect(e.query(['Other', 'Row']).search('needle', { fuzzy: false, recency: { field: 'at', halfLife: 10000 } }).limit(1).ids())
+       .toEqual(['Other-0']);
+   });
++  it('decays mixed native timestamp values before returning a bounded prefix without JS hydration', () => {
++    const { db, e } = open();
++    const values = [1000, new Date(99000), null, '99000', false, [99000], { at: 99000 }, -0, new Date(200000)];
++    for (const [i, at] of values.entries()) e.create('Row', { id: `Row-${i}`, name: i % 2 ? 'needle needle' : 'needle', at });
++    e.create('Row', { id: 'Row-missing', name: 'needle' });
++    const base = e.query('Row').search('needle', { fuzzy: false }).hits();
++    const expected = (halfLife: number) => base.map(hit => {
++      const value = e.getAttr(hit.id, 'at'), at = value instanceof Date ? value.getTime() : value;
++      return { id: hit.id, score: typeof at === 'number' ? hit.score * Math.pow(0.5, Math.max(0, 100000 - at) / halfLife) : hit.score };
++    }).sort((a, b) => b.score - a.score);
++    const normal = expected(10000), underflow = expected(0.01);
++    const rows = db.rows.bind(db);
++    vi.spyOn(db, 'rows').mockImplementation((ids, fields) => {
++      if (fields?.includes('at')) throw new Error('Recency must not hydrate candidate timestamps');
++      return rows(ids, fields);
++    });
++    const statements = observe(db);
++    for (const [halfLife, expectedHits] of [[10000, normal], [0.01, underflow]] as const) {
++      const query = () => e.query('Row').search('needle', { fuzzy: false, recency: { field: 'at', halfLife, now: 100000 } });
++      const answer = query().limit(3).hits({ fields: ['name'] });
++      expect(answer.map(hit => hit.id)).toEqual(expectedHits.slice(0, 3).map(hit => hit.id));
++      for (const hit of answer) expect(hit.score).toBeCloseTo(expectedHits.find(expected => expected.id === hit.id)!.score, 12);
++      expect(statements.at(-1)?.returnedRows).toBe(3);
++      expect(query().ids()).toEqual(expectedHits.map(hit => hit.id));
++      expect(query().limit(3).ids()).toEqual(expectedHits.slice(0, 3).map(hit => hit.id));
++      expect(statements.at(-1)?.returnedRows).toBe(3);
++    }
++  });
++  it('ranks declared Date slots and built-in numeric timestamps natively after read-only reopen', () => {
++    const definition: EngineSchema = { ...schema, types: { ...schema.types,
++      Row: { ...schema.types.Row!, fields: { at: { type: 'any', optional: true } } } } };
++    const { db, e } = open(definition);
++    e.create('Row', { id: 'Row-old', name: 'needle', at: new Date(1000), createdAt: 1000 });
++    e.create('Row', { id: 'Row-new', name: 'needle', at: new Date(99000), createdAt: 99000 });
++    db.close(); const reader = new SqliteDatabase({ path: db.path, readOnly: true }); stores.push(reader);
++    const read = createEarsEngine({ database: reader }), statements = observe(reader);
++    for (const field of ['at', 'createdAt']) {
++      expect(read.query('Row').search('needle', { fuzzy: false, recency: { field, halfLife: 10000, now: 100000 } }).first()).toBe('Row-new');
++      expect(statements.at(-1)?.returnedRows).toBe(1);
++    }
++  });
++  it('reads incumbent overflow timestamps after a dynamic scalar-slot declaration', () => {
++    const { db, e } = open();
++    e.create('Row', { id: 'Row-old', name: 'needle', at: 1000 });
++    e.create('Row', { id: 'Row-new', name: 'needle', at: new Date(99000) });
++    const query = () => e.query('Row').search('needle', { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } }).limit(1).ids();
++    expect(query()).toEqual(['Row-new']);
++    e.admin.setSchema({ ...schema, types: { ...schema.types,
++      Row: { ...schema.types.Row!, fields: { at: { type: 'any', optional: true } } } } });
++    expect(query()).toEqual(['Row-new']);
++    e.write('Row-old').set('at', 100000);
++    expect(query()).toEqual(['Row-old']);
++    expect(db.get("SELECT count(*) n FROM value_overflow WHERE field='at'")?.n).toBe(1);
++  });
++  it('preserves recency ties, full selected highlights and limits after filters and cursors', () => {
++    const { db, e } = open(); seed(e, 'Row', 32);
++    e.write('Row-31').set('at', new Date(99000)).set('body', ['needle one', 'needle two']);
++    const options = { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } };
++    for (let i = 0; i < 31; i++) e.write(`Row-${i}` as const).set('at', 1000);
++    const query = () => e.query('Row').search('needle', options), all = query().ids();
++    expect(all[0]).toBe('Row-31');
++    expect(query().limit(1).hits({ fields: ['name'], highlights: true })[0]?.highlights)
++      .toEqual({ name: [[0, 0, 6]], body: [[0, 0, 6], [1, 0, 6]] });
++    const statements = observe(db);
++    expect(query().where('bucket', 'early').limit(3).ids()).toEqual(all.filter(id => Number(id.slice(4)) < 10).slice(0, 3));
++    expect(statements.at(-1)?.returnedRows).toBe(32);
++    expect(query().after(all[3]!).limit(3).ids()).toEqual(all.slice(4, 7));
++    expect(query().limit(1).where('bucket', 'early').ids()).toEqual([]);
++  });
++  it('sees recency writes in units, rolls them back and invalidates a watched prefix', async () => {
++    const { e } = open(); seed(e, 'Row', 16);
++    for (let i = 0; i < 16; i++) e.write(`Row-${i}` as const).set('at', 1000);
++    const query = () => e.query('Row').search('needle', { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } }).limit(1).ids();
++    const failure = new Error('abort timestamp change');
++    expect(() => e.transact(() => { e.write('Row-15').set('at', new Date(99000)); expect(query()).toEqual(['Row-15']); throw failure; })).toThrow(failure);
++    expect(query()).toEqual(['Row-0']);
++    const seen: string[][] = [], watch = e.watch(query, ids => seen.push([...ids]));
++    try {
++      await e.admin.watchesSettled(); expect(seen.at(-1)).toEqual(['Row-0']);
++      e.write('Row-15').set('at', new Date(99000));
++      await e.admin.watchesSettled(); expect(seen.at(-1)).toEqual(['Row-15']);
++    } finally { watch.stop(); }
++  });
++  it('keeps generic nonfinite recency options while finite clocks use native ranking', () => {
++    const { e } = open();
++    e.create('Row', { id: 'Row-old', name: 'needle', at: 1000 });
++    e.create('Row', { id: 'Row-new', name: 'needle needle', at: new Date(99000) });
++    e.create('Row', { id: 'Row-missing', name: 'needle' });
++    const base = e.query('Row').search('needle', { fuzzy: false }).hits();
++    for (const [halfLife, now] of [[Infinity, 100000], [10000, Infinity], [10000, NaN]]) {
++      const expected = base.map(hit => {
++        const value = e.getAttr(hit.id, 'at'), at = value instanceof Date ? value.getTime() : value;
++        return { id: hit.id, score: typeof at === 'number' ? hit.score * Math.pow(0.5, Math.max(0, now! - at) / halfLife!) : hit.score };
++      }).sort((a, b) => b.score - a.score);
++      const query = () => e.query('Row').search('needle', { fuzzy: false, recency: { field: 'at', halfLife: halfLife!, now } });
++      expect(query().ids()).toEqual(expected.map(hit => hit.id));
++      expect(query().limit(1).ids()).toEqual(expected.slice(0, 1).map(hit => hit.id));
++    }
++  });
+   it('limits complete entities before expanding their highlight strings', () => {
+     const { db, e } = open();
+     e.create('Row', { id: 'Row-first', name: 'needle', body: ['needle one', 'needle two'] }); seed(e, 'Row', 32);
+@@ -97,19 +196,22 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('native text pr
+     expect(statements.at(-1)?.returnedRows).toBe(3);
+     expect(formatted).toHaveLength(6);
+   });
+-  it('keeps score and text fetch in one snapshot while another handle commits', () => {
+-    const { db, e } = open(); e.create('Row', { id: 'Row-one', name: 'needle' });
++  it.each([false, true])('keeps score and text fetch in one snapshot while another handle commits (recency=%s)', recency => {
++    const { db, e } = open(); e.create('Row', { id: 'Row-one', name: 'needle', at: 1000 });
++    const options = { fuzzy: false, ...(recency ? { recency: { field: 'at', halfLife: 10000, now: 100000 } } : {}) };
++    const score = e.query('Row').search('needle', options).hits()[0]!.score;
+     const writer = new SqliteDatabase({ path: db.path, syncs: false }); stores.push(writer);
+     const other = createEarsEngine({ database: writer }), all = db.all.bind(db); let committed = false;
+     vi.spyOn(db, 'all').mockImplementation((sql, args) => {
+       const rows = all(sql, args);
+       if (!committed && /^WITH c\d+ AS MATERIALIZED/.test(sql) && !sql.includes('highlight(')) {
+-        committed = true; other.write('Row-one').set('name', 'changed');
++        committed = true; other.transact(() => { other.write('Row-one').set('name', 'changed').set('at', new Date(99999)); });
+       }
+       return rows;
+     });
+-    const [hit] = e.query('Row').search('needle', { fuzzy: false }).limit(1).hits({ fields: ['name'], highlights: true });
++    const [hit] = e.query('Row').search('needle', options).limit(1).hits({ fields: ['name'], highlights: true });
+     expect(committed).toBe(true);
++    expect(hit?.score).toBe(score);
+     expect(hit?.row).toEqual({ id: 'Row-one', name: 'needle' });
+     expect(hit?.highlights).toEqual({ name: [[0, 0, 6]] });
+     expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual([]);

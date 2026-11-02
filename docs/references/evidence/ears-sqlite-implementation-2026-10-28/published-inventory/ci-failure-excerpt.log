@@ -1,0 +1,121 @@
+2026-10-30T10:04:02.4500350Z test:integration failed (exit 1)
+2026-10-30T10:04:02.5300290Z [31m     → expected [ 'apack.schema.json', 'dist', …(2) ] to deeply equal [ 'apack.schema.json', 'dist', …(1) ][39m
+2026-10-30T10:04:02.5301290Z    [90m·[39m published @apackdev/sdk[2m > [22mloads the SDK on the installed @apackdev/ears
+2026-10-30T10:04:02.5302000Z    [90m·[39m published @apackdev/sdk[2m > [22mpublishes the workspace package.json of @apackdev/ears, derived
+2026-10-30T10:04:02.5303290Z    [90m·[39m published @apackdev/sdk[2m > [22mpublishes the workspace package.json of @apackdev/sdk, derived
+2026-10-30T10:04:02.5304110Z    [90m·[39m published @apackdev/sdk[2m > [22mpublishes the workspace package.json of @apackdev/ui, derived
+2026-10-30T10:04:02.5305280Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5305940Z [22m[39m
+2026-10-30T10:04:02.5306090Z Build output:
+2026-10-30T10:04:02.5306190Z
+2026-10-30T10:04:02.5307010Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5308170Z [22m[39m  content runtime: dist/build/content-runtime.mjs
+2026-10-30T10:04:02.5308380Z
+2026-10-30T10:04:02.5309220Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5309960Z [22m[39m  runtime: dist/runtime/index.cjs
+2026-10-30T10:04:02.5310140Z
+2026-10-30T10:04:02.5310950Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5311600Z [22m[39m
+2026-10-30T10:04:02.5312070Z Output: ../../../../../var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/apack-clear-output-dGM90d/dist/
+2026-10-30T10:04:02.5312400Z
+2026-10-30T10:04:02.5313240Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5313900Z [22m[39mGenerated:
+2026-10-30T10:04:02.5314160Z   src/__generated__/entity-destinations.json
+2026-10-30T10:04:02.5314460Z   src/__generated__/event-contracts.json
+2026-10-30T10:04:02.5314720Z   src/__generated__/pack-entry.ts
+2026-10-30T10:04:02.5314980Z   src/__generated__/pack-entry-fe.ts
+2026-10-30T10:04:02.5315210Z   src/__generated__/ears.ts
+2026-10-30T10:04:02.5315420Z   src/__generated__/ref.ts
+2026-10-30T10:04:02.5315630Z   src/__generated__/paths.ts
+2026-10-30T10:04:02.5315860Z   src/__generated__/settings.ts
+2026-10-30T10:04:02.5316110Z   src/__generated__/settings-fe.ts
+2026-10-30T10:04:02.5316340Z   src/__generated__/events.ts
+2026-10-30T10:04:02.5316550Z   src/__generated__/types.ts
+2026-10-30T10:04:02.5316780Z   src/__generated__/services.ts
+2026-10-30T10:04:02.5317130Z   src/__generated__/runtime-services.ts
+2026-10-30T10:04:02.5317400Z   src/__generated__/repository.ts
+2026-10-30T10:04:02.5317640Z   src/__generated__/pack-types.ts
+2026-10-30T10:04:02.5317890Z   src/__generated__/references.ts
+2026-10-30T10:04:02.5318130Z   src/__generated__/appliers.ts
+2026-10-30T10:04:02.5318390Z   src/__generated__/content-runtime.ts
+2026-10-30T10:04:02.5327420Z   src/__generated__/flow-helpers.ts
+2026-10-30T10:04:02.5327610Z
+2026-10-30T10:04:02.5328560Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5329400Z [22m[39mBuilding pack: Demo v1.0.0
+2026-10-30T10:04:02.5329860Z No content.sources or content.datasets in manifest. Skipping content compilation.
+2026-10-30T10:04:02.5330140Z
+2026-10-30T10:04:02.5330970Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5331630Z [22m[39m
+2026-10-30T10:04:02.5331790Z Build output:
+2026-10-30T10:04:02.5331890Z
+2026-10-30T10:04:02.5333310Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5334170Z [22m[39m  content runtime: dist/build/content-runtime.mjs
+2026-10-30T10:04:02.5334380Z
+2026-10-30T10:04:02.5335210Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5335940Z [22m[39m  runtime: dist/runtime/index.cjs
+2026-10-30T10:04:02.5336120Z
+2026-10-30T10:04:02.5336940Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5338010Z [22m[39mgenerate-entries: inputs unchanged, skipping (use --force to regenerate)
+2026-10-30T10:04:02.5338290Z
+2026-10-30T10:04:02.5339120Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5339850Z [22m[39mBuilding pack: Demo v1.0.0
+2026-10-30T10:04:02.5340300Z No content.sources or content.datasets in manifest. Skipping content compilation.
+2026-10-30T10:04:02.5340580Z
+2026-10-30T10:04:02.5341400Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5342040Z [22m[39m
+2026-10-30T10:04:02.5342190Z Build output:
+2026-10-30T10:04:02.5342290Z
+2026-10-30T10:04:02.5343100Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5343990Z [22m[39m  content runtime: dist/build/content-runtime.mjs
+2026-10-30T10:04:02.5344210Z
+2026-10-30T10:04:02.5345120Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5346320Z [22m[39m  runtime: dist/runtime/index.cjs
+2026-10-30T10:04:02.5346510Z
+2026-10-30T10:04:02.5349430Z [90mstdout[2m | tests/build/build-output-swap.integration.spec.ts[2m > [22m[2ma build that fails[2m > [22m[2mdoes not reuse facade files from an incumbent with stamps from a refused replacement
+2026-10-30T10:04:02.5350140Z [22m[39m
+2026-10-30T10:04:02.5350640Z Output: ../../../../../var/folders/n6/hn37q6pj7sj_9dmqqc2113800000gn/T/apack-clear-output-dGM90d/dist/
+2026-10-30T10:04:02.5350990Z
+2026-10-30T10:04:02.5351650Z  [32m✓[39m [30m[43m @apackdev/cli [49m[39m tests/build/build-output-swap.integration.spec.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 177947[2mms[22m[39m
+2026-10-30T10:04:02.5352690Z    [33m[2m✓[22m[39m a build that fails[2m > [22mrefuses missing producer output before sealing and retains the incumbent [33m 36652[2mms[22m[39m
+2026-10-30T10:04:02.5353680Z    [33m[2m✓[22m[39m a build that fails[2m > [22mrefuses copied media removed after compilation and retains the incumbent [33m 23875[2mms[22m[39m
+2026-10-30T10:04:02.5354640Z    [33m[2m✓[22m[39m a build that fails[2m > [22mrefuses publication when an authored input changes during a real build [33m 15368[2mms[22m[39m
+2026-10-30T10:04:02.5355800Z    [33m[2m✓[22m[39m a build that fails[2m > [22mretains the previous build when a missing external resolution directory appears during compilation [33m 22837[2mms[22m[39m
+2026-10-30T10:04:02.5356900Z    [33m[2m✓[22m[39m a build that fails[2m > [22mdoes not reuse facade files from an incumbent with stamps from a refused replacement [33m 79214[2mms[22m[39m
+2026-10-30T10:04:02.5357370Z
+2026-10-30T10:04:02.5358300Z [31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+2026-10-30T10:04:02.5358590Z
+2026-10-30T10:04:02.5359430Z [41m[1m FAIL [22m[49m [30m[43m @app/publish-checks [49m[39m tests/published-sdk-types.integration.spec.ts[2m > [22mpublished @apackdev/sdk[2m > [22mships no host-only module
+2026-10-30T10:04:02.5360540Z [31m[1mAssertionError[22m: expected [ 'apack.schema.json', 'dist', …(2) ] to deeply equal [ 'apack.schema.json', 'dist', …(1) ][39m
+2026-10-30T10:04:02.5360950Z
+2026-10-30T10:04:02.5361050Z [32m- Expected[39m
+2026-10-30T10:04:02.5361270Z [31m+ Received[39m
+2026-10-30T10:04:02.5361390Z
+2026-10-30T10:04:02.5361470Z [2m  [[22m
+2026-10-30T10:04:02.5361730Z [2m    "apack.schema.json",[22m
+2026-10-30T10:04:02.5362230Z [2m    "dist",[22m
+2026-10-30T10:04:02.5362650Z [31m+   "node_modules",[39m
+2026-10-30T10:04:02.5362940Z [2m    "package.json",[22m
+2026-10-30T10:04:02.5363160Z [2m  ][22m
+2026-10-30T10:04:02.5363250Z
+2026-10-30T10:04:02.5363660Z [36m [2m❯[22m tests/published-sdk-types.integration.spec.ts:[2m151:40[22m[39m
+2026-10-30T10:04:02.5366020Z     [90m149| [39m    expect(await resolveFromConsumer('@apackdev/ears')).toBe(pathToFil…
+2026-10-30T10:04:02.5367890Z     [90m150| [39m    const shipped = fs.readdirSync(path.join(sdk, 'dist'), { recursive…
+2026-10-30T10:04:02.5369520Z     [90m151| [39m    expect(fs.readdirSync(sdk).sort()).toEqual(['apack.schema.json', '…
+2026-10-30T10:04:02.5370760Z     [90m   | [39m                                       [31m^[39m
+2026-10-30T10:04:02.5372020Z     [90m152| [39m    [90m// Source maps would point at src, which isn't published[39m
+2026-10-30T10:04:02.5374300Z     [90m153| [39m    [34mexpect[39m(shipped[33m.[39m[34mfilter[39m((f) [33m=>[39m f[33m.[39m[34mendsWith[39m([32m'.map'[39m)))[33m.[39m[34mtoEqual[39m([])[33m;[39m
+2026-10-30T10:04:02.5375620Z
+2026-10-30T10:04:02.5376220Z [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+2026-10-30T10:04:02.5376690Z
+2026-10-30T10:04:02.5376700Z
+2026-10-30T10:04:02.5377760Z [2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (30)[39m
+2026-10-30T10:04:02.5379530Z [2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m81 passed[39m[22m[90m (95)[39m
+2026-10-30T10:04:02.5380670Z [2m   Start at [22m 09:57:36
+2026-10-30T10:04:02.5382400Z [2m   Duration [22m 384.46s[2m (transform 2.80s, setup 106ms, collect 9.17s, tests 694.49s, environment 1ms, prepare 383ms)[22m
+2026-10-30T10:04:02.5383410Z
+2026-10-30T10:04:02.5383420Z
+2026-10-30T10:04:02.5383770Z integration pool failed (exit 1)
+2026-10-30T10:04:02.5384160Z
+2026-10-30T10:04:02.5384170Z
+2026-10-30T10:04:02.5384760Z chain FAILED at test:integration in 389.6s on a 2-core budget
+2026-10-30T10:04:02.5386260Z evidence from this run in node_modules/.cache/apack-chain/runs/2026-10-30T09-57-32Z-6590 (1 step)

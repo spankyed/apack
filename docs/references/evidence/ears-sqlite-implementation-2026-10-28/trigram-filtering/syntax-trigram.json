@@ -1,0 +1,208 @@
+{
+  "node": "v23.11.1",
+  "platform": "linux",
+  "arch": "arm64",
+  "package": "1.13.1",
+  "wasmSha256": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525",
+  "checks": [
+    {
+      "pattern": "(?i)^error",
+      "inputLength": 5,
+      "actual": true,
+      "ms": 5.900823000000003
+    },
+    {
+      "pattern": "\\p{Greek}+",
+      "inputLength": 7,
+      "actual": true,
+      "ms": 1.9527599999999978
+    },
+    {
+      "pattern": "\\b\\w+\\b",
+      "inputLength": 2,
+      "actual": true,
+      "ms": 2.266054000000004
+    },
+    {
+      "pattern": "[a-z&&[^b]]+",
+      "inputLength": 1,
+      "actual": false,
+      "ms": 1.174630999999998
+    },
+    {
+      "pattern": "(?:a+)+$",
+      "inputLength": 100001,
+      "actual": false,
+      "ms": 2.2781790000000015
+    },
+    {
+      "pattern": "x(?=y)",
+      "errorType": "object",
+      "errorClass": "Error",
+      "message": "regex parse error:\n    x(?=y)\n     ^^^\nerror: look-around, including look-ahead and look-behind, is not supported"
+    },
+    {
+      "pattern": "(a)\\1",
+      "errorType": "object",
+      "errorClass": "Error",
+      "message": "regex parse error:\n    (a)\\1\n       ^^\nerror: backreferences are not supported"
+    },
+    {
+      "pattern": "(",
+      "errorType": "object",
+      "errorClass": "Error",
+      "message": "regex parse error:\n    (\n    ^\nerror: unclosed group"
+    }
+  ],
+  "syntax": {
+    "@type": "struct",
+    "@name": "regex_syntax::hir::Hir",
+    "kind": {
+      "@type": "enum",
+      "@name": "regex_syntax::hir::HirKind",
+      "@variant": "Concat",
+      "@values": [
+        [
+          {
+            "@type": "struct",
+            "@name": "regex_syntax::hir::Hir",
+            "kind": {
+              "@type": "enum",
+              "@name": "regex_syntax::hir::HirKind",
+              "@variant": "Look",
+              "@values": [
+                {
+                  "@type": "enum",
+                  "@name": "regex_syntax::hir::Look",
+                  "@variant": "Start"
+                }
+              ]
+            }
+          },
+          {
+            "@type": "struct",
+            "@name": "regex_syntax::hir::Hir",
+            "kind": {
+              "@type": "enum",
+              "@name": "regex_syntax::hir::HirKind",
+              "@variant": "Literal",
+              "@values": [
+                {
+                  "@type": "struct",
+                  "@name": "regex_syntax::hir::Literal",
+                  "@values": [
+                    {
+                      "0": 108,
+                      "1": 105,
+                      "2": 116,
+                      "3": 101,
+                      "4": 114,
+                      "5": 97,
+                      "6": 108
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "@type": "struct",
+            "@name": "regex_syntax::hir::Hir",
+            "kind": {
+              "@type": "enum",
+              "@name": "regex_syntax::hir::HirKind",
+              "@variant": "Repetition",
+              "@values": [
+                {
+                  "@type": "struct",
+                  "@name": "regex_syntax::hir::Repetition",
+                  "min": 1,
+                  "greedy": true,
+                  "sub": {
+                    "@type": "struct",
+                    "@name": "regex_syntax::hir::Hir",
+                    "kind": {
+                      "@type": "enum",
+                      "@name": "regex_syntax::hir::HirKind",
+                      "@variant": "Class",
+                      "@values": [
+                        {
+                          "@type": "enum",
+                          "@name": "regex_syntax::hir::Class",
+                          "@variant": "Unicode",
+                          "@values": [
+                            {
+                              "@type": "struct",
+                              "@name": "regex_syntax::hir::ClassUnicode",
+                              "ranges": [
+                                {
+                                  "@type": "struct",
+                                  "@name": "regex_syntax::hir::ClassUnicodeRange",
+                                  "start": "\u0000",
+                                  "end": "\t",
+                                  "len": 10
+                                },
+                                {
+                                  "@type": "struct",
+                                  "@name": "regex_syntax::hir::ClassUnicodeRange",
+                                  "start": "\u000b",
+                                  "end": "􏿿",
+                                  "len": 1114101
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "@type": "struct",
+            "@name": "regex_syntax::hir::Hir",
+            "kind": {
+              "@type": "enum",
+              "@name": "regex_syntax::hir::HirKind",
+              "@variant": "Literal",
+              "@values": [
+                {
+                  "@type": "struct",
+                  "@name": "regex_syntax::hir::Literal",
+                  "@values": [
+                    {
+                      "0": 116,
+                      "1": 97,
+                      "2": 105,
+                      "3": 108
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "@type": "struct",
+            "@name": "regex_syntax::hir::Hir",
+            "kind": {
+              "@type": "enum",
+              "@name": "regex_syntax::hir::HirKind",
+              "@variant": "Look",
+              "@values": [
+                {
+                  "@type": "enum",
+                  "@name": "regex_syntax::hir::Look",
+                  "@variant": "End"
+                }
+              ]
+            }
+          }
+        ]
+      ]
+    }
+  },
+  "wasmBytesBefore": 2752512,
+  "wasmBytesAfter": 2752512
+}

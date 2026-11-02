@@ -1,0 +1,16 @@
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/database/storage.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/database/storage.spec.ts (15 tests) 1017ms
+   ✓ selects both real stores and preserves the profile when selection is omitted on reopen  490ms
+   ✓ blocks writable recovery opens without salvaging either sqlite/1 store  422ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  12:00:23
+   Duration  2.76s (transform 712ms, setup 18ms, collect 1.60s, tests 1.02s, environment 0ms, prepare 40ms)
+

@@ -1,0 +1,15 @@
+# Current platform contracts at 4cc1cc3b19
+
+[Run 41294379000](https://github.com/spankyed/apack/actions/runs/41294379000) is terminal failure at `4cc1cc3b19a52257014f3c54a5944afddf29bd7c`, native pin f496470679a7bd9764398108b20f62a73333c701. All three OSes fail only the retained `generate-entries` keyword judgment. Linux x64 and macOS arm64 each pass 894 EARS tests with no skips; Windows x64 passes 890 with four explicit FIFO exclusions. No relevance waiver is applied.
+
+All seven native training witnesses execute on every OS, including real malformed one-byte and valid-sized wrong-dimension eight-byte projection refusal, canonical-data/commit preservation and successful repair/retry. All 36 model-admission cases and 735 native membership comparisons execute. The four Library search-index and five Thread repository cases pass with no skips. Library uses fake inference with the actual manifest model/dimensions; it is not production-provider or semantic/UI acceptance.
+
+Windows now passes both complete models in the full two-worker EARS suite, with all original 120 random and 40 watch workloads/comparisons: random 22,964.08ms and watch 24,625.21ms under unchanged 30,000ms per-test deadlines. This closes the old a8 timeout on this source/runtime scope; it does not isolate its cause or guarantee timing under real app/admission load. The later relation lookup/spool source is not qualified here.
+
+Matching-producer copied-profile conversion passes all five check groups on all OSes, preserving both stores, settings/search/vectors/history/media/secrets/pack bytes, persistent converted writes and source-preserving refusal paths. Five conversion publication/process-death recovery points pass per OS, with source/incumbent preservation and retry. This is parent-issued process death, not physical power loss. Linux additionally passes converted API baseline boot, two SQLite boots with persistent data, three live pack updates and history/settings/media preservation.
+
+Linux prepared SDK passes all 1,330 contracts; API startup passes seven. Host, CLI, built logical commands, private native assets and source/type/API gates retain their exact report scope. Linux real read-only filesystem/WAL and four full-filesystem cases pass. Windows host/crash/FIFO/platform exclusions remain in raw reports and summary. None certifies arbitrary network/external filesystems or power-loss safety.
+
+The terminal red status is required because keyword usefulness is still 24/25. Original heartbeat/resource failures remain independently open. Full strict, signed/installed and current-source app/resource acceptance is not supplied by this source-built platform route.
+
+Compressed complete reports/logs and decompressed SHA256 hashes are preserved. `summary.json` contains counts, exact exclusions, model durations and original verification summaries. Subsequent `208227ac0c` relation streaming and `9ac1f748d3` audit spool require focused driver/type/codec/model and resource qualification before broader reruns.

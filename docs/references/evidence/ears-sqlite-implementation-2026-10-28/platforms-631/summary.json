@@ -1,0 +1,61 @@
+{
+  "run": 41245968059,
+  "source": "631a832a0b5c325e54978d4e3f2cba49a9be1762",
+  "platforms": {
+    "Linux": {
+      "passed": 860,
+      "failed": 1,
+      "pending": 0,
+      "fullNativeModelPassed": 36,
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ],
+      "rawSha256": "4a455eae596c31cb4ee089b507db89eecdf236155be900596ccf3a8631058188",
+      "sdk-all-sqlite.json": {
+        "numPassedTests": 1327,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      },
+      "api-startup.json": {
+        "numPassedTests": 7,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      },
+      "query-work.json": {
+        "numPassedTests": 5,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      }
+    },
+    "macOS": {
+      "passed": 860,
+      "failed": 1,
+      "pending": 0,
+      "fullNativeModelPassed": 36,
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ],
+      "rawSha256": "935167b4596a7e8c39ad25e6ffc4449e659500a0fc676a4e59242d826fd21b7f",
+      "query-work.json": {
+        "numPassedTests": 5,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      }
+    },
+    "Windows": {
+      "passed": 856,
+      "failed": 1,
+      "pending": 4,
+      "fullNativeModelPassed": 36,
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ],
+      "rawSha256": "2742f35c02ffe94cc3235b9af7371a97b19b6bea37d1d7f3ad29fd2e4c5b586f",
+      "query-work.json": {
+        "numPassedTests": 5,
+        "numFailedTests": 0,
+        "numPendingTests": 0
+      }
+    }
+  }
+}

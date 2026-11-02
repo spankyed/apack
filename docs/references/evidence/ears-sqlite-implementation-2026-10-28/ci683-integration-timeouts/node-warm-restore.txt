@@ -1,0 +1,3 @@
+2026-10-28T12:46:53.1810800Z Cache Size: ~36 MB (37656307 B)
+2026-10-28T12:46:55.0730470Z Cache restored from key: node-toolchain-v1-macOS-ARM64-23.11.1
+2026-10-28T12:46:55.5290390Z Found in cache @ /Users/runner/hostedtoolcache/node/23.11.1/arm64

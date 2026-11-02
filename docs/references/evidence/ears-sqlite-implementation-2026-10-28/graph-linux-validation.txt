@@ -1,0 +1,110 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc npm run typecheck -w @apackdev/ears && npm test -w @apackdev/ears -- tests/engine/relations.spec.ts && npm ci --prefix packages/apack-ears/bench/sqlite/extensions && EARS_EVALUATION_BACKEND=sqlite npm test -w @apackdev/ears
+
+cannot delete non-empty directory: packages/renderer/node_modules
+    Finished `release` profile [optimized] target(s) in 0.05s
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/ears@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/relations.spec.ts
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/relations.spec.ts (21 tests) 218ms
+
+ Test Files  1 passed (1)
+      Tests  21 passed (21)
+   Start at  05:30:52
+   Duration  546ms (transform 163ms, setup 13ms, collect 199ms, tests 218ms, environment 0ms, prepare 40ms)
+
+
+added 4 packages, and audited 5 packages in 4s
+
+found 0 vulnerabilities
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /work/packages/apack-ears
+
+ ✓ tests/engine/model-based.spec.ts (2 tests) 20299ms
+   ✓ refuses, holds and answers what the model does  4569ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  15729ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 870ms
+ ❯ tests/engine/queries.spec.ts (26 tests | 1 failed) 1227ms
+   ✓ starts > a type, types, ids, and every entity 35ms
+   ✓ starts > a builder kept across writes answers as one made after them, whatever its steps 24ms
+   ✓ starts > refuses a name that is not a registered type, undefined and a list holding one included 13ms
+   ✓ starts > an id or ids start finds only entities still in the engine 12ms
+   ✓ starts > a builder kept across writes drops, at its next step, the ids destroyed since 12ms
+   ✓ filters > ofType, within, where, has, lacks, withRole, linkedTo, linkedFrom and linkedWith 14ms
+   ✓ filters > out and in walk edges, by kinds and target types, and outEdges and inEdges return their relation rows 16ms
+   ✓ ordering > orderBy numbers and strings, missing values last, reverse and limit 11ms
+   ✓ ordering > orderBy sorts by type, then value: a list or object after strings, a missing value or null last, a date by its time 13ms
+   ✓ ordering > distinct and groupBy 11ms
+   ✓ terminals > count, first, last, exists, map, forEach, reduce 13ms
+   ✓ terminals > first, exists, pickOne and limit read only as far as their answer 12ms
+   ✓ terminals > a predicate that creates an entity of the type it walks doesn't reach it 14ms
+   ✓ terminals > limit takes the first n, rounded down, and none for a count below one or one that isn't a number 13ms
+   ✓ terminals > pick holds a field named __proto__ as its own, as getRow does 14ms
+   ✓ terminals > pick, pickOne and pickAll 17ms
+   ✓ the value index > answers where and withRole as a walk would, through every kind of write once it is built 17ms
+   ✓ the value index > gives its matches in the order the types and their entities were given, and reads trashed ones only with withTrashed 13ms
+   ✓ the value index > is rebuilt from what a clear and a bulk load leave 17ms
+   ✓ the value index > leaves to a walk what it cannot answer: a predicate, an object, NaN and the entity type 19ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches 232ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk 219ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws 201ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number 194ms
+   × explain > answers the query's ids and each stage of its plan: the index it read, what it visited and kept 30ms
+     → Cannot read properties of undefined (reading 'ids')
+   ✓ explain > refuses a query with a where given a function, which runs outside the plan 27ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 2911ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 650ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 349ms
+ ✓ tests/engine/watch-schedule.spec.ts (8 tests) 226ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 76ms
+ ✓ tests/engine/calls.spec.ts (6 tests) 129ms
+ ✓ tests/engine/search.spec.ts (7 tests) 115ms
+ ✓ tests/engines.spec.ts (4 tests) 76ms
+ ✓ tests/engine/vector.spec.ts (6 tests) 107ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 46ms
+ ✓ tests/engine/query-values.spec.ts (2 tests) 48ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 43ms
+ ✓ tests/engine/sqlite-operations.spec.ts (14 tests) 1096ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/queries.spec.ts > explain > answers the query's ids and each stage of its plan: the index it read, what it visited and kept
+TypeError: Cannot read properties of undefined (reading 'ids')
+ ❯ Object.explain src/query.ts:289:41
+    287|         const plan = { scope: recipe.scope, start: recipe.start, steps…
+    288|         const [explained] = read([{ read: 'query', plan, explain: true…
+    289|         return { ids: explained!.answer.ids as EARS.EntityId[], visite…
+       |                                         ^
+    290|       },
+    291|       count: () => run(recipe, { answer: 'count' }).n as number,
+ ❯ tests/engine/queries.spec.ts:389:90
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 15 passed (16)
+      Tests  1 failed | 237 passed (238)
+   Start at  05:30:57
+   Duration  31.25s (transform 335ms, setup 32ms, collect 1.22s, tests 28.27s, environment 2ms, prepare 605ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /work/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /work/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run

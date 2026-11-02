@@ -1,0 +1,110 @@
+{
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--check.log": {
+    "sha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "bytes": 458
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--elmdb-contracts.json": {
+    "sha256": "bf2700a6e7e43f5af042334f47b4871b69ae84031bf76c5718b84a82cfcae933",
+    "bytes": 31944
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--elmdb-contracts.log": {
+    "sha256": "87f94c920f9e1bdfe46bd837685b5b0a5bd57bd19ecd7c33ae6ea955495ed69f",
+    "bytes": 6864
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--elmdb.rev": {
+    "sha256": "c0c37c221beb7e95dfc06ad787c90759465af6e89061e85589ac44fd43486381",
+    "bytes": 41
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--graph-probe.log": {
+    "sha256": "e6dce5d7782876ebc17c3ffe1d613f3484fbda645e9e1d544c9fd3ccaec0e3df",
+    "bytes": 407
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--graph-report.json": {
+    "sha256": "a65ce75a7bdd030feca0343bba74bcf00bce30cf9c6bca2d1cd22191cf560bcc",
+    "bytes": 725
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--bulkLoad-reopen.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--bulkLoad.log": {
+    "sha256": "71f4a96ae75309129a59e4183d4ce19d971a147ac917a208603d266ec705d8fd",
+    "bytes": 8
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--compile.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--disabled-control-reopen.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--disabled-control.log": {
+    "sha256": "5b5a10d859dabb7b920b783ccc74399bbb8fca7e28a41fa48a10a6b864cbe9da",
+    "bytes": 12
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--report.json": {
+    "sha256": "c65c2dcfaa0e1455f3b1366af35d96fdf002a5164ad59921c1625317ac0c4bc1",
+    "bytes": 11064
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--unit-reopen.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--unit.log": {
+    "sha256": "71f4a96ae75309129a59e4183d4ce19d971a147ac917a208603d266ec705d8fd",
+    "bytes": 8
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--write-reopen.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--lost-ack--write.log": {
+    "sha256": "71f4a96ae75309129a59e4183d4ce19d971a147ac917a208603d266ec705d8fd",
+    "bytes": 8
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--packages.log": {
+    "sha256": "1b5d12898d6cf21176ecd2ef9a5746aed21843cc218fe2e68bff5b334dd24090",
+    "bytes": 13890
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--reports.patch": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--source.txt": {
+    "sha256": "e910f985e39acf39de66fd81b5e69e309d2273541acd522d4fd9e8d2c77b708d",
+    "bytes": 41
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--sqlite-contracts.json": {
+    "sha256": "d386a8a077ca1f973e54c9833c382e36afe5b5ddf1fad534f43ab33a37421832",
+    "bytes": 31906
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--sqlite-contracts.log": {
+    "sha256": "cb67ff7046caa4136608a3e18d8db47918548ebe478d18a073dc7b24989b271e",
+    "bytes": 7028
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--subprocess-inventory.json": {
+    "sha256": "fc306e4b2cdb74d660d1e0b7fb1b93eb1db82d96efb161081840a1dd724ed227",
+    "bytes": 5156
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--subprocess-inventory.log": {
+    "sha256": "6da09dd95acef54bdf3874dd52660bafa273a44c812928897b00ae3a909fb7c4",
+    "bytes": 1058
+  },
+  "ears-sqlite-api-41226498992--.temp--sqlite-api--update.log": {
+    "sha256": "224f96c2041b05ba898aee0c6a8536e46c687fc36523272ce5a6ea26502306b2",
+    "bytes": 469
+  },
+  "ears-sqlite-api-41226498992--packages--apack-ears--etc--index.api.md": {
+    "sha256": "f56ad2191d7679f03ddbe4a56b3cbc051011217e41eaa0bc34205867b8d9cf71",
+    "bytes": 32572
+  },
+  "ears-sqlite-api-41226498992--packages--apack-ears--etc--lmdb.api.md": {
+    "sha256": "dcebf934aeef02e6d5384ac2aa70fba020c11de7f15d9838dcfecbba50883d3d",
+    "bytes": 689
+  },
+  "ears-sqlite-api-41226498992--packages--apack-ears--etc--sqlite.api.md": {
+    "sha256": "c011286ca87cee4b818e9f84b835f85a709cd47b0e7b59916935c9aab1709cab",
+    "bytes": 2629
+  }
+}

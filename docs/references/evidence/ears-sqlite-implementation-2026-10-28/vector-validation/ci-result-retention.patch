@@ -1,0 +1,13 @@
+diff --git a/.github/workflows/strict-chain.yml b/.github/workflows/strict-chain.yml
+index d90aff8290..b445aa6807 100644
+--- a/.github/workflows/strict-chain.yml
++++ b/.github/workflows/strict-chain.yml
+@@ -122,6 +122,8 @@ jobs:
+           path: |
+             ${{ runner.temp }}/strict-chain.log
+             node_modules/.cache/apack-chain/runs/
++            .apack/tests/results/
++            tests/packs/*/.apack/tests/results/
+ 
+   sqlite-candidate:
+     permissions:

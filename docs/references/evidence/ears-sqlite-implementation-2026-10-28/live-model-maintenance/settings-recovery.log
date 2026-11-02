@@ -1,0 +1,27 @@
+(node:20) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+stderr | tests/backup/storage.spec.ts > closes managed app stores without announcing success when settings cleanup fails after import
+[database:backup] The backup holds entities of types no installed pack declares { types: [ [32m'Note (1)'[39m ] }
+
+stdout | tests/backup/storage.spec.ts > closes managed app stores without announcing success when settings cleanup fails after import
+[database:backup] Imported lmdb
+[database:backup] Imported runHistory
+
+stdout | tests/backup/storage.spec.ts > closes managed app stores without announcing success when settings cleanup fails after import
+[database:backup] Restored media assets
+
+stdout | tests/backup/storage.spec.ts > closes managed app stores without announcing success when settings cleanup fails after import
+[database:backup] Import completed
+
+ ✓ |@apackdev/host| tests/backup/storage.spec.ts (27 tests | 26 skipped) 1870ms
+   ✓ closes managed app stores without announcing success when settings cleanup fails after import  1869ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 26 skipped (27)
+   Start at  11:21:56
+   Duration  8.78s (transform 2.94s, setup 14ms, collect 6.40s, tests 1.87s, environment 0ms, prepare 281ms)
+
+JSON report written to /results/settings-recovery.json

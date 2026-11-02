@@ -1,0 +1,142 @@
+[
+  {
+    "label": "ear-package",
+    "args": [
+      "npm",
+      "run",
+      "build:package",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 6.086062757007312
+  },
+  {
+    "label": "source-stage",
+    "args": [
+      "git",
+      "add",
+      "-A"
+    ],
+    "exitCode": 0,
+    "seconds": 0.3681124309950974
+  },
+  {
+    "label": "source-snapshot",
+    "args": [
+      "git",
+      "-c",
+      "user.name=Physical model qualification",
+      "-c",
+      "user.email=qualification@localhost",
+      "commit",
+      "--allow-empty",
+      "-qm",
+      "Current pinned integration with physical model refresh overlay"
+    ],
+    "exitCode": 0,
+    "seconds": 0.02043842599960044
+  },
+  {
+    "label": "all-ears",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@apackdev/ears",
+      "--outputFile=/results/all-ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 54.40080901302281
+  },
+  {
+    "label": "host",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@apackdev/host",
+      "packages/apack-host/tests/database/storage.spec.ts",
+      "packages/apack-host/tests/database/close.spec.ts",
+      "--outputFile=/results/host.json"
+    ],
+    "exitCode": 0,
+    "seconds": 4.949405006016605
+  },
+  {
+    "label": "api",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--project",
+      "@app/api",
+      "packages/api/tests/runtime/sqlite-profile.spec.ts",
+      "packages/api/tests/transport/shutdown.spec.ts",
+      "--outputFile=/results/api.json"
+    ],
+    "exitCode": 0,
+    "seconds": 4.47668043198064
+  },
+  {
+    "label": "ears-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.2253749709925614
+  },
+  {
+    "label": "host-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:host"
+    ],
+    "exitCode": 0,
+    "seconds": 8.419968220987357
+  },
+  {
+    "label": "api-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:api"
+    ],
+    "exitCode": 0,
+    "seconds": 16.46200271701673
+  },
+  {
+    "label": "api-update",
+    "args": [
+      "npm",
+      "run",
+      "api:update",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 1,
+    "seconds": 2.881743236008333
+  }
+]

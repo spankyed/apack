@@ -1,0 +1,11 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/database/write-lock.spec.ts (15 tests) 1325ms
+   ✓ the database write lock > is taken by one of several tools that ask for it at the same moment  708ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  16:04:39
+   Duration  2.78s (transform 675ms, setup 12ms, collect 1.33s, tests 1.33s, environment 0ms, prepare 36ms)
+

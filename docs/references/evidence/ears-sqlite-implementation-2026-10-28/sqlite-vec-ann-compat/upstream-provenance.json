@@ -1,0 +1,26 @@
+[
+  {
+    "path": "tests/test-diskann.py",
+    "ref": "v0.1.10-alpha.4",
+    "blob": "4e65160434dceeffde68990813ba0fc8086bc619",
+    "sha256": "d6672c804186e45b4f92c51884064815d5d7e56f58a0ac5197e6dd71d54aea99",
+    "bytes": 46545,
+    "url": "https://github.com/asg017/sqlite-vec/blob/v0.1.10-alpha.4/tests/test-diskann.py"
+  },
+  {
+    "path": "tests/test-ivf.py",
+    "ref": "v0.1.10-alpha.4",
+    "blob": "8b7f566b6ca3b5f48e768b1bbc2fc815cac5f2b5",
+    "sha256": "5522ea7aa8dd8aadff121f8147cef88c5a0f95cd5fbd8f3ae647e10611736cd8",
+    "bytes": 13394,
+    "url": "https://github.com/asg017/sqlite-vec/blob/v0.1.10-alpha.4/tests/test-ivf.py"
+  },
+  {
+    "path": "sqlite-vec-diskann.c",
+    "ref": "v0.1.10-alpha.4",
+    "blob": "5bd298bc12752d4b18909afd2c5daf6f0100851e",
+    "sha256": "eba84318f6a0c43ecacc9769bf967af345791760e1eebb8ad3b200ea0a7afbc7",
+    "bytes": 64430,
+    "url": "https://github.com/asg017/sqlite-vec/blob/v0.1.10-alpha.4/sqlite-vec-diskann.c"
+  }
+]

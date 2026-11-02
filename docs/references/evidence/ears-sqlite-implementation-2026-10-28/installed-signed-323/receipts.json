@@ -1,0 +1,34 @@
+{
+  "installed-app.json": {
+    "sha256": "c0ae2904d83eea2bcca686faf64c704b4e0443cda9a1c0d5df97ddd42253a95a",
+    "bytes": 10043
+  },
+  "typecheck.log": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "installed-signed-native.log": {
+    "sha256": "64ed26add6051748bb8bb20411afea99cec5fe601bf992d69226231890e5d1f3",
+    "bytes": 2318
+  },
+  "installed-signing.log": {
+    "sha256": "49ad09ca1a70855e45e8c5bb5328592a5bbfdd120c9003f45b4e856b5ef91a96",
+    "bytes": 1434
+  },
+  "installed-native.log": {
+    "sha256": "b40c4104f2152e42f1731503960a7eddd61a236fa771d8b1c335598dce969b71",
+    "bytes": 2318
+  },
+  "verification.json": {
+    "sha256": "c34884ca0bbeb2f2121536d59ace0c41253e194446e75c077c41e82c448c839e",
+    "bytes": 263
+  },
+  "installed-build.log": {
+    "sha256": "dd84be6944867eb951ad08a29d189ef968174f8ff81cb98b68cc075ff081523c",
+    "bytes": 10480
+  },
+  "ears-signed-323-metadata.json": {
+    "sha256": "4826b8870964e5268037be30a5cd0cb09fa6361bb987a797c8a9a3eb7c109593",
+    "bytes": 7457
+  }
+}

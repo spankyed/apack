@@ -1,0 +1,37 @@
+[
+  {
+    "label": "prebuilt-inputs",
+    "exitCode": 0,
+    "seconds": 0.1888177920045564
+  },
+  {
+    "label": "pack-ears",
+    "exitCode": 0,
+    "seconds": 0.2938933669938706
+  },
+  {
+    "label": "pack-sdk",
+    "exitCode": 0,
+    "seconds": 0.4555698369949823
+  },
+  {
+    "label": "pack-cli",
+    "exitCode": 0,
+    "seconds": 0.3290478230046574
+  },
+  {
+    "label": "pack-elmdb",
+    "exitCode": 0,
+    "seconds": 0.924732272993424
+  },
+  {
+    "label": "isolated-npm-install",
+    "exitCode": 0,
+    "seconds": 29.682882610009983
+  },
+  {
+    "label": "isolated-logical-cli",
+    "exitCode": 0,
+    "seconds": 8.694194320996758
+  }
+]

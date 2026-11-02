@@ -1,0 +1,36 @@
+{
+  "name": "sqlite-vec",
+  "version": "0.1.10-alpha.4",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "url": "git+https://github.com/asg017/sqlite-vec.git",
+    "type": "git",
+    "directory": null
+  },
+  "dist": {
+    "shasum": "442f2acacbc4a673dc6a129916bec6b2431eaa0b",
+    "tarball": "https://registry.npmjs.org/sqlite-vec/-/sqlite-vec-0.1.10-alpha.4.tgz",
+    "fileCount": 5,
+    "integrity": "sha512-Ce5zw8jkaJJlPoPp6aaxCjL/niC7bRw3TT6oeEmFqYLMiHU5eB7i9pvVWM6TaqmvgNCl3XJUBNmFRcI/RHPVhQ==",
+    "signatures": [
+      {
+        "sig": "MEUCIQCLCR8rXRuDlBXjPrjuifSF4qlnaPpRyfp1vi3n/1ysogIgHLx4hVWaNiFfPkBCsDnV2Snmnx/3S+6CNjqHWMp7R44=",
+        "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+      }
+    ],
+    "attestations": {
+      "url": "https://registry.npmjs.org/-/npm/v1/attestations/sqlite-vec@0.1.10-alpha.4",
+      "provenance": {
+        "predicateType": "https://slsa.dev/provenance/v1"
+      }
+    },
+    "unpackedSize": 4062
+  },
+  "optionalDependencies": {
+    "sqlite-vec-linux-x64": "0.1.10-alpha.4",
+    "sqlite-vec-darwin-x64": "0.1.10-alpha.4",
+    "sqlite-vec-linux-arm64": "0.1.10-alpha.4",
+    "sqlite-vec-windows-x64": "0.1.10-alpha.4",
+    "sqlite-vec-darwin-arm64": "0.1.10-alpha.4"
+  }
+}

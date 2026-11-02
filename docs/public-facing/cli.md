@@ -25,6 +25,7 @@ Packs pin `@apackdev/cli` in `devDependencies`. Any `apack` run inside a pack ha
 | `apack logs` | Recent installed-app logs; `--follow` streams new output |
 | `apack doctor` | Read-only installed-app diagnostics; supports `--json` |
 | `apack db backup`, `db backup verify` | Create and check restorable database/media backups |
+| `apack db recover` | Inspect or explicitly recover an interrupted import while the app is closed |
 | `apack profiles` | List stored profiles; supports `--json`, `--all`, and `--sizes` |
 | `apack pack list`, `pack outdated`, `pack upgrade` | Inspect installed packs, check releases, and upgrade GitHub-installed packs |
 | `apack pack dev` | Build, install, and watch a pack in a development host |
@@ -46,6 +47,43 @@ For app contributors working in the apack source monorepo, see the
 `apack db backup --out <new-directory> [--profile <name> | --data-dir <path>]` creates a full backup compatible with `apack db import`. Close the app first. The database, the run history and media are included; installed packs and secrets are excluded. The backup directory is accessible only to its owner. Existing destinations and destinations inside the source data directory are refused.
 
 `apack db backup verify <directory> [--json]` checks that each listed store opens and that the listed media is there, before restoration. It does not open your app data. It checks the backup format and completeness; entity-type compatibility depends on the packs installed when you import. Invalid backups exit nonzero; JSON reports include `valid: false` and the error.
+
+`apack db recover --data-dir <profile> [--json]` lists interrupted import sessions; it only reads their recovery
+records. To restore a selected session’s retained incumbent database, history and media, quit the app and run
+`apack db recover --data-dir <profile> --session <reported-name> --restore`. A named `--profile` also works.
+Close other tools reading the profile too. The command takes the profile’s offline write lock and reader exclusion,
+validates the retained copies before changing live stores,
+and retains the interrupted live files and incumbent copies inside the session. It resumes interrupted recovery;
+a completed session is never restored again, even if the app has since written new data. Writable startup stays
+blocked until recovery completes. Keep retained copies until you have verified your data; do not delete a pending
+recovery record to bypass the block. SQLite candidate profiles additionally require `APACK_STORAGE_FORMAT=sqlite/1`
+and must remain isolated from default profiles. Recovery requires readable intact incumbent copies and sufficient
+space for a staged copy; malformed records, symlinks/special files or a changed staged copy refuse before publication.
+Read-only profile tools register short-lived claims in private profile metadata so directory replacement cannot
+race an open connection; profile metadata must be writable even though database contents remain read-only.
+The backend’s direct read-only snapshot API is unchanged. Directory durability depends on the host/filesystem;
+this command is not a universal power-loss guarantee.
+
+
+The SQLite candidate also supports lossless database-only archives. Set `APACK_STORAGE_FORMAT=sqlite/1`
+and name an isolated profile explicitly. `apack db dump --data-dir <profile> --primary <new-file>` writes
+one primary archive; add `--runs <new-file>` for a separate history archive, or name only `--runs`.
+Quit the app first. Output parents must exist, each target must be new and outside the source profile,
+and a selected history store must already exist. Each completed file is an independent verified snapshot;
+if a later export fails, completed files are retained and named. These archives preserve typed/raw values,
+relations, counters and reusable embeddings; `db export` JSON/CSV remains a display format.
+
+`apack db load --data-dir <profile> --primary <file> [--runs <file>]` fully verifies, rebuilds, audits and
+checks the selected archives against the installed settings contract without replacing data. It uses
+private staging space and may take substantial disk/time; memory can scale with the largest individual
+value. Add `--force` to replace the selected stores through the protected import/recovery path. A history-only
+load leaves primary data and its commit unchanged. Every selected input validates before replacement;
+unknown outcomes retain incumbent recovery copies for `db recover`. Media, packs and secrets are not part
+of these files, and current media is preserved. Use `db backup` for a full database-and-media backup.
+Archive publication requires hard-link support; unsupported filesystems refuse. Directory durability and
+Windows inherited permissions depend on the host/filesystem; this is not a universal power-loss guarantee.
+A killed export can leave a private `.apack-logical-export-*` directory beside its output. Stop exporting
+tools and verify any retained output before removing such scratch directories; retry does not delete them.
 
 `apack pack outdated [--profile <name>] [--json]` checks GitHub-installed packs for newer releases compatible with the profile’s recorded app version. Beta profiles include prereleases. Local/URL installs and app-shipped packs are reported as unmanaged. A failed check exits nonzero; finding an update alone does not. CLI GitHub installs record their source for subsequent checks; uninstall removes that record.
 
@@ -479,7 +517,7 @@ Checks:
 | `pack-own-aliases` | `@/…`, a TypeScript-only `paths` mapping no runtime reads. Name your own modules with `#` subpath imports from your `package.json` | no |
 | `internal-package-imports` | an `@apackdev` export named `_x`: it is `@internal`, the app's own, and an app update is free to rename it | no |
 | `host-imports` | `@apackdev/host`, which is not installed for a pack | no |
-| `elmdb-imports` | `elmdb` or `@apackdev/ears/lmdb`: your data comes through the engine the app installs | no |
+| `database-imports` | Native database packages or app-only `@apackdev/ears/lmdb` and `/sqlite` entries: use the engine the app binds | no |
 | `untyped-sends` | `untypedBroadcastToSurface`, `untypedSendToSystem` — use the typed facades from `#generated/events` | yes |
 | `raw-transport` | `_rootEvents`, `trpc.bus`, `@apackdev/sdk/rpc` | yes |
 | `backend-console` | `console.*` under `features/*/be/`, `migrations/` or `extensions/` — use `createLogger` from `@apackdev/sdk/logger` | yes |
@@ -789,6 +827,9 @@ Replace the database and the run history the backup holds, and the media folder 
 #### `apack db reset [--force] [--keep-keys]` (names its data dir)
 
 Delete all of the app's data, as Reset Database in the Database settings does: the database, the run history and the stored secrets. The app creates its default data (settings, written flows, the packs' content) on its next start and shows onboarding. Without `--force` it lists the entities per type and each stored secret it would delete.
+
+Close tools reading or writing the run history before a forced reset; it refuses them before deleting data.
+A reset interrupted between its separate stores can leave part of the reset complete. Run it again to finish.
 
 No backup holds the secrets — `export` and the Database settings' backups copy the databases and the media folder, never the secrets or the data key that encrypts them — so a deleted secret is entered again in Settings → Secrets. That's why the listing names each one by provider and label (never its value), and why `--keep-keys` leaves them where they are and deletes only the data.
 

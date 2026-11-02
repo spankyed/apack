@@ -1,0 +1,1091 @@
+
+> apack@0.3.14 test:linux
+> tsx scripts/linux-runner.ts bash -lc npm run typecheck -w @apackdev/cli && npm run typecheck -w @app/repo-checks && npm run check:specifiers && npm run packages:check
+
+cannot delete non-empty directory: packages/renderer/node_modules
+    Finished `release` profile [optimized] target(s) in 0.13s
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+
+> @apackdev/cli@0.1.0 typecheck
+> tsc --noEmit
+
+
+> @app/repo-checks@0.0.0 typecheck
+> tsc --noEmit
+
+
+> apack@0.3.14 check:specifiers
+> tsx scripts/check-import-specifiers.ts
+
+Import specifiers and pack rules pass
+
+> apack@0.3.14 packages:check
+> tsx scripts/packages-check.ts
+
+Running publint v0.3.24 for /tmp/apack-packages-check-MUoCPL/apackdev-ears-0.1.0.tgz...
+Unpacking tarball...
+Linting...
+All good!
+  ok   publint apack-ears
+
+@apackdev/ears v0.1.0
+
+ (ignoring resolutions: 'node10', 'node16-cjs')
+
+(ignored per resolution) 💀 Import failed to resolve to type declarations or JavaScript files. https://github.com/arethetypeswrong/arethetypeswrong.github.io/blob/main/docs/problems/NoResolution.md
+
+(ignored per resolution) ⚠️ A require call resolved to an ESM JavaScript file, which is an error in Node and some bundlers. CommonJS consumers will need to use a dynamic import. https://github.com/arethetypeswrong/arethetypeswrong.github.io/blob/main/docs/problems/CJSResolvesToESM.md
+
+
+"@apackdev/ears"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ears/package.json"
+
+node16 (from ESM): 🟢 (JSON)
+bundler: 🟢 (JSON)
+node10: (ignored) 🟢 (JSON)
+node16 (from CJS): (ignored) 🟢 (JSON)
+
+***********************************
+
+"@apackdev/ears/lmdb"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ears/sqlite"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+  ok   attw apack-ears
+Running publint v0.3.24 for /tmp/apack-packages-check-MUoCPL/apackdev-sdk-0.1.0.tgz...
+Unpacking tarball...
+Linting...
+All good!
+  ok   publint apack-sdk
+
+@apackdev/sdk v0.1.0
+
+ (ignoring resolutions: 'node10', 'node16-cjs')
+
+(ignored per resolution) 💀 Import failed to resolve to type declarations or JavaScript files. https://github.com/arethetypeswrong/arethetypeswrong.github.io/blob/main/docs/problems/NoResolution.md
+
+(ignored per resolution) ⚠️ A require call resolved to an ESM JavaScript file, which is an error in Node and some bundlers. CommonJS consumers will need to use a dynamic import. https://github.com/arethetypeswrong/arethetypeswrong.github.io/blob/main/docs/problems/CJSResolvesToESM.md
+
+
+"@apackdev/sdk"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/package.json"
+
+node16 (from ESM): 🟢 (JSON)
+bundler: 🟢 (JSON)
+node10: (ignored) 🟢 (JSON)
+node16 (from CJS): (ignored) 🟢 (JSON)
+
+***********************************
+
+"@apackdev/sdk/designations"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/commands"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/events"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/env"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/framework"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/helpers"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/types"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/ids"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/ears"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/database-console"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/repositories"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/fe"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/fe/references"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/actions"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/artifacts"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/blocks"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/steps"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/build"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/runtime"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/logger"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/templates"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/utils"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/utils/pure"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/utils/compare-versions"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/services"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/models"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/cron"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/content"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/testing"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/sdk/apack.schema.json"
+
+node16 (from ESM): 🟢 (JSON)
+bundler: 🟢 (JSON)
+node10: (ignored) 🟢 (JSON)
+node16 (from CJS): (ignored) 🟢 (JSON)
+
+***********************************
+  ok   attw apack-sdk
+Running publint v0.3.24 for /tmp/apack-packages-check-MUoCPL/apackdev-ui-0.1.0.tgz...
+Unpacking tarball...
+Linting...
+All good!
+  ok   publint apack-ui
+
+@apackdev/ui v0.1.0
+
+ (ignoring resolutions: 'node10', 'node16-cjs')
+
+(ignored per resolution) 💀 Import failed to resolve to type declarations or JavaScript files. https://github.com/arethetypeswrong/arethetypeswrong.github.io/blob/main/docs/problems/NoResolution.md
+
+(ignored per resolution) ⚠️ A require call resolved to an ESM JavaScript file, which is an error in Node and some bundlers. CommonJS consumers will need to use a dynamic import. https://github.com/arethetypeswrong/arethetypeswrong.github.io/blob/main/docs/problems/CJSResolvesToESM.md
+
+
+"@apackdev/ui/package.json"
+
+node16 (from ESM): 🟢 (JSON)
+bundler: 🟢 (JSON)
+node10: (ignored) 🟢 (JSON)
+node16 (from CJS): (ignored) 🟢 (JSON)
+
+***********************************
+
+"@apackdev/ui/components/BaseForm"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/BaseNode"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/DataRenderer"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/JsonHoverPopup"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/JsonSchemaEditor"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/KeyboardShortcutInput"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/RunNodeListItem"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/SimpleMonacoEditor"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/TipSection"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/UnifiedMonacoEditor"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/monaco-actions"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/monaco-config"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/monaco-error-filters"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/node-dimensions"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/node-handles"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/node-styles"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/TiptapEditor"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/TiptapSearchBar"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/composables/createEditorClickHandler"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/composables/createEditorKeyboard"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/composables/createImageHandlers"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/composables/useBlockHandle"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/composables/useCommandItems"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/composables/useSubDocumentTracking"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/editor-config"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/blockquote-pipe"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/code-block-copy"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/command-suggestion"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/custom-horizontal-rule"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/details-block"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/empty-line-preserver"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/image-selection-decoration"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/image-upload-placeholder"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/list-shift-enter"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/markdown-parse-fixes"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/reference-node"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/resizable-image"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/search"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/components/tiptap/extensions/sub-document-link"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/composables/useClickOutside"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/composables/useCollapsibleState"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/composables/useContextMenu"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/composables/useDebounce"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/composables/useExternalFileDrag"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/composables/useInfiniteScroll"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/Autocomplete"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/CategoryFilter"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/CollapsibleSection"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/ColorPicker"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/ConfirmationDialog"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/ContextMenuPopup"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/CopyButton"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/CopyFeedback"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/DirectorySelect"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/EmojiPicker"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/ImageLightbox"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/NameSaveHeader"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/ParameterRow"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/ScrollToBottomFob"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/Select"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/ToastNotification"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/TrackedContextMenuRoot"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/button"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/dialog"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/design/tag-input"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/layout/panel-resizer"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/tailwind-preset"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/utils/json-detection"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/ui/utils/path-truncation"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+  ok   attw apack-ui
+Running publint v0.3.24 for /tmp/apack-packages-check-MUoCPL/apackdev-testing-0.1.0.tgz...
+Unpacking tarball...
+Linting...
+All good!
+  ok   publint apack-testing
+
+@apackdev/testing v0.1.0
+
+ (ignoring resolutions: 'node10', 'node16-cjs')
+
+(ignored per resolution) 💀 Import failed to resolve to type declarations or JavaScript files. https://github.com/arethetypeswrong/arethetypeswrong.github.io/blob/main/docs/problems/NoResolution.md
+
+(ignored per resolution) ⚠️ A require call resolved to an ESM JavaScript file, which is an error in Node and some bundlers. CommonJS consumers will need to use a dynamic import. https://github.com/arethetypeswrong/arethetypeswrong.github.io/blob/main/docs/problems/CJSResolvesToESM.md
+
+
+"@apackdev/testing"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/testing/playwright"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/testing/vitest"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+
+"@apackdev/testing/harness"
+
+node16 (from ESM): 🟢 (ESM)
+bundler: 🟢
+node10: (ignored) 💀 Resolution failed
+node16 (from CJS): (ignored) ⚠️ ESM (dynamic import only)
+
+***********************************
+  ok   attw apack-testing
+Running publint v0.3.24 for /tmp/apack-packages-check-MUoCPL/apackdev-cli-0.1.0.tgz...
+Unpacking tarball...
+Linting...
+Suggestions:
+1. The package publishes internal tests or config files (/templates/pack/tests/example.spec.ts, /templates/pack/tests/e2e/smoke-without-surface.spec.ts, /templates/pack/tests/e2e/smoke.spec.ts, /templates/pack/tests/features/feature/be/system.spec.ts). You can use pkg.files to only publish certain files and save user bandwidth.
+  ok   publint apack-cli
+
+✅ 5 published trees check out

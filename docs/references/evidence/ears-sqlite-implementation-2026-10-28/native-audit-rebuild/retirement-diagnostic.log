@@ -1,0 +1,67 @@
+(node:19) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+stdout | tests/sqlite/vector-models.spec.ts > durable native model admission > does not enqueue or keep polling a failed logical generation with a large partial projection
+RETIREMENT_DIAGNOSTIC {"jobs":[{"type":"Row","kind":"vector","name":"embedding","definition":{"kind":"vector","from":["title"],"chunk":"paragraph","dims":128,"metric":"cosine","precision":"f32","model":"fixture"},"generation":4,"state":"failed","afterSeq":4187,"throughSeq":4608,"error":"fixture projection failure"},{"type":"Row","kind":"value","name":"role","definition":{"field":"role"},"generation":5,"state":"ready","afterSeq":4608,"throughSeq":4608,"error":null},{"type":"Row","kind":"value","name":"shortCode","definition":{"field":"shortCode"},"generation":6,"state":"ready","afterSeq":4608,"throughSeq":4608,"error":null}],"gc":[{"generation":1,"kind":"vector","reusable":1}],"models":[{"id":1,"generation":1,"state":"retiring","after_id":4608,"model_sha256":"e41750e3a3a7735945384be35f89bc58ef908e723e917f7d9dacde9e71425c1f"}],"training":[],"steps":["progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress","progress"],"rows":[{"n":2016}],"pending":true,"schedulerStopped":false,"admissionDirty":[[4,9]],"stopped":false,"error":"undefined","indexError":"Error: fixture projection failure"}
+
+ ❯ |@apackdev/ears| tests/sqlite/vector-models.spec.ts (35 tests | 1 failed | 34 skipped) 8906ms
+   ↓ durable native model admission > automatically admits an eligible committed generation, while small scopes and rolled-back growth stay exact
+   ↓ durable native model admission > admits canonical embeddings imported after an initially ineligible generation
+   ↓ durable native model admission > discovers another connection's committed embeddings when readiness is polled
+   ↓ durable native model admission > requires enough live distinct owners and rechecks eligibility after restoring trashed chunks
+   ↓ durable native model admission > bounds eligibility to metadata pages and retries the same enqueue after its commit is refused
+   ↓ durable native model admission > discovers rebuilt generations without a logical commit and skips unsupported training dimensions
+   × durable native model admission > does not enqueue or keep polling a failed logical generation with a large partial projection 8905ms
+     → expected true to be false // Object.is equality
+   ↓ durable native model admission > uses the shared scheduler to train, project and publish readiness without logical commits
+   ↓ durable native model admission > routes real EARS queries through ready native candidates with scoped exact fallbacks and unit visibility
+   ↓ durable native model admission > loads trusted native candidates on independent readers and writers without creating training owners
+   ↓ durable native model admission > retains the trusted connection loader in native-bearing export and private audit copies
+   ↓ durable native model admission > expands repeated chunk owners, reranks canonical chunks and preserves ties, scopes and like exclusions
+   ↓ durable native model admission > keeps native candidates available to owners and peer readers during pending and failed physical refresh
+   ↓ durable native model admission > resumes an interrupted private projection after reopening without sacrificing the incumbent
+   ↓ durable native model admission > admits public refresh durably without holding write exclusion through background training
+   ↓ durable native model admission > drains the real worker while retaining the service claim and logical readiness through nested maintenance
+   ↓ durable native model admission > rolls back a refused corpus epoch and invalidates the old model on successful same-schema replacement
+   ↓ durable native model admission > keeps cleared data usable and permits physical cleanup only after the paused worker has exited
+   ↓ durable native model admission > retains both maintenance and resume failures and releases a failed service for explicit restart
+   ↓ durable native model admission > excludes another service during offline maintenance without starting a trainer
+   ↓ durable native model admission > aborts a unit left open by maintenance before releasing write exclusion
+   ↓ durable native model admission > refuses stale handles before maintenance and before resuming a paused service
+   ↓ durable native model admission > drains training during rebuild and resumes the retained service with fresh logical generations
+   ↓ durable native model admission > drains and closes a quarantined unknown-commit handle while preserving its committed data for inspection
+   ↓ durable native model admission > retains a completed model when its result transaction rolls back before acknowledgement
+   ↓ durable native model admission > recovers abandoned attempts and resumes committed model work after reopening
+   ↓ durable native model admission > persists failure and supports explicit retry after additional primary embeddings
+   ↓ durable native model admission > recovers abandoned attempts only after claiming managed model ownership
+   ↓ durable native model admission > releases a failed managed startup claim and preserves its original recovery error
+   ↓ durable native model admission > refuses native ownership on a read-only connection without creating a service
+   ↓ durable native model admission > keeps logical readiness usable while optional native work is pending or failed
+   ↓ durable native model admission > settles logical backfill independently when a native waiter is cancelled by stopping its owner
+   ↓ durable native model admission > does not misreport a committed primary write when a background readiness probe fails
+   ↓ durable native model admission > excludes independent connections until the owning native worker actually drains
+   ↓ durable native model admission > enforces one owner and drains workers before allowing file close and a new owner
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@apackdev/ears| tests/sqlite/vector-models.spec.ts > durable native model admission > does not enqueue or keep polling a failed logical generation with a large partial projection
+AssertionError: expected true to be false // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- false[39m
+[31m+ true[39m
+
+ ❯ vi.waitFor.timeout tests/sqlite/vector-models.spec.ts:189:104
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 34 skipped (35)
+   Start at  11:55:50
+   Duration  11.04s (transform 1.34s, setup 15ms, collect 1.69s, tests 8.91s, environment 0ms, prepare 184ms)

@@ -1,0 +1,23 @@
+{
+  "run": 40967406799,
+  "artifact": 12939585685,
+  "sha256": "7c80cd1ba5604e189ae1c0b92c0a2764dbaef76a15bd90d2fb2e0732baf58e01",
+  "entries": [
+    "cli-maintenance.json",
+    "cli-maintenance.log",
+    "ears.json",
+    "ears.log",
+    "host.json",
+    "host.log",
+    "logical-cli.json",
+    "logical-cli.log",
+    "native-generation/provenance.json",
+    "native-generation/vec1.c",
+    "native-generation/vec1.dll",
+    "native-generation/vec1.exp",
+    "native-generation/vec1.lib",
+    "native-generation/vec1.obj",
+    "runtime.log",
+    "runtime.json"
+  ]
+}

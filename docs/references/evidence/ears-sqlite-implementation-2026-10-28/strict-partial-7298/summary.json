@@ -1,0 +1,197 @@
+{
+  "run": 41251408078,
+  "source": "729867e787b1927bfed778e3ad0f72a44e0942ce",
+  "complete": true,
+  "producer": "passed",
+  "native2": {
+    "status": "passed",
+    "passed": 47,
+    "skipped": 26,
+    "excludedFile": "compiler-pe-libraries.native.spec.ts",
+    "chainSeconds": 1063.0
+  },
+  "native1": {
+    "status": "passed",
+    "passed": 26,
+    "skipped": 2,
+    "excludedFile": "compiler-elf-libraries.native.spec.ts",
+    "chainSeconds": 1219.0
+  },
+  "integration1": {
+    "status": "passed",
+    "passed": 242,
+    "skipped": 0,
+    "files": 31,
+    "chainSeconds": 1794.8
+  },
+  "integration2": {
+    "status": "failed",
+    "passed": 570,
+    "skipped": 6,
+    "failedFiles": 1,
+    "passedFiles": 30,
+    "failure": "dependency-graph beforeAll hook exceeded 240000ms",
+    "setupPhasesMs": {
+      "deep-pack": 69701,
+      "left-pack": 60000,
+      "right-pack": 44476,
+      "app-pack": 67696
+    }
+  },
+  "appRest": {
+    "passed": 6919,
+    "failed": 1,
+    "skipped": 84,
+    "hostStepSeconds": 433.3,
+    "failure": "retained generated-metadata text relevance",
+    "sourceAppSmoke": "skipped after earlier step failure"
+  },
+  "platforms": {
+    "linux": {
+      "ears.json": {
+        "passed": 870,
+        "failed": 1,
+        "skipped": 0,
+        "sha256": "56fec9ecf04c81f072b64fc23db3e2aa5f391ba5d88cc34bba5cfc4bc38830f1"
+      },
+      "host.json": {
+        "passed": 197,
+        "failed": 0,
+        "skipped": 0,
+        "sha256": "141171e9d0bf4ea851b7849ff4f7b67e11aeff6768cc423c466fe1ddae5dd05e"
+      },
+      "host-crash.json": {
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0,
+        "sha256": "9c46876437f9372d4db699367e38f7899bbeb825c6f9b7293e57ccd1fd8fd5a9"
+      },
+      "cli-maintenance.json": {
+        "passed": 41,
+        "failed": 0,
+        "skipped": 0,
+        "sha256": "f80f83e223675051c1fa30771bba5bd5608a52340ab167ce209875dc876f88ba"
+      },
+      "downstreamReportReplay": "all assertions pass until unchanged complete-EARS guard rejects one relevance failure"
+    },
+    "windows": {
+      "ears.json": {
+        "passed": 866,
+        "failed": 1,
+        "skipped": 4,
+        "sha256": "daababc441b9de6d448b59d80bce5006cf6522533cb23fa3860cb6b3653c6fc8",
+        "nonPassingCases": [
+          {
+            "name": "real repository-content search relevance 'find generated metadata ownership'",
+            "status": "failed"
+          },
+          {
+            "name": "SQLite file ownership refuses a FIFO at data.sqlite3 without blocking the native opener",
+            "status": "skipped"
+          },
+          {
+            "name": "SQLite file ownership refuses a FIFO at data.sqlite3-wal without blocking the native opener",
+            "status": "skipped"
+          },
+          {
+            "name": "SQLite file ownership refuses a FIFO at data.sqlite3-shm without blocking the native opener",
+            "status": "skipped"
+          },
+          {
+            "name": "SQLite file ownership refuses a FIFO at data.sqlite3-journal without blocking the native opener",
+            "status": "skipped"
+          }
+        ]
+      },
+      "host.json": {
+        "passed": 194,
+        "failed": 0,
+        "skipped": 6,
+        "sha256": "b93ead9370d927bae3f9998466be3383c26e3e194a7dea4683eea996a454fdac",
+        "nonPassingCases": [
+          {
+            "name": "refuses before replacement when syncing the recovery copy fails",
+            "status": "skipped"
+          },
+          {
+            "name": "refuses before replacement when syncing the recovery parent fails",
+            "status": "skipped"
+          },
+          {
+            "name": "refuses a managed open without writable metadata while direct read-only snapshots remain available",
+            "status": "skipped"
+          },
+          {
+            "name": "the database write lock releases the lock when the tool is interrupted with POSIX SIGINT",
+            "status": "skipped"
+          },
+          {
+            "name": "the database write lock releases the lock when the tool is interrupted with POSIX SIGTERM",
+            "status": "skipped"
+          },
+          {
+            "name": "the database write lock releases the lock when the tool is interrupted with POSIX SIGHUP",
+            "status": "skipped"
+          }
+        ]
+      },
+      "host-crash.json": {
+        "passed": 2,
+        "failed": 0,
+        "skipped": 10,
+        "sha256": "9060eaf16a93126fdb44c3c743fe544dd8199bc21a825cc47030cd2e1f2b7c4c",
+        "nonPassingCases": [
+          {
+            "name": "recovers elmdb/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+            "status": "skipped"
+          },
+          {
+            "name": "recovers elmdb/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+            "status": "skipped"
+          },
+          {
+            "name": "recovers elmdb/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+            "status": "skipped"
+          },
+          {
+            "name": "recovers elmdb/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+            "status": "skipped"
+          },
+          {
+            "name": "recovers sqlite/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+            "status": "skipped"
+          },
+          {
+            "name": "recovers sqlite/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+            "status": "skipped"
+          },
+          {
+            "name": "recovers sqlite/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+            "status": "skipped"
+          },
+          {
+            "name": "recovers sqlite/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+            "status": "skipped"
+          },
+          {
+            "name": "refuses a separate live reader and reclaims its claim after SIGKILL",
+            "status": "skipped"
+          },
+          {
+            "name": "refuses a separate live writer and reclaims its claim after SIGKILL",
+            "status": "skipped"
+          }
+        ]
+      },
+      "cli-maintenance.json": {
+        "passed": 41,
+        "failed": 0,
+        "skipped": 0,
+        "sha256": "6fcf1a61473f66cd9f762a52a32ac68e094648e70fa87f07d89c159fff73387a",
+        "nonPassingCases": []
+      },
+      "downstreamReportReplay": "all assertions pass until unchanged complete-EARS guard rejects one relevance failure"
+    }
+  },
+  "overall": "failed"
+}

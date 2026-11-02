@@ -1,0 +1,34 @@
+[
+  {
+    "label": "automatic-real-1000",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "/metrics/packages/apack-ears/bench/sqlite/automatic-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "1000",
+      "/results/automatic-real-1000.json",
+      "native-diagnose"
+    ],
+    "exitCode": 0,
+    "seconds": 1.8532327379798517
+  },
+  {
+    "label": "automatic-real-99900",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "/metrics/packages/apack-ears/bench/sqlite/automatic-admission-probe.mjs",
+      "/corpus",
+      "/truth/truth.json",
+      "99900",
+      "/results/automatic-real-99900.json",
+      "native-diagnose"
+    ],
+    "exitCode": 0,
+    "seconds": 70.35513124501449
+  }
+]

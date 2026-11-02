@@ -1,0 +1,178 @@
+{
+  "linux": {
+    "passed": 766,
+    "failed": 0,
+    "skipped": [],
+    "verification": {
+      "source": "487011c4848348bcb436f397a455999e79525192",
+      "filesystemFullCasesPassed": 4,
+      "apiStartupCasesPassed": 7,
+      "nativeMembershipChecks": 735,
+      "nativeMembershipPatchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+      "sdkSqliteCasesPassed": 1320,
+      "sdkContentRuntimeCasesPassed": 1,
+      "sdkBackendCasesPassed": 2,
+      "queryWorkCasesPassed": 5,
+      "nativeAuditCasesPassed": 25,
+      "nativeOwnerCasesPassed": 3,
+      "nativePackageCasesPassed": 5,
+      "nativeGenerationCasesPassed": 10,
+      "nativeTrainingCasesPassed": 5,
+      "nativeModelCasesPassed": 35,
+      "nativeGenerationExtensionSha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+      "earsPassed": 766,
+      "sqliteCasesPassed": 444,
+      "selectedTextPassed": 16,
+      "selectedTextTotal": 16,
+      "maintenanceCasesPassed": 9,
+      "logicalCommandCasesPassed": 8,
+      "logicalCrashCasesPassed": 2,
+      "builtLogicalChecks": 5,
+      "profileConversionChecks": 5,
+      "profileCrashCases": 5,
+      "convertedApi": {
+        "source": "487011c4848348bcb436f397a455999e79525192",
+        "nativeBaselineBoots": 1,
+        "sqliteBoots": 2,
+        "livePackUpdates": 3,
+        "postRestartDataRetained": true,
+        "nativeSourceUnchanged": true,
+        "historyRetained": true,
+        "settingsRetained": true,
+        "mediaRetained": true,
+        "environmentDiagnostics": {
+          "missingOptionalCodexExecutable": true
+        }
+      },
+      "nativeDumpCasesPassed": 7,
+      "logicalSnapshotCasesPassed": 5,
+      "logicalHostCasesPassed": 10,
+      "logicalHostSkipped": [],
+      "databaseIdentityCasesPassed": 19,
+      "namespaceCasesPassed": 24,
+      "sqliteProfileCasesPassed": 15,
+      "managedPublicationCasesPassed": 29,
+      "hostPassed": 200,
+      "recoveryCasesPassed": 44
+    }
+  },
+  "macos": {
+    "passed": 766,
+    "failed": 0,
+    "skipped": [],
+    "verification": {
+      "source": "487011c4848348bcb436f397a455999e79525192",
+      "filesystemFullCasesPassed": null,
+      "apiStartupCasesPassed": null,
+      "nativeMembershipChecks": 735,
+      "nativeMembershipPatchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+      "sdkSqliteCasesPassed": null,
+      "sdkContentRuntimeCasesPassed": null,
+      "sdkBackendCasesPassed": 2,
+      "queryWorkCasesPassed": 5,
+      "nativeAuditCasesPassed": 25,
+      "nativeOwnerCasesPassed": 3,
+      "nativePackageCasesPassed": 5,
+      "nativeGenerationCasesPassed": 10,
+      "nativeTrainingCasesPassed": 5,
+      "nativeModelCasesPassed": 35,
+      "nativeGenerationExtensionSha256": "0d94db701c4a2a7e502898df87e54c121a51dbfa5bfa7c544572ee1c888ade6e",
+      "earsPassed": 766,
+      "sqliteCasesPassed": 444,
+      "selectedTextPassed": 16,
+      "selectedTextTotal": 16,
+      "maintenanceCasesPassed": 9,
+      "logicalCommandCasesPassed": 8,
+      "logicalCrashCasesPassed": 2,
+      "builtLogicalChecks": 5,
+      "profileConversionChecks": 5,
+      "profileCrashCases": 5,
+      "convertedApi": null,
+      "nativeDumpCasesPassed": 7,
+      "logicalSnapshotCasesPassed": 5,
+      "logicalHostCasesPassed": 10,
+      "logicalHostSkipped": [],
+      "databaseIdentityCasesPassed": 19,
+      "namespaceCasesPassed": 24,
+      "sqliteProfileCasesPassed": 15,
+      "managedPublicationCasesPassed": 29,
+      "hostPassed": 200,
+      "recoveryCasesPassed": 44
+    }
+  },
+  "windows": {
+    "passed": 761,
+    "failed": 0,
+    "skipped": [
+      {
+        "file": "sqlite/file-ownership.spec.ts",
+        "case": "SQLite file ownership refuses a FIFO at data.sqlite3 without blocking the native opener",
+        "status": "skipped"
+      },
+      {
+        "file": "sqlite/file-ownership.spec.ts",
+        "case": "SQLite file ownership refuses a FIFO at data.sqlite3-wal without blocking the native opener",
+        "status": "skipped"
+      },
+      {
+        "file": "sqlite/file-ownership.spec.ts",
+        "case": "SQLite file ownership refuses a FIFO at data.sqlite3-shm without blocking the native opener",
+        "status": "skipped"
+      },
+      {
+        "file": "sqlite/file-ownership.spec.ts",
+        "case": "SQLite file ownership refuses a FIFO at data.sqlite3-journal without blocking the native opener",
+        "status": "skipped"
+      },
+      {
+        "file": "sqlite/index-builds.spec.ts",
+        "case": "yielding value-index admission resumes a committed batch cursor after a real killed process",
+        "status": "skipped"
+      }
+    ],
+    "verification": {
+      "source": "487011c4848348bcb436f397a455999e79525192",
+      "filesystemFullCasesPassed": null,
+      "apiStartupCasesPassed": null,
+      "nativeMembershipChecks": 735,
+      "nativeMembershipPatchSha256": "d76fba22be9c09fe5c7d865999e608b5896f051c19811d41fd0e547ce6efb3f5",
+      "sdkSqliteCasesPassed": null,
+      "sdkContentRuntimeCasesPassed": null,
+      "sdkBackendCasesPassed": 2,
+      "queryWorkCasesPassed": 5,
+      "nativeAuditCasesPassed": 25,
+      "nativeOwnerCasesPassed": 3,
+      "nativePackageCasesPassed": 5,
+      "nativeGenerationCasesPassed": 10,
+      "nativeTrainingCasesPassed": 5,
+      "nativeModelCasesPassed": 35,
+      "nativeGenerationExtensionSha256": "245fe333c9ab29fd8d6d15a0a9341c0682963e3774684a913899906473075481",
+      "earsPassed": 761,
+      "sqliteCasesPassed": 439,
+      "selectedTextPassed": 16,
+      "selectedTextTotal": 16,
+      "maintenanceCasesPassed": 9,
+      "logicalCommandCasesPassed": 8,
+      "logicalCrashCasesPassed": 2,
+      "builtLogicalChecks": 5,
+      "profileConversionChecks": 5,
+      "profileCrashCases": 5,
+      "convertedApi": null,
+      "nativeDumpCasesPassed": 7,
+      "logicalSnapshotCasesPassed": 5,
+      "logicalHostCasesPassed": 9,
+      "logicalHostSkipped": [
+        {
+          "name": "reports a published but unsynchronized directory truthfully and retains its complete archive",
+          "status": "skipped"
+        }
+      ],
+      "databaseIdentityCasesPassed": 19,
+      "namespaceCasesPassed": 24,
+      "sqliteProfileCasesPassed": 15,
+      "managedPublicationCasesPassed": 29,
+      "hostPassed": 186,
+      "recoveryCasesPassed": 43
+    }
+  }
+}

@@ -1,0 +1,7 @@
+# Current diamond contention coverage passes
+
+App acceptance41191053003 succeeds at61f0a8dabf01002f4762c5990e33787058270af2. The actual eleven-file report has51passes, zero failures and zero skips, including all five diamond assertions. The existing integration dispatcher retains its two-worker ceiling and original deadlines. Logs prove the four actual builds execute: deep47197ms, left26540ms, right36170ms, app52417ms; the setup wall interval is162413ms, below its unchanged240000ms deadline.
+
+Seven other specs have recorded assertion intervals overlapping the diamond setup: dependency-runtime, pack-doctor, init-install-load, facade-gate, editor-declarations, published-manifest-paths and component-contracts. This is contention coverage, not another isolated pass. Here the diamond JSON startTime begins after the four-build hook, so that interval alone would miss the original failing setup. Setup overlap is derived from the actual stdout phase timestamps and the other specs' report intervals; raw evidence and the derivation are retained. The later diamond assertion interval also overlaps three files.
+
+No compiler fix or causal explanation for the earlier strict timeout is inferred. Current inputs include later SDK/settings and other documented changes; the original failure remains under integration2-63c/. This closes the targeted current overlap coverage gap, not full exact-input strict acceptance. All remaining app/performance/failure/packaging/maintenance criteria remain required.

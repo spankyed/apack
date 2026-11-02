@@ -1,0 +1,18 @@
+{
+  "ears": {
+    "file": "apackdev-ears-0.1.0.tgz",
+    "sha256": "f571f2acad1903491692f3103b36ec33f02effd4034c8506ddbf5bd3b54ca929"
+  },
+  "sdk": {
+    "file": "apackdev-sdk-0.1.0.tgz",
+    "sha256": "5bb179f0cc2ba478468d836055d2d31fe8e35b232202fdded37e4856c6848813"
+  },
+  "cli": {
+    "file": "apackdev-cli-0.1.0.tgz",
+    "sha256": "c33e5542ab600f3ef548db7dd678df4d6c00a38926aaced7f035b837f1320dab"
+  },
+  "elmdb": {
+    "file": "elmdb-0.0.0.tgz",
+    "sha256": "927fca0b05396ff57daa73d452e251b5124a0c1040007e24904cf56d9e54ad73"
+  }
+}

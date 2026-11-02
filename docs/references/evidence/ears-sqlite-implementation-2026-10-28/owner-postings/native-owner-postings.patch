@@ -1,0 +1,188 @@
+diff --git a/packages/apack-ears/bench/sqlite/README.md b/packages/apack-ears/bench/sqlite/README.md
+index 7cb566f5bd..2491a7fe49 100644
+--- a/packages/apack-ears/bench/sqlite/README.md
++++ b/packages/apack-ears/bench/sqlite/README.md
+@@ -220,3 +220,20 @@ semantics/scores. Global exclusions use owner candidates from the positive group
+ their entire matching corpus; this does not change their truth conditions or positive scores. Record all calls/samples, including probe overhead. Retain larger/broad materialization,
+ index-size/build and app-budget limits as unresolved until separately qualified. Stop on any correctness or
+ setup failure; never repeat automatically or change a deadline/expectation after the result.
++
++### Native owner-postings correction cohort
++
++The six-process conjunction cohort at `aadd721d43` is retained: rowid constraints fix a point case but
++regress a 100-owner case to ~68 ms. That implementation is not accepted. After focused correctness checks,
++run exactly **legacy / rowid / postings / postings / rowid / legacy**, fresh processes in one Linux container,
++unchanged two CPUs/6 GiB and 180 seconds per process. Legacy is `9a2771ec25`, rowid is `aadd721d43`, postings
++is the new owner-column implementation. Use the identical updated `text-shape.mjs` from the previous cohort
++for all six, including both word orders, 100-owner groups, exclusions, OR, broad reads, writes, all samples,
++bytes/calls/RSS/heartbeat. Stop on setup/correctness failure; no automatic retries or discarded samples.
++
++Owner terms encode the immutable entity sequence in a private indexed column with zero BM25 weight. MATCH
++intersects owner postings in one expression; no per-document MATCH loop is used. Build the mask in the final
++SQL snapshot, cap generated terms at 2048, and fall back to the unrestricted clause if the runtime owner set
++is larger. Estimates never truncate results. The indexed column changes document-length statistics and adds
++storage/build work, which this cohort must report. Fresh/reset copied format-one profiles are required.
++This diagnostic does not settle broad-query pagination, fuzzy scaling, real app budgets or phase 3–7 acceptance.
+diff --git a/packages/apack-ears/src/sqlite/search.ts b/packages/apack-ears/src/sqlite/search.ts
+index 8a72d4e30e..5ff963a26f 100644
+--- a/packages/apack-ears/src/sqlite/search.ts
++++ b/packages/apack-ears/src/sqlite/search.ts
+@@ -118,7 +118,7 @@ export class SqliteSearch {
+   refileIndex(row: Data, seq: number, job: SqliteIndexJob, changed?: ReadonlySet<string>): void {
+     const index = job.definition, name = job.name, generation = job.generation;
+     if (job.kind === 'trigram') { this.trigrams.refileIndex(row, job); return; }
+-    if (job.kind === 'text') this.texts.refile(row, job, changed);
++    if (job.kind === 'text') this.texts.refile(row, job, seq, changed);
+     if (job.kind === 'vector') {
+       const joined = index.from.map((field: string) => textOf(row[field])).filter(Boolean).join('\n\n').trim();
+       const texts = index.chunk === 'paragraph' ? joined.split(/\n\s*\n/).filter(Boolean) : joined ? [joined] : [];
+diff --git a/packages/apack-ears/src/sqlite/text.ts b/packages/apack-ears/src/sqlite/text.ts
+index b7f5d9762f..c323450d24 100644
+--- a/packages/apack-ears/src/sqlite/text.ts
++++ b/packages/apack-ears/src/sqlite/text.ts
+@@ -58,9 +58,9 @@ export class SqliteText {
+   ensure(job: SqliteIndexJob): void {
+     const table = searchTable(job), index = job.definition;
+     if (index.stem && index.stem !== 'en') throw Object.assign(new Error('SQLite text indexes support English stemming only'), { code: 'UNSUPPORTED' });
+-    this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,
++    this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,
+       tokenize='${index.stem ? 'porter ' : ''}unicode61 remove_diacritics 2');
+-      CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},row);
++      CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_vocab USING fts5vocab(${table},col);
+       CREATE TABLE IF NOT EXISTS ${table}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL);
+       CREATE UNIQUE INDEX IF NOT EXISTS ${table}_docs_entity ON ${table}_docs(entity_id,field,element);`);
+   }
+@@ -70,7 +70,8 @@ export class SqliteText {
+     this.db.run(`DELETE FROM ${table} WHERE rowid IN (SELECT id FROM ${table}_docs WHERE ${where})`, args);
+     this.db.run(`DELETE FROM ${table}_docs WHERE ${where}`, args);
+   }
+-  refile(row: Data, job: SqliteIndexJob, changed?: ReadonlySet<string>): void {
++  refile(row: Data, job: SqliteIndexJob, seq: number, changed?: ReadonlySet<string>): void {
++    if (!Number.isSafeInteger(seq) || seq < 1) fail('Invalid text owner sequence');
+     const fields = Object.keys(job.definition.fields);
+     const old = this.db.get('SELECT hashes FROM text_meta WHERE entity_id=? AND index_name=? AND generation=?', [row.id, job.name, job.generation]);
+     let decoded: unknown;
+@@ -97,8 +98,8 @@ export class SqliteText {
+       this.remove(job, row.id, field);
+       for (const doc of docs) {
+         const id = this.db.run(`INSERT INTO ${table}_docs(entity_id,field,element) VALUES (?,?,?)`, [row.id, doc.field, doc.element]).lastInsertRowid;
+-        this.db.run(`INSERT INTO ${table}(rowid,entity_id,field,element,body,aliases) VALUES (?,?,?,?,?,?)`,
+-          [id, row.id, doc.field, doc.element, doc.body, identifierParts(doc.body).text]);
++        this.db.run(`INSERT INTO ${table}(rowid,entity_id,field,element,body,aliases,owner) VALUES (?,?,?,?,?,?,?)`,
++          [id, row.id, doc.field, doc.element, doc.body, identifierParts(doc.body).text, 'e' + seq]);
+       }
+     }
+     if (!previous || hashes.some((hash, i) => previous[i] !== hash))
+@@ -112,7 +113,8 @@ export class SqliteText {
+   search(job: SqliteIndexJob, ids: string[] | null, query: string, options: Data, wantHits: boolean): Data[] {
+     const table = searchTable(job), fields = Object.keys(job.definition.fields);
+     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
+-    const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT term FROM ${table}_vocab`).map(row => String(row.term));
++    if (!tokens.length) return [];
++    const vocabulary = options.fuzzy === false ? [] : this.db.all(`SELECT DISTINCT term FROM ${table}_vocab WHERE col IN ('body','aliases')`).map(row => String(row.term));
+     const distance = (a: string, b: string): number => {
+       let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+       for (let i = 1; i <= a.length; i++) {
+@@ -172,19 +174,22 @@ export class SqliteText {
+       const args: any[] = [], ctes = executionOrder.map(i => {
+         const clause = clauses[i]!;
+         const preceding = previous.get(i);
+-        const owners = clause.negative ? candidates.map(candidate => `SELECT id FROM c${candidate}`).join(' UNION ') :
+-          preceding === undefined ? undefined : `SELECT id FROM c${preceding}`;
+-        const restriction = owners === undefined ? '' : ` AND f.rowid IN
+-          (SELECT d.id FROM ${table}_docs d WHERE d.entity_id IN (${owners}))`;
++        const owners = clause.negative ? candidates.map(candidate => `SELECT owner FROM c${candidate}`).join(' UNION ') :
++          preceding === undefined ? undefined : `SELECT owner FROM c${preceding}`;
++        // A mask is an FTS expression, not repeated rowid-constrained MATCH. Limit generated terms at
++        // execution time; a larger owner set falls back to the full clause rather than losing answers.
++        const match = owners === undefined ? '?' : `('(' || ? || ')' ||
++          (SELECT CASE WHEN count(*)>2048 THEN '' ELSE ' AND owner : (' || coalesce(group_concat(owner,' OR '),'z') || ')' END
++           FROM (SELECT DISTINCT owner FROM (${owners}) LIMIT 2049)))`;
+         const weights = fields.map((field, position) => `WHEN ${position} THEN ${Number(job.definition.fields[field].weight ?? 1)}`).join(' ');
+         if (wantHits) args.push(open, close, open, close);
+         args.push(clause.match);
+         args.push(...scoped);
+-        return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,
+-          -bm25(${table},0,0,0,1,1)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
++        return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,
++          -bm25(${table},0,0,0,1,1,0)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
+           ${wantHits ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
+-          FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ? AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
+-          AND ${scope}${restriction})`;
++          FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ${match} AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
++          AND ${scope})`;
+       });
+       return this.db.all(`WITH ${ctes.join(',')}, matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
+         clause_scores AS (SELECT clause,id,max(score) score FROM matches WHERE negative=0 GROUP BY clause,id),
+diff --git a/packages/apack-ears/tests/sqlite/text-documents.spec.ts b/packages/apack-ears/tests/sqlite/text-documents.spec.ts
+index 2258e65773..b2559c1cc3 100644
+--- a/packages/apack-ears/tests/sqlite/text-documents.spec.ts
++++ b/packages/apack-ears/tests/sqlite/text-documents.spec.ts
+@@ -15,6 +15,17 @@ function open(path?: string, readOnly = false) {
+   stores.push(db); return { db, e: createEarsEngine({ database: db }) };
+ }
+ 
++function observeNativeMatches(db: SqliteDatabase) {
++  const expressions: string[] = [], plans: string[] = [], all = db.all.bind(db);
++  db.sql.function('trace_match', { deterministic: false }, (value: unknown) => { const text = String(value); expressions.push(text); return text; });
++  vi.spyOn(db, 'all').mockImplementation((sql, args) => {
++    if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) plans.push(...all('EXPLAIN QUERY PLAN ' + sql, args).map(row => String(row.detail)));
++    const observed = sql.replace(/(WHERE fts_[a-f0-9]+ MATCH )([\s\S]*?)( AND CAST\(f\.field)/g, '$1trace_match($2)$3');
++    return all(observed, args);
++  });
++  return { expressions, plans, all };
++}
++
+ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string FTS documents', () => {
+   it('maps identifier and acronym components to original UTF-16 offsets and preserves whole identifiers', () => {
+     const { e } = open(); e.create('Row', { id: 'Row-code', name: '😀 openDatabaseStore HTTPRequest' });
+@@ -112,14 +123,33 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string
+     expect(probes.some(probe => probe.bound > 32)).toBe(true);
+     expect(probes.every(probe => probe.count <= probe.bound && probe.bound <= 2048)).toBe(true);
+   });
++  it('bounds native owner masks without truncating either the masked or fallback answer', () => {
++    const { db, e } = open();
++    e.transact(() => { for (let i = 0; i < 2200; i++) e.create('Row', { id: `Row-${i}`, name: 'groupCommon', body: 'common', cohort: i < 2000 }); });
++    const { expressions } = observeNativeMatches(db);
++    expect(e.query('Row').where('cohort', true).search('name:groupCommon body:common', { fuzzy: false }).count()).toBe(2000);
++    const masked = expressions.filter(expression => expression.includes('body : "common"'));
++    expect(masked.some(expression => expression.includes(' AND owner : ('))).toBe(true);
++    expect(masked.every(expression => (expression.match(/\be\d+\b/g) ?? []).length <= 2048)).toBe(true);
++    expressions.length = 0;
++    expect(e.query('Row').search('name:groupCommon body:common', { fuzzy: false }).count()).toBe(2200);
++    const fallback = expressions.filter(expression => expression.includes('body : "common"'));
++    expect(fallback.length).toBeGreaterThan(0);
++    expect(fallback.every(expression => !expression.includes(' AND owner : ('))).toBe(true);
++    expect(e.query('Row').search('e1', { fuzzy: false }).ids()).toEqual([]);
++  });
++  it('returns empty text queries without reading the vocabulary', () => {
++    const { db, e } = open(); e.create('Row', { name: 'openDatabaseStore' });
++    const all = db.all.bind(db), vocabulary: string[] = [];
++    vi.spyOn(db, 'all').mockImplementation((sql, args) => { if (sql.includes('_vocab')) vocabulary.push(sql); return all(sql, args); });
++    expect(e.query('Row').search('').ids()).toEqual([]);
++    expect(e.query('Row').search('   ').ids()).toEqual([]);
++    expect(vocabulary).toEqual([]);
++  });
+   it('uses selective native FTS execution for entity combination without hydrating primary rows', () => {
+     const { db, e } = open();
+     e.transact(() => { for (let i = 0; i < 100; i++) e.create('Row', { id: `Row-${i}`, name: 'alpha', body: i === 99 ? ['beta', 'gamma'] : ['unrelated'] }); });
+-    const read = vi.spyOn(db.values, 'read'), all = db.all.bind(db), plans: string[] = [];
+-    vi.spyOn(db, 'all').mockImplementation((sql, args) => {
+-      if (/^WITH c\d+ AS MATERIALIZED/.test(sql)) plans.push(...all('EXPLAIN QUERY PLAN ' + sql, args).map(row => String(row.detail)));
+-      return all(sql, args);
+-    });
++    const read = vi.spyOn(db.values, 'read'), { expressions, plans, all } = observeNativeMatches(db);
+     expect(e.query('Row').search('alpha "beta"', { fuzzy: false }).ids()).toEqual(['Row-99']);
+     expect(e.query('Row').search('"beta" alpha', { fuzzy: false }).ids()).toEqual(['Row-99']);
+     const forward = e.query('Row').search('alpha "beta"', { fuzzy: false }).hits({ highlights: true });
+@@ -127,8 +157,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string
+     expect(forward.map(hit => ({ id: hit.id, score: hit.score, highlights: hit.highlights })))
+       .toEqual(reverse.map(hit => ({ id: hit.id, score: hit.score, highlights: hit.highlights })));
+     expect(read).not.toHaveBeenCalled();
+-    expect(plans.some(detail => detail.includes('VIRTUAL TABLE INDEX') && detail.includes('M') && detail.includes('='))).toBe(true);
+-    expect(plans.some(detail => detail.includes('_docs_entity') && detail.includes('entity_id=?'))).toBe(true);
++    expect(plans.some(detail => /VIRTUAL TABLE INDEX .*M/.test(detail))).toBe(true);
++    expect(expressions.some(expression => expression.includes(' AND owner : ('))).toBe(true);
+     const table = searchTable(db.indexBuilds.jobs().find(job => job.kind === 'text')!);
+     expect(all(`EXPLAIN QUERY PLAN SELECT id FROM ${table}_docs WHERE entity_id=?`, ['Row-99'])
+       .some(row => String(row.detail).includes('COVERING INDEX') && String(row.detail).includes('entity_id=?'))).toBe(true);

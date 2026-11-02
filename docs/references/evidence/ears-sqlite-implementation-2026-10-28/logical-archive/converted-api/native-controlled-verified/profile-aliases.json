@@ -1,0 +1,53 @@
+{
+  "source": "4cafaec5d66ce8d63ef6ee1bf5f8f7215221c4cd",
+  "producer": "/native-target/release/elmdb",
+  "producerSha256": "2c997f55e1e8a6b93c02c3167f190076884df4df57b1dce1b5d32c22423b5440",
+  "enginePin": "6ab2f69fa13289ed4f02952253c58b4d41922c98",
+  "runtime": {
+    "node": "v23.11.1",
+    "platform": "linux",
+    "arch": "arm64"
+  },
+  "checks": [
+    "both native stores converted and reopened through host; settings, typed/search/vector data, history, media, secrets and pack-owned bytes retained; post-conversion write survives reopen",
+    "absent history remains absent until normal host boot creates it",
+    "late native history refusal removes owned output after primary conversion and preserves source",
+    "active managed writer and running app refuse without deleting incumbent claims",
+    "existing outputs, source overlap/aliases and linked source content refuse"
+  ],
+  "sourceHashes": {
+    "apack/ears-db/data.mdb": "f10b849a50fe6d621c199feef134d2ac35deb9bba9d52ac76c71b3bd899415e1",
+    "apack/run-history/data.mdb": "901da914d4da83f4c7a1e176568a25c5691558558a13adbab8e2029d401242a9",
+    "apack/media/asset.bin": "c3e2d6ce9638c39fdf3c92460f115d9e428e217022ab2b5eb8852ada85526a51",
+    "apack/secrets.json": "69d5e047d95917b75b9e356bbc61b2fa8652d8c711bd4258014c468b08d61a71",
+    "apack/installed-packs.json": "04a33da1475a9d3625fb02e6454aca46f14aab82ef6fc3c08b2d012484fb1639",
+    "apack/pack-data/example/value": "a1099ab5cc84ded50a88e3b736f5929648cd609d467509d7f27b2e80a80c39ea",
+    "apack/packs/materialized/marker": "815eb4e16753ced2771783397477f9bf0b3d4a19942a9b0baecdaaff7b7a89f9",
+    "apack/packs/materialized/apack.json": "17839557e2f1f313e16ca8347ed40175d93038323660355d10aaf9e128fe0e36",
+    "apack/packs/materialized/integrity.json": "c41da3db1c7db448ff9ce090e3e1f50d334da25845fd0eebed382e55c3f5856d",
+    "apack/packs/materialized/types/snapshot.json": "399f8ef389610a38a00343c682b991f55c8535cd7a7d20fcdf269e4bd512b401",
+    "apack/packs/materialized/runtime/index.cjs": "69cd765ceefc5da908c4ad4556bff0535b982ca4062e1893e7ab1a29e8dd558a",
+    "apack/packs/materialized/runtime/fe.js": "ef7de96ab703d387d8432d5ba5f9c7aefc4f9e7a1c811e571841435031c937e4"
+  },
+  "converted": {
+    "path": "/tmp/ears-profile-conversion-0ivBs9/both-converted/profile",
+    "source": "/tmp/ears-profile-conversion-0ivBs9/both",
+    "format": "sqlite/1",
+    "stores": [
+      {
+        "name": "primary",
+        "loads": 5,
+        "audit": {
+          "ok": true
+        }
+      },
+      {
+        "name": "runs",
+        "loads": 2,
+        "audit": {
+          "ok": true
+        }
+      }
+    ]
+  }
+}

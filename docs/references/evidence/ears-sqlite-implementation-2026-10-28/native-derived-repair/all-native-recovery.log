@@ -1,0 +1,25 @@
+(node:19) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@apackdev/ears| tests/sqlite/vector-audit.spec.ts (25 tests) 6926ms
+   ✓ native projection maintenance > audits model identity, canonical vectors, owner visibility and triggers without modifying the source  597ms
+   ✓ native projection maintenance > allows an incomplete private projection but detects missing rows behind its committed cursor  306ms
+   ✓ native projection maintenance > rebuilds offline under the native claim and retires invalidated models without changing canonical data  301ms
+   ✓ native projection maintenance > repairs missing-trigger from canonical data under explicit rebuild  385ms
+   ✓ native projection maintenance > repairs missing-table from canonical data under explicit rebuild  350ms
+   ✓ native projection maintenance > repairs missing-model from canonical data under explicit rebuild  363ms
+   ✓ native projection maintenance > repairs corrupt-model from canonical data under explicit rebuild  400ms
+   ✓ native projection maintenance > repairs missing-shadow from canonical data under explicit rebuild  308ms
+   ✓ native projection maintenance > repairs damaged-pages from canonical data under explicit rebuild  319ms
+   ✓ native projection maintenance > repairs orphan-catalog from canonical data under explicit rebuild  307ms
+   ✓ native projection maintenance > repairs missing-catalog from canonical data under explicit rebuild  369ms
+   ✓ native projection maintenance > quarantines an unacknowledged committed repair and recovers its persisted state only after reopen  380ms
+
+ Test Files  1 passed (1)
+      Tests  25 passed (25)
+   Start at  12:20:08
+   Duration  9.17s (transform 1.10s, setup 89ms, collect 1.59s, tests 6.93s, environment 0ms, prepare 197ms)
+
+JSON report written to /results/all-native-recovery.json

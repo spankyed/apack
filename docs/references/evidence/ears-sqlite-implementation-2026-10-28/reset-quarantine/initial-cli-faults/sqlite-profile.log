@@ -1,0 +1,13 @@
+
+ RUN  v3.2.7 /electron/packages/apack-cli
+
+ ✓ tests/commands/sqlite-profile.spec.ts (7 tests) 1982ms
+   ✓ queries and writes the named SQLite profile through normal CLI commands  325ms
+   ✓ backs up, verifies, reads history and restores both stores using the named target  660ms
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  19:49:16
+   Duration  4.14s (transform 1.15s, setup 15ms, collect 1.84s, tests 1.98s, environment 0ms, prepare 38ms)
+
+JSON report written to /results/sqlite-profile.json

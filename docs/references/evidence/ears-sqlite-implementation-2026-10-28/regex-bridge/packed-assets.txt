@@ -1,0 +1,30 @@
+{
+  "verified": [
+    "source",
+    "staged",
+    "packed"
+  ],
+  "packedFiles": [
+    {
+      "path": "vendor/rregex/LICENSE",
+      "size": 11357
+    },
+    {
+      "path": "vendor/rregex/provenance.json",
+      "size": 642
+    },
+    {
+      "path": "vendor/rregex/README.md",
+      "size": 1146
+    },
+    {
+      "path": "vendor/rregex/rregex_bg.wasm",
+      "size": 1364126
+    },
+    {
+      "path": "vendor/rregex/rregex.cjs",
+      "size": 38644
+    }
+  ],
+  "package": "@apackdev/ears"
+}

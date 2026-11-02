@@ -1,0 +1,11 @@
+{
+  "workflowExit": 0,
+  "platform": {
+    "positive": 1,
+    "negative": 6,
+    "scope": "Actual platform gate on real CI reports; metadata-only, no native workload"
+  },
+  "rawInputHashesUnchanged": true,
+  "workflowSha256": "6606e98077b444a1e6eb6f92968f082730f948bd7f84c614d14e72b34da2556e",
+  "platformSha256": "8a9b9b26276096ed84a76cc63496d36b8fbd03a9387f4372c01b6ef05aa6fd78"
+}
