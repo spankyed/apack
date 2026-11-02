@@ -326,6 +326,12 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 
 Current validation handles and results:
 
+- [Independent prefix-passage ranking and original keyword hard gate 41473096670](https://github.com/spankyed/apack/actions/runs/41473096670)
+  is active at `373bf288c6`. Text revision 2 uses at most one separately normalized prefix per
+  long source string, with the unchanged 256-unit cap and weight 3. Full sources preserve phrase
+  semantics, audit compares portions, and old layouts require writable regeneration. No current
+  keyword/safety pass is inferred from the failed leading-column attempt.
+
 - [Bounded leading-text ranking and original keyword hard gate 41469187700](https://github.com/spankyed/apack/actions/runs/41469187700)
   is terminal failure at `a9e415aad4`: original unstemmed keyword remains 24/25, case 6 rank 7;
   English SQLite is 25/25. [Original reports](../references/evidence/ears-sqlite-implementation-2026-10-28/lead-column-a9/README.md)
