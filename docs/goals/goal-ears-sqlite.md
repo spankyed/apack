@@ -206,7 +206,7 @@ The SQLite compiler incorrectly makes unquoted punctuation-separated compounds i
 The follow-up source review narrows splitting to ASCII separators, preserving non-ASCII input
 for unicode61 rather than approximating its Unicode 6.1 rules with JS character categories.
 A private-use/decomposed-accent regression accompanies this adjustment and still needs CI;
-the active eed run qualifies the earlier compound patch, not this subsequent input change.
+the terminal eed run covers the earlier compound patch, not this subsequent input change.
 The current fix separates their terms across fields/elements while retaining explicit phrase
 adjacency, compound exclusions, field filters and OR/any groups. New matching/highlight/stemming
 regressions and exact-old-source controls must pass in disposable CI. The frozen corpus, query,
@@ -307,9 +307,10 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 Current validation handles and results:
 
 - [Compound-query fix and original relevance qualification 41462773196](https://github.com/spankyed/apack/actions/runs/41462773196)
-  is active at `eed73e4071`. It requires source/test typecheck, existing search contracts, both new
-  regressions, exact old-source failures/restoration and the unchanged frozen relevance diagnostics.
-  Local YAML/shell syntax and diff checks pass; no native/local compiler validation was run.
+  is terminal failure at `eed73e4071`: typecheck and all 92 selected search contracts pass,
+  including both new compound regressions. The counterfactual never ran: its historical commit
+  was absent from the shallow checkout. Relevance was skipped. [Original report and failure disposition](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-eed-control-failure/README.md)
+  retain this limitation. The workflow now fetches the exact commit before source replacement.
 
 - [Original keyword ranking diagnostics 41460757710](https://github.com/spankyed/apack/actions/runs/41460757710)
   is terminal success at `4566270bf78e8d9290c92ff46f197e4fbdbeca25`. The frozen fixture is unchanged.

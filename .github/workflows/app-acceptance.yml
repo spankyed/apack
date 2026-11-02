@@ -648,11 +648,13 @@ jobs:
         run: |
           set -euo pipefail
           text_source=packages/apack-ears/src/sqlite/text.ts
+          old_commit=0a9892907b9d69729f38d7e0f8d43b32c5fd8d74
+          git fetch --no-tags --depth=1 origin "$old_commit"
           saved_source=$(mktemp "$RUNNER_TEMP/ears-text-source-XXXXXX")
           cp "$text_source" "$saved_source"
           restore_source() { cp "$saved_source" "$text_source"; rm -f "$saved_source"; }
           trap restore_source EXIT
-          git show 0a9892907b:packages/apack-ears/src/sqlite/text.ts > "$text_source"
+          git show "$old_commit:$text_source" > "$text_source"
           test_status=0
           npm test -w @apackdev/ears -- tests/sqlite/text-documents.spec.ts \
             -t 'combines (unquoted|stemmed) compound terms across' --maxWorkers 2 \
