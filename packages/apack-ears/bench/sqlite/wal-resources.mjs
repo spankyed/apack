@@ -18,13 +18,13 @@ const limits = Object.fromEntries(['cpu.max', 'memory.max', 'memory.swap.max'].m
   [name, readFileSync('/sys/fs/cgroup/' + name, 'utf8').trim()]));
 assert.deepEqual(limits, { 'cpu.max': '200000 100000', 'memory.max': '6442450944', 'memory.swap.max': '0' });
 const directory = mkdtempSync(join(tmpdir(), 'ears-wal-resources-')), store = join(directory, 'store');
-const report = { protocol: 'ears-wal-resources/2', source: process.env.GITHUB_SHA, mode, regime,
+const report = { protocol: 'ears-wal-resources/3', source: process.env.GITHUB_SHA, mode, regime,
   completed: false, qualification: false, execution: 'built-package', limits,
   node: process.version, cpuModels: [...new Set(cpus().map(cpu => cpu.model))],
   commits: regime === 'sustained' ? 4096 : 512, scheduledMs: regime === 'sustained' ? 120000 : 0,
   payloadBytes: 65536, syncs: true, samples: [],
   scope: 'One synthetic fresh process per reader state/regime; paced sustained workload is not saturation throughput, independent trial/device variance, physical power loss or complete app qualification',
-  measurement: 'Logical sizes and allocated blocks sampled after every commit; transient intra-commit peaks are not observed. Memory includes setup and instrumentation.' };
+  measurement: 'Post-commit sizes/blocks plus an explicit FULL-before-TRUNCATE overlap state; not instantaneous peak disk or ordinary one-call TRUNCATE timing. Memory includes setup/instrumentation.' };
 const connections = [];
 let failure;
 const files = () => Object.fromEntries(readdirSync(store).map(name => {
@@ -82,7 +82,32 @@ try {
     reader.sql.exec('ROLLBACK');
   }
   assert.equal(reader.get('SELECT count(*) n FROM entities').n, report.commits + 1);
-  report.checkpointAfterRelease = checkpoint(db); assert.equal(report.checkpointAfterRelease.busy, 0);
+  // FULL leaves checkpointed WAL bytes present, exposing database/WAL capacity overlap that a
+  // post-TRUNCATE JS sample misses. This is an explicit diagnostic maintenance sequence.
+  report.beforeFullCheckpoint = { files: files(), memory: process.memoryUsage() };
+  const maintenancePulse = startHeartbeat(1);
+  try {
+    let checkpointAt = performance.now();
+    report.fullCheckpointAfterRelease = db.all('PRAGMA wal_checkpoint(FULL)')[0];
+    report.fullCheckpointMs = performance.now() - checkpointAt;
+    assert.equal(report.fullCheckpointAfterRelease.busy, 0);
+    assert.equal(report.fullCheckpointAfterRelease.checkpointed, report.fullCheckpointAfterRelease.log);
+    report.afterFullCheckpoint = { files: files(), memory: process.memoryUsage(), usage: process.resourceUsage() };
+    if (mode === 'retained') {
+      assert(report.beforeFullCheckpoint.files['data.sqlite3-wal'].bytes > 0);
+      assert.equal(report.afterFullCheckpoint.files['data.sqlite3-wal'].bytes,
+        report.beforeFullCheckpoint.files['data.sqlite3-wal'].bytes);
+      assert(report.afterFullCheckpoint.files['data.sqlite3'].bytes > report.beforeFullCheckpoint.files['data.sqlite3'].bytes);
+    }
+    checkpointAt = performance.now();
+    report.checkpointAfterRelease = checkpoint(db);
+    report.truncateCheckpointMs = performance.now() - checkpointAt;
+    assert.equal(report.checkpointAfterRelease.busy, 0);
+  } finally {
+    maintenancePulse.stop();
+    report.maintenanceHeartbeatDelaysMs = maintenancePulse.delaysMs;
+    report.maintenanceScope = 'One synchronous FULL/sample/TRUNCATE sequence including instrumentation; sparse heartbeat samples are not percentile or app responsiveness qualification';
+  }
   assert.equal(statSync(join(store, 'data.sqlite3-wal')).size, 0);
   // A separate writer owns the lock; a refused EARS write must preserve its sequence and be reusable.
   const other = new SqliteDatabase({ path: store }); connections.push(other);
