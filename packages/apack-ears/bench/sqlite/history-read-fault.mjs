@@ -4,11 +4,15 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { openRunHistory, databaseStorage } from '../../../apack-host/dist/database/index.js';
+import { openRunHistory, databaseStorage } from '@apackdev/host/database';
 import { loadedNativeBindings } from './load-metrics.ts';
 
 assert.equal(process.env.GITHUB_ACTIONS, 'true'); assert.equal(process.platform, 'linux'); assert.equal(process.arch, 'x64');
 assert.match(process.env.GITHUB_SHA ?? '', /^[a-f0-9]{40}$/);
+// The private host has no dist build; its real source must exercise the matching built storage/SDK.
+for (const entry of ['@apackdev/ears', '@apackdev/ears/sqlite', '@apackdev/sdk/services']) {
+  assert.match(import.meta.resolve(entry), /\/dist\//, `${entry} must use its built package`);
+}
 const [output, ...extra] = process.argv.slice(2); assert(output && !existsSync(output) && !extra.length);
 assert(process.env.LD_PRELOAD?.endsWith('/worker-read-fault.so'));
 const directory = mkdtempSync(join(tmpdir(), 'ears-history-read-fault-')), store = join(directory, 'history');
@@ -16,7 +20,7 @@ const arm = join(directory, 'armed'), event = join(directory, 'event.json');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const storage = databaseStorage('sqlite/1'), originalOpen = storage.open;
 const report = { protocol: 'ears-history-read-fault/1', source: process.env.GITHUB_SHA,
-  completed: false, qualification: false, execution: 'built-host-and-ears-packages',
+  completed: false, qualification: false, execution: 'host-source-with-built-ears-and-sdk-packages',
   scope: 'One main-thread metadata-page EIO during actual host history open; observes recovery policy, not all corruption/I/O or physical storage regimes',
   openErrors: [] };
 let history, inspected, failure;
