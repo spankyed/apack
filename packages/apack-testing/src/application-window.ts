@@ -1,5 +1,11 @@
 import type { ElectronApplication, Page } from '@playwright/test';
 
+// Popouts also have applicationState, but their shell owns only the requested surface.
+function isMainApplicationWindow(page: Page): boolean {
+  try { return !new URL(page.url()).searchParams.has('surfaceId'); }
+  catch { return false; }
+}
+
 /** One unresponsive renderer cannot block another window or the discovery deadline. */
 export async function waitForApplicationWindow(application: ElectronApplication, timeout: number): Promise<Page> {
   const deadline = performance.now() + timeout;
@@ -16,11 +22,12 @@ export async function waitForApplicationWindow(application: ElectronApplication,
         wake = done;
       });
       for (const page of application.windows()) {
-        if (pending.has(page)) continue;
+        if (pending.has(page) || !isMainApplicationWindow(page)) continue;
         pending.add(page);
         void page.evaluate(() => !!(window as unknown as { applicationState?: unknown }).applicationState)
           .then(ready => {
-            if (!stopped && ready && performance.now() < deadline) { found = page; wake(); }
+            // Navigation may have completed while the readiness probe was pending.
+            if (!stopped && ready && isMainApplicationWindow(page) && performance.now() < deadline) { found = page; wake(); }
           })
           .catch(() => {})
           .finally(() => pending.delete(page));
