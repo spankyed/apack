@@ -49,6 +49,9 @@ const CustomCode = Code.extend({
 export type TiptapMode = 'editor' | 'input' | 'viewer'
 export type TiptapVariant = 'full' | 'chat'
 
+/** The block boundary used by ConversationViewer for each independently authored message. */
+export const conversationMessageNodeName = 'conversationMessage'
+
 interface CreateExtensionsOptions {
   mode: TiptapMode
   variant?: TiptapVariant
@@ -82,6 +85,7 @@ export function createExtensions({ mode, variant = 'full', placeholder, injected
   const extensions: AnyExtension[] = [
     StarterKit.configure({
       paragraph: false,
+      trailingNode: cfg.editable && cfg.richFormatting ? {} : false,
       codeBlock: false,
       link: false,
       blockquote: false,
@@ -95,7 +99,7 @@ export function createExtensions({ mode, variant = 'full', placeholder, injected
           { itemName: 'taskItem', wrapperNames: ['taskList'] },
         ],
       },
-      ...(!cfg.richFormatting && { heading: false, strike: false, trailingNode: false }),
+      ...(!cfg.richFormatting && { heading: false, strike: false }),
     }),
     // Blockquote is loaded unconditionally (custom input rule is `|<space>`,
     // not `>`, so it doesn't collide with `>`-typed chat input). This ensures

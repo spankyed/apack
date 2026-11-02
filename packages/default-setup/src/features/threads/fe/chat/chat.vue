@@ -55,20 +55,26 @@
                   <!-- Markdown, rendered without raw HTML -->
                   <TiptapEditor class="text-neutral-300 text-sm leading-relaxed" mode="viewer" variant="chat" :model-value="currentThread.instructions" />
                 </div>
-                <ChatMessage
-                  v-for="message in visibleMessages"
-                  :key="message.id"
-                  :message="message"
-                  :is-tail="isTailMessage(message)"
-                  :is-claude-code-thread="!!currentThread?.context?.claudeCode"
-                  @open-lightbox="openLightbox"
-                  @fork="(messageId: string) => actor.send({ type: 'FORK_THREAD', messageId, threadId: currentThread?.id, threadTopic: currentThread?.topic })"
-                  @unqueue="handleUnqueue"
-                  @resend="handleResend"
-                  @revert="(messageId: string) => handleRevert(messageId)"
-                  @revert-with-files="(messageId: string) => handleRevert(messageId, true)"
-                  @toggle-compacted="handleToggleCompacted"
-                />
+                <ConversationViewer v-if="visibleMessages.length" :key="currentThread?.id" :messages="visibleMessages"
+                  @rendered="onMessagesRendered" @image-click="openLightbox">
+                  <template #default="{ id, content }">
+                    <ChatMessage
+                      v-if="messagesById.has(id)"
+                      :message="messagesById.get(id)!"
+                      :is-tail="tailMessageIds.has(id)"
+                      :is-claude-code-thread="!!currentThread?.context?.claudeCode"
+                      @open-lightbox="openLightbox"
+                      @fork="(messageId: string) => actor.send({ type: 'FORK_THREAD', messageId, threadId: currentThread?.id, threadTopic: currentThread?.topic })"
+                      @unqueue="handleUnqueue"
+                      @resend="handleResend"
+                      @revert="(messageId: string) => handleRevert(messageId)"
+                      @revert-with-files="(messageId: string) => handleRevert(messageId, true)"
+                      @toggle-compacted="handleToggleCompacted"
+                    >
+                      <component :is="content" />
+                    </ChatMessage>
+                  </template>
+                </ConversationViewer>
               </div>
             </div>
             <ScrollToBottomFob :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
@@ -177,6 +183,7 @@ function rotateQuote() {
 }
 
 import ChatMessage from './message.vue'
+import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ChatInput from './input.vue'
 import RecentThreads from './recent-threads.vue'
@@ -201,33 +208,39 @@ const actor: ThreadsState = useSurface();
 const isOnboarding = shell.isOnboarding;
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
+const messagesById = computed(() => new Map<string, MessageEntity>(visibleMessages.value.map(message => [message.id, message])));
+const chatMessageCount = useSelector(actor, state => state.context.chatMessageIds.length);
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
+const messagesReady = computed(() => !messagePagination.value.isLoading && allMessages.value.length >= chatMessageCount.value);
 // The message to bring into view, while the thread shown is its own
 const focusMessageId = useSelector(actor, ({ context }) =>
   context.focusMessage && context.focusMessage.threadId === context.currentThread?.id ? context.focusMessage.messageId : null);
 const style = useCssModule();
 
 // Scroll preservation for prepending older messages
-const savedScrollHeight = ref(0);
-const isPrependPending = ref(false);
+let prependScroll: { height: number; top: number } | undefined;
 
 // Asks only when the machine takes the ask (`loadMoreMessages`): one it dropped would leave the page already loading,
 // a focused message's seek's, handled as this prepend
 function requestLoadMore() {
   if (messagePagination.value.isLoading || !messagePagination.value.hasMore) return;
   const el = messagesContainer.value;
-  if (el) savedScrollHeight.value = el.scrollHeight;
-  isPrependPending.value = true;
+  if (!el) return;
+  prependScroll = { height: el.scrollHeight, top: el.scrollTop };
   actor.send({ type: 'LOAD_MORE_MESSAGES' });
 }
 
-/** True when no processed user messages follow this one — gates queued/cancelled actions. */
-function isTailMessage(msg: MessageEntity): boolean {
-  const msgs = visibleMessages.value
-  const idx = msgs.indexOf(msg)
-  if (idx === -1) return false
-  return !msgs.slice(idx + 1).some(m => m.sender === 'user' && !m.status)
-}
+/** Rows with no later processed user message are eligible for queued/cancelled actions. */
+const tailMessageIds = computed(() => {
+  const messages = visibleMessages.value
+  const ids = new Set<string>()
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    ids.add(message.id)
+    if (message.sender === 'user' && !message.status) break
+  }
+  return ids
+})
 
 const currentThread = useSelector(actor, (state) => state.context.currentThread)
 const scrollPositioning = createScrollPositioning(callback => requestAnimationFrame(callback), id => cancelAnimationFrame(id))
@@ -363,7 +376,7 @@ function onScroll() {
   isNearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
 
   // Trigger load-more when scrolled near the top
-  if (scrollPositioning.ready() && el.scrollTop < 100 && messagePagination.value.hasMore && !isPrependPending.value) {
+  if (scrollPositioning.ready() && el.scrollTop < 100 && messagePagination.value.hasMore && !prependScroll) {
     requestLoadMore()
   }
 }
@@ -542,7 +555,7 @@ function handleToggleCompacted(markerId: string, compacted: boolean) {
   })
 }
 
-const prevThreadId = ref(currentThread.value?.id)
+let renderedThreadId = currentThread.value?.id
 
 /**
  * Brings the message opened from the panel's search into view once it is drawn, and says whether that takes the place
@@ -554,13 +567,14 @@ function showFocusedMessage(messages: MessageEntity[]): boolean {
   if (!focused) return false
   const el = messagesContainer.value?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focused)}"]`)
   if (el) {
-    el.scrollIntoView({ block: 'center' })
+    scrollPositioning.position(() => el.scrollIntoView({ block: 'center' }))
     el.classList.add(style.focused)
     setTimeout(() => el.classList.remove(style.focused), 1600)
     actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
     return true
   }
-  if (!messages.some((m) => m.id === focused)) return true
+  const message = messages.find(m => m.id === focused)
+  if (!message || !(message as any).compacted) return true
   actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
   return false
 }
@@ -570,33 +584,41 @@ function showFocusedMessage(messages: MessageEntity[]): boolean {
 watch(focusMessageId, async (focused) => {
   if (!focused) return
   await nextTick()
+  if (!messagesReady.value) return
   showFocusedMessage(allMessages.value)
 })
 
-watch(allMessages, async (newMsgs, oldMsgs) => {
-  await nextTick()
+let renderedMessageCount = 0
+function onMessagesRendered() {
+  const newMsgs = allMessages.value
+  if (!messagesReady.value) return
+  const previousCount = renderedMessageCount
+  renderedMessageCount = newMsgs.length
 
-  // Handle scroll preservation for prepended older messages
-  if (isPrependPending.value) {
-    isPrependPending.value = false
-    const el = messagesContainer.value
-    if (el) el.scrollTop += (el.scrollHeight - savedScrollHeight.value)
-    return
+  const threadChanged = currentThread.value?.id !== renderedThreadId
+  if (threadChanged) {
+    renderedThreadId = currentThread.value?.id
+    showInlineDashboard.value = false
+    prependScroll = undefined
   }
 
-  const threadChanged = currentThread.value?.id !== prevThreadId.value
-  if (threadChanged) {
-    prevThreadId.value = currentThread.value?.id
-    showInlineDashboard.value = false
+  // Handle scroll preservation for prepended older messages
+  if (prependScroll) {
+    const { height, top } = prependScroll
+    prependScroll = undefined
+    const el = messagesContainer.value
+    if (el) scrollPositioning.position(() => {
+      el.scrollTop = top + el.scrollHeight - height
+    })
+    return
   }
 
   // A message opened from the panel's search is brought into view in place of a load's scroll
   if (showFocusedMessage(newMsgs)) {
-    scrollPositioning.position(() => {})
     return
   }
 
-  const isThreadLoad = threadChanged || !oldMsgs?.length || Math.abs(newMsgs.length - oldMsgs.length) > 1
+  const isThreadLoad = threadChanged || previousCount === 0 || Math.abs(newMsgs.length - previousCount) > 1
   if (isThreadLoad || pendingScrollOnSend.value) {
     pendingScrollOnSend.value = false
     forceScrollToBottom()
@@ -606,6 +628,12 @@ watch(allMessages, async (newMsgs, oldMsgs) => {
       if (isNearBottom.value) scrollToBottom('instant')
     })
   }
+}
+
+watch(allMessages, async () => {
+  if (visibleMessages.value.length) return
+  await nextTick()
+  if (!visibleMessages.value.length) onMessagesRendered()
 })
 
 // Auto-scroll while the agent is busy and the user hasn't scrolled away.
