@@ -1,7 +1,7 @@
 # EARS SQLite candidate evaluation
 
 Status: experiment delivered, 2026-11-02; production adoption not recommended. Implementation is `93ed37e67f40faee3fd25a10f3b897c15e55c858`;
-subsequent commits contain documentation/evidence only. Integrated master is
+Subsequent implementation-review split commits restore baseline documentation on the code branch and relocate only CI receipt-control fixtures and the regex recipe/provenance path; application runtime and dependency versions remain unchanged. The relocated pure controls pass 17/17, and the shell recipe is syntax-checked. Integrated master is
 `461f7bf2cb9f52b968957a423744168740bf37a7`, native elmdb `f496470679a7bd9764398108b20f62a73333c701`.
 [Draft PR #286](https://github.com/spankyed/apack/pull/286) contains the complete candidate. Production
 continues selecting elmdb; no merge, release, daily-profile migration or PR closure is authorized.
@@ -14,6 +14,8 @@ and the [goal](../archive/goals/goal-ears-sqlite.md#current-handoff) records the
 ## Requirement audit
 
 Evidence paths below are under [the source-pinned evidence directory](evidence/ears-sqlite-implementation-2026-10-28/).
+Documentation and evidence are reviewed on `session/ears-sqlite-docs`, stacked on code PR #286; the code branch intentionally omits this document tree. Original receipts retain the pre-split paths/hashes rather than being rewritten as fresh runtime executions.
+
 The detailed [contract matrix](../archive/plans/ears-sqlite-contracts.md#ownership-and-acceptance) maps individual
 facade invariants to code/tests; this table maps the original seven delivery phases.
 
