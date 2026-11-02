@@ -69,7 +69,7 @@ Do not dispatch another app-acceptance workflow while one is pending: the shared
 - Ordinary [value](../admission-value-4ded/README.md)/[search](../admission-search-4ded/README.md) admission at `4ded696f79`: all six trials pass for value OFF, search OFF and search FULL under verified 2 CPU/6 GiB/no swap. Value FULL misses heartbeat in five of six. The [instrumented FULL trace](../admission-value-trace-df0/README.md) does not reproduce its long pauses, explain their cause or clear ordinary latency failures. Synthetic pending-vector admission is not managed-model or app-streaming load.
 - Earlier [signed macOS](../rebase-455-signed-e2/README.md), [packaged Windows/Linux](../installed-graph-eb74/README.md), [Linux conversion/API lifecycle](../linux-lifecycle-cda/README.md) and [downstream report replay](../platform-report-replay-7298/README.md) receipts retain their exact tested source and limits. Shared fixes landed in #299/#301. None qualifies later source by implication.
 
-The [contract/invariant and dependency review](../../../../plans/ears-sqlite-contracts.md) records owned responsibilities and remaining proof. [Historical checkpoint details](../handoff-before-scope-c802/README.md) preserve older receipts and failures; they are not another work plan or a waiver.
+The [contract/invariant and dependency review](../../../../archive/plans/ears-sqlite-contracts.md) records owned responsibilities and remaining proof. [Historical checkpoint details](../handoff-before-scope-c802/README.md) preserve older receipts and failures; they are not another work plan or a waiver.
 
 ### Unmet acceptance work
 

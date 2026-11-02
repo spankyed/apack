@@ -2,11 +2,11 @@
 
 This directory began as the opt-in feasibility experiment preserved at `4a3fe698f8` on `session/sqlite-evaluation`
 (apack `5838145675`, elmdb `9359949`). The current implementation follows
-[the SQLite goal](../../../../docs/goals/goal-ears-sqlite.md) on `session/ears-sqlite`, with its pinned native baseline
+[the SQLite goal](../../../../docs/archive/goals/goal-ears-sqlite.md) on `session/ears-sqlite`, with its pinned native baseline
 and exact evidence recorded there. It does not select SQLite for normal app boot or migrate daily-use data.
 Use synthetic/copied data and separate directories; elmdb directories are refused.
 
-The [original evaluation plan](../../../../docs/plans/ears-sqlite-evaluation.md) and
+The [original evaluation plan](../../../../docs/archive/plans/ears-sqlite-evaluation.md) and
 [dated findings](../../../../docs/references/evidence/ears-sqlite-evaluation-2026-10-27.md) describe historical results,
 not acceptance of the changing implementation.
 
@@ -27,12 +27,12 @@ pass on actual Electron, and the [complete source-app replay](../../../../docs/r
 passes 33 eligible cases once with one packaged-only exclusion. These receipts identify exact source and
 runtime scope; they do not establish notarized distribution or complete adoption acceptance.
 Ordinary tests select elmdb and skip SQLite-only cases. The goal and retained evidence own current-source
-qualification, exclusions and remaining requirements.
+completed qualification, exclusions and evidence limits.
 
 The user explicitly retains synchronous app search and accepts foreground responsiveness degradation
 for experimental completion. Keep the original heartbeat samples and failures visible; this disposition
 does not change query-p95, recall, correctness or resource requirements, nor turn a failed measurement
-into a pass. The [completion assessment](../../../../docs/plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
+into a pass. The [completion assessment](../../../../docs/references/ears-sqlite-evaluation-report.md)
 records the decision and remaining limitations.
 
 From the repository root, run one expensive task at a time:
@@ -94,7 +94,7 @@ and declarations validate through Ajv plus structural checks. Supported large ve
 native models with adaptive owner budgets; smaller scopes, unsupported shapes and large K remain exact.
 Primary embedding bytes survive derived retirement, and logical export/staging, audit/rebuild, host replacement
 and cross-platform loading are implemented. Their evidence and limits belong to the
-[current goal handoff](../../../../docs/goals/goal-ears-sqlite.md#current-handoff), rather than this historical
+[current goal handoff](../../../../docs/archive/goals/goal-ears-sqlite.md#current-handoff), rather than this historical
 experiment directory. Passing contracts or one corpus pass do not establish complete app, resource,
 filesystem, signed-distribution or adoption acceptance.
 

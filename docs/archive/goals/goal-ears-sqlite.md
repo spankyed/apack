@@ -1,24 +1,12 @@
 # SQLite implementation for EARS
 
-```text
-# Goal: Deliver a production candidate for EARS over SQLite
-
-Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
-Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
-The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 461f7bf2cb
-and its native pin f496470679a7bd9764398108b20f62a73333c701; full combined acceptance remains pending. Inspect the current handoff and actual source before continuing.
-Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
-
-Finished when the SQLite candidate runs the complete app data lifecycle, all required
-contracts and recorded performance/relevance/recall budgets pass, full validation is
-recorded on pinned source in disposable environments, and a draft PR is ready for
-an adoption decision. Commit usable checkpoints. Do not silently drop requirements.
-```
-
-Status: active after user-verified OrbStack migration to Seagate, 2026-10-31; candidate qualification remains incomplete.
-Branch: `session/ears-sqlite`. Authoritative source: `/private/tmp/ears-sqlite-query-integration`;
-`monorepo-worktrees.noindex/sqlite-evaluation` preserves an earlier session checkpoint.
-The original `session/sqlite-evaluation` branch preserves the experiment at `4a3fe698f8`.
+Status: completed candidate experiment, 2026-11-02. Production remains elmdb; adoption is not recommended.
+Branch: `session/ears-sqlite`, draft PR #286. Implementation: `93ed37e67f40faee3fd25a10f3b897c15e55c858`;
+integrated master `461f7bf2cb9f52b968957a423744168740bf37a7`, elmdb `f496470679a7bd9764398108b20f62a73333c701`.
+This archived goal preserves the original delivery requirements. Current behavior belongs to the
+[implementation reference](../../references/ears-sqlite-candidate.md), and the
+[final evaluation](../../references/ears-sqlite-evaluation-report.md) owns the verdict and evidence limits.
+No additional implementation, merge, release, daily-profile conversion or PR closure is authorized.
 
 ## Scope
 
@@ -33,7 +21,7 @@ work committed after the original experiment. Search acceptance measures user us
 exact scores and rank order need not reproduce elmdb. Important identifier matching, correct highlights and
 phrase boundaries remain requirements. Typo handling, syntax and language choices must be specified and evaluated.
 
-Use the [feasibility evidence](../references/evidence/ears-sqlite-evaluation-2026-10-27.md) as historical findings,
+Use the [feasibility evidence](../../references/evidence/ears-sqlite-evaluation-2026-10-27.md) as historical findings,
 not current acceptance. Existing trial results used an older elmdb/API baseline and low-rank synthetic vectors.
 
 A production cutover is the final adoption decision after a complete reviewable candidate. Until then keep the
@@ -193,7 +181,7 @@ elmdb `f496470679a7bd9764398108b20f62a73333c701`. Production defaults remain elm
 release, daily-profile migration or native-baseline ranking patch is authorized.
 
 Current implementation is `93ed37e67f`; later commits contain documentation only. Keyword search is
-fixed, not waived: [current 64-probe relevance](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-93ed/README.md)
+fixed, not waived: [current 64-probe relevance](../../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-93ed/README.md)
 passes the unchanged 25/25 gate for both SQLite none/English modes, all 125 contracts, four effective
 old-source assertion controls and hybrid 25/25 on both engines. Native keyword remains a separately
 recorded 24/25 comparison. Complete source-app lifecycle passes 33 cases and ten discovery cases;
@@ -209,50 +197,45 @@ is now TERMINAL SUCCESS at `93ed37e67f`: 1,800 queries/18 groups meet unchanged 
 limits, minimum mean recall 0.988. All 29 safeguards, three reopens per size, full pairing and cleanup
 pass. Eight 16 ms heartbeat misses retain accepted degradation. The pure validator independently
 reproduces all gate outcomes; five summary means differ only by floating-point rounding, with all
-other fields identical. [Original reports and matched same-model probe diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-93ed/README.md).
+other fields identical. [Original reports and matched same-model probe diagnostic](../../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-93ed/README.md).
 
 [Strict run 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216/attempts/2)
 is now TERMINAL SUCCESS at original implementation 93ed: eight first-attempt passing jobs were
-retained and only integration-1 reran. [Full replay evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-93ed-replay/README.md)
+retained and only integration-1 reran. [Full replay evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/integration-93ed-replay/README.md)
 verifies all 242 tests/31 repository files pass without exclusions; the timed-out case passes in
 146,398 ms under unchanged 200,000 ms. The new artifact is explicitly ID 13175604072; first-attempt
 13173022874 remains separately preserved. Source, producer freshness, two-core budget, assertions
 and deadlines are unchanged. No source fix or causal contention diagnosis is claimed; intermittent
-compiler-test timing remains a follow-up. [Original consumer reports](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md)
+compiler-test timing remains a follow-up. [Original consumer reports](../../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md)
 verify both native shards and app/rest: host 7,040/95 existing exclusions, pack 989/two, authoring
 seven/two, external app 32, smoke five and six once-passing SQLite witnesses; host pool 489.9 s
-stays under unchanged 600 s. [Producer](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-producers/README.md)
-and [three platforms](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md)
+stays under unchanged 600 s. [Producer](../../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-producers/README.md)
+and [three platforms](../../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md)
 also pass. No further strict/model repeat is needed absent a new failure or relevant source change.
 
-Final audit gap: admission/WAL/disk-budget measurements predate the ordinary shared-content text
-layout. The existing ordinary four-cohort [admission suite 41520371169](https://github.com/spankyed/apack/actions/runs/41520371169)
-is now live at docs-only descendant `5d80feae991d7bed9452034432f408f256e2706d`. Source code is still
-byte-identical to implementation 93ed. Run value/search × OFF/FULL with trace/checkpoint overrides
-false, original three fresh-process trials per size, original watches and 2 CPU/6 GiB/no-swap limits.
-Both active/pending app-workflow lists were empty before dispatch. Preserve every original budget,
-failure and actual source; only foreground responsiveness has the user's accepted degradation.
-Both value-index cohorts now pass all twelve trials and every original budget. Independent checks reproduce latency quantiles/limits and all 138 source hashes; [partial current reports](../references/evidence/ears-sqlite-implementation-2026-10-28/admission-5d80/README.md) are preserved. Both search cohorts remain live. Inspect this same run to terminal; remaining results are not inferred from old measurements or corpus passes.
+The final [current-layout admission suite 41520371169](https://github.com/spankyed/apack/actions/runs/41520371169)
+is terminal success at docs-only descendant `5d80feae991d7bed9452034432f408f256e2706d`.
+All four ordinary value/search × OFF/FULL cohorts pass all 24 fresh-process trials and every original
+budget, with 138 source fingerprints per cohort and raw quantiles independently checked.
+[Original numeric reports and receipt](../../references/evidence/ears-sqlite-implementation-2026-10-28/admission-5d80/README.md)
+retain expected INDEX_BUILDING notifications, eventual readiness, resource scope and privacy omissions.
+No tracing/checkpoint/watch override or resource/latency relaxation was used.
 
-The [evaluation report](../references/ears-sqlite-evaluation-report.md) now maps all seven phases and records the recommendation, evidence scope, retained failures and explicit pending admission gate.
-
-Frozen closing checklist: inspect/preserve this current admission suite, reconcile each original phase
-and numbered acceptance item against the existing source-pinned evidence, finalize the recommendation
-and reference/public docs, repair archival links and commit closure. Do not add arbitrary universal
-provider/filesystem/device certification or repeat already-qualified gates without changed relevant
-inputs. Compiler/native/full/runtime checks remain disposable. Completion is still unproven until
-this audit closes; production stays elmdb and PR remains draft for the separate adoption decision.
+The [final evaluation](../../references/ears-sqlite-evaluation-report.md) maps all seven delivery phases.
+The closing audit is complete; no further unchanged validation is required. Only synchronous foreground
+responsiveness has the user's accepted degradation disposition. Original failed runs and source limits
+remain visible. Production stays elmdb and the PR remains draft for a separate adoption decision.
 
 The prespecified independent managed-model repeat [41508326544](https://github.com/spankyed/apack/actions/runs/41508326544)
-is now TERMINAL SUCCESS at docs-only descendant `67ae01a334`: [full corpus](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-67ae/README.md)
+is now TERMINAL SUCCESS at docs-only descendant `67ae01a334`: [full corpus](../../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-67ae/README.md)
 passes all 1,800 queries/18 groups, minimum mean recall 0.990, all original query-p95 limits and
 29 safeguards. The 10k/99.9k trained-model hashes both differ from the first corrected run. Nine
 heartbeat misses retain accepted degradation. Full pairing, cleanup and three reopens per size pass;
-independent validation differs only in nine summary means by floating-point rounding. [Repeat relevance](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-repeat-67ae/README.md)
+independent validation differs only in nine summary means by floating-point rounding. [Repeat relevance](../../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-repeat-67ae/README.md)
 also passes both SQLite keyword modes 25/25, hybrid 25/25 per backend, 125 contracts and four controls.
 Both corrected full-corpus cohorts are preserved; no further unchanged model repeat is needed.
 
-The [final input audit](../references/evidence/ears-sqlite-implementation-2026-10-28/final-input-audit/README.md) verifies the two-file runtime delta, 66 unchanged files per 68-file fault fingerprint, unchanged driver/backup/native/dependency inputs, pinned ancestry and elmdb default. Historical runs retain their tested sources.
+The [final input audit](../../references/evidence/ears-sqlite-implementation-2026-10-28/final-input-audit/README.md) verifies the two-file runtime delta, 66 unchanged files per 68-file fault fingerprint, unchanged driver/backup/native/dependency inputs, pinned ancestry and elmdb default. Historical runs retain their tested sources.
 
 The [adoption assessment](../plans/ears-sqlite-contracts.md#current-adoption-assessment) maps all seven
 phases and source-pinned evidence, including a850 whole strict/platform, operational faults, signed
@@ -261,12 +244,27 @@ responsiveness has an approved experimental degradation disposition: retain orig
 misses as failures. Correctness, recall, query latency and resource accounting remain required.
 The recommendation remains retain elmdb; experiment delivery does not authorize adoption or PR closure.
 
-### Unmet acceptance work
+## Outcome (2026-11-02)
 
-1. Qualify all current-master contracts and the exact final source, including shared/native models, full strict, app lifecycle, platform packaging/signing, API freshness and meaningful negative controls. Reconcile later relevant master changes deliberately.
-2. Expand the existing curated search fixtures to representative real app/repository text with pre-recorded usefulness judgments, supported languages, identifiers, typos, lists, phrases, highlights, recency and hybrid retrieval. Full corresponding text pairing is now qualified in the private acquisition job; its payload is deliberately deleted after qualification. The exercised `bench/sqlite/acquire-real-vectors.py --with-text` path emits text, identities and vectors together; its full pairing validator checks every identity and all four original sealed file digests. The unused standalone re-download/join helper was removed instead of maintaining an unqualified second acquisition format. This does not waive any pairing, usefulness or performance requirement. The frozen snapshot contains 214 real repository-guide/shipped-content sections and 25 predeclared top-five usefulness judgments. Pinned local English hybrid retrieval now passes all 25 on both backends, repeated on current candidate runtime at b9896d5205; its original numeric receipts are linked in the current handoff. The original text-only SQLite gate is now 25/25 in both none/English configurations at 7ffa2a7ca5, with 125 contracts and four effective old-source controls; full current-source qualification continues. Native comparison remains explicitly 24/25. [The current three-platform search feature audit](../references/evidence/ears-sqlite-implementation-2026-10-28/search-features-061/README.md) verifies 80 named passing SQLite contracts per OS, including literal multilingual highlights, identifiers/phrases/lists/fields/boolean/recency/prefix, bounded typos and unsupported language/analyzer refusals. This proves those declared feature cases; broad multilingual semantic usefulness, production-provider/model variance and broader semantic/provider-specific UI acceptance remain open. The current-query thread search, actor supersession/cancellation and capture-refusal UI paths now pass the app-flow checkpoint above.
-3. Meet original admission/search/vector/resource budgets; the user explicitly accepts synchronous foreground responsiveness degradation for experiment completion. Historical matched real-vector trials retain heartbeat/latency failures. The current adaptive SQLite warm hybrid run meets 100/200ms query p95 but fails heartbeat; this does not establish a current matched-engine speedup or complete resource acceptance. The original 16ms heartbeat results remain recorded as misses with an approved degradation disposition; 100ms/200ms query targets and resource accounting remain required. Measure warm/cold/reopen, realistic streaming/write/watch flows, sustained background work, variance, peak memory, disk/WAL growth, checkpoint contention and large-corpus ingestion.
-4. Finish physical/error-outcome evidence beyond the now-qualified successful-sync/lost-acknowledgement process-death cases: active worker I/O/corruption/resource extremes, broader ambiguous COMMIT/storage failure regimes beyond the now-observed injected post-sync error cases, busy writers/long readers and required filesystem/read-only behavior. Existing injected EIO cases mostly prove rollback; process-kill boundaries do not prove physical power-loss safety.
-5. Complete owned-invariant, complexity, maintenance/native-dependency and upgrade/recovery review, then produce the requirement-by-requirement adoption recommendation. A green suite alone does not close the goal. Production terminal-service natural-exit cleanup is a separate unresolved concern; the shared probe cleanup does not fix it.
+Delivered the complete isolated SQLite candidate and source-pinned qualification in draft PR #286.
+The recommendation is **retain elmdb**: feasibility is established in the declared scope, but a net
+performance/maintenance advantage is not. The [final report](../../references/ears-sqlite-evaluation-report.md#requirement-audit)
+maps every original phase; this table disposes of the five former outstanding acceptance items without
+treating historical or unsupported-topology limits as universal certification.
 
-Detailed superseded execution checkpoints are preserved in the [historical handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/checkpoint-before-probe-qualification/README.md); they do not override current state or reduce the remaining requirements.
+| Former item | Disposition and evidence |
+| --- | --- |
+| 1. Contracts and final integration | Complete at pinned master/native inputs: final 93ed whole strict, API/package/facade freshness, three platforms, independent models and controls. Full source-app and supported installed/signing runs retain their actual sources; the input audit identifies the later two-file retrieval-only delta, directly qualified by current contracts/corpus. The compiler timeout and full unchanged replay remain separately recorded. |
+| 2. Representative search/usefulness | Complete for declared none/English behavior: 214 real guide/content sections, 25 frozen judgments, unchanged keyword 25/25 in both candidate modes, hybrid 25/25 per engine, 125 contracts/four effective controls, multilingual literal feature cases, paired real 1,536-dimensional corpus and two different managed-model cohorts. Actual thread-search/UI controls pass. Remote provider quality, arbitrary languages/models and the dormant semantic Library UI are not supported conclusions; their product owner must qualify them if enabled, rather than infer coverage from literal or controlled-inference tests. |
+| 3. Performance and resources | Complete in recorded workload scope: original query-p95/mean-recall targets pass in both final corpus cohorts; current admission passes 24/24 without budget changes. Matched built reads, sustained durable writes/watches, cold-file/reopen, admission, real app/streaming flows, model variance, process high-water memory and sampled files/WAL/checkpoints are preserved. Only synchronous responsiveness misses have an approved experimental degradation. Whole-process/sampled measurements do not imply isolated allocations or instantaneous disk peaks. |
+| 4. Error outcomes and runtime support | Complete for supported paths through actual I/O/full/ENOMEM/read/worker retry, canonical preservation, held-reader release, eight successful-sync/death witnesses, disabled controls and post-sync uncertain-commit/fenced-reopen cases. Backup/replacement/readonly and all shipping runtime targets have named receipts. Physical device power loss, arbitrary filesystems and independent SQLite binaries sharing a file in one process remain unsupported certification claims, not silently passing outcomes. Operational owners must qualify any newly supported topology. |
+| 5. Ownership and recommendation | Complete: invariant, algorithmic complexity, driver, dependency/native-patch upgrade and recovery reviews feed the final recommendation and current implementation reference. Retained maintenance ownership and workload regressions do not justify adoption. Build-tools owns the observed compiler timing follow-up; terminal-service owns the separately identified natural-exit cleanup concern (probe PTY cleanup is not its fix). Neither is claimed corrected by this candidate. |
+
+The only authorized material degradation is synchronous foreground responsiveness, recorded with the
+original failed measurements. The candidate remains opt-in; merge, release, production conversion,
+backend removal or closing the draft require a separate decision. A future adoption proposal must own
+native upgrades and explicitly qualify its selected product/provider/filesystem targets.
+
+Detailed superseded execution checkpoints and original acceptance wording remain in the
+[historical handoff](../../references/evidence/ears-sqlite-implementation-2026-10-28/checkpoint-before-probe-qualification/README.md).
+They preserve dated failures and do not reopen the completed delivery or authorize production use.

@@ -1,6 +1,6 @@
 # Superseded handoff before the 64-bucket qualification
 
-Captured from goal source `a380d17ca6`. These chronological queue statuses and earlier claims retain their original scope; they are not current instructions or completion claims. [The active goal](../../../../goals/goal-ears-sqlite.md#current-handoff) owns current state and all original requirements. Goal bytes before this move have SHA-256 `26d4b966601ccab4230ea806dcab1c09a53a44e554c1688ac196b8cad56c08fb`. Relative links are relocated without changing their targets.
+Captured from goal source `a380d17ca6`. These chronological queue statuses and earlier claims retain their original scope; they are not current instructions or completion claims. [The active goal](../../../../archive/goals/goal-ears-sqlite.md#current-handoff) owns current state and all original requirements. Goal bytes before this move have SHA-256 `26d4b966601ccab4230ea806dcab1c09a53a44e554c1688ac196b8cad56c08fb`. Relative links are relocated without changing their targets.
 
 ## Current handoff
 
@@ -230,7 +230,7 @@ Disposable run 41391989615 now qualifies these stages; the full integrated chain
 keyword failure; the separate integration timeout has a passing unchanged full-shard replay.
 The original timeout and its unresolved cause remain recorded. No failure or deadline is relaxed.
 
-The [completion assessment and invariant/dependency review](../../../../plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
+The [completion assessment and invariant/dependency review](../../../../archive/plans/ears-sqlite-contracts.md#experiment-completion-report)
 recommends retaining elmdb; experimental completion is not yet proven. [Earlier detailed handoff](../handoff-before-completion-audit/README.md)
 retains all preceding receipts, negative controls, runtime decisions and historical next actions.
 

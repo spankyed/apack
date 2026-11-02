@@ -7,9 +7,9 @@ Production retains elmdb. The active agent's app and engine checkouts were not e
 
 ## Decision and evidence
 
-The [dated evaluation](../references/evidence/ears-sqlite-evaluation-2026-10-27.md) contains the capability matrix,
+The [dated evaluation](../../references/evidence/ears-sqlite-evaluation-2026-10-27.md) contains the capability matrix,
 algorithmic/maintenance critique, raw measurements and principal-engineer recommendation. The
-[reproduction guide](../../packages/apack-ears/bench/sqlite/README.md) describes the opt-in prototype and commands.
+[reproduction guide](../../../packages/apack-ears/bench/sqlite/README.md) describes the opt-in prototype and commands.
 
 SQLite supports the broad EARS contract in an isolated implementation. The current adapter does not establish
 a performance or ownership advantage over elmdb. Text search is near parity after avoiding unnecessary work;

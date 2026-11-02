@@ -80,8 +80,8 @@ candidate qualification remain required. Inspect actual Git/process/workflow sta
 The candidate implements structured graph/query execution, typed authoritative values, live declarations,
 transaction/watch identity, search/index generations, canonical embedding/model lifecycle, both managed app
 stores, SDK fixtures, CLI maintenance, backup/import/recovery and explicit copied-profile conversion.
-[The storage design](../../../../plans/ears-sqlite-storage.md) owns implemented contracts;
-[the contract matrix](../../../../plans/ears-sqlite-contracts.md) owns required semantics. Implementation is not final
+[The storage design](../../../../archive/plans/ears-sqlite-storage.md) owns implemented contracts;
+[the contract matrix](../../../../archive/plans/ears-sqlite-contracts.md) owns required semantics. Implementation is not final
 app, resource, physical-durability or adoption qualification.
 
 | Current evidence | What it proves | Remaining boundary |
@@ -325,7 +325,7 @@ and999updates take4551833ms/269581ms; no complete fresh-ingestion or causalupdat
 MatchedSQLite session22187 is now eligible for30-second quiet admission; observe the same owner.
 
 
-The shipping architecture inventory is explicit in the[contract matrix](../../../../plans/ears-sqlite-contracts.md#packaged-platform-qualification-boundary):
+The shipping architecture inventory is explicit in the[contract matrix](../../../../archive/plans/ears-sqlite-contracts.md#packaged-platform-qualification-boundary):
 macOSarm64, Windowsx64 and Linuxx64. The new installed-platform dispatcher builds normal unsigned
 Previews on the latter two and requires the existing actual packaged Electron/API native witness,
 including4097-vector worker admission, ownership, FTS/regex and read-only reopen. It is not renderer,

@@ -4,7 +4,7 @@ Inspected candidate checkpoint `1d7a3de090d74028ca36eba574686da8c794609a`, whose
 63c8267994 and test diagnostics 0126eda005. This is a phase-7 source review, not a completed adoption audit,
 new test execution, approval to change a budget, or an assertion that every implementation path was reviewed.
 The accompanying source inventory binds the inspected module footprint and critical ownership paths. Runtime
-qualification and unresolved failures remain in the [current goal](../../../../goals/goal-ears-sqlite.md#current-handoff).
+qualification and unresolved failures remain in the [current goal](../../../../archive/goals/goal-ears-sqlite.md#current-handoff).
 
 ## Assessment
 

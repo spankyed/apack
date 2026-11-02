@@ -1,6 +1,6 @@
 # SQLite checkpoint history through 2026-10-29
 
-Historical checkpoint log moved from the active goal at source `0fe78fc8de`. Claims below retain their original tested source and scope; they are not current handoff instructions. The [active goal](../../../goals/goal-ears-sqlite.md) owns every remaining requirement. This move does not complete or defer any acceptance item.
+Historical checkpoint log moved from the active goal at source `0fe78fc8de`. Claims below retain their original tested source and scope; they are not current handoff instructions. The [active goal](../../../archive/goals/goal-ears-sqlite.md) owns every remaining requirement. This move does not complete or defer any acceptance item.
 
 
 The existing [draft PR #286](https://github.com/spankyed/apack/pull/286) is the publication surface for

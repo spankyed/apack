@@ -3,7 +3,7 @@
   "source": "5d80feae991d7bed9452034432f408f256e2706d",
   "implementation": "93ed37e67f40faee3fd25a10f3b897c15e55c858",
   "expectedCohorts": 4,
-  "inspectedCohorts": 2,
+  "inspectedCohorts": 4,
   "cohorts": [
     {
       "cohort": "value-off",
@@ -11,6 +11,10 @@
       "jobConclusion": "success",
       "matrixPassed": true,
       "sourceHashesVerified": 138,
+      "currentSourceHashesMatching": 137,
+      "documentationOnlyChanges": [
+        "packages/apack-ears/bench/sqlite/README.md"
+      ],
       "cpuModels": [
         "AMD EPYC 9V74 80-Core Processor"
       ],
@@ -52,6 +56,7 @@
               "limit": 41075184
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 1255.0469029999997,
           "gcMs": 1035.2327599999999,
           "writes": 626,
@@ -92,6 +97,7 @@
               "limit": 207506208
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 17182.519017,
           "gcMs": 15460.56798,
           "writes": 6252,
@@ -132,6 +138,7 @@
               "limit": 207506208
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 16329.254364999999,
           "gcMs": 15102.221615999999,
           "writes": 6252,
@@ -172,6 +179,7 @@
               "limit": 41075184
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 1249.302627,
           "gcMs": 1062.3976910000001,
           "writes": 626,
@@ -212,6 +220,7 @@
               "limit": 41075184
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 1248.8660000000002,
           "gcMs": 1062.085301,
           "writes": 626,
@@ -252,6 +261,7 @@
               "limit": 207506208
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 16556.387066000003,
           "gcMs": 15105.06311,
           "writes": 6252,
@@ -265,6 +275,10 @@
       "jobConclusion": "success",
       "matrixPassed": true,
       "sourceHashesVerified": 138,
+      "currentSourceHashesMatching": 137,
+      "documentationOnlyChanges": [
+        "packages/apack-ears/bench/sqlite/README.md"
+      ],
       "cpuModels": [
         "AMD EPYC 7763 64-Core Processor"
       ],
@@ -306,6 +320,7 @@
               "limit": 41075184
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 1544.9189609999999,
           "gcMs": 1394.528593,
           "writes": 626,
@@ -346,6 +361,7 @@
               "limit": 207506208
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 18619.090464,
           "gcMs": 17571.937908,
           "writes": 6252,
@@ -386,6 +402,7 @@
               "limit": 207506208
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 18430.353378000003,
           "gcMs": 17503.145708999997,
           "writes": 6252,
@@ -426,6 +443,7 @@
               "limit": 41075184
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 1544.6307259999999,
           "gcMs": 1367.8122190000004,
           "writes": 626,
@@ -466,6 +484,7 @@
               "limit": 41075184
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 1547.606319,
           "gcMs": 1335.0760160000004,
           "writes": 626,
@@ -506,10 +525,587 @@
               "limit": 207506208
             }
           },
+          "expectedIndexBuildingNotifications": 0,
           "buildMs": 18390.347184,
           "gcMs": 17429.562222,
           "writes": 6252,
           "processMaxRssKiB": 228604
+        }
+      ]
+    },
+    {
+      "cohort": "search-off",
+      "job": 125534548421,
+      "jobConclusion": "success",
+      "matrixPassed": true,
+      "sourceHashesVerified": 138,
+      "currentSourceHashesMatching": 137,
+      "documentationOnlyChanges": [
+        "packages/apack-ears/bench/sqlite/README.md"
+      ],
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "imageId": "sha256:bf819f79e18a9433aed2cb9d5c83634fa251f968e93f26a0a6c7ac058c028d9f",
+      "originalJobMetadataSha256": "62f0578e10480aa4fe2af27e8f33b3ae705a9fd4a58c4eec4c0b9d073314ec95",
+      "trials": [
+        {
+          "size": 10000,
+          "trial": 1,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 4.869804999999815,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.3122240000002421,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.5226970000003348,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 2.2150220000003173,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 3.626310000000103,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 8.25770700000021,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 4293072,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 19468752,
+              "limit": 41264032
+            }
+          },
+          "expectedIndexBuildingNotifications": 747,
+          "buildMs": 4817.663975,
+          "gcMs": 3715.986301,
+          "writes": 2191,
+          "processMaxRssKiB": 177732
+        },
+        {
+          "size": 100000,
+          "trial": 1,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.1624530000008235,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.2641939999994065,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.411509000001388,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 2.8706269999966025,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 3.893579999999929,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 10.51798300000155,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 5265392,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 157530096,
+              "limit": 208907616
+            }
+          },
+          "expectedIndexBuildingNotifications": 8855,
+          "buildMs": 58057.423829,
+          "gcMs": 52499.585244999995,
+          "writes": 21887,
+          "processMaxRssKiB": 250148
+        },
+        {
+          "size": 100000,
+          "trial": 2,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.158233000000109,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.26340300000083516,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.4193039999991015,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 2.90008300000045,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 3.9903160000030766,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 10.847746000006737,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 5265392,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 157530096,
+              "limit": 208907616
+            }
+          },
+          "expectedIndexBuildingNotifications": 8871,
+          "buildMs": 58128.046395000005,
+          "gcMs": 52174.50021499999,
+          "writes": 21887,
+          "processMaxRssKiB": 247172
+        },
+        {
+          "size": 10000,
+          "trial": 2,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 4.771792000000005,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.31962799999996605,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.4676669999998921,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 1.8705519999998614,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 4.678746000001411,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 8.098765000000185,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 4433152,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 19608832,
+              "limit": 41264032
+            }
+          },
+          "expectedIndexBuildingNotifications": 736,
+          "buildMs": 4795.62008,
+          "gcMs": 3805.032461,
+          "writes": 2191,
+          "processMaxRssKiB": 165524
+        },
+        {
+          "size": 10000,
+          "trial": 3,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 4.809287999999924,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.29247899999973015,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.4688999999998487,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 2.201380999998946,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 3.333828999999696,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 8.420114999999896,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 4433152,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 19608832,
+              "limit": 41264032
+            }
+          },
+          "expectedIndexBuildingNotifications": 726,
+          "buildMs": 4744.918035000001,
+          "gcMs": 3745.476656,
+          "writes": 2191,
+          "processMaxRssKiB": 181004
+        },
+        {
+          "size": 100000,
+          "trial": 3,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.273000000001048,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.27664800000275136,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.4610549999997602,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 3.104940000004717,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 4.861989000000904,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 11.654504000000088,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 5405472,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 157670176,
+              "limit": 208907616
+            }
+          },
+          "expectedIndexBuildingNotifications": 9108,
+          "buildMs": 60076.476789,
+          "gcMs": 52592.22356,
+          "writes": 21887,
+          "processMaxRssKiB": 249940
+        }
+      ]
+    },
+    {
+      "cohort": "search-full",
+      "job": 125534548507,
+      "jobConclusion": "success",
+      "matrixPassed": true,
+      "sourceHashesVerified": 138,
+      "currentSourceHashesMatching": 137,
+      "documentationOnlyChanges": [
+        "packages/apack-ears/bench/sqlite/README.md"
+      ],
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "imageId": "sha256:aa2e32819c86eae1564594997e9bc6b3cd987bddb3bf6fb5cdead5ad8cc3977f",
+      "originalJobMetadataSha256": "e0bd48cda3640c186f4612e828ff4716088fbb73d8afdd20096c9947f50935c3",
+      "trials": [
+        {
+          "size": 10000,
+          "trial": 1,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.33634099999972,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.3025560000000951,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 2.0168460000004416,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 2.3140919999996186,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 4.015417999999954,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 9.865399999999681,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 4437272,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 19612952,
+              "limit": 41264032
+            }
+          },
+          "expectedIndexBuildingNotifications": 859,
+          "buildMs": 5531.222729,
+          "gcMs": 4854.654845999999,
+          "writes": 2191,
+          "processMaxRssKiB": 171456
+        },
+        {
+          "size": 100000,
+          "trial": 1,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.615370999999868,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.26235100000121747,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.8750209999998333,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 2.449956000000384,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 4.239387000001443,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 11.698699000000488,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 5463152,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 157727856,
+              "limit": 208907616
+            }
+          },
+          "expectedIndexBuildingNotifications": 9651,
+          "buildMs": 63388.50827300001,
+          "gcMs": 62328.117319,
+          "writes": 21888,
+          "processMaxRssKiB": 251376
+        },
+        {
+          "size": 100000,
+          "trial": 2,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.472324000000299,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.26165000000037253,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.9312449999997625,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 2.6378879999974743,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 4.291643000004115,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 11.984223999999813,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 5347792,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 157612496,
+              "limit": 208907616
+            }
+          },
+          "expectedIndexBuildingNotifications": 9765,
+          "buildMs": 64107.179494,
+          "gcMs": 62679.83444599999,
+          "writes": 21888,
+          "processMaxRssKiB": 249624
+        },
+        {
+          "size": 10000,
+          "trial": 2,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.358930999999984,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.30014200000005076,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.8744579999997768,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 1.9924089999999524,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 3.8939989999998943,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 10.048170999999911,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 4441392,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 19617072,
+              "limit": 41264032
+            }
+          },
+          "expectedIndexBuildingNotifications": 843,
+          "buildMs": 5504.054206,
+          "gcMs": 4739.770826999999,
+          "writes": 2191,
+          "processMaxRssKiB": 164676
+        },
+        {
+          "size": 10000,
+          "trial": 3,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.487711999999874,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.31142300000010437,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 2.099199999999655,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 1.9251030000000355,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 3.8189210000000458,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 9.74124699999993,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 4293072,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 19468752,
+              "limit": 41264032
+            }
+          },
+          "expectedIndexBuildingNotifications": 843,
+          "buildMs": 5484.53023,
+          "gcMs": 4720.207298,
+          "writes": 2191,
+          "processMaxRssKiB": 175464
+        },
+        {
+          "size": 100000,
+          "trial": 3,
+          "passed": true,
+          "failedBudgets": [],
+          "budgets": {
+            "admissionMs": {
+              "actual": 5.897148000000016,
+              "limit": 100
+            },
+            "searchLookupP99Ms": {
+              "actual": 0.2635730000001786,
+              "limit": 16
+            },
+            "operationP99Ms": {
+              "actual": 1.8991640000022016,
+              "limit": 16
+            },
+            "lookupP99Ms": {
+              "actual": 2.6034319999962463,
+              "limit": 16
+            },
+            "turnWaitP99Ms": {
+              "actual": 4.405925999999454,
+              "limit": 16
+            },
+            "heartbeatDelayP99Ms": {
+              "actual": 11.872337999997399,
+              "limit": 16
+            },
+            "maxObservedWalBytes": {
+              "actual": 5265392,
+              "limit": 16777216
+            },
+            "maxObservedFilesBytes": {
+              "actual": 157530096,
+              "limit": 208907616
+            }
+          },
+          "expectedIndexBuildingNotifications": 9704,
+          "buildMs": 63639.447697,
+          "gcMs": 61864.477396999995,
+          "writes": 21887,
+          "processMaxRssKiB": 248932
         }
       ]
     }

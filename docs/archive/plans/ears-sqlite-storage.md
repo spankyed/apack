@@ -1,7 +1,10 @@
 # SQLite storage design for EARS
 
-Status: authoritative layout integrated through the candidate EARS facade; performance qualification pending, 2026-10-28. Execution and acceptance belong to
-[the SQLite goal](../goals/goal-ears-sqlite.md); [the contract matrix](ears-sqlite-contracts.md) defines required semantics.
+Status: completed candidate design/history, 2026-11-02. Current implemented behavior belongs to the
+[SQLite reference](../../references/ears-sqlite-candidate.md); the [final evaluation](../../references/ears-sqlite-evaluation-report.md)
+records completed qualification and recommends retaining elmdb. The [goal](../goals/goal-ears-sqlite.md)
+records delivery; [contracts](ears-sqlite-contracts.md) retain detailed invariants and dated checkpoints.
+Historical pending/next-work statements below are checkpoint history, not current instructions.
 
 ## Direction
 
@@ -64,7 +67,7 @@ Shared native/SQLite tests pin omitted undefined object properties and refused u
 is per changed value, preserving the structured transport. Undeclared primary types remain readable/filterable through
 all-entity or ID starts. The backend/query/search implementation is source-owned under `src/sqlite/`, with an app-only `./sqlite` entry
 and pinned workspace dependencies. Measured backend-specific explain and discriminated operation/read/result
-types are implemented. The [actual-facade comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/facade-slice.md)
+types are implemented. The [actual-facade comparison](../../references/evidence/ears-sqlite-implementation-2026-10-28/facade-slice.md)
 exposed expensive large-value key traversal in the overflow WITHOUT ROWID table. Only that table now uses rowids
 plus a unique logical key; the identical repeat cuts its projected large-row page from ~14.3 ms to ~0.27 ms.
 Sorting/vector regressions, app budgets and more precise native/allocator attribution remain open.
@@ -121,7 +124,7 @@ The original timer metric measures a setImmediate turn between foreground operat
 operation itself. Add an independent periodic heartbeat and report its delay before claiming total event-loop
 responsiveness. Keep the original operation, turn-wait and resource targets; periodic-heartbeat p99 must also be
 below 16 ms in the same fixtures. This requirement is set before its first maintained-harness measurements.
-[Controlled diagnosis](../references/evidence/ears-sqlite-implementation-2026-10-28/durable-admission-diagnosis/README.md)
+[Controlled diagnosis](../../references/evidence/ears-sqlite-implementation-2026-10-28/durable-admission-diagnosis/README.md)
 shows that synchronous durable COMMIT alone can exceed the operation target on the current host, including
 without background work. Both native and SQLite controls miss it here. Separate environment/IO limits from
 builder processing and qualify the remedy without weakening durable acknowledgments.
@@ -249,9 +252,9 @@ Single-pack activation and reload instead include that pack's entity types, its 
 (including admitted declarations without a running runtime), and common SDK/host types. Unrelated retained
 failures remain visible to global waits without blocking the scoped admission. The database snapshots scoped
 generation identities and rejects `CANCELLED` when they retire or change while waiting, rather than silently
-accepting a replacement. The registry also snapshots relevant accepted runtime bindings/dependency declarations and checks them again after awaiting, because a replacement can add types outside an earlier scope. This check ignores unrelated owners and structurally equal catalog clones; dependency discovery is iterative with indexed owner lookup. All five owner-race cases pass [focused 3bc](../references/evidence/ears-sqlite-implementation-2026-10-28/owner-3bc/README.md), with 97 host passes and full host/EARS types. Closed/stale/open-unit/fatal-owner refusals still apply, including empty scopes.
+accepting a replacement. The registry also snapshots relevant accepted runtime bindings/dependency declarations and checks them again after awaiting, because a replacement can add types outside an earlier scope. This check ignores unrelated owners and structurally equal catalog clones; dependency discovery is iterative with indexed owner lookup. All five owner-race cases pass [focused 3bc](../../references/evidence/ears-sqlite-implementation-2026-10-28/owner-3bc/README.md), with 97 host passes and full host/EARS types. Closed/stale/open-unit/fatal-owner refusals still apply, including empty scopes.
 Real-store unrelated-failure and generation-replacement regressions plus registry ownership and actual lifecycle
-forwarding checks pass [focused 644](../references/evidence/ears-sqlite-implementation-2026-10-28/readiness-644/README.md). The additional host fixture uses normal SQLite store composition and installed-pack activation, with a valid persisted failed derived generation and bridged onInit primary read; it still requires global readiness to refuse. The integrated fixture now passes [real-host d9c](../references/evidence/ears-sqlite-implementation-2026-10-28/real-host-d9c/README.md), including full host types; the [Linux 163 mutation control](../references/evidence/ears-sqlite-implementation-2026-10-28/readiness-163-linux/README.md) proves the original EARS isolation regression fails with the old global wait. The owner-race correction is now focused-qualified at 3bc; the installed-pack mutation control and full latest-source platform/app coverage still require their own routes. Passing these controls alone does not close full final-source/app acceptance.
+forwarding checks pass [focused 644](../../references/evidence/ears-sqlite-implementation-2026-10-28/readiness-644/README.md). The additional host fixture uses normal SQLite store composition and installed-pack activation, with a valid persisted failed derived generation and bridged onInit primary read; it still requires global readiness to refuse. The integrated fixture now passes [real-host d9c](../../references/evidence/ears-sqlite-implementation-2026-10-28/real-host-d9c/README.md), including full host types; the [Linux 163 mutation control](../../references/evidence/ears-sqlite-implementation-2026-10-28/readiness-163-linux/README.md) proves the original EARS isolation regression fails with the old global wait. The owner-race correction is now focused-qualified at 3bc; the installed-pack mutation control and full latest-source platform/app coverage still require their own routes. Passing these controls alone does not close full final-source/app acceptance.
 
 Canonical cosine scoring uses the already loaded, application-owned vec1 kernel when that connection has one, and sqlite-vec otherwise. Both consume the same canonical/safe derived direction and the same normalized query; primary bytes, membership filters, owner aggregation, ANN budgets and tie-breaking policy stay unchanged. This deliberately permits existing Float32 kernel rounding differences, rather than requiring bitwise score identity across kernels. Independent Float64 compatibility at 1–1536 dimensions, magnitude extremes and odd lengths is required through public fallback/native reads; supported-platform and real-corpus recall/responsiveness gates still apply. The initial matched synthetic scan diagnostic is an optimization lead, not a full-query performance claim.
 
@@ -303,7 +306,7 @@ name-update costs, failures and mixed results. They compare SQLite revisions rat
 matched elmdb performance qualification. Query-derived typo alternatives now replace the vocabulary scan;
 the bounded-typo checkpoint below records behavior and its remaining resource/usefulness qualification.
 This does not replace the failed 100k admission qualification or any phase 4–7 requirement. See the
-[corpus evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md).
+[corpus evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/search-relevance/README.md).
 
 ### Bounded typo checkpoint: candidate behavior
 
@@ -336,18 +339,18 @@ scripts, explicit opt-out, quoted/prefix behavior and field/boolean/candidate re
 The threads panel sets `prefix:true`; the candidate now preserves its literal completion branch and
 allows the same bounded **whole-word** typo alternatives alongside it, with default/explicit fuzzy:true.
 It never applies prefix wildcards to alternatives, expands quoted phrases, enumerates vocabulary or
-overrides fuzzy:false. [Four useful-result judgments](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-typo-preregistration/README.md)
-were preregistered before implementation. [Post-rebase validation](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-rebase-validation/README.md)
+overrides fuzzy:false. [Four useful-result judgments](../../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-typo-preregistration/README.md)
+were preregistered before implementation. [Post-rebase validation](../../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-rebase-validation/README.md)
 records native36/36, pre-fix SQLite34/36 with exactly the two intended failures, and all153 assertions in
 seven affected search files passing after the change. Types, lint and all five package builds pass.
 The full local run still has seven original-deadline timeouts. Its75 native skips from a private harness
-omission are covered by a [corrected focused run](../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-followup/README.md):75pass/0skip.
+omission are covered by a [corrected focused run](../../references/evidence/ears-sqlite-implementation-2026-10-28/prefix-followup/README.md):75pass/0skip.
 All14 cost paths pass answer checks at1k/10k/100k. At100k, prefix typo warm p50 is3.719ms and the
 32-character typo11.193ms. Broad common-word queries still reach197ms warm and the full diagnostic
 sequence reaches329ms heartbeat delay. These observations do not claim a speedup, pass the16ms
 responsiveness criterion or complete app/search/goal acceptance.
 
-The [bounded typo proof](../references/evidence/ears-sqlite-implementation-2026-10-28/bounded-typos/README.md)
+The [bounded typo proof](../../references/evidence/ears-sqlite-implementation-2026-10-28/bounded-typos/README.md)
 passes 18 new cases, the unchanged shared corpus, actual native MATCH/growth checks, both removal controls,
 509 SQLite / 289 native cases and affected recovery/build/types/API/lint checks in disposable Linux.
 Before claiming a speedup,
@@ -355,9 +358,9 @@ preregister a fixed-order growth cohort with default fuzzy enabled, useful-answe
 large/absent/exact/typo inputs and memory/bytes costs. Functional passage alone does not accept latency or
 replace the realistic search, vector and complete-app criteria in the goal.
 
-The first [default-fuzzy growth cohort](../references/evidence/ears-sqlite-implementation-2026-10-28/typo-cost/README.md)
+The first [default-fuzzy growth cohort](../../references/evidence/ears-sqlite-implementation-2026-10-28/typo-cost/README.md)
 completed but rejects unpruned alternatives: broad 100k reads regress from about 300 to 1320 ms, despite
-selective improvements. The [native counterfactual](../references/evidence/ears-sqlite-implementation-2026-10-28/typo-native-plan/README.md)
+selective improvements. The [native counterfactual](../../references/evidence/ears-sqlite-implementation-2026-10-28/typo-native-plan/README.md)
 preserves exact native rows/scores after removing alternatives with no posting, isolating redundant MATCH
 branches as a major cost. The correction probes only query-generated alternatives through native MATCH
 EXISTS over body/aliases before building the scored expression. It uses the request's read snapshot,
@@ -374,7 +377,7 @@ time in the normal facade timings. Keep all original failed-strategy results and
 the expected answers and actual loaded JS/native hashes, and stop on the first failure. Do not qualify
 real-app/cold-store/language/memory budgets from this diagnostic alone.
 
-The [six-process cohort](../references/evidence/ears-sqlite-implementation-2026-10-28/presence-cost/README.md)
+The [six-process cohort](../../references/evidence/ears-sqlite-implementation-2026-10-28/presence-cost/README.md)
 completed on a2de2944a1 with all sizes/answers: 100k selective medians ~3–3.5 ms, broad ~164–166 ms;
 the original scan is ~138–144 / ~294–299 ms. Small profiles and maximum-length tokens still regress
 against the scan, and broad latency remains high. Preserve every result; architecture bounding and this
@@ -489,11 +492,11 @@ reranked with stable entity-sequence ties. Too few native owners retain the ordi
 Small scopes (at most 4096 eligible chunks), K above 64, dimensions below 128 and dimensions not divisible by eight remain exact. Native training additionally stops at 4096 dimensions; wider aligned dimensions can use the ordinary BQ fallback.
 The native page cap does not bound canonical reranking work: one selected owner may have many chunks.
 Phase-4/7 resource qualification must cover that skew as well as one-chunk-per-owner corpora.
-[The current managed corpus](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b99/README.md)
+[The current managed corpus](../../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b99/README.md)
 passes mean recall at 10/40/64 against independent Float64 truth in each scope/family, but still misses eight
 heartbeat groups. This is neither complete fallback/model-state qualification nor product adoption.
 
-The [lifecycle evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-generation-admission/README.md)
+The [lifecycle evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-generation-admission/README.md)
 covers actual EARS mutation/rollback, bounded admission, a read-only compacted backup
 and negative controls on original upstream vec1. It does not select a native fork or
 establish automatic admission, performance, normal packaging or platform qualification.
@@ -502,7 +505,7 @@ vector generation again after completion. Its samples/input budget and returned 
 bounded; total native memory and timing still require measurement. The owner supplies trusted
 paths, serializes workers and awaits actual exit on cancellation. Close signals cancellation,
 but host storage must explicitly drain before replacement/deletion; native C need not stop
-immediately. The [worker evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-training-worker/README.md)
+immediately. The [worker evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-training-worker/README.md)
 retains a real stale-snapshot failure, its fix, negative controls and exact native hashes.
 
 Projection backfill first pages IDs using `chunk_native_admission`, then loads only that page's
@@ -513,7 +516,7 @@ but an indivisible row, query/GC and COMMIT can exceed the cooperative target. M
 The shared scheduler now persists attempt/model states, claims attempts before worker launch,
 acknowledges responses only after result COMMIT, resumes committed work after reopen and
 joins native readiness/watch notification and bounded retirement. Explicit restart recovery
-requires the managed exclusive writer. [Scheduler evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-scheduler/README.md)
+requires the managed exclusive writer. [Scheduler evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-model-scheduler/README.md)
 retains rollback, stale-attempt and acknowledgement mutation controls.
 Attached model owners now perform automatic **initial** eligibility admission. Shared routing limits keep
 scopes of at most 4,096 chunks exact; admission requires more live chunks and at least 256 live owners,
@@ -525,21 +528,21 @@ An active finite-range metadata scan is not reset by intervening relevant writes
 128 references before joining live-owner metadata, stores at most 256 owners, and accepts its progress/enqueue
 only after COMMIT. No vector payload is hydrated. Failed logical generations and unsupported dimensions
 are skipped. Persisted failed training still requires explicit retry.
-[Automatic admission evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/automatic-model-admission/README.md)
+[Automatic admission evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/automatic-model-admission/README.md)
 covers 633 EARS cases, all fourteen model cases, five mutation controls and real 1k/100k owner-driven admission
 without explicit benchmark enqueue. The 100k heartbeat p99 still misses 16 ms; neither concurrent training
 WAL/write behavior nor complete query/relevance acceptance follows from this probe.
 App-only `openDatabase` now accepts an owner-supplied absolute `nativeVectorExtension` and loads it
 before connection writes. Ready native candidate selection is shared with separately opened read-only and
 writable handles, without automatically creating a trainer. Private export/audit/replacement-source copies
-inherit the owner's loader, never a path from stored data. [Connection evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-connections/README.md)
+inherit the owner's loader, never a path from stored data. [Connection evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-connections/README.md)
 retains 637 passing SQLite cases, generated API/package checks and two negative controls. This is the
 connection contract; ordinary unsigned package resolution is now implemented below; installed/signing qualification remains required.
 Graceful API SIGTERM now uses host `closeDatabases`: per-handle write exclusion remains held until
 optional terminal drain and close complete. Other stores still settle if one fails; repeated signals and
 shutdown hooks are idempotent. SQLite's terminal drain rejects new writes until close/reopen. This does
 not implement live replacement suspension/resume or offline publication; those require separate ownership.
-[Shutdown qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/shutdown-ownership/README.md)
+[Shutdown qualification](../../references/evidence/ears-sqlite-implementation-2026-10-28/shutdown-ownership/README.md)
 retains real worker-drain tests and host/API controls, without claiming installed-process acceptance.
 Ordinary EARS package production now builds vec1 offline from the vendored pinned C source, retaining the
 existing membership patch and native parameters. Only the target library, stable provenance and upstream
@@ -560,7 +563,7 @@ store before loading packs. It recovers abandoned attempts only after claiming o
 stores if either startup refuses. Forensic readers and offline constructors do not start services.
 Logical `indexesReady()` remains usable while optional native work is pending or failed; explicit
 `waitForNativeModels()` includes model completion. Graceful shutdown joins the service's actual worker exit.
-[Exact platform qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/model-readiness-activation/platform-41034695900/README.md)
+[Exact platform qualification](../../references/evidence/ears-sqlite-implementation-2026-10-28/model-readiness-activation/platform-41034695900/README.md)
 passes Linux/macOS/Windows on committed master `5e81dda7c2` and native `95615ed8d4`. This does not
 certify signed installed apps, live replacement suspension or the final performance budgets.
 
@@ -580,7 +583,7 @@ An older read snapshot remains valid across another connection's publication and
 private projection resumes after reopen while the incumbent remains current. This changes pre-release
 format-one derived metadata in place: recreate developer SQLite profiles rather than adding a compatibility
 migration; production remains elmdb.
-[Physical refresh evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/physical-model-refresh/README.md)
+[Physical refresh evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/physical-model-refresh/README.md)
 records the five focused cases, three reverted-code controls and current-pin integrated Linux qualification.
 Physical refresh passes all three platforms and full strict at `95515e6463`; installed qualification remains required.
 
@@ -591,11 +594,11 @@ installed loading/signing remain required; explicit native group repair is descr
 No raw constructor or model-service claim grants physical replacement/deletion authority.
 Ordinary empty-store creation now prepares the native cursor index before primary/stage ingestion,
 with transactional failure/retry and populated staging/reopen coverage. Populated stores missing it
-still require explicit offline preparation. [Cursor preparation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-cursor-preparation/README.md)
+still require explicit offline preparation. [Cursor preparation evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-cursor-preparation/README.md)
 retains 635 SQLite cases and the reverted-code control; it does not qualify the newer native pin. The new platform gate requires the native
 lifecycle cases; neither it nor these local cases establish performance or final adoption.
 Keep the complete goal and frozen fresh validation gates.
-The [fresh integrated matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/fresh-native-ears/README.md)
+The [fresh integrated matrix](../../references/evidence/ears-sqlite-implementation-2026-10-28/fresh-native-ears/README.md)
 now completes all eighteen cohorts with mean recall >=0.972, but fails responsiveness
 and 10k broad latency. Native filtered SQL dominates large scopes; count/rerank plans
 also cost measurable time. Admission profiling identifies COMMIT as the dominant tail,
@@ -605,9 +608,9 @@ durability. Frozen parameters, original failures and remaining app/resource gate
 Owner-only native projection now omits unused vector payload/distance calculation, without
 material sampled speedup. A bounded materialized eligibility page shares count and exact
 scoring for small sets, with a scalar witness against duplicate scope evaluation. Source
-`25668da288` passes 625 EARS/135 host cases; [diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/vector-projection-scope/README.md)
+`25668da288` passes 625 EARS/135 host cases; [diagnostics](../../references/evidence/ears-sqlite-implementation-2026-10-28/vector-projection-scope/README.md)
 show a small exact-query improvement but no overall acceptance and worse broad samples.
-[Checkpoint and batching evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/admission-commit-batching/README.md)
+[Checkpoint and batching evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/admission-commit-batching/README.md)
 now separates automatic-checkpoint deferral from the same FULL admission workload. Deferral alone still
 misses heartbeat and grows WAL to about 2.16 GB before a 4.56 s final checkpoint, so it is not selected.
 Time-sliced projection reduces sampled FULL commit counts from 3,126 to 1,075–1,185 and admission from
@@ -683,7 +686,7 @@ The current CLI help, storage descriptors and public `/sqlite` entry are the imp
 | Derived audit and recovery | Candidate `apack db audit` and `rebuild --force`, backed by `/sqlite` maintenance exports | The native binding/CLI keeps its own check/rebuild operations. Host capabilities refuse when absent; no fake native implementation is exposed by the SQLite factory. |
 | Raw LMDB pages, map/reader-table inspection and native CLI switches | No compatibility layer | These are engine internals outside EARS. Use backend-specific tooling on a verified copy; independent SQLite tooling uses a separate process and the documented locking/filesystem assumptions. Direct SQL writes bypass EARS identity, schema, projection and watch ownership and are not a supported repair API. |
 
-The [current Linux contract inventory](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/linux/contract-inventory.json)
+The [current Linux contract inventory](../../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/linux/contract-inventory.json)
 source-hashes the actual 41 CLI maintenance cases plus EARS/host fixtures. These include logical
 archives, derived rebuild and isolated-profile selection. Physical backup/media recovery and
 copied-profile interoperability have their own source-pinned receipts in the active contract report;
@@ -838,7 +841,7 @@ native namespace refuse rather than guessing ownership. Unreadable primary/catal
 from a retained copy or logical export/staging into a new private profile; this repair is not a general file
 salvager. The existing logical archive operations retain canonical bytes independently of derived models.
 
-[Native derived repair evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/native-derived-repair/README.md)
+[Native derived repair evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-derived-repair/README.md)
 records the exact overlay, fault cases and four negative controls. Final all-platform, physical-publication,
 installed/signing and unchanged performance gates remain required. Full strict at the preceding live-maintenance
 checkpoint also has an unresolved bundled-editor app assertion; native platform success does not close it.
@@ -855,8 +858,8 @@ The `installed` app-acceptance suite builds an ordinary unsigned Preview, runs t
 and launches its actual executable against an isolated SQLite profile. An app-integration witness requires
 both managed stores to contain SQLite files and retain their native model claims across the real API process.
 The report guard refuses a missing or skipped witness. This complements source-based authoring tests;
-it does not certify signing or all required architectures. [Component evidence and limits](../references/evidence/ears-sqlite-implementation-2026-10-28/native-electron-runtime/README.md)
-retain runtime hashes, fixture corrections and negative controls. [Actual packaged Windows/Linux module probes](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-platform-dcbb/README.md) pass at their recorded source; they do not launch the renderer or certify an installer. Current-source installed execution remains required.
+it does not certify signing or all required architectures. [Component evidence and limits](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-electron-runtime/README.md)
+retain runtime hashes, fixture corrections and negative controls. [Actual packaged Windows/Linux module probes](../../references/evidence/ears-sqlite-implementation-2026-10-28/installed-platform-dcbb/README.md) pass at their recorded source; they do not launch the renderer or certify an installer. Current-source installed execution remains required.
 
 
 ### macOS signing and final native hashes
@@ -868,8 +871,8 @@ changed manifests, escaping paths and unsupported universal layouts. Signing nev
 
 The `installed-signed` app acceptance suite exercises the same hook using the existing CI Developer ID
 certificate on a disposable Preview, verifies strict bundle integrity, then runs the full native smoke and
-SQLite app lifecycle. No release or notarization occurs. [Ordering/fault evidence and cold-build fix](../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
-record the 12 isolated tests and three safeguard controls. [Actual signed macOS installed execution](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-49d/README.md) passes at 49d, with six app cases and native smoke before/after signing. This predates the current runtime, so exact-current signing/distribution qualification remains required.
+SQLite app lifecycle. No release or notarization occurs. [Ordering/fault evidence and cold-build fix](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-mac-signing/README.md)
+record the 12 isolated tests and three safeguard controls. [Actual signed macOS installed execution](../../references/evidence/ears-sqlite-implementation-2026-10-28/installed-49d/README.md) passes at 49d, with six app cases and native smoke before/after signing. This predates the current runtime, so exact-current signing/distribution qualification remains required.
 Preview and production now let the ordinary pack build generate entries after preparing SDK dependencies.
 
 
@@ -889,7 +892,7 @@ inspection/recovery rather than automatic replacement. I/O, permission, full-dis
 also refuse without moving the history. Ordinary background owners continue to drain
 through `closeDatabases` before close or filesystem changes.
 
-[Managed publication evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/managed-publication/README.md)
+[Managed publication evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/managed-publication/README.md)
 retains both-format tests, live-writer process death, stale-publication and close-fault proofs, exact input hashes
 and seven reverted-safeguard controls. The current named inventory requires 29 publication and 19 identity witnesses on every platform; extra passing cases
 cannot mask missing, skipped or duplicated required witnesses. Local functional evidence does not certify final
@@ -966,7 +969,7 @@ database files. Package production performs locked builds with Rust1.99.1/wasm-b
 intermediates, path remapping and third-party license texts. No compiler/download runs at database open,
 and stored metadata never selects executable code. Missing or changed artifacts refuse explicitly.
 
-[Portable-core evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/graph-wasm-4ed/README.md)
+[Portable-core evidence](../../references/evidence/ears-sqlite-implementation-2026-10-28/graph-wasm-4ed/README.md)
 records Node native-quality parity and 106 focused passing EARS cases, including independent memories and
 negative integrity checks. This does not qualify the new production build, installed runtimes, realistic
 graph resource costs or all remaining original acceptance gates. The original strict checkpoint is green
@@ -983,7 +986,7 @@ immutable: they may have a concurrent writer. A cleanly closed WAL-mode file can
 or switch a live database's mode to bypass that refusal. Publish a database backup before placing an image
 on read-only media; the existing `VACUUM INTO` backup uses rollback journaling and needs no WAL sidecars.
 
-The [Linux mount observation](../references/evidence/ears-sqlite-implementation-2026-10-28/readonly-mount-aea/README.md)
+The [Linux mount observation](../../references/evidence/ears-sqlite-implementation-2026-10-28/readonly-mount-aea/README.md)
 verifies successful published-backup queries and logical write refusal under kernel `EROFS`, the closed-WAL
 refusal, and unchanged file hashes/inventories. Managed host opens still require writable directory-lifetime
 claim metadata, including read-only inspection. This is not support for a read-only app profile, qualification
@@ -1010,7 +1013,7 @@ operational qualification are still required by the goal.
 
 ### Background responsiveness: transaction-level attribution
 
-The [current-source admission diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-responsiveness/README.md)
+The [current-source admission diagnostic](../../references/evidence/ears-sqlite-implementation-2026-10-28/commit-responsiveness/README.md)
 still fails: 99,900 vectors take 18.15 seconds and heartbeat p99 is 31.05 ms against 16 ms. Native projection
 itself stays near its four-millisecond slice, but 1,088 COMMITs consume 11.32 seconds wall time and about
 4.23 seconds of main-thread CPU, without cgroup throttling or substantial run-queue delay. Upstream vec1's
@@ -1018,7 +1021,7 @@ xSync flushes buffered native writers during COMMIT, outside the current project
 retains Float32 inputs; database growth during admission is approximately 844 MB. These are attribution
 results, not a speedup comparison or acceptance.
 
-The [fixed-model allocation diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/fixed-model-allocation/README.md)
+The [fixed-model allocation diagnostic](../../references/evidence/ears-sqlite-implementation-2026-10-28/fixed-model-allocation/README.md)
 compares upstream 16-KiB and 4-KiB `blocksize-min` with unchanged FULL, default checkpoints and canonical
 bytes. Both finish the complete query/update matrix with matching paired answers and minimum cohort mean
 recall 0.971, but neither establishes the responsiveness gate. The guard paused only our container when other
@@ -1026,21 +1029,21 @@ agents started work, contaminating some timing samples; single fixed-order obser
 or peak-resource qualification. The production default stays unchanged. The first harness's REAL/integer
 parameter refusal and corrected BigInt preflight are retained alongside the complete report.
 
-The [SQL attribution matrix](../references/evidence/ears-sqlite-implementation-2026-10-28/query-attribution/README.md)
+The [SQL attribution matrix](../../references/evidence/ears-sqlite-implementation-2026-10-28/query-attribution/README.md)
 now completes all 18 initial/updated cohorts with phase/query wall markers, canonical-byte verification and
 minimum mean recall 0.973. In the warmed updated 10k scope, independent stage medians are 8.87 ms eligibility,
 34.28 ms native candidates and 8.02 ms reranking; preparation averages about 0.015 ms/query. Driver execution
 and materialization remain combined, so this does not isolate decoding. The live owner still fails admission
 responsiveness; differences in model, instrumentation and storage prevent causal comparison with earlier runs.
 
-[Cheaper supported query policies](../references/evidence/ears-sqlite-implementation-2026-10-28/query-policy/README.md)
+[Cheaper supported query policies](../../references/evidence/ears-sqlite-implementation-2026-10-28/query-policy/README.md)
 fail the existing recall gate on the same immutable updated snapshot: 128/32 reaches 0.948, 256/16 reaches
 0.915 and 128/16 reaches 0.893, versus 0.974 for default 256/32. No settings or thresholds change. This
 updated-only diagnostic retains pause windows and does not replace the full acceptance matrix.
-[Upstream native counters](../references/evidence/ears-sqlite-implementation-2026-10-28/native-query-profile/README.md)
+[Upstream native counters](../../references/evidence/ears-sqlite-implementation-2026-10-28/native-query-profile/README.md)
 then identify metadata scanning as about 51–54% of filtered native timer ticks versus 0.14% unfiltered.
 About 665 metadata blocks/query each repeat RHS conversion/allocation. These timer ratios are not CPU time
-or complete EARS call attribution. The [supported larger-block comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
+or complete EARS call attribution. The [supported larger-block comparison](../../references/evidence/ears-sqlite-implementation-2026-10-28/supported-large-blocks/README.md)
 now completes 16/64/256 KiB on one fixed trained model, with 21,600 queries, verified canonical bytes,
 minimum mean recall 0.973 and exact paired answers. Metadata blocks/query decrease, but every variant still
 fails responsiveness, including the three timed query passes. Pause-overlapping samples remain in the raw
@@ -1048,7 +1051,7 @@ report; fixed ordering/caches/cumulative RSS prevent causal or isolated-resource
 The smaller next native diagnostic is to binary-search the existing query-owned integer RHS directly for
 compact metadata, avoiding per-block conversion without a bitmap, new allocations or lifetime state. Require
 ordinary-SQLite NULL/full-width/mixed semantics, baseline controls and full scoped query/update/recall/resource
-checks before adoption. The [private direct-IN prototype](../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
+checks before adoption. The [private direct-IN prototype](../../references/evidence/ears-sqlite-implementation-2026-10-28/direct-in-prototype/README.md)
 passes 735 ordinary-SQLite comparisons per library, then reproduces all 900 updated-snapshot EARS answers/
 scores exactly at minimum mean recall 0.974. Its baseline binary matches the package; that package remains
 unchanged. This diagnostic does not replace the full initial/update matrix, fresh model owner, platform/
@@ -1065,4 +1068,4 @@ The complete uninstrumented workload and original budgets remain required after 
 
 Current-master integration carries a nullable MessagePack weight BLOB alongside relation info. Absence represents the default weight 1; ordinary writes canonicalize explicit 1 to absence and -0 to 0, validate the declared weighted kind and range 0 through 2^960, and include supplied weight in relink identity. Unique relinks replace only supplied parts. Unchecked loads retain primary bytes independently of the current declaration. A temporarily unweighted kind ignores its stored weight without deleting it.
 
-Logical export, staging, restore and transactional replacement carry the weight bytes. Audit/export/restore reject invalid numerical weights. Rank validates positive seed weights, adds repeated seeds and distributes each outgoing share by its effective edge weight; an outgoing weight sum of zero is dangling. Communities pass the effective weights to the owned Leiden core, whose wrapper admits zero. SQL explain reports actual weight projections rather than invented native graph counters. Shared rollback/watch and dormant-weight logical round-trip cases pass in [focused weighted qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/weighted-focused-4ded/README.md) and the [6135 platform suites](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-613/README.md). These precede the counter guard and do not establish final-source performance, packaging or broader storage-fault acceptance.
+Logical export, staging, restore and transactional replacement carry the weight bytes. Audit/export/restore reject invalid numerical weights. Rank validates positive seed weights, adds repeated seeds and distributes each outgoing share by its effective edge weight; an outgoing weight sum of zero is dangling. Communities pass the effective weights to the owned Leiden core, whose wrapper admits zero. SQL explain reports actual weight projections rather than invented native graph counters. Shared rollback/watch and dormant-weight logical round-trip cases pass in [focused weighted qualification](../../references/evidence/ears-sqlite-implementation-2026-10-28/weighted-focused-4ded/README.md) and the [6135 platform suites](../../references/evidence/ears-sqlite-implementation-2026-10-28/platform-613/README.md). These precede the counter guard and do not establish final-source performance, packaging or broader storage-fault acceptance.

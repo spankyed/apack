@@ -1,8 +1,8 @@
 # EARS SQLite candidate
 
 This describes the implementation on `session/ears-sqlite`, draft PR [#286](https://github.com/spankyed/apack/pull/286).
-Production continues to select elmdb. The [goal](../goals/goal-ears-sqlite.md#current-handoff) owns
-qualification status; the [evaluation report](ears-sqlite-evaluation-report.md)
+Production continues to select elmdb. The [goal](../archive/goals/goal-ears-sqlite.md#current-handoff) records
+completed qualification; the [evaluation report](ears-sqlite-evaluation-report.md)
 owns the adoption recommendation. This reference does not authorize a cutover or daily-profile migration.
 
 ## Selection and ownership
@@ -20,7 +20,7 @@ in place before release; derived text revision 4 is rebuildable state, not a new
 
 Packs receive the existing typed EARS facade. App-only `@apackdev/ears/sqlite` constructs storage and
 owns native model/maintenance helpers; it does not expose the complete raw elmdb binding API. The
-[tooling disposition](../plans/ears-sqlite-storage.md#native-tooling-disposition) maps supported commands.
+[tooling disposition](../archive/plans/ears-sqlite-storage.md#native-tooling-disposition) maps supported commands.
 The host opens primary and history independently and closes partial acquisitions when boot refuses.
 
 ## Primary data, queries and observations
@@ -118,7 +118,7 @@ requirements remain in force. Resource reports distinguish whole-process/harness
 engine memory and sampled files from instantaneous disk peaks. Source/model/runner-specific timings do not
 establish a general SQLite speedup or lower maintenance cost.
 
-The [contract matrix and ownership review](../plans/ears-sqlite-contracts.md) link exact tests, native dependency
-upgrade obligations, recovery evidence, timings and original failures. The [storage design](../plans/ears-sqlite-storage.md)
+The [contract matrix and ownership review](../archive/plans/ears-sqlite-contracts.md) link exact tests, native dependency
+upgrade obligations, recovery evidence, timings and original failures. The [storage design](../archive/plans/ears-sqlite-storage.md)
 retains implementation detail and source-pinned history. An adoption decision must choose one production backend;
 this candidate does not establish a permanent obligation to maintain both.

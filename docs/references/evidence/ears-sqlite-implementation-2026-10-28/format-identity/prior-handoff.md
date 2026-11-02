@@ -1,6 +1,6 @@
 # Prior goal handoff
 
-Historical snapshot retained before the identity/signing checkpoint. The [active goal](../../../../goals/goal-ears-sqlite.md) owns current status and every remaining acceptance requirement.
+Historical snapshot retained before the identity/signing checkpoint. The [active goal](../../../../archive/goals/goal-ears-sqlite.md) owns current status and every remaining acceptance requirement.
 
 ## Current handoff
 

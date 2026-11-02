@@ -1,6 +1,6 @@
 # Historical handoff notes before scoped-probe qualification
 
-These notes consolidate earlier source-pinned checkpoints; their old “current”, “next” and “pending” statements are historical, not instructions or proof of present status. The [active goal](../../../../goals/goal-ears-sqlite.md) owns current source, live runs, closing checks and all unmet requirements. No requirement or budget is waived by moving these notes.
+These notes consolidate earlier source-pinned checkpoints; their old “current”, “next” and “pending” statements are historical, not instructions or proof of present status. The [active goal](../../../../archive/goals/goal-ears-sqlite.md) owns current source, live runs, closing checks and all unmet requirements. No requirement or budget is waived by moving these notes.
 
 
 The user resumed the full goal after the requested master rebase. All Scope, Decisions, Phases and Validation above remain required; no adoption, master merge, release or daily-profile migration is authorized. Deliverable remains [draft PR #286](https://github.com/spankyed/apack/pull/286).
