@@ -320,6 +320,12 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 
 Current validation handles and results:
 
+- [Bounded leading-text ranking and original keyword hard gate 41469187700](https://github.com/spankyed/apack/actions/runs/41469187700)
+  is active at `a9e415aad4`. This changes FTS layout/revision, scoring, audit and read-only rebuild
+  handling. Require both SQLite 25/25 keyword groups, original frozen shared cases, ordinary
+  contracts, migration/audit/truncation checks and three old-source assertion failures/restoration.
+  No passing result is inferred from the previous compound-only run.
+
 - [Compound/Unicode correction and pinned old-source control 41464298033](https://github.com/spankyed/apack/actions/runs/41464298033)
   is terminal success at `cf5d7b4800`. [Verified reports](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
   prove 93 ordinary search passes and both exact old-source failures/restoration. SQLite English
@@ -366,7 +372,7 @@ Current validation handles and results:
   probes pass actual packaged Electron/native/API execution and four preview contracts per OS.
   Source/native/provenance and original reports are retained. No local build, signing or compiler run.
 - [Corrected-source app flows and UI controls 41401869473](https://github.com/spankyed/apack/actions/runs/41401869473)
-  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier handles, including the original keyword diagnostics, are terminal; the corrected compound/Unicode qualification above is also terminal. Strict still retains the unwaived keyword failure.
+  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier handles, including the original keyword diagnostics, are terminal; the corrected compound/Unicode qualification above is also terminal; leading-text ranking is now active. Strict still retains the unwaived keyword failure.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   [Attempt 2](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) reruns only integration-1 on the same source and passes all 242 tests/31 files. All other job outcomes remain retained; root keyword failures still keep the overall workflow red.
