@@ -6,6 +6,8 @@ import { SurfaceScope, type ArtifactFrontendBinding, type BlockFrontendBinding }
 import type { ArtifactCatalogEntry, BlockCatalogEntry } from '@apackdev/sdk/framework';
 import ContentViewer from '#features/threads/fe/canvas/agent/content-viewer.vue';
 import InteractionContainer from '#features/threads/fe/chat/interactions/InteractionContainer.vue';
+import ChatMessage from '#features/threads/fe/chat/message.vue';
+import type { MessageEntity } from '#generated/types.ts';
 
 let app: App | undefined;
 afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime(); });
@@ -65,4 +67,22 @@ it('renders input props only with the current block declaration and drops a disa
   expect(f.root.querySelector('.custom-input')).toBeNull();
   app.unmount(); app = undefined;
   expect(f.catalogListeners.size).toBe(0); expect(f.bindingListeners.size).toBe(0);
+});
+
+it('keeps a message body mounted when its aside is expanded and collapsed', async () => {
+  const f = fixture();
+  const message = { id: 'Message-viewer', sender: 'assistant', text: 'Body', autoHide: true, asideText: 'Summary' } as MessageEntity;
+  app = createApp({ render: () => h(ChatMessage, { message }, {
+    default: () => h('p', { 'data-body': '' }, 'Body'),
+  }) });
+  app.mount(f.root); await nextTick();
+  const body = f.root.querySelector('[data-body]')!;
+  expect(body).not.toBeNull();
+  const bubble = body.closest<HTMLElement>('.group > .relative')!;
+  expect(bubble.style.display).toBe('none');
+  f.root.querySelector<HTMLElement>('.cursor-pointer')!.click(); await nextTick();
+  expect(bubble.style.display).toBe('');
+  f.root.querySelector<HTMLButtonElement>('[title="Collapse"]')!.click(); await nextTick();
+  expect(bubble.style.display).toBe('none');
+  expect(f.root.querySelector('[data-body]')).toBe(body);
 });

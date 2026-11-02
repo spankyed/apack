@@ -654,6 +654,14 @@ The block answers with a `ButtonGroupResponse` — `{ buttonId, state }`. Respon
 
 ### Text editor extensions
 
+Chat displays a conversation in one read-only editor. Each message is a block node named by
+`conversationMessageNodeName` from `@apackdev/ui/components/tiptap/extensions`; its `id` attribute
+identifies the message and its children are ordinary rich-text blocks. Extensions operate through
+the same Tiptap schema, plugins and Markdown/clipboard pipeline as other editors. A plugin that
+recognizes the beginning of an independently authored message should inspect these boundaries,
+while continuing to support ordinary editor documents. Message actions and attachments remain Vue
+UI outside each message's ProseMirror content DOM.
+
 `extensions.textEditor` declares named editor groups. Each group names its extensions,
 popups and optional suggestion predicate without importing executable code:
 
@@ -687,19 +695,6 @@ registration order. Each row is immutable and its binding holds captured extensi
 The returned list is detached. `onChanged(listener)` observes committed frontend changes and returns
 an unsubscribe function; reread the projection to distinguish relevant editor changes from unrelated
 pack changes. Discovery and unavailable groups remain in the catalog, separate from these bindings.
-
-Read-only chat messages use `ChatMessageViewer` without constructing an editor during rendering when every active
-editor group declares support. Set `readOnly: false` for editing-only groups, or name an exported
-`ReadOnlyTextRenderer` object with `"readOnly": "src/viewer.ts#Viewer"`. An adapter can transform
-Markdown with `transformMarkdown(source): string` and enhance the rendered root with
-`decorate(root): void | (() => void)`. The parser always disables raw HTML. Return cleanup for DOM
-listeners or subscriptions; it runs before replacement and on unmount. Adapters are checked without
-executing them. An absent declaration uses the existing editor viewer; a failing supported adapter
-shows an error instead of silently falling back. Contribution changes rebuild affected viewers.
-
-Copying selected chat text uses the existing Markdown serializer on demand, including contributed
-node serializers and the current accepted contributions' clipboard hooks; the temporary editor is
-released after the copy. No editor is retained per message.
 
 Open editors follow accepted contribution changes. Popup/predicate-only updates preserve the editor
 and undo history. Extension changes replace its executable editor after retiring the previous popups;

@@ -11,7 +11,7 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import Placeholder from '@tiptap/extension-placeholder'
 import { Markdown } from 'tiptap-markdown'
-import { lowlight } from './internal/code-highlighting.ts'
+import { common, createLowlight } from 'lowlight'
 import { CodeBlockCopy } from './extensions/code-block-copy.ts'
 import Color from '@tiptap/extension-color'
 import Highlight from '@tiptap/extension-highlight'
@@ -29,6 +29,7 @@ import { CustomHorizontalRule } from './extensions/custom-horizontal-rule.ts'
 import { SearchAndFind } from './extensions/search.ts'
 import { CommandSuggestion } from './extensions/command-suggestion.ts'
 
+const lowlight = createLowlight(common)
 
 // Custom Code extension: don't trigger inline code when backtick is followed by a space.
 // Default regex: /(^|[^`])`([^`]+)`(?!`)$/
@@ -47,6 +48,9 @@ const CustomCode = Code.extend({
 
 export type TiptapMode = 'editor' | 'input' | 'viewer'
 export type TiptapVariant = 'full' | 'chat'
+
+/** The block boundary used by ConversationViewer for each independently authored message. */
+export const conversationMessageNodeName = 'conversationMessage'
 
 interface CreateExtensionsOptions {
   mode: TiptapMode
@@ -81,6 +85,7 @@ export function createExtensions({ mode, variant = 'full', placeholder, injected
   const extensions: AnyExtension[] = [
     StarterKit.configure({
       paragraph: false,
+      trailingNode: cfg.editable && cfg.richFormatting ? {} : false,
       codeBlock: false,
       link: false,
       blockquote: false,
@@ -94,7 +99,7 @@ export function createExtensions({ mode, variant = 'full', placeholder, injected
           { itemName: 'taskItem', wrapperNames: ['taskList'] },
         ],
       },
-      ...(!cfg.richFormatting && { heading: false, strike: false, trailingNode: false }),
+      ...(!cfg.richFormatting && { heading: false, strike: false }),
     }),
     // Blockquote is loaded unconditionally (custom input rule is `|<space>`,
     // not `>`, so it doesn't collide with `>`-typed chat input). This ensures

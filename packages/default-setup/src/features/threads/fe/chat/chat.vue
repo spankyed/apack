@@ -55,20 +55,26 @@
                   <!-- Markdown, rendered without raw HTML -->
                   <TiptapEditor class="text-neutral-300 text-sm leading-relaxed" mode="viewer" variant="chat" :model-value="currentThread.instructions" />
                 </div>
-                <ChatMessage
-                  v-for="message in visibleMessages"
-                  :key="message.id"
-                  :message="message"
-                  :is-tail="isTailMessage(message)"
-                  :is-claude-code-thread="!!currentThread?.context?.claudeCode"
-                  @open-lightbox="openLightbox"
-                  @fork="(messageId: string) => actor.send({ type: 'FORK_THREAD', messageId, threadId: currentThread?.id, threadTopic: currentThread?.topic })"
-                  @unqueue="handleUnqueue"
-                  @resend="handleResend"
-                  @revert="(messageId: string) => handleRevert(messageId)"
-                  @revert-with-files="(messageId: string) => handleRevert(messageId, true)"
-                  @toggle-compacted="handleToggleCompacted"
-                />
+                <ConversationViewer v-if="visibleMessages.length" :key="currentThread?.id" :messages="visibleMessages"
+                  @rendered="onMessagesRendered" @image-click="openLightbox">
+                  <template #default="{ id, content }">
+                    <ChatMessage
+                      v-if="messagesById.has(id)"
+                      :message="messagesById.get(id)!"
+                      :is-tail="isTailMessage(messagesById.get(id)!)"
+                      :is-claude-code-thread="!!currentThread?.context?.claudeCode"
+                      @open-lightbox="openLightbox"
+                      @fork="(messageId: string) => actor.send({ type: 'FORK_THREAD', messageId, threadId: currentThread?.id, threadTopic: currentThread?.topic })"
+                      @unqueue="handleUnqueue"
+                      @resend="handleResend"
+                      @revert="(messageId: string) => handleRevert(messageId)"
+                      @revert-with-files="(messageId: string) => handleRevert(messageId, true)"
+                      @toggle-compacted="handleToggleCompacted"
+                    >
+                      <component :is="content" />
+                    </ChatMessage>
+                  </template>
+                </ConversationViewer>
               </div>
             </div>
             <ScrollToBottomFob :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
@@ -177,6 +183,7 @@ function rotateQuote() {
 }
 
 import ChatMessage from './message.vue'
+import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ChatInput from './input.vue'
 import RecentThreads from './recent-threads.vue'
@@ -201,6 +208,7 @@ const actor: ThreadsState = useSurface();
 const isOnboarding = shell.isOnboarding;
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
+const messagesById = computed(() => new Map<string, MessageEntity>(visibleMessages.value.map(message => [message.id, message])));
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
 // The message to bring into view, while the thread shown is its own
 const focusMessageId = useSelector(actor, ({ context }) =>
@@ -560,7 +568,8 @@ function showFocusedMessage(messages: MessageEntity[]): boolean {
     actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
     return true
   }
-  if (!messages.some((m) => m.id === focused)) return true
+  const message = messages.find(m => m.id === focused)
+  if (!message || !(message as any).compacted) return true
   actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
   return false
 }
@@ -573,8 +582,11 @@ watch(focusMessageId, async (focused) => {
   showFocusedMessage(allMessages.value)
 })
 
-watch(allMessages, async (newMsgs, oldMsgs) => {
-  await nextTick()
+let renderedMessageCount = 0
+function onMessagesRendered() {
+  const newMsgs = allMessages.value
+  const previousCount = renderedMessageCount
+  renderedMessageCount = newMsgs.length
 
   // Handle scroll preservation for prepended older messages
   if (isPrependPending.value) {
@@ -596,7 +608,7 @@ watch(allMessages, async (newMsgs, oldMsgs) => {
     return
   }
 
-  const isThreadLoad = threadChanged || !oldMsgs?.length || Math.abs(newMsgs.length - oldMsgs.length) > 1
+  const isThreadLoad = threadChanged || previousCount === 0 || Math.abs(newMsgs.length - previousCount) > 1
   if (isThreadLoad || pendingScrollOnSend.value) {
     pendingScrollOnSend.value = false
     forceScrollToBottom()
@@ -606,6 +618,12 @@ watch(allMessages, async (newMsgs, oldMsgs) => {
       if (isNearBottom.value) scrollToBottom('instant')
     })
   }
+}
+
+watch(allMessages, async () => {
+  if (visibleMessages.value.length) return
+  await nextTick()
+  if (!visibleMessages.value.length) onMessagesRendered()
 })
 
 // Auto-scroll while the agent is busy and the user hasn't scrolled away.

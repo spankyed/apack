@@ -5,10 +5,6 @@
 ```ts
 
 import { Node as Node_2 } from '@tiptap/core';
-import type { ReadOnlyTextRenderer } from '@apackdev/sdk/fe';
-
-// @public
-export const ReadOnlyReferences: ReadOnlyTextRenderer;
 
 // @public (undocumented)
 export const ReferenceNode: Node_2<any, any>;

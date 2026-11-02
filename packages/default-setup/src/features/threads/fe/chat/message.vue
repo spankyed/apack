@@ -20,7 +20,7 @@
       <div class="flex-1 h-px bg-neutral-700/50"></div>
     </div>
 
-    <div v-else class="group max-w-full min-w-0">
+    <div v-show="!isMarker" class="group max-w-full min-w-0">
       <!-- Aside: collapsed interactive message (click to expand) -->
       <div v-if="message.autoHide && message.asideText && !expanded"
            class="text-xs italic py-1 px-2 cursor-pointer hover:bg-neutral-800/50 rounded transition-colors"
@@ -35,8 +35,7 @@
       </div>
 
       <!-- Normal message rendering -->
-      <template v-else-if="!message.autoHide || !message.asideText || expanded">
-      <div class="relative">
+      <div v-show="!isSystem && (!message.autoHide || !message.asideText || expanded)" class="relative">
       <!-- Floating hover UI -->
       <div
         class="absolute transition-opacity duration-200 opacity-0 pointer-events-none -bottom-3 -right-4 z-10 group-hover:opacity-100 group-hover:pointer-events-auto"
@@ -163,7 +162,7 @@
 
         <!-- Message content -->
         <div class="leading-relaxed text-[15px]">
-          <ChatMessageViewer :model-value="message.text" />
+          <slot />
         </div>
 
         <!-- Other block types (approval, choice, etc.) render BELOW text -->
@@ -194,7 +193,6 @@
         </div>
       </div>
       </div>
-      </template>
 
       <!-- Status indicator (queued / cancelled) -->
       <div v-if="statusIndicator" :class="['flex items-center justify-end gap-1.5 mt-1 px-1 text-xs', statusIndicator.textClass]">
@@ -220,7 +218,6 @@ import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
 import ImageThumbnail from './ImageThumbnail.vue'
-import ChatMessageViewer from '@apackdev/ui/components/tiptap/ChatMessageViewer'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 
@@ -285,7 +282,7 @@ function checkTruncation() {
   }
 }
 
-// Use ResizeObserver so truncation is detected even when TiptapEditor renders async (e.g. on refresh)
+// Rich-text transactions can change the body after Vue's render has completed.
 watch(bubbleRef, (el, _prev, onCleanup) => {
   if (!el || !isUser.value) return
   const observer = new ResizeObserver(checkTruncation)

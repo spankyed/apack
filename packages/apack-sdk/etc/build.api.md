@@ -836,22 +836,18 @@ export const ManifestSchema: z.ZodObject<{
     }>>>>;
     extensions: z.ZodOptional<z.ZodObject<{
         textEditor: z.ZodOptional<z.ZodType<Record<string, {
-            readOnly?: string | false | undefined;
             extensions?: Record<string, string> | undefined;
             popups?: Record<string, string> | undefined;
             isSuggestionActive?: string | undefined;
         }>, Record<string, {
-            readOnly?: string | false | undefined;
             extensions?: Record<string, string> | undefined;
             popups?: Record<string, string> | undefined;
             isSuggestionActive?: string | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
-            readOnly?: string | false | undefined;
             extensions?: Record<string, string> | undefined;
             popups?: Record<string, string> | undefined;
             isSuggestionActive?: string | undefined;
         }>, Record<string, {
-            readOnly?: string | false | undefined;
             extensions?: Record<string, string> | undefined;
             popups?: Record<string, string> | undefined;
             isSuggestionActive?: string | undefined;
@@ -1773,22 +1769,18 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         } | undefined;
     }>>>>;
     textEditor: z.ZodLazy<z.ZodOptional<z.ZodType<Record<string, {
-        readOnly?: string | false | undefined;
         extensions?: Record<string, string> | undefined;
         popups?: Record<string, string> | undefined;
         isSuggestionActive?: string | undefined;
     }>, Record<string, {
-        readOnly?: string | false | undefined;
         extensions?: Record<string, string> | undefined;
         popups?: Record<string, string> | undefined;
         isSuggestionActive?: string | undefined;
     }>, z.core.$ZodTypeInternals<Record<string, {
-        readOnly?: string | false | undefined;
         extensions?: Record<string, string> | undefined;
         popups?: Record<string, string> | undefined;
         isSuggestionActive?: string | undefined;
     }>, Record<string, {
-        readOnly?: string | false | undefined;
         extensions?: Record<string, string> | undefined;
         popups?: Record<string, string> | undefined;
         isSuggestionActive?: string | undefined;

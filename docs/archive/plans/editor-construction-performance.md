@@ -1,5 +1,8 @@
 # Editor construction and read-only chat rendering
 
+> Superseded: this records the independent renderer removed during review. Its measurements do not
+> qualify the replacement. Current work: [one conversation viewer](../../plans/conversation-viewer.md).
+
 Status: complete. Base: master `461f7bf2cb`; #309 is merged. Delivered in PRs #310 and #311; no automatic merge.
 
 ## Delivery
