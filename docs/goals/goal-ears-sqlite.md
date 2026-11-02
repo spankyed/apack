@@ -232,7 +232,7 @@ byte-identical to implementation 93ed. Run value/search × OFF/FULL with trace/c
 false, original three fresh-process trials per size, original watches and 2 CPU/6 GiB/no-swap limits.
 Both active/pending app-workflow lists were empty before dispatch. Preserve every original budget,
 failure and actual source; only foreground responsiveness has the user's accepted degradation.
-Inspect this same run to terminal. Its results are not inferred from old measurements or corpus passes.
+Both value-index cohorts now pass all twelve trials and every original budget. Independent checks reproduce latency quantiles/limits and all 138 source hashes; [partial current reports](../references/evidence/ears-sqlite-implementation-2026-10-28/admission-5d80/README.md) are preserved. Both search cohorts remain live. Inspect this same run to terminal; remaining results are not inferred from old measurements or corpus passes.
 
 The [evaluation report](../references/ears-sqlite-evaluation-report.md) now maps all seven phases and records the recommendation, evidence scope, retained failures and explicit pending admission gate.
 
