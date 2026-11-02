@@ -127,6 +127,10 @@ test('cross-thread search focus survives paging for loaded and older targets', a
     await expect(target).toBeInViewport({ ratio: 1 });
     await appPage.waitForFunction(() => !((window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { focusMessage?: unknown }).focusMessage);
     await frames(appPage);
+    // Exercise paging at the focused position without scrolling the target away ourselves.
+    await target.evaluate(row => row.closest('.overflow-y-auto')!.dispatchEvent(new Event('scroll')));
+    await expectRows(appPage, 0, 100);
+    await frames(appPage);
     await expect(target).toBeInViewport({ ratio: 1 });
   }
 });
