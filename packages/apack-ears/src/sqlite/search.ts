@@ -50,9 +50,6 @@ export class SqliteSearch {
     const selected = entries[0] ?? fail("UNKNOWN_INDEX", `${type} has no vector index`);
     if (requireReady) this.db.indexBuilds.requireReady(type, 'vector', selected[0]); return selected;
   }
-  private table(type: string, name: string, index: Data) {
-    return searchTable(this.db.indexBuilds.index(type, index.kind, name));
-  }
   loadVectors(schema: Data) {
     if (
       !this.vectorLoaded &&
