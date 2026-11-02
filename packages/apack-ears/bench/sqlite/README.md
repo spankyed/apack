@@ -741,7 +741,9 @@ The [first CI receipt](../../../../docs/references/evidence/ears-sqlite-implemen
 proves the selected allocation refusal and retry. Its empty-WAL checkpoint is insufficient to prove
 reader release. Protocol v2 holds the actual worker until a foreground commit produces a WAL whose
 reclamation is busy; after refusal it requires successful truncation to zero bytes. That one foreground
-commit is explicitly accounted for, with canonical embeddings unchanged. V2 awaits disposable CI.
+commit is explicitly accounted for, with canonical embeddings unchanged. The
+[protocol-2 CI receipt](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/allocation-5cf/README.md)
+now proves that populated-WAL pin and release, preservation and retry.
 This exercises allocation-error
 handling at this selected native aggregate/model-sized allocation; it does not exhaust OS/cgroup
 memory, inject every allocation or mid-kmeans failure, prove a process-memory bound, or alter any

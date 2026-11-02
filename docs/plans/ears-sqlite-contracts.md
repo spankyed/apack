@@ -438,10 +438,12 @@ This decision does not authorize adoption or waive correctness, recall, keyword 
 accounting or recovery requirements. Finish functional validation and the completion report with a
 clear separation between demonstrated results, accepted degradation and remaining limitations.
 
-The [selected native allocation-failure receipt](../references/evidence/ears-sqlite-implementation-2026-10-28/allocation-517/README.md)
-proves SQLITE_NOMEM, canonical preservation and a 512-sample retry. Its empty-WAL checkpoint
-does not independently establish reader release. The follow-up probe requires a populated WAL
-to remain pinned by the held worker and become reclaimable after refusal; that proof awaits CI.
+The [selected native allocation-failure receipt](../references/evidence/ears-sqlite-implementation-2026-10-28/allocation-5cf/README.md)
+now proves SQLITE_NOMEM, canonical preservation, a 512-sample retry and actual reader release:
+the held worker blocks reclamation of a 57,712-byte WAL, which truncates to zero after failure
+and worker exit. Commit accounting isolates the two explicit foreground writes. This closes
+the first empty-WAL proof gap within this selected Linux/glibc fault scope; broader resource
+and recovery limits remain as stated in the receipt. Shared suites retain only the keyword failure.
 
 ### Deferred app-search execution proposal (not selected)
 
