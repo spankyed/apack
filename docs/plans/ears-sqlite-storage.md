@@ -480,6 +480,9 @@ Canonical bytes stay in `embedding_values`; native rows are derived. Readiness p
 after backfill, without a logical data commit. A nonempty group cannot be dropped through
 the retirement operation. Candidate queries apply owner scopes before K. When a model owner is attached and ready,
 EARS requests 256 distinct owners through K=32, 1024 through K=40, and 2048 through K=64.
+The current candidate probes all 64 trained buckets before this bounded binary candidate selection;
+the former 32-bucket policy missed one fresh-model recall@64 cohort (0.94890625 against 0.95).
+The active goal owns qualification of this correction; full-bucket probing does not make BQ exact.
 Duplicate-chunk expansion grows the native page up to 4096 chunks until that target is supplied;
 all returned distinct owners are retained, then every current canonical chunk for those owners is
 reranked with stable entity-sequence ties. Too few native owners retain the ordinary owner-level fallback.
