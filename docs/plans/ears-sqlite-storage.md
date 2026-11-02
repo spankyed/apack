@@ -668,6 +668,27 @@ retained output, an operator can remove leftover `.apack-logical-export-*` direc
 checks do not prove directory persistence under power loss. Interrupted ingestion/semantic rebuild and
 large-profile disk/resource/power-loss qualification remain separate requirements.
 
+### Native tooling disposition
+
+The pack-facing EARS facade is the compatibility boundary. `EarsDatabase` exposes the common
+schema/unit/read/write/statistics/backup/replacement contract; its factories do not promise the raw
+elmdb binding's complete API. Host storage descriptors own capabilities that differ by backend.
+The current CLI help, storage descriptors and public `/sqlite` entry are the implemented authority:
+
+| Need | SQLite candidate path | Native elmdb tooling disposition |
+| --- | --- | --- |
+| App queries, diagnostics and display exports | Existing `apack db query`, `inspect`, `runs`, `export` and query explanations through EARS | Keep the common app contract; SQL plans and file sizes retain backend-specific meanings. Do not fabricate LMDB page/work counters. |
+| Physical backup, populated replacement and media recovery | `apack db backup`, `backup verify`, `import` and `recover` through host storage coordination | Native backup/replacement remains owned by elmdb; physical files from one engine are never loaded as the other's format. |
+| Lossless primary archives | Candidate `apack db dump`/`load`, backed by `exportLogicalSnapshot`/`stageLogicalSnapshot` | These commands produce SQLite logical archives. The Rust `elmdb dump`/`load` format is separate; the explicit developer converter below consumes a trusted copied native dump. |
+| Derived audit and recovery | Candidate `apack db audit` and `rebuild --force`, backed by `/sqlite` maintenance exports | The native binding/CLI keeps its own check/rebuild operations. Host capabilities refuse when absent; no fake native implementation is exposed by the SQLite factory. |
+| Raw LMDB pages, map/reader-table inspection and native CLI switches | No compatibility layer | These are engine internals outside EARS. Use backend-specific tooling on a verified copy; independent SQLite tooling uses a separate process and the documented locking/filesystem assumptions. Direct SQL writes bypass EARS identity, schema, projection and watch ownership and are not a supported repair API. |
+
+The [current Linux contract inventory](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/linux/contract-inventory.json)
+source-hashes the actual 41 CLI maintenance cases plus EARS/host fixtures. These include logical
+archives, derived rebuild and isolated-profile selection. Physical backup/media recovery and
+copied-profile interoperability have their own source-pinned receipts in the active contract report;
+this disposition does not substitute for their execution or certify arbitrary raw storage tools.
+
 ### Explicit developer conversion from elmdb
 
 `packages/apack-ears/scripts/convert-elmdb-dump.ts` is an offline developer tool, outside the public
