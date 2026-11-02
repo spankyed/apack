@@ -148,7 +148,7 @@ uncertainties and checks; it does not promise that all four investigation catego
 ## Delivered dispositions
 
 - Baselines: all eight original-mode comparisons admitted; failed historical budgets and controls
-  retained. [Final lightweight qualification](../references/evidence/2026-10-31-application-performance.md#final-implementation-qualification)
+  retained. [Final lightweight qualification](../archive/references/evidence/2026-10-31-application-performance.md#final-implementation-qualification)
   passed for all four actions with the full counts and unchanged budget.
 - Investigation: three query dossiers, CPU/allocation attribution, explicit codec/ownership limits,
   and evidence-based rejection of editor-rule and serializer changes.
@@ -157,7 +157,7 @@ uncertainties and checks; it does not promise that all four investigation catego
 - Allocations: shared query methods passed protocol/correctness checks and the predeclared paired
   acceptance, with 36.8% less sampled allocation on the final native checkpoint.
 
-The [final investigation evidence](../references/evidence/2026-10-31-performance-investigation.md#final-combined-result)
+The [final investigation evidence](../archive/references/evidence/2026-10-31-performance-investigation.md#final-combined-result)
 records the review fixes, clean native provenance, rejected copied-cache checkpoint, local
 model-test timeouts reproduced in the original factory, and required strict gate. No deadlines,
 assertions or workload counts were weakened. PRs remain unmerged for review.

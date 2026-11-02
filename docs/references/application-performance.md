@@ -3,7 +3,7 @@
 The manual application suite measures real thread opening, deterministic reply streaming, current-query
 search and populated startup. [The suite guide](../../tests/performance/README.md) owns the commands,
 fixtures, completion conditions, report format and comparison workflow. The
-[qualification evidence](evidence/2026-10-30-application-performance.md) records measured results and
+[qualification evidence](../archive/references/evidence/2026-10-30-application-performance.md) records measured results and
 limitations; it is not a timing golden or a promise about other machines.
 
 ## Ownership and admission

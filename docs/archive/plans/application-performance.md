@@ -2,7 +2,7 @@
 
 Status: completed 2026-10-31; all four checkpoints and required validation passed.
 Originally planned on 2026-10-29 from `master` at `98386b36a18d244c19ffb501830b990ed49f7653`.
-Source-qualified measurements and limitations are recorded in the [evidence record](../../references/evidence/2026-10-30-application-performance.md).
+Source-qualified measurements and limitations are recorded in the [evidence record](../references/evidence/2026-10-30-application-performance.md).
 
 ## Outcome
 

@@ -3,7 +3,7 @@
  *
  * Not on a daily-use Mac: those specs compile and execute fresh native fixtures and runtime copies at new paths,
  * and macOS security-assesses each new executable path. Hundreds per run is the pattern recorded alongside
- * system-wide stalled app launches (`docs/references/evidence/build-input-snapshot-proof.md`, "macOS
+ * system-wide stalled app launches (`docs/archive/references/evidence/build-input-snapshot-proof.md`, "macOS
  * launch-policy investigation"). Linux has no first-launch assessment, and a GitHub-hosted runner is disposable.
  * On a Mac those suites run in the Linux test container instead (`npm run test:linux`). Ordinary builds, the
  * integration half included, reuse the shared compiler store and run directly.

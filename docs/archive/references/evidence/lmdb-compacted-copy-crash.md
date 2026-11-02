@@ -1,5 +1,7 @@
 # A compacted LMDB copy aborts the process when it is emptied
 
+Archived evidence. Status and measurements below describe their recorded checkpoints.
+
 Found 2026-10-24, while measuring `reset()` on the converted production copy. lmdb-js 3.5.9 (the newest release),
 Node 23.11.1, macOS arm64.
 

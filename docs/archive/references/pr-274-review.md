@@ -1,5 +1,7 @@
 # PR #274 against the on-disk engine: what to take
 
+Archived review of the former lmdb-js-backed engine; dispositions describe the dated design below.
+
 Reviewed 2026-10-24. [PR #274](https://github.com/spankyed/apack/pull/274) builds the in-memory engine
 (`docs/plans/ears-in-memory-engine.md`, Steps 0–8): memory is the database and LMDB is how it is made durable. This
 branch, `ears-disk-engine` ([PR #273](https://github.com/spankyed/apack/pull/273)), builds the opposite: the engine
@@ -132,7 +134,7 @@ data, not a description of it.
   sees what the app has committed. A write to the live data goes through the app already, by the drive server's
   `/transact`. Serving `apack db` too would run a tool's code in the app's process and still need an offline path for
   when no app answers. What a terminal write beside the running app would need instead — the tool writes the files and
-  tells the app, which re-runs every watch — is [a deferred plan](../plans/deferred/db-writes-beside-the-running-app.md).
+  tells the app, which re-runs every watch — is [a deferred plan](../../plans/deferred/db-writes-beside-the-running-app.md).
 
 ## Order
 

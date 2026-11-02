@@ -12,7 +12,7 @@ For repository implementation and validation rules, read [CLAUDE.md](../CLAUDE.m
 | [references/guides/](references/guides/) | Development environment guides | Agent access, practical workflows, resource ownership and operational safeguards |
 | [goals/](goals/) | Delivery scope and completion | Required outcomes, execution order, remaining checkpoints and acceptance |
 | [plans/](plans/) | Intended designs | Proposed contracts, decisions, dependencies and acceptance cases |
-| [references/evidence/](references/evidence/) | What happened | Dated investigations, experiments, source commits and validation results |
+| [references/evidence/](references/evidence/) | What happened | Evidence for active investigations; archive completed or superseded records with their attached data |
 | [issues/](issues/) | Problems awaiting resolution | Reproductions, observed impact and unresolved findings |
 | [archive/](archive/) | Historical work and decisions | Completed, superseded, absorbed, abandoned or rejected documents with explicit status |
 

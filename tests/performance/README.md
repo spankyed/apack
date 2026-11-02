@@ -4,7 +4,7 @@ This is a manual suite against built application output, separate from the ordin
 owns a disposable test profile. [Recording contracts](../../docs/references/application-performance.md)
 describe instrumentation ownership, attribution and limits. Never set `E2E_DATA_DIR` to a developer's profile for qualification.
 All four actions have completed controlled mode comparisons. Source-qualified measurements, retained
-failures and limitations are in [the evidence record](../../docs/references/evidence/2026-10-30-application-performance.md);
+failures and limitations are in [the evidence record](../../docs/archive/references/evidence/2026-10-30-application-performance.md);
 completed acceptance is recorded in [the goal audit](../../docs/archive/goals/goal-application-performance.md).
 
 Build with the normal repository commands, then run from the checkout root:

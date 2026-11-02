@@ -225,7 +225,7 @@ Complete direct Electron content-compiler/build/archive acceptance now passes on
 (133.956s) and Linux x64 [39182255120](https://github.com/spankyed/apack/actions/runs/39182255120)
 (71.738s). Both prove actual Electron 37.2.4 / Node 22.17.1 execution, owned-runtime retirement,
 verified backend/Vue output and Node 23.11.1 archive without compiler-function invocation. See
-[direct runtime evidence](../../references/evidence/build-input-snapshot-proof.md#direct-electron-content-compiler-and-passive-archive-accepted--2026-10-19).
+[direct runtime evidence](../references/evidence/build-input-snapshot-proof.md#direct-electron-content-compiler-and-passive-archive-accepted--2026-10-19).
 The invocation receipt complements existing passive-reader/poisoned-import checks. Signed-runtime
 environment filtering remains intact. No repeat of these accepted runtime paths is needed.
 Strict convergence run [39191666077](https://github.com/spankyed/apack/actions/runs/39191666077)
@@ -538,7 +538,7 @@ both repairs. Final accepted source must additionally include the later bound-on
 Windows **Node 23.11.1** also archives the retained Electron-built pack successfully (20.599s), with
 the exact previous archive checksum. The first private 60s control timed out; the diagnostic verifier
 then accepted all 40,731 observations in about 55s. A measured 180s private control completed in
-20.599s; no repository deadline or production source changed. See [Windows consumer evidence](../../references/evidence/build-input-snapshot-proof.md#windows-node-consumer-of-the-retained-electron-build--2026-10-19).
+20.599s; no repository deadline or production source changed. See [Windows consumer evidence](../references/evidence/build-input-snapshot-proof.md#windows-node-consumer-of-the-retained-electron-build--2026-10-19).
 The VM has no remaining compiler processes; its evidence is exported and Azure confirms it is deallocated.
 
 The publisher-policy fixture is now valid: process-owned signing and the documented SDK/cache APIs
@@ -557,8 +557,8 @@ contract is introduced. The implementation candidate separates copied distributi
 executable-specific selection, records the fresh runtime in the compiler identity and includes OS
 namespace membership in reuse freshness. Original and copied selection baselines remain independent.
 The durable regression retains its stale-record and actual selected-DLL assertions; its copy check
-now compares distribution integrity. See [identity evidence](../../references/evidence/build-input-snapshot-proof.md#publisher-policy-freshness-and-runtime-identity-boundary--2026-10-19).
-The [runtime-identity caller audit](../../references/evidence/build-input-snapshot-proof.md#runtime-identity-caller-audit--2026-10-19)
+now compares distribution integrity. See [identity evidence](../references/evidence/build-input-snapshot-proof.md#publisher-policy-freshness-and-runtime-identity-boundary--2026-10-19).
+The [runtime-identity caller audit](../references/evidence/build-input-snapshot-proof.md#runtime-identity-caller-audit--2026-10-19)
 identified a reuse gap: capture did not retain selection observations, and its hash omitted directory
 listings. The repair closes direct reuse with OS listing hashes and separate runtime baselines;
 preserve common-record replay too. Frontend readiness echoes the generation hash and is not an
@@ -579,18 +579,18 @@ Frontend CJS preload capture/reporting is accounted for through the existing own
 production repair needed. Source **`387555312`** proves real preload/dependency reads are retained,
 reported as watch probes, rejected on edits and accepted after byte restoration; authored reads after
 startup remain live. All five owner tests, CLI types and lint pass. This in-process proof complements,
-not replaces, existing real frontend/native/HMR acceptance. See [preload evidence](../../references/evidence/build-input-snapshot-proof.md#frontend-javascript-preload-ownership-audit--2026-10-19).
+not replaces, existing real frontend/native/HMR acceptance. See [preload evidence](../references/evidence/build-input-snapshot-proof.md#frontend-javascript-preload-ownership-audit--2026-10-19).
 
 **Bound-only Windows import decision: approved by the user on 2026-10-18.** Native compiler imports
 containing only bound addresses, without recoverable import names or ordinals, are unsupported and
 must receive an attributed refusal. Ordinary imports and bound imports retaining lookup information
 remain supported. The [native-boundary ADR](../../references/adr/native-compiler-input-boundary.md#decision)
-owns the contract; the [decision evidence](../../references/evidence/build-input-snapshot-proof.md#bound-only-pe-support-decision--2026-10-18)
+owns the contract; the [decision evidence](../references/evidence/build-input-snapshot-proof.md#bound-only-pe-support-decision--2026-10-18)
 retains the rationale and proof limits. Source **`12447893a`** moves refusal before dependency
 resolution, closing OS-library and missing-target bypasses. All 68 focused CLI and 22 loader-hook
 checks pass, including requester/dependency attribution and prevention of the native loader call.
 Existing Windows normal/bound-lookup and failed-candidate incumbent proofs remain applicable through
-the unchanged publication owner; see [focused acceptance](../../references/evidence/build-input-snapshot-proof.md#bound-only-refusal-before-resolution--2026-10-19).
+the unchanged publication owner; see [focused acceptance](../references/evidence/build-input-snapshot-proof.md#bound-only-refusal-before-resolution--2026-10-19).
 Converged/final acceptance must include this repair; run `39196299955` predates it.
 Do not restart address-recovery research or invalid fixture
 construction. Revisit only for a real required dependency with an independently Windows-loadable
@@ -676,8 +676,8 @@ the full packaged-authoring author half passes in 690.1s. The external-contract 
 its unchanged 600s bound while building the default-pack fork, after both ordinary fixture builds and
 38 memo cases pass. Its remaining cause is unproven. Preserve [hosted acceptance and failure evidence](../references/evidence/settings-and-pack-contracts.md#hosted-facade-and-author-half-acceptance-2026-10-18);
 do not repeat broad gates or raise deadlines to diagnose it.
-The app half and final strict acceptance remain open. A [bounded Windows profile](../../references/evidence/build-input-snapshot-proof.md#bounded-windows-build-profile-2026-10-18)
-retained only supervisor samples. A [short follow-up](../../references/evidence/build-input-snapshot-proof.md#short-windows-diagnostic-cleanup--2026-10-18)
+The app half and final strict acceptance remain open. A [bounded Windows profile](../references/evidence/build-input-snapshot-proof.md#bounded-windows-build-profile-2026-10-18)
+retained only supervisor samples. A [short follow-up](../references/evidence/build-input-snapshot-proof.md#short-windows-diagnostic-cleanup--2026-10-18)
 perturbed shutdown through its inspector helper and was intentionally stopped; it is not compiler-defect
 or hotspot evidence. All owned work stopped, evidence is exported and the VM is confirmed deallocated.
 Do not repeat that helper or start another compiler-performance project from these inconclusive profiles.
@@ -723,11 +723,11 @@ See [selector evidence](../references/evidence/settings-and-pack-contracts.md#ru
 Broader installed publisher-policy mutations and registry notifications are not proven by this check;
 retain the finite closure register and final platform/strict obligations. No new watcher framework,
 registry polling or profiling effort is authorized.
-A separate [Windows binder control](../../references/evidence/build-input-snapshot-proof.md#windows-binder-ordinary-loader-control--2026-10-18)
+A separate [Windows binder control](../references/evidence/build-input-snapshot-proof.md#windows-binder-ordinary-loader-control--2026-10-18)
 uses the OS-generated bound directory: ordinary/bound imports load, while removing the lookup table
 still fails in the ordinary loader. Preserve this historical result without treating it as proof that
 all address-only inputs are invalid; the approved refusal boundary now settles support scope. The subsequent
-[single-import control](../../references/evidence/build-input-snapshot-proof.md#single-import-binding-control-2026-10-18)
+[single-import control](../references/evidence/build-input-snapshot-proof.md#single-import-binding-control-2026-10-18)
 also fails in the ordinary loader after eliminating all Windows/CRT imports. It closes that additional
 hypothesis and requires no production change.
 
@@ -751,26 +751,26 @@ preloads (`bbf05ec00`). These are source evidence, not a claim that the full str
 #### Current compiler checkpoint (2026-10-18)
 
 **Current outcome:** the Windows report-reader repair is committed as `11cb737e2`; the two-build
-lifecycle/budget repair is `9adb9073f`. The [public repeated-build case](../../references/evidence/build-input-snapshot-proof.md#windows-repeated-build-identity-and-owned-teardown--2026-10-18)
+lifecycle/budget repair is `9adb9073f`. The [public repeated-build case](../references/evidence/build-input-snapshot-proof.md#windows-repeated-build-identity-and-owned-teardown--2026-10-18)
 now passes in **224.65s**, preserving both fresh installations, source paths, stable cache/output
 identity, archive acceptance and complete disposal. This closes that named failure; it does not close
 the remaining policy/platform cases, B6 or final strict acceptance. Earlier failure states below are
 checkpoint history, superseded by this outcome rather than instructions to repeat accepted work.
 
-The [remaining-obligation audit](../../references/evidence/build-input-snapshot-proof.md#remaining-native-obligations-and-bound-only-control--2026-10-18)
+The [remaining-obligation audit](../references/evidence/build-input-snapshot-proof.md#remaining-native-obligations-and-bound-only-control--2026-10-18)
 corrects stale lifetime labels against existing Windows/Linux acceptance. Its bounded ordinary-loader
 control still fails after removing the bound import's lookup table, including with a fixed-base importer;
 it proves no product defect or valid unsupported image. The user-approved refusal boundary above
 supersedes the earlier open support question; verify that refusal without repeating invalid fixtures. Next resolve outside-image/publisher-policy and remaining mapped/runtime
 acceptance against actual supported paths; B6 and the full Phase 7 audit remain required.
 
-Source `931e08186` now accepts [physical outside selection through a private assembly](../../references/evidence/build-input-snapshot-proof.md#outside-private-assembly-dll-ownership-acceptance--2026-10-18)
+Source `931e08186` now accepts [physical outside selection through a private assembly](../references/evidence/build-input-snapshot-proof.md#outside-private-assembly-dll-ownership-acceptance--2026-10-18)
 in 4.561s: Windows loads the exact outside DLL, then existing admission refuses before initialization.
 No production change is needed. Preserve this proof alongside the accepted application-context
 controls. Publisher/system-policy changes and remaining mapped/runtime acceptance remain explicit;
 the converged strict checkpoint still needs the full cross-phase producer/consumer run.
 
-Source `c27e78a06` and its [ownership evidence](../../references/evidence/build-input-snapshot-proof.md#compiler-installation-namespace-ownership--2026-10-18)
+Source `c27e78a06` and its [ownership evidence](../references/evidence/build-input-snapshot-proof.md#compiler-installation-namespace-ownership--2026-10-18)
 exclude private installation ancestor probes from replayable source identity. Inert owner regression,
 mutation, types and lint are accepted; the public two-installation check instead ended with native
 exit 3221226356 before completed-build assertions. The scoped Windows diagnostic accepts
@@ -780,7 +780,7 @@ original native failure remains unexplained, and repeated-build identity is unac
 owned-process receipts and avoid another uninstrumented rerun or deadline increase. Neither run is a
 complete public-build acceptance result.
 
-Source `34684ee56` closes the named [imports/exports candidate audit](../../references/evidence/build-input-snapshot-proof.md#package-mapping-candidate-ownership--2026-10-18):
+Source `34684ee56` closes the named [imports/exports candidate audit](../references/evidence/build-input-snapshot-proof.md#package-mapping-candidate-ownership--2026-10-18):
 three original freshness counterexamples, 22 host models, three CLI ownership regressions and actual
 Node/Electron main-thread/async-loader controls pass. Matching mapping branches are conservatively
 observed; Node owns selection/errors. No new general resolver work is identified by this bounded audit.
@@ -788,22 +788,22 @@ Continue the finite native/platform obligations below, then B6 and final accepta
 identity unaccepted on current source; preserve all phases and do not restart accepted lifecycles for
 reassurance.
 
-Source `afc98b845` accepts the missing [Electron application-context startup case](../../references/evidence/build-input-snapshot-proof.md#electron-application-context-startup-acceptance--2026-10-18)
+Source `afc98b845` accepts the missing [Electron application-context startup case](../references/evidence/build-input-snapshot-proof.md#electron-application-context-startup-acceptance--2026-10-18)
 in 22.039s under the unchanged 60s bound: exact private copied-DLL selection and pre-initialization
 compiler refusal pass. This is a fixture/acceptance checkpoint; production code needed no change.
-Source `d2c459913` also accepts [Electron DotLocal startup](../../references/evidence/build-input-snapshot-proof.md#electron-dotlocal-startup-acceptance--2026-10-18)
+Source `d2c459913` also accepts [Electron DotLocal startup](../references/evidence/build-input-snapshot-proof.md#electron-dotlocal-startup-acceptance--2026-10-18)
 in 13.320s under the unchanged 60s bound, with copied-runtime identity, actual selected DLL and refusal
 before initialization. Both named Electron context gaps are now accepted; preserve remaining
 localized/outside-image/publisher/system-policy input obligations, platform cases, B6 and final gates.
 
-Source `8fae65949` closes the demonstrated [neutral transitive private-candidate gap](../../references/evidence/build-input-snapshot-proof.md#transitive-private-assembly-candidate-ownership--2026-10-18):
+Source `8fae65949` closes the demonstrated [neutral transitive private-candidate gap](../references/evidence/build-input-snapshot-proof.md#transitive-private-assembly-candidate-ownership--2026-10-18):
 original missing-probe failure in 10.312s, final direct/transitive acceptance in 6.725s/6.302s. Actual
 selection, candidate creation/removal, configuration changes and refused-context repair inputs pass.
 One dictionary owns candidate traversal and validation; the extra context rebind is removed. Localized
 and outside-image private probing, publisher/system-policy acceptance, other platform cases, B6 and
 final strict `--all` remain required; this does not close all Windows policy behavior.
 
-Source `604981200` repairs the [explicit localized-candidate omission](../../references/evidence/build-input-snapshot-proof.md#declared-localized-private-candidate-ownership--2026-10-18):
+Source `604981200` repairs the [explicit localized-candidate omission](../references/evidence/build-input-snapshot-proof.md#declared-localized-private-candidate-ownership--2026-10-18):
 original missing-probe failure in 9.586s; final direct/transitive/localized cases pass in
 6.327s/5.951s/5.967s with unchanged budgets. Explicit `en-US` selection, candidate appearance/restoration
 and refused-context repair inputs are accepted. Wildcard/user/system fallback and MUI satellite
@@ -811,7 +811,7 @@ behavior remain unverified within the existing localized/policy obligation, alon
 probing, publisher/system-policy inputs, other platform cases, B6 and final strict `--all`. No exclusion
 or reduction of the full goal is made.
 
-Source `8d6f62323` implements [directory membership through successful and refused activation queries](../../references/evidence/build-input-snapshot-proof.md#private-assembly-directory-membership-and-copy-identity--2026-10-18).
+Source `8d6f62323` implements [directory membership through successful and refused activation queries](../references/evidence/build-input-snapshot-proof.md#private-assembly-directory-membership-and-copy-identity--2026-10-18).
 Typed entries reach the existing source record, watcher and owned copy; passive replay after disposal
 passes. Six affected Windows cases accept wildcard directory creation/removal and repair, direct,
 transitive and declared-culture selection, Node/Electron copy identity and pre-initialization refusal
@@ -823,15 +823,15 @@ requirements as actual assembly selection or native resource I/O; the latter is 
 user-approved boundary and must not silently expand this goal. No required assembly-selection case is
 excluded by this classification.
 
-The [captured-policy checkpoint](../../references/evidence/build-input-snapshot-proof.md#captured-native-policy-in-compiler-identity--2026-10-18)
+The [captured-policy checkpoint](../references/evidence/build-input-snapshot-proof.md#captured-native-policy-in-compiler-identity--2026-10-18)
 (`2dc550a5b`) repairs omitted native loader state in phase identity and Windows policy invalidation in retained
 runtime identity. All 57 focused Windows checks and actual Node/Electron application startup controls
 pass; source paths, copied-runtime identity and refusal before initialization remain asserted. The
 single public repeated-build case fails at 129.548s with `0xC0000374`, matching the earlier native crash,
-not its 240s deadline. The [follow-up report-API controls](../../references/evidence/build-input-snapshot-proof.md#windows-report-api-race-short-reproducer-and-rejected-lock--2026-10-18)
+not its 240s deadline. The [follow-up report-API controls](../references/evidence/build-input-snapshot-proof.md#windows-report-api-race-short-reproducer-and-rejected-lock--2026-10-18)
 reproduce the same native status without pack compilation in 184ms, and through the actual Windows
 metadata reader in 461ms. Excluding network diagnostics and a shared-lock candidate do not fix the
-actual reader; the rejected candidate remains stashed. The [replacement process-metadata reader](../../references/evidence/build-input-snapshot-proof.md#windows-process-metadata-reader-without-diagnostic-reports--2026-10-18)
+actual reader; the rejected candidate remains stashed. The [replacement process-metadata reader](../references/evidence/build-input-snapshot-proof.md#windows-process-metadata-reader-without-diagnostic-reports--2026-10-18)
 now removes Windows report calls, retaining native PATH and exact loaded-DLL meaning through the existing
 metadata/lifetime owner. Both short regressions, 57 models and actual packaged Node/Electron startup
 controls pass. The uninstrumented public build now completes its first build/replay/archive without
@@ -848,14 +848,14 @@ native, captured-runtime and cancellation debugging and focused validation, with
 and two cores. Use disposable GitHub runners for macOS/Linux execution, clean platform verification
 and the existing final gates through `compiler_macos`, `compiler_windows` or `compiler_linux`.
 Do not change macOS security settings or repeat local native batches. Preserve the
-[incident evidence](../../references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17).
+[incident evidence](../references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17).
 
 **Current handoff:** preserve the implemented compiler/input owners and close the finite native/platform
 cases below. Source checkpoint `d8ac9486c` accepts both ordinary Windows dependency-redirection controls;
-the corrected test blob and exact VM evidence are recorded below. The [SxS admission counterexample](../../references/evidence/build-input-snapshot-proof.md#windows-sxs-admission-counterexample-2026-10-18)
+the corrected test blob and exact VM evidence are recorded below. The [SxS admission counterexample](../references/evidence/build-input-snapshot-proof.md#windows-sxs-admission-counterexample-2026-10-18)
 now confirms the low-level predicate misses the OS-selected private assembly. Its expected-failing
 regression is stashed locally and on the VM. Source `113116791` implements
-[`.local` admission and runtime inventory](../../references/evidence/build-input-snapshot-proof.md#windows-local-redirection-admission-checkpoint-2026-10-18):
+[`.local` admission and runtime inventory](../references/evidence/build-input-snapshot-proof.md#windows-local-redirection-admission-checkpoint-2026-10-18):
 both marker forms, manifest policy, missing-input freshness and private-runtime ownership. Exact outside
 selection/refusal and the existing retained-compiler ownership/freshness/HMR case pass on matching VM
 source. A first runtime attempt hit its unchanged deadline; a timestamped diagnostic and final matching
@@ -865,35 +865,35 @@ that same reader and input owner to resource 2, preserving default-context
 selection and runtime-copy checks. Actual Node startup refuses a DLL-local assembly's transitive
 outside library before initialization, then executes captured value-22 code once the dependency is
 package-contained. A loaded-System32/private-`psapi.dll` collision also preserves exact selection
-without helper-side initialization. See the [DLL checkpoint](../../references/evidence/build-input-snapshot-proof.md#windows-dll-activation-context-checkpoint-2026-10-18)
-and [earlier four-point review](../../references/evidence/build-input-snapshot-proof.md#windows-default-application-context-admission-checkpoint-2026-10-18).
-The [helper/launcher audit](../../references/evidence/build-input-snapshot-proof.md#windows-helper-and-launcher-checkpoint-2026-10-18)
+without helper-side initialization. See the [DLL checkpoint](../references/evidence/build-input-snapshot-proof.md#windows-dll-activation-context-checkpoint-2026-10-18)
+and [earlier four-point review](../references/evidence/build-input-snapshot-proof.md#windows-default-application-context-admission-checkpoint-2026-10-18).
+The [helper/launcher audit](../references/evidence/build-input-snapshot-proof.md#windows-helper-and-launcher-checkpoint-2026-10-18)
 observed both the live metadata helper and its actual C# compiler in a Windows job. A subsequent
-[lifetime probe and repair](../../references/evidence/build-input-snapshot-proof.md#windows-helper-compiler-lifetime-repair-2026-10-18)
+[lifetime probe and repair](../references/evidence/build-input-snapshot-proof.md#windows-helper-compiler-lifetime-repair-2026-10-18)
 in `f6cd78014` reproduces compiler survival after helper timeout and parent loss, then closes both paths
 with a shared job established before compilation. The suspended real-compiler probes, mutation-checked
 regression, seven launcher scenarios, seven DLL/startup controls and builder publication boundary pass.
 Source `8e93dc4f4` repairs the launcher proof's runtime-directory input. Source `61431e063` accepts
-[DLL-specific configuration](../../references/evidence/build-input-snapshot-proof.md#windows-dll-configuration-acceptance-2026-10-18):
+[DLL-specific configuration](../references/evidence/build-input-snapshot-proof.md#windows-dll-configuration-acceptance-2026-10-18):
 ordinary selection, observed configuration bytes and actual Node refusal/allowed snapshot startup.
 Source `4aa3bc7a5` accepts the
-[Electron module-context path](../../references/evidence/build-input-snapshot-proof.md#windows-electron-node-api-host-binding-2026-10-18)
+[Electron module-context path](../references/evidence/build-input-snapshot-proof.md#windows-electron-node-api-host-binding-2026-10-18)
 through the production launcher, repairing a false outside-Node refusal for standard Node-API delay
 imports. Runtime exports are tied to captured executable bytes; ordinary outside-library refusal stays
 covered. Source `4dbeaa968` repairs
-[higher-priority private-candidate observation](../../references/evidence/build-input-snapshot-proof.md#windows-private-assembly-candidate-freshness-2026-10-18):
+[higher-priority private-candidate observation](../references/evidence/build-input-snapshot-proof.md#windows-private-assembly-candidate-freshness-2026-10-18):
 real selection changes from value 22 to 33, invalidates the earlier view and restores its identity
 when the candidate is removed. Source `6e16483b4` now preserves failed-query repair inputs through
-the existing observer. The [refusal-input checkpoint](../../references/evidence/build-input-snapshot-proof.md#windows-activation-refusal-input-checkpoint-2026-10-18) accepts configuration/missing-candidate observation,
+the existing observer. The [refusal-input checkpoint](../references/evidence/build-input-snapshot-proof.md#windows-activation-refusal-input-checkpoint-2026-10-18) accepts configuration/missing-candidate observation,
 repair invalidation and four real Node/Electron/helper cases on identical VM source. Source `9bbe9e505`
 repairs the next demonstrated defect: extended drive-root probes made subscription construction throw
-`EISDIR` and terminate the watcher. The [watch-root checkpoint](../../references/evidence/build-input-snapshot-proof.md#windows-watch-root-checkpoint-2026-10-18)
+`EISDIR` and terminate the watcher. The [watch-root checkpoint](../references/evidence/build-input-snapshot-proof.md#windows-watch-root-checkpoint-2026-10-18)
 accepts all 18 watcher checks and a real frontend-report subscription replay.
 Source `595a7d8e1` fixes the reproduced publication boundary: separate retained Vite processes scan
 private staged output during Windows rename. The focused regression fails against the old code in
 2.4s and passes with private `.apack` watching excluded; authored generated files and external
 dependency inputs remain watched. See the
-[publication checkpoint](../../references/evidence/build-input-snapshot-proof.md#windows-private-output-publication-checkpoint--2026-10-18).
+[publication checkpoint](../references/evidence/build-input-snapshot-proof.md#windows-private-output-publication-checkpoint--2026-10-18).
 The subsequent slow lifecycle was profiled: initial compiler dependency inventory takes 69.8s in
 synchronous reads; capture takes 33.4s. That attributes the blocked phase without claiming its underlying
 filesystem latency is explained. Source `72ad6bae9` makes frontend replacement share an unchanged,
@@ -901,7 +901,7 @@ verified compiler installation; each frontend retains its private workspace, and
 The complete Windows native watch lifecycle **passes in 232.4s**, under its unchanged 300s budget:
 missing-assembly refusal before initialization, incumbent service, failed-input repair subscription,
 repair-only creation, values 11 then 22, successful publication, one notification and old-frontend
-retirement. See the [reuse and recovery checkpoint](../../references/evidence/build-input-snapshot-proof.md#verified-compiler-reuse-and-windows-recovery--2026-10-18).
+retirement. See the [reuse and recovery checkpoint](../references/evidence/build-input-snapshot-proof.md#verified-compiler-reuse-and-windows-recovery--2026-10-18).
 Preserve stash `540fa3cc844918afe1c634c00d24857451c5506f` and earlier failed reports as history.
 Do not repeat this accepted lifecycle for reassurance or infer acceptance for other loader paths.
 Sources `1293ae2fe` and `47387a502` close a demonstrated frontend startup JavaScript gap: existing reads reached
@@ -909,7 +909,7 @@ subscriptions, but a newly appearing nearer package did not invalidate reuse. St
 now goes through the existing file view while Node retains resolution. The real ESM/custom-loader case
 passes in 44.54s under its original 60s bound, including probe delivery, actual nearer-package selection
 by a replacement, restoration and live Vue. The resolver hook is released with startup read ownership. See the
-[startup lookup checkpoint](../../references/evidence/build-input-snapshot-proof.md#startup-package-lookup-observation--2026-10-18).
+[startup lookup checkpoint](../references/evidence/build-input-snapshot-proof.md#startup-package-lookup-observation--2026-10-18).
 Source `ce0b5e00b` makes installation capture/verification yield between byte reads and accept the builder's
 cancellation signal; synchronous consumers retain the same traversal and content identity. Source
 `1e023b29f` observes initial bare launch requests, package-less CommonJS candidates, missing relative/index/main
@@ -917,20 +917,20 @@ inputs and symlink targets through the existing startup owner. Nine focused reso
 the matching Windows runtime case passes in 47.23s, including bare require/import flags, probe delivery,
 invalidation/restoration, replacement selection and live Vue. Cold attempts before the async repair
 blocked the test worker; the one startup scenario now has a measured 120s budget, with helper/freshness
-bounds unchanged. See the [namespace and capture checkpoint](../../references/evidence/build-input-snapshot-proof.md#startup-namespace-and-responsive-capture-checkpoint--2026-10-18).
+bounds unchanged. See the [namespace and capture checkpoint](../references/evidence/build-input-snapshot-proof.md#startup-namespace-and-responsive-capture-checkpoint--2026-10-18).
 Sources `348862f30` and `bdfd7f005` close the reproduced async-loader ESM lookup omission through
 the same startup read owner. Explicit loader flags get an observer before their graph loads;
 programmatic registration waits for the user's first call. Plain launches do not gain a loader thread.
 The real Windows retained-Vite case passes in 102.37s, and the exact-order two-build backend case passes
 in 170.88s. Final focused controls prove lazy registration, retirement of cached registration references,
-and refusal without a startup owner. See the [async-loader checkpoint](../../references/evidence/build-input-snapshot-proof.md#async-loader-namespace-observation-checkpoint--2026-10-18).
+and refusal without a startup owner. See the [async-loader checkpoint](../references/evidence/build-input-snapshot-proof.md#async-loader-namespace-observation-checkpoint--2026-10-18).
 Source `21389b608` closes the reproduced loader-local CommonJS omission using Node's actual CJS
 lookup paths, including `createRequire`, transitive loads, custom `require.resolve({ paths })` and
 `module.paths`. The observer is startup-owned and delegates selection to Node. All 16 focused models
 pass locally and on Windows; original Node 23.11.1 and Electron 37.2.4/Node 22.17.1 controls preserve
 selection and preload order. The retained-Vite case passes in 100.16s under its unchanged 120s bound,
 including transitive CommonJS invalidation, restoration, replacement selection and HMR. See the
-[CommonJS checkpoint](../../references/evidence/build-input-snapshot-proof.md#commonjs-native-lookup-observation-checkpoint--2026-10-18).
+[CommonJS checkpoint](../references/evidence/build-input-snapshot-proof.md#commonjs-native-lookup-observation-checkpoint--2026-10-18).
 Next audit package import/export mappings against existing observations before adding machinery.
 Those mapped-target paths remain unverified. Broader cold/aggregate budgets, remaining native/platform
 cases, B6 and final committed-source strict acceptance remain open. Preserve accepted paths without
@@ -950,22 +950,22 @@ deallocate after focused execution; the linked checkpoint records its exact sour
 | Live native/frontend input ownership | `ccaa809a8` retains process-wide copies, worker receipts and failed-candidate repair probes; unresponsive freshness checks refuse within five seconds. Actual watch refusal/recovery/retirement passes on `e6ce60a78` in hosted run `39079492068`, within the restored 120-second scenario budget. | Preserve this behavior through converged native and final gates; no new watch coordinator. |
 | Frontend startup JavaScript | `c85f3fd95` captures ordinary preloads. `6d482e79f` captures enclosing package metadata; real ESM/custom-loader/transitive export selection and live Vue pass in hosted run `39079716622`. | Preserve accepted byte restoration, source paths and HMR; do not infer universal resolution coverage from one case. |
 | macOS launch environment | `b7385c0bb` accepts only physical OS directories for versioned overrides; both real versioned cases pass in `39080454772`. `ef01842ed` applies the same policy to the single shared-cache directory. The revised one-builder OS baseline/refusal case passes on `baf461618` in `39081394988` in 27.62 seconds with its original 60-second deadline. All 48 parser/environment checks pass. | Preserve ordinary package-relative/OS loading and attributed refusal. Converged native-file acceptance on final source remains required; selected runs do not cover every case. |
-| Runtime/signing | Shared-launcher pre-initialization Mach-O refusal/contained loading passes in `39095180283`; actual retained Node/Vite passes in `39095878658`. Default Electron 37.2.4 capture/launch passes in `39097385010`. Source `ee1c76459` additionally preserves the complete macOS Contents distribution, sealed relative link text and physical ASAR bytes through capture and disposal. Five inert runtime/copy checks pass. Hosted `39099157645` on that source accepts exact app entitlements, hardened runtime/Developer ID, strict captured signature verification, real Electron startup, freshness and cleanup in 2.14s, with one confirmed passing case. See [strict-profile evidence](../../references/evidence/build-input-snapshot-proof.md#strict-app-profile-electron-probe-2026-10-18). | The demonstrated strict-profile capture/cleanup defects are closed. Remaining linked runtime/native combinations still need bounded acceptance; this tiny compiler-entry probe does not prove every addon combination. Full Windows Electron pack build/archive passes on `3827993ba`; complete signed macOS and Linux Electron compilation plus Node archive now pass on `f37315483`. The named complete-distribution compilation gap is closed; preserve the existing native module/preload/thread cases and explicit policy obligations and approved bound-only refusal acceptance. Preserve accepted runtime controls through B6 and final strict acceptance; do not broaden permissions or claim isolation. |
-| Windows process ownership | Job Object/lifetime acceptance passes in `39075394015` attempt 2. Exact OS-reported DLL ownership, privacy, source restoration, Vue and outside-PATH refusal pass in `39091568546`; Unicode and bound-import lookup fallback pass in `39092975820` / `39093260230`. Backend preload/thread publication passes in `39095177818`; combined preload/thread reuse passes in `39097382309`. Source `4f1fdfbee` extends the same native owner to CommonJS content compilation, with 13 focused checks passing. Hosted `39100052114` on fixture correction `965b914b4` accepts that complete ownership/freshness/cleanup/refused-publication case in 106.17s under the unchanged 120s bound. See [compiler-reader evidence](../../references/evidence/build-input-snapshot-proof.md#content-compiler-native-ownership-checkpoint-2026-10-18). | Preserve accepted ownership, cross-drive, codegen, cleanup and exact-copy checks. Run `39100566892` confirms extended tool paths are misclassified by the actual API. Source `aee3a18ab` uses the existing comparison for all eight remaining ownership decisions and preserves device prefixes when parsing module queries (51 pure checks pass). Hosted `39101205268` accepts eleven Windows alias/query/live-event cases; `39101209244` accepts the exact macOS live-event case in 1.09s after a local EMFILE failure. The live case is now guarded against daily-use Mac execution; no resource/security limit is changed. Namespace classification is accepted. B3 async watcher failure repair is implemented in the current checkpoint: attributed native/frontend subscription errors cancel builds, drain owned disposal and reach public/dev callers through the existing watcher owner. All 31 mocked/inert lifecycle checks, CLI types and focused lint pass. On pushed source `167722d1f`, macOS `39103783217` and the unit stage of Windows `39103780229` each accept ten focused watcher cases, including real backend/frontend controls. The separate ordinary-control failures are resolved by dependency-shaped probes and configuring `.local` before first launch. The [Windows VM control checkpoint](../../references/evidence/build-input-snapshot-proof.md#windows-vm-redirection-control-acceptance-2026-10-18) accepts both exact value/path controls in 2.98s combined. Source `113116791` adds `.local` observation, admission and runtime inventory with matching focused VM acceptance; Configured Node `.local` public-build capture/refusal passes in `9d25152aa`; The default application-context Node SxS repair now has focused startup/copy acceptance linked above; Electron module/application SxS and DotLocal startup controls are accepted in `4aa3bc7a5`, `afc98b845` and `d2c459913`; remaining context/policy obligations stay explicit. See [hosted watcher/control evidence](../../references/evidence/build-input-snapshot-proof.md#hosted-watcher-acceptance-and-pe-control-result-2026-10-18). No local live watcher runs. Close activation/SxS/.local redirection, approved bound-only refusal acceptance and supported search-state reconciliation. The [current Windows audit](../../references/evidence/build-input-snapshot-proof.md#remaining-windows-resolution-audit-2026-10-18) identified unused manifest parsing and missing `.local` observation. The `.local` checkpoint addresses the latter; The default-context SxS omission is repaired as linked above; other context and policy edges remain open. Private `.local`/SxS controls are authored in the existing PE integration file. Both ordinary controls pass on the approved VM, and `.local` now refuses the proven outside selection. Configured Node `.local` now has public-build acceptance; Basic DLL-owned resource-2 selection and actual Node startup now pass as linked above; DLL-specific configuration and actual Node snapshot startup are accepted in `61431e063`; Electron module-context is accepted in `4aa3bc7a5`; Electron application-context and DotLocal startup are accepted in `afc98b845` / `d2c459913`; broader policy/watch edges remain unaccepted. Their [proof boundary](../../references/evidence/build-input-snapshot-proof.md#private-pe-redirection-control-candidate) preserves actual Node/Electron and admission acceptance as required. Watcher checkpoint source is `6d6a8e9e1`; the user pushed `167722d1f`, and its focused hosted watcher acceptance is recorded above. Remaining platform/native requirements, B6 and final strict `--all` stay required; partial support/refusals are not exclusions. |
+| Runtime/signing | Shared-launcher pre-initialization Mach-O refusal/contained loading passes in `39095180283`; actual retained Node/Vite passes in `39095878658`. Default Electron 37.2.4 capture/launch passes in `39097385010`. Source `ee1c76459` additionally preserves the complete macOS Contents distribution, sealed relative link text and physical ASAR bytes through capture and disposal. Five inert runtime/copy checks pass. Hosted `39099157645` on that source accepts exact app entitlements, hardened runtime/Developer ID, strict captured signature verification, real Electron startup, freshness and cleanup in 2.14s, with one confirmed passing case. See [strict-profile evidence](../references/evidence/build-input-snapshot-proof.md#strict-app-profile-electron-probe-2026-10-18). | The demonstrated strict-profile capture/cleanup defects are closed. Remaining linked runtime/native combinations still need bounded acceptance; this tiny compiler-entry probe does not prove every addon combination. Full Windows Electron pack build/archive passes on `3827993ba`; complete signed macOS and Linux Electron compilation plus Node archive now pass on `f37315483`. The named complete-distribution compilation gap is closed; preserve the existing native module/preload/thread cases and explicit policy obligations and approved bound-only refusal acceptance. Preserve accepted runtime controls through B6 and final strict acceptance; do not broaden permissions or claim isolation. |
+| Windows process ownership | Job Object/lifetime acceptance passes in `39075394015` attempt 2. Exact OS-reported DLL ownership, privacy, source restoration, Vue and outside-PATH refusal pass in `39091568546`; Unicode and bound-import lookup fallback pass in `39092975820` / `39093260230`. Backend preload/thread publication passes in `39095177818`; combined preload/thread reuse passes in `39097382309`. Source `4f1fdfbee` extends the same native owner to CommonJS content compilation, with 13 focused checks passing. Hosted `39100052114` on fixture correction `965b914b4` accepts that complete ownership/freshness/cleanup/refused-publication case in 106.17s under the unchanged 120s bound. See [compiler-reader evidence](../references/evidence/build-input-snapshot-proof.md#content-compiler-native-ownership-checkpoint-2026-10-18). | Preserve accepted ownership, cross-drive, codegen, cleanup and exact-copy checks. Run `39100566892` confirms extended tool paths are misclassified by the actual API. Source `aee3a18ab` uses the existing comparison for all eight remaining ownership decisions and preserves device prefixes when parsing module queries (51 pure checks pass). Hosted `39101205268` accepts eleven Windows alias/query/live-event cases; `39101209244` accepts the exact macOS live-event case in 1.09s after a local EMFILE failure. The live case is now guarded against daily-use Mac execution; no resource/security limit is changed. Namespace classification is accepted. B3 async watcher failure repair is implemented in the current checkpoint: attributed native/frontend subscription errors cancel builds, drain owned disposal and reach public/dev callers through the existing watcher owner. All 31 mocked/inert lifecycle checks, CLI types and focused lint pass. On pushed source `167722d1f`, macOS `39103783217` and the unit stage of Windows `39103780229` each accept ten focused watcher cases, including real backend/frontend controls. The separate ordinary-control failures are resolved by dependency-shaped probes and configuring `.local` before first launch. The [Windows VM control checkpoint](../references/evidence/build-input-snapshot-proof.md#windows-vm-redirection-control-acceptance-2026-10-18) accepts both exact value/path controls in 2.98s combined. Source `113116791` adds `.local` observation, admission and runtime inventory with matching focused VM acceptance; Configured Node `.local` public-build capture/refusal passes in `9d25152aa`; The default application-context Node SxS repair now has focused startup/copy acceptance linked above; Electron module/application SxS and DotLocal startup controls are accepted in `4aa3bc7a5`, `afc98b845` and `d2c459913`; remaining context/policy obligations stay explicit. See [hosted watcher/control evidence](../references/evidence/build-input-snapshot-proof.md#hosted-watcher-acceptance-and-pe-control-result-2026-10-18). No local live watcher runs. Close activation/SxS/.local redirection, approved bound-only refusal acceptance and supported search-state reconciliation. The [current Windows audit](../references/evidence/build-input-snapshot-proof.md#remaining-windows-resolution-audit-2026-10-18) identified unused manifest parsing and missing `.local` observation. The `.local` checkpoint addresses the latter; The default-context SxS omission is repaired as linked above; other context and policy edges remain open. Private `.local`/SxS controls are authored in the existing PE integration file. Both ordinary controls pass on the approved VM, and `.local` now refuses the proven outside selection. Configured Node `.local` now has public-build acceptance; Basic DLL-owned resource-2 selection and actual Node startup now pass as linked above; DLL-specific configuration and actual Node snapshot startup are accepted in `61431e063`; Electron module-context is accepted in `4aa3bc7a5`; Electron application-context and DotLocal startup are accepted in `afc98b845` / `d2c459913`; broader policy/watch edges remain unaccepted. Their [proof boundary](../references/evidence/build-input-snapshot-proof.md#private-pe-redirection-control-candidate) preserves actual Node/Electron and admission acceptance as required. Watcher checkpoint source is `6d6a8e9e1`; the user pushed `167722d1f`, and its focused hosted watcher acceptance is recorded above. Remaining platform/native requirements, B6 and final strict `--all` stay required; partial support/refusals are not exclusions. |
 | Linux native ownership | `3ec217669` adds runtime preflight at the shared launcher; run `39085132469` accepts the constructor boundary, metadata, retained ELF/Vue, lifetime, native backend preload/thread, independent Vite and backend baselines. Filtered run `39085739556` on `b310e9a0b` additionally accepts the ordinary bare-SONAME/ORIGIN-RUNPATH worker case, launch-env mutation and new-override invalidation. | These concrete gaps are closed on their recorded Node sources. Preserve them in converged/final acceptance. Remaining mapped-image/runtime-distribution checks stay explicit; continue the remaining Windows lookup/preload/thread obligations rather than repeating accepted Linux cases for diagnosis. |
 
 The Linux retained-library counterexample is repaired and accepted on `b02217703`; see
-[Linux acceptance](../../references/evidence/build-input-snapshot-proof.md#retained-elf-library-acceptance-2026-10-17).
+[Linux acceptance](../references/evidence/build-input-snapshot-proof.md#retained-elf-library-acceptance-2026-10-17).
 The native backend preload/thread publication boundary also passes on `1fbf12216`; see
-[Linux backend acceptance](../../references/evidence/build-input-snapshot-proof.md#linux-native-backend-publication-acceptance-2026-10-17).
+[Linux backend acceptance](../references/evidence/build-input-snapshot-proof.md#linux-native-backend-publication-acceptance-2026-10-17).
 The runtime-linked constructor control and all bounded Linux stages now pass on `3ec217669` in
-`39085132469`; see [runtime acceptance](../../references/evidence/build-input-snapshot-proof.md#runtime-linked-elf-launcher-acceptance-2026-10-17).
+`39085132469`; see [runtime acceptance](../references/evidence/build-input-snapshot-proof.md#runtime-linked-elf-launcher-acceptance-2026-10-17).
 The ordinary ELF bare-SONAME/ORIGIN-RUNPATH worker case now also passes on `b310e9a0b` in
-`39085739556`; see [RUNPATH acceptance](../../references/evidence/build-input-snapshot-proof.md#elf-runpath-and-launch-state-acceptance-2026-10-17).
-The [Windows DLL control](../../references/evidence/build-input-snapshot-proof.md#accepted-windows-dll-ownership-and-full-path-module-metadata-2026-10-17)
+`39085739556`; see [RUNPATH acceptance](../references/evidence/build-input-snapshot-proof.md#elf-runpath-and-launch-state-acceptance-2026-10-17).
+The [Windows DLL control](../references/evidence/build-input-snapshot-proof.md#accepted-windows-dll-ownership-and-full-path-module-metadata-2026-10-17)
 now accepts exact captured ownership, freshness and pre-initialization outside-library refusal through
 the existing native owner. Preserve the accepted Job Object and shared path identity implementations.
-The [Unicode/binding follow-up](../../references/evidence/build-input-snapshot-proof.md#windows-unicode-metadata-and-bound-import-control-correction-2026-10-17)
+The [Unicode/binding follow-up](../references/evidence/build-input-snapshot-proof.md#windows-unicode-metadata-and-bound-import-control-correction-2026-10-17)
 distinguishes the accepted Unicode case from a failing ordinary-Node fixture; do not treat that failure
 as a production counterexample. Remaining linked-runtime distributions, mapped-image/platform cases,
 stricter app signing and final gates remain required.
@@ -975,7 +975,7 @@ passing packaged authoring, external-pack contracts, default-pack build, facade/
 and typechecks. Corrections pass all 951 affected repository checks; this is not a full strict pass.
 Do not repeat that broad run to diagnose already-corrected bookkeeping. Finish the named native/platform
 work, then B6 and final committed-source strict `--all`, preserving every phase below.
-See [compiler evidence](../../references/evidence/build-input-snapshot-proof.md#shared-cache-acceptance-and-linux-proof-boundary-2026-10-17)
+See [compiler evidence](../references/evidence/build-input-snapshot-proof.md#shared-cache-acceptance-and-linux-proof-boundary-2026-10-17)
 for exact source commits, commands, failures and passed runs.
 
 #### Earlier compiler checkpoints
@@ -992,7 +992,7 @@ or cleanup, so the case makes forward progress; final completion is still unveri
 Windows two-build/archive case 240 seconds, retaining 120 seconds locally and every assertion. The
 focused Windows diagnostic selects startup and repeat-build baseline cases; broader platform/native
 lifetime acceptance remains required with its implementation. See
-[timing evidence](../../references/evidence/build-input-snapshot-proof.md#windows-repeated-build-forward-progress-2026-10-17).
+[timing evidence](../references/evidence/build-input-snapshot-proof.md#windows-repeated-build-forward-progress-2026-10-17).
 Source `b1c1c87c6` integrates the shared Windows build/Vite job owner. Run `39065375155` passes the
 actual production launch helper's success/failure/cancellation/Unicode proof and all 162 focused unit
 cases (eight platform skips). The publication step never reaches its intended case: a Windows shell
@@ -1011,7 +1011,7 @@ including forced parent loss and isolated replacement. Its package/publication/r
 did not run: dependency installation failed with a GitHub API 403 downloading ripgrep.
 The focused workflow now supplies the installer's supported `GITHUB_TOKEN`, matching the main CI;
 the native helper pass does not certify the pending integrations. See
-[handoff evidence](../../references/evidence/build-input-snapshot-proof.md#windows-environment-and-final-lifetime-cases-2026-10-17).
+[handoff evidence](../references/evidence/build-input-snapshot-proof.md#windows-environment-and-final-lifetime-cases-2026-10-17).
 Local types, CLI packaging, POSIX descendant publication, syntax/lint and 53 tooling cases pass.
 Actual repeated-build baseline, build/frontend integration and final strict acceptance remain open.
 
@@ -1020,7 +1020,7 @@ installation, matching package build, 162 focused checks (eight platform skips),
 descendant-publication case, startup identity and repeated-build/archive identity. The repeated-build
 case takes 164.325 seconds under its existing 240-second Windows budget. This closes the previously
 unexecuted Windows baseline/publication acceptance, not the remaining Vite/native-input paths or
-the converged/final gates. See [Windows acceptance evidence](../../references/evidence/build-input-snapshot-proof.md#windows-producer-baseline-acceptance-2026-10-17).
+the converged/final gates. See [Windows acceptance evidence](../references/evidence/build-input-snapshot-proof.md#windows-producer-baseline-acceptance-2026-10-17).
 
 Source `6fd1a5050` implements SDK-dependent standard macOS native fallbacks and distinguishes absent
 fallback settings from explicitly empty lists. Forty-two unit cases, four real loader cases covering
@@ -1028,7 +1028,7 @@ SDK 13/14 dylib/framework searches and empty-list suppression, the real explicit
 refusal/incumbent-retention case, CLI types and lint pass. The real loader proof uses macOS 26.3.1 /
 Node 23.11.1 and private fixtures; no system directory writes. Restricted/hardened-runtime fallback
 policy still needs acceptance; versioned/shared-cache controls, retained Vite native initialization,
-ELF/PE and converged/final acceptance remain open. See [standard fallback evidence](../../references/evidence/build-input-snapshot-proof.md#sdk-dependent-standard-native-fallbacks-2026-10-17).
+ELF/PE and converged/final acceptance remain open. See [standard fallback evidence](../references/evidence/build-input-snapshot-proof.md#sdk-dependent-standard-native-fallbacks-2026-10-17).
 
 Source `ce172953d` installs native admission before retained Vite preloads, shares the existing native
 capture owner, and checks frontend inputs before readiness/reuse. Vite copies selected images rather
@@ -1038,7 +1038,7 @@ backend preload/thread regressions also pass. Builder cancellation, real generat
 actual Vite descendant/replacement ownership pass locally. Next: deliver frontend discoveries and
 failure probes into live watch subscriptions, account for frontend preload JS inputs, and accept the
 loader/late-load paths. Versioned/shared-cache/restricted-runtime controls, ELF/PE, remaining platform
-coverage and converged/final gates remain required. See [retained Vite evidence](../../references/evidence/build-input-snapshot-proof.md#retained-vite-native-input-ownership-2026-10-17).
+coverage and converged/final gates remain required. See [retained Vite evidence](../references/evidence/build-input-snapshot-proof.md#retained-vite-native-input-ownership-2026-10-17).
 
 Windows run `39069433335` on `0ac839c94` passes native job ownership, 169 focused checks, both
 publication/cancellation cases and actual Vite replacement/descendant ownership. Its baseline then
@@ -1053,11 +1053,11 @@ survives preload mutation, selected external fallback libraries refuse before na
 and the incumbent survives. Current-directory lookup precedes fallback lookup; a successfully resolved
 package-relative library does not consult unused fallback paths. Twenty-seven unit cases, four real
 native/compiler cases, CLI types and correctness lint pass. See
-[checkpoint evidence](../../references/evidence/build-input-snapshot-proof.md#explicit-native-fallback-admission-2026-10-17).
+[checkpoint evidence](../references/evidence/build-input-snapshot-proof.md#explicit-native-fallback-admission-2026-10-17).
 Source `c1abbd9c2` implements framework override/fallback admission using the same ordered search, with full framework/version
 paths and the retained launch environment. Thirty unit cases and three real compiler-preload cases
 pass, including preserved dylib fallback behavior; see
-[framework evidence](../../references/evidence/build-input-snapshot-proof.md#native-framework-search-admission-2026-10-17).
+[framework evidence](../references/evidence/build-input-snapshot-proof.md#native-framework-search-admission-2026-10-17).
 Versioned/shared-cache controls and default fallbacks, retained frontend native initialization,
 ELF/PE, platform lifetime and converged/final acceptance remain open. Do not treat these focused repairs as full B1/B3 closure.
 The demonstrated `DYLD_IMAGE_SUFFIX` gap is now repaired: capture launch-time ordered suffixes and
@@ -1066,7 +1066,7 @@ ordering. Missing variants are observed; nonexistent owned candidates are not re
 executes captured suffixed bytes, detects their change, and refuses a later transitive outside
 dependency before initialization while retaining the incumbent. Thirty-five native unit cases,
 subprocess inventory, CLI types and lint pass; see
-[suffix evidence](../../references/evidence/build-input-snapshot-proof.md#selected-native-image-suffix-admission-2026-10-17).
+[suffix evidence](../references/evidence/build-input-snapshot-proof.md#selected-native-image-suffix-admission-2026-10-17).
 Versioned overrides/shared-cache controls/default fallbacks, retained frontend native initialization,
 ELF/PE, platform lifetime and final gates still require closure.
 
@@ -1101,7 +1101,7 @@ explicit detection limit, not a claim of stronger security isolation. Historical
 |---|---|---|
 | Outside-library admission | Common module/startup/worker/frontend owners use Mach-O, ELF and PE admission. Actual macOS direct/transitive/preload/thread/Vite cases, Linux native backend/runtime cases (`39085132469`, `39085739556`) and Windows backend/thread/content-compiler controls (`39095177818`, `39097382309`, `39100052114`) accept captured loading and refusal before initialization. Windows Node/Electron application/module/DotLocal controls additionally accept exact copied selection. | Preserve all existing refusal, source/copy identity, freshness and incumbent-retention assertions. Reconcile the finite loader-selection gaps below, then accept the converged source. The original absolute-library counterexample is repaired; do not restart its implementation. |
 | Native/background lifetime | Windows Job Object ownership passes in `39075394015` attempt 2; Linux startup/cancellation/descendant/retirement and independent Vite ownership pass in `39083965583`. The Windows native watch replacement/refusal/repair lifecycle passes on `72ad6bae9`. The helper compiler timeout/parent-loss defect is repaired in `f6cd78014`, with real suspended-compiler controls. `9adb9073f` accepts two fresh builders and complete disposal on Windows. | These named owner paths have implementation and runtime evidence. Preserve them through clean-platform/B6/final acceptance; do not schedule them again as missing implementation. A new lifetime defect requires a specific counterexample through an existing owner, not a general resource framework. |
-| Remaining loader-selection evidence | Current PE helper reads selected assembly manifests through `QueryActCtx`, observes policy-store candidates when the OS omits the selected policy path, probes private candidates, delegates binding to Windows, and maps resources without initialization. Runtime inventory includes selected context and captured OS policy. Existing checks cover transitive/declared/wildcard language candidates, configuration changes and creation/removal. | Outside-image private-assembly selection is accepted in `931e08186`, with its physical outside DLL refused before initialization. The [system-assembly control](../../references/evidence/build-input-snapshot-proof.md#windows-system-assembly-selection-and-copied-runtime--2026-10-18) now accepts exact OS DLL selection, fresh copied-runtime identity, all selected OS manifests and manifest-change/restoration freshness in 4.287s, without production changes. Publisher-policy mutation and copy/freshness acceptance now pass on `7ce19661f` as recorded above. The bound-only scope decision is closed by the user-approved refusal above; its attribution, pre-initialization and incumbent-retention checks remain required. Other specifically named unresolved linked/mapped-image combinations retain their existing acceptance obligations. Do not infer a defect from the old partial labels, omit required cases, or implement address recovery from a malformed fixture. |
+| Remaining loader-selection evidence | Current PE helper reads selected assembly manifests through `QueryActCtx`, observes policy-store candidates when the OS omits the selected policy path, probes private candidates, delegates binding to Windows, and maps resources without initialization. Runtime inventory includes selected context and captured OS policy. Existing checks cover transitive/declared/wildcard language candidates, configuration changes and creation/removal. | Outside-image private-assembly selection is accepted in `931e08186`, with its physical outside DLL refused before initialization. The [system-assembly control](../references/evidence/build-input-snapshot-proof.md#windows-system-assembly-selection-and-copied-runtime--2026-10-18) now accepts exact OS DLL selection, fresh copied-runtime identity, all selected OS manifests and manifest-change/restoration freshness in 4.287s, without production changes. Publisher-policy mutation and copy/freshness acceptance now pass on `7ce19661f` as recorded above. The bound-only scope decision is closed by the user-approved refusal above; its attribution, pre-initialization and incumbent-retention checks remain required. Other specifically named unresolved linked/mapped-image combinations retain their existing acceptance obligations. Do not infer a defect from the old partial labels, omit required cases, or implement address recovery from a malformed fixture. |
 | Platform coverage | Exact recorded runs cover macOS ARM64, Windows x64 and Linux x64 on their documented Node/Electron versions; packaging alone is not acceptance. | Preserve exact OS/architecture/runtime evidence, close the finite unresolved combinations and run converged/final gates. A version range is not a requirement to invent an unlimited version matrix; unverified configured targets are not implicitly excluded. |
 
 Configured targets, inspected 2026-10-17:
@@ -1181,13 +1181,13 @@ outside GitHub-hosted runners before importing specs. It covers direct Vitest an
 selection; unit checks and normal product commands are unchanged. Eight policy cases, an actual local
 configuration refusal, CLI types and focused lint pass. This is an operational boundary, not a finding
 about the launch incident's cause or acceptance of the remaining compiler work. See
-[guard evidence](../../references/evidence/build-input-snapshot-proof.md#local-compiler-integration-guard-2026-10-17).
+[guard evidence](../references/evidence/build-input-snapshot-proof.md#local-compiler-integration-guard-2026-10-17).
 Windows PE checkpoint `b70228539`, including shared path identity `a07182ec2`, repairs the original
 DLL bypass, extended-root/namespace defects and Node 23's incomplete report module inventory through
 the existing copy owner. Run `39091568546` passes exact DLL ownership, report privacy, source byte/mode
 restoration, Vue updates and attributed outside-PATH refusal before both initialization markers in
 44.38s on the original 60s deadline. Forty-six focused PE cases, forty-four adjacent host/CLI cases,
-types and lint pass in the recorded checks. See [accepted evidence and source history](../../references/evidence/build-input-snapshot-proof.md#accepted-windows-dll-ownership-and-full-path-module-metadata-2026-10-17).
+types and lint pass in the recorded checks. See [accepted evidence and source history](../references/evidence/build-input-snapshot-proof.md#accepted-windows-dll-ownership-and-full-path-module-metadata-2026-10-17).
 Remaining Windows lookup and preload/thread/publication obligations stay in the current closure
 register. Other native/profile requirements, B6 and final committed-source strict `--all` remain open
 and must execute in disposable CI; this focused pass does not close them.
@@ -1266,103 +1266,103 @@ wrong owners/policies and missing compiled data files refuse; missing specialty 
 compiler. Focused cases, types/lint and real shipped/external output reads pass; final layout acceptance
 passes 110 cases including installation and capture races. See [content evidence](../references/evidence/discovery-without-activation.md#compiled-content-admission-2026-10-17).
 Reader cleanup `e6ce3f1e4` removes the unused declaration-only reader; all 110 layout cases, host types
-and lint pass. The [asset producer audit](../../references/evidence/build-input-snapshot-proof.md#asset-producer-audit-and-bounded-follow-through-2026-10-17)
+and lint pass. The [asset producer audit](../references/evidence/build-input-snapshot-proof.md#asset-producer-audit-and-bounded-follow-through-2026-10-17)
 classifies remaining media, CSS, lazy/worker chunks and public-file copying. Proofs show returned Vite
 graphs omit public copies and media copying bypasses an injected captured-byte view; neither alone
-proves a publication failure. The [B1/B3 path matrix](../../references/evidence/build-input-snapshot-proof.md#b1b3-current-compiler-path-matrix-2026-10-17)
+proves a publication failure. The [B1/B3 path matrix](../references/evidence/build-input-snapshot-proof.md#b1b3-current-compiler-path-matrix-2026-10-17)
 is now recorded against current owners. Media execution checkpoint `129b541de` copies ordinary files
 through captured byte/directory/metadata reads, preserving permissions and native link/special-file
 behavior. The real input-view regression passes after reproducing live-byte copying; 22 compiler cases,
 SDK/CLI types, lint and package builds pass. The preserved exit-handler case passes unchanged in an
-isolated run; its earlier failure cause remains unclassified. See [media evidence](../../references/evidence/build-input-snapshot-proof.md#captured-media-execution-checkpoint-2026-10-17).
+isolated run; its earlier failure cause remains unclassified. See [media evidence](../references/evidence/build-input-snapshot-proof.md#captured-media-execution-checkpoint-2026-10-17).
 Native-package acceptance `4c126846f` runs a real captured platform executable and addon after deleting
 their source fixture; all ten installation cases pass. This verifies the existing package owner on the
 current platform, not external binary overrides or Node/Electron runtime ownership. Public-input
 checkpoint `d09a7f447` gives the frontend bundler the existing build owner and projects Vite's public
 directory onto captured authored files, preserving copied permissions and bundle replacement behavior.
 The real Vite regression, 19 adjacent frontend cases, CLI types/lint and package refresh pass. See
-[public-input evidence](../../references/evidence/build-input-snapshot-proof.md#captured-public-directory-checkpoint-2026-10-17).
+[public-input evidence](../references/evidence/build-input-snapshot-proof.md#captured-public-directory-checkpoint-2026-10-17).
 Frontend scope checkpoint `0e03d4021` runs the complete bundling operation under the existing captured
 read owner, retaining Vite's root and resolvers. Changed/unchanged real compiler cases cover Vue,
 dependency code, CSS/SVG, lazy imports, browser workers, globs, Sass, Tailwind and configuration source
 globals. The public-file case, 19 adjacent cases, CLI types/lint/package refresh and real external-pack
-build/publication pass. See [frontend evidence](../../references/evidence/build-input-snapshot-proof.md#frontend-read-scope-checkpoint-2026-10-17).
+build/publication pass. See [frontend evidence](../references/evidence/build-input-snapshot-proof.md#frontend-read-scope-checkpoint-2026-10-17).
 Dependency-startup checkpoint `9ecf788fb` captures declared npm bytes, filtered membership and missing
 lookups before user initialization through the existing package reader/input owner. Twelve focused
 input tests, the real native-preload regression, CLI/host types, lint and refreshed CLI build pass.
 The real worker's two builds preserve unchanged sealed output/cache identity (50.02s). Existing twenty
-package-reader cases also pass. See [dependency evidence](../../references/evidence/build-input-snapshot-proof.md#early-declared-dependency-capture-checkpoint-2026-10-17).
+package-reader cases also pass. See [dependency evidence](../references/evidence/build-input-snapshot-proof.md#early-declared-dependency-capture-checkpoint-2026-10-17).
 This closes the demonstrated early declared-input gap, not external executable/runtime ownership or
-all transient resolution paths. The next [executable-selection proof](../../references/evidence/build-input-snapshot-proof.md#external-esbuild-executable-selection-proof-2026-10-17)
+all transient resolution paths. The next [executable-selection proof](../references/evidence/build-input-snapshot-proof.md#external-esbuild-executable-selection-proof-2026-10-17)
 demonstrates that a changed external `ESBUILD_BINARY_PATH` executes under unchanged captured compiler
 identity. Source `5c5f733fb` repairs that configured selection through the existing installation owner,
 including its reuse checks, worker environment and cleanup. Twelve installation cases, real override
 build/repeat identity, corrected cancellation fixture, CLI types/lint and package refresh pass; see
-[executable checkpoint evidence](../../references/evidence/build-input-snapshot-proof.md#captured-external-esbuild-executable-checkpoint-2026-10-17).
+[executable checkpoint evidence](../references/evidence/build-input-snapshot-proof.md#captured-external-esbuild-executable-checkpoint-2026-10-17).
 Frontend ownership checkpoint `a595246f2` now retains one builder for initial/dev/watch compilation and
 Vite workers. Actual A/B publication/HTTP source watching, failure retention, watcher/session ownership
 and complete process/copy/cache retirement pass, alongside affected lifecycle tests, CLI/scripts types,
-lint and package builds. See [frontend generation evidence](../../references/evidence/build-input-snapshot-proof.md#retained-frontend-compiler-ownership-checkpoint-2026-10-17).
+lint and package builds. See [frontend generation evidence](../references/evidence/build-input-snapshot-proof.md#retained-frontend-compiler-ownership-checkpoint-2026-10-17).
 Configuration checkpoint `d3833f788` refreshes on pack/shared metadata changes through the same owner;
 fresh lookup fixes a reproduced UI link-cache omission. All 39 focused builder/package/shared cases,
 CLI/host types, lint and package refresh pass. Real browser HMR through generated registration preserves
-component state and document with no page errors; see [configuration/browser evidence](../../references/evidence/build-input-snapshot-proof.md#frontend-configuration-and-browser-hmr-checkpoint-2026-10-17).
+component state and document with no page errors; see [configuration/browser evidence](../references/evidence/build-input-snapshot-proof.md#frontend-configuration-and-browser-hmr-checkpoint-2026-10-17).
 Cleanup `a67edefc1` centralizes generation sequencing; 29 affected lifecycle cases, CLI types and lint
-pass. The [runtime-copy proof](../../references/evidence/build-input-snapshot-proof.md#generation-cleanup-and-runtime-copy-feasibility-2026-10-17)
+pass. The [runtime-copy proof](../references/evidence/build-input-snapshot-proof.md#generation-cleanup-and-runtime-copy-feasibility-2026-10-17)
 shows owned Node and Electron execution is feasible locally; Electron needs adjacent frameworks.
 Runtime checkpoint `e369d3cb9` now owns the selected executable in the captured installation and uses
 it for both worker launches. Twenty-three focused cases across the recorded runs, three real integration
 cases, CLI types/lint/package refresh and integrated owned Electron execution pass; see
-[runtime ownership evidence](../../references/evidence/build-input-snapshot-proof.md#selected-runtime-ownership-checkpoint-2026-10-17).
+[runtime ownership evidence](../references/evidence/build-input-snapshot-proof.md#selected-runtime-ownership-checkpoint-2026-10-17).
 Tooling subscription checkpoint `0bb9e64ec` closes the idle compiler/runtime/esbuild omission through
 the existing observer/signature. Twenty-five focused cases, real idle filesystem delivery, CLI
 types/lint/package refresh and a real distributable inventory check pass; see
-[subscription evidence](../../references/evidence/build-input-snapshot-proof.md#idle-tooling-subscription-checkpoint).
+[subscription evidence](../references/evidence/build-input-snapshot-proof.md#idle-tooling-subscription-checkpoint).
 Namespace/native checkpoint `701928e9f` proves actual outside-addon execution uses the owned tree;
 existing implementation suffices. Thirty-three view/namespace/observation cases and actual early
-startup pass; see [bounded reconciliation](../../references/evidence/build-input-snapshot-proof.md#native-module-and-namespacethread-acceptance-2026-10-17).
+startup pass; see [bounded reconciliation](../references/evidence/build-input-snapshot-proof.md#native-module-and-namespacethread-acceptance-2026-10-17).
 Environment checkpoint `84f473549` repairs a reproduced Vite output/identity mismatch, using a shared
 initial-environment digest and private-path normalization. Twenty-five focused cases, actual startup
 capture, CLI types/lint/package refresh pass. Repeat-build revision/cache assertions pass in a 64.02s
 diagnostic run; its original 60s aggregate-budget failure remains a B6/final-gate item. See
-[environment evidence](../../references/evidence/build-input-snapshot-proof.md#initial-environment-identity-checkpoint).
+[environment evidence](../references/evidence/build-input-snapshot-proof.md#initial-environment-identity-checkpoint).
 Passive glob replay is implemented in `6c7198474`: actual TypeScript directory selection records
 native filesystem facts, with complete authored membership supplied by its existing owner. Fifty focused
-cases and real early startup pass; see [replay evidence](../../references/evidence/build-input-snapshot-proof.md#passive-glob-replay-checkpoint).
+cases and real early startup pass; see [replay evidence](../references/evidence/build-input-snapshot-proof.md#passive-glob-replay-checkpoint).
 Watch checkpoint `268ef667b` eliminates redundant tooling discovery while preserving build-time byte
 verification. All 24 affected integration cases pass with two workers; no timeout changed. The
 external-types budget remains tight and no broad/strict pass is claimed; see
-[watch repair evidence](../../references/evidence/build-input-snapshot-proof.md#compilerwatch-integration-repair-2026-10-17).
+[watch repair evidence](../references/evidence/build-input-snapshot-proof.md#compilerwatch-integration-repair-2026-10-17).
 Common native input ownership is implemented in `0434a0703`: capture/replay now lives in the host
 build layer, with no compiler activation or import-time filesystem interception. Eighty-two focused
 checks, actual bundled startup, host/CLI types, lint and package refresh pass; see
-[common-owner evidence](../../references/evidence/build-input-snapshot-proof.md#common-native-input-owner-checkpoint).
+[common-owner evidence](../references/evidence/build-input-snapshot-proof.md#common-native-input-owner-checkpoint).
 Completed-frame replay repair `2d7dd140c` now honors explicitly consumed generated bytes without
 expanding authored membership. Its regression failed on unchanged input before the fix; 52 affected
 cases, passive replay and host/CLI types pass. See
-[generated-input evidence](../../references/evidence/build-input-snapshot-proof.md#explicit-generated-input-replay-checkpoint).
+[generated-input evidence](../references/evidence/build-input-snapshot-proof.md#explicit-generated-input-replay-checkpoint).
 B4 source checkpoint `0192d2819` publishes completed input observations and recorded package/compiler/execution context in
 `dist/build-inputs.json`, sealed by the existing output receipt. Reused phases retain their prior input
 facts; passive replay uses common native ownership and installed staging omits source metadata. Real
 repeat publication preserves phase reuse, sealed revision and cleanup (50.00s); 100 affected cases,
 110 layout/receipt cases and host/CLI types pass. See
-[completed-record evidence](../../references/evidence/build-input-snapshot-proof.md#completed-source-inputoutput-association-checkpoint).
+[completed-record evidence](../references/evidence/build-input-snapshot-proof.md#completed-source-inputoutput-association-checkpoint).
 The frontend metadata reader now derives shared SDK owners from `getSdkFeModules()` and retains UI's
 dynamic exports; it does not adopt backend EARS sharing. The six shared-package rule cases and eight
 builder cases pass, alongside CLI types/lint; see the same evidence record.
 Frontend output checkpoint `0e84bd67c` retains actual Vite emissions and public copies through final
 sealing, including CSS/lazy/worker/maps and placeholder replacement. Missing required output refuses
 the real candidate and retains its incumbent directory. See
-[frontend output evidence](../../references/evidence/build-input-snapshot-proof.md#frontend-output-expectations-checkpoint).
+[frontend output evidence](../references/evidence/build-input-snapshot-proof.md#frontend-output-expectations-checkpoint).
 Content-output checkpoint `72435c778` feeds compiled JSON, the index and regular media bytes into that same
 expectation owner. The real post-compilation media-deletion case refuses publication and retains its
 incumbent; SDK/CLI types, 23 focused checks and all 28 SDK API reports pass. See
-[content output evidence](../../references/evidence/build-input-snapshot-proof.md#content-and-media-output-expectations-checkpoint).
+[content output evidence](../references/evidence/build-input-snapshot-proof.md#content-and-media-output-expectations-checkpoint).
 Writer-output checkpoint `d4e24d4b5` feeds native backend/content/step bundles, rendered facade/helper/DSL
 declarations, metadata and reused-phase files into that same final check. Reuse verifies the prior receipt's expected bytes before copying.
 Twenty-eight unit/passive cases, six DSL cases, three actual native compiler cases, host/CLI types and
 lint pass. Two real builds preserve reuse/revision/cleanup in 65.20s; see
-[remaining writer evidence](../../references/evidence/build-input-snapshot-proof.md#remaining-writer-output-expectations-checkpoint).
+[remaining writer evidence](../references/evidence/build-input-snapshot-proof.md#remaining-writer-output-expectations-checkpoint).
 This implements B4's supported file-writer coverage. Its final acceptance still depends on the retained
 B1/B3 ownership/lifetime requirements and converged checks. B5's prebuilt-test checkpoint `c70f37c3b` now verifies
 the sealed output, replays completed source/dependency observations and requires a recorded `--release`
@@ -1390,7 +1390,7 @@ defect: native root-directory observations included the not-yet-published dist e
 and cursor reads now apply the same source exclusions as module resolution; explicit output-directory
 reads retain their full observations. A small case fails before the fix and passes afterward. The actual
 worker now proves fresh publication, archive acceptance and unchanged repeat-build reuse in 61.51s.
-See [fresh directory evidence](../../references/evidence/build-input-snapshot-proof.md#fresh-publication-directory-namespace-repair).
+See [fresh directory evidence](../references/evidence/build-input-snapshot-proof.md#fresh-publication-directory-namespace-repair).
 Generic acceptance repair `f8fbbedf5`: adapted the generic portions of `d5845c96f` without merging research work.
 The watcher mock now supplies the current factory; build stamps declare the two transitive input
 modules; synthetic packs include required frontend/content files before sealing. The content compiler
@@ -1398,29 +1398,29 @@ failure fixture no longer declares an unrelated nonexistent source. All 155 affe
 The three-build replacement/cache case passes its assertions in 59.27s alone and exceeds 60s alongside
 focused checks; it now has a named 120s exception, alongside the two existing 120s scenarios. This does
 not resolve compiler cost or the earlier aggregate integration deadline. See
-[generic acceptance evidence](../../references/evidence/build-input-snapshot-proof.md#generic-acceptance-repair).
+[generic acceptance evidence](../references/evidence/build-input-snapshot-proof.md#generic-acceptance-repair).
 B5 real handoff acceptance now passes on source `895143b7b`: default build, fresh fork build/archive,
 cached preparation verification and all four isolated app launches (two-window replacement/dev reload,
 fork restart, removed-pack boot and restored-pack boot). The old external fixture correctly refused
 before startup for stale compiler observations; rebuilding that fixture allowed the complete lifecycle
 to pass. App bundles were refreshed because they inline changed host code. See
-[real handoff evidence](../../references/evidence/build-input-snapshot-proof.md#real-default-fork-handoff-acceptance).
+[real handoff evidence](../references/evidence/build-input-snapshot-proof.md#real-default-fork-handoff-acceptance).
 Ordinary compiler-worker filesystem observations and one-shot settlement are implemented in
 `c7d5603c5`. A real content compiler previously published an external worker-read value that freshness
 did not track; the regression now passes for explicit termination, natural exit with explicit options,
 nested workers and a background worker. A CPU-blocked worker refuses publication and preserves the
 incumbent. Existing native preload/loader and builder cancellation checks pass. See
-[worker ownership evidence](../../references/evidence/build-input-snapshot-proof.md#compiler-created-worker-input-ownership).
+[worker ownership evidence](../references/evidence/build-input-snapshot-proof.md#compiler-created-worker-input-ownership).
 Watch continuity and repair are implemented in `77e4bffc5`: typed capture probes feed existing
 subscriptions after successful and failed compilers; the common record supplies additional native
 freshness checks. A real external retarget fails without replacing the incumbent, then creating its
 missing file publishes the repair without authored edits. Recursive directory probes, original source
 paths, close cancellation and native termination semantics are covered. See
-[watch evidence](../../references/evidence/build-input-snapshot-proof.md#worker-watch-continuity-and-repair).
+[watch evidence](../references/evidence/build-input-snapshot-proof.md#worker-watch-continuity-and-repair).
 Native package-relative library ownership has source checkpoint `6710e3026`: extensionless file-path imports
 capture the selected addon's owning package through the existing native input reader. An actual macOS
 addon/library test and public build prove copied-byte execution and passive changed-input refusal;
-see [native-library evidence](../../references/evidence/build-input-snapshot-proof.md#package-relative-native-library-ownership).
+see [native-library evidence](../references/evidence/build-input-snapshot-proof.md#package-relative-native-library-ownership).
 Absolute external-library loading remains a demonstrated gap; other-platform lifetime behavior remains
 unverified. The B1/B3 closure register above owns the support decisions and finite acceptance work;
 neither item has an approved exclusion. Do not grow this repair into an incidental binary
@@ -1528,7 +1528,7 @@ This is current local app convergence, not a whole strict-gate pass. Keep B1/B3 
 requirements and the final committed-source strict `--all` open. The user subsequently approved bounded
 native support in `711565757`. `cc186a0d0` enforces declared outside-library refusal for selected macOS
 compiler modules, preserving real captured relative loading, JavaScript exports fallback and repeated
-refusal. See [native checkpoint evidence](../../references/evidence/build-input-snapshot-proof.md#bounded-macos-module-library-admission-2026-10-17).
+refusal. See [native checkpoint evidence](../references/evidence/build-input-snapshot-proof.md#bounded-macos-module-library-admission-2026-10-17).
 Startup/thread/Vite, ELF/PE and public-build acceptance remain required within that approved boundary.
 Windows validation uses the existing manual CI dispatch (`6fb4d9bcb`). The user authorized branch
 pushes and focused Windows CI on 2026-10-17. No descendant-lifetime acceptance is claimed.
@@ -1536,14 +1536,14 @@ Native startup checkpoint `e6dd35d52` keeps native admission active independentl
 interception, reuses the package/read-tree owners, and verifies captured relative preload loading,
 changed-library freshness and incumbent retention after direct/transitive refusal. Four real addon
 cases, 79 affected unit cases, 53 tooling cases, host/CLI types and lint pass. See the
-[startup evidence](../../references/evidence/build-input-snapshot-proof.md#native-startup-admission-checkpoint-2026-10-17).
+[startup evidence](../references/evidence/build-input-snapshot-proof.md#native-startup-admission-checkpoint-2026-10-17).
 This is a focused source checkpoint, not the converged B6 or final strict gate. A diagnostic run also
 demonstrated inherited preloads executing without capture in checkout setup and the separate content
 runtime checker. `70101557e` fixes the checker boundary: it simulates a dependent runtime without
 compiler launch options, preventing compiler hooks from hiding unusable published bundles. The
 regression fails on the prior implementation; six runtime cases and the real ordered-preload,
 changed-loader rebuild case pass. Checkout setup precedes compiler capture; it is not an unowned
-compilation phase. See the [boundary evidence](../../references/evidence/build-input-snapshot-proof.md#published-runtime-initialization-boundary-2026-10-17).
+compilation phase. See the [boundary evidence](../references/evidence/build-input-snapshot-proof.md#published-runtime-initialization-boundary-2026-10-17).
 Do not interpret compiler-startup acceptance as arbitrary child-process coverage. Retained frontend
 and other-platform native acceptance, ELF/PE, loader-environment semantics, Windows lifetime ownership and the converged/final
 gates remain open. Next, reconcile native initialization with retained frontend generations while
@@ -1555,19 +1555,19 @@ launch-option reuse, not native preload dependency capture or all frontend initi
 `c3b27fda7` closes the real macOS native-worker acceptance case through the existing thread owner:
 captured relative loading, changed-library freshness, direct/transitive pre-initialization refusal and
 incumbent retention pass in 38.18s. The shared preload regression also passes in 27.77s, with 53 tooling
-checks, CLI types and lint. See [native-worker evidence](../../references/evidence/build-input-snapshot-proof.md#native-worker-library-acceptance-2026-10-17).
+checks, CLI types and lint. See [native-worker evidence](../references/evidence/build-input-snapshot-proof.md#native-worker-library-acceptance-2026-10-17).
 A separate 0.84s native-loader experiment demonstrates that inherited `DYLD_LIBRARY_PATH` can replace
 a captured loader-relative library with an outside copy. `70480baeb` closes that demonstrated case:
 launch settings survive preload environment changes and worker creation; matching outside overrides
 refuse before addon initialization, while an unused directory is allowed and its later matching file
 invalidates freshness. The real worker/public-build case passes in 31.03s with incumbent retention;
 52 focused cases, 53 tooling cases, CLI types, lint and a targeted mutation check pass. See the
-[search-path checkpoint](../../references/evidence/build-input-snapshot-proof.md#native-search-override-admission-2026-10-17).
+[search-path checkpoint](../references/evidence/build-input-snapshot-proof.md#native-search-override-admission-2026-10-17).
 `99ca1c6af` closes direct pre-initialization insertion through build preparation and both worker launch
 owners: normal OS insertion succeeds; live outside and original-package paths refuse before launch,
 without running a real library constructor or replacing the accepted build. The real case passes in
 25.70s with 24 policy cases, 53 tooling cases, CLI types, lint and a targeted mutation check. See the
-[insertion checkpoint](../../references/evidence/build-input-snapshot-proof.md#pre-launch-library-insertion-admission-2026-10-17).
+[insertion checkpoint](../references/evidence/build-input-snapshot-proof.md#pre-launch-library-insertion-admission-2026-10-17).
 This does not close every loader control: inspect applicable framework/versioned/fallback/suffix
 controls and shared-cache-specific precedence before claiming the macOS environment boundary complete.
 Then finish retained-frontend initialization without freezing HMR. ELF/PE, Windows descendant
@@ -1579,14 +1579,14 @@ skips) in [run 39059985521](https://github.com/spankyed/apack/actions/runs/39059
 identifies ordinary realpath failing on Windows extended paths. The current coherent correction
 uses native identity across roots, package inputs, captured trees and passive readers while preserving
 root-link metadata and authored-root watch exclusions. `f42e77db9` separately isolates a pack's esbuild
-override from checkout setup. See [path-policy evidence](../../references/evidence/build-input-snapshot-proof.md#consistent-native-compiler-path-identity-2026-10-17)
+override from checkout setup. See [path-policy evidence](../references/evidence/build-input-snapshot-proof.md#consistent-native-compiler-path-identity-2026-10-17)
 for the focused checks and real local repeated-build proof. Run the expanded focused Windows job
 against the committed correction; worker-baseline fail-fast remains enabled. Compiler platform and
 descendant-lifetime acceptance remain open. The earlier Windows trial history is retained in that
 evidence record rather than another live task list.
 The local two-core integration run against `e8940bb6d` reached its unchanged 600s deadline after
 eight files / 474 cases passed, including all seven native-library cases; the pool remains incomplete.
-See [launcher and pool evidence](../../references/evidence/build-input-snapshot-proof.md#windows-package-launcher-and-local-integration-checkpoint-2026-10-17).
+See [launcher and pool evidence](../references/evidence/build-input-snapshot-proof.md#windows-package-launcher-and-local-integration-checkpoint-2026-10-17).
 Do not repeat this broad run to diagnose the Windows launcher or count it as B6/final acceptance.
 
 The single two-core strict run failed preparing the default-pack fork: the build observation for

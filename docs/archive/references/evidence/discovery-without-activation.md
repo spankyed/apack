@@ -394,7 +394,7 @@ owns a conservative subtree beneath its static prefix rather than duplicating es
 
 
 The user's suggested snapshot-led hybrid is now exercised in disposable proofs, before selecting a
-production design. [The evaluation](../../../references/evidence/build-input-snapshot-proof.md) owns the actual matrix,
+production design. [The evaluation](build-input-snapshot-proof.md) owns the actual matrix,
 reports, alternatives and next acceptance. Real TypeScript, esbuild, executable content and Vite
 Vue/CSS/glob/worker builds preserve captured source/dependency bytes after the originals change.
 Two independent captures produce identical output; only private phase-cache metadata differs from

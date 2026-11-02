@@ -1,9 +1,11 @@
 # Application performance evidence
 
+Archived evidence. Status and measurements below describe their recorded checkpoints.
+
 These are immutable, source-qualified historical results, not timing goldens or claims about later
-cleanup revisions. The [recording reference](../application-performance.md) owns architecture and
-limits; the [suite guide](../../../tests/performance/README.md) owns commands and acceptance criteria.
-The [investigation archive](../../archive/references/application-performance-investigation-2026-10-31.md)
+cleanup revisions. The [recording reference](../../../references/application-performance.md) owns architecture and
+limits; the [suite guide](../../../../tests/performance/README.md) owns commands and acceptance criteria.
+The [investigation archive](../application-performance-investigation-2026-10-31.md)
 preserves the full experiment/checkpoint history, operational failures, commands and validation provenance.
 
 ## Recorded qualification

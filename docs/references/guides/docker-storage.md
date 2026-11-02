@@ -86,4 +86,4 @@ in subsequent measurements; do not pool old and new timing samples as matched co
 The maintained Linux runner explicitly gives `/dev/shm` 256 MiB, within its existing 6 GiB memory
 limit. Docker's 64 MiB default can prevent Electron renderer modules loading; OrbStack's larger
 default masked this locally. Direct Docker invocations that launch the app must also pass
-`--shm-size=256m`. The [controlled startup evidence](../evidence/2026-10-30-application-performance.md#linux-startup-resolution) records the failed and successful configurations.
+`--shm-size=256m`. The [controlled startup evidence](../../archive/references/evidence/2026-10-30-application-performance.md#linux-startup-resolution) records the failed and successful configurations.

@@ -434,7 +434,7 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   For a data dir the fixture made, it waits for Electron's `will-quit` (emitted once the API server's
   `before-quit` handler has stopped the API) and then kills Electron rather than waiting for Chromium to write
   a profile it is about to delete: under load those writes held exit past Playwright's 60s worker teardown
-  ([the evidence](../../docs/references/evidence/build-input-snapshot-proof.md#electron-exit-hang-in-linked-worktrees-2026-10-25)).
+  ([the evidence](../../docs/archive/references/evidence/build-input-snapshot-proof.md#electron-exit-hang-in-linked-worktrees-2026-10-25)).
   A dir the caller gave (`E2E_DATA_DIR`) is relaunched on, so its close still waits for the profile.
 
 ## API reference

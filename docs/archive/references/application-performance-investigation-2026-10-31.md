@@ -2,7 +2,7 @@
 
 Historical investigation and checkpoint diary. Current architecture and commands live in the
 [recording reference](../../references/application-performance.md); the
-[evidence index](../../references/evidence/2026-10-30-application-performance.md) owns the concise result inventory.
+[evidence index](evidence/2026-10-30-application-performance.md) owns the concise result inventory.
 
 # Application performance qualification evidence
 
@@ -275,7 +275,7 @@ on the composed branch remains required.
 
 All nine original full comparisons were re-admitted from their archived raw reports under the
 stronger capture rules: 450 trials passed, including per-launch startup provenance and process
-lifecycle checks. The [admission receipt](../../references/evidence/application-performance-2026-10-30/review-capture-admission.json)
+lifecycle checks. The [admission receipt](evidence/application-performance-2026-10-30/review-capture-admission.json)
 retains the archive and validator hashes. The temporary extraction was removed after checking;
 original archives remain intact. No timings, collectors or scenario behavior were changed.
 

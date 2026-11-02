@@ -41,8 +41,8 @@ Compiler capture and startup/authored inputs are implemented through `aba660aed`
 generations and retained frontend lifetimes in `a595246f2` / `d3833f788`. The completed input/output
 association and producer output expectations are implemented through `d4e24d4b5`. Archive, prebuilt tests,
 default-fork preparation and drive use the common record; see the
-[consumer evidence](../../references/evidence/build-input-snapshot-proof.md#prebuilt-test-consumer-checkpoint) and
-[real handoff](../../references/evidence/build-input-snapshot-proof.md#real-default-fork-handoff-acceptance).
+[consumer evidence](../references/evidence/build-input-snapshot-proof.md#prebuilt-test-consumer-checkpoint) and
+[real handoff](../references/evidence/build-input-snapshot-proof.md#real-default-fork-handoff-acceptance).
 `caf57cb0e` repairs compiler-specific generation-cache ownership without weakening generated-byte
 validation. These implemented owners must not be scheduled again as new designs.
 
@@ -50,12 +50,12 @@ Compiler identity uses native canonical filesystem paths consistently across roo
 private captures and passive replay. The common input view normalizes representational root spellings
 while retaining a real root link's namespace slot and observable metadata. Authored metadata operations
 keep their own semantics; they are not all converted to native-realpath queries. Watch exclusions
-recognize both declared and canonical roots. See the [path-policy proof](../../references/evidence/build-input-snapshot-proof.md#consistent-native-compiler-path-identity-2026-10-17);
+recognize both declared and canonical roots. See the [path-policy proof](../references/evidence/build-input-snapshot-proof.md#consistent-native-compiler-path-identity-2026-10-17);
 its local acceptance does not close the goal's Windows/native or final strict requirements.
 
 The user approved B1's bounded native contract on 2026-10-17: captured package-contained and OS
 libraries, with refusal of identifiable outside dependencies. `cc186a0d0` implements selected macOS
-module admission; [native checkpoint evidence](../../references/evidence/build-input-snapshot-proof.md#bounded-macos-module-library-admission-2026-10-17)
+module admission; [native checkpoint evidence](../references/evidence/build-input-snapshot-proof.md#bounded-macos-module-library-admission-2026-10-17)
 records its actual addon/refusal proof and remaining startup/thread/Vite, ELF/PE and public-build cases.
 B1/B3 completion and platform/resource-lifetime requirements remain open, as does converged B6/final acceptance. The [live ledger](../goals/goal-settings-and-pack-contracts.md#live-execution-ledger-reconciled-2026-10-16)
 owns their finite closure register and next actions. Installed/offline discovery continues to require
@@ -190,13 +190,13 @@ flags. Reused phases retain their prior observations. Native verification/replay
 build layer; it does not import the CLI, TypeScript or Vite. Compiler-copy namespace facts remain under
 the installation identity rather than being replayed against originals. Staging omits the source-only
 record; installed/offline inspection remains source-free. See
-[checkpoint evidence](../../references/evidence/build-input-snapshot-proof.md#completed-source-inputoutput-association-checkpoint).
+[checkpoint evidence](../references/evidence/build-input-snapshot-proof.md#completed-source-inputoutput-association-checkpoint).
 Compiler-created worker reads now join that common record. Their watch probes use the existing
 subscription owner, including missing-input recovery after failed builds and nested recursive
 directories. Probe transport stays in the build workspace and never certifies output. Static
 fingerprints and additional captured native facts retain distinct ownership; private compiler
 bookkeeping is excluded from authored reads. See
-[worker/watch evidence](../../references/evidence/build-input-snapshot-proof.md#worker-watch-continuity-and-repair).
+[worker/watch evidence](../references/evidence/build-input-snapshot-proof.md#worker-watch-continuity-and-repair).
 Native-library/platform lifetime and converged acceptance remain open under B1/B3/B6.
 Expected emitted/copied output bytes and B5 consumer policies have the separate checkpoints below
 and in the consumer evidence; the record alone does not establish those guarantees.
@@ -204,19 +204,19 @@ and in the consumer evidence; the record alone does not establish those guarante
 Frontend producer output expectations now use Vite's returned emitted bytes plus copied public bytes
 from the existing walk, retained in memory until final sealing. Missing or changed expected output
 refuses publication; ordered bundle emissions preserve public-placeholder replacement. CSS, lazy/worker
-files and maps are included. See [frontend output evidence](../../references/evidence/build-input-snapshot-proof.md#frontend-output-expectations-checkpoint).
+files and maps are included. See [frontend output evidence](../references/evidence/build-input-snapshot-proof.md#frontend-output-expectations-checkpoint).
 Compiled JSON/index and ordinary media now feed the same final expectation check through
 `CompilePackOptions.recordOutput`; deletion after actual media compilation refuses publication.
 Native bundle writers now report bytes after source-map transformation; declaration writers report
 final rendered text. Reused phases validate source bytes against the prior verified receipt before
 copying, then retain their destination expectations. Snapshot/cache/input metadata are checked too;
 inline flow helpers belong to their actual snapshot output. See
-[remaining writer evidence](../../references/evidence/build-input-snapshot-proof.md#remaining-writer-output-expectations-checkpoint).
+[remaining writer evidence](../references/evidence/build-input-snapshot-proof.md#remaining-writer-output-expectations-checkpoint).
 B4 final producer acceptance still includes the remaining B1/B3 lifetime requirements and converged
 checks. B5's four consumers are implemented with their recorded distinct freshness policies; preserve
 their remaining converged acceptance.
 
-The [asset producer audit](../../references/evidence/build-input-snapshot-proof.md#asset-producer-audit-and-bounded-follow-through-2026-10-17)
+The [asset producer audit](../references/evidence/build-input-snapshot-proof.md#asset-producer-audit-and-bounded-follow-through-2026-10-17)
 now enumerates the remaining concrete paths. Vite's output graph includes CSS/lazy/worker emissions
 but omits copied public files; media `fs.cpSync` bypasses the injected captured-byte view in a focused
 compiler proof. Neither observation alone proves an invalid build can publish. Close input ownership
@@ -224,7 +224,7 @@ under B1 and expected emitted/copied bytes under the existing B4 input/output as
 public-directory copying and explicit media-import behavior; do not add another asset manifest,
 JavaScript reference scanner or a second installed-reader authority. `e6ce3f1e4` removes the unused
 declaration-only `readPackSnapshot`; current installed readers use `readPackBuild`. The subsequent
-[B1/B3 matrix](../../references/evidence/build-input-snapshot-proof.md#b1b3-current-compiler-path-matrix-2026-10-17)
+[B1/B3 matrix](../references/evidence/build-input-snapshot-proof.md#b1b3-current-compiler-path-matrix-2026-10-17)
 locates current owners rather than treating every unverified path as new implementation. Source
 `129b541de` closes ordinary media-byte consumption through the existing captured reads and preserves
 copy modes/link behavior. Source `d09a7f447` projects Vite public copying onto the same captured owner,

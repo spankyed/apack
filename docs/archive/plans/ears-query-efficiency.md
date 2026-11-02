@@ -1,6 +1,6 @@
 # EARS query efficiency
 
-Status: done, 2026-10-29: [the readings](../../references/evidence/ears-query-efficiency.md).
+Status: done, 2026-10-29: [the readings](../references/evidence/ears-query-efficiency.md).
 
 ## Outcome and ownership
 
@@ -84,7 +84,7 @@ and explain differences; do not rerun until a favorable timing appears.
 
 ## Evidence and stopping rules
 
-Record dated results under `docs/references/evidence/ears-query-efficiency.md` when execution begins:
+Record dated results under `docs/archive/references/evidence/ears-query-efficiency.md` when execution begins:
 source/native build identities, fixture seed/shape, runtime/resources, commands, cache/warmup policy,
 raw trial locations, work counters, timings, memory and limitations. Keep mechanism and action results
 separate. Do not sum nested call durations or treat an end-to-end decode measurement as pure codec time.
@@ -94,7 +94,7 @@ with a concrete reopening trigger. Broader planner or API work requires its own 
 
 ## Current handoff
 
-Done, 2026-10-29: [the readings](../../references/evidence/ears-query-efficiency.md).
+Done, 2026-10-29: [the readings](../references/evidence/ears-query-efficiency.md).
 - Admitted: the chat page (thread open), the thread list (a view that refreshes repeatedly) and notes search, with
   message search's short page fixed beside them.
 - The chat page took one elmdb change (its `docs/roadmap/query-work-efficiency.md`); the rest were caller-only.

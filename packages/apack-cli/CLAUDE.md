@@ -155,7 +155,7 @@ It reuses the helper Job Object before optional C# compilation. The inspector re
 modules and native PATH; a worker's private or replaced `process.env` is not the OS loader state.
 Do not reintroduce `process.report.getReport()` for Windows queries: concurrent worker reports
 reproduce heap corruption. Only the immutable ntdll directory is cached; policy, modules and PATH stay
-live. See the [report-reader evidence](../../docs/references/evidence/build-input-snapshot-proof.md#windows-process-metadata-reader-without-diagnostic-reports--2026-10-18).
+live. See the [report-reader evidence](../../docs/archive/references/evidence/build-input-snapshot-proof.md#windows-process-metadata-reader-without-diagnostic-reports--2026-10-18).
 
 The runtime capture declares `runtimeDirectory`; the shared launcher uses it for linked-library
 admission before native constructors can run. On macOS, Electron includes the complete Contents
@@ -200,7 +200,7 @@ Use `splitCompilerModulePath` for tsx filename scope queries; the `?` in a Windo
 is part of the path. Use `relativeCompilerPath` for compiler ownership comparisons and `compilerSourcePath` for source
 projection. Node passes extended Windows filenames to native loading; both sides of a comparison must
 use the same spelling. The common file view uses `resolveCompilerPath` for drive-root identity; see
-[Windows copy-path evidence](../../docs/references/evidence/build-input-snapshot-proof.md#windows-native-copy-path-identity-2026-10-17).
+[Windows copy-path evidence](../../docs/archive/references/evidence/build-input-snapshot-proof.md#windows-native-copy-path-identity-2026-10-17).
 
 Retained Vite uses the same early bootstrap and native admission as backend builds, with a lazy view
 that copies selected images rather than the authored package. Vue sources remain live for HMR.

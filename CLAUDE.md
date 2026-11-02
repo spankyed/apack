@@ -176,7 +176,7 @@ variables. Dispatch CI only for what a Linux container cannot cover: the macOS-o
 framework copy, signed Mach-O) with `gh workflow run ci.yml --ref <branch> -f compiler_macos=true`, and clean
 Windows verification with `compiler_windows=true`. Stop local testing immediately if unrelated apps stop
 launching; preserve evidence without changing macOS security settings. Cause remains unproven in the
-[launch incident](docs/references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17). The integration half runs directly: its builds reuse the shared compiler store, so
+[launch incident](docs/archive/references/evidence/build-input-snapshot-proof.md#macos-launch-policy-investigation-2026-10-17). The integration half runs directly: its builds reuse the shared compiler store, so
 macOS assesses each runtime once. Live watcher cases belong in `*.native.spec.ts`; pure unit checks stay in the
 fast half.
 For this host's shared external Docker storage and relocation checks, see the
@@ -206,7 +206,7 @@ required final gate once fixes converge, and retain any unresolved acceptance ex
 
 With Vitest projects, verify the effective deadline: project test/hook settings can override CLI
 flags. Keep diagnostic overrides scoped to the selected case and preserve their exact source. See the
-[async-loader budget evidence](docs/references/evidence/build-input-snapshot-proof.md#async-loader-namespace-observation-checkpoint-2026-10-18).
+[async-loader budget evidence](docs/archive/references/evidence/build-input-snapshot-proof.md#async-loader-namespace-observation-checkpoint-2026-10-18).
 
 Keep direct pool output live and integration fail-fast. Collect additional failures only in a deliberate
 diagnostic run; see [the early-failure checkpoint](docs/archive/references/evidence/settings-and-pack-contracts.md#bounded-compiler-cost-and-early-failure-checkpoint-2026-10-17).

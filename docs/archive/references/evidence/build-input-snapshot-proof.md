@@ -1,7 +1,9 @@
 # Build-input snapshot evaluation
 
+Archived evidence. Status and measurements below describe their recorded checkpoints.
+
 2026-10-16, source baseline `74890676d`. This evaluates a candidate for the remaining input-coherence
-work in the [discovery evidence](../../archive/references/evidence/discovery-without-activation.md#execution-ownership-audit-after-phase-cache-publication).
+work in the [discovery evidence](discovery-without-activation.md#execution-ownership-audit-after-phase-cache-publication).
 It is experimental evidence, not a completed source-input contract or a production implementation.
 
 ## Recommendation
@@ -2988,7 +2990,7 @@ memory. Their app logs went with the restart, so that trigger is unconfirmed; a 
 failing run's `app-<n>.log` would confirm it. The E2E fixture now names an API restart under a failing test
 (`api-restarted`). Fixed by keeping the remount and moving the draft out of its reach: `useSurfaceDraft`
 (`@apackdev/sdk/fe`), which the fixture's editor holds its text in; the same probe, run again, reads the typed text
-after the restart ([unsaved state across a reconnect](../../archive/plans/reconnect-without-remount.md)). **No same-files test of the indexing was made**: moving a built worktree between an
+after the restart ([unsaved state across a reconnect](../../plans/reconnect-without-remount.md)). **No same-files test of the indexing was made**: moving a built worktree between an
 indexed and a `.noindex` parent invalidates its prebuilt pack, whose recorded inputs carry absolute paths ("Compiler
 startup input changed"), so the indexed phase of that run tested nothing. The finding rests on the four pairs above.
 
@@ -6450,8 +6452,8 @@ No VM/native build, daily-use Mac captured executable, broad suite or deadline c
 The user explicitly approved refusing Windows native compiler imports containing only bound
 addresses when import names or ordinals cannot be recovered. Ordinary imports and ordinary bound
 imports retaining usable lookup information remain supported. The
-[native-boundary ADR](../adr/native-compiler-input-boundary.md#decision) owns this contract;
-the [active goal](../../archive/goals/goal-settings-and-pack-contracts.md) owns remaining verification.
+[native-boundary ADR](../../../references/adr/native-compiler-input-boundary.md#decision) owns this contract;
+the [active goal](../../goals/goal-settings-and-pack-contracts.md) owns remaining verification.
 
 Rationale: admission needs symbol identity to follow forwarded exports and inspect native dependency
 ownership before execution. No real required dependency needing the address-only encoding was

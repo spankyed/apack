@@ -59,7 +59,7 @@ landed: the change is on disk, and the app shows it after its next restart or re
 
 **Not chosen:**
 
-- **Serving `apack db` through the app** (#274's `POST /db`, `docs/references/pr-274-review.md`, "Not needed here").
+- **Serving `apack db` through the app** (#274's `POST /db`, `docs/archive/references/pr-274-review.md`, "Not needed here").
   It runs the tool's code in the app's process and needs an offline path anyway for when no app answers, so it is the
   same command implemented twice.
 - **The app noticing foreign commits itself.** LMDB's last transaction id moves on any process's commit, but nothing
