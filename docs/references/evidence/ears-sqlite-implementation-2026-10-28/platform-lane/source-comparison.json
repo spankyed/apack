@@ -1,7 +1,0 @@
-{
-  "changedFilesBetweenFullRunAndFinalVerifier": [
-    ".github/scripts/ears-sqlite-platform.mjs"
-  ],
-  "builtProbeBranchIdentical": true,
-  "productionAndTestFilesIdentical": true
-}

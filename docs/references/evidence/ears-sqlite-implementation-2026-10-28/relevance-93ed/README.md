@@ -1,5 +1,0 @@
-# Search acceptance on the 64-probe implementation
-
-The relevance job in [run 41503539981](https://github.com/spankyed/apack/actions/runs/41503539981) succeeds at `93ed37e67f40faee3fd25a10f3b897c15e55c858`. Both unchanged SQLite keyword gates pass 25/25, with none and English stemming. Hybrid usefulness/highlights pass 25/25 per engine. All 125 search contracts pass without exclusions. Four required regressions fail against the actual old source with AssertionError, followed by verified restoration; 16 other control-stage tests are intentionally excluded. Native keyword remains the recorded 24/25 comparison.
-
-The two maintained pure validators independently reproduce their original summaries byte-for-byte. Eight original numeric/provenance reports are compressed with decompressed SHA-256 values. No corpus text, vectors, source identities, profiles, raw failure stacks or logs are published. The full private corpus and whole strict/platform run remain separate required gates; success here does not qualify recall or declare experiment completion.

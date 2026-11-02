@@ -1,7 +1,0 @@
-# Complete current-code source SQLite app qualification
-
-[Run 41494039628](https://github.com/spankyed/apack/actions/runs/41494039628), source `6d0903e455285361c5a4fc7b7fa8980bb8586a74` (production code a8500818f6), succeeds. All 33 eligible source-app cases pass once, with zero failures/flakes/retries. The one existing packaged-only model-claim witness is excluded from source launch; its exact title is matched to the separately successful signed run 41487346823, where it actually runs and passes. No application requirement is inferred from the exclusion itself. All ten retained main-window discovery cases pass without exclusions; app/testing typecheck and settings lint steps also pass.
-
-The unit report survives Playwright output cleanup under the maintained qualification path. The minimized receipt retains public case names/outcomes/durations, raw-report/job hashes and the exact existing exclusion's signed-runtime counterpart. Original window-helper report bytes are gzip-preserved with decompressed SHA-256. Playwright configuration, profiles, source identities, logs, screenshots and traces are omitted.
-
-This completes the named full current-code app lifecycle gate alongside separately preserved strict, operational, signed-runtime and real-flow controls. It is not the final corpus/relevance/performance or adoption conclusion. Exact-final-code managed corpus/relevance run 41500524060 remains live and must meet its original budgets; the goal stays active until that and the final requirement/input audit are complete. Production remains on elmdb.

@@ -471,7 +471,7 @@ jobs:
           case "$SQLITE_VECTOR_BACKEND" in
             packaged) ;;
             paired-dispatch)
-              PYTHONDONTWRITEBYTECODE=1 python3 docs/references/evidence/ears-sqlite-implementation-2026-10-28/vector-pair-protocol/control.py
+              PYTHONDONTWRITEBYTECODE=1 python3 packages/apack-ears/bench/sqlite/vector-pair-protocol/control.py
               test "$SQLITE_VECTOR_MODE" = managed
               test "$SQLITE_NATIVE_CANDIDATE_FLOOR" = production
               ;;
