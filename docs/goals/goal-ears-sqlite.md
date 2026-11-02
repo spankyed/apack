@@ -351,6 +351,12 @@ The [completion assessment and invariant/dependency review](../plans/ears-sqlite
 recommends retaining elmdb; experimental completion is not yet proven. [Earlier detailed handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-completion-audit/README.md)
 retains all preceding receipts, negative controls, runtime decisions and historical next actions.
 
+The [commit-outcome audit](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-outcome-audit/README.md)
+now source-verifies 69 platform refusal/rollback/ambiguity test executions and eight actual WAL
+sync/process-death cases, plus two disabled-injector controls. All four post-sync EIO-return
+families report COMMIT_UNKNOWN, fence reads, and reopen with the committed result. The broader
+storage-error requirement below remains open; process death is not physical power-loss proof.
+
 ### Unmet acceptance work
 
 1. Qualify all current-master contracts and the exact final source, including shared/native models, full strict, app lifecycle, platform packaging/signing, API freshness and meaningful negative controls. Reconcile later relevant master changes deliberately.

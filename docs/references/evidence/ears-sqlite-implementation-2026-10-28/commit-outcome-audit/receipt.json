@@ -1,0 +1,505 @@
+{
+  "protocol": "ears-current-commit-outcome-audit/1",
+  "auditTip": "c9898f31acd3194a8d7a6a93a10e92a7af7d202d",
+  "platforms": {
+    "linux": {
+      "originalReportSha256": "7a533fb3702650e4af68e79001a576fd2b4232d95b6505822aca678f2e8dfb03",
+      "passed": 23,
+      "failed": 0,
+      "excluded": 0,
+      "cases": [
+        {
+          "name": "SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back schema when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (SQLITE_BUSY)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (undefined)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses replacement before commit when closing its source fails",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling captures fallible watch changes before committing",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for schema",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling stops a background commit without replaying it or writing a false failure marker",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state preserves automatic SQLITE_FULL rollback and recovery for write",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state preserves automatic SQLITE_FULL rollback and recovery for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state ends the entire unit when SQLite rolls it back, even if its caller catches the full error",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state retains both errors and refuses reuse after rollback itself fails, while allowing close and reopen",
+          "status": "passed"
+        }
+      ]
+    },
+    "macos": {
+      "originalReportSha256": "3fb1bcb5bb1dc3fe4ccc173472a1ad21b828fb5ed6d918e1d63dbd0d9a30a5d1",
+      "passed": 23,
+      "failed": 0,
+      "excluded": 0,
+      "cases": [
+        {
+          "name": "SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back schema when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (SQLITE_BUSY)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (undefined)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses replacement before commit when closing its source fails",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling captures fallible watch changes before committing",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for schema",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling stops a background commit without replaying it or writing a false failure marker",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state preserves automatic SQLITE_FULL rollback and recovery for write",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state preserves automatic SQLITE_FULL rollback and recovery for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state ends the entire unit when SQLite rolls it back, even if its caller catches the full error",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state retains both errors and refuses reuse after rollback itself fails, while allowing close and reopen",
+          "status": "passed"
+        }
+      ]
+    },
+    "windows": {
+      "originalReportSha256": "b4f21dba59de147a4c01826daeaa114dc3d3936a81c5587cd6d4cc3385940f2e",
+      "passed": 23,
+      "failed": 0,
+      "excluded": 0,
+      "cases": [
+        {
+          "name": "SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back schema when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling does not invent a committed/refused answer after an ended commit error (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (SQLITE_BUSY)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling rolls back a failed commit that still has an active transaction (undefined)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling refuses replacement before commit when closing its source fails",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling keeps the primary replacement refusal when source cleanup also fails (undefined: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: false)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling closes the replacement source before an uncertain destination commit (applied: true)",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling captures fallible watch changes before committing",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for schema",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling uses the same uncertain-commit boundary for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite commit outcome handling stops a background commit without replaying it or writing a false failure marker",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state preserves automatic SQLITE_FULL rollback and recovery for write",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state preserves automatic SQLITE_FULL rollback and recovery for bulkLoad",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state ends the entire unit when SQLite rolls it back, even if its caller catches the full error",
+          "status": "passed"
+        },
+        {
+          "name": "SQLite transaction failure state retains both errors and refuses reuse after rollback itself fails, while allowing close and reopen",
+          "status": "passed"
+        }
+      ]
+    }
+  },
+  "actualWalSyncFaults": {
+    "lost-ack": {
+      "run": 41411063927,
+      "source": "5cf602ce3b0c6b0323ef1db56c277c895b7314f4",
+      "originalReportSha256": "67eeb140d8a298f560f17744f64279431c4e8ada0a9d97bb72f557370d47c4e4",
+      "scope": "Real successful WAL sync; parent SIGKILL before application acknowledgement. Not physical power loss.",
+      "records": [
+        {
+          "operation": "write",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 2,
+          "negativeZeroPreserved": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-before-return"
+          },
+          "killedBeforeAcknowledgement": true
+        },
+        {
+          "operation": "unit",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 3,
+          "negativeZeroPreserved": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-before-return"
+          },
+          "killedBeforeAcknowledgement": true
+        },
+        {
+          "operation": "bulkLoad",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 2,
+          "negativeZeroPreserved": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-before-return"
+          },
+          "killedBeforeAcknowledgement": true
+        },
+        {
+          "operation": "schema",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 1,
+          "negativeZeroPreserved": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-before-return"
+          },
+          "killedBeforeAcknowledgement": true
+        },
+        {
+          "operation": "disabled-control",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 2,
+          "negativeZeroPreserved": true,
+          "missingInjectorRejected": true
+        }
+      ],
+      "sourceHashesVerifiedAgainstCurrentFiles": true
+    },
+    "sync-error-no-close": {
+      "run": 41411063927,
+      "source": "5cf602ce3b0c6b0323ef1db56c277c895b7314f4",
+      "originalReportSha256": "8b7b6e003717884090ca57e5391540dccb269f36b38a2aeddd33c11ca2fc30ea",
+      "scope": "Real successful WAL sync returns EIO; application receives error, parent kills before close, fresh process determines outcome. Not physical power loss.",
+      "records": [
+        {
+          "operation": "write",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 2,
+          "negativeZeroPreserved": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-return-eio"
+          },
+          "killedBeforeAcknowledgement": true,
+          "applicationErrorReturned": {
+            "returned": true,
+            "code": "COMMIT_UNKNOWN",
+            "causeCode": "SQLITE_IOERR_FSYNC",
+            "fenced": true,
+            "readErrorCode": "COMMIT_UNKNOWN"
+          }
+        },
+        {
+          "operation": "unit",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 3,
+          "negativeZeroPreserved": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-return-eio"
+          },
+          "killedBeforeAcknowledgement": true,
+          "applicationErrorReturned": {
+            "returned": true,
+            "code": "COMMIT_UNKNOWN",
+            "causeCode": "SQLITE_IOERR_FSYNC",
+            "fenced": true,
+            "readErrorCode": "COMMIT_UNKNOWN"
+          }
+        },
+        {
+          "operation": "bulkLoad",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 2,
+          "negativeZeroPreserved": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-return-eio"
+          },
+          "killedBeforeAcknowledgement": true,
+          "applicationErrorReturned": {
+            "returned": true,
+            "code": "COMMIT_UNKNOWN",
+            "causeCode": "SQLITE_IOERR_FSYNC",
+            "fenced": true,
+            "readErrorCode": "COMMIT_UNKNOWN"
+          }
+        },
+        {
+          "operation": "schema",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 1,
+          "negativeZeroPreserved": true,
+          "event": {
+            "syscall": "fsync",
+            "result": 0,
+            "point": "after-success-return-eio"
+          },
+          "killedBeforeAcknowledgement": true,
+          "applicationErrorReturned": {
+            "returned": true,
+            "code": "COMMIT_UNKNOWN",
+            "causeCode": "SQLITE_IOERR_FSYNC",
+            "fenced": true,
+            "readErrorCode": "COMMIT_UNKNOWN"
+          }
+        },
+        {
+          "operation": "disabled-control",
+          "passed": true,
+          "sequenceBefore": 2,
+          "sequenceOnReopen": 3,
+          "sequenceAfterReuse": 4,
+          "rowsBefore": 1,
+          "rowsOnReopen": 2,
+          "negativeZeroPreserved": true,
+          "missingInjectorRejected": true
+        }
+      ],
+      "sourceHashesVerifiedAgainstCurrentFiles": true
+    }
+  },
+  "scope": "Named commit/refusal/rollback contracts plus two real successful-WAL-sync/process-death boundaries; not arbitrary device faults or physical power loss"
+}

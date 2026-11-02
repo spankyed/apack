@@ -216,6 +216,14 @@ support these contracts; broader storage/worker fault regimes and complete app/r
 in the goal. The specific post-sync EIO/error-return/kill-before-close regime now has actual
 complete-commit and quarantine evidence at faae1545e2.
 
+The [current commit-outcome audit](../references/evidence/ears-sqlite-implementation-2026-10-28/commit-outcome-audit/README.md)
+independently verifies 23 named refusal/rollback/ambiguity tests on each OS and eight actual
+FULL WAL-sync/process-death cases across write, unit, bulk-load and schema paths. Both disabled-
+injector controls pass. In the four post-sync EIO-return cases, COMMIT_UNKNOWN fences the handle
+before death and fresh reopen observes the commit. Every recorded source hash matches current
+files. This closes the named source/evidence cross-check; it does not certify physical power
+loss or every storage-error regime. No new classification bug was identified.
+
 The adoption decision must account for this whole ownership surface. SQLite removes LMDB page,
 reader-slot and custom storage-format responsibilities, but EARS still owns query translation,
 watch invalidation/scheduling, text adaptation, native model admission/projections and lifecycle
