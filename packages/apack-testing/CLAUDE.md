@@ -416,7 +416,7 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 
 ### Test setup (`appPage` fixture, per test)
 
-4. **Find main window** — polls Electron windows for `window.applicationState` (the XState actor). Distinguishes the main renderer from the splash screen and popouts (URLs with `surfaceId`); rechecks the role after an asynchronous readiness probe. 45s timeout. Sets the viewport to 1400×900.
+4. **Find main window** — polls Electron windows for `window.applicationState` (the XState actor). Distinguishes the main renderer from the splash screen and popouts (URLs with `popout=surface`); rechecks the role after an asynchronous readiness probe. 45s timeout. Sets the viewport to 1400×900.
 
 5. **Wait for connected state** — checks `applicationState.getSnapshot().value` for `{ running: 'connected' }` or onboarding state. Bypasses onboarding via `window.__disableOnboardingUI()` if detected.
 

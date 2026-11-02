@@ -54,7 +54,7 @@ it.each([false, true])('retains the discovery deadline with an unresponsive wind
 it.each([false, true])('selects the main renderer beside an already-ready popout (popout first: %s)', async popoutFirst => {
   vi.useFakeTimers();
   const main = { url: () => 'file:///app/index.html', evaluate: vi.fn(async () => true) } as unknown as Page;
-  const popout = { url: () => 'file:///app/index.html?surfaceId=default-setup%2Fnotes', evaluate: vi.fn(async () => true) } as unknown as Page;
+  const popout = { url: () => 'file:///app/index.html?popout=surface&surfaceId=default-setup%2Fnotes', evaluate: vi.fn(async () => true) } as unknown as Page;
   const application = app(popoutFirst ? [popout, main] : [main, popout]);
   const pending = waitForApplicationWindow(application, 45_000);
   await vi.advanceTimersByTimeAsync(0);
@@ -74,7 +74,7 @@ it('rechecks window role when navigation finishes during a readiness probe', asy
   let found: Page | undefined;
   const pending = waitForApplicationWindow(application, 45_000).then(page => { found = page; return page; });
   await vi.advanceTimersByTimeAsync(0);
-  url = 'file:///app/index.html?surfaceId=default-setup%2Fnotes';
+  url = 'file:///app/index.html?popout=surface&surfaceId=default-setup%2Fnotes';
   resolveProbe(true);
   await vi.advanceTimersByTimeAsync(0);
   expect(found).toBeUndefined();
@@ -87,13 +87,24 @@ it('rechecks window role when navigation finishes during a readiness probe', asy
 
 it('keeps the discovery deadline when only a ready popout exists', async () => {
   vi.useFakeTimers();
-  const popout = { url: () => 'file:///app/index.html?surfaceId=default-setup%2Fnotes', evaluate: vi.fn(async () => true) } as unknown as Page;
+  const popout = { url: () => 'file:///app/index.html?popout=surface&surfaceId=default-setup%2Fnotes', evaluate: vi.fn(async () => true) } as unknown as Page;
   const application = app([popout]);
   const pending = waitForApplicationWindow(application, 20);
   const rejected = expect(pending).rejects.toThrow(/within timeout/);
   await vi.advanceTimersByTimeAsync(20);
   await rejected;
   expect(popout.evaluate).not.toHaveBeenCalled();
+  expect(application.listenerCount('window')).toBe(0);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('accepts a main renderer with a surface selection query but no popout role', async () => {
+  vi.useFakeTimers();
+  const main = { url: () => 'file:///app/index.html?surfaceId=host%2Fsettings', evaluate: vi.fn(async () => true) } as unknown as Page;
+  const application = app([main]);
+  const pending = waitForApplicationWindow(application, 45_000);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(await pending).toBe(main);
   expect(application.listenerCount('window')).toBe(0);
   expect(vi.getTimerCount()).toBe(0);
 });

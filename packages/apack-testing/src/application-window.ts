@@ -2,7 +2,7 @@ import type { ElectronApplication, Page } from '@playwright/test';
 
 // Popouts also have applicationState, but their shell owns only the requested surface.
 function isMainApplicationWindow(page: Page): boolean {
-  try { return !new URL(page.url()).searchParams.has('surfaceId'); }
+  try { return new URL(page.url()).searchParams.get('popout') !== 'surface'; }
   catch { return false; }
 }
 
