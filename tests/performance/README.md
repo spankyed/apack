@@ -76,6 +76,16 @@ measurement. It closes the seed process, copies the profile, then launches and c
 for each warmup/trial. The measured boundary is parent-process launch through the actual initial
 usable restored chat (correct fifty full message bodies, corpus and matching chat revision), including backend admission. This is a warm-filesystem experiment, not cold disk.
 
+The candidate's manual `App acceptance` workflow with `suite=sqlite-startup` accepts
+`sqlite_startup_mode=lightweight` (default) or `detailed`. Both use the same controller,
+five warmups, twenty fresh-process measured trials per actual store and complete admission.
+Use `detailed` to inspect the existing bounded V8 CPU/allocation captures when lightweight
+traces leave a regression unexplained; its instrumentation cost is a distinct recording mode,
+not a replacement latency result. Reports include the actual admitted mode. Preserve the
+original lightweight result, process/profile size limits and failures. Inspect/minimize captures
+before publishing evidence; no daily-use profiles are allowed.
+
+
 Before comparing reports, run `node scripts/with-source.mjs tsx tests/performance/verify-run.ts RUN`
 (or `RUN_A RUN_B` for compatibility and median/range comparison). The default requires all five
 warmups and twenty measured trials; a comparison does not itself certify balanced order or quiet

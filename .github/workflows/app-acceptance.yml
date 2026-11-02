@@ -36,6 +36,11 @@ on:
         type: choice
         options: [elmdb/1, sqlite/1]
         default: elmdb/1
+      sqlite_startup_mode:
+        description: Startup recording; detailed captures diagnose overhead, lightweight measures latency
+        type: choice
+        options: [lightweight, detailed]
+        default: lightweight
       test:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
         type: string
@@ -69,6 +74,9 @@ on:
       storage_format:
         type: string
         default: elmdb/1
+      sqlite_startup_mode:
+        type: string
+        default: lightweight
       test:
         type: string
         default: ''
@@ -1106,9 +1114,11 @@ jobs:
           done
       - name: Existing populated startup controller on both actual stores
         if: ${{ inputs.suite == 'sqlite-startup' }}
+        env:
+          APACK_PERFORMANCE_MODE: ${{ inputs.sqlite_startup_mode }}
         run: |
           set -euo pipefail
-          export APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=20
+          export APACK_PERFORMANCE_TRIALS=20
           export APACK_PERFORMANCE_MACHINE_ID="github-startup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           unset APACK_HOST_EXECUTABLE E2E_DATA_DIR APACK_PERFORMANCE_COMPARE_MODE APACK_PERFORMANCE_GATE
           for storage in elmdb/1 sqlite/1; do
@@ -1122,11 +1132,14 @@ jobs:
           const run = readPerformanceRun(process.env.APACK_PERFORMANCE_RUN_OUTPUT, 20);
           assert.equal(run.manifest.runtime.storageFormat, process.env.APACK_STORAGE_FORMAT);
           assert.equal(run.scenario, 'populated-startup');
+          assert.equal(run.manifest.mode, process.env.APACK_PERFORMANCE_MODE);
           assert.equal(run.manifest.source.dirty, false); assert.equal(run.manifest.native.dirty, false);
           writeFileSync(process.env.APACK_PERFORMANCE_RUN_OUTPUT + '/admission.json', JSON.stringify({ completed: true,
             scope: 'Fresh processes from closed copied populated profiles; warm filesystem, fixed native-first order, one macOS runner; not cold disk, independent-device variance or the Linux foreground gate',
             source: run.manifest.source.revision, storageFormat: run.manifest.runtime.storageFormat,
-            scenario: run.scenario, summary: run.summary, machine: run.manifest.machine }, null, 2) + '\n');
+            scenario: run.scenario, mode: run.manifest.mode,
+            recording: 'Detailed CPU/allocation captures diagnose observed work; their timings do not substitute for lightweight latency acceptance',
+            summary: run.summary, machine: run.manifest.machine }, null, 2) + '\n');
           JS
           done
       - name: Preserve every app-flow performance outcome
