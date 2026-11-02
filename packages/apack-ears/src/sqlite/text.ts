@@ -156,9 +156,9 @@ export class SqliteText {
       const field = colon < 0 ? undefined : token.slice(0, colon);
       if (colon >= 0) token = token.slice(colon + 1);
       const phrase = token.startsWith('"'), raw = token.replace(/^"|"$/g, '');
-      // Only explicit quotes impose adjacency. Punctuation in an ordinary token separates
-      // words, which may match different indexed fields or list elements of the same entity.
-      const parts = phrase ? [raw] : raw.match(/[\p{L}\p{N}\p{M}]+/gu) ?? [];
+      // ASCII separators in ordinary identifiers do not impose phrase adjacency. Keep non-ASCII
+      // text intact for unicode61: JS Unicode categories differ from its pinned tokenizer rules.
+      const parts = phrase ? [raw] : raw.split(/[\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/).filter(Boolean);
       const selected = (field === undefined ? fields : [field]).filter(f => !options.fields?.length || options.fields.includes(f))
         .map(f => fields.indexOf(f)).filter(i => i >= 0);
       const tokenClauses: number[] = [];

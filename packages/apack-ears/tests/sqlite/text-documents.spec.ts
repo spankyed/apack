@@ -53,6 +53,15 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     expect(e.query('Row').search('"generate-entries"', { fuzzy: false }).ids()).toEqual([]);
   });
 
+  it('preserves native Unicode token characters when separating ASCII identifiers', () => {
+    const { e } = open();
+    e.create('Row', { id: 'Row-private', name: '\ue000key', body: 'suffix' });
+    e.create('Row', { id: 'Row-accent', name: 'cafe\u0301', body: 'suffix' });
+    expect(e.query('Row').search('\ue000key-suffix', { fuzzy: false }).ids()).toEqual(['Row-private']);
+    expect(e.query('Row').search('key-suffix', { fuzzy: false }).ids()).toEqual([]);
+    expect(e.query('Row').search('cafe\u0301.suffix', { fuzzy: false }).ids()).toEqual(['Row-accent']);
+  });
+
   it('maps identifier and acronym components to original UTF-16 offsets and preserves whole identifiers', () => {
     const { e } = open(); e.create('Row', { id: 'Row-code', name: '😀 openDatabaseStore HTTPRequest' });
     expect(e.query('Row').search('database', { fuzzy: false }).hits({ highlights: true })[0]?.highlights)

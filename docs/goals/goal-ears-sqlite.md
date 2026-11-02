@@ -203,6 +203,10 @@ finds the required overview at rank 9/11 on SQLite none/English and rank 13 on u
 limited results agree with full-ranking prefixes. English-stemmed elmdb passes that case but
 fails the separate transposed-identifier case 20. Do not conflate the four 24/25 outcomes.
 The SQLite compiler incorrectly makes unquoted punctuation-separated compounds into phrases.
+The follow-up source review narrows splitting to ASCII separators, preserving non-ASCII input
+for unicode61 rather than approximating its Unicode 6.1 rules with JS character categories.
+A private-use/decomposed-accent regression accompanies this adjustment and still needs CI;
+the active eed run qualifies the earlier compound patch, not this subsequent input change.
 The current fix separates their terms across fields/elements while retaining explicit phrase
 adjacency, compound exclusions, field filters and OR/any groups. New matching/highlight/stemming
 regressions and exact-old-source controls must pass in disposable CI. The frozen corpus, query,
