@@ -55,6 +55,44 @@
           "excluded": 0
         }
       }
+    },
+    "macos": {
+      "job": 125476905761,
+      "conclusion": "success",
+      "finalGuardPassed": true,
+      "originalJobMetadataSha256": "f71c7faea9dfe534e89249c448ac0ec71c7b545e1fd577720ef78794ca008900",
+      "contracts": {
+        "ears.json": {
+          "passed": 946,
+          "failed": 0,
+          "excluded": 0
+        },
+        "host.json": {
+          "passed": 313,
+          "failed": 0,
+          "excluded": 0
+        },
+        "host-crash.json": {
+          "passed": 12,
+          "failed": 0,
+          "excluded": 0
+        },
+        "cli-maintenance.json": {
+          "passed": 41,
+          "failed": 0,
+          "excluded": 0
+        },
+        "sdk-backend.json": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 0
+        },
+        "query-work.json": {
+          "passed": 9,
+          "failed": 0,
+          "excluded": 0
+        }
+      }
     }
   }
 }
