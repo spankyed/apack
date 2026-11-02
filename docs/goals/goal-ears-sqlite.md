@@ -273,6 +273,17 @@ Original header/page/history fault phases still pass. No ordinary native artifac
 API changed. This serves the phase-6 selected active-worker resource-failure requirement; it is
 not OS/cgroup OOM, arbitrary/mid-kmeans failure, total-memory bounds or physical power-loss proof.
 
+Next finite checkpoint: an independent ordinary managed corpus repetition, mapped to phase 4/7
+model variance and original recall/query-latency budgets. Use `sqlite-corpus`, managed models,
+packaged generic native backend and production candidate policy, with the existing pinned paired
+corpus, 2 CPUs/6 GiB/no swap and unchanged validators. Compare all 1,800 queries and 18 groups
+with the original b989 receipt, recording corpus/artifact/model/machine identities, admission,
+query distributions, canonical recall, resource samples, reopen checks and cleanup. Preserve
+16 ms heartbeat misses with the approved degradation disposition. Closing checks require actual
+CI reports, original-byte hashes, validator outcomes and a source/policy-aware comparison;
+independent runner/model variation permits observed repeatability, not a causal speedup claim.
+This does not replace the unmet keyword judgment or broader remaining acceptance work.
+
 Current validation handles and results:
 
 - [Populated-WAL allocation/refusal check 41411063927](https://github.com/spankyed/apack/actions/runs/41411063927)
