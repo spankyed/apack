@@ -367,22 +367,17 @@ subtest does not complete the phase that contains it.
 | 6: Operations and packaging | [Current three-platform checks](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-81/README.md) cover the history policy repair and native readiness: new generic-CORRUPT refusal passes everywhere; Linux/macOS host 313/recovery 12 pass, Windows host 310/six exclusions and recovery two/ten exclusions. EARS retains only keyword failure; [actual-EIO refusal/preservation](../references/evidence/ears-sqlite-implementation-2026-10-28/history-ae9/README.md) now passes, while strict consumers remain separate live evidence. Earlier [packaged Windows/Linux](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-b7b/README.md) and [private signed macOS](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d2e-signed/README.md) cover projected-hit runtime corrections before that repair. [Actual worker header/canonical-page EIO recovery](../references/evidence/ears-sqlite-implementation-2026-10-28/worker-bdfe/README.md) now passes canonical/commit preservation, no publication, drained 512-sample retry, foreground reuse and cleanup in both phases. [Sustained WAL](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-473/README.md) verifies two-minute reader retention/release, writer refusal/reuse, reopen and cleanup. | Final-source installed/signing and remaining storage/resource regimes remain required. [Actual metadata-page EIO](../references/evidence/ears-sqlite-implementation-2026-10-28/history-c159/README.md) confirms generic SQLITE_CORRUPT falsely quarantines intact/readable history and returns an empty replacement. The corrected policy refuses that ambiguous code; NOTADB retains quarantine, while internal malformed pages require explicit inspection/recovery. [Real v2 refusal/preservation](../references/evidence/ears-sqlite-implementation-2026-10-28/history-ae9/README.md) and all 47 host policy/publication cases now pass at ae9; that specific defect is closed, with broader storage/final-source gates still open. [Explicit checkpoint capacity](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-c471/README.md) now passes all four cohorts, showing 765 MB logical overlap for the retained sustained fixture before reclamation. This is not instantaneous peak; its synchronous FULL/TRUNCATE calls take 735/86 ms, outside write-loop heartbeat percentiles, so maintenance placement/responsiveness remains open. Worker input-page failure does not prove compute-stage, all scheduler/resource or physical/device regimes. Private signing is not notarized distribution; CI hosts do not certify arbitrary filesystems. |
 | 7: Ownership and adoption | This matrix and the invariant, algorithmic and dependency reviews identify concrete owned costs and failure boundaries. | Full requirement-by-requirement final recommendation after remaining evidence or explicit approved dispositions; no acceptance requirement has been waived. |
 
-The main execution decision is now foreground search ownership. Owner caps, native scoring and
-SIMD do not guarantee a bounded synchronous call when postings, eligibility or one owner's chunks
-grow. An explicit asynchronous app-search path on a worker is proposed, with synchronous methods
-remaining explicit blocking operations, but the user has not approved changing the acceptance path.
-Do not implement that product change or relabel the existing 16 ms failures as passing. If approved,
-qualify snapshot/commit identity, watch invalidation, cancellation, stale replies, queue/resource bounds,
-maintenance/worker shutdown and realistic UI flows before claiming responsiveness. If synchronous
-execution is retained, it must meet the original budgets with measured semantics-preserving changes.
+The user has explicitly chosen to retain synchronous app search and accept its foreground
+responsiveness degradation for completion of this experiment. Do not implement the proposed async
+worker API or continue optimizing solely to clear the 16 ms gate. Preserve the measured misses as
+failures against the original budget, with an accepted experimental disposition; they are not passes.
+This decision does not authorize adoption or waive correctness, recall, keyword usefulness, resource
+accounting or recovery requirements. Finish functional validation and the completion report with a
+clear separation between demonstrated results, accepted degradation and remaining limitations.
 
-Neither the keyword miss also occurring on native nor the stronger correctness evidence permits
-adoption with unmet requirements. Keep the candidate isolated, preserve current baseline evidence,
-finish the running gates, and resolve the execution decision before presenting a final cutover proposal.
+### Deferred app-search execution proposal (not selected)
 
-### Proposed app-search execution contract (decision pending)
-
-This specifies the proposed decision above; it authorizes no implementation or acceptance change.
+This records an alternative that the user did not select; it authorizes no implementation.
 Its deliverable would be the actual app search interaction completing within the existing query and
 foreground budgets under representative writes, admission and chunk skew. Moving a function into a
 worker is insufficient evidence. Keep the existing synchronous EARS methods and their blocking costs
@@ -419,10 +414,9 @@ explicit; the app would opt into an asynchronous repository/service operation.
   backend claim additionally needs the same app scheduling/acknowledgment contract on both sides; comparing
   a worker path with a blocking baseline is not an isolated engine comparison.
 
-If this proposal is approved, qualify the smallest complete app search flow first, then its shared
-failure/resource cases before widening use. If synchronous app execution is retained instead, the
-original responsiveness requirement remains with that path. Neither choice waives keyword usefulness,
-recall, supported search features or the rest of the candidate's adoption gates.
+The current experiment retains synchronous execution. Foreground responsiveness misses are an
+explicitly accepted known degradation, not evidence of a responsive app. Revisit this alternative
+only if the candidate is reconsidered for adoption.
 
 ### Sustained write/watch requalification
 
