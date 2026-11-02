@@ -243,6 +243,14 @@ its diagnostic responsiveness misses preserved. Do not cancel/restart for an obs
 Preserve the final app receipt, then reconcile every remaining requirement and finish the completion
 report. No new heavyweight run is needed without a changed input, failed check or unresolved concern.
 
+Final CI audit identified an explicit remaining gap: the retained keyword failure stops the strict
+app/rest chain before pack-unit, packaged-authoring, external-pack app and smoke stages complete.
+The strict workflow now runs those named stages independently after an actual app/rest failure,
+using the existing strict producer freshness checks and preserving the original failed job. The
+independent SQLite witness moves outside Playwright's cleared output directory so later app checks
+cannot erase it. This closes no requirement until disposable qualification succeeds; no test is
+skipped and no original failure or deadline is relaxed.
+
 The [completion assessment and invariant/dependency review](../plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
 recommends retaining elmdb; experimental completion is not yet proven. [Earlier detailed handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-completion-audit/README.md)
 retains all preceding receipts, negative controls, runtime decisions and historical next actions.

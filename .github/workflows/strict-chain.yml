@@ -112,6 +112,7 @@ jobs:
       - name: Unpack producer outputs
         run: tar -xzf "$RUNNER_TEMP/producers.tgz"
       - name: ${{ matrix.name }}
+        id: strict_consumer
         env:
           APACK_STRICT_JOB: ${{ matrix.job }}
           APACK_STRICT_SHARD: ${{ matrix.shard }}
@@ -131,13 +132,14 @@ jobs:
         if: ${{ !cancelled() && matrix.name == 'app-and-rest' && steps.sqlite_app_build.outcome == 'success' }}
         env:
           APACK_STORAGE_FORMAT: sqlite/1
-          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/tests/results/strict-sqlite-app.json
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/qualification/strict-sqlite-app.json
         run: |
+          mkdir -p .apack/qualification
           node scripts/with-source.mjs playwright test tests/e2e/smoke tests/e2e/app-integration/sqlite-source-storage.spec.ts --workers=1 --retries=0 --reporter=line,json
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
           import { readFileSync } from 'node:fs';
-          const result = JSON.parse(readFileSync('.apack/tests/results/strict-sqlite-app.json', 'utf8'));
+          const result = JSON.parse(readFileSync('.apack/qualification/strict-sqlite-app.json', 'utf8'));
           assert.equal(result.stats.expected, 6);
           for (const key of ['skipped', 'unexpected', 'flaky']) assert.equal(result.stats[key], 0);
           const specs = suite => [...(suite.specs ?? []), ...(suite.suites ?? []).flatMap(specs)];
@@ -149,6 +151,16 @@ jobs:
             assert.equal(test.results[0].retry, 0);
           }
           JS
+      - name: Qualify remaining checks after a failed app/rest chain
+        # Preserve the original failure. A known host judgment must not leave later pack/authoring
+        # contracts unexecuted; --only still refuses missing or stale producer outputs.
+        if: ${{ !cancelled() && matrix.name == 'app-and-rest' && steps.strict_consumer.outcome == 'failure' && steps.sqlite_app_build.outcome == 'success' }}
+        env:
+          SPEC_DURATIONS_PROGRESS_FILE: ${{ runner.temp }}/strict-remaining-progress
+        run: |
+          npm run chain -- --strict --all --cores 2 \
+            --only test:unit:pack,test:packaged-authoring:author,test:packaged-authoring:app,test:external-pack:app,test:smoke \
+            | tee "$RUNNER_TEMP/strict-remaining.log"
       - name: Retain validation evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -158,9 +170,12 @@ jobs:
           path: |
             ${{ runner.temp }}/strict-chain.log
             ${{ runner.temp }}/strict-app-build.log
+            ${{ runner.temp }}/strict-remaining.log
+            ${{ runner.temp }}/strict-remaining-progress.*.jsonl
             ${{ runner.temp }}/strict-spec-progress.*.jsonl
             node_modules/.cache/apack-chain/runs/
             .apack/tests/results/
+            .apack/qualification/
             tests/packs/*/.apack/tests/results/
 
   sqlite-candidate:
