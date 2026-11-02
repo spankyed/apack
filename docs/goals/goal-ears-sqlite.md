@@ -220,14 +220,24 @@ Integration-2 job 125488939981 passes all 31 repository files. Integration-1 job
 replacement/facade-stamp case; seven files pass, one fails and 23 remain unexecuted. [Original failure
 and successful sibling evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-integration/README.md).
 The fixture/build/publication files match passing a850 bytes; no assertion mismatch is reported and
-no contention cause is proven. Preserve this attempt. After the remaining native-1 consumer finishes,
-replay the entire original failed job once with original source/producer freshness/two-core budget,
-assertions and deadlines unchanged. A repeated failure requires diagnosis rather than retries until
-green. Do not weaken deadlines or claim a source fix for observed timing variance.
+no contention cause is proven. Preserve this attempt. The original attempt is now TERMINAL FAILURE: eight jobs passed, integration-1 failed. Native-1
+job 125488939807 passes nine files (eight passed/one existing skipped file); native-2 passes eight
+(seven/one). App/rest passes 7,040 host assertions/95 existing exclusions, 989 pack/two exclusions,
+authoring seven/two, external app 32, smoke five and all six explicit SQLite witnesses once with
+zero failures/exclusions/retries/flakes. Host pool is 489.9 s under unchanged 600 s. [Consumer reports
+and original attempt summary](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md).
 
-[Native-2 job 125488939884](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md) is TERMINAL SUCCESS: eight files complete, seven passed/one existing skipped file. App/rest job 125488940066 is TERMINAL SUCCESS: 7,040 host passes/95 existing exclusions, 989 pack/two exclusions, authoring seven/two, external app 32, smoke five and all six explicit SQLite witnesses pass once without failures/exclusions/retries/flakes. Host pool is 489.9 s under unchanged 600 s; reports are preserved beside native-2. Native-1 job 125488939807 is the only still-live original job. Inspect their
-actual outcomes; do not restart an observed-live job merely because polling times out. Platform is a
-reusable workflow invoked by strict. Compiler/native, full and runtime checks remain disposable.
+The full original integration-1 job has been replayed ONCE, only after the original run completed:
+[run 41503546216 attempt 2](https://github.com/spankyed/apack/actions/runs/41503546216/attempts/2),
+job 125510874345, verified LIVE at original source `93ed37e67f40faee3fd25a10f3b897c15e55c858`.
+Original producer outputs/freshness checks, two-core budget, entire 31-file selection, assertions and
+200-second test deadline are unchanged. Preserve attempt-1 artifact/report hashes; select the new
+attempt's artifact explicitly to avoid merging same-name reports. A repeated failure requires
+diagnosis, not more unchanged retries until green. No source fix or causal contention claim is made.
+Inspect this same handle until terminal; polling timeout does not authorize restart.
+
+Compiler/native, full and runtime checks remain disposable. After this full failed-shard replay
+passes, reconcile every original requirement and final source before reporting completion.
 
 The prespecified independent managed-model repeat [41508326544](https://github.com/spankyed/apack/actions/runs/41508326544)
 is now TERMINAL SUCCESS at docs-only descendant `67ae01a334`: [full corpus](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-67ae/README.md)
