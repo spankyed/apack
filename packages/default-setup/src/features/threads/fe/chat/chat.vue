@@ -218,7 +218,7 @@ const focusMessageId = useSelector(actor, ({ context }) =>
 const style = useCssModule();
 
 // Scroll preservation for prepending older messages
-let prependScroll: { height: number; top: number } | undefined;
+let prependScroll: { anchor?: HTMLElement; top: number; scrollTop: number } | undefined;
 
 // Asks only when the machine takes the ask (`loadMoreMessages`): one it dropped would leave the page already loading,
 // a focused message's seek's, handled as this prepend
@@ -226,7 +226,12 @@ function requestLoadMore() {
   if (messagePagination.value.isLoading || !messagePagination.value.hasMore) return;
   const el = messagesContainer.value;
   if (!el) return;
-  prependScroll = { height: el.scrollHeight, top: el.scrollTop };
+  const viewport = el.getBoundingClientRect();
+  const anchor = Array.from(el.querySelectorAll<HTMLElement>('[data-message-id]')).find(row => {
+    const rect = row.getBoundingClientRect();
+    return rect.bottom > viewport.top && rect.top < viewport.bottom;
+  });
+  prependScroll = { anchor, top: anchor?.getBoundingClientRect().top ?? viewport.top, scrollTop: el.scrollTop };
   actor.send({ type: 'LOAD_MORE_MESSAGES' });
 }
 
@@ -604,11 +609,13 @@ function onMessagesRendered() {
 
   // Handle scroll preservation for prepended older messages
   if (prependScroll) {
-    const { height, top } = prependScroll
+    const { anchor, top, scrollTop } = prependScroll
     prependScroll = undefined
     const el = messagesContainer.value
     if (el) scrollPositioning.position(() => {
-      el.scrollTop = top + el.scrollHeight - height
+      // Content below the anchor can change height too; preserve the visible row itself.
+      if (anchor && el.contains(anchor)) el.scrollTop += anchor.getBoundingClientRect().top - top
+      else el.scrollTop = scrollTop
     })
     return
   }

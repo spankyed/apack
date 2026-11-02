@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { Page } from '@playwright/test';
+import type { Page, TestInfo } from '@playwright/test';
 import { test, expect, type AppDriver } from '@apackdev/testing';
 import { richThreadFixture } from '../../performance/fixture.ts';
 import type { PerformanceWindow } from '../../performance/window.ts';
@@ -47,14 +47,37 @@ async function expectRows(page: Page, first: number, count: number, fixtureIndex
   expect(new Set(ids).size).toBe(count);
 }
 
-async function restoreAnchor(page: Page, id: string, top: number) {
-  await frames(page);
-  await expect.poll(() => page.locator(`[data-message-id="${id}"]`).evaluate((row, top) => Math.abs(row.getBoundingClientRect().top - top), top)).toBeLessThan(3);
+function measureAnchor(row: Element, scrollToTop: boolean) {
+  const container = row.closest<HTMLElement>('.overflow-y-auto')!;
+  if (scrollToTop) container.scrollTop = 0;
+  const rect = row.getBoundingClientRect();
+  return { id: row.getAttribute('data-message-id')!, top: rect.top, height: rect.height,
+    scrollTop: container.scrollTop, scrollHeight: container.scrollHeight, clientHeight: container.clientHeight,
+    containerTop: container.getBoundingClientRect().top, fonts: document.fonts.status };
+}
+
+async function restoreAnchor(page: Page, anchor: ReturnType<typeof measureAnchor>, info: TestInfo) {
+  const row = page.locator(`[data-message-id="${anchor.id}"]`);
+  try {
+    await frames(page);
+    await expect.poll(() => row.evaluate((row, top) => Math.abs(row.getBoundingClientRect().top - top), anchor.top)).toBeLessThan(3);
+  } finally {
+    await info.attach('anchor-geometry', { body: Buffer.from(JSON.stringify({ before: anchor, after: await row.evaluate(measureAnchor, false) })), contentType: 'application/json' });
+  }
 }
 
 
+test.beforeEach(async ({ appPage }) => {
+  await appPage.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+});
+
 test.afterEach(async ({ appPage }, info) => {
-  if (info.status === info.expectedStatus) return;
+  const failed = info.status !== info.expectedStatus;
+  const trace = info.outputPath('paging-browser-trace.zip');
+  await appPage.context().tracing.stop(failed ? { path: trace } : {});
+  if (!failed) return;
+  await info.attach('paging-browser-trace', { path: trace, contentType: 'application/zip' });
+  await info.attach('paging-window', { body: await appPage.screenshot(), contentType: 'image/png' });
   const state = await appPage.evaluate(() => {
     const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const paging = context as typeof context & { messagePagination: unknown; focusMessage: unknown };
@@ -68,28 +91,24 @@ test.afterEach(async ({ appPage }, info) => {
   await info.attach('paging-state', { body: Buffer.from(JSON.stringify(state)), contentType: 'application/json' });
 });
 
-test('manual paging prepends complete rows without moving the reading position', async ({ app, appPage }) => {
+test('manual paging prepends complete rows without moving the reading position', async ({ app, appPage }, info) => {
   const [thread] = await prepare(app, appPage, 'manual');
   await open(app, appPage, thread);
   await expect(older(appPage)).toHaveCount(1);
-  const anchor = await rows(appPage).last().evaluate(row => ({ id: row.getAttribute('data-message-id')!, top: row.getBoundingClientRect().top }));
+  const anchor = await rows(appPage).last().evaluate(measureAnchor, false);
   // A normal Playwright click scrolls the button into view, exercising automatic paging first.
   await older(appPage).evaluate((button: HTMLButtonElement) => button.click());
   await expectRows(appPage, 0, 100);
-  await restoreAnchor(appPage, anchor.id, anchor.top);
+  await restoreAnchor(appPage, anchor, info);
   await expect(older(appPage)).toHaveCount(0);
 });
 
-test('scrolling to the top automatically prepends one page and preserves its anchor', async ({ app, appPage }) => {
+test('scrolling to the top automatically prepends one page and preserves its anchor', async ({ app, appPage }, info) => {
   const [thread] = await prepare(app, appPage, 'automatic');
   await open(app, appPage, thread);
-  const anchor = await rows(appPage).first().evaluate(row => {
-    const container = row.closest<HTMLElement>('.overflow-y-auto')!;
-    container.scrollTop = 0;
-    return { id: row.getAttribute('data-message-id')!, top: row.getBoundingClientRect().top };
-  });
+  const anchor = await rows(appPage).first().evaluate(measureAnchor, true);
   await expectRows(appPage, 0, 100);
-  await restoreAnchor(appPage, anchor.id, anchor.top);
+  await restoreAnchor(appPage, anchor, info);
   await expect(older(appPage)).toHaveCount(0);
 });
 
