@@ -245,7 +245,7 @@ Latest demonstrated results:
   original Windows exclusions. [Actual history EIO refusal/preservation](../references/evidence/ears-sqlite-implementation-2026-10-28/history-ae9/README.md)
   separately proves intact-incumbent refusal/reopen; routing tests alone do not prove syscall outcomes.
 - [Packaged Linux/Windows](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-eb/README.md)
-  pass native/API probes. [Signed macOS at 3ec277e393](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-3ec-signed/README.md)
+  pass native/API probes. [Signed macOS at d795901191](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795-signed/README.md)
   passes strict signing, post-sign native smoke and all six installed cases without exclusions/retries.
   Cleanup is observed at command/step scope; no notarized distribution claim.
 - [Cold/warm reopen](../references/evidence/ears-sqlite-implementation-2026-10-28/cold-27/README.md)
@@ -257,9 +257,9 @@ Latest demonstrated results:
 Current validation handles and results:
 
 - Final-runtime packaged qualification at `d795901191` (program identical to cd8; documentation-only descendants):
-  [signed macOS 41399250308](https://github.com/spankyed/apack/actions/runs/41399250308) is active;
+  [signed macOS 41399250308](https://github.com/spankyed/apack/actions/runs/41399250308) succeeds: [six installed cases, strict signing, post-sign native smoke and cleanup step](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795-signed/README.md);
   [Windows/Linux installed probes 41399303818](https://github.com/spankyed/apack/actions/runs/41399303818)
-  are pending behind it in the same app-workflow concurrency group. macOS reached checkout before adding
+  are now active on both OSes after it completed in the same app-workflow concurrency group. macOS reached checkout before adding
   the one pending run; no existing run was displaced. These requalify installed execution after the
   query dependency correction, rather than repeating heavy checks for documentation changes alone.
   Require actual signed native loading/six lifecycle cases and both real packaged Electron probe results;
