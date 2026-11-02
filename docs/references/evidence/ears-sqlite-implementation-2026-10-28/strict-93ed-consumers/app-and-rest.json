@@ -1,0 +1,108 @@
+{
+  "name": "app-and-rest",
+  "job": 125488940066,
+  "conclusion": "success",
+  "repositoryProgressFiles": 762,
+  "repositoryFileStates": {
+    "passed": 756,
+    "skipped": 6
+  },
+  "host": {
+    "passed": 7040,
+    "failed": 0,
+    "excluded": 95,
+    "originalStepLogSha256": "fb4e56ae924a4a879d6b7af4c29bc385cc25835b58a8430fb601d5ce7625992c"
+  },
+  "pack": {
+    "passed": 989,
+    "failed": 0,
+    "excluded": 2,
+    "originalStepLogSha256": "ce2206798de37095260237d542de31304687ac1bcd495db988955019bcdd8521"
+  },
+  "authoringProducer": {
+    "passed": 7,
+    "failed": 0,
+    "excluded": 0,
+    "originalStepLogSha256": "2da214916f2884890b444bf4e3889d6135565f79e8609a2ef9b06ca4feb77113"
+  },
+  "authoringApp": {
+    "passed": 2,
+    "reportedGroups": [
+      2
+    ],
+    "originalStepLogSha256": "59672cd26e66d5ef35543f64c4400c19abc3f1e68ff75fd22fc592c3eecd5a02"
+  },
+  "externalApp": {
+    "passed": 32,
+    "reportedGroups": [
+      27,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "originalStepLogSha256": "8ff494df926ed67d1cd93088debc8fd3de02397ecbfc0134a8d246748db5cafc"
+  },
+  "smoke": {
+    "passed": 5,
+    "reportedGroups": [
+      5
+    ],
+    "originalStepLogSha256": "219e72015b4fc98eb9a4788bc30b11491c20939cab3139756708dabe0bdd6ad3"
+  },
+  "forkStepPassed": true,
+  "hostPoolSeconds": 489.9,
+  "unchangedHostPoolLimitSeconds": 600,
+  "hostPoolHeadroomSeconds": 110.1,
+  "individualSizeBudgetWarnings": 1,
+  "warningScope": "Reported 15-second size-budget excursions; existing actual deadlines and pool limit were not relaxed.",
+  "explicitSqliteWitnesses": [
+    {
+      "name": "source SQLite app opens both managed stores with persisted EARS identity",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 8232
+    },
+    {
+      "name": "app launches without crashing",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 182
+    },
+    {
+      "name": "app reaches connected state",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 128
+    },
+    {
+      "name": "applicationState is accessible with surfaces loaded",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 62
+    },
+    {
+      "name": "runs in an isolated per-worker test data dir",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 46
+    },
+    {
+      "name": "publishes no session, though a test app has a debug port open",
+      "status": "passed",
+      "retry": 0,
+      "durationMs": 41
+    }
+  ],
+  "originalSqliteWitnessReportSha256": "939640f16dd73863c5f1d11bcbdc38563bf27a2db5f51e0e367af083e0d97bc6",
+  "originalProgressSha256": [
+    "3c3b1bc04ea5258ff4572e56adc04f2b669f927cf94b237b67d01333540c7486",
+    "44b4d64608db039079cd9b526df6265c8fdbcba853a32131ecb55b75d01eac7e"
+  ],
+  "originalJobMetadataSha256": "e4f06830f1d98e102fbd04221aa9de4077d33eb8e19a0ab86cea7fa0904c4996",
+  "originalChainLogSha256": "845921b3d546cad487ad50380b5e2ae385f4f2f08cfc5051ee7fc8bef216880b",
+  "run": 41503546216,
+  "source": "93ed37e67f40faee3fd25a10f3b897c15e55c858",
+  "scope": "Terminal successful app/rest only; native-1 and failed integration-1 remain separate"
+}

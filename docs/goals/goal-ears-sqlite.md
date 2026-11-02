@@ -220,12 +220,12 @@ Integration-2 job 125488939981 passes all 31 repository files. Integration-1 job
 replacement/facade-stamp case; seven files pass, one fails and 23 remain unexecuted. [Original failure
 and successful sibling evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-integration/README.md).
 The fixture/build/publication files match passing a850 bytes; no assertion mismatch is reported and
-no contention cause is proven. Preserve this attempt. After the two remaining consumers finish,
+no contention cause is proven. Preserve this attempt. After the remaining native-1 consumer finishes,
 replay the entire original failed job once with original source/producer freshness/two-core budget,
 assertions and deadlines unchanged. A repeated failure requires diagnosis rather than retries until
 green. Do not weaken deadlines or claim a source fix for observed timing variance.
 
-[Native-2 job 125488939884](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md) is TERMINAL SUCCESS: eight files complete, seven passed/one existing skipped file. Native-1 job 125488939807 and app/rest 125488940066 were last verified live. Inspect their
+[Native-2 job 125488939884](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md) is TERMINAL SUCCESS: eight files complete, seven passed/one existing skipped file. App/rest job 125488940066 is TERMINAL SUCCESS: 7,040 host passes/95 existing exclusions, 989 pack/two exclusions, authoring seven/two, external app 32, smoke five and all six explicit SQLite witnesses pass once without failures/exclusions/retries/flakes. Host pool is 489.9 s under unchanged 600 s; reports are preserved beside native-2. Native-1 job 125488939807 is the only still-live original job. Inspect their
 actual outcomes; do not restart an observed-live job merely because polling times out. Platform is a
 reusable workflow invoked by strict. Compiler/native, full and runtime checks remain disposable.
 
