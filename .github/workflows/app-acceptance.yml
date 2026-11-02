@@ -631,6 +631,46 @@ jobs:
         run: |
           npm ci
           npm run packages:build
+      - name: Keyword compound semantics and existing search contracts
+        env:
+          EARS_EVALUATION_BACKEND: sqlite
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-relevance
+          npm run typecheck -w @apackdev/ears
+          npm test -w @apackdev/ears -- tests/sqlite/text-documents.spec.ts tests/sqlite/text-typos.spec.ts \
+            tests/sqlite/text-scope.spec.ts tests/engine/search.spec.ts tests/engine/search-relevance.spec.ts \
+            tests/engine/search-languages.spec.ts --maxWorkers 2 --reporter=default --reporter=json \
+            --outputFile=../../.temp/sqlite-relevance/search-contracts.json
+      - name: Compound matching regressions reject the original phrase execution
+        env:
+          EARS_EVALUATION_BACKEND: sqlite
+        run: |
+          set -euo pipefail
+          text_source=packages/apack-ears/src/sqlite/text.ts
+          saved_source=$(mktemp "$RUNNER_TEMP/ears-text-source-XXXXXX")
+          cp "$text_source" "$saved_source"
+          restore_source() { cp "$saved_source" "$text_source"; rm -f "$saved_source"; }
+          trap restore_source EXIT
+          git show 0a9892907b:packages/apack-ears/src/sqlite/text.ts > "$text_source"
+          test_status=0
+          npm test -w @apackdev/ears -- tests/sqlite/text-documents.spec.ts \
+            -t 'combines (unquoted|stemmed) compound terms across' --maxWorkers 2 \
+            --reporter=default --reporter=json \
+            --outputFile=../../.temp/sqlite-relevance/compound-old-source.json || test_status=$?
+          test "$test_status" != 0
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const report=JSON.parse(readFileSync('.temp/sqlite-relevance/compound-old-source.json','utf8'));
+          const failed=report.testResults.flatMap(file=>file.assertionResults).filter(test=>test.status==='failed');
+          assert.equal(report.numFailedTests,2);
+          assert.equal(failed.length,2);
+          assert(failed.every(test=>/combines (unquoted|stemmed) compound terms across/.test(test.fullName)));
+          JS
+          restore_source
+          trap - EXIT
+          git diff --exit-code -- "$text_source"
       - name: Local inference and original app judgments on both backends
         run: |
           set -euo pipefail

@@ -148,36 +148,44 @@ export class SqliteText {
     const nativeLimit = recency && !nativeRecency ? undefined : limit;
     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
     if (!tokens.length) return [];
-    const clauses: Clause[] = [], groups: number[][] = [[]];
+    const clauses: Clause[] = [], groups: number[][] = [[]], positiveTokens: number[][] = [], negativeTokens: number[][] = [];
     for (const [position, rawToken] of tokens.entries()) {
       if (rawToken === 'OR') { if (groups.at(-1)!.length) groups.push([]); continue; }
       const negative = rawToken.startsWith('-'); let token = negative ? rawToken.slice(1) : rawToken;
       const colon = token.startsWith('"') ? -1 : token.indexOf(':');
       const field = colon < 0 ? undefined : token.slice(0, colon);
       if (colon >= 0) token = token.slice(colon + 1);
-      const phrase = token.startsWith('"'), raw = token.replace(/^"|"$/g, ''), normalized = fold(raw);
-      if (!normalized) continue;
-      const prefix = options.prefix && !phrase && position === tokens.length - 1 ? '*' : '';
-      const expanded = !phrase && options.fuzzy !== false ? this.presentAlternatives(job, normalized) : [];
-      const words = phrase ? [raw] : [...new Set([raw, ...expanded])];
-      // Literal completion and exact typo alternatives are independent. A wildcard on every alternative
-      // would turn whole-word correction into a broader fuzzy-prefix search.
-      const match = words.map(word => {
-        const suffix = word === raw ? prefix : '';
-        return `(body : ${quote(word)}${suffix} OR aliases : ${quote(identifierParts(word).text || word)}${suffix})`;
-      }).join(' OR ');
+      const phrase = token.startsWith('"'), raw = token.replace(/^"|"$/g, '');
+      // Only explicit quotes impose adjacency. Punctuation in an ordinary token separates
+      // words, which may match different indexed fields or list elements of the same entity.
+      const parts = phrase ? [raw] : raw.match(/[\p{L}\p{N}\p{M}]+/gu) ?? [];
       const selected = (field === undefined ? fields : [field]).filter(f => !options.fields?.length || options.fields.includes(f))
         .map(f => fields.indexOf(f)).filter(i => i >= 0);
-      if (!negative) groups.at(-1)!.push(clauses.length);
-      clauses.push({ match, fields: selected, negative });
+      const tokenClauses: number[] = [];
+      for (const [part, text] of parts.entries()) {
+        const normalized = fold(text); if (!normalized) continue;
+        const prefix = options.prefix && !phrase && position === tokens.length - 1 && part === parts.length - 1 ? '*' : '';
+        const expanded = !phrase && options.fuzzy !== false ? this.presentAlternatives(job, normalized) : [];
+        const words = phrase ? [text] : [...new Set([text, ...expanded])];
+        const match = words.map(word => {
+          const suffix = word === text ? prefix : '';
+          return `(body : ${quote(word)}${suffix} OR aliases : ${quote(identifierParts(word).text || word)}${suffix})`;
+        }).join(' OR ');
+        tokenClauses.push(clauses.length);
+        clauses.push({ match, fields: selected, negative });
+      }
+      if (!tokenClauses.length) continue;
+      if (negative) negativeTokens.push(tokenClauses);
+      else { positiveTokens.push(tokenClauses); groups.at(-1)!.push(...tokenClauses); }
     }
     const positive = groups.flat(); if (!positive.length) return [];
-    const required = options.any ? positive.map(i => [i]) : groups.filter(group => group.length);
+    const required = options.any ? positiveTokens : groups.filter(group => group.length);
     const condition = required.map(group => '(' + group.map(i => `max(clause=${i})`).join(' AND ') + ')').join(' OR ');
     const scoped = within?.parameters ?? [];
     const scope = within === null ? 'e.trashed=0' : `f.entity_id IN (${within.sql})`;
     const previous = new Map<number, number>();
-    const negatives = clauses.flatMap((clause, i) => clause.negative ? [i] : []);
+    const negatives = negativeTokens.flat();
+    const excluded = negativeTokens.map(group => '(' + group.map(i => `max(clause=${i})`).join(' AND ') + ')').join(' OR ');
     let executionOrder = [...positive, ...negatives];
     if (required.length === 1 && required[0]!.length > 1) {
       // Global bounded posting counts are only an execution-order hint. Applying the candidate scope
@@ -231,7 +239,7 @@ export class SqliteText {
       const combined = single ? 'accepted AS (SELECT id,max(score) score,min(owner) owner,min(seq) seq FROM c0 GROUP BY id)' :
         `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
          clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner,min(seq) seq FROM matches WHERE negative=0 GROUP BY clause,id),
-         accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) AND id NOT IN (SELECT id FROM matches WHERE negative=1))`;
+         accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) ${excluded ? `AND id NOT IN (SELECT id FROM matches WHERE negative=1 GROUP BY id HAVING ${excluded})` : ''})`;
       const decayed = nativeRecency ? `, decayed AS (
         SELECT a.id,a.owner,a.seq,a.score base_score,
           a.score * coalesce((SELECT CASE WHEN r.kind IN ('num','zero','date') THEN pow(0.5,max(0,? - r.value)/?) ELSE 1 END

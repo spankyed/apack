@@ -27,6 +27,32 @@ function observeNativeMatches(db: SqliteDatabase) {
 }
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string FTS documents', () => {
+  it('combines unquoted compound terms across fields while keeping explicit phrases adjacent', () => {
+    const { e } = open();
+    e.create('Row', { id: 'Row-split', name: 'generate', body: ['unrelated', 'entries'] });
+    e.create('Row', { id: 'Row-phrase', body: 'unrelated generate-entries' });
+    e.create('Row', { id: 'Row-half', name: 'generate', body: 'unrelated' });
+    e.create('Row', { id: 'Row-other', name: 'unrelated' });
+    const ids = (query: string, any = false) => e.query('Row').search(query, { fuzzy: false, any }).ids().sort();
+    expect(ids('generate-entries')).toEqual(['Row-phrase', 'Row-split']);
+    expect(ids('"generate-entries"')).toEqual(['Row-phrase']);
+    expect(ids('generate-entries missing', true)).toEqual(['Row-phrase', 'Row-split']);
+    expect(ids('unrelated -generate-entries')).toEqual(['Row-half', 'Row-other']);
+    expect(ids('name:generate-entries')).toEqual([]);
+    expect(ids('body:generate-entries')).toEqual(['Row-phrase']);
+    const hit = e.query('Row').search('generate-entries', { fuzzy: false }).hits({ highlights: true })
+      .find(hit => hit.id === 'Row-split');
+    expect(hit?.highlights).toEqual({ name: [[0, 0, 8]], body: [[1, 0, 7]] });
+  });
+
+  it('combines stemmed compound terms across weighted fields without making a phrase match', () => {
+    const { e } = open();
+    e.admin.setSchema({ ...schema, types: { Row: { required: [], search: { fields: { name: 3, body: 1 }, stem: 'en' } } } });
+    e.create('Row', { id: 'Row-generated', name: 'Generated files', body: 'These entries describe the output.' });
+    expect(e.query('Row').search('generate-entries', { fuzzy: false }).ids()).toEqual(['Row-generated']);
+    expect(e.query('Row').search('"generate-entries"', { fuzzy: false }).ids()).toEqual([]);
+  });
+
   it('maps identifier and acronym components to original UTF-16 offsets and preserves whole identifiers', () => {
     const { e } = open(); e.create('Row', { id: 'Row-code', name: '😀 openDatabaseStore HTTPRequest' });
     expect(e.query('Row').search('database', { fuzzy: false }).hits({ highlights: true })[0]?.highlights)

@@ -197,14 +197,18 @@ confirms no shipped source/dependency/native/build-script changes from integrate
 Changed executable test/workflow inputs match their later qualified blobs; this does not waive
 keyword failures or broaden the original validation scopes.
 
-Current checkpoint: the user explicitly resumed full goal work and directed fixing the 24/25
-keyword result. No relevance waiver is requested or assumed. Keep the frozen query, top-five
-threshold and expected answer unchanged. First collect actual unlimited versus limited rankings,
-relevant rank, score and match-position diagnostics on both backends under both existing stemming
-configurations. This is diagnostic evidence, not a ranking fix or a performance measurement.
-Then correct the demonstrated cause and require the original shared judgments/search contracts,
-meaningful old-code controls and relevant corpus/app checks on the changed runtime. Native/compiler
-validation stays in disposable CI; all previous evidence remains source-pinned history.
+Current checkpoint: fix the original keyword judgment, with no relevance waiver. The
+[exact diagnostic receipt](../references/evidence/ears-sqlite-implementation-2026-10-28/keyword-diagnostic-456/README.md)
+finds the required overview at rank 9/11 on SQLite none/English and rank 13 on unstemmed elmdb;
+limited results agree with full-ranking prefixes. English-stemmed elmdb passes that case but
+fails the separate transposed-identifier case 20. Do not conflate the four 24/25 outcomes.
+The SQLite compiler incorrectly makes unquoted punctuation-separated compounds into phrases.
+The current fix separates their terms across fields/elements while retaining explicit phrase
+adjacency, compound exclusions, field filters and OR/any groups. New matching/highlight/stemming
+regressions and exact-old-source controls must pass in disposable CI. The frozen corpus, query,
+expected answer and top-five threshold remain unchanged. Full 25/25 acceptance is still unproven;
+use the resulting ranking data to finish the remaining correction, then rerun relevant integrated,
+corpus and app checks on the changed runtime. No stop/waiver decision is pending.
 
 The user explicitly retains synchronous app search and accepts foreground responsiveness degradation
 for completion of this experiment. Preserve original heartbeat misses as measured failures with an
@@ -299,7 +303,7 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 Current validation handles and results:
 
 - [Original keyword ranking diagnostics 41460757710](https://github.com/spankyed/apack/actions/runs/41460757710)
-  is in progress at `4566270bf78e8d9290c92ff46f197e4fbdbeca25`. The frozen fixture is unchanged.
+  is terminal success at `4566270bf78e8d9290c92ff46f197e4fbdbeca25`. The frozen fixture is unchanged.
   Numeric failure diagnostics compare limited/unlimited ranks, scores and highlight positions on
   both backends and both stemming modes; no query, target or top-five threshold was relaxed.
 
