@@ -41,6 +41,7 @@ export function nativeFrontendDeclarationFixture(fixture: PackFERegistration): N
       { ...(value.kind !== undefined && { kind: value.kind }), ...(value.fe !== undefined && { fe: 'fixtures/block.vue' }) }])) }),
     ...(fixture.appExtensions && { appExtensions: Object.fromEntries(Object.keys(fixture.appExtensions).map(id => [id, 'fixtures/extension.vue'])) }),
     ...(fixture.textEditor && { textEditor: Object.fromEntries(Object.entries(fixture.textEditor).map(([id, value]) => [id, {
+      ...(value.readOnly !== undefined && { readOnly: value.readOnly === false ? false : 'fixtures/editor.ts#readOnly' }),
       ...(value.extensions && { extensions: Object.fromEntries(Object.keys(value.extensions).map(name => [name, component])) }),
       ...(value.popups && { popups: Object.fromEntries(Object.keys(value.popups).map(name => [name, 'fixtures/popup.vue'])) }),
       ...(value.isSuggestionActive !== undefined && { isSuggestionActive: 'fixtures/editor.ts#isSuggestionActive' }),

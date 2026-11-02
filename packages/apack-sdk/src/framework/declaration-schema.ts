@@ -770,6 +770,7 @@ const BuildConfigSchema = z.object({
 }).strict().describe('Build-time configuration: settings that change what the build produces, never what the app loads.');
 
 const TextEditorExtensionsSchema = z.object({
+  readOnly: z.union([z.literal(false), ExportTargetSchema]).describe('False for editing-only behavior; otherwise an exported read-only rendering adapter. Absence requires the editor viewer.').optional(),
   extensions: declarationRecord(IdentifierSchema, ExportTargetSchema).describe('Tiptap extension name to its exported extension object ("path#exportName"). Each key must match the exported object\'s Tiptap name.').optional(),
   popups: declarationRecord(IdentifierSchema, ModulePathSchema).describe('Popup IDs local to this group, mapped to pack-root-relative Vue component modules.').optional(),
   isSuggestionActive: ExportTargetSchema.describe('Exported predicate ("path#exportName") reporting whether this group has an active suggestion for the current editor state.').optional(),

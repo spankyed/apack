@@ -29,19 +29,20 @@ export function performanceExecutionPolicy(comparison?: string) {
   return comparison ? 'alternating-modes-v1' : 'single-scenario-v1';
 }
 
-/** The coordinator grants one action at a time; waiting occurs before recording or readiness timing. */
+/** Wait for any revision permission, then activate the interactive window before timing. */
 export async function waitForPerformanceTrial(entry: PerformanceScheduleEntry, target?: { application: ElectronApplication; page: Page }) {
   const gate = configuration();
-  if (!gate) return;
-  if (entry.mode !== gate.mode || entry.index > gate.lastIndex) throw Error('Revision gate mode differs from its worker');
-  publishPerformanceMarker(path.join(gate.directory, `ready-${entry.index}.json`), { index: entry.index, mode: entry.mode });
-  const permission = path.join(gate.directory, `permit-${entry.index}.json`);
-  while (!existsSync(permission)) {
-    if (Date.now() >= gate.deadline) throw Error('Revision coordinator deadline expired');
-    await delay(20);
+  if (gate) {
+    if (entry.mode !== gate.mode || entry.index > gate.lastIndex) throw Error('Revision gate mode differs from its worker');
+    publishPerformanceMarker(path.join(gate.directory, `ready-${entry.index}.json`), { index: entry.index, mode: entry.mode });
+    const permission = path.join(gate.directory, `permit-${entry.index}.json`);
+    while (!existsSync(permission)) {
+      if (Date.now() >= gate.deadline) throw Error('Revision coordinator deadline expired');
+      await delay(20);
+    }
+    const value = read(permission) as { index?: unknown; mode?: unknown };
+    if (value.index !== entry.index || value.mode !== entry.mode || Date.now() >= gate.deadline) throw Error('Invalid or expired revision permission');
   }
-  const value = read(permission) as { index?: unknown; mode?: unknown };
-  if (value.index !== entry.index || value.mode !== entry.mode || Date.now() >= gate.deadline) throw Error('Invalid or expired revision permission');
   if (target) {
     const window = await target.application.browserWindow(target.page);
     try { await window.evaluate(window => { window.show(); window.focus(); window.webContents.focus(); }); }

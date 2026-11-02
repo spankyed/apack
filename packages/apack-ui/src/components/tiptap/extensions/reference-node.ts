@@ -1,32 +1,10 @@
-import { openEntity } from '@apackdev/sdk/fe'
-import type { EARS } from '@apackdev/sdk'
+import { createReferencePill } from '../internal/reference-pill.ts'
+import type { ReadOnlyTextRenderer } from '@apackdev/sdk/fe'
 import { Node, mergeAttributes } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { MarkdownSerializerState } from 'prosemirror-markdown'
-import { formatReferenceHref, parseReferenceHref, getReferenceTypeDeclaration, onReferenceDeclarationsChanged } from '@apackdev/sdk/fe/references'
+import { formatReferenceHref, parseReferenceHref } from '@apackdev/sdk/fe/references'
 
-function createIconSvg(type: string): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg'
-  const svg = document.createElementNS(ns, 'svg')
-  svg.setAttribute('width', '14')
-  svg.setAttribute('height', '14')
-  svg.setAttribute('viewBox', '0 0 24 24')
-  svg.setAttribute('fill', 'none')
-  svg.setAttribute('stroke', 'currentColor')
-  svg.setAttribute('stroke-width', '2')
-  svg.setAttribute('stroke-linecap', 'round')
-  svg.setAttribute('stroke-linejoin', 'round')
-
-  for (const [tag, attrs] of getReferenceTypeDeclaration(type)?.svgElements ?? []) {
-    const el = document.createElementNS(ns, tag)
-    for (const [k, v] of Object.entries(attrs)) {
-      el.setAttribute(k, v)
-    }
-    svg.appendChild(el)
-  }
-
-  return svg
-}
 
 export const ReferenceNode = Node.create({
   name: 'reference',
@@ -71,47 +49,13 @@ export const ReferenceNode = Node.create({
 
   addNodeView() {
     return ({ node, editor }) => {
-      let currentNode = node
-      const dom = document.createElement('span')
-      dom.classList.add('reference-pill')
-      dom.dataset.refType = node.attrs.refType
-      dom.contentEditable = 'false'
-
-      const icon = document.createElement('span')
-      icon.classList.add('reference-pill-icon')
-      icon.appendChild(createIconSvg(node.attrs.refType))
-
-      const label = document.createElement('span')
-      label.classList.add('reference-pill-label')
-      label.textContent = node.attrs.label
-
-      dom.appendChild(icon)
-      dom.appendChild(label)
-      const stopDeclarations = onReferenceDeclarationsChanged(() => {
-        icon.replaceChildren(createIconSvg(currentNode.attrs.refType))
-      })
-
-      const onClick = (event: MouseEvent) => {
-        if (editor.isEditable && !event.metaKey && !event.ctrlKey) return
-
-        const refId = currentNode.attrs.refId as string
-
-        if (typeof refId === 'string' && refId.includes('-')) openEntity(refId as EARS.EntityId)
-      }
-      dom.addEventListener('click', onClick)
-
+      const pill = createReferencePill({ type: node.attrs.refType, id: node.attrs.refId, label: node.attrs.label }, () => editor.isEditable)
       return {
-        dom,
-        destroy() {
-          stopDeclarations()
-          dom.removeEventListener('click', onClick)
-        },
+        dom: pill.dom,
+        destroy: pill.dispose,
         update(updatedNode) {
           if (updatedNode.type.name !== 'reference') return false
-          currentNode = updatedNode
-          dom.dataset.refType = updatedNode.attrs.refType
-          icon.replaceChildren(createIconSvg(updatedNode.attrs.refType))
-          label.textContent = updatedNode.attrs.label
+          pill.update({ type: updatedNode.attrs.refType, id: updatedNode.attrs.refId, label: updatedNode.attrs.label })
           return true
         },
       }
@@ -152,3 +96,31 @@ export const ReferenceNode = Node.create({
     }
   },
 })
+
+/** References retain their navigation and live icons without an editor view. */
+export const ReadOnlyReferences: ReadOnlyTextRenderer = {
+  decorate(root) {
+    const cleanups: Array<() => void> = []
+    try {
+      for (const anchor of root.querySelectorAll<HTMLAnchorElement>('a[href^="apack-ref://"]')) {
+        const target = parseReferenceHref(anchor.getAttribute('href') ?? '')
+        if (!target) continue
+        const pill = createReferencePill({ ...target, label: anchor.textContent ?? '' })
+        const separator = () => {
+          const image = document.createElement('img')
+          image.className = 'ProseMirror-separator'
+          image.alt = ''
+          return image
+        }
+        anchor.replaceWith(separator(), pill.dom, separator())
+        if (pill.dom.parentElement?.tagName === 'P' && pill.dom.parentElement.lastChild === pill.dom.nextSibling) {
+          const line = document.createElement('br')
+          line.className = 'ProseMirror-trailingBreak'
+          pill.dom.parentElement.appendChild(line)
+        }
+        cleanups.push(pill.dispose)
+      }
+    } catch (error) { for (const cleanup of cleanups.reverse()) cleanup(); throw error }
+    return () => { for (const cleanup of cleanups.reverse()) cleanup() }
+  },
+}

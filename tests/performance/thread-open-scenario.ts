@@ -1,10 +1,12 @@
-import { threadFixture } from './fixture.ts';
+import { threadFixture, richThreadFixture } from './fixture.ts';
 import { createWarmScenario } from './scenario.ts';
 import type { PerformanceWindow } from './window.ts';
 
 /** Own profile per worker/run; interactive trials deliberately share a warmed process and filesystem cache. */
 export async function threadOpenScenario({ app, appPage, electronApp }: Parameters<typeof createWarmScenario>[2], fault?: 'full-read' | 'missing-completion') {
-  const run = await createWarmScenario('thread-open', threadFixture, { app, appPage, electronApp });
+  const corpus = process.env.APACK_PERFORMANCE_CORPUS ?? 'plain';
+  if (!['plain', 'rich'].includes(corpus)) throw Error('Invalid thread corpus');
+  const run = await createWarmScenario('thread-open', corpus === 'rich' ? richThreadFixture : threadFixture, { app, appPage, electronApp });
   const { fixture, schedule } = run;
   try {
     await run.importThreads('Thread-performance-1');
@@ -20,12 +22,12 @@ export async function threadOpenScenario({ app, appPage, electronApp }: Paramete
       const { mode } = entry;
       await run.begin(entry);
       const thread = (entry.ordinal + firstThread) % 2;
-      const result = await appPage.evaluate(async ({ mode, thread, expectedBodies, fault }) => {
+      const result = await appPage.evaluate(async ({ mode, thread, expectedBodies, rich, fixtureId, fault }) => {
         const win = window as unknown as PerformanceWindow;
         const recording = win.__performance;
         await recording.start(mode);
         const started = performance.now();
-        const action = recording.begin('app.thread.open', { 'app.scenario': 'thread-open', 'app.fixture': 'populated-threads-v1' })!;
+        const action = recording.begin('app.thread.open', { 'app.scenario': 'thread-open', 'app.fixture': fixtureId })!;
         const target = `Thread-performance-${thread}`;
         let completed = false;
         let durationMs: number | undefined;
@@ -49,6 +51,9 @@ export async function threadOpenScenario({ app, appPage, electronApp }: Paramete
                 && shown.every(element => element && element.getClientRects().length > 0)
                 && new Set(indices).size === 50 && indices.every(value => value >= 50 && value < 100)
                 && shown.every((element, at) => element!.textContent?.includes(expectedBodies[indices[at]! - 50]!));
+              if (rich && shown.some((element, at) => !element?.textContent?.includes(`Rich end ${thread}/${indices[at]}.`)
+                || ['h2', 'strong', 'em', 'blockquote', 'ul', 'ol', 'table', 'pre code', '.reference-pill'].some(selector => !element?.querySelector(selector))
+                || (indices[at]! % 4 === 0 && !element?.querySelector('.command-segment')))) return false;
               work.expectedTruncatedMessages = 25;
               work.truncatedMessages = shown.filter((element, at) => indices[at]! % 2 === 0
                 && element?.textContent?.includes('Click to view')).length;
@@ -80,7 +85,7 @@ export async function threadOpenScenario({ app, appPage, electronApp }: Paramete
         finally { action.end(completed ? 'ok' : 'error'); }
         const reports = await recording.stop();
         return { completed, durationMs, reports, failure, lastDelivery, work };
-      }, { mode, thread, fault, expectedBodies: fixture.data.threads[thread]!.messages.slice(50).map(message => message.text.trimEnd()) });
+      }, { mode, thread, fault, fixtureId: fixture.identity.generator, rich: corpus === 'rich', expectedBodies: threadFixture().data.threads[thread]!.messages.slice(50).map(message => message.text.trimEnd()) });
       // A page may return its bodies, scalar metadata/framing (50% headroom), and 16 KiB of headers.
       // This is a declared work budget; a full-history read must not pass just because the UI shows fifty rows.
       const maxAppResponseBytes = Math.ceil(fixture.data.threads[thread]!.messages.slice(50)

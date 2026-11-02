@@ -151,6 +151,18 @@ describe('generated frontend entry', () => {
       .rejects.toThrow('Missing.vue');
   });
 
+  it('generates read-only adapters and editing-only declarations without executing pack code', async () => {
+    write('src/viewer.ts', 'throw new Error("Do not execute"); export const Viewer = { decorate() {} }; export function invalid() {}');
+    const files = await generate({ textEditor: {
+      viewer: { readOnly: 'src/viewer.ts#Viewer' }, editing: { readOnly: false },
+    } });
+    const fe = files['src/__generated__/pack-entry-fe.ts'];
+    expect(fe).toContain("import { Viewer as __editor_0 } from '../viewer.ts';");
+    expect(fe).toContain('"viewer": { readOnly: __editor_0 }');
+    expect(fe).toContain('"editing": { readOnly: false }');
+    await expect(generate({ textEditor: { viewer: { readOnly: 'src/viewer.ts#invalid' } } })).rejects.toThrow('expected an exported extension object');
+  });
+
   it('registers the tiptap surfaces a pack declares', async () => {
     write('src/tiptap/ok.ts', 'throw new Error("Do not execute"); export const Mention = {}; export function isActive() { return false; }\n');
     write('src/tiptap/Popup.vue', '<template><div /></template>');

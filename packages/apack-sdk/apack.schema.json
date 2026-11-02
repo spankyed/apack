@@ -1706,6 +1706,19 @@
           "additionalProperties": {
             "type": "object",
             "properties": {
+              "readOnly": {
+                "anyOf": [
+                  {
+                    "type": "boolean",
+                    "const": false
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$"
+                  }
+                ],
+                "description": "False for editing-only behavior; otherwise an exported read-only rendering adapter. Absence requires the editor viewer."
+              },
               "extensions": {
                 "type": "object",
                 "propertyNames": {

@@ -256,3 +256,31 @@ it('checks native declaration data before copying it or reading declarative acce
   expect(() => packs.registerPackFE({ kind: 'native', declaration }, { id: 'native' })).toThrow('JSON data properties');
   expect(read).not.toHaveBeenCalled();
 });
+
+
+it('matches declared read-only capabilities and refuses missing, foreign or non-callable adapters', () => {
+  const manifest = { id: 'viewer-pack', extensions: { textEditor: { viewer: { readOnly: 'src/viewer.ts#Viewer' } } } };
+  const valid = { id: 'viewer-pack', textEditor: { viewer: { readOnly: { decorate: () => undefined } } } };
+  expect(frontendBindingProblem(manifest, valid)).toBeUndefined();
+  expect(frontendBindingProblem(manifest, { id: 'viewer-pack', textEditor: { viewer: {} } })).toContain('readOnly');
+  expect(frontendBindingProblem(manifest, { id: 'viewer-pack', textEditor: { viewer: { readOnly: { decorate: 'invalid' } } } })).toContain('readOnly');
+  expect(frontendBindingProblem(manifest, { id: 'viewer-pack', textEditor: { viewer: { readOnly: { surprise: () => undefined } } } })).toContain('readOnly');
+  const editorOnly = { id: 'viewer-pack', extensions: { textEditor: { viewer: { readOnly: false as const } } } };
+  expect(frontendBindingProblem(editorOnly, { id: 'viewer-pack', textEditor: { viewer: { readOnly: false } } })).toBeUndefined();
+  expect(frontendBindingProblem(editorOnly, valid)).toContain('readOnly');
+  expect(frontendBindingProblem({ id: 'viewer-pack', extensions: { textEditor: { viewer: {} } } }, valid)).toContain('readOnly');
+});
+
+
+it('captures read-only adapter callbacks before a caller can mutate the registered object', () => {
+  const registry = createNativeFrontendTestRegistry([{ id: 'viewer', textEditor: {
+    messages: { readOnly: 'native/viewer.ts#Viewer' },
+  } }]);
+  const decorate = vi.fn();
+  const adapter = { decorate };
+  registry.registerFixture({ id: 'viewer', textEditor: { messages: { readOnly: adapter } } });
+  adapter.decorate = vi.fn();
+  const captured = registry.textEditor()[0].binding.readOnly;
+  expect(captured && captured.decorate).toBe(decorate);
+  expect(Object.isFrozen(captured)).toBe(true);
+});

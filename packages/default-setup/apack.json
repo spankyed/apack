@@ -2382,6 +2382,7 @@
     },
     "textEditor": {
       "suggestions": {
+        "readOnly": "src/extensions/tiptap/command-viewer-decoration.ts#ReadOnlyCommandDecoration",
         "extensions": {
           "referenceSuggestion": "src/extensions/tiptap/reference-suggestion.ts#ReferenceSuggestion",
           "commandViewerDecoration": "src/extensions/tiptap/command-viewer-decoration.ts#CommandViewerDecoration"

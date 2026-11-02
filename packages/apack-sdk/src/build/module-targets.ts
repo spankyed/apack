@@ -70,6 +70,7 @@ export function _packModuleTargets(manifest: Partial<PackManifest>): ModuleTarge
   for (const [name, entry] of Object.entries(manifest.extensions?.dsl ?? {})) add(['extensions', 'dsl', name, 'entry'], entry.entry, 'types', 'module');
   for (const [id, contribution] of Object.entries(manifest.extensions?.textEditor ?? {})) {
     const prefix = ['extensions', 'textEditor', id];
+    if (typeof contribution.readOnly === 'string') add([...prefix, 'readOnly'], contribution.readOnly);
     for (const [name, target] of Object.entries(contribution.extensions ?? {})) add([...prefix, 'extensions', name], target);
     for (const [name, target] of Object.entries(contribution.popups ?? {})) add([...prefix, 'popups', name], target, 'component', 'module');
     add([...prefix, 'isSuggestionActive'], contribution.isSuggestionActive);
