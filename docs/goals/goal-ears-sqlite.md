@@ -5,7 +5,7 @@
 
 Implement docs/goals/goal-ears-sqlite.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Validation and Current handoff before changing code.
-The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 984f1b4aca
+The prototype checkpoint is 4a3fe698f8. The current detached integration combines master 461f7bf2cb
 and its native pin f496470679a7bd9764398108b20f62a73333c701; full combined acceptance remains pending. Inspect the current handoff and actual source before continuing.
 Work in the isolated session/ears-sqlite checkout and preserve concurrent work.
 
@@ -206,8 +206,7 @@ passes all 31 watch and six real thread-view cases on each backend, including th
 case. Four precision guards fail against the exact old c5d6f3ea66 module; both source blob hashes
 and byte-for-byte restoration verify. [Corrected three-platform EARS](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-cd8/README.md)
 now pass 935 cases on Linux/macOS and 931 on Windows, retaining only keyword failure and the four
-original Windows exclusions. This closes the demonstrated defect at focused scope; all 991 pack units
-and the remaining authoring/app stages still require corrected-source integrated qualification.
+original Windows exclusions. [Integrated qualification](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-061-consumers/README.md) now passes all 989 eligible pack units with two original exclusions, including the actual thread-view file; all five remaining stages pass. This closes the demonstrated watch regression without hiding the retained keyword failure or new integration timeout.
 
 Latest demonstrated results:
 
@@ -229,19 +228,22 @@ Latest demonstrated results:
   without English stemming. Both maintained validators reproduce the downloaded receipts byte-for-byte;
   private/model/database scratch cleanup passes. This is one pinned model; 141/239 inputs truncate
   at 256 tokens, so broader search coverage and the keyword disposition remain open.
-- [Source app at 26c291d031](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-26c/README.md):
+- [Source app at d2684393ec](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-d268/README.md):
   all 33 eligible cases pass once, one packaged-only exclusion, zero failures/flakes/retries. Ten
   main-window role-discovery cases and testing-workspace typecheck pass, with the unit report retained
   outside Playwright cleanup. Previous navigation and ENOTEMPTY
   failures remain preserved. The final replay qualifies `1d25cbf2af`: its code-surface test observes
   the exact terminal.CLOSED event before directory removal, without a retry or longer existing deadline.
-- [Strict consumers at 81e8ab4fe5](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-81-consumers/README.md):
-  all four integration/native consumers pass. Host completes 613 files in 518.61 seconds under 600,
-  retaining only keyword failure; six independent Electron smoke cases pass. Later dependent chain
-  stages remain unproven. [Current three-platform host/readiness](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-c5d/README.md)
-  and [actual history EIO refusal/preservation](../references/evidence/ears-sqlite-implementation-2026-10-28/history-ae9/README.md)
-  include the latest database-runtime repair: ambiguous generic CORRUPT refuses without quarantining
-  an intact incumbent; NOTADB retains the documented quarantine path.
+- [Corrected-source integrated strict](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-061-consumers/README.md) at 06106d18dd:
+  producer, both native shards and integration-2 pass. Host completes 613 files in 482.66 seconds
+  under 600, with 7,029 passes, one keyword failure and 95 exclusions. Integration-1 reports 199 passes
+  and one 200 s dependency-publication timeout, leaving three files uncompleted; cause remains unresolved.
+  All five separately executed remaining stages pass: pack 989/two exclusions, authoring producer seven,
+  authoring app two, external-pack/fork 32 passing executions and smoke five. Six independent explicit
+  SQLite Electron/storage cases pass, and their report survives later output cleanup.
+  [Matching three-platform results](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-061/README.md) retain only keyword failure and
+  original Windows exclusions. [Actual history EIO refusal/preservation](../references/evidence/ears-sqlite-implementation-2026-10-28/history-ae9/README.md)
+  separately proves intact-incumbent refusal/reopen; routing tests alone do not prove syscall outcomes.
 - [Packaged Linux/Windows](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-eb/README.md)
   pass native/API probes. [Signed macOS at 3ec277e393](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-3ec-signed/README.md)
   passes strict signing, post-sign native smoke and all six installed cases without exclusions/retries.
@@ -252,18 +254,16 @@ Latest demonstrated results:
   import remains slower. [Sustained checkpoint capacity](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-c471/README.md)
   passes four cohorts and shows 765 MB controlled logical overlap, not instantaneous peak or power-loss certification.
 
-Live checks on corrected program source:
+Current validation handles and results:
 
-- Platform/control run [41390395444](https://github.com/spankyed/apack/actions/runs/41390395444)
-  at `cd8b413fa8`: all three platforms are terminal with only keyword failure and original OS
-  exclusions. The focused dependency control passes with original numeric reports retained above.
-- Integrated strict run [41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
-  at `06106d18dd` is active; it must execute the full pack
-  pool and previously unexecuted remaining stages. Both native shards and integration-2 pass. [Integration-1 fails one dependency-publication test](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-timeout/README.md) at its unchanged 200 s timeout (199 tests pass); the cause is not established and this failure remains open. This source differs from cd8 only in documentation.
-- Explicit SQLite packaged-authoring run [41392105607](https://github.com/spankyed/apack/actions/runs/41392105607)
-  at `06106d18dd` is terminal success, with its receipt above.
-- Full corrected-source app replay [41395988057](https://github.com/spankyed/apack/actions/runs/41395988057)
-  at `d2684393ec` is terminal success: [33 eligible app passes, one packaged-only exclusion and ten helper passes](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-d268/README.md), with type/lint checks passing and no retries. This source includes the dependency patch.
+- [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
+  at `06106d18dd` is terminal failure with the exact independent successes/failures above.
+- [Focused unchanged integration test 41397716324](https://github.com/spankyed/apack/actions/runs/41397716324)
+  at `733294618a` is active in disposable CI. It preserves the 200 s deadline and assertions. A focused
+  pass would not by itself supersede the failed complete shard.
+- [Explicit SQLite packaged authoring 41392105607](https://github.com/spankyed/apack/actions/runs/41392105607)
+  at `06106d18dd` and [full app 41395988057](https://github.com/spankyed/apack/actions/runs/41395988057)
+  at `d2684393ec` are terminal success, with their separate receipts above. Both include cd8's correction.
 
 Previous integrated run `41385303835` at c5d6f3ea66 is terminal: producer and all four integration/native
 consumers pass; host retains keyword failure and the independent SQLite witness passes; pack units
@@ -276,12 +276,12 @@ Do not cancel/restart an existing handle for observation timeout. Inspect actual
 adding any pending app run. Collect corrected-source results and reconcile every remaining requirement
 before experimental completion; only foreground responsiveness has an approved degradation disposition.
 
-The strict audit identified a concrete gap: the retained keyword failure stops app/rest before
+The strict audit identified a concrete gap: the retained keyword failure stopped app/rest before
 pack-unit, packaged-authoring, external-pack app and smoke stages complete. The current workflow
 runs those named stages independently after an actual failure, using existing strict producer
 freshness checks and retaining the failed job. Its SQLite witness lives outside Playwright cleanup.
-This closes no requirement until disposable qualification succeeds; no test is skipped and no
-original failure or deadline is relaxed.
+Disposable run 41391989615 now qualifies these stages; the full integrated chain retains its original
+keyword failure and separate integration timeout. No original failure or deadline is relaxed.
 
 The [completion assessment and invariant/dependency review](../plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
 recommends retaining elmdb; experimental completion is not yet proven. [Earlier detailed handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-completion-audit/README.md)

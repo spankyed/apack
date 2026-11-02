@@ -1,0 +1,190 @@
+{
+  "run": 41391989615,
+  "source": "06106d18ddc61e0792b9faa1f64a302ffe1f7fdd",
+  "platformJobs": "terminal failure only at retained frozen keyword judgment",
+  "strictConsumers": "terminal; keyword and integration timeout failures retained separately",
+  "platforms": [
+    {
+      "platform": "linux",
+      "suites": {
+        "ears": {
+          "passed": 935,
+          "failed": 1,
+          "excluded": 0,
+          "failedCases": [
+            "real repository-content search relevance 'find generated metadata ownership'"
+          ],
+          "excludedCases": []
+        },
+        "host": {
+          "passed": 313,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": [],
+          "excludedCases": []
+        },
+        "host-crash": {
+          "passed": 12,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": [],
+          "excludedCases": []
+        },
+        "cli-maintenance": {
+          "passed": 41,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": [],
+          "excludedCases": []
+        }
+      },
+      "requiredHistoryCases": [
+        {
+          "name": "never treats SQLITE_CORRUPT as permission to replace a SQLite history directory",
+          "status": "passed"
+        },
+        {
+          "name": "refuses sqlite/1 history quarantine while a managed reader still holds the directory",
+          "status": "passed"
+        },
+        {
+          "name": "quarantines corrupt sqlite/1 history while an unrelated primary handle stays open",
+          "status": "passed"
+        }
+      ],
+      "verifierFailure": "Complete EARS contracts must pass, including retained relevance judgments",
+      "originalJobLogSha256": "18f8bcefc3518664ec777d17675eb034e3dee11f8e230999595045b7f9e5f75d",
+      "remainingFinalPredicateVerified": true,
+      "nativeReadinessPassed": 8
+    },
+    {
+      "platform": "macos",
+      "suites": {
+        "ears": {
+          "passed": 935,
+          "failed": 1,
+          "excluded": 0,
+          "failedCases": [
+            "real repository-content search relevance 'find generated metadata ownership'"
+          ],
+          "excludedCases": []
+        },
+        "host": {
+          "passed": 313,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": [],
+          "excludedCases": []
+        },
+        "host-crash": {
+          "passed": 12,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": [],
+          "excludedCases": []
+        },
+        "cli-maintenance": {
+          "passed": 41,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": [],
+          "excludedCases": []
+        }
+      },
+      "requiredHistoryCases": [
+        {
+          "name": "never treats SQLITE_CORRUPT as permission to replace a SQLite history directory",
+          "status": "passed"
+        },
+        {
+          "name": "refuses sqlite/1 history quarantine while a managed reader still holds the directory",
+          "status": "passed"
+        },
+        {
+          "name": "quarantines corrupt sqlite/1 history while an unrelated primary handle stays open",
+          "status": "passed"
+        }
+      ],
+      "verifierFailure": "Complete EARS contracts must pass, including retained relevance judgments",
+      "originalJobLogSha256": "7a70d0e8a91ee0489ee16de8e6ab6805e6cb48572e2b90a29e537597fc8a262d",
+      "remainingFinalPredicateVerified": true,
+      "nativeReadinessPassed": 8
+    },
+    {
+      "platform": "windows",
+      "suites": {
+        "ears": {
+          "passed": 931,
+          "failed": 1,
+          "excluded": 4,
+          "failedCases": [
+            "real repository-content search relevance 'find generated metadata ownership'"
+          ],
+          "excludedCases": [
+            "SQLite file ownership refuses a FIFO at data.sqlite3 without blocking the native opener",
+            "SQLite file ownership refuses a FIFO at data.sqlite3-wal without blocking the native opener",
+            "SQLite file ownership refuses a FIFO at data.sqlite3-shm without blocking the native opener",
+            "SQLite file ownership refuses a FIFO at data.sqlite3-journal without blocking the native opener"
+          ]
+        },
+        "host": {
+          "passed": 310,
+          "failed": 0,
+          "excluded": 6,
+          "failedCases": [],
+          "excludedCases": [
+            "refuses before replacement when syncing the recovery copy fails",
+            "refuses before replacement when syncing the recovery parent fails",
+            "refuses a managed open without writable metadata while direct read-only snapshots remain available",
+            "the database write lock releases the lock when the tool is interrupted with POSIX SIGINT",
+            "the database write lock releases the lock when the tool is interrupted with POSIX SIGTERM",
+            "the database write lock releases the lock when the tool is interrupted with POSIX SIGHUP"
+          ]
+        },
+        "host-crash": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 10,
+          "failedCases": [],
+          "excludedCases": [
+            "recovers elmdb/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+            "recovers elmdb/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+            "recovers elmdb/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+            "recovers elmdb/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+            "recovers sqlite/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+            "recovers sqlite/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+            "recovers sqlite/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+            "recovers sqlite/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+            "refuses a separate live reader and reclaims its claim after SIGKILL",
+            "refuses a separate live writer and reclaims its claim after SIGKILL"
+          ]
+        },
+        "cli-maintenance": {
+          "passed": 41,
+          "failed": 0,
+          "excluded": 0,
+          "failedCases": [],
+          "excludedCases": []
+        }
+      },
+      "requiredHistoryCases": [
+        {
+          "name": "never treats SQLITE_CORRUPT as permission to replace a SQLite history directory",
+          "status": "passed"
+        },
+        {
+          "name": "refuses sqlite/1 history quarantine while a managed reader still holds the directory",
+          "status": "passed"
+        },
+        {
+          "name": "quarantines corrupt sqlite/1 history while an unrelated primary handle stays open",
+          "status": "passed"
+        }
+      ],
+      "verifierFailure": "Complete EARS contracts must pass, including retained relevance judgments",
+      "originalJobLogSha256": "e6194aca39ab1d8834a4ac96aa9bae4edfb57825d3eab2bad361d8d61421e5eb",
+      "remainingFinalPredicateVerified": true,
+      "nativeReadinessPassed": 8
+    }
+  ]
+}
