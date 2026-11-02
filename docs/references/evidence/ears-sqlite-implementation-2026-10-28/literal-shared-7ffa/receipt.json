@@ -1,0 +1,66 @@
+{
+  "run": 41480349250,
+  "source": "7ffa2a7ca57bb38ac132f9390e74d26e7a5ceba2",
+  "searchContracts": {
+    "passed": 125,
+    "failed": 0,
+    "excluded": 0
+  },
+  "keyword": [
+    {
+      "backend": "elmdb",
+      "stem": "none",
+      "passed": 24,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "backend": "elmdb",
+      "stem": "en",
+      "passed": 24,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "backend": "sqlite",
+      "stem": "none",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "backend": "sqlite",
+      "stem": "en",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "hybrid": {
+    "elmdb": {
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    "sqlite": {
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "oldSourceControl": {
+    "commit": "0a9892907b9d69729f38d7e0f8d43b32c5fd8d74",
+    "originalReportSha256": "4b1a10f88595c1eb60ec5c27c3dd9c4692acdb21c54efaf491ec2f55d90e2c6b",
+    "requiredAssertionFailures": [
+      "source-string FTS documents prefers a leading mention over an incidental mention late in a shorter field",
+      "source-string FTS documents combines unquoted compound terms across fields while keeping explicit phrases adjacent",
+      "source-string FTS documents combines stemmed compound terms across weighted fields without making a phrase match",
+      "source-string FTS documents prefers literal compounds over stem-only matches and maintains their postings"
+    ],
+    "otherTestsExcluded": 16,
+    "restoredSource": "CI step git diff --exit-code succeeds after restoration"
+  },
+  "independentValidation": "Both maintained pure validators reproduce original summaries byte-for-byte",
+  "originalJobMetadataSha256": "a03a710fc45efc785bffe7bafea9e47b60bf2dece402e152320b6284a3865fde",
+  "scope": "Focused relevance, search contracts, lifecycle and audit/upgrade regressions; broader runtime qualification remains required."
+}
