@@ -259,6 +259,15 @@ Adjacency plan guards require a persistent indexed SEARCH bounded by source equa
 
 ## App embedding and search lifecycle evidence
 
+The final-runtime app-flow checkpoint also runs the maintained `search-supersession` and
+`search-resource-refusal` scenarios on each backend. Both must verify their real store identity;
+all four named cases must pass once without exclusions/flakes/retries. Reports are retained in
+`.apack/qualification/app-flows`, outside Playwright cleanup, together with the six ordinary flow
+reports. The refusal scenario requires correct current UI results and an explicitly incomplete
+resource capture. These controls preserve correctness and evidence refusal; they do not turn a
+failed resource capture into passing performance or establish semantic/model/provider usefulness.
+The workflow change remains unqualified until actual disposable execution completes.
+
 The shipped Library IndexedDoc declaration uses `openai:text-embedding-3-small`, 1,536 dimensions. The approved Qdrant DBpedia paired corpus names the same model/dimensions; its independent recall evidence concerns that stored embedding space, not an actual OpenAI request or Library-document usefulness. The separate frozen guide/hybrid judgment uses pinned English MiniLM at 384 dimensions; do not label it production-provider coverage.
 
 SDK `services/embeddings.spec.ts` checks provider model selection, batches and stale chunks with fake three-dimensional inference; the complete SDK passes on SQLite at a8. Existing default-setup Library search-index tests run the actual repository and SDK service pipeline using fake 1,536-dimensional word-axis embeddings. Platform CI now explicitly selects all four alongside the existing five Thread query-work cases and requires their counts separately: folder/subfolder indexing and search, scope exclusion, edited-text pending/re-embed, and separate list chunks. The [a902 platform receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-a902/README.md) now verify all four Library cases and five query-work cases on all three platforms. This proves wiring/data lifecycle at that source, not remote provider availability, semantic quality, a live search UI or ANN scale. Full strict source-selected tests and actual app-flow qualification remain separate required gates.

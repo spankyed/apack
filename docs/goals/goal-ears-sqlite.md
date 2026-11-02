@@ -254,6 +254,16 @@ Latest demonstrated results:
   import remains slower. [Sustained checkpoint capacity](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-c471/README.md)
   passes four cohorts and shows 765 MB controlled logical overlap, not instantaneous peak or power-loss certification.
 
+The next UI checkpoint is the corrected-source `sqlite-app-flows` workflow: retain the six existing
+thread/search/streaming cohorts (twenty measured actions each), then execute the existing search
+supersession and renderer-resource-refusal cases on each store. The supersession case now checks
+both actual store identities before assigning its backend. Keep all ten Playwright reports outside
+output-directory cleanup and require four named control passes with no exclusions/flakes/retries.
+The refusal control must retain correct UI results with an incomplete resource capture; it is not
+performance acceptance. Closing checks: workflow parse/shell/inline-JS syntax, existing script/test
+CI typechecks, six admitted cohorts, four actual source-app controls and their retained reports.
+This maps to phase 5/search UI failure contracts; it introduces no asynchronous API or latency waiver.
+
 Current validation handles and results:
 
 - Final-runtime packaged qualification at `d795901191` (program identical to cd8; documentation-only descendants):

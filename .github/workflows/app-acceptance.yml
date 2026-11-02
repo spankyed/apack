@@ -1102,12 +1102,13 @@ jobs:
           export APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=20
           export APACK_PERFORMANCE_MACHINE_ID="github-app-flows-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           unset APACK_HOST_EXECUTABLE E2E_DATA_DIR APACK_PERFORMANCE_COMPARE_MODE APACK_PERFORMANCE_GATE
+          mkdir -p .apack/qualification/app-flows
           for scenario in thread-open search streaming; do
             for storage in elmdb/1 sqlite/1; do
               name="${storage%%/*}-$scenario"
               export APACK_STORAGE_FORMAT="$storage" APACK_PERFORMANCE_SCENARIO="$scenario"
               export APACK_PERFORMANCE_RUN_OUTPUT="$GITHUB_WORKSPACE/.apack/performance/sqlite-evaluation/$name"
-              export PLAYWRIGHT_JSON_OUTPUT_NAME="$GITHUB_WORKSPACE/.apack/tests/results/app-flows-$name.json"
+              export PLAYWRIGHT_JSON_OUTPUT_NAME="$GITHUB_WORKSPACE/.apack/qualification/app-flows/$name.json"
               node scripts/with-source.mjs node_modules/.bin/playwright test --config tests/performance/playwright.config.ts --workers 1 --reporter=line,json
               node scripts/with-source.mjs node --import tsx --input-type=module <<'JS'
           import assert from 'node:assert/strict';
@@ -1125,6 +1126,48 @@ jobs:
           JS
             done
           done
+      - name: Application search lifecycle controls on both stores
+        if: ${{ inputs.suite == 'sqlite-app-flows' }}
+        run: |
+          set -euo pipefail
+          export APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=20
+          export APACK_PERFORMANCE_MACHINE_ID="github-search-controls-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          unset APACK_HOST_EXECUTABLE E2E_DATA_DIR APACK_PERFORMANCE_COMPARE_MODE APACK_PERFORMANCE_GATE
+          mkdir -p .apack/qualification/app-flows
+          for scenario in search-supersession search-resource-refusal; do
+            for storage in elmdb/1 sqlite/1; do
+              name="${storage%%/*}-$scenario"
+              export APACK_STORAGE_FORMAT="$storage" APACK_PERFORMANCE_SCENARIO="$scenario"
+              export APACK_PERFORMANCE_RUN_OUTPUT="$GITHUB_WORKSPACE/.apack/performance/sqlite-evaluation/$name"
+              export PLAYWRIGHT_JSON_OUTPUT_NAME="$GITHUB_WORKSPACE/.apack/qualification/app-flows/$name.json"
+              node scripts/with-source.mjs node_modules/.bin/playwright test --config tests/performance/playwright.config.ts --workers 1 --retries 0 --reporter=line,json
+            done
+          done
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const titles = {
+            'search-supersession': 'a late old result cannot replace current search results, including after cancellation',
+            'search-resource-refusal': 'renderer resource refusal preserves correctness and incomplete capture',
+          };
+          const root = '.apack/qualification/app-flows';
+          const specs = suite => [...(suite.specs ?? []), ...(suite.suites ?? []).flatMap(specs)];
+          const cases = [];
+          assert.match(process.env.GITHUB_SHA, /^[a-f0-9]{40}$/);
+          for (const [scenario, title] of Object.entries(titles)) for (const backend of ['elmdb', 'sqlite']) {
+            const report = JSON.parse(readFileSync(`${root}/${backend}-${scenario}.json`, 'utf8'));
+            assert.equal(report.stats.expected, 1);
+            for (const key of ['skipped', 'unexpected', 'flaky']) assert.equal(report.stats[key], 0);
+            const actual = specs(report); assert.equal(actual.length, 1); assert.equal(actual[0].title, title);
+            assert.equal(actual[0].tests.length, 1);
+            const test = actual[0].tests[0]; assert.equal(test.status, 'expected');
+            assert.equal(test.results.length, 1); assert.equal(test.results[0].status, 'passed');
+            assert.equal(test.results[0].retry, 0);
+            cases.push({ backend, scenario, title, status: 'passed' });
+          }
+          writeFileSync(`${root}/search-controls.json`, JSON.stringify({ source: process.env.GITHUB_SHA,
+            completed: true, scope: 'Source app correctness controls; resource refusal must remain an incomplete capture, not a performance pass', cases }, null, 2) + '\n');
+          JS
       - name: Existing populated startup controller on both actual stores
         if: ${{ inputs.suite == 'sqlite-startup' }}
         env:
@@ -1172,6 +1215,7 @@ jobs:
           path: |
             .apack/performance/sqlite-evaluation
             .apack/tests/results/app-flows-*.json
+            .apack/qualification/app-flows/
           if-no-files-found: error
       - name: Build unsigned installed Preview
         if: ${{ startsWith(inputs.suite, 'installed') }}

@@ -4,10 +4,13 @@ import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import { searchFixture } from './fixture.ts';
 import type { PerformanceWindow } from './window.ts';
+import { performanceStorageFormat } from './storage-identity.ts';
 
 // Controlled application counterfactual, not a latency sample. Transport callback generations have
 // separate contract tests; this deliberately reaches the actor to prove its own stale-query guard.
-test('a late old result cannot replace current search results, including after cancellation', async ({ app, appPage }) => {
+test('a late old result cannot replace current search results, including after cancellation', async ({ app, appPage, electronApp }) => {
+  const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'));
+  performanceStorageFormat(userData, process.env.APACK_STORAGE_FORMAT ?? 'elmdb/1');
   const fixture = searchFixture();
   const directory = mkdtempSync(path.join(tmpdir(), 'apack-search-supersession-'));
   try {
