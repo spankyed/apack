@@ -1,0 +1,9 @@
+# First-attempt corrected-source integration outcomes
+
+In [run 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216), source 93ed, integration-2 passes all 31 repository files. Integration-1 fails a compiler-test timeout after seven passing files and one failed file, leaving 23 repository files unexecuted under bail=1. Four nested timing-fixture records are separated from repository coverage. File records do not establish individual assertion/exclusion counts.
+
+The failure is `build-output-swap.integration.spec.ts`: “does not reuse facade files from an incumbent with stamps from a refused replacement”, at its unchanged 200,000 ms deadline (reported duration 222,485 ms includes timeout/cleanup). It performs three real pack builds. The fixture, build command and publication implementation are byte-identical to the passing a850 source; the asserted contract concerns compiler publication rather than vector retrieval. No assertion mismatch is reported, and a specific contention cause is not established. This remains a failed gate rather than a waived result or claimed source fix.
+
+Preserve this attempt and replay the entire original failed shard once after remaining original jobs finish, with source, assertions, producer freshness, two-core budget and deadlines unchanged. A repeated failure requires diagnosis rather than unchanged retries until green. The previous different dependency-publication timeout also remains historical evidence; this is a new timed-out case, not that case relabeled.
+
+Normalized progress retains public repository paths; generated fixture paths are ordinal labels. Original progress, chain logs and job metadata are fingerprinted without publishing raw logs/private paths/configuration. Whole strict and the remaining live consumers are not inferred from integration-2 success or the independently passing full corpus.

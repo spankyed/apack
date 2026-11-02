@@ -211,20 +211,32 @@ pass. Eight 16 ms heartbeat misses retain accepted degradation. The pure validat
 reproduces all gate outcomes; five summary means differ only by floating-point rounding, with all
 other fields identical. [Original reports and matched same-model probe diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-93ed/README.md).
 
-Next deliverable: inspect [whole strict/platform 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216),
-then finish the requirement-by-requirement adoption report. Linux job 125476905599 is TERMINAL SUCCESS, with 946 EARS, 313 host, 12 recovery, 41 CLI and 1,330 SDK passes, no exclusions; its final guard passes. [Original platform reports](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md). [Producer job 125476904574](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-producers/README.md) is TERMINAL SUCCESS: all 19 build/type/export/schema/lint/authoring stages pass in 659.0 s on two cores. Native consumer jobs 125488939807/125488939884 are live; integration jobs 125488939987/125488939981 and app/rest 125488940066 are queued. macOS platform job 125476905761 is TERMINAL SUCCESS: 946 EARS, 313 host, 12 recovery, 41 CLI, two SDK backend and nine repository-query passes, no exclusions; its final guard passes and reports are preserved beside Linux. Windows job 125476905128 is TERMINAL SUCCESS: 942 EARS/four existing POSIX exclusions, 310 host/six exclusions, two recovery/ten exclusions and 41 CLI passes. All three platform final guards pass; [original reports](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md) are preserved. All five strict consumer jobs are now live; inspect their actual outcomes before final acceptance. Require actual reports and final
-guards for all three OSes, both native/integration shards and app/rest. Do not restart merely because
-observation times out. Platform coverage is reusable and invoked by strict; it has no manual-dispatch
-trigger. One prespecified independent managed-model repeat is now live:
-[41508326544](https://github.com/spankyed/apack/actions/runs/41508326544), source
-`67ae01a3340c8df7dafb96f43aaa66a7bbc1e060` (documentation-only descendant of 93ed).
-Corpus job 125493285029 remains live. Relevance job 125493284803 is TERMINAL SUCCESS: both SQLite keyword modes 25/25, hybrid 25/25 per backend, 125 contracts and four effective old-source controls. Both pure validators reproduce original summaries byte-for-byte; [repeat relevance evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-repeat-67ae/README.md) is preserved.
-Both active/pending app-workflow lists were empty immediately before dispatch. This repeat closes
-the unresolved fresh-model variance check after the former 32-probe policy passed several models
-before missing recall. Retain this single repeat's result either way; a miss requires diagnosis/fix,
-not unchanged reruns until one passes. Check all original targets, source equivalence, sealed-data
-identity and actual trained-model fingerprints against corpus-93ed. No success is inferred yet. Compiler/native, full and runtime
-checks remain disposable; local work is source review, metadata and pure evidence validation.
+Next deliverable: finish [strict run 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216)
+and qualify its failed integration shard. Producer and all three platform jobs pass, with original
+reports at [producer](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-producers/README.md)
+and [platform](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md).
+Integration-2 job 125488939981 passes all 31 repository files. Integration-1 job 125488939987 FAILS:
+`build-output-swap.integration.spec.ts` times out at its unchanged 200-second deadline in the refused
+replacement/facade-stamp case; seven files pass, one fails and 23 remain unexecuted. [Original failure
+and successful sibling evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-integration/README.md).
+The fixture/build/publication files match passing a850 bytes; no assertion mismatch is reported and
+no contention cause is proven. Preserve this attempt. After the three remaining consumers finish,
+replay the entire original failed job once with original source/producer freshness/two-core budget,
+assertions and deadlines unchanged. A repeated failure requires diagnosis rather than retries until
+green. Do not weaken deadlines or claim a source fix for observed timing variance.
+
+Native jobs 125488939807/125488939884 and app/rest 125488940066 were last verified live. Inspect their
+actual outcomes; do not restart an observed-live job merely because polling times out. Platform is a
+reusable workflow invoked by strict. Compiler/native, full and runtime checks remain disposable.
+
+The prespecified independent managed-model repeat [41508326544](https://github.com/spankyed/apack/actions/runs/41508326544)
+is now TERMINAL SUCCESS at docs-only descendant `67ae01a334`: [full corpus](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-67ae/README.md)
+passes all 1,800 queries/18 groups, minimum mean recall 0.990, all original query-p95 limits and
+29 safeguards. The 10k/99.9k trained-model hashes both differ from the first corrected run. Nine
+heartbeat misses retain accepted degradation. Full pairing, cleanup and three reopens per size pass;
+independent validation differs only in nine summary means by floating-point rounding. [Repeat relevance](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-repeat-67ae/README.md)
+also passes both SQLite keyword modes 25/25, hybrid 25/25 per backend, 125 contracts and four controls.
+Both corrected full-corpus cohorts are preserved; no further unchanged model repeat is needed.
 
 The [final input audit](../references/evidence/ears-sqlite-implementation-2026-10-28/final-input-audit/README.md) verifies the two-file runtime delta, 66 unchanged files per 68-file fault fingerprint, unchanged driver/backup/native/dependency inputs, pinned ancestry and elmdb default. Historical runs retain their tested sources.
 
