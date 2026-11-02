@@ -92,6 +92,36 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     expect(reopened.e.getRow('Row-one')?.body).toBe('needle context');
   });
 
+  it('upgrades English passage generations without a literal companion', async () => {
+    const { db, e } = open();
+    e.admin.setSchema({ ...schema, types: { Row: { required: [], search: { fields: { name: 3, body: 1 }, stem: 'en' } } } });
+    e.create('Row', { id: 'Row-one', body: 'generate-entries ' + 'background '.repeat(100) });
+    await db.indexesReady();
+    const job = db.indexBuilds.index('Row', 'text', 'search'), sequence = db.sequence;
+    const definition = { ...job.definition, textRevision: 2 };
+    const current = searchTable(job), legacy = searchTable({ ...job, definition });
+    db.sql.exec(`CREATE VIRTUAL TABLE ${legacy} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,portion UNINDEXED,
+      tokenize='porter unicode61 remove_diacritics 2');
+      INSERT INTO ${legacy}(rowid,entity_id,field,element,body,aliases,owner,portion)
+        SELECT rowid,entity_id,field,element,body,aliases,owner,portion FROM ${current};
+      CREATE TABLE ${legacy}_docs AS SELECT * FROM ${current}_docs;
+      CREATE UNIQUE INDEX ${legacy}_docs_entity ON ${legacy}_docs(entity_id,field,element,portion);
+      DROP TABLE ${current}_literal; DROP TABLE ${current}; DROP TABLE ${current}_docs;`);
+    db.run('UPDATE index_builds SET definition=? WHERE generation=?', [JSON.stringify(definition), job.generation]);
+    db.close();
+    const file = join(db.path, 'data.sqlite3'), before = readFileSync(file);
+    expect(() => new SqliteDatabase({ path: db.path, readOnly: true, syncs: false }))
+      .toThrow(expect.objectContaining({ code: 'INDEX_BUILDING' }));
+    expect(readFileSync(file)).toEqual(before);
+    const reopened = new SqliteDatabase({ path: db.path, syncs: false }); stores.push(reopened);
+    await reopened.indexesReady();
+    expect(reopened.indexBuilds.index('Row', 'text', 'search').definition.textRevision).toBe(SQLITE_TEXT_REVISION);
+    expect(reopened.sequence).toBe(sequence);
+    expect(createEarsEngine({ database: reopened }).query('Row').search('generate-entries', { fuzzy: false }).ids()).toEqual(['Row-one']);
+    expect((await auditSqliteDatabase(reopened)).ok).toBe(true);
+    expect(reopened.all('SELECT name FROM sqlite_schema WHERE name=?', [legacy])).toEqual([]);
+  });
+
   it('combines unquoted compound terms across fields while keeping explicit phrases adjacent', () => {
     const { e } = open();
     e.create('Row', { id: 'Row-split', name: 'generate', body: ['unrelated', 'entries'] });

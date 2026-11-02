@@ -680,7 +680,7 @@ jobs:
           git show "$old_commit:$text_source" > "$text_source"
           test_status=0
           npm test -w @apackdev/ears -- tests/sqlite/text-documents.spec.ts \
-            -t 'combines (unquoted|stemmed) compound terms across|prefers a leading mention' --maxWorkers 2 \
+            -t 'combines (unquoted|stemmed) compound terms across|prefers a leading mention|prefers literal compounds' --maxWorkers 2 \
             --reporter=default --reporter=json \
             --outputFile=../../.temp/sqlite-relevance/compound-old-source.json || test_status=$?
           test "$test_status" != 0
@@ -689,9 +689,9 @@ jobs:
           import {readFileSync} from 'node:fs';
           const report=JSON.parse(readFileSync('.temp/sqlite-relevance/compound-old-source.json','utf8'));
           const failed=report.testResults.flatMap(file=>file.assertionResults).filter(test=>test.status==='failed');
-          assert.equal(report.numFailedTests,3);
-          assert.equal(failed.length,3);
-          assert(failed.every(test=>/combines (unquoted|stemmed) compound terms across|prefers a leading mention/.test(test.fullName)));
+          assert.equal(report.numFailedTests,4);
+          assert.equal(failed.length,4);
+          assert(failed.every(test=>/combines (unquoted|stemmed) compound terms across|prefers a leading mention|prefers literal compounds/.test(test.fullName)));
           assert(failed.every(test=>test.failureMessages.some(message=>message.includes('AssertionError'))));
           JS
           restore_source
