@@ -123,7 +123,7 @@
     "@types/node": "24.1.0",
     "@types/ws": "^8.18.1",
     "create-vite": "7.0.3",
-    "electron": "37.2.4",
+    "electron": "44.9.3",
     "electron-builder": "26.15.3",
     "glob": "11.1.0",
     "playwright": "1.55.1",
