@@ -1,5 +1,7 @@
 # Chat editor construction attribution — 2026-11-01
 
+Archived attribution evidence. Findings apply to the recorded revisions.
+
 ## Finding and decision
 
 The maintained fifty-message action constructs fifty read-only Tiptap editors. A dedicated viewer
