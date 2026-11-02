@@ -237,7 +237,7 @@ Latest demonstrated results:
 - [Corrected-source integrated strict](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-061-consumers/README.md) at 06106d18dd:
   producer, both native shards and integration-2 pass. Host completes 613 files in 482.66 seconds
   under 600, with 7,029 passes, one keyword failure and 95 exclusions. Integration-1 reports 199 passes
-  and one 200 s dependency-publication timeout, leaving three files uncompleted; cause remains unresolved.
+  and one 200 s dependency-publication timeout in attempt 1, leaving three files uncompleted. [Attempt-2 full replay](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) now passes all 242 tests/31 files on the unchanged source, including the formerly timed-out case in 130.719 s. The original failure and its unexplained timing variance remain recorded.
   All five separately executed remaining stages pass: pack 989/two exclusions, authoring producer seven,
   authoring app two, external-pack/fork 32 passing executions and smoke five. Six independent explicit
   SQLite Electron/storage cases pass, and their report survives later output cleanup.
@@ -276,9 +276,9 @@ Current validation handles and results:
   at `275b6fac3d` are active. This executes the checkpoint above; it is not passing evidence yet.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
-  Attempt 2 reruns only integration-1 on the same source; it is active. All other job outcomes remain retained.
+  [Attempt 2](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) reruns only integration-1 on the same source and passes all 242 tests/31 files. All other job outcomes remain retained; root keyword failures still keep the overall workflow red.
 - [Focused unchanged integration test 41397716324](https://github.com/spankyed/apack/actions/runs/41397716324)
-  at `733294618a` is terminal success: [the unchanged case passes in 61.06 s](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-733-focused/README.md), under the original 200 s deadline. Git verifies documentation-only differences from the failed source. This does not establish the timeout cause or supersede the full shard; attempt 2 above is required.
+  at `733294618a` is terminal success: [the unchanged case passes in 61.06 s](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-733-focused/README.md), under the original 200 s deadline. Git verifies documentation-only differences from the failed source. This does not establish the timeout cause; the separately retained attempt-2 full shard above now passes.
 - [Explicit SQLite packaged authoring 41392105607](https://github.com/spankyed/apack/actions/runs/41392105607)
   at `06106d18dd` and [full app 41395988057](https://github.com/spankyed/apack/actions/runs/41395988057)
   at `d2684393ec` are terminal success, with their separate receipts above. Both include cd8's correction.
