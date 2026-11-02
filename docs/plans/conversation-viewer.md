@@ -38,7 +38,15 @@ the sole pack contract. The earlier renderer's evidence is historical and does n
 
 ## Status
 
-Implementation in progress. No new performance result is claimed.
+Implementation, actual-app verification and fresh performance qualification complete. Final strict CI
+is running on `cf55bed96c`; keep PR #311 draft until all six required jobs pass.
+
+Measured medians improve 18.15% for plain and 20.26% for rich thread opening; sampled renderer
+allocations fall 65.45%. Lightweight recording adds 0.43%. Streaming completion is 4.79% slower,
+inside its 5% limit. An earlier missed intermediate-progress delivery remains documented as an
+unreproduced observation, not a fixed defect. See the
+[qualification evidence](../references/evidence/conversation-viewer-2026-11-02.md) for raw report
+locations, exact revisions, original acceptance, failures, limits and validation.
 
 Review caught two integration requirements: scrolling must follow mounted message node views rather
 than the parent component's next tick, and Markdown must use the existing command options. Tiptap's
