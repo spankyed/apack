@@ -200,9 +200,10 @@ pending; no waiver or answer is assumed. Other requirements below remain intact.
 
 Latest demonstrated results:
 
-- [Source app at 672e599e7f](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-672/README.md):
+- [Source app at 3ec277e393](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-3ec/README.md):
   all 33 eligible cases pass once, one packaged-only exclusion, zero failures/flakes/retries. Ten
-  main-window role-discovery cases pass the workflow assertion. Previous navigation and ENOTEMPTY
+  main-window role-discovery cases and testing-workspace typecheck pass, with the unit report retained
+  outside Playwright cleanup. Previous navigation and ENOTEMPTY
   failures remain preserved. Follow-up `1d25cbf2af` observes terminal.CLOSED before directory removal;
   syntax checks pass, but this test-only wait still needs disposable app validation.
 - [Strict consumers at 81e8ab4fe5](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-81-consumers/README.md):
@@ -222,13 +223,14 @@ Latest demonstrated results:
   import remains slower. [Sustained checkpoint capacity](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-c471/README.md)
   passes four cohorts and shows 765 MB controlled logical overlap, not instantaneous peak or power-loss certification.
 
-Live checks: full app/report-retention/testing-typecheck run
-[41380838479](https://github.com/spankyed/apack/actions/runs/41380838479) at `3ec277e393` is running;
-ordinary managed-corpus run [41382184193](https://github.com/spankyed/apack/actions/runs/41382184193)
-at `b9896d5205` is pending with packaged generic artifacts and production candidate policy. Do not
-cancel/restart for an observation timeout or displace the occupied pending slot. Verify actual live
-steps before adding another pending run. Preserve minimized receipts and failures, then qualify the
-terminal-exit wait, reconcile the remaining requirement audit and finish the completion report.
+Live checks: ordinary managed-corpus run
+[41382184193](https://github.com/spankyed/apack/actions/runs/41382184193) at `b9896d5205` is running
+with packaged generic artifacts and production candidate policy; its relevance and corpus jobs are
+preparing matching native dependencies. The final full app replay
+[41383516309](https://github.com/spankyed/apack/actions/runs/41383516309) at `26c291d031` is pending
+and includes the terminal-exit wait. Do not cancel/restart for an observation timeout or displace the
+occupied pending slot. Verify actual live steps before adding another pending run. Preserve minimized
+receipts and failures, then reconcile the remaining requirement audit and finish the completion report.
 
 The [completion assessment and invariant/dependency review](../plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
 recommends retaining elmdb; experimental completion is not yet proven. [Earlier detailed handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-completion-audit/README.md)
