@@ -1,7 +1,7 @@
 {
   "run": 41483924153,
   "source": "a8500818f6d580dd061fd6bfdb6dffb735da2137",
-  "scope": "Four completed strict consumers only; app-and-rest remains live. File counts are not inferred individual test counts.",
+  "scope": "Whole corrected-source strict run succeeds; individual native/integration assertion counts not retained by their reporter, so only observed file counts are quoted. Manual app-flow/full-app/final performance gates remain separate.",
   "consumers": [
     {
       "name": "native-1",
@@ -82,6 +82,111 @@
       "originalJobMetadataSha256": "6fa2b9da2cb23443c0f216c05954dc28a6d25af40c95d168e17874b4be1d2884",
       "originalChainLogSha256": "c79be860c7b53c9deca5f9c111372fce04d1aecafa7f7092c6233f2340db7fd2",
       "originalJobLogSha256": "780770015936a67c79065aaf94f4c0ac9838036919b882f10f28e6625f7ad37f"
+    },
+    {
+      "name": "app-and-rest",
+      "job": 125425067248,
+      "conclusion": "success",
+      "repositoryProgressFiles": 762,
+      "repositoryFileStates": {
+        "passed": 756,
+        "skipped": 6
+      },
+      "host": {
+        "passed": 7040,
+        "failed": 0,
+        "excluded": 95,
+        "originalStepLogSha256": "75605d15e657b2221ac804c48db9d105dfa62d72a8b0432f7c5646775d4cd621"
+      },
+      "pack": {
+        "passed": 989,
+        "failed": 0,
+        "excluded": 2,
+        "originalStepLogSha256": "42988694b91e8870784a2245202741db2c8c0741dd81f6c772789673094fb865"
+      },
+      "authoringProducer": {
+        "passed": 7,
+        "failed": 0,
+        "excluded": 0,
+        "originalStepLogSha256": "77416d395ce00546f45978c9e913bbacd0658bcb41d34f94abd58dce2febce74"
+      },
+      "authoringApp": {
+        "passed": 2,
+        "reportedGroups": [
+          2
+        ],
+        "originalStepLogSha256": "701cc47af389e3c3fd2d54f34ad1b4129fdd4c5541bc3ed8766d4ba8dc7cf522"
+      },
+      "externalApp": {
+        "passed": 32,
+        "reportedGroups": [
+          27,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "originalStepLogSha256": "09e64ad8b4fabf91fe782e18eb5963685fe12f76bcdaa3f7bd6b3c307427cc54"
+      },
+      "smoke": {
+        "passed": 5,
+        "reportedGroups": [
+          5
+        ],
+        "originalStepLogSha256": "cf2df08503086352b3a7393962efb6cb2473cc8687e5a02c24a5d6ee4f3db6e4"
+      },
+      "forkStepPassed": true,
+      "hostPoolSeconds": 585.1,
+      "unchangedHostPoolLimitSeconds": 600,
+      "hostPoolHeadroomSeconds": 14.9,
+      "individualSizeBudgetWarnings": 2,
+      "warningScope": "Reported 15-second size-budget excursions; existing actual deadlines and pool limit were not relaxed.",
+      "explicitSqliteWitnesses": [
+        {
+          "name": "source SQLite app opens both managed stores with persisted EARS identity",
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 9474
+        },
+        {
+          "name": "app launches without crashing",
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 230
+        },
+        {
+          "name": "app reaches connected state",
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 123
+        },
+        {
+          "name": "applicationState is accessible with surfaces loaded",
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 30
+        },
+        {
+          "name": "runs in an isolated per-worker test data dir",
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 135
+        },
+        {
+          "name": "publishes no session, though a test app has a debug port open",
+          "status": "passed",
+          "retry": 0,
+          "durationMs": 137
+        }
+      ],
+      "originalSqliteWitnessReportSha256": "88ef67d424f1097c7725843c34339bddb4833598f599aa6cb83f879f3fadeaca",
+      "originalProgressSha256": [
+        "38467f2a03cf038683b3689e5da6a5a326396abeacc1cba7a7ace2ad00c2adee",
+        "1256ae454f20f56f5e64c60d6e380a073997e08e1c93aa79b7c90b8e9b90be05"
+      ],
+      "originalJobMetadataSha256": "aac5bc77a20e3004e3d8816e94aa62dcc4ad5e5c7eedde77f0dc296a12aa5340",
+      "originalChainLogSha256": "fab77e10113a2b18955c5f3cf391460b2a934e1568546f5b13f7ebf51d7ddb1f"
     }
   ],
   "unchangedDeadlineFixture": {
@@ -92,5 +197,45 @@
       "a8500818f6"
     ],
     "deadlineExpression": "3 * 60_000 + 20_000"
-  }
+  },
+  "overall": "success",
+  "allJobs": [
+    {
+      "name": "sqlite-candidate / sqlite (windows-latest)",
+      "conclusion": "success"
+    },
+    {
+      "name": "sqlite-candidate / sqlite (ubuntu-24.04)",
+      "conclusion": "success"
+    },
+    {
+      "name": "producers",
+      "conclusion": "success"
+    },
+    {
+      "name": "sqlite-candidate / sqlite (macos-26)",
+      "conclusion": "success"
+    },
+    {
+      "name": "native-1",
+      "conclusion": "success"
+    },
+    {
+      "name": "native-2",
+      "conclusion": "success"
+    },
+    {
+      "name": "integration-1",
+      "conclusion": "success"
+    },
+    {
+      "name": "app-and-rest",
+      "conclusion": "success"
+    },
+    {
+      "name": "integration-2",
+      "conclusion": "success"
+    }
+  ],
+  "originalWholeRunMetadataSha256": "4ccad9536f7df20712b9bf66003fb505e5e0e207c0ed5fda2ba9a3a43cf1cf4c"
 }
