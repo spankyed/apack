@@ -1,0 +1,46 @@
+{
+  "protocol": "ears-candidate-runtime-input-audit/1",
+  "baseline": "06106d18ddc61e0792b9faa1f64a302ffe1f7fdd",
+  "auditTip": "262cbd92769ba62bfb2a14867053bbf252dcbbb0",
+  "changedTrackedFiles": 146,
+  "nonDocumentationChanges": [
+    {
+      "path": ".github/workflows/app-acceptance.yml",
+      "byteIdenticalToQualifiedSource": "5cf602ce3b0c6b0323ef1db56c277c895b7314f4",
+      "run": 41411063927,
+      "gitBlob": "f22bc7183ba578bc1bf29b2864af46655dcfb15d"
+    },
+    {
+      "path": "packages/apack-ears/bench/sqlite/README.md",
+      "disposition": "Benchmark documentation only"
+    },
+    {
+      "path": "packages/apack-ears/bench/sqlite/REAL-VECTOR-PROTOCOL.md",
+      "disposition": "Benchmark documentation only"
+    },
+    {
+      "path": "packages/apack-ears/bench/sqlite/acquire-real-text.py",
+      "disposition": "Unused acquisition helper removed; exercised recipe remains acquire-real-vectors.py --with-text, unchanged from integrated source"
+    },
+    {
+      "path": "packages/apack-ears/bench/sqlite/worker-model-allocation-fault.c",
+      "byteIdenticalToQualifiedSource": "5cf602ce3b0c6b0323ef1db56c277c895b7314f4",
+      "run": 41411063927,
+      "gitBlob": "88b96c6fa4d559e16531abcefe7bfe5995dff908"
+    },
+    {
+      "path": "packages/apack-ears/bench/sqlite/worker-read-fault.mjs",
+      "byteIdenticalToQualifiedSource": "5cf602ce3b0c6b0323ef1db56c277c895b7314f4",
+      "run": 41411063927,
+      "gitBlob": "25aa913e88882a9a981c42e11d7f54675ec5d721"
+    },
+    {
+      "path": "tests/performance/search-supersession.spec.ts",
+      "byteIdenticalToQualifiedSource": "275b6fac3d5160a130e9922ce81590735ac2aa07",
+      "run": 41401869473,
+      "gitBlob": "6e3291ea3f1915d0c9a72a3b3ef4c8cc6215eb04"
+    }
+  ],
+  "conclusion": "No shipped source, dependency, native source or build-script difference from integrated qualification source. Relevant changed probes/tests match their qualified source bytes.",
+  "limits": "Source-input equivalence is not byte-identical packaged binaries or a green full chain. The retained keyword failure, OS exclusions and original timeout remain; one unchanged passing replay does not prove timing stability."
+}

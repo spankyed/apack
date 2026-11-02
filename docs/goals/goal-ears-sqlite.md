@@ -192,6 +192,11 @@ draft PR [#286](https://github.com/spankyed/apack/pull/286). Integrated master r
 elmdb pin is `f496470679a7bd9764398108b20f62a73333c701`. Production stays on elmdb. No merge,
 release, adoption or daily-profile migration is authorized. Compiler/full validation remains disposable.
 
+The [current input-equivalence audit](../references/evidence/ears-sqlite-implementation-2026-10-28/final-runtime-inputs/README.md)
+confirms no shipped source/dependency/native/build-script changes from integrated source 061.
+Changed executable test/workflow inputs match their later qualified blobs; this does not waive
+keyword failures or broaden the original validation scopes.
+
 The user explicitly retains synchronous app search and accepts foreground responsiveness degradation
 for completion of this experiment. Preserve original heartbeat misses as measured failures with an
 approved disposition, not passes. No async search API is being implemented. Keyword-only usefulness
