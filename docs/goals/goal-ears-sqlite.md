@@ -204,7 +204,8 @@ queues three open-thread views that should remain untouched. [Original failure e
 is preserved. The corrective query patch limits membership/field dependencies to explicit IDs or
 admitted types, removes unread far-membership dependencies for fixed relation endpoints, and retains
 untyped/deep intermediate reachability tracking. Five shared guards and the real thread-view case
-require disposable qualification; syntax checks alone do not close this defect. The Linux platform
+require disposable qualification in run `41390395444`, pinned to correction `cd8b413fa8`;
+syntax checks alone do not close this defect. The Linux platform
 control tests both backends, reverts only the CI query source to the pinned old implementation to
 require four precise failures, then restores it byte-for-byte before subsequent checks.
 
@@ -249,7 +250,7 @@ Latest demonstrated results:
 Live check: integrated strict/platform run
 [41385303835](https://github.com/spankyed/apack/actions/runs/41385303835) at `c5d6f3ea66` is running.
 Its producer passes. Integration-2 passes 580 cases with one exclusion; native-2 passes 47 with
-26 exclusions. Integration-1/native-1 remain active. App/rest fails at the retained keyword gate,
+26 exclusions. Integration-1/native-1 also pass their jobs. App/rest fails at the retained keyword gate,
 its independent SQLite witness passes, then the new remaining stage fails at the thread-view
 pack-unit guard described above; later selected authoring/app stages remain unexecuted. All three platform
 jobs are terminal with only the frozen keyword failure. Linux/macOS EARS 930, host 313 and host
@@ -264,10 +265,12 @@ cancel/restart for an observation timeout. Preserve minimized final strict recei
 every remaining requirement and finish the completion report. No new heavyweight run is needed
 without a changed input, failed check or unresolved concern.
 
-A separate actual-SQLite external-pack app run, `41388294349` at `bb35e86c7f`, is active. Strict
-app checks retain production-default composition, so that explicit selected-profile run qualifies
-the candidate pack flow separately; its source precedes the dependency patch. Do not displace an
-occupied pending app-workflow slot.
+[Explicit SQLite external-pack run `41388294349`](../references/evidence/ears-sqlite-implementation-2026-10-28/external-bb35/README.md)
+at `bb35e86c7f` passes all 28 cases, fixture contracts and the default-fork producer; storage selection
+and the suite environment both confirm sqlite/1. Its source precedes the dependency correction.
+Dedicated platform/control run `41390395444` at `cd8b413fa8` is now active across Linux/macOS/Windows.
+Require both-backend positives, four actual-old-source failures, restored source and the real thread
+views before closing the invalidation defect. Do not displace an occupied pending app-workflow slot.
 
 The strict audit identified a concrete gap: the retained keyword failure stops app/rest before
 pack-unit, packaged-authoring, external-pack app and smoke stages complete. The current workflow
