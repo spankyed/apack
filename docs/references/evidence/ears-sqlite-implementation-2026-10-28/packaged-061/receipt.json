@@ -1,0 +1,29 @@
+{
+  "run": 41392105607,
+  "source": "06106d18ddc61e0792b9faa1f64a302ffe1f7fdd",
+  "scope": "Packed public CLI/SDK, generated pack archive, source-host app consumer and offline CLI query/export with explicit SQLite selection",
+  "storageFormat": "sqlite/1",
+  "steps": [
+    {
+      "name": "Validate storage selection",
+      "conclusion": "success"
+    },
+    {
+      "name": "Packaged authoring producer",
+      "conclusion": "success"
+    },
+    {
+      "name": "Packaged authoring app consumer",
+      "conclusion": "success"
+    }
+  ],
+  "producerHarnessTestsPassed": 7,
+  "appTestsPassed": 2,
+  "appSummaryFailuresExclusionsFlakes": 0,
+  "archiveIntegrityComparedWithActualInstalledPack": true,
+  "offlineQueryAndExportValidated": true,
+  "scriptNoWorkspaceSymlinkCheckPassed": true,
+  "querySourceSha256": "41e3e953f4de1231f0f33d98197418d1c9d53a25486bdcc0052de4c084c648de",
+  "originalJobLogSha256": "41f1559636cb66f78e0548cdf3424adaabb2edc250b82d224699e77944025cc1",
+  "evidenceScope": "Named successful stages and exact completed-step log summaries; no per-case JSON aggregate emitted"
+}

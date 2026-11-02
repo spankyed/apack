@@ -211,6 +211,11 @@ and the remaining authoring/app stages still require corrected-source integrated
 
 Latest demonstrated results:
 
+- [Corrected-source packed authoring](../references/evidence/ears-sqlite-implementation-2026-10-28/packaged-061/README.md)
+  at 06106d18dd succeeds: public tarballs build and typecheck outside the workspace, seven producer
+  harness cases and two app cases pass, actual installed archive identity matches, and packed CLI
+  offline query/export verifies written data under explicit SQLite selection. This is source-host
+  packed tooling/archive integration; installed/signed app distribution keeps its separate scope.
 - [Ordinary managed corpus at b9896d5205](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md):
   all 1,800 queries verify independent canonical-vector truth; minimum mean recall is 0.95671875,
   above 0.95 at all depths/scopes/families. All original 100/200 ms query-p95 limits pass. Eight
@@ -256,7 +261,10 @@ Live checks on corrected program source:
   at `06106d18dd` is active; it must execute the full pack
   pool and previously unexecuted remaining stages. This source differs from cd8 only in documentation.
 - Explicit SQLite packaged-authoring run [41392105607](https://github.com/spankyed/apack/actions/runs/41392105607)
-  at `06106d18dd` is active with an explicit SQLite profile. Preserve any occupied pending slot.
+  at `06106d18dd` is terminal success, with its receipt above.
+- Full corrected-source app replay [41395988057](https://github.com/spankyed/apack/actions/runs/41395988057)
+  is queued at `d2684393ec`: the earlier complete 33-pass app replay precedes the dependency patch.
+  Keep source pins and any occupied pending app-workflow slot intact.
 
 Previous integrated run `41385303835` at c5d6f3ea66 is terminal: producer and all four integration/native
 consumers pass; host retains keyword failure and the independent SQLite witness passes; pack units
