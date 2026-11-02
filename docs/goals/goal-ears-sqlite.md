@@ -213,12 +213,12 @@ Latest demonstrated results:
   without English stemming. Both maintained validators reproduce the downloaded receipts byte-for-byte;
   private/model/database scratch cleanup passes. This is one pinned model; 141/239 inputs truncate
   at 256 tokens, so broader search coverage and the keyword disposition remain open.
-- [Source app at 3ec277e393](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-3ec/README.md):
+- [Source app at 26c291d031](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-26c/README.md):
   all 33 eligible cases pass once, one packaged-only exclusion, zero failures/flakes/retries. Ten
   main-window role-discovery cases and testing-workspace typecheck pass, with the unit report retained
   outside Playwright cleanup. Previous navigation and ENOTEMPTY
-  failures remain preserved. Follow-up `1d25cbf2af` observes terminal.CLOSED before directory removal;
-  syntax checks pass, but this test-only wait still needs disposable app validation.
+  failures remain preserved. The final replay qualifies `1d25cbf2af`: its code-surface test observes
+  the exact terminal.CLOSED event before directory removal, without a retry or longer existing deadline.
 - [Strict consumers at 81e8ab4fe5](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-81-consumers/README.md):
   all four integration/native consumers pass. Host completes 613 files in 518.61 seconds under 600,
   retaining only keyword failure; six independent Electron smoke cases pass. Later dependent chain
@@ -236,20 +236,21 @@ Latest demonstrated results:
   import remains slower. [Sustained checkpoint capacity](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-c471/README.md)
   passes four cohorts and shows 765 MB controlled logical overlap, not instantaneous peak or power-loss certification.
 
-Live check: the final full app replay
-[41383516309](https://github.com/spankyed/apack/actions/runs/41383516309) at `26c291d031` is running
-and includes the terminal-exit wait. Corpus/relevance run `41382184193` is terminal success, with
-its diagnostic responsiveness misses preserved. Do not cancel/restart for an observation timeout.
-Preserve the final app receipt, then reconcile every remaining requirement and finish the completion
-report. No new heavyweight run is needed without a changed input, failed check or unresolved concern.
+Live check: integrated strict/platform run
+[41385303835](https://github.com/spankyed/apack/actions/runs/41385303835) at `c5d6f3ea66` is running.
+Its producer and three platform jobs are active; consumers must receive verified producer outputs.
+Final source-app run `41383516309` is terminal success, including the terminal-exit wait. Corpus/relevance
+run `41382184193` is also terminal success, with diagnostic responsiveness misses preserved. Do not
+cancel/restart for an observation timeout. Preserve minimized final strict receipts, then reconcile
+every remaining requirement and finish the completion report. No new heavyweight run is needed
+without a changed input, failed check or unresolved concern.
 
-Final CI audit identified an explicit remaining gap: the retained keyword failure stops the strict
-app/rest chain before pack-unit, packaged-authoring, external-pack app and smoke stages complete.
-The strict workflow now runs those named stages independently after an actual app/rest failure,
-using the existing strict producer freshness checks and preserving the original failed job. The
-independent SQLite witness moves outside Playwright's cleared output directory so later app checks
-cannot erase it. This closes no requirement until disposable qualification succeeds; no test is
-skipped and no original failure or deadline is relaxed.
+The strict audit identified a concrete gap: the retained keyword failure stops app/rest before
+pack-unit, packaged-authoring, external-pack app and smoke stages complete. The current workflow
+runs those named stages independently after an actual failure, using existing strict producer
+freshness checks and retaining the failed job. Its SQLite witness lives outside Playwright cleanup.
+This closes no requirement until disposable qualification succeeds; no test is skipped and no
+original failure or deadline is relaxed.
 
 The [completion assessment and invariant/dependency review](../plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
 recommends retaining elmdb; experimental completion is not yet proven. [Earlier detailed handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-completion-audit/README.md)
