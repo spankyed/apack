@@ -32,7 +32,7 @@ on:
         type: boolean
         default: false
       storage_format:
-        description: Storage for isolated source app/pack qualification; installed suites select SQLite explicitly
+        description: Storage for source app/pack qualification; startup runs this store first; installed suites select SQLite explicitly
         type: choice
         options: [elmdb/1, sqlite/1]
         default: elmdb/1
@@ -1127,7 +1127,14 @@ jobs:
           export APACK_PERFORMANCE_TRIALS=20
           export APACK_PERFORMANCE_MACHINE_ID="github-startup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           unset APACK_HOST_EXECUTABLE E2E_DATA_DIR APACK_PERFORMANCE_COMPARE_MODE APACK_PERFORMANCE_GATE
-          for storage in elmdb/1 sqlite/1; do
+          # Qualify both orderings explicitly; the selected store runs its whole cohort first.
+          if [[ "$APACK_STORAGE_FORMAT" == sqlite/1 ]]; then
+            storage_order=(sqlite/1 elmdb/1)
+          else
+            storage_order=(elmdb/1 sqlite/1)
+          fi
+          export APACK_STARTUP_STORAGE_ORDER="${storage_order[*]}"
+          for storage in "${storage_order[@]}"; do
             export APACK_STORAGE_FORMAT="$storage" APACK_PERFORMANCE_SCENARIO=populated-startup
             export APACK_PERFORMANCE_RUN_OUTPUT="$GITHUB_WORKSPACE/.apack/performance/sqlite-evaluation/${storage%%/*}-populated-startup"
             node scripts/with-source.mjs node --import tsx tests/performance/startup-run.ts
@@ -1141,7 +1148,8 @@ jobs:
           assert.equal(run.manifest.mode, process.env.APACK_PERFORMANCE_MODE);
           assert.equal(run.manifest.source.dirty, false); assert.equal(run.manifest.native.dirty, false);
           writeFileSync(process.env.APACK_PERFORMANCE_RUN_OUTPUT + '/admission.json', JSON.stringify({ completed: true,
-            scope: 'Fresh processes from closed copied populated profiles; warm filesystem, fixed native-first order, one macOS runner; not cold disk, independent-device variance or the Linux foreground gate',
+            scope: 'Fresh processes from closed copied populated profiles; warm filesystem, fixed recorded cohort order, one macOS runner; not cold disk, independent-device variance or the Linux foreground gate',
+            comparisonOrder: process.env.APACK_STARTUP_STORAGE_ORDER.split(' '),
             source: run.manifest.source.revision, storageFormat: run.manifest.runtime.storageFormat,
             scenario: run.scenario, mode: run.manifest.mode,
             recording: 'Detailed CPU/allocation captures diagnose observed work; their timings do not substitute for lightweight latency acceptance',

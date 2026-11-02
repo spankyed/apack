@@ -76,7 +76,11 @@ measurement. It closes the seed process, copies the profile, then launches and c
 for each warmup/trial. The measured boundary is parent-process launch through the actual initial
 usable restored chat (correct fifty full message bodies, corpus and matching chat revision), including backend admission. This is a warm-filesystem experiment, not cold disk.
 
-The candidate's manual `App acceptance` workflow with `suite=sqlite-startup` accepts
+The candidate's manual `App acceptance` workflow with `suite=sqlite-startup` runs
+both backend cohorts. `storage_format` selects which cohort runs first (default elmdb);
+each admission report records the actual `comparisonOrder`. This is whole-cohort order,
+not interleaved/paired trials. Run the opposite ordering to investigate order sensitivity;
+independent runner/load variance still prevents exclusive causal attribution. It accepts
 `sqlite_startup_mode=lightweight` (default) or `detailed`. Both use the same controller,
 five warmups, twenty fresh-process measured trials per actual store and complete admission.
 Use `detailed` to inspect the existing bounded V8 CPU/allocation captures when lightweight
