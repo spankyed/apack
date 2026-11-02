@@ -518,16 +518,13 @@ source/manifest hashes, row counts and numeric timing samples. Private database 
 on success or failure; the calling workflow also deletes the acquired corpus before artifact upload.
 
 This is a correctness slice, not a semantic-relevance judgment, ANN recall study, full-corpus
-performance result or resource-budget qualification. The current hybrid path requests all vector
-candidates, so growth behavior remains an explicit unresolved performance concern. Runtime
-qualification of this new recipe is pending.
+performance result or resource-budget qualification. The current hybrid path bounds its ranked vector leg at `max(40, 4*k)` and uses the separately recorded native owner-candidate policy; full-ranking overlap remains diagnostic, not exact equivalence. [Ordinary managed-corpus qualification](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md) now verifies all 1,800 independent query references and original recall/query-p95 targets. It retains eight heartbeat misses with the approved synchronous-responsiveness degradation disposition.
 
 The first actual paired hybrid run (41229505453, b95b0ed195) passed all 100 fusion checks
 at 1,000 rows (warm p95 8.08ms, max 10.78ms), but only three held-out titles had lexical matches
 in that prefix. A separately labelled set of 100 corpus-derived lexical controls now checks
 that both rankings participate; these controls reuse corpus vectors and are explicitly not
-held-out semantic-relevance judgments. Their execution and the later selective/heartbeat
-changes remain unqualified until a matching run finishes.
+held-out semantic-relevance judgments. Later [ordinary managed-corpus evidence](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md) executes both query families and all scopes/sizes. This does not retroactively change that first run or promote its timings to the later runtime.
 
 The current probe accepts an optional final size argument of `1000`, `10000` or `99900`.
 The corpus workflow runs every prefix against the same acquired dataset, creating and removing
@@ -546,7 +543,7 @@ usefulness and recall must be evaluated before adoption, with original budgets i
 After all timed samples, a separate explain pass captures actual statement times, returned-row
 counts, hashed SQL and SQLite query-plan details for each scope. It excludes query text,
 bindings, IDs and vector payloads. This diagnoses distance/scoped access costs without putting
-trace instrumentation into the timing samples. Its runtime qualification remains pending.
+trace instrumentation into the timing samples. The [ordinary managed-corpus receipt](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md) retains these separate diagnostics; they do not establish causal performance attribution.
 
 The next routing candidate extends the approximate-result limit from 32 to 64, retaining
 the existing 256-owner rerank pool, exact small-scope route and exact larger-K fallback.
@@ -557,7 +554,7 @@ their raw numeric samples and matrix receipt and fail CI. Fusion correctness use
 approximate-policy evaluation, not exact equivalence. No managed native-model owner is started
 in this fixture: fallback candidate routing is exercised; ready-model app qualification and
 independent Float64/update/trash vector matrices remain required. Original latency/heartbeat
-limits are unchanged. Actual execution of this routing revision remains pending.
+limits are unchanged. Later routing policy and its actual qualification are recorded below; this historical fixed-256 description is not the current production candidate policy.
 
 ## App semantic usefulness checkpoint
 
@@ -576,8 +573,7 @@ weights and generated vectors are removed. An independent verifier requires ever
 ordinal once on each backend, matching provenance, actual useful results and source-correct
 highlights. A miss fails the job while preserving its report. This new model-specific English
 hybrid check does not replace the retained text-only relevance failure, multilingual/language
-semantics, full-dimensional resource/recall trials or app UI acceptance. Recipes parse locally;
-actual inference/backend qualification is pending.
+semantics, full-dimensional resource/recall trials or app UI acceptance. [Pinned English inference/backend qualification](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/relevance-b989/README.md) passes all 25 hybrid judgments on each backend, while keyword-only stays 24/25 in both language configurations.
 
 `sqlite-corpus` also runs this app-judgment job on a separate disposable runner, so a routing
 checkpoint includes both large-corpus recall/resource diagnostics and small real-app usefulness
@@ -589,13 +585,11 @@ no-swap container. It mounts the matching runner-built dependencies and Node bin
 disables runtime networking and writes databases/cache only to owned private scratch. The harness
 refuses mismatched cgroup limits and records actual limits, Node/native hashes and peak RSS.
 Earlier uncapped timings remain explicitly distinct. This warm diagnostic still does not certify
-cold/reopen variance, sustained app/admission work or every original resource budget. Container
-compatibility and this execution revision require actual qualification.
+cold/reopen variance, sustained app/admission work or every original resource budget. [Capped ordinary execution](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md) passes its stated recall/query-p95 scope and records memory/disk/provenance; it retains the measured responsiveness failures.
 
 Node workload containers use Ubuntu 24.04, matching the runner that built their native modules,
 and retain that image digest separately from the Python acquisition image. This avoids treating
-an unrelated Python base image as evidence of native ABI compatibility. Actual loading and
-query execution in the capped image remain required.
+an unrelated Python base image as evidence of native ABI compatibility. Actual loading and query execution are recorded in the capped ordinary receipt; this is not arbitrary-image/OS ABI certification.
 
 The real-corpus CI job accepts `sqlite_vector_models=managed` as a separate execution regime.
 It prepares the cursor before ingestion, starts the ordinary model owner after embeddings are stored,
@@ -603,8 +597,7 @@ waits for ordinary admission and verifies a persisted ready model above the exac
 The 1k prefix must retain exact routing without training; 10k/99.9k require a ready model.
 Admission time/heartbeat samples, training sample count and model/extension hashes are retained;
 workers are drained before private database removal. The default remains the separately identified
-fallback regime. The managed recipe is not runtime-qualified yet and does not change recall or
-latency targets. Admission measurements here do not exercise concurrent foreground write/watch load.
+fallback regime. [Managed qualification](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md) now observes ordinary native readiness at 10k/99.9k and exact fallback at 1k, without changing recall/query targets. Admission measurements here do not exercise concurrent foreground write/watch load.
 
 The hybrid recall recipe now generates independent Float64 cosine truth over the sealed
 canonical Float32 corpus in the capped Python container. It covers both query families,
@@ -613,8 +606,7 @@ Matrix results are checked with scalar `math.fsum` for six queries per cohort. N
 recipe/manifest identity, complete unique cases and eligibility before comparing recall
 at 10/40/64. Oracle ordinals stay in private scratch; public receipts retain hashes and
 numeric scalar checks. Fusion-policy correctness still has its separate exact-SQL reference.
-This recipe is awaiting actual runtime qualification and does not retroactively relabel
-earlier same-engine exact recall as independent truth.
+[Ordinary managed qualification](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md) verifies these independent references for all 1,800 query cases. Earlier same-engine exact recall remains separately labelled.
 
 The first managed run fails the unchanged mean recall target at K=40/64 despite improving
 all-live latency. Its numeric failure evidence is retained under `managed-hybrid-b04`.
@@ -633,7 +625,7 @@ unchanged. Reports contain numeric ordinal/outcome/timing data only. The indepen
 requires all 100 cases and cleanup receipts, preserving every configuration's failure count;
 a successful diagnostic means complete execution, not that all configurations meet usefulness.
 This does not modify the original unstemmed acceptance spec or choose a production language
-policy. It is awaiting actual runtime evidence in the separate relevance CI job.
+policy. [The completed relevance diagnostic](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/relevance-b989/README.md) retains 24/25 keyword usefulness for both adapters under both none/en configurations; all hybrid judgments pass. Diagnostic success does not waive the keyword miss.
 
 The 1,024-floor diagnostic still misses one K=64 group (0.94890625), and independent
 training produced different model hashes from its 256-target predecessor. The next
@@ -648,8 +640,7 @@ the separately requested relevance/language workflow still runs its complete jud
 The matched 2,048-floor run passes all declared mean recall targets while retaining
 heartbeat failures and higher candidate/reranking costs. The production candidate now
 uses distinct-owner budgets 256 through K=32, 1,024 through K=40 and 2,048 through K=64;
-training admission and raw fallback budgets remain unchanged. Actual integrated policy
-qualification is pending; the matched override alone does not establish it.
+training admission and raw fallback budgets remain unchanged. [Ordinary production-policy qualification](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md) now passes all original independent recall/query-p95 targets with the packaged Scalar extension; it retains eight heartbeat misses. The matched override alone did not establish those outcomes.
 
 The managed corpus recipe also records a separate owner-projection diagnostic after timed
 queries. For one fixed control vector per non-small cohort it compares native `owner`
@@ -686,8 +677,7 @@ recording a syscall witness. The scenario must reject worker training, preserve
 commit/canonical bytes without publishing a model, drain, remove the arm and
 train successfully on retry while the foreground remains writable. The existing
 `scenario` timeout class owns the process tree. Reports retain native/preload/
-compiled hashes and numeric outcomes, never stored payloads. Actual execution is
-pending. This does not identify a mid-training phase, test device failure/power
+compiled hashes and numeric outcomes, never stored payloads. [Actual header/canonical-page EIO qualification](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/worker-bdfe/README.md) now passes both phase-specific error/refusal, unchanged canonical/commit, no-publication, drained 512-sample retry, foreground reuse and cleanup checks. This does not identify a compute-stage failure, test device failure/power
 loss, or cover every worker I/O/resource extreme. No production fault hook or
 storage policy changes.
 
@@ -701,9 +691,7 @@ readiness-before-writer-stop, whole-run and admission-phase raw heartbeats and f
 A synchronous or too-fast admission can record zero concurrent writes; that is an
 observation, not invented overlap. Foreground mutations use matched durable units,
 while schema acknowledgment follows each backend’s ordinary default. Original
-16-ms responsiveness limits and failures remain. The recipe is not executed yet;
-it is not representative app/provider, independent-device or complete resource
-qualification. The existing steady-state recipe remains a separate protocol.
+16-ms responsiveness measurements and failures remain, with the explicitly accepted synchronous degradation disposition. [All six actual-native-readiness cohorts](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/admission-watch-009/README.md) now complete: both builders finish during foreground writing and all views converge. This is not representative app/provider, independent-device or complete resource qualification. The existing steady-state recipe remains a separate protocol.
 
 ## Verified file-page cache and reopen diagnostic
 
@@ -735,5 +723,4 @@ reads are not individually cold and the snapshot is not a promise about future r
 This diagnostic does not measure whole-app startup, cold executable/module caches,
 physical-device caches, many-device variance, search/recall or final adoption. The
 existing fresh-process application startup remains labelled warm-filesystem. Original
-foreground/recall/resource requirements remain unchanged. Runtime execution of this new
-recipe is pending; local syntax checks establish no cold-cache or performance result.
+recall/query-latency/resource requirements remain unchanged; foreground misses retain the accepted synchronous degradation disposition. [All eighty fresh-process trials](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/cold-27/README.md) now pass actual main-file residency, answer/count, native-provenance and cleanup checks on one Linux host. Those results do not establish whole-app/device cold start or a universal engine ranking.
