@@ -23,7 +23,7 @@ let history, inspected, failure;
 try {
   history = openRunHistory(store, { storageFormat: 'sqlite/1' });
   history.engine.create('RunNode', { id: 'RunNode-fixture', kind: 'flow', label: 'retained fixture',
-    status: 'complete', startedAt: 1700000000000, rootId: 'RunNode-fixture' });
+    status: 'completed', startedAt: 1700000000000, rootId: 'RunNode-fixture' });
   assert.equal(history.engine.query('RunNode').count(), 1);
   const db = history.database;
   const page = Number(db.get("SELECT rootpage FROM sqlite_schema WHERE type='table' AND name='meta'").rootpage);
