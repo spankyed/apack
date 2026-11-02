@@ -200,6 +200,14 @@ pending; no waiver or answer is assumed. Other requirements below remain intact.
 
 Latest demonstrated results:
 
+- [Ordinary managed corpus at b9896d5205](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md):
+  all 1,800 queries verify independent canonical-vector truth; minimum mean recall is 0.95671875,
+  above 0.95 at all depths/scopes/families. All original 100/200 ms query-p95 limits pass. Eight
+  heartbeat groups still miss 16 ms and retain the approved degradation disposition. Actual packaged
+  Scalar models reach ready at 10k/99.9k, 29 safeguards pass, three reopen passes per cohort reproduce
+  answers, and private/database scratch cleanup verifies. At 99.9k, load/admission take 68.96/42.52 s;
+  recorded logical storage is 1.94 GB and process high-water RSS reaches 1,571,764 KiB, including
+  fixture/reference/harness memory. These are not pure engine costs or instantaneous disk bounds.
 - [Current-runtime relevance at b9896d5205](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-b989/README.md):
   both backends pass all 25 frozen English hybrid judgments. Keyword-only stays 24/25 with and
   without English stemming. Both maintained validators reproduce the downloaded receipts byte-for-byte;
@@ -228,14 +236,12 @@ Latest demonstrated results:
   import remains slower. [Sustained checkpoint capacity](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-c471/README.md)
   passes four cohorts and shows 765 MB controlled logical overlap, not instantaneous peak or power-loss certification.
 
-Live checks: ordinary managed-corpus run
-[41382184193](https://github.com/spankyed/apack/actions/runs/41382184193) at `b9896d5205` is running
-with packaged generic artifacts and production candidate policy; its relevance and corpus jobs are
-preparing matching native dependencies. The final full app replay
-[41383516309](https://github.com/spankyed/apack/actions/runs/41383516309) at `26c291d031` is pending
-and includes the terminal-exit wait. Do not cancel/restart for an observation timeout or displace the
-occupied pending slot. Verify actual live steps before adding another pending run. Preserve minimized
-receipts and failures, then reconcile the remaining requirement audit and finish the completion report.
+Live check: the final full app replay
+[41383516309](https://github.com/spankyed/apack/actions/runs/41383516309) at `26c291d031` is running
+and includes the terminal-exit wait. Corpus/relevance run `41382184193` is terminal success, with
+its diagnostic responsiveness misses preserved. Do not cancel/restart for an observation timeout.
+Preserve the final app receipt, then reconcile every remaining requirement and finish the completion
+report. No new heavyweight run is needed without a changed input, failed check or unresolved concern.
 
 The [completion assessment and invariant/dependency review](../plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
 recommends retaining elmdb; experimental completion is not yet proven. [Earlier detailed handoff](../references/evidence/ears-sqlite-implementation-2026-10-28/handoff-before-completion-audit/README.md)
