@@ -257,10 +257,10 @@ Latest demonstrated results:
 Current validation handles and results:
 
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
-  at `06106d18dd` is terminal failure with the exact independent successes/failures above.
+  at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
+  Attempt 2 reruns only integration-1 on the same source; it is active. All other job outcomes remain retained.
 - [Focused unchanged integration test 41397716324](https://github.com/spankyed/apack/actions/runs/41397716324)
-  at `733294618a` is active in disposable CI. It preserves the 200 s deadline and assertions. A focused
-  pass would not by itself supersede the failed complete shard.
+  at `733294618a` is terminal success: [the unchanged case passes in 61.06 s](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-733-focused/README.md), under the original 200 s deadline. Git verifies documentation-only differences from the failed source. This does not establish the timeout cause or supersede the full shard; attempt 2 above is required.
 - [Explicit SQLite packaged authoring 41392105607](https://github.com/spankyed/apack/actions/runs/41392105607)
   at `06106d18dd` and [full app 41395988057](https://github.com/spankyed/apack/actions/runs/41395988057)
   at `d2684393ec` are terminal success, with their separate receipts above. Both include cd8's correction.
