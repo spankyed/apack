@@ -222,7 +222,7 @@ Latest demonstrated results:
 - [Strict consumers at 81e8ab4fe5](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-81-consumers/README.md):
   all four integration/native consumers pass. Host completes 613 files in 518.61 seconds under 600,
   retaining only keyword failure; six independent Electron smoke cases pass. Later dependent chain
-  stages remain unproven. [Three-platform host/readiness](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-81/README.md)
+  stages remain unproven. [Current three-platform host/readiness](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-c5d/README.md)
   and [actual history EIO refusal/preservation](../references/evidence/ears-sqlite-implementation-2026-10-28/history-ae9/README.md)
   include the latest database-runtime repair: ambiguous generic CORRUPT refuses without quarantining
   an intact incumbent; NOTADB retains the documented quarantine path.
@@ -238,7 +238,13 @@ Latest demonstrated results:
 
 Live check: integrated strict/platform run
 [41385303835](https://github.com/spankyed/apack/actions/runs/41385303835) at `c5d6f3ea66` is running.
-Its producer and three platform jobs are active; consumers must receive verified producer outputs.
+Its producer passes; all five consumers are active on verified producer outputs. All three platform
+jobs are terminal with only the frozen keyword failure. Linux/macOS EARS 930, host 313 and host
+process-death recovery 12 pass; Windows EARS 926, host 310 and applicable recovery two pass with
+four/six/ten original exclusions. All eight native-readiness cases, 735 membership comparisons,
+nine native-training cases and 41 CLI-maintenance cases pass on each platform. Exact verifier
+failures and original log hashes confirm the remaining keyword gate rather than assuming it from
+the pre-assertion report.
 Final source-app run `41383516309` is terminal success, including the terminal-exit wait. Corpus/relevance
 run `41382184193` is also terminal success, with diagnostic responsiveness misses preserved. Do not
 cancel/restart for an observation timeout. Preserve minimized final strict receipts, then reconcile
