@@ -630,7 +630,29 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           npm ci
-          npm run packages:build
+          npm run build:package -w @apackdev/ears
+      - name: Evaluate explicit English text stemming without changing the frozen gate
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-relevance
+          git rev-parse HEAD > .temp/sqlite-relevance/source.txt
+          node --import tsx packages/apack-ears/bench/sqlite/app-text-language.mjs \
+            packages/apack-ears/tests/fixtures/real-search-relevance.json .temp/sqlite-relevance/text-language.json
+          python3 packages/apack-ears/bench/sqlite/qualify-text-language.py \
+            --fixture packages/apack-ears/tests/fixtures/real-search-relevance.json \
+            --report .temp/sqlite-relevance/text-language.json --source "$GITHUB_SHA" \
+            --output .temp/sqlite-relevance/text-language-receipt.json
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const report=JSON.parse(readFileSync('.temp/sqlite-relevance/text-language-receipt.json','utf8'));
+          const groups=report.groups.filter(group=>group.backend==='sqlite');
+          assert.equal(groups.length,2);
+          for(const group of groups) {
+            assert.equal(group.passed,25,`SQLite ${group.stem}: every original keyword judgment must pass`);
+            assert.equal(group.failed,0); assert.equal(group.skipped,0);
+          }
+          JS
       - name: Keyword compound semantics and existing search contracts
         env:
           EARS_EVALUATION_BACKEND: sqlite
@@ -640,7 +662,8 @@ jobs:
           npm run typecheck -w @apackdev/ears
           npm test -w @apackdev/ears -- tests/sqlite/text-documents.spec.ts tests/sqlite/text-typos.spec.ts \
             tests/sqlite/text-scope.spec.ts tests/engine/search.spec.ts tests/engine/search-relevance.spec.ts \
-            tests/engine/search-languages.spec.ts --maxWorkers 2 --reporter=default --reporter=json \
+            tests/engine/search-languages.spec.ts tests/engine/real-search-relevance.spec.ts \
+            --maxWorkers 2 --reporter=default --reporter=json \
             --outputFile=../../.temp/sqlite-relevance/search-contracts.json
       - name: Compound matching regressions reject the original phrase execution
         env:
@@ -657,7 +680,7 @@ jobs:
           git show "$old_commit:$text_source" > "$text_source"
           test_status=0
           npm test -w @apackdev/ears -- tests/sqlite/text-documents.spec.ts \
-            -t 'combines (unquoted|stemmed) compound terms across' --maxWorkers 2 \
+            -t 'combines (unquoted|stemmed) compound terms across|prefers a leading mention' --maxWorkers 2 \
             --reporter=default --reporter=json \
             --outputFile=../../.temp/sqlite-relevance/compound-old-source.json || test_status=$?
           test "$test_status" != 0
@@ -666,9 +689,10 @@ jobs:
           import {readFileSync} from 'node:fs';
           const report=JSON.parse(readFileSync('.temp/sqlite-relevance/compound-old-source.json','utf8'));
           const failed=report.testResults.flatMap(file=>file.assertionResults).filter(test=>test.status==='failed');
-          assert.equal(report.numFailedTests,2);
-          assert.equal(failed.length,2);
-          assert(failed.every(test=>/combines (unquoted|stemmed) compound terms across/.test(test.fullName)));
+          assert.equal(report.numFailedTests,3);
+          assert.equal(failed.length,3);
+          assert(failed.every(test=>/combines (unquoted|stemmed) compound terms across|prefers a leading mention/.test(test.fullName)));
+          assert(failed.every(test=>test.failureMessages.some(message=>message.includes('AssertionError'))));
           JS
           restore_source
           trap - EXIT
@@ -705,15 +729,6 @@ jobs:
           trap - EXIT
           echo '{"privateScratchRemoved":true}' > .temp/sqlite-relevance/cleanup.json
           exit "$failed"
-      - name: Evaluate explicit English text stemming without changing the frozen gate
-        run: |
-          set -euo pipefail
-          node --import tsx packages/apack-ears/bench/sqlite/app-text-language.mjs \
-            packages/apack-ears/tests/fixtures/real-search-relevance.json .temp/sqlite-relevance/text-language.json
-          python3 packages/apack-ears/bench/sqlite/qualify-text-language.py \
-            --fixture packages/apack-ears/tests/fixtures/real-search-relevance.json \
-            --report .temp/sqlite-relevance/text-language.json --source "$GITHUB_SHA" \
-            --output .temp/sqlite-relevance/text-language-receipt.json
       - name: Retain metadata and numeric judgments only
         if: always()
         uses: actions/upload-artifact@v4

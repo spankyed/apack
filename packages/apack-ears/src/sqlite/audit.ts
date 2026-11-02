@@ -166,7 +166,7 @@ function contents(job: SqliteIndexJob): [string, unknown[]] {
   ];
   const table = searchTable(job);
   return job.kind === 'text' ? [
-    `SELECT entity_id,field,element,body,aliases,owner FROM ${table} ORDER BY entity_id,field,element`, [],
+    `SELECT entity_id,field,element,body,aliases,owner,lead FROM ${table} ORDER BY entity_id,field,element`, [],
   ] : [`SELECT entity_id,raw,folded FROM ${table}_docs ORDER BY entity_id,raw,folded`, []];
 }
 

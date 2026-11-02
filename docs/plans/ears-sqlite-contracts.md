@@ -9,19 +9,13 @@ benchmark/failed-suite evidence retains its original source and native artifact.
 
 ## Experiment completion report (qualification in progress)
 
-Current runtime correction `eed73e4071` separates unquoted compound terms from explicit phrases.
-Its first CI run passes 92 selected search contracts but stops before relevance because the old
-commit is absent from the shallow checkout. The [corrected qualification](https://github.com/spankyed/apack/actions/runs/41464298033)
-includes an exact commit fetch and the subsequent ASCII-only/Unicode preservation guard. Its
-[verified reports](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
-pass 93 search contracts and both required old-source failures/restoration; SQLite English keyword
-usefulness is now 25/25. Original unstemmed keyword remains 24/25, with case 6 at rank 12; the
-requested full fix is still incomplete. Both validators reproduce original hybrid/language summaries
-byte-for-byte, and hybrid remains 25/25 on both backends. The frozen query/expected answer/threshold are unchanged. This shipped
-query-compiler change invalidates broad current-source applicability of the earlier input-equivalence
-audit; previous corpus/integration/installed reports remain evidence only for their recorded source.
-The [old ranking diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/keyword-diagnostic-456/README.md)
-also distinguish the English-stemmed elmdb typo failure from the metadata miss in other modes.
+Current source adds a bounded leading-text FTS field (256 UTF-16 units ending at whitespace,
+native weight 3), with versioned derived generations and audit/rebuild/read-only upgrade checks.
+This is a general ranking correction under qualification, not a passing 25/25 claim. The frozen
+query, expected answer and threshold are unchanged. The previous [compound correction](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
+passes 93 contracts and old-source controls, and English SQLite keyword is 25/25; its original
+unstemmed gate remains 24/25. The new source must pass both configurations and affected checks.
+Earlier corpus/integration/installed reports remain source-pinned history after these changes.
 
 **Recommendation: retain elmdb in production.** The SQLite candidate demonstrates a feasible
 implementation of the complete app-facing API; the evidence does not establish a net adoption benefit.

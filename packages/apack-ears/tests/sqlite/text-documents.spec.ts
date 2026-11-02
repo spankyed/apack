@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEarsEngine, type EngineSchema } from '../../src/index.ts';
 import { toElmdbSchema } from '../../src/schema.ts';
 import { SqliteDatabase } from '../../src/sqlite/database.ts';
 import { searchTable } from '../../src/sqlite/index-builds.ts';
+import { auditSqliteDatabase } from '../../src/sqlite/audit.ts';
+import { SQLITE_TEXT_REVISION, TEXT_LEAD_MAX_UNITS } from '../../src/sqlite/text-policy.ts';
 const schema: EngineSchema = { types: { Row: { required: [], search: { fields: { name: 3, body: 1 } } } }, relations: {}, roles: [] };
 const stores: SqliteDatabase[] = [], paths: string[] = [];
 afterEach(() => { vi.restoreAllMocks(); for (const db of stores.splice(0)) db.close(); for (const path of paths.splice(0)) rmSync(path, { recursive: true, force: true }); });
@@ -27,6 +29,68 @@ function observeNativeMatches(db: SqliteDatabase) {
 }
 
 describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string FTS documents', () => {
+  it('prefers a leading mention over an incidental mention late in a shorter field', () => {
+    const { e } = open();
+    e.create('Row', { id: 'Row-lead', body: 'needle ' + 'context '.repeat(2000) });
+    e.create('Row', { id: 'Row-late', body: 'context '.repeat(60) + 'needle' });
+    expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual(['Row-lead', 'Row-late']);
+  });
+
+  it('bounds indexed leading text without introducing truncated-word matches', () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-boundary', body: 'x '.repeat(125) + 'suffixword' });
+    const job = db.indexBuilds.jobs().find(job => job.kind === 'text')!;
+    const lead = db.get(`SELECT lead FROM ${searchTable(job)} WHERE entity_id=?`, ['Row-boundary'])!.lead;
+    expect(lead.length).toBeLessThanOrEqual(TEXT_LEAD_MAX_UNITS);
+    expect(e.query('Row').search('suffix', { fuzzy: false }).ids()).toEqual([]);
+    expect(e.query('Row').search('"x suffixword"', { fuzzy: false }).ids()).toEqual(['Row-boundary']);
+  });
+
+  it('audits and rebuilds leading-text damage from authoritative fields', async () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-one', body: 'needle context' });
+    await db.indexesReady();
+    const job = db.indexBuilds.jobs().find(job => job.kind === 'text')!, sequence = db.sequence;
+    db.run(`UPDATE ${searchTable(job)} SET lead=?`, ['unrelated']);
+    const damaged = await auditSqliteDatabase(db);
+    expect(damaged.ok).toBe(false);
+    expect(damaged.issues.some(issue => issue.includes("derived text contents differ"))).toBe(true);
+    expect(e.getRow('Row-one')?.body).toBe('needle context');
+    db.rebuildIndexes(); await db.indexesReady();
+    expect(db.sequence).toBe(sequence);
+    expect((await auditSqliteDatabase(db)).ok).toBe(true);
+  });
+
+  it('replaces obsolete text generations on writable reopen and refuses a read-only upgrade', async () => {
+    const { db, e } = open();
+    e.create('Row', { id: 'Row-one', body: 'needle context' });
+    await db.indexesReady();
+    const job = db.indexBuilds.jobs().find(job => job.kind === 'text')!, sequence = db.sequence;
+    const definition = { ...job.definition }; delete definition.textRevision;
+    const current = searchTable(job), legacy = searchTable({ ...job, definition });
+    // Construct the actual old six-column FTS layout, preserving its primary values and generation.
+    db.sql.exec(`CREATE VIRTUAL TABLE ${legacy} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,
+      tokenize='unicode61 remove_diacritics 2');
+      INSERT INTO ${legacy}(rowid,entity_id,field,element,body,aliases,owner)
+        SELECT rowid,entity_id,field,element,body,aliases,owner FROM ${current};
+      CREATE TABLE ${legacy}_docs AS SELECT * FROM ${current}_docs;
+      CREATE UNIQUE INDEX ${legacy}_docs_entity ON ${legacy}_docs(entity_id,field,element);
+      DROP TABLE ${current}; DROP TABLE ${current}_docs;`);
+    db.run('UPDATE index_builds SET definition=? WHERE generation=?', [JSON.stringify(definition), job.generation]);
+    db.close();
+    const file = join(db.path, 'data.sqlite3'), before = readFileSync(file);
+    expect(() => open(db.path, true)).toThrow(expect.objectContaining({ code: 'INDEX_BUILDING' }));
+    expect(readFileSync(file)).toEqual(before);
+    const reopened = open(db.path);
+    await reopened.db.indexesReady();
+    const rebuilt = reopened.db.indexBuilds.jobs().find(job => job.kind === 'text')!;
+    expect(rebuilt.generation).not.toBe(job.generation);
+    expect(rebuilt.definition.textRevision).toBe(SQLITE_TEXT_REVISION);
+    expect(reopened.db.sequence).toBe(sequence);
+    expect(reopened.e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual(['Row-one']);
+    expect(reopened.e.getRow('Row-one')?.body).toBe('needle context');
+  });
+
   it('combines unquoted compound terms across fields while keeping explicit phrases adjacent', () => {
     const { e } = open();
     e.create('Row', { id: 'Row-split', name: 'generate', body: ['unrelated', 'entries'] });

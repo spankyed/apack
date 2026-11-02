@@ -45,6 +45,7 @@ import { executeQuery } from "./query.ts";
 import { SqliteIndexBuilds, type SqliteIndexSpec } from "./index-builds.ts";
 import { SqliteEmbeddings, encodeEmbeddingVector } from './embeddings.ts';
 import { SqliteSearch } from "./search.ts";
+import { SQLITE_TEXT_REVISION } from './text-policy.ts';
 import { SqliteValues, type SqliteValueLayout } from "./values.ts";
 import { logicalValues } from './logical-records.ts';
 import { createSchemaValidator } from "./schema-validation.ts";
@@ -254,7 +255,15 @@ export class SqliteDatabase implements EarsDatabase {
         });
       const specs = this.indexSpecs(this.heldSchema);
       if (this.readOnly) {
-        if (!this.indexBuilds.matches(specs)) fail('CORRUPT', 'Index declarations do not match stored generations');
+        if (!this.indexBuilds.matches(specs)) {
+          const stored = this.indexBuilds.jobs();
+          const textUpgrade = specs.some(spec => spec.kind === 'text' && stored.some(job =>
+            job.kind === 'text' && job.type === spec.type && job.name === spec.name &&
+            job.definition.textRevision !== SQLITE_TEXT_REVISION &&
+            sameValue({ ...job.definition, textRevision: SQLITE_TEXT_REVISION }, spec.definition)));
+          if (textUpgrade) fail('INDEX_BUILDING', 'Text analysis changed; reopen writable to rebuild derived text indexes');
+          fail('CORRUPT', 'Index declarations do not match stored generations');
+        }
         this.search.validateStructures(this.heldSchema);
         this.search.loadVectors(this.heldSchema);
       } else if (!this.indexBuilds.matches(specs) || this.search.needsRepair(this.heldSchema)) {
@@ -1301,7 +1310,8 @@ export class SqliteDatabase implements EarsDatabase {
       const fields = new Set<string>(['role', 'shortCode']);
       for (const [name, index] of Object.entries(definition.indexes ?? {}) as Array<[string, Data]>) {
         if (index.kind === 'value') fields.add(index.fields[0]);
-        else indexes.push({ type, name, kind: index.kind, definition: index });
+        else indexes.push({ type, name, kind: index.kind,
+          definition: index.kind === 'text' ? { ...index, textRevision: SQLITE_TEXT_REVISION } : index });
       }
       for (const field of fields) indexes.push({ type, name: field, kind: 'value', definition: { field } });
     }

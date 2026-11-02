@@ -4,6 +4,7 @@ import type { SqliteDatabase } from './database.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
 import { searchTable, type SqliteIndexJob } from './index-builds.ts';
 import type { SqliteSearchStructure } from './search-structures.ts';
+import { textLead, TEXT_LEAD_WEIGHT } from './text-policy.ts';
 
 type Data = Record<string, any>;
 interface Clause { match: string; fields: number[]; negative: boolean }
@@ -88,7 +89,7 @@ export class SqliteText {
   ensure(job: SqliteIndexJob): void {
     const table = searchTable(job), index = job.definition;
     if (index.stem && index.stem !== 'en') throw Object.assign(new Error('SQLite text indexes support English stemming only'), { code: 'UNSUPPORTED' });
-    this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,
+    this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,lead,
       tokenize='${index.stem ? 'porter ' : ''}unicode61 remove_diacritics 2');
       CREATE TABLE IF NOT EXISTS ${table}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS ${table}_docs_entity ON ${table}_docs(entity_id,field,element);`);
@@ -127,8 +128,8 @@ export class SqliteText {
       this.remove(job, row.id, field);
       for (const doc of docs) {
         const id = this.db.run(`INSERT INTO ${table}_docs(entity_id,field,element) VALUES (?,?,?)`, [row.id, doc.field, doc.element]).lastInsertRowid;
-        this.db.run(`INSERT INTO ${table}(rowid,entity_id,field,element,body,aliases,owner) VALUES (?,?,?,?,?,?,?)`,
-          [id, row.id, doc.field, doc.element, doc.body, identifierParts(doc.body).text, 'e' + seq]);
+        this.db.run(`INSERT INTO ${table}(rowid,entity_id,field,element,body,aliases,owner,lead) VALUES (?,?,?,?,?,?,?,?)`,
+          [id, row.id, doc.field, doc.element, doc.body, identifierParts(doc.body).text, 'e' + seq, textLead(doc.body)]);
       }
     }
     if (!previous || hashes.some((hash, i) => previous[i] !== hash))
@@ -169,7 +170,7 @@ export class SqliteText {
         const words = phrase ? [text] : [...new Set([text, ...expanded])];
         const match = words.map(word => {
           const suffix = word === text ? prefix : '';
-          return `(body : ${quote(word)}${suffix} OR aliases : ${quote(identifierParts(word).text || word)}${suffix})`;
+          return `(body : ${quote(word)}${suffix} OR aliases : ${quote(identifierParts(word).text || word)}${suffix} OR lead : ${quote(word)}${suffix})`;
         }).join(' OR ');
         tokenClauses.push(clauses.length);
         clauses.push({ match, fields: selected, negative });
@@ -229,7 +230,7 @@ export class SqliteText {
         args.push(ownerMask ? `(${clause.match}) AND owner : (${ownerMask})` : clause.match);
         args.push(...filtered);
         return `c${i} AS MATERIALIZED (SELECT ${i} clause,${Number(clause.negative)} negative,f.rowid docid,f.entity_id id,f.field,f.element,f.owner,e.seq,
-          -bm25(${table},0,0,0,1,1,0)*(CASE CAST(f.field AS INTEGER) ${weights} END) score
+          -bm25(${table},0,0,0,1,1,0,${TEXT_LEAD_WEIGHT})*(CASE CAST(f.field AS INTEGER) ${weights} END) score
           ${details ? `,f.body,f.aliases,highlight(${table},3,?,?) hbody,highlight(${table},4,?,?) halias` : ''}
           FROM ${table} f JOIN entities e ON e.id=f.entity_id WHERE ${table} MATCH ${match} AND CAST(f.field AS INTEGER) IN (${clause.fields.join(',')})
           AND ${eligible})`;

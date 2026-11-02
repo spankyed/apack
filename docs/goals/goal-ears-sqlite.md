@@ -197,29 +197,36 @@ remains dated evidence for its recorded tip. The new compound-query correction c
 runtime input `src/sqlite/text.ts`; earlier integration/corpus/installed results retain their original
 source and do not qualify this changed execution. Requalify the affected search and app behavior.
 
-Current checkpoint: fix the original keyword judgment, with no relevance waiver. The
-[exact diagnostic receipt](../references/evidence/ears-sqlite-implementation-2026-10-28/keyword-diagnostic-456/README.md)
-finds the required overview at rank 9/11 on SQLite none/English and rank 13 on unstemmed elmdb;
-limited results agree with full-ranking prefixes. English-stemmed elmdb passes that case but
-fails the separate transposed-identifier case 20. Do not conflate the four 24/25 outcomes.
-The SQLite compiler incorrectly makes unquoted punctuation-separated compounds into phrases.
-The follow-up source review narrows splitting to ASCII separators, preserving non-ASCII input
-for unicode61 rather than approximating its Unicode 6.1 rules with JS character categories.
-The private-use/decomposed-accent adjustment and all 93 search contracts now pass at cf5,
-with both old-source compound failures verified. English SQLite keyword is 25/25; unstemmed
-ranking still fails the original metadata judgment at rank 12. Continue fixing that gate.
+Current checkpoint: finish the original unstemmed keyword judgment without changing its query,
+expected answer or top-five threshold. The [compound correction](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
+passes 93 search contracts and both old-source controls; SQLite English keyword is 25/25, but
+unstemmed case 6 is still rank 12. English-stemmed elmdb's distinct failure is typo case 20.
+
+The current next correction uses native FTS field weighting for a bounded leading-text prefix:
+at most 256 UTF-16 units, cut at whitespace to avoid invented partial words, weighted 3 beside
+full body/identifier aliases. It applies to every indexed source string, not a named query/document,
+and performs no JavaScript reranking or vocabulary scan. A derived text revision creates new
+generations on writable reopen. Read-only obsolete generations refuse with INDEX_BUILDING and
+an explicit writable-rebuild instruction. Audit includes leading text; primary values and logical
+commit identity remain unchanged during derived regeneration.
+
+Closing checks: unchanged original 25/25 SQLite keyword gate in both none/English configurations,
+original frozen shared spec plus existing search contracts, generic long-field lead ranking,
+truncation safety, lead corruption audit/rebuild, real old-layout reopen, and three assertion
+failures against the exact old text source followed by verified restoration. The relevance-only
+job builds the EARS package with its normal native-asset producer; full integrated/app/platform
+qualification remains separate and required after the final runtime correction. The keyword
+measurement now runs before inference and is a hard gate, so diagnostic completion cannot hide
+an original keyword failure. Local checks cover YAML/shell syntax, links/diff and unchanged fixture
+hash only; all compilation/native/runtime testing remains disposable. This correction is unqualified
+until actual CI reports prove it; previous corpus/installed reports retain their original source.
+
 A minimal two-file elmdb written-word fuzzy patch is prepared in
 `/private/tmp/ears-native-written-fuzzy.patch` against f496, with source hashes in the adjacent
-JSON and preparation recipe `/private/tmp/ears-prepare-native-keyword-patch.py`. It uses the
-existing pruned written-word dictionary and adds an exact typo regression. It is not applied,
-compiled, committed or pushed to elmdb; the shared checkout remains unchanged. This addresses
-the separately observed English-baseline typo, not the unstemmed ranking miss.
-The current fix separates their terms across fields/elements while retaining explicit phrase
-adjacency, compound exclusions, field filters and OR/any groups. New matching/highlight/stemming
-regressions and exact-old-source controls must pass in disposable CI. The frozen corpus, query,
-expected answer and top-five threshold remain unchanged. Full 25/25 acceptance is still unproven;
-use the resulting ranking data to finish the remaining correction, then rerun relevant integrated,
-corpus and app checks on the changed runtime. No stop/waiver decision is pending.
+JSON and recipe `/private/tmp/ears-prepare-native-keyword-patch.py`. It is not applied, compiled,
+committed or pushed to elmdb; the shared checkout is unchanged. It addresses the distinct English
+baseline typo via the existing pruned written-word dictionary, not the unstemmed ranking miss.
+No stop/waiver decision is pending; the user explicitly requires completing the original goal.
 
 The user explicitly retains synchronous app search and accepts foreground responsiveness degradation
 for completion of this experiment. Preserve original heartbeat misses as measured failures with an
