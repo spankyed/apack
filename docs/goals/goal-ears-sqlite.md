@@ -276,6 +276,10 @@ OOM, arbitrary/mid-kmeans failure, total-memory bounds or physical power-loss qu
 
 Current validation handles and results:
 
+- [Populated-WAL allocation/refusal check 41411063927](https://github.com/spankyed/apack/actions/runs/41411063927)
+  is in progress at `5cf602ce3b0c6b0323ef1db56c277c895b7314f4`. Local JS/workflow/shell syntax
+  and original decompressed evidence hashes pass. Native execution remains unqualified until this run finishes.
+
 - [Native allocation/refusal and existing API fault checks 41408228347](https://github.com/spankyed/apack/actions/runs/41408228347)
   at `517bd80dc5` are terminal. The allocation, header/page and history fault steps pass; the
   shared-suite step retains only the known keyword failures (SQLite 459 passes, elmdb 268 passes).
