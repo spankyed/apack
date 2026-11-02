@@ -289,6 +289,21 @@ describe('attribute writes', () => {
     expect(e.getRow(id)).toEqual(before);
   });
 
+  it('stores string-keyed Map attributes as own-field objects and refuses invalid nested maps atomically', () => {
+    const id = e.create('Task').id();
+    e.write(id).set('meta', new Map<string, unknown>([['name', 'kept'], ['nested', new Map([['rank', 1]])],
+      ['__proto__', new Map([['own', true]])]]));
+    const expected = JSON.parse('{"name":"kept","nested":{"rank":1},"__proto__":{"own":true}}');
+    expect(e.getAttr(id, 'meta')).toEqual(expected);
+    expect(Object.hasOwn(e.getAttr(id, 'meta') as object, '__proto__')).toBe(true);
+    const commit = e.lastCommit();
+    for (const value of [new Map([[1, 'invalid']]), { nested: new Map([[1, 'invalid']]) }, new Map([['nested', [NaN]]])]) {
+      expect(() => e.write(id).set('meta', value)).toThrow(expect.objectContaining({ code: 'VALUE_INVALID' }));
+      expect(e.lastCommit()).toBe(commit);
+      expect(e.getAttr(id, 'meta')).toEqual(expected);
+    }
+  });
+
   it('null is a value, undefined leaves an attribute alone in setMany and is refused by every other attribute write', () => {
     const id = e.create('Task').setMany({ title: 'A', gone: 1 }).id();
     e.write(id).setMany({ title: null, gone: undefined, list: [3] });

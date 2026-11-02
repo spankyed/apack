@@ -1,0 +1,24 @@
+import json,pathlib
+r=pathlib.Path('/private/tmp/ears-search-generations-cohort');results=[]
+for p in sorted(r.glob('100000-OFF-*.stdout')):
+ v=json.loads(p.read_text());stages={x['stage']:x['at'] for x in map(json.loads,p.with_suffix('.stderr').read_text().splitlines())}
+ # startHeartbeat's initial performance.now() lies after seed-end and before admission starts.
+ low=stages['seed-end'];high=stages['admitted']-v['admissionMs'];interval=v['heartbeatIntervalMs']
+ # Stage markers are outside the measured loop endpoints. These windows are inside the loop for every
+ # nonnegative setup/finalization duration consistent with the reported duration and marker order.
+ windows={'build':(stages['build-end']-v['buildMs'],stages['admitted']+v['buildMs']),
+          'gc':(stages['gc-end']-v['gcMs'],stages['build-end']+v['gcMs'])}
+ assert all(a<=b for a,b in windows.values())
+ count={'build':0,'gc':0,'unassigned':0};totals={'build':0,'gc':0,'unassigned':0};zeros=0
+ for delay in v['samples']['heartbeatDelays']:
+  startLow=low+interval
+  # A positive stored delay is exact. Zero was clamped, so conservatively allow any nonnegative delta <= interval.
+  if delay>0:low+=interval+delay
+  else:zeros+=1
+  high+=interval+delay
+  phase=next((name for name,(a,b) in windows.items() if startLow>=a and high<=b),'unassigned')
+  totals[phase]+=1
+  if delay>16:count[phase]+=1
+ result={'trial':p.name,'samples':len(v['samples']['heartbeatDelays']),'clampedZeroSamples':zeros,'timeBoundWidthMs':high-low,'certainPhaseSampleCounts':totals,'above16msCertainPhaseCounts':count,'method':'conservative reset-deadline/stage-marker bounds; not callback attribution'}
+ results.append(result);print(json.dumps(result))
+(r/'heartbeat-phase-bounds.json').write_text(json.dumps(results,indent=2)+'\n')

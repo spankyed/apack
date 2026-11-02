@@ -1,0 +1,15 @@
+(node:20) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@apackdev/ears| tests/sqlite/vector-models.spec.ts (34 tests | 32 skipped) 1193ms
+   ✓ durable native model admission > refuses stale handles before maintenance and before resuming a paused service  491ms
+   ✓ durable native model admission > drains and closes a quarantined unknown-commit handle while preserving its committed data for inspection  700ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 32 skipped (34)
+   Start at  11:14:32
+   Duration  3.20s (transform 1.13s, setup 17ms, collect 1.60s, tests 1.19s, environment 0ms, prepare 178ms)
+
+JSON report written to /results/quarantine-stale.json

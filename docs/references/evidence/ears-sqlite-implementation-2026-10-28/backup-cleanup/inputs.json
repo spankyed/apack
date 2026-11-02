@@ -1,0 +1,19 @@
+{
+  "parent": "58ae8a7b0ecc200091080916fce40ba0bfa4d1c9",
+  "inputsSha256": {
+    "packages/apack-cli/tests/commands/sqlite-profile.spec.ts": "0d84b24b2541051a7f31903cc6d84201868f6f174d54ca9f1aa92b2f0687ec9a",
+    "packages/apack-cli/src/commands/db/backup.ts": "c3030bddeb1ca5faca950c4ee79ef3bccacf4f67579b513afc810e85e4cc3814",
+    ".github/scripts/ears-sqlite-platform.mjs": "4c360d28984565e8b11336925a1796c6bd9e7aac8a0b5138b039644388eed849"
+  },
+  "baselineBackupSha256": "72b107cd75041ed7844ff62750c767ea168fccccd04997515dc801c0968f3f3e",
+  "patchSha256": "71283b71962441f2bea926e9d0fc2f1459dca8d573f6e9650e28f787f7538627",
+  "runtime": "apack-linux-test:74d4b8cfe839; Node23.11.1; Linux ARM64",
+  "limits": {
+    "cpus": 0.5,
+    "memoryMiB": 768,
+    "swapMiB": 0,
+    "capabilities": "ALL dropped"
+  },
+  "types": "CLI typecheck pending larger disposable budget; preceding512MiB failure retained in windows-backup-exclusive",
+  "packages": "normal package build/current-source broad validation pending"
+}

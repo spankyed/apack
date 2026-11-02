@@ -1,0 +1,62 @@
+[
+  {
+    "file": "linux/ears.json.gz",
+    "sha256": "fab14d8b92e473d91c32489e4586e3d657dd071fb62ee3cafd39721b6bc3400f",
+    "storedSha256": "651ecab2ce12912fad117e8f710ab78030531b640cc79c2660e3c6753cb68012"
+  },
+  {
+    "file": "linux/verification.json.gz",
+    "sha256": "d96e9641207267bdb5ccd1eb56585d3ad82cfba9d6b85f2a54beeb2c60f03d1c",
+    "storedSha256": "a98c4ea85e0f6dc584ca738ffd215695682fbb1dd3fa7961d5efe959e1a68e1f"
+  },
+  {
+    "file": "linux/native-membership.json.gz",
+    "sha256": "825983f2e7ac46fca0a40c4203dea0a83294ff7b773eed90f841d474606d14b9",
+    "storedSha256": "140293031b22e7b0d62a839c7709d547dd174c0bcd201707e564dd5d407bd15a"
+  },
+  {
+    "file": "linux/filesystem-full.json.gz",
+    "sha256": "dfd1c04ad0e28ae7a075a8f77dd28c71f8d503e0157d4bef2835d85057a83068",
+    "storedSha256": "500d2c686d7426ca54d9c8b54cc05b8a733a543d12eb7d7c23f68624bb5e2a2e"
+  },
+  {
+    "file": "linux/sdk-all-sqlite.json.gz",
+    "sha256": "0a8c0e78c3e72e0d7d9e19bc5e946948b07fe6dc8c76836286f57085740665e2",
+    "storedSha256": "62917e437bbb78c8df231fae7ba369ca86c67ae560602dbfc35210f90944e858"
+  },
+  {
+    "file": "macos/ears.json.gz",
+    "sha256": "e831e69be733e764233d00c9bc5807ddf0e2e8391d1c0b3af66de1cf5deef85e",
+    "storedSha256": "f37e06502566b4a8551893f8076d2bf873db069b812c71f1efe5d9afee27bf68"
+  },
+  {
+    "file": "macos/verification.json.gz",
+    "sha256": "aad91b6e97524c490d9df8208e5b60483bb27642730e62e29fd71225ce42e266",
+    "storedSha256": "ba12fb7f016eb68d191fad4273ecc41db6c78dcd649d1aa7e70141c24e6788f8"
+  },
+  {
+    "file": "macos/native-membership.json.gz",
+    "sha256": "1d96eaa69be1a41f667a9587da645135b3a1992934883c64413fcc68f8bdb604",
+    "storedSha256": "76a3d26140abecff5be275f94107432368a8443ddbce6e7c9e8aebec5d2857f8"
+  },
+  {
+    "file": "windows/ears.json.gz",
+    "sha256": "4d3aa838c18b5898dee3d6e3e62ab8436e7eec3b9deac01973d11febc602c963",
+    "storedSha256": "4243103e530860a059462c232e8329ae29e75b7f154454f06784afeded4315c6"
+  },
+  {
+    "file": "windows/verification.json.gz",
+    "sha256": "cbf2f871101d46d1b8fb55c597bdaf5f7c8ec916d5d9c9d1da501a323ae58d1c",
+    "storedSha256": "d450b4f2f8077b1a5e234305ed51445612fb658f36730f2bc613f14760457a19"
+  },
+  {
+    "file": "windows/native-membership.json.gz",
+    "sha256": "3fb248e954d61f7695c5966c6963d6a21eb38dba9cbd03355c3499956a42c1de",
+    "storedSha256": "7c86932a60c9fe7fde92fdf222858f8e8c1efe59dcea40c1ce6f24a7b69d4fa1"
+  },
+  {
+    "file": "workflow.json.gz",
+    "sha256": "2a8285b392dcbf5744121f9c390caa8410d935d3d922a6ca03020a31c7150da4",
+    "storedSha256": "39bb25c8a986171c5c63fc7e0d113a4aac735c576a1d16ab48e3d5d20e3a62dd"
+  }
+]

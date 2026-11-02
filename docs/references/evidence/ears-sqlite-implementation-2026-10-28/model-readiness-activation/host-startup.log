@@ -1,0 +1,13 @@
+(node:3590) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ✓ |@apackdev/host| tests/database/storage.spec.ts (18 tests) 859ms
+
+ Test Files  1 passed (1)
+      Tests  18 passed (18)
+   Start at  09:29:29
+   Duration  2.63s (transform 770ms, setup 13ms, collect 1.63s, tests 859ms, environment 0ms, prepare 44ms)
+
+JSON report written to /results/host-startup.json

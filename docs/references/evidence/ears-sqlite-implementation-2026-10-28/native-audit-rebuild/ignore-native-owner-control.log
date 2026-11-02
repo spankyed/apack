@@ -1,0 +1,46 @@
+(node:19) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /metrics
+
+ ❯ |@apackdev/ears| tests/sqlite/vector-audit.spec.ts (10 tests | 1 failed | 9 skipped) 576ms
+   ↓ native projection maintenance > audits model identity, canonical vectors, owner visibility and triggers without modifying the source
+   ↓ native projection maintenance > reports missing-row drift independently of intact native pages
+   × native projection maintenance > reports owner drift independently of intact native pages 575ms
+     → expected true to be false // Object.is equality
+   ↓ native projection maintenance > reports model-hash drift independently of intact native pages
+   ↓ native projection maintenance > reports trigger drift independently of intact native pages
+   ↓ native projection maintenance > reports native page membership damage through the extension integrity method
+   ↓ native projection maintenance > reports a native table whose catalog ownership has been lost
+   ↓ native projection maintenance > allows an incomplete private projection but detects missing rows behind its committed cursor
+   ↓ native projection maintenance > rebuilds offline under the native claim and retires invalidated models without changing canonical data
+   ↓ native projection maintenance > refuses rebuild while an independent handle owns native work before admitting any generation
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@apackdev/ears| tests/sqlite/vector-audit.spec.ts > native projection maintenance > reports owner drift independently of intact native pages
+AssertionError: expected true to be false // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- false[39m
+[31m+ true[39m
+
+ ❯ tests/sqlite/vector-audit.spec.ts:41:60
+     39|     if(mutation==='model-hash')db.run("UPDATE vector_indexes SET model…
+     40|     if(mutation==='trigger'){db.sql.exec(`DROP TRIGGER ${name}_insert;…
+     41|     const report=await auditDatabase(db);expect(report.ok).toBe(false)…
+       |                                                            ^
+     42|     expect(report.issues.join('\n')).toMatch(/native (projection is mi…
+     43|     expect(e.lastCommit()).toBe(sequence);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 skipped (10)
+   Start at  12:00:36
+   Duration  2.41s (transform 967ms, setup 13ms, collect 1.40s, tests 576ms, environment 0ms, prepare 173ms)
+
+JSON report written to /results/ignore-native-owner-control.json

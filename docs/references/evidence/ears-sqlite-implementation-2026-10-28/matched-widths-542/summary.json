@@ -1,0 +1,82 @@
+{
+  "run": 41242646139,
+  "source": "54228d840736fbee175e449f660f3f52982b78ff",
+  "prefixes": [
+    {
+      "size": 1000,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "nativeCandidateFloor": 2048,
+      "matchedCandidateWidths": [
+        "production",
+        "1024",
+        "2048"
+      ],
+      "nativeModel": null,
+      "nativeModelRequired": false,
+      "nativeModelReady": false,
+      "oracleSha256": "75cde69080e8fff07082bb82e5417b666dfad0a9b8058e14c3a82ab632e00229",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "databaseScratchRemoved": true,
+      "rawSha256": "c1a4d164b699d1035f4da1c429bac9c8dd0a7b3cbe95ee9ed7ab987e7dbcccf2"
+    },
+    {
+      "size": 10000,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "nativeCandidateFloor": 2048,
+      "matchedCandidateWidths": [
+        "production",
+        "1024",
+        "2048"
+      ],
+      "nativeModel": {
+        "state": "ready",
+        "samples": 10000,
+        "model_sha256": "a4a50d7dbe18ced6329559270af0197bb0b39af2331932910b5693d94ace0da8",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "nativeModelRequired": true,
+      "nativeModelReady": true,
+      "oracleSha256": "75cde69080e8fff07082bb82e5417b666dfad0a9b8058e14c3a82ab632e00229",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "databaseScratchRemoved": true,
+      "rawSha256": "e49d319437fd1c000b8f9be45d2860b449d646ea7c8fbb3820d642cabedf654d"
+    },
+    {
+      "size": 99900,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "nativeCandidateFloor": 2048,
+      "matchedCandidateWidths": [
+        "production",
+        "1024",
+        "2048"
+      ],
+      "nativeModel": {
+        "state": "ready",
+        "samples": 20000,
+        "model_sha256": "3ffe6414dc30a8e2dd508874216cac6252e1e70695189ab292b0734308fe1922",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "nativeModelRequired": true,
+      "nativeModelReady": true,
+      "oracleSha256": "75cde69080e8fff07082bb82e5417b666dfad0a9b8058e14c3a82ab632e00229",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "databaseScratchRemoved": true,
+      "rawSha256": "a73947e466f7523867fa54b8e06687d9f44996587b11eece0ff7b20df2518c3e"
+    }
+  ],
+  "cleanup": {
+    "privateScratchRemoved": true
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "pairs": 961,
+  "equal": 41,
+  "structuralTokenAgreement": true,
+  "nonreflexiveKeysSkipped": true,
+  "unpairedSurrogatesDistinct": true,
+  "scope": "Pure helper semantic controls; actual MessagePack/SQLite audit and collision tests pending"
+}

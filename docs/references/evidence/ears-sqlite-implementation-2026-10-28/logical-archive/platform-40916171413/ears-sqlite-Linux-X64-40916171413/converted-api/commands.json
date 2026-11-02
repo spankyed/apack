@@ -1,0 +1,106 @@
+[
+  {
+    "label": "prebuilt-inputs",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "--conditions=@apackdev/source",
+      "--input-type=module",
+      "-e",
+      "import {packagesBuiltOrRefuse} from '@apackdev/host/build/packages-built'; if (!packagesBuiltOrRefuse('npm run packages:build')) throw new Error('Built inputs are required for this gate');"
+    ],
+    "exitCode": 0,
+    "seconds": 0.3148299289999841
+  },
+  {
+    "label": "seed-native",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "--conditions=@apackdev/source",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "seed",
+      "/home/runner/work/apack/apack/.temp/sqlite-platform/converted-api/seed.json"
+    ],
+    "exitCode": 0,
+    "seconds": 1.9703725620000796
+  },
+  {
+    "label": "native-baseline-rpc",
+    "args": [
+      "node",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "client",
+      "/home/runner/work/apack/apack/.temp/sqlite-platform/converted-api/native-baseline-rpc.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.1646122380000179
+  },
+  {
+    "label": "inspect-native-baseline",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "--conditions=@apackdev/source",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "source-inspect",
+      "/home/runner/work/apack/apack/.temp/sqlite-platform/converted-api/native-inspection.json"
+    ],
+    "exitCode": 0,
+    "seconds": 1.921819346999996
+  },
+  {
+    "label": "convert",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "--conditions=@apackdev/source",
+      "scripts/convert-sqlite-profile.ts",
+      "/tmp/ears-converted-api-96t2k286/native-source",
+      "/tmp/ears-converted-api-96t2k286/converted",
+      "/home/runner/work/apack/apack/vendor/elmdb/target/release/elmdb"
+    ],
+    "exitCode": 0,
+    "seconds": 2.8751241189999064
+  },
+  {
+    "label": "sqlite-1-rpc",
+    "args": [
+      "node",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "client",
+      "/home/runner/work/apack/apack/.temp/sqlite-platform/converted-api/sqlite-1-rpc.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.1651355029999877
+  },
+  {
+    "label": "sqlite-2-rpc",
+    "args": [
+      "node",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "client",
+      "/home/runner/work/apack/apack/.temp/sqlite-platform/converted-api/sqlite-2-rpc.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.16466803399998753
+  },
+  {
+    "label": "inspect-reopened",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "--conditions=@apackdev/source",
+      "tests/scripts/_support/sqlite-converted-api.mjs",
+      "inspect",
+      "/home/runner/work/apack/apack/.temp/sqlite-platform/converted-api/inspection.json"
+    ],
+    "exitCode": 0,
+    "seconds": 2.0195714189999308
+  }
+]

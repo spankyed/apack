@@ -1,0 +1,16 @@
+{
+  "source": "b814f7722da442a9c4e1fda88014ee11e0859672",
+  "primary": {
+    "sequence": 180,
+    "label": "updated in native baseline",
+    "typedAndLargeFieldsRetained": true,
+    "settingsRetained": true
+  },
+  "historyRetained": true,
+  "mediaSha256": "2f36a18044fe854573fe6b8f0ca00cf19e31a929c8cd0724e647a714f4c5e935",
+  "format": "elmdb/1",
+  "hashes": {
+    "primary": "0ec6b2cd1317f2822f065a7773f98dba2608b2ed0b8d3d5a605d61c695f9445f",
+    "runs": "8d83fa312ad4021645b846e416293d889454be1bf2aa43de83a282b51713b283"
+  }
+}

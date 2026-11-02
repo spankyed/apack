@@ -1,0 +1,81 @@
+{
+  "source": "5cde3fc26de94a4e6bc2e5910e425aaa2190b735",
+  "scope": "Current runtime including projected-hit fixes; not later CI-only worker fault/startup recipes or full strict/installed/resource acceptance",
+  "platforms": [
+    {
+      "platform": "linux",
+      "suites": {
+        "ears": {
+          "numPassedTests": 922,
+          "numFailedTests": 1,
+          "numPendingTests": 0
+        },
+        "host": {
+          "numPassedTests": 312,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        },
+        "host-crash": {
+          "numPassedTests": 12,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        }
+      },
+      "costCasesPassed": 29,
+      "newRegressionWitnessesPassed": [
+        "watch refreshes graph-ranked hit projections when only a returned field changes",
+        "SQLite ordering work batches projected search hits across types without changing order, scores or highlights"
+      ]
+    },
+    {
+      "platform": "macos",
+      "suites": {
+        "ears": {
+          "numPassedTests": 922,
+          "numFailedTests": 1,
+          "numPendingTests": 0
+        },
+        "host": {
+          "numPassedTests": 312,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        },
+        "host-crash": {
+          "numPassedTests": 12,
+          "numFailedTests": 0,
+          "numPendingTests": 0
+        }
+      },
+      "costCasesPassed": 29,
+      "newRegressionWitnessesPassed": [
+        "watch refreshes graph-ranked hit projections when only a returned field changes",
+        "SQLite ordering work batches projected search hits across types without changing order, scores or highlights"
+      ]
+    },
+    {
+      "platform": "windows",
+      "suites": {
+        "ears": {
+          "numPassedTests": 918,
+          "numFailedTests": 1,
+          "numPendingTests": 4
+        },
+        "host": {
+          "numPassedTests": 309,
+          "numFailedTests": 0,
+          "numPendingTests": 6
+        },
+        "host-crash": {
+          "numPassedTests": 2,
+          "numFailedTests": 0,
+          "numPendingTests": 10
+        }
+      },
+      "costCasesPassed": 29,
+      "newRegressionWitnessesPassed": [
+        "watch refreshes graph-ranked hit projections when only a returned field changes",
+        "SQLite ordering work batches projected search hits across types without changing order, scores or highlights"
+      ]
+    }
+  ]
+}

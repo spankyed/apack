@@ -1,8 +1,12 @@
+import { directoryIdentity, holdRecoveryExclusion, openProfileDatabase } from './recovery-lock.ts';
+import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { assertNoImportRecovery, syncRecoveryDirectory } from '../backup/recovery.ts';
 // Opening an app's database: the one composition of the elmdb database and the engine, which the API's boot and tools
 // (apack db) share, so both open a data dir the same way
 import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
-import { openDatabase } from '@apackdev/ears/lmdb';
+import { configuredDatabaseFormat, databaseStorage } from './storage.ts';
 import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import type { _AppDataPaths } from '@apackdev/sdk/utils';
@@ -15,6 +19,8 @@ import * as fs from 'node:fs';
 const logger = createLogger('run-history');
 
 export interface DatabaseStoreOptions {
+  /** Explicit constructor selection; otherwise uses the isolated candidate boot setting or production elmdb. */
+  storageFormat?: string;
   /** Told when a query does something its data will make slow (the engine's `warn`); the app passes one in development */
   warn?: (message: string) => void;
   /** The database directory */
@@ -27,22 +33,32 @@ export interface DatabaseStoreOptions {
 /**
  * The elmdb database at `path` and a new engine reading and writing it. The database keeps the schema it was last
  * held to; opened to write, it is held to what `schema` names too (`admin.declare`), and again each time those names
- * change (`onRegistrationChanged`: the app's registry, as packs register), so a declaration another pack made stays
+ * change (the app's registry admits declarations before publishing a runtime), so a declaration another pack made stays
  * while that pack registers. Nothing is installed.
  */
-export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
-  const database = openDatabase({ path, readOnly });
-  const engine = createEarsEngine({ database, warn });
-  if (!readOnly) {
-    try {
-      engine.admin.declare(engineSchemaOf(schema));
-    } catch (error) {
-      database.close();
-      throw error;
+export function openDatabaseStore({ path, schema, readOnly, warn, storageFormat = configuredDatabaseFormat() }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
+  if (!readOnly) assertNoImportRecovery(path);
+  const database = openProfileDatabase(path, readOnly, () => databaseStorage(storageFormat).open({ path, readOnly }));
+  try {
+    const engine = createEarsEngine({ database, warn });
+    if (!readOnly) {
+      if (schema.bindDatabaseSchema) schema.bindDatabaseSchema({
+        get isOpen() { return database.isOpen; },
+        assertUsable: () => { void database.sequence; return undefined; },
+        indexesReady: types => database.indexesReady(types),
+        declare: candidate => { engine.admin.declare(candidate); return undefined; },
+      });
+      else engine.admin.declare(engineSchemaOf(schema));
     }
-    schema.onRegistrationChanged?.(() => { if (database.isOpen) engine.admin.declare(engineSchemaOf(schema)); });
+    return { database, engine };
+  } catch (error) {
+    try { database.close(); }
+    catch (cleanup) {
+      throw Object.assign(new AggregateError([error, cleanup], 'Database initialization and close failed', { cause: error }),
+        { code: (error as { code?: unknown })?.code, databaseConnectionUnclosed: true });
+    }
+    throw error;
   }
-  return { database, engine };
 }
 
 /** The run history's database and the engine over it, which no `transact` on the app's engine reaches */
@@ -51,29 +67,50 @@ export interface RunsDatabase {
   engine: EarsEngine;
 }
 
-/** elmdb's codes for files no open of them will read: not elmdb's, in another format, or damaged */
-const UNREADABLE_CODES: readonly unknown[] = ['NOT_A_DATABASE', 'WRONG_FORMAT', 'CORRUPTED'];
-
 /**
  * The run history's database at `dir` (`runs`), held to the run history's schema. Opened to write, files that can't be
  * read — another format, a record store's from before, damaged — are moved aside, to `<dir>.unreadable-<time>`, and a
  * new database is started: the history is a log, so what that costs is past runs, and refusing would keep the whole app
  * from starting over it. Any other failure (a full disk, a permission, the system's lock table) says nothing about the
- * files and throws, as it does opened read-only.
+ * files and throws, as it does opened read-only. Explicit maintenance sets replaceUnreadable=false to refuse
+ * damaged history without moving or replacing the incumbent. SQLite SQLITE_CORRUPT also refuses: a transient
+ * page-read failure can produce it without damaged files, so it cannot authorize automatic replacement.
  */
-export function openRunHistory(dir: string, { readOnly }: { readOnly?: boolean } = {}): RunsDatabase {
+export function openRunHistory(dir: string, { readOnly, storageFormat = configuredDatabaseFormat(), replaceUnreadable = true }: { readOnly?: boolean; storageFormat?: string; replaceUnreadable?: boolean } = {}): RunsDatabase {
+  if (!readOnly) assertNoImportRecovery(dir);
+  const incumbent = directoryIdentity(dir);
   const open = (): RunsDatabase => {
-    const database = openDatabase({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) });
+    const database = openProfileDatabase(dir, readOnly, () => databaseStorage(storageFormat).open({ path: dir, readOnly, ...(!readOnly && { schema: _RUN_HISTORY_SCHEMA }) }));
     return { database, engine: createEarsEngine({ database }) };
   };
   try {
     return open();
   } catch (error) {
-    if (readOnly || !fs.existsSync(dir) || !UNREADABLE_CODES.includes((error as { code?: unknown })?.code)) throw error;
-    const aside = `${dir}.unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}`;
-    fs.renameSync(dir, aside);
+    if (readOnly || !replaceUnreadable || !fs.existsSync(dir) || !databaseStorage(storageFormat).isUnreadableOpenError(error)) throw error;
+    const aside = `${dir}.unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}`;
+    const publicationFailure = (failure: unknown, cleanup: readonly unknown[] = []) => Object.assign(new AggregateError(
+      [error, failure, ...cleanup],
+      `Run-history publication could not be synchronized; retained unreadable history at ${aside}`, { cause: failure }),
+      { code: 'PUBLICATION_NOT_DURABLE', quarantinePath: aside, ...(cleanup.length > 0 && { databaseConnectionUnclosed: true }) });
+    const exclusion = holdRecoveryExclusion(dir, 'store');
+    try {
+      if (!incumbent || directoryIdentity(dir) !== incumbent) throw Object.assign(
+        new Error(`Run-history directory identity cannot be confirmed; retry or inspect ${dir} before replacing it`),
+        { code: 'PUBLICATION_REFUSED' });
+      fs.renameSync(dir, aside);
+      try { syncRecoveryDirectory(dirname(dir)); }
+      catch (failure) { throw publicationFailure(failure); }
+    }
+    finally { exclusion.release(); }
+    const replacement = open();
+    try { syncRecoveryDirectory(dirname(dir)); }
+    catch (failure) {
+      try { replacement.database.close(); }
+      catch (cleanup) { throw publicationFailure(failure, [cleanup]); }
+      throw publicationFailure(failure);
+    }
     logger.warn(`The run history at ${dir} couldn't be opened (${errorMessage(error)}): it was moved to ${aside}, and a new one started`);
-    return open();
+    return replacement;
   }
 }
 
@@ -102,6 +139,8 @@ export interface OpenAppDatabaseOptions {
    * snapshot file, a pack directory, or a directory of pack directories (`readInstalledSchema`).
    */
   schemaFrom?: string;
+  /** Explicit format for an isolated candidate profile; otherwise uses the process boot selection. */
+  storageFormat?: string;
 }
 
 /**
@@ -109,13 +148,14 @@ export interface OpenAppDatabaseOptions {
  * packs' names read from their manifests (no pack code runs), which a tool reports. The engine is bound, so `@apackdev/sdk/ears`'s
  * operations act on it until `close()`. The run history is a database of its own (`openRunHistory`).
  */
-export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom }: OpenAppDatabaseOptions): Promise<AppDatabase> {
+export async function openAppDatabase({ env, userDataDir, readOnly = false, schemaFrom, storageFormat = configuredDatabaseFormat(userDataDir) }: OpenAppDatabaseOptions): Promise<AppDatabase> {
   const context = resolveAppEnvironment({ env, userDataDir });
   const paths = findAppDataPaths(userDataDir);
   const schema = readInstalledSchema(context, { schemaFrom });
   // The database is held to the schema the app last declared, which a tool doesn't change: the app declares what its
   // packs' code says (their required fields among it), and no manifest carries all of that
-  const database = openDatabase({ path: paths.lmdb, readOnly });
+  if (!readOnly) assertNoImportRecovery(paths.lmdb);
+  const database = openProfileDatabase(paths.lmdb, readOnly, () => databaseStorage(storageFormat).open({ path: paths.lmdb, readOnly }));
   if (!readOnly && database.schema === null) {
     database.close();
     throw new Error(`The database in ${userDataDir} holds no schema yet: start apack on it once, which declares its packs', then run this again.`);

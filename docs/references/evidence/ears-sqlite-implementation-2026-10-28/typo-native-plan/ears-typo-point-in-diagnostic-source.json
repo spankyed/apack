@@ -1,0 +1,5 @@
+{
+  "runtime": "9beb23ebc9a73c0860c7e8053c9be85814ff1929",
+  "fixtureSha256": "6f5e9db8ff276395d43fb43391438f93c2e0ff445b76d8c24dd5726967fbac93",
+  "purpose": "Batched native FTS5 term IN lookup versus MATCH presence oracle; nonstemmed; preserve plan/VM"
+}

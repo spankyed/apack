@@ -1,0 +1,30 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/logical-format.spec.ts tests/sqlite/logical-export.spec.ts tests/sqlite/logical-stage.spec.ts tests/sqlite/values.spec.ts tests/sqlite/embeddings.spec.ts tests/sqlite/logical-restore.spec.ts tests/sqlite/search-recovery.spec.ts tests/sqlite/source-node.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/search-recovery.spec.ts (39 tests) 9073ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed before its commit  388ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text retirement index in a private background generation  1259ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram shadow index in a private background generation  1841ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text shadow content in a private background generation  912ms
+   ✓ SQLite missing search storage recovery > rolls back partial postings on a background repair failure, refuses incomplete reads and retries cleanly  333ms
+   ✓ SQLite missing search storage recovery > preserves repair and rollback errors, stops scheduling and discards the transaction on close  828ms
+ ✓ tests/sqlite/values.spec.ts (10 tests) 319ms
+ ✓ tests/sqlite/logical-restore.spec.ts (9 tests) 1935ms
+   ✓ restored logical stores > reopens an audited real store preserving raw values, vectors, order and counters  390ms
+   ✓ restored logical stores > preserves an existing destination and keeps the verified spool reusable after an IO refusal  321ms
+ ✓ tests/sqlite/embeddings.spec.ts (8 tests) 509ms
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 317ms
+ ✓ tests/sqlite/logical-stage.spec.ts (7 tests) 931ms
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 15ms
+ ✓ tests/sqlite/source-node.spec.ts (1 test) 318ms
+   ✓ opens the app-only storage entry with plain Node source conditions and owned regex assets  317ms
+
+ Test Files  8 passed (8)
+      Tests  91 passed (91)
+   Start at  13:47:26
+   Duration  15.01s (transform 328ms, setup 24ms, collect 715ms, tests 13.42s, environment 1ms, prepare 292ms)
+

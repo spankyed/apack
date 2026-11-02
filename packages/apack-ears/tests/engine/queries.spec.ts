@@ -1,6 +1,6 @@
 // The engine's contract: query builder starts, filters, ordering and terminals
-import { beforeEach, describe, expect, it } from 'vitest';
-import { EARS } from '../../src/index.ts';
+import { beforeEach, describe, expect, expectTypeOf, it } from 'vitest';
+import { EARS, type QueryBuilder } from '../../src/index.ts';
 import { NAMES, engine, type Id, type RelId } from './helpers.ts';
 import { freshEngine, type EngineUnderTest } from './engine-under-test.ts';
 
@@ -167,6 +167,21 @@ describe('ordering', () => {
       .toEqual([v.flag, v.two, v.ten, v.earlier, v.later, v.word, v.text, v.list, v.none, v.nil]);
     expect(e.query('Person').orderBy('value', 'desc').ids())
       .toEqual([v.none, v.nil, v.list, v.text, v.word, v.later, v.earlier, v.ten, v.two, v.flag]);
+  });
+
+  it('retains every missing and null field member in the same group', () => {
+    const a = e.create('Person').id(), b = e.create('Person').id();
+    const c = e.create('Person').set('value', null).id(), d = e.create('Person').set('value', null).id();
+    expect([...e.query('Person').groupBy('value')]).toEqual([[null, [a, b, c, d]]]);
+  });
+
+  it('uses scalar value equality and decoded object identity for distinct and grouping', () => {
+    const values = [true, 1, new Date(1), new Date(1), { n: 1 }, { n: 1 }, [1], [1], null];
+    const ids = values.map(value => e.create('Person').set('value', value).id());
+    const missing = [e.create('Person').id(), e.create('Person').id()];
+    expect(e.query('Person').distinct('value').ids()).toEqual(ids);
+    expect([...e.query('Person').groupBy('value')]).toEqual(values.map((value, index) =>
+      [value, value === null ? [ids[index], ...missing] : [ids[index]]]));
   });
 
   it('distinct and groupBy', () => {
@@ -390,12 +405,36 @@ describe('declared indexes', () => {
 });
 
 describe('explain', () => {
+  it('retains entity-id typing across backend explanation variants', () => {
+    type Result = ReturnType<QueryBuilder<'Task'>['explain']>;
+    expectTypeOf<Result['ids']>().toEqualTypeOf<EARS.EntityId<'Task'>[]>();
+  });
+
   it("answers the query's ids and each stage of its plan: the index it read, what it visited and kept", () => {
     const indexed = freshEngine({ ...NAMES, rowRules: { Task: { required: [], indexes: ['status'] } } });
     const ids = Array.from({ length: 30 }, (_, i) => indexed.create('Task', { status: i % 3 ? 'open' : 'done', rank: i % 4 }).id());
     const explained = indexed.query('Task').has('rank').where('status', 'done').limit(5).explain();
     expect(explained.ids).toEqual(indexed.query('Task').has('rank').where('status', 'done').limit(5).ids());
     expect(explained.ids).toEqual(ids.filter((_, i) => i % 3 === 0).slice(0, 5));
+    expect(explained.ms).toBeGreaterThanOrEqual(0);
+    const walked = indexed.query('Task').where('rank', 1).explain();
+    expect(walked.ids).toEqual(indexed.query('Task').where('rank', 1).ids());
+    if (explained.backend === 'sqlite') {
+      expect(explained).not.toHaveProperty('visited');
+      expect(explained).not.toHaveProperty('stages');
+      const selection = explained.statements.find(statement => statement.sql.includes('field_index x'))!;
+      expect(selection.returnedRows).toBe(5);
+      expect(selection.plan.some(step => step.detail.includes('field_lookup'))).toBe(true);
+      expect(selection.parameters).toContain('string:done');
+      for (const statement of explained.statements) {
+        expect(statement.ms).toBeGreaterThanOrEqual(0);
+        expect(statement.plan.length).toBeGreaterThan(0);
+        expect(statement.sql).not.toContain('EXPLAIN QUERY PLAN');
+      }
+      return;
+    }
+    expect(walked.backend).toBe('elmdb');
+    if (walked.backend !== 'elmdb') throw new Error('The same engine changed explanation backends');
     expect(explained.stages.map(({ ms, ...stage }) => (expect(ms).toBeGreaterThanOrEqual(0), stage))).toEqual([
       { stage: 'types', visited: 0, kept: 0 },
       { stage: 'has', visited: 0, kept: 0 },
@@ -406,7 +445,6 @@ describe('explain', () => {
     expect(explained.visited).toBe(5);
     expect(explained.ms).toBeGreaterThanOrEqual(0);
     // Without the index the start walks every task
-    const walked = indexed.query('Task').where('rank', 1).explain();
     expect(walked.stages[1]).toMatchObject({ stage: 'where', index: 'none: walks the type', visited: 30, kept: walked.ids.length });
   });
 

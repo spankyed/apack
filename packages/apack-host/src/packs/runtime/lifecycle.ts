@@ -75,11 +75,11 @@ export function replacePackRuntime(registry: PackRegistry, pack: LoadedPack, bus
  * (hash-checked, so unchanged data isn't imported again). Returns false when it can't be read, loaded or registered,
  * with why recorded as the pack's load problem in `registry`.
  */
-export function activatePack(
+export async function activatePack(
   registry: PackRegistry,
   packId: string,
   busActor: import('xstate').AnyActorRef,
-): boolean {
+): Promise<boolean> {
   const { packsDir } = resolveAppEnvironment();
   registry.refreshCatalog(packsDir);
   const packDir = path.join(packsDir, packId);
@@ -113,7 +113,7 @@ export function acceptInstalledPack(
   registry: PackRegistry,
   packId: string,
   busActor: import('xstate').AnyActorRef,
-): () => boolean {
+): () => Promise<boolean> {
   const packDir = path.join(resolveAppEnvironment().packsDir, packId);
   const previous = registry.getPackRegistration(packId);
   const previousSystemIds = previous ? packSystemIds(previous) : undefined;
@@ -133,19 +133,19 @@ export function acceptInstalledPack(
     clearPackRequireCache(packDir);
     throw error;
   }
-  return () => {
-    const started = startAcceptedPack(registry, pack, busActor, previousSystemIds);
+  return async () => {
+    const started = await startAcceptedPack(registry, pack, busActor, previousSystemIds);
     for (const problem of cleanupProblems) logger.error(`Pack ${packId} accepted, but old binding cleanup failed: ${problem}`);
     return started;
   };
 }
 
-function startAcceptedPack(
+async function startAcceptedPack(
   registry: PackRegistry,
   pack: LoadedPack,
   busActor: import('xstate').AnyActorRef,
   previousSystemIds?: string[],
-): boolean {
+): Promise<boolean> {
   const packId = pack.registration.id;
   const systemIds = packSystemIds(pack.registration);
   const affectedSystemIds = [...new Set([...(previousSystemIds ?? []), ...systemIds])];
@@ -153,6 +153,7 @@ function startAcceptedPack(
   if (previousSystemIds) registry.runShutdownHooksForKey(packId);
   if (lifecycle?.onShutdown) registry.registerShutdownHook(lifecycle.onShutdown, packId);
   try {
+    await registry.indexesReady(packId);
     registry.refreshCatalog(resolveAppEnvironment().packsDir);
     lifecycle?.onInit?.();
     runPackMigrations(registry.packMigrationTargets('pack', [packId]));

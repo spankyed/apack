@@ -83,7 +83,7 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
     onFile: [["import { x } from '@/features/memos/be/x.ts';\n", 'src/f.ts:1: @/features/memos/be/x.ts']],
   },
   'host-imports': { onFile: [["import { edgeStore } from '@apackdev/host/ears';\n", 'src/f.ts:1: @apackdev/host/ears']] },
-  'elmdb-imports': { onFile: [["import { Database } from 'elmdb';\n", 'src/f.ts:1: elmdb']] },
+  'database-imports': { onFile: [["import { Database } from 'elmdb';\n", 'src/f.ts:1: elmdb']] },
   'untyped-sends': {
     onFile: [["import { untypedSendToSystem } from '@apackdev/sdk/events';\n",
       'src/f.ts:1: untypedSendToSystem from @apackdev/sdk/events']],
@@ -505,9 +505,15 @@ describe('when several rules are right about one site', () => {
       .toEqual(['raw-transport: src/__generated__/x.ts:1: @apackdev/sdk/rpc/client']);
   });
 
+  it.each(['@apackdev/ears/sqlite', 'better-sqlite3', 'sqlite-vec'])('refuses app-only SQLite storage %s in packs', (specifier) => {
+    expect(offender(`import * as storage from '${specifier}';\n`)).toEqual([
+      `database-imports: src/extensions/steps/x.ts:1: ${specifier}`,
+    ]);
+  });
+
   it('gives an @internal name from the store to the rule about the store', () => {
     expect(offender("import { _x } from '@apackdev/ears/lmdb';\n")).toEqual([
-      'elmdb-imports: src/extensions/steps/x.ts:1: @apackdev/ears/lmdb',
+      'database-imports: src/extensions/steps/x.ts:1: @apackdev/ears/lmdb',
     ]);
   });
 
@@ -594,7 +600,7 @@ describe('when several rules are right about one site', () => {
   it('declares that precedence in one place', () => {
     expect(PACK_RULES.map((rule) => rule.key)).toEqual([
       'source-resolution', 'contract-leaves',
-      'host-imports', 'elmdb-imports',
+      'host-imports', 'database-imports',
       // cross-feature-imports is out of its cause group on purpose: its fix subsumes own-modules'
       'cross-feature-imports', 'own-modules', 'pack-own-aliases',
       'internal-package-imports',

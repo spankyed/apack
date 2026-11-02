@@ -1,0 +1,22 @@
+[
+  {
+    "file": "ears-prefix-qualification.py.gz",
+    "sha256": "f026de526761e179f9d8eba909a0cd7dcd5d84ecb523d638d4b8898999fa65c7",
+    "storedSha256": "cb8cce03ad0d240d2433fdffcc0ad2b808393db38700f3c55b8f0da93ff72936"
+  },
+  {
+    "file": "ears-run-prefix-qualification.py.gz",
+    "sha256": "62f7bc80d2368b4db11df334cef1391401cdc5f8ff565be9064441dd908ad158",
+    "storedSha256": "e994b016f9a6ddf08e07e83baa31d0f6c12879670f9b0b58f1fe3d0001dd3001"
+  },
+  {
+    "file": "ears-wait-prefix-qualification.py.gz",
+    "sha256": "931443102761fd092da53b9b6f4fa30d6c15701306d9db48bffd7e744df7df43",
+    "storedSha256": "8c45d1a9cf7af97d9c034c7937fc4fc872aee32686fcd1d3c82c749abd79b301"
+  },
+  {
+    "file": "ears-prefix-cost.mjs.gz",
+    "sha256": "3c292bf15f4ec0ac781e40ef3400cde742b907c0058ad413f7890889e0d348a5",
+    "storedSha256": "b75a7d1979a0b21f15b1df1d4a25c5e9a6f68c8991a149c1a0046ca9694b21fb"
+  }
+]

@@ -1,0 +1,89 @@
+{
+  "source": "6135b37f5ccc8224410786a556a25191a558778e",
+  "run": "41316192751",
+  "scope": "Derived actual source SQLite smoke/storage outcomes only; not complete app/performance/installed acceptance",
+  "originalPlaywrightSha256": "962794ab53ee737c71ba73a2e9c6e0b667847243b62d8306accc61ac99efccda",
+  "omittedFields": [
+    "config",
+    "attachments",
+    "stdout",
+    "stderr",
+    "stack/context"
+  ],
+  "stats": {
+    "startTime": "2026-11-01T15:08:41.879Z",
+    "duration": 23120.496,
+    "expected": 6,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "cases": [
+    {
+      "title": "source SQLite app opens both managed stores with persisted EARS identity",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 16693
+        }
+      ]
+    },
+    {
+      "title": "app launches without crashing",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 319
+        }
+      ]
+    },
+    {
+      "title": "app reaches connected state",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 64
+        }
+      ]
+    },
+    {
+      "title": "applicationState is accessible with surfaces loaded",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 195
+        }
+      ]
+    },
+    {
+      "title": "runs in an isolated per-worker test data dir",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 17
+        }
+      ]
+    },
+    {
+      "title": "publishes no session, though a test app has a debug port open",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "retry": 0,
+          "duration": 18
+        }
+      ]
+    }
+  ]
+}

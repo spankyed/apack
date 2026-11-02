@@ -1,0 +1,15 @@
+{
+  "decompressedSha256": {
+    "source.txt": "2f517d31be135f60c37a725464a61b15b5a6d8b8071ee447e3e9af6253296923",
+    "runtime.json": "3359edc569b796bb3b15844109e8c345e7f087a626675cfee6dcfb9c81e6efe3",
+    "generic/provenance.json": "716324b9d72ebf69c9dbaa8a56f363dd74b9527ab13e5b93c626cf6614743721",
+    "dispatch/provenance.json": "61a0560c63abc3c6146ff03bd5b2e6eca882922d4e9b815c45a8f6d7e3609ebc",
+    "generic-membership.json": "f2821a39bb7c20c42aa42b4b539939f8b041728fdb303065eba6c8f2ee322bc0",
+    "dispatch-membership.json": "3dd27642b3e9549f71417d05b22674a9c6f52d2d0a870b591c785478099da63c",
+    "cross-backend-models.json": "b0f00851fd03eadec97200a4c0c8622ae1c4b8134df7fee9e5f2e333ef43a471",
+    "generic-training.json": "9c44954bb4bf3f4272285519d26d695a38e738ff8893177099d5cbbd35786293",
+    "dispatch-training.json": "caad27eaad3962a3f4975a8b4e89af7a0ebde7607b2e1ce9613ae99c75d849b0",
+    "generic-training.log": "ca6e9bc7806a5da9c0eda8a98a1c89fa313042bbd24f0435b98414496e8ccaf0",
+    "dispatch-training.log": "109487044d1ea55370e3e92e00dda59120b1879d654b9ace0833a3552ef8fffd"
+  }
+}

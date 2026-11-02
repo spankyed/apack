@@ -1,0 +1,7 @@
+# Known-type numeric-order qualification
+
+[Run 41344051810](https://github.com/spankyed/apack/actions/runs/41344051810), source `126d5a9dffe6c77bd8f8c7835132a3fd3fd542fd`, completes with all 28 query-cost cases passing and all 114 host cases passing without exclusions. Inline/overflow single-type ordering avoids discovery, typed traversal uses the destination rather than seed type, mixed/untyped ordering retains actual discovery and empty scopes retain their answer. Existing numeric/limit/group/projection cost cases also pass.
+
+SQLite shared contracts have 452 passes/one retained keyword failure/no exclusions. Native has 262 passes/the same failure/190 SQLite-only exclusions, including all 28 cost cases. The sole failure is `real repository-content search relevance 'find generated metadata ownership'`. Matching package/API generation and the source/test typecheck step pass; generated API diff is empty. The run remains red, and these checks do not prove a timing improvement or final platform/app acceptance on the changed runtime.
+
+Four explicitly inspected original test/model JSON reports are compressed unchanged with decompressed SHA-256 hashes. Logs, profiles, database files and traces are omitted. The subsequent strengthened cost metadata gate replays against this original SQLite report; twelve missing/skipped/duplicate/replaced-witness controls are refused. That metadata replay is distinct from execution of the new disposable source-mutation control and repeated-workload remeasurement, both still required.

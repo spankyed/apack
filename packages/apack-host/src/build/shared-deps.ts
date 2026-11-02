@@ -30,6 +30,7 @@ export function sharedInstanceExternals(): string[] {
  * requires them, so neither the pack loader's bridge nor the test harness's provides them.
  */
 export const APP_ONLY_EXPORTS: Readonly<Record<string, string>> = {
+  '@apackdev/ears/sqlite': "the app's SQLite databases; native storage bindings are not provided to packs",
   '@apackdev/ears/lmdb': "the app's elmdb databases; it loads elmdb, which only the app installs",
 };
 

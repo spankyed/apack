@@ -1,0 +1,14 @@
+
+> @apackdev/host@0.1.0 test
+> vitest run tests/database/storage.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-host
+
+ ✓ tests/database/storage.spec.ts (15 tests) 624ms
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  12:06:47
+   Duration  2.16s (transform 687ms, setup 12ms, collect 1.40s, tests 624ms, environment 0ms, prepare 39ms)
+

@@ -1,7 +1,8 @@
 // Builds a publishable copy of a workspace package that ships as a bundle (@apackdev/cli,
 // @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES)
 // and the private @apackdev/host are inlined from source, so the published package can use host-only
-// modules; every other package stays external and becomes a dependency at the version the workspace uses.
+// modules. The app-only SQLite entry stays external to preserve package-relative native/vector/WASM
+// assets. Other packages stay external and become dependencies at the version the workspace uses.
 //
 //   tsx scripts/bundle-package.ts packages/apack-cli
 import * as fs from 'node:fs';
@@ -122,6 +123,8 @@ const externalizeAllButInlined: Plugin = {
   name: 'externalize-all-but-inlined',
   setup(b) {
     b.onResolve({ filter: /^[^./]/ }, (args) => {
+      // SQLite's native extension and regex assets resolve relative to its own package.
+      if (args.path === '@apackdev/ears/sqlite') return { path: args.path, external: true };
       if (args.kind === 'entry-point' || INLINED.has(packageName(args.path))) return undefined;
       return { path: args.path, external: true };
     });

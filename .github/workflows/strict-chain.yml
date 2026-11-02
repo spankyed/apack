@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 
+# Shared SDK/engine contracts use SQLite. Boot selection belongs to isolated app-launch steps;
+# unit/integration fixtures also exercise explicit native stores and default-profile refusals.
+# Native extension-specific coverage additionally runs in ears-sqlite.yml on all supported hosts.
+env:
+  EARS_EVALUATION_BACKEND: sqlite
+
 concurrency:
   group: strict-chain-${{ github.ref }}
   cancel-in-progress: false
@@ -28,10 +34,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/node-runtime
         with:
           node-version: 23.11.1
-          cache: npm
       - name: Record source and platform
         run: |
           git rev-parse HEAD
@@ -89,10 +94,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/node-runtime
         with:
           node-version: 23.11.1
-          cache: npm
       - name: Record source
         run: git rev-parse HEAD
       - uses: ./.github/actions/elmdb
@@ -108,6 +112,7 @@ jobs:
       - name: Unpack producer outputs
         run: tar -xzf "$RUNNER_TEMP/producers.tgz"
       - name: ${{ matrix.name }}
+        id: strict_consumer
         env:
           APACK_STRICT_JOB: ${{ matrix.job }}
           APACK_STRICT_SHARD: ${{ matrix.shard }}
@@ -116,6 +121,46 @@ jobs:
           args=(--strict --all --cores 2 --job "$APACK_STRICT_JOB")
           if [[ -n "$APACK_STRICT_SHARD" ]]; then args+=(--shard "$APACK_STRICT_SHARD"); fi
           npm run chain -- "${args[@]}" | tee "$RUNNER_TEMP/strict-chain.log"
+      - name: Build the independent SQLite app witness
+        # A failed rest/unit step can stop the chain before the app build. Reuse only verified producer
+        # inputs and build the runtime explicitly; the earlier failure still keeps this job red.
+        id: sqlite_app_build
+        if: ${{ !cancelled() && matrix.name == 'app-and-rest' }}
+        run: npm run chain -- --strict --cores 2 --only build:runtime | tee "$RUNNER_TEMP/strict-app-build.log"
+      - name: Isolated source SQLite app smoke and storage witness
+        # Run after contract failures when the actual app is ready; preparation failures remain explicit.
+        if: ${{ !cancelled() && matrix.name == 'app-and-rest' && steps.sqlite_app_build.outcome == 'success' }}
+        env:
+          APACK_STORAGE_FORMAT: sqlite/1
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/qualification/strict-sqlite-app.json
+        run: |
+          mkdir -p .apack/qualification
+          node scripts/with-source.mjs playwright test tests/e2e/smoke tests/e2e/app-integration/sqlite-source-storage.spec.ts --workers=1 --retries=0 --reporter=line,json
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const result = JSON.parse(readFileSync('.apack/qualification/strict-sqlite-app.json', 'utf8'));
+          assert.equal(result.stats.expected, 6);
+          for (const key of ['skipped', 'unexpected', 'flaky']) assert.equal(result.stats[key], 0);
+          const specs = suite => [...(suite.specs ?? []), ...(suite.suites ?? []).flatMap(specs)];
+          const actual = specs(result);
+          assert(actual.some(spec => spec.title === 'source SQLite app opens both managed stores with persisted EARS identity'));
+          for (const spec of actual) for (const test of spec.tests) {
+            assert.equal(test.results.length, 1);
+            assert.equal(test.results[0].status, 'passed');
+            assert.equal(test.results[0].retry, 0);
+          }
+          JS
+      - name: Qualify remaining checks after a failed app/rest chain
+        # Preserve the original failure. A known host judgment must not leave later pack/authoring
+        # contracts unexecuted; --only still refuses missing or stale producer outputs.
+        if: ${{ !cancelled() && matrix.name == 'app-and-rest' && steps.strict_consumer.outcome == 'failure' && steps.sqlite_app_build.outcome == 'success' }}
+        env:
+          SPEC_DURATIONS_PROGRESS_FILE: ${{ runner.temp }}/strict-remaining-progress
+        run: |
+          npm run chain -- --strict --all --cores 2 \
+            --only test:unit:pack,test:packaged-authoring:author,test:packaged-authoring:app,test:external-pack:app,test:smoke \
+            | tee "$RUNNER_TEMP/strict-remaining.log"
       - name: Retain validation evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,5 +169,16 @@ jobs:
           include-hidden-files: true
           path: |
             ${{ runner.temp }}/strict-chain.log
+            ${{ runner.temp }}/strict-app-build.log
+            ${{ runner.temp }}/strict-remaining.log
+            ${{ runner.temp }}/strict-remaining-progress.*.jsonl
             ${{ runner.temp }}/strict-spec-progress.*.jsonl
             node_modules/.cache/apack-chain/runs/
+            .apack/tests/results/
+            .apack/qualification/
+            tests/packs/*/.apack/tests/results/
+
+  sqlite-candidate:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ears-sqlite.yml

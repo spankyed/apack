@@ -1,0 +1,908 @@
+{
+  "source": "cd4aaa8bfa49eea102cadd888e9397e856906808",
+  "recallAccepted": true,
+  "groups": [
+    {
+      "size": 1000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 6.491799999999785,
+      "p95Ms": 7.548047999999653,
+      "p99Ms": 9.477352999999312,
+      "maxMs": 12.492048999999497,
+      "heartbeatP99Ms": 8.528496999999334,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 6.319500999999946,
+      "p95Ms": 8.41453999999976,
+      "p99Ms": 10.53362399999969,
+      "maxMs": 10.535698000000139,
+      "heartbeatP99Ms": 9.566925999999967,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "candidate-1-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 0.9884519999995973,
+      "p95Ms": 1.3766689999993105,
+      "p99Ms": 1.733248000000458,
+      "maxMs": 1.8734610000010434,
+      "heartbeatP99Ms": 0.8818059999994148,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "candidate-1-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 0.8530790000004345,
+      "p95Ms": 1.275019999999131,
+      "p99Ms": 1.3466829999997572,
+      "maxMs": 1.6589080000012473,
+      "heartbeatP99Ms": 0.6725339999993594,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 2.093503000000055,
+      "p95Ms": 2.31637899999987,
+      "p99Ms": 2.7324900000003254,
+      "maxMs": 2.839137999999366,
+      "heartbeatP99Ms": 1.7469070000006468,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 1000,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 1.6005580000000919,
+      "p95Ms": 4.301596999999674,
+      "p99Ms": 4.818655999999464,
+      "maxMs": 6.857444999999643,
+      "heartbeatP99Ms": 3.8341440000003786,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": null,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": null,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 18.05930499999522,
+      "p95Ms": 21.2734430000055,
+      "p99Ms": 24.43376200000057,
+      "maxMs": 31.447359999998298,
+      "heartbeatP99Ms": 23.474419000005582,
+      "meanFullRankingOverlapAt10": 0.9840000000000001,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.983,
+        "40": 0.971,
+        "64": 0.965
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 10000,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 17.380252000002656,
+      "p95Ms": 21.524034000001848,
+      "p99Ms": 25.15834100000211,
+      "maxMs": 26.120042000002286,
+      "heartbeatP99Ms": 24.199877999999444,
+      "meanFullRankingOverlapAt10": 0.977,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.97,
+        "40": 0.96925,
+        "64": 0.96328125
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 10000,
+      "cohort": "candidate-1-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 2.607757000005222,
+      "p95Ms": 3.925515999995696,
+      "p99Ms": 4.503779999999097,
+      "maxMs": 5.646100999998453,
+      "heartbeatP99Ms": 3.59782599999744,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 10000,
+      "cohort": "candidate-1-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 1.8379539999950794,
+      "p95Ms": 3.140274999997928,
+      "p99Ms": 3.8004220000002533,
+      "maxMs": 4.328562000002421,
+      "heartbeatP99Ms": 2.8155899999983376,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 10000,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 12.284749000005831,
+      "p95Ms": 13.966648999994504,
+      "p99Ms": 14.040606999995362,
+      "maxMs": 16.42351100000087,
+      "heartbeatP99Ms": 13.08844699999463,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": true
+    },
+    {
+      "size": 10000,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 10.604691000000457,
+      "p95Ms": 14.726650999997219,
+      "p99Ms": 18.031411999996635,
+      "maxMs": 20.045414000000164,
+      "heartbeatP99Ms": 17.07800000000134,
+      "meanFullRankingOverlapAt10": 0.9990000000000001,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 100,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 34.184135999996215,
+      "p95Ms": 63.129360000020824,
+      "p99Ms": 94.87293599999975,
+      "maxMs": 313.2707930000033,
+      "heartbeatP99Ms": 93.9244620000245,
+      "meanFullRankingOverlapAt10": 0.992,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.9879999999999999,
+        "40": 0.9835,
+        "64": 0.98515625
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "all-live",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 32.99131599999964,
+      "p95Ms": 73.32812699998613,
+      "p99Ms": 88.2862679999962,
+      "maxMs": 93.63869500000146,
+      "heartbeatP99Ms": 87.34025799998199,
+      "meanFullRankingOverlapAt10": 0.973,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.98,
+        "40": 0.9797499999999999,
+        "64": 0.98140625
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-1-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 15.370942000008654,
+      "p95Ms": 19.872695000027306,
+      "p99Ms": 25.111404999974184,
+      "maxMs": 32.05896200001007,
+      "heartbeatP99Ms": 24.133124999993015,
+      "meanFullRankingOverlapAt10": 0.9990000000000001,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-1-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 13.918799999984913,
+      "p95Ms": 21.768058999965433,
+      "p99Ms": 24.728370999975596,
+      "maxMs": 24.956979000009596,
+      "heartbeatP99Ms": 23.76335600001039,
+      "meanFullRankingOverlapAt10": 1.0,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 1.0,
+        "40": 1.0,
+        "64": 1.0
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "corpus-lexical-control",
+      "samples": 100,
+      "p50Ms": 80.67830500000855,
+      "p95Ms": 103.77385400002822,
+      "p99Ms": 109.62036399997305,
+      "maxMs": 130.39012300001923,
+      "heartbeatP99Ms": 108.66305500001181,
+      "meanFullRankingOverlapAt10": 0.9769999999999999,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.9740000000000001,
+        "40": 0.96625,
+        "64": 0.96
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    },
+    {
+      "size": 99900,
+      "cohort": "candidate-10-percent",
+      "family": "held-out-title",
+      "samples": 100,
+      "p50Ms": 78.21352700004354,
+      "p95Ms": 98.70516999997199,
+      "p99Ms": 107.52368800004479,
+      "maxMs": 113.17583999998169,
+      "heartbeatP99Ms": 106.5644939999911,
+      "meanFullRankingOverlapAt10": 0.983,
+      "modelMode": "managed",
+      "nativeCandidateFloor": null,
+      "matchedMeanVectorRecall": null,
+      "matchedVectorP95Ms": null,
+      "vectorRecallReference": "independent-float64-canonical-f32",
+      "meanVectorRecall": {
+        "10": 0.983,
+        "40": 0.9655,
+        "64": 0.95765625
+      },
+      "vectorRecallTarget": 0.95,
+      "latencyDiagnosticLimitMs": 200,
+      "heartbeatDiagnosticLimitMs": 16,
+      "latencyWithinDiagnosticLimit": true,
+      "heartbeatWithinDiagnosticLimit": false
+    }
+  ],
+  "resourcesAndReopen": [
+    {
+      "size": 1000,
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "maxRssKiBBeforeDiagnostics": 208980,
+      "resourceSnapshots": {
+        "afterAdmission": {
+          "memory": {
+            "rss": 192684032,
+            "heapTotal": 61997056,
+            "heapUsed": 32371552,
+            "external": 11640600,
+            "arrayBuffers": 9095787
+          },
+          "usage": {
+            "userCPUTime": 2195297,
+            "systemCPUTime": 433388,
+            "maxRSS": 188168,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 42888,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 69824,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 12825,
+            "involuntaryContextSwitches": 463
+          },
+          "files": {
+            "mainBytes": 10768384,
+            "walBytes": 4779232,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 15580384
+          }
+        },
+        "afterQueriesAndReferences": {
+          "memory": {
+            "rss": 205103104,
+            "heapTotal": 70860800,
+            "heapUsed": 38285040,
+            "external": 11209514,
+            "arrayBuffers": 8664661
+          },
+          "usage": {
+            "userCPUTime": 9695301,
+            "systemCPUTime": 1433889,
+            "maxRSS": 208980,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 52540,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 75840,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 13669,
+            "involuntaryContextSwitches": 630
+          },
+          "files": {
+            "mainBytes": 10768384,
+            "walBytes": 4779232,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 15580384
+          }
+        },
+        "afterDiagnostics": {
+          "memory": {
+            "rss": 289804288,
+            "heapTotal": 67629056,
+            "heapUsed": 25168456,
+            "external": 138757298,
+            "arrayBuffers": 10710420
+          },
+          "usage": {
+            "userCPUTime": 9832409,
+            "systemCPUTime": 1541827,
+            "maxRSS": 322920,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 83189,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 76312,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 13713,
+            "involuntaryContextSwitches": 633
+          },
+          "files": {
+            "mainBytes": 10768384,
+            "walBytes": 4779232,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 15580384
+          }
+        }
+      },
+      "reopen": [
+        {
+          "pass": 0,
+          "openMs": 43.09828800000105,
+          "closeAndDrainMs": 10.450773000000481,
+          "samples": 18,
+          "maxQueryMs": 9.234934000000067,
+          "maxHeartbeatDelayMs": 8.252016000000367
+        },
+        {
+          "pass": 1,
+          "openMs": 30.701999000000797,
+          "closeAndDrainMs": 0.634038000000146,
+          "samples": 18,
+          "maxQueryMs": 9.095604000000094,
+          "maxHeartbeatDelayMs": 8.11011099999996
+        },
+        {
+          "pass": 2,
+          "openMs": 28.080957999998645,
+          "closeAndDrainMs": 0.5838139999996201,
+          "samples": 18,
+          "maxQueryMs": 9.045830000000933,
+          "maxHeartbeatDelayMs": 8.061048000001392
+        }
+      ],
+      "databaseScratchRemoved": true
+    },
+    {
+      "size": 10000,
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "maxRssKiBBeforeDiagnostics": 440156,
+      "resourceSnapshots": {
+        "afterAdmission": {
+          "memory": {
+            "rss": 284495872,
+            "heapTotal": 34975744,
+            "heapUsed": 28988056,
+            "external": 69335212,
+            "arrayBuffers": 66795733
+          },
+          "usage": {
+            "userCPUTime": 22317898,
+            "systemCPUTime": 2435450,
+            "maxRSS": 440156,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 137701,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 1432360,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 42810,
+            "involuntaryContextSwitches": 342
+          },
+          "files": {
+            "mainBytes": 193736704,
+            "walBytes": 4721552,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 198491024
+          }
+        },
+        "afterQueriesAndReferences": {
+          "memory": {
+            "rss": 326709248,
+            "heapTotal": 75845632,
+            "heapUsed": 52089952,
+            "external": 67282603,
+            "arrayBuffers": 64743084
+          },
+          "usage": {
+            "userCPUTime": 56677205,
+            "systemCPUTime": 8927370,
+            "maxRSS": 440156,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 225959,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 1453272,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 44675,
+            "involuntaryContextSwitches": 849
+          },
+          "files": {
+            "mainBytes": 193736704,
+            "walBytes": 4721552,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 198491024
+          }
+        },
+        "afterDiagnostics": {
+          "memory": {
+            "rss": 324128768,
+            "heapTotal": 72609792,
+            "heapUsed": 34130952,
+            "external": 68011396,
+            "arrayBuffers": 65471877
+          },
+          "usage": {
+            "userCPUTime": 59361648,
+            "systemCPUTime": 9538974,
+            "maxRSS": 440156,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 256766,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 1454368,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 44825,
+            "involuntaryContextSwitches": 869
+          },
+          "files": {
+            "mainBytes": 193736704,
+            "walBytes": 4721552,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 198491024
+          }
+        }
+      },
+      "reopen": [
+        {
+          "pass": 0,
+          "openMs": 53.01470800000243,
+          "closeAndDrainMs": 10.221896000002744,
+          "samples": 18,
+          "maxQueryMs": 25.591678000011598,
+          "maxHeartbeatDelayMs": 24.608038999998826
+        },
+        {
+          "pass": 1,
+          "openMs": 39.92489999999816,
+          "closeAndDrainMs": 4.167895999999018,
+          "samples": 18,
+          "maxQueryMs": 25.61846399999922,
+          "maxHeartbeatDelayMs": 24.63685799999803
+        },
+        {
+          "pass": 2,
+          "openMs": 33.495157999990624,
+          "closeAndDrainMs": 4.66121099999873,
+          "samples": 18,
+          "maxQueryMs": 26.479026000000886,
+          "maxHeartbeatDelayMs": 25.499234000002616
+        }
+      ],
+      "databaseScratchRemoved": true
+    },
+    {
+      "size": 99900,
+      "cpuModels": [
+        "AMD EPYC 7763 64-Core Processor"
+      ],
+      "maxRssKiBBeforeDiagnostics": 1564400,
+      "resourceSnapshots": {
+        "afterAdmission": {
+          "memory": {
+            "rss": 937713664,
+            "heapTotal": 131616768,
+            "heapUsed": 128424320,
+            "external": 627469013,
+            "arrayBuffers": 615848664
+          },
+          "usage": {
+            "userCPUTime": 103807447,
+            "systemCPUTime": 19728764,
+            "maxRSS": 1469868,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 405542,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 15213672,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 227611,
+            "involuntaryContextSwitches": 1157
+          },
+          "files": {
+            "mainBytes": 1930948608,
+            "walBytes": 8260632,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 1939242008
+          }
+        },
+        "afterQueriesAndReferences": {
+          "memory": {
+            "rss": 1452699648,
+            "heapTotal": 218152960,
+            "heapUsed": 146266952,
+            "external": 618996573,
+            "arrayBuffers": 616457054
+          },
+          "usage": {
+            "userCPUTime": 345379060,
+            "systemCPUTime": 90786899,
+            "maxRSS": 1564400,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 2499132,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 15249208,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 245153,
+            "involuntaryContextSwitches": 5633
+          },
+          "files": {
+            "mainBytes": 1930948608,
+            "walBytes": 8260632,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 1939242008
+          }
+        },
+        "afterDiagnostics": {
+          "memory": {
+            "rss": 1459658752,
+            "heapTotal": 173678592,
+            "heapUsed": 133224688,
+            "external": 620365188,
+            "arrayBuffers": 617825669
+          },
+          "usage": {
+            "userCPUTime": 360839894,
+            "systemCPUTime": 93232045,
+            "maxRSS": 1564400,
+            "sharedMemorySize": 0,
+            "unsharedDataSize": 0,
+            "unsharedStackSize": 0,
+            "minorPageFault": 2532127,
+            "majorPageFault": 0,
+            "swappedOut": 0,
+            "fsRead": 0,
+            "fsWrite": 15250912,
+            "ipcSent": 0,
+            "ipcReceived": 0,
+            "signalsCount": 0,
+            "voluntaryContextSwitches": 245506,
+            "involuntaryContextSwitches": 5765
+          },
+          "files": {
+            "mainBytes": 1930948608,
+            "walBytes": 8260632,
+            "shmBytes": 32768,
+            "otherBytes": 0,
+            "totalBytes": 1939242008
+          }
+        }
+      },
+      "reopen": [
+        {
+          "pass": 0,
+          "openMs": 53.768313999986276,
+          "closeAndDrainMs": 16.176777000015136,
+          "samples": 18,
+          "maxQueryMs": 105.8215799999889,
+          "maxHeartbeatDelayMs": 104.84612499998184
+        },
+        {
+          "pass": 1,
+          "openMs": 40.368401999992784,
+          "closeAndDrainMs": 4.545041000004858,
+          "samples": 18,
+          "maxQueryMs": 108.64702400000533,
+          "maxHeartbeatDelayMs": 107.67184999998426
+        },
+        {
+          "pass": 2,
+          "openMs": 31.384468999982346,
+          "closeAndDrainMs": 4.596776999998838,
+          "samples": 18,
+          "maxQueryMs": 110.13219199999003,
+          "maxHeartbeatDelayMs": 109.15768999996362
+        }
+      ],
+      "databaseScratchRemoved": true
+    }
+  ]
+}

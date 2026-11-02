@@ -1,0 +1,7 @@
+# Strict app setup refusal at 03c
+
+The app-and-rest consumer of [41312762268](https://github.com/spankyed/apack/actions/runs/41312762268), source `03c852400df6e466cc59e7e11a63c8f67158d6e9`, fails after the host unit pool: 6973 passing, one original keyword judgment failure, 88 exclusions. Remaining chain steps are not established. The independent six-case SQLite source-app witness also fails, all before launch: main/renderer dist are absent because the failed chain stopped before build:runtime. There are zero expected passes, six unexpected, no skips/flakes; these are setup refusals, not proof of a running-app bug or success.
+
+The candidate workflow now builds the independent witness with `chain --strict --cores 2 --only build:runtime`, verifying current producer prerequisites, and runs smoke only after successful build. Its build log is retained. The original unit failure still keeps the job red; no judgment/assertion/retry/deadline is relaxed. The fix needs actual disposable execution.
+
+Only the inspected Playwright JSON and exact failure-summary tail of the unit log are retained. The manifest identifies the extracted tail and full original log hash; it is not the complete unit log. Reports contain fixture assertions and missing-build paths. Traces, unrelated unit output and uninspected trees remain in CI/private download. This source predates conditional public cosine selection.

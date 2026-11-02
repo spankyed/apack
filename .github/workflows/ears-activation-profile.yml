@@ -1,0 +1,59 @@
+name: EARS activation attribution
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ears-activation-attribution-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  profile:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Install pinned dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+      - name: Check diagnostic sources
+        run: |
+          node_modules/.bin/oxlint tests/scripts/_support/ears-activation-observer.mjs tests/scripts/_support/ears-activation-client.mjs -D correctness
+          python3 -c "from pathlib import Path; p=Path('tests/scripts/profile-ears-activation.py'); compile(p.read_text(),str(p),'exec')"
+      - name: Build normal packages and shipped pack
+        run: npm run build:default-setup
+      - name: Build normal development API
+        run: npm run build:api:dev
+      - name: Validate settings schema compilation and catalog admission
+        env:
+          EARS_EVALUATION_BACKEND: sqlite
+        run: |
+          mkdir -p .apack/tests/results/ears-activation-static
+          node_modules/.bin/oxlint packages/apack-sdk/src/framework/settings-validation.ts packages/apack-sdk/tests/framework/settings-definition.spec.ts -D correctness
+          npm run typecheck -w @apackdev/sdk -w @apackdev/host
+          node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --project @apackdev/sdk --maxWorkers=2 --reporter=default --reporter=json --outputFile=.apack/tests/results/ears-activation-static/sdk.json packages/apack-sdk/tests/framework/settings-definition.spec.ts packages/apack-sdk/tests/framework/pack-settings.spec.ts packages/apack-sdk/tests/build/shipped-settings.spec.ts packages/apack-sdk/tests/build/snapshot.spec.ts packages/apack-sdk/tests/build/settings-declarations.spec.ts
+          node scripts/with-source.mjs node node_modules/vitest/vitest.mjs run --project @apackdev/host --maxWorkers=2 --reporter=default --reporter=json --outputFile=.apack/tests/results/ears-activation-static/host.json packages/apack-host/tests/packs/catalog.spec.ts packages/apack-host/tests/packs/settings-discovery.spec.ts packages/apack-host/tests/features/settings/answer.spec.ts packages/apack-host/tests/features/settings/store.spec.ts packages/apack-host/tests/features/settings/access.spec.ts packages/apack-host/tests/features/settings/app.spec.ts packages/apack-host/tests/features/settings/document.spec.ts
+      - name: Observe isolated backend activation
+        run: python3 tests/scripts/profile-ears-activation.py --output .apack/tests/results/ears-activation-profile
+      - name: Preserve diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-activation-profile-${{ github.run_id }}
+          path: |
+            .apack/tests/results/ears-activation-profile
+            .apack/tests/results/ears-activation-static
+          if-no-files-found: error
+          retention-days: 14

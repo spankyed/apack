@@ -1,0 +1,24 @@
+{
+  "trial": 0,
+  "format": "elmdb/1",
+  "readySeconds": 2.350366487997235,
+  "exitCode": 0,
+  "rpc": {
+    "trial": 0,
+    "seeded": true,
+    "appStatePresent": true,
+    "loaded": [
+      "default-setup"
+    ],
+    "view": {
+      "firstCommit": 179,
+      "changedCommit": 180,
+      "label": "updated in native baseline",
+      "updates": 2
+    },
+    "settingsLeaseOpenedAndClosed": true
+  },
+  "environmentDiagnostics": {
+    "missingOptionalCodexExecutable": true
+  }
+}

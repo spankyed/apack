@@ -6,20 +6,83 @@ on:
       suite:
         description: App acceptance suite; all also exercises the source CLI
         type: choice
-        options: [all, app, external, cli, build, integration, packaged]
+        options: [all, app, external, bundled-ui, host-windows, sqlite, sqlite-admission, sqlite-bench, sqlite-watch, sqlite-admission-watch, sqlite-wal, sqlite-cold, sqlite-app-flows, sqlite-startup, sqlite-model-windows, sqlite-api, sqlite-corpus, sqlite-relevance, sqlite-graph-wasm, sqlite-vector-dispatch, cli, build, integration, packaged, installed, installed-signed, installed-platform, activation-profile, windows-durability]
         default: all
+      sqlite_vector_models:
+        description: Real corpus vector regime; managed verifies native readiness above the exact-search threshold
+        type: choice
+        options: [fallback, managed]
+        default: fallback
+      sqlite_vector_backend:
+        description: Corpus-only paired upstream dispatch diagnostic; ordinary artifacts remain generic
+        type: choice
+        options: [packaged, paired-dispatch]
+        default: packaged
+      sqlite_native_candidate_floor:
+        description: Corpus-only diagnostic override; production keeps the current native candidate policy
+        type: choice
+        options: [production, '1024', '2048']
+        default: production
+      sqlite_admission_checkpoint_probe:
+        description: Alternate 1000/128-page checkpoints on 100k FULL value admission; diagnostic only
+        type: boolean
+        default: false
+      sqlite_admission_trace:
+        description: Instrument only one 100k FULL value trial; diagnostic, not latency acceptance
+        type: boolean
+        default: false
+      storage_format:
+        description: Storage for source app/pack qualification; startup runs this store first; installed suites select SQLite explicitly
+        type: choice
+        options: [elmdb/1, sqlite/1]
+        default: elmdb/1
+      sqlite_startup_mode:
+        description: Startup recording; detailed captures diagnose overhead, lightweight measures latency
+        type: choice
+        options: [lightweight, detailed]
+        default: lightweight
       test:
         description: Playwright name pattern; integration requires space-separated integration or native spec file paths
         type: string
         default: ''
+      repeat_each:
+        description: Repeat each selected app or pack Playwright case (1-20)
+        type: number
+        default: 1
   workflow_call:
     inputs:
       suite:
         type: string
         default: all
+      sqlite_vector_models:
+        type: string
+        default: fallback
+      sqlite_vector_backend:
+        type: string
+        default: packaged
+      sqlite_native_candidate_floor:
+        type: string
+        default: production
+      sqlite_admission_checkpoint_probe:
+        description: Alternate 1000/128-page checkpoints on 100k FULL value admission; diagnostic only
+        type: boolean
+        default: false
+      sqlite_admission_trace:
+        description: Instrument only one 100k FULL value trial; diagnostic, not latency acceptance
+        type: boolean
+        default: false
+      storage_format:
+        type: string
+        default: elmdb/1
+      sqlite_startup_mode:
+        type: string
+        default: lightweight
       test:
         type: string
         default: ''
+      repeat_each:
+        type: number
+        default: 1
 
 permissions:
   contents: read
@@ -29,12 +92,953 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  sqlite:
+    if: ${{ inputs.suite == 'sqlite' }}
+    uses: ./.github/workflows/ears-sqlite.yml
+  activation-profile:
+    if: ${{ inputs.suite == 'activation-profile' }}
+    uses: ./.github/workflows/ears-activation-profile.yml
+  windows-durability:
+    if: ${{ inputs.suite == 'windows-durability' }}
+    uses: ./.github/workflows/ears-windows-durability.yml
+  installed-platform:
+    if: ${{ inputs.suite == 'installed-platform' }}
+    uses: ./.github/workflows/ears-installed-platform.yml
+  sqlite-graph-wasm:
+    if: ${{ inputs.suite == 'sqlite-graph-wasm' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - name: Build pinned portable Leiden core
+        working-directory: native/graphs
+        run: |
+          set -o pipefail
+          mkdir -p ../../.temp/sqlite-graph-wasm
+          git rev-parse HEAD > ../../.temp/sqlite-graph-wasm/source.txt
+          rustup toolchain install 1.99.1 --profile minimal
+          rustup target add wasm32-unknown-unknown
+          cargo generate-lockfile
+          cargo build --locked --release --target wasm32-unknown-unknown 2>&1 | tee ../../.temp/sqlite-graph-wasm/build.log
+          cargo install wasm-bindgen-cli --version 0.2.105 --locked
+          wasm-bindgen --target nodejs --out-dir ../../.temp/sqlite-graph-wasm --out-name ears_graph target/wasm32-unknown-unknown/release/ears_graph.wasm
+          node -e "require('fs').writeFileSync('../../.temp/sqlite-graph-wasm/package.json',JSON.stringify({type:'commonjs'}))"
+          node probe.mjs ../../.temp/sqlite-graph-wasm 2>&1 | tee ../../.temp/sqlite-graph-wasm/probe.log
+      - name: Preserve portable core and lockfile for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-graph-wasm-${{ github.run_id }}
+          path: |
+            native/graphs/Cargo.lock
+            .temp/sqlite-graph-wasm
+          if-no-files-found: error
+          retention-days: 14
+  sqlite-admission:
+    if: ${{ inputs.suite == 'sqlite-admission' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON((inputs.sqlite_admission_trace || inputs.sqlite_admission_checkpoint_probe) && '[{"kind":"value","durability":"full"}]' || '[{"kind":"value","durability":"off"},{"kind":"value","durability":"full"},{"kind":"search","durability":"off"},{"kind":"search","durability":"full"}]') }}
+    env:
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching admission runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm ci
+          npm run packages:build
+          npm run typecheck -w @apackdev/ears
+          npm run typecheck:host
+      - name: Admission trials or explicit runtime diagnostic under enforced limits
+        env:
+          ADMISSION_KIND: ${{ matrix.kind }}
+          ADMISSION_DURABILITY: ${{ matrix.durability }}
+          ADMISSION_TRACE: ${{ inputs.sqlite_admission_trace }}
+          ADMISSION_CHECKPOINT_PROBE: ${{ inputs.sqlite_admission_checkpoint_probe }}
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-admission
+          git rev-parse HEAD > .temp/sqlite-admission/source.txt
+          docker build -t ears-admission-runtime - <<'DOCKER'
+          FROM ubuntu:24.04
+          RUN apt-get update && apt-get install -y --no-install-recommends python3 git libstdc++6 && rm -rf /var/lib/apt/lists/*
+          DOCKER
+          docker image inspect ears-admission-runtime --format '{{.Id}}' > .temp/sqlite-admission/image.txt
+          admission_node_binary=$(command -v node)
+          arguments=()
+          if [ "$ADMISSION_KIND" = search ]; then arguments+=(--search); fi
+          if [ "$ADMISSION_DURABILITY" = full ]; then arguments+=(--durable); fi
+          docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+            --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
+            -e GITHUB_SHA="$GITHUB_SHA" -e ADMISSION_TRACE="$ADMISSION_TRACE" -e ADMISSION_CHECKPOINT_PROBE="$ADMISSION_CHECKPOINT_PROBE" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$admission_node_binary:/runtime/node:ro" \
+            -v "$GITHUB_WORKSPACE/.temp/sqlite-admission:/results" \
+            ears-admission-runtime bash .github/scripts/ears-admission-run.sh "${arguments[@]}"
+      - name: Retain all admission trial outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-admission-${{ matrix.kind }}-${{ matrix.durability }}-${{ github.run_id }}
+          path: .temp/sqlite-admission
+          if-no-files-found: error
+          retention-days: 14
+  sqlite-watch:
+    name: SQLite storage workloads
+    if: ${{ inputs.suite == 'sqlite-watch' || inputs.suite == 'sqlite-admission-watch' || inputs.suite == 'sqlite-wal' || inputs.suite == 'sqlite-cold' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching sustained workload
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm ci
+          npm run packages:build
+          npm run typecheck -w @apackdev/ears
+      - name: Prove numeric ordering rejects the previous discovery cost
+        if: ${{ inputs.suite == 'sqlite-watch' }}
+        run: node --import tsx .github/scripts/ears-numeric-order-control.mjs
+      - name: Bounded storage resource trials
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-watch
+          docker build -t ears-watch-runtime - <<'DOCKER'
+          FROM ubuntu:24.04
+          RUN apt-get update && apt-get install -y --no-install-recommends python3 libstdc++6 && rm -rf /var/lib/apt/lists/*
+          DOCKER
+          docker image inspect ears-watch-runtime --format '{{.Id}}' > .temp/sqlite-watch/image.txt
+          watch_node_binary=$(command -v node)
+          docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+            --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
+            -e GITHUB_SHA="$GITHUB_SHA" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$watch_node_binary:/runtime/node:ro" -v "$GITHUB_WORKSPACE/.temp/sqlite-watch:/results" \
+            ears-watch-runtime bash -euc '
+              if [ "$1" = sqlite-watch ]; then
+                python3 packages/apack-ears/bench/sqlite/run-watch.py /results/trials
+              elif [ "$1" = sqlite-admission-watch ]; then
+                python3 packages/apack-ears/bench/sqlite/run-watch.py /results/trials --admission
+              elif [ "$1" = sqlite-cold ]; then
+                python3 packages/apack-ears/bench/sqlite/run-cold.py /results/cold-reopen
+              else
+                for regime in burst sustained; do
+                  for mode in released retained; do
+                    timeout --kill-after=10s 180s node --experimental-strip-types \
+                      packages/apack-ears/bench/sqlite/wal-resources.mjs "$mode" "/results/wal-$regime-$mode.json" "$regime"
+                  done
+                done
+              fi
+            ' -- '${{ inputs.suite }}'
+      - name: Preserve every sustained workload outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-watch-${{ github.run_id }}
+          path: .temp/sqlite-watch
+          if-no-files-found: error
+  sqlite-bench:
+    if: ${{ inputs.suite == 'sqlite-bench' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        durability: ['off', 'full']
+    env:
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching benchmark runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm ci
+          npm run packages:build
+          npm run typecheck -w @apackdev/ears
+      - name: Sequential fresh-process backend trials under enforced limits
+        env:
+          BENCH_DURABILITY: ${{ matrix.durability }}
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-bench
+          git rev-parse HEAD > .temp/sqlite-bench/source.txt
+          docker build -t ears-bench-runtime - <<'DOCKER'
+          FROM ubuntu:24.04
+          RUN apt-get update && apt-get install -y --no-install-recommends python3 git libstdc++6 && rm -rf /var/lib/apt/lists/*
+          DOCKER
+          docker image inspect ears-bench-runtime --format '{{.Id}}' > .temp/sqlite-bench/image.txt
+          bench_node_binary=$(command -v node)
+          arguments=()
+          case "$BENCH_DURABILITY" in
+            off) ;;
+            full) arguments+=(--durable) ;;
+            *) echo 'Expected off or full benchmark durability'; exit 1 ;;
+          esac
+          docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+            --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
+            -e GITHUB_SHA="$GITHUB_SHA" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$bench_node_binary:/runtime/node:ro" -v "$GITHUB_WORKSPACE/.temp/sqlite-bench:/results" \
+            ears-bench-runtime bash .github/scripts/ears-bench-run.sh "${arguments[@]}"
+      - name: Retain all benchmark outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-bench-${{ matrix.durability }}-${{ github.run_id }}
+          path: .temp/sqlite-bench
+          if-no-files-found: error
+          retention-days: 14
+  sqlite-vector-dispatch:
+    if: ${{ inputs.suite == 'sqlite-vector-dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching driver and compile diagnostic artifacts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run typecheck -w @apackdev/ears
+          node_modules/.bin/oxlint packages/apack-ears/tests/sqlite/vector-cosine.spec.ts -D correctness
+          mkdir -p .temp/vector-dispatch
+          git rev-parse HEAD > .temp/vector-dispatch/source.txt
+          node native/vectors/build.mjs .temp/vector-dispatch/generic
+          node native/vectors/dispatch-build.mjs .temp/vector-dispatch/generic .temp/vector-dispatch/dispatch
+      - name: Verify actual selected backend and independent membership contracts
+        run: |
+          set -euo pipefail
+          for variant in generic dispatch; do
+            node native/vectors/membership-test.mjs ".temp/vector-dispatch/$variant/vec1.so" ".temp/vector-dispatch/$variant-membership.json"
+          done
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { createHash } from 'node:crypto';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { cpus } from 'node:os';
+          import Database from 'better-sqlite3';
+          const flags = new Set((readFileSync('/proc/cpuinfo', 'utf8').match(/^flags\s*:\s*(.+)$/m)?.[1] ?? '').split(/\s+/));
+          const report = { completed: false, source: process.env.GITHUB_SHA, node: process.version,
+            cpuModels: [...new Set(cpus().map(cpu => cpu.model))], avx2Exposed: flags.has('avx2'), variants: [],
+            scope: 'Build/runtime/membership diagnostic only; no latency, recall or unsupported-CPU qualification' };
+          try {
+            for (const variant of ['generic', 'dispatch']) {
+              const file = `.temp/vector-dispatch/${variant}/vec1.so`;
+              const db = new Database(':memory:');
+              try {
+                db.loadExtension(file);
+                const runtime = db.prepare('SELECT vec1_info() value').get().value;
+                report.variants.push({ variant, runtime, sha256: createHash('sha256').update(readFileSync(file)).digest('hex') });
+                assert(runtime.includes(variant === 'dispatch' && report.avx2Exposed ? '(AVX2,' : '(Scalar,'));
+                const membership = JSON.parse(readFileSync(`.temp/vector-dispatch/${variant}-membership.json`, 'utf8'));
+                assert.equal(membership.completed, true);
+                assert.equal(membership.groups.length, 15);
+                assert.equal(membership.groups.reduce((n, group) => n + group.checks, 0), 735);
+              } finally { db.close(); }
+            }
+            report.completed = true;
+          } catch (error) {
+            report.failure = { message: error?.message ?? String(error), stack: error?.stack };
+            throw error;
+          } finally {
+            writeFileSync('.temp/vector-dispatch/runtime.json', JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
+          }
+          JS
+      - name: Verify persisted trained models in both backend directions
+        run: |
+          node native/vectors/dispatch-model-test.mjs compare \
+            .temp/vector-dispatch/generic/vec1.so .temp/vector-dispatch/dispatch/vec1.so \
+            .temp/vector-dispatch/cross-backend-models.json
+      - name: Real EARS training worker ownership and checkpoint contracts
+        run: |
+          set -euo pipefail
+          for variant in generic dispatch; do
+            EARS_EVALUATION_BACKEND=sqlite EARS_VEC1_EXTENSION="$GITHUB_WORKSPACE/.temp/vector-dispatch/$variant/vec1.so" \
+              npm test -w @apackdev/ears -- tests/sqlite/vector-training.spec.ts tests/sqlite/vector-cosine.spec.ts --maxWorkers=2 \
+              --reporter=default --reporter=json --outputFile="../../.temp/vector-dispatch/$variant-training.json" \
+              2>&1 | tee ".temp/vector-dispatch/$variant-training.log"
+          done
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          for (const variant of ['generic', 'dispatch']) {
+            const report = JSON.parse(readFileSync(`.temp/vector-dispatch/${variant}-training.json`, 'utf8'));
+            assert.equal(report.numFailedTests, 0); assert.equal(report.numPendingTests, 0);
+            const file = report.testResults.find(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-training.spec.ts'));
+            assert(file?.assertionResults.length > 0);
+            for (const test of file.assertionResults) assert.equal(test.status, 'passed', test.fullName);
+            const cosine = report.testResults.find(file => file.name.replaceAll('\\', '/').endsWith('/tests/sqlite/vector-cosine.spec.ts'));
+            assert.equal(cosine?.assertionResults.length, 7);
+            for (const test of cosine.assertionResults) assert.equal(test.status, 'passed', test.fullName);
+            for (const syncs of [false, true]) assert(file.assertionResults.some(test => test.fullName.endsWith(
+              `keeps foreground writes live while a training snapshot pins WAL, then releases the checkpoint (${syncs} syncs)`)));
+          }
+          JS
+      - name: Compare existing cosine functions under bounded synthetic load
+        run: |
+          set -euo pipefail
+          docker pull ubuntu:24.04
+          docker image inspect ubuntu:24.04 --format '{{json .RepoDigests}}' > .temp/vector-dispatch/kernel-image.json
+          kernel_node_binary=$(command -v node)
+          docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+            --user "$(id -u):$(id -g)" --workdir /workspace -e GITHUB_SHA="$GITHUB_SHA" \
+            -v "$GITHUB_WORKSPACE:/workspace:ro" -v "$kernel_node_binary:/runtime/node:ro" \
+            -v "$GITHUB_WORKSPACE/.temp/vector-dispatch:/results" \
+            ubuntu:24.04 /runtime/node --experimental-strip-types native/vectors/distance-kernel.mjs compare \
+            .temp/vector-dispatch/generic/vec1.so .temp/vector-dispatch/dispatch/vec1.so \
+            /results/distance-kernel.json
+      - name: Preserve diagnostic source, commands and outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-vector-dispatch-${{ github.run_id }}
+          path: .temp/vector-dispatch
+          if-no-files-found: error
+          retention-days: 14
+  sqlite-corpus:
+    if: ${{ inputs.suite == 'sqlite-corpus' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ inputs.sqlite_vector_backend == 'paired-dispatch' && 60 || 30 }}
+    env:
+      SQLITE_VECTOR_BACKEND: ${{ inputs.sqlite_vector_backend || 'packaged' }}
+      SQLITE_VECTOR_MODE: ${{ inputs.sqlite_vector_models }}
+      SQLITE_NATIVE_CANDIDATE_FLOOR: ${{ inputs.sqlite_native_candidate_floor }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching hybrid runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CARGO_BUILD_JOBS: 2
+          npm_config_jobs: 2
+        run: |
+          set -euo pipefail
+          case "$SQLITE_VECTOR_BACKEND" in
+            packaged) ;;
+            paired-dispatch)
+              PYTHONDONTWRITEBYTECODE=1 python3 docs/references/evidence/ears-sqlite-implementation-2026-10-28/vector-pair-protocol/control.py
+              test "$SQLITE_VECTOR_MODE" = managed
+              test "$SQLITE_NATIVE_CANDIDATE_FLOOR" = production
+              ;;
+            *) exit 1 ;;
+          esac
+          npm ci
+          npm run packages:build
+          if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then
+            mkdir -p .temp/sqlite-corpus/native-build
+            node native/vectors/build.mjs .temp/sqlite-corpus/native-build/generic
+            node native/vectors/dispatch-build.mjs .temp/sqlite-corpus/native-build/generic .temp/sqlite-corpus/native-build/dispatch
+            node native/vectors/membership-test.mjs .temp/sqlite-corpus/native-build/dispatch/vec1.so .temp/sqlite-corpus/dispatch-membership.json
+            node native/vectors/dispatch-model-test.mjs compare \
+              .temp/sqlite-corpus/native-build/generic/vec1.so .temp/sqlite-corpus/native-build/dispatch/vec1.so \
+              .temp/sqlite-corpus/cross-backend-models.json
+          fi
+      - name: Query routing and replacement outcome safeguards
+        env:
+          EARS_EVALUATION_BACKEND: sqlite
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-corpus
+          git rev-parse HEAD > .temp/sqlite-corpus/source.txt
+          npm test -w @apackdev/ears -- tests/sqlite/vector-execution.spec.ts tests/sqlite/commit-outcomes.spec.ts tests/sqlite/text-scope.spec.ts tests/sqlite/hybrid-highlights.spec.ts \
+            --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.temp/sqlite-corpus/safeguards.json \
+            2>&1 | tee .temp/sqlite-corpus/safeguards.log
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('.temp/sqlite-corpus/safeguards.json', 'utf8'));
+          assert.equal(report.numFailedTests, 0); assert.equal(report.numPendingTests, 0);
+          for (const name of ['vector-execution.spec.ts', 'commit-outcomes.spec.ts', 'text-scope.spec.ts', 'hybrid-highlights.spec.ts']) {
+            const file = report.testResults.find(test => test.name.replaceAll('\\', '/').endsWith('/tests/sqlite/' + name));
+            assert(file?.assertionResults.length > 0, `Required safeguard file must execute: ${name}`);
+            for (const test of file.assertionResults) assert.equal(test.status, 'passed', test.fullName);
+          }
+          const names = report.testResults.flatMap(file => file.assertionResults.map(test => test.fullName));
+          for (const title of [
+            'uses posting estimates without reevaluating the candidate prefix and still scopes actual matches',
+            'stops a streaming eligibility scope at the chunk threshold and keeps limited, duplicate and empty scopes exact',
+            'refuses replacement before commit when closing its source fails',
+            'formats only final lexical winners while preserving global fusion scores, list highlights and scoped mixed-type answers',
+            'keeps deferred text details in the ranking snapshot when an independent writer commits between phases',
+          ]) assert(names.some(name => name.endsWith(title)), `Required safeguard must be collected: ${title}`);
+          JS
+      - name: Acquire and verify the full private paired corpus
+        env:
+          SQLITE_VECTOR_MODE: ${{ inputs.sqlite_vector_models }}
+          SQLITE_NATIVE_CANDIDATE_FLOOR: ${{ inputs.sqlite_native_candidate_floor }}
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-corpus
+          git rev-parse HEAD > .temp/sqlite-corpus/source.txt
+          private_fixture=$(mktemp -d "$RUNNER_TEMP/ears-private-corpus-XXXXXX")
+          cleanup_fixture() {
+            fixture_exit_code=$?
+            if rm -rf "$private_fixture" && test ! -e "$private_fixture"; then
+              echo '{"privateScratchRemoved":true}' > .temp/sqlite-corpus/cleanup.json
+            else
+              echo '{"privateScratchRemoved":false}' > .temp/sqlite-corpus/cleanup.json
+              fixture_exit_code=1
+            fi
+            return "$fixture_exit_code"
+          }
+          trap cleanup_fixture EXIT
+          docker pull python:3.12-slim
+          docker image inspect python:3.12-slim --format '{{json .RepoDigests}}' > .temp/sqlite-corpus/image.json
+          docker run --rm --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL --user "$(id -u):$(id -g)" \
+            -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "$GITHUB_WORKSPACE/packages/apack-ears/bench/sqlite:/recipe:ro" \
+            -v "$GITHUB_WORKSPACE/.temp/sqlite-corpus:/results" -v "$private_fixture:/private" \
+            python:3.12-slim sh -ec '
+              python -m pip install --no-cache-dir --target /private/tools pyarrow==26.0.0 numpy==2.5.4 > /results/install.log 2>&1
+              PYTHONPATH=/private/tools python /recipe/acquire-real-vectors.py --with-text --output /private/corpus > /results/acquire.log 2>&1
+              python /recipe/qualify-real-corpus.py --corpus /private/corpus --output /results/qualification.json
+              PYTHONPATH=/private/tools python /recipe/hybrid-vector-oracle.py --corpus /private/corpus --output /private/corpus/hybrid-vector-truth.json
+              cp /private/corpus/manifest.json /results/corpus-manifest.json
+            '
+          # The same matching Node binary/dependencies run read-only under explicit workload limits.
+          hybrid_node_binary=$(node -p 'process.execPath')
+          docker pull ubuntu:24.04
+          docker image inspect ubuntu:24.04 --format '{{json .RepoDigests}}' > .temp/sqlite-corpus/node-image.json
+          mkdir -p "$private_fixture/runtime"
+          variants=(packaged)
+          if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then variants=(generic dispatch); fi
+          if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then
+            for variant in "${variants[@]}"; do
+              mkdir -p ".temp/sqlite-corpus/$variant"
+              cp .temp/sqlite-corpus/corpus-manifest.json ".temp/sqlite-corpus/$variant/corpus-manifest.json"
+            done
+          fi
+          for size in 1000 10000 99900; do
+            # Reverse the middle pair; cache/model variance remains explicitly uncontrolled.
+            if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then
+              variants=(generic dispatch)
+              if test "$size" = 10000; then variants=(dispatch generic); fi
+            fi
+            for variant in "${variants[@]}"; do
+              extension=packaged
+              result_path=/results
+              if test "$variant" != packaged; then result_path=/results/$variant; fi
+              if test "$variant" = dispatch; then extension=/workspace/.temp/sqlite-corpus/native-build/dispatch; fi
+              docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+                --user "$(id -u):$(id -g)" --workdir /workspace \
+                -e GITHUB_SHA="$GITHUB_SHA" -e GITHUB_RUN_ID="$GITHUB_RUN_ID" -e TMPDIR=/private/runtime \
+                -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 \
+                -v "$GITHUB_WORKSPACE:/workspace:ro" -v "$hybrid_node_binary:/runtime/node:ro" \
+                -v "$private_fixture:/private" -v "$GITHUB_WORKSPACE/.temp/sqlite-corpus:/results" \
+                ubuntu:24.04 /runtime/node --import tsx packages/apack-ears/bench/sqlite/real-hybrid.mjs \
+                /private/corpus "$result_path/hybrid-$size.json" "$size" "$SQLITE_VECTOR_MODE" "$SQLITE_NATIVE_CANDIDATE_FLOOR" "$extension"
+            done
+          done
+          qualification_status=0
+          for variant in "${variants[@]}"; do
+            result_directory=.temp/sqlite-corpus
+            if test "$variant" != packaged; then result_directory=$result_directory/$variant; fi
+            python3 packages/apack-ears/bench/sqlite/qualify-real-hybrid.py --results "$result_directory" \
+              --source "$GITHUB_SHA" --output "$result_directory/hybrid-matrix.json" || qualification_status=1
+          done
+          if test "$SQLITE_VECTOR_BACKEND" = paired-dispatch; then
+            python3 packages/apack-ears/bench/sqlite/compare-vector-builds.py --results .temp/sqlite-corpus \
+              --source "$GITHUB_SHA" --output .temp/sqlite-corpus/vector-build-comparison.json || qualification_status=1
+          fi
+          exit "$qualification_status"
+
+      - name: Retain metadata receipts only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-corpus-${{ github.run_id }}
+          path: |
+            .temp/sqlite-corpus
+            !.temp/sqlite-corpus/native-build/**/*.c
+            !.temp/sqlite-corpus/native-build/**/*.o
+            !.temp/sqlite-corpus/native-build/**/*.so
+          if-no-files-found: error
+          retention-days: 14
+  sqlite-relevance:
+    if: ${{ inputs.suite == 'sqlite-relevance' || (inputs.suite == 'sqlite-corpus' && inputs.sqlite_native_candidate_floor == 'production') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching backend runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          npm ci
+          npm run packages:build
+      - name: Local inference and original app judgments on both backends
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-relevance
+          git rev-parse HEAD > .temp/sqlite-relevance/source.txt
+          private_relevance=$(mktemp -d "$RUNNER_TEMP/ears-private-relevance-XXXXXX")
+          trap 'rm -rf "$private_relevance"' EXIT
+          docker pull python:3.12-slim
+          docker image inspect python:3.12-slim --format '{{json .RepoDigests}}' > .temp/sqlite-relevance/image.json
+          docker run --rm --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL --user "$(id -u):$(id -g)" \
+            -e OPENBLAS_NUM_THREADS=1 -e OMP_NUM_THREADS=1 -e PYTHONDONTWRITEBYTECODE=1 \
+            -v "$GITHUB_WORKSPACE/packages/apack-ears/bench/sqlite:/recipe:ro" \
+            -v "$GITHUB_WORKSPACE/packages/apack-ears/tests/fixtures/real-search-relevance.json:/fixture.json:ro" \
+            -v "$GITHUB_WORKSPACE/.temp/sqlite-relevance:/results" -v "$private_relevance:/private" \
+            python:3.12-slim sh -ec '
+              python -m pip install --no-cache-dir --no-deps --target /private/tools -r /recipe/relevance-runtime.txt > /results/install.log 2>&1
+              PYTHONPATH=/private/tools python /recipe/embed-app-relevance.py --fixture /fixture.json --output /private/vectors --receipt /results/model.json
+            '
+          failed=0
+          for backend in elmdb sqlite; do
+            if ! node --import tsx packages/apack-ears/bench/sqlite/app-hybrid-relevance.mjs \
+              packages/apack-ears/tests/fixtures/real-search-relevance.json "$private_relevance/vectors/vectors.json" \
+              ".temp/sqlite-relevance/$backend.json" "$backend"; then failed=1; fi
+          done
+          if ! python3 packages/apack-ears/bench/sqlite/qualify-app-relevance.py \
+            --fixture packages/apack-ears/tests/fixtures/real-search-relevance.json --results .temp/sqlite-relevance \
+            --source "$GITHUB_SHA" --output .temp/sqlite-relevance/judgments.json; then failed=1; fi
+          rm -rf "$private_relevance"
+          test ! -e "$private_relevance"
+          trap - EXIT
+          echo '{"privateScratchRemoved":true}' > .temp/sqlite-relevance/cleanup.json
+          exit "$failed"
+      - name: Evaluate explicit English text stemming without changing the frozen gate
+        run: |
+          set -euo pipefail
+          node --import tsx packages/apack-ears/bench/sqlite/app-text-language.mjs \
+            packages/apack-ears/tests/fixtures/real-search-relevance.json .temp/sqlite-relevance/text-language.json
+          python3 packages/apack-ears/bench/sqlite/qualify-text-language.py \
+            --fixture packages/apack-ears/tests/fixtures/real-search-relevance.json \
+            --report .temp/sqlite-relevance/text-language.json --source "$GITHUB_SHA" \
+            --output .temp/sqlite-relevance/text-language-receipt.json
+      - name: Retain metadata and numeric judgments only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-app-hybrid-relevance-${{ github.run_id }}
+          path: .temp/sqlite-relevance
+          if-no-files-found: error
+          retention-days: 14
+  sqlite-model-windows:
+    if: ${{ inputs.suite == 'sqlite-model-windows' }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+      EARS_EVALUATION_BACKEND: sqlite
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Prepare matching real model runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-model-windows
+          git rev-parse HEAD > .temp/sqlite-model-windows/source.txt
+          cp vendor/elmdb.rev .temp/sqlite-model-windows/elmdb.rev
+          npm ci
+          npm run packages:build
+          npm run typecheck -w @apackdev/ears
+      - name: Unchanged real SQLite model and watch workloads
+        run: |
+          set -o pipefail
+          npm test -w @apackdev/ears -- tests/engine/model-based.spec.ts --maxWorkers=2 \
+            --reporter=default --reporter=json --outputFile=../../.temp/sqlite-model-windows/report.json \
+            2>&1 | tee .temp/sqlite-model-windows/model.log
+      - name: Require actual backend and both complete model cases
+        if: ${{ !cancelled() }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          const report=JSON.parse(readFileSync('.temp/sqlite-model-windows/report.json','utf8'));
+          const cases=report.testResults.flatMap(file=>file.assertionResults);
+          const required=['runs the model against the selected real backend and independent empty stores',
+            'refuses, holds and answers what the model does',
+            'keeps every watch at what its read answers afresh, after every write, whatever wrote'];
+          assert(cases.length>=required.length);
+          assert.equal(new Set(cases.map(test=>test.fullName)).size,cases.length);
+          for(const name of required)assert(cases.some(test=>test.fullName===name&&test.status==='passed'),name);
+          for(const test of cases)assert.equal(test.status,'passed',test.fullName);
+          assert.equal(report.numFailedTests,0);assert.equal(report.numPendingTests,0);
+          const paths=['packages/apack-ears/tests/engine/model-based.spec.ts','packages/apack-ears/tests/_harness/model.ts','packages/apack-ears/tests/_harness/workload.ts','packages/apack-ears/vitest.config.ts','package-lock.json'];
+          writeFileSync('.temp/sqlite-model-windows/receipt.json',JSON.stringify({source:process.env.GITHUB_SHA,
+            node:process.version,platform:process.platform,arch:process.arch,
+            inputs:Object.fromEntries(paths.map(path=>[path,createHash('sha256').update(readFileSync(path)).digest('hex')])),
+            cases:cases.map(test=>({name:test.fullName,status:test.status,durationMs:test.duration})),
+            scope:'Original 120 random and 40 watch workloads; unchanged 30s per-test deadline; isolated Windows verification does not replace full-suite concurrency acceptance'},null,2)+'\n');
+          JS
+      - name: Preserve complete focused model outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-model-windows-${{ github.run_id }}
+          path: .temp/sqlite-model-windows
+          if-no-files-found: error
+          retention-days: 14
+  sqlite-api:
+    if: ${{ inputs.suite == 'sqlite-api' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      APACK_CHAIN_CORES: 2
+      CARGO_BUILD_JOBS: 2
+      npm_config_jobs: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - uses: ./.github/actions/elmdb
+      - name: Install matching dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+      - name: Regenerate EARS API from matching published packages
+        run: |
+          set -o pipefail
+          mkdir -p .temp/sqlite-api
+          git rev-parse HEAD > .temp/sqlite-api/source.txt
+          cp vendor/elmdb.rev .temp/sqlite-api/elmdb.rev
+          npm run packages:build 2>&1 | tee .temp/sqlite-api/packages.log
+          node native/graphs/probe.mjs packages/apack-ears/dist/sqlite/graph .temp/sqlite-api/graph-report.json 2>&1 | tee .temp/sqlite-api/graph-probe.log
+          npm run api:update -w @apackdev/ears 2>&1 | tee .temp/sqlite-api/update.log
+          npm run api:check -w @apackdev/ears 2>&1 | tee .temp/sqlite-api/check.log
+          git diff -- packages/apack-ears/etc > .temp/sqlite-api/reports.patch
+      - name: Ready native routing boundary and unit visibility
+        run: |
+          set -euo pipefail
+          native_extension=$(node --import tsx --input-type=module -e "import {resolveNativeVectorExtension} from './packages/apack-ears/src/sqlite/native-extension.ts'; console.log(resolveNativeVectorExtension())")
+          EARS_EVALUATION_BACKEND=sqlite EARS_VEC1_EXTENSION="$native_extension" npm test -w @apackdev/ears -- tests/sqlite/vector-models.spec.ts \
+            -t 'routes real EARS queries through ready native candidates' --maxWorkers 2 \
+            --reporter=default --reporter=json --outputFile=../../.temp/sqlite-api/native-routing.json \
+            2>&1 | tee .temp/sqlite-api/native-routing.log
+          node --input-type=module -e "import assert from 'node:assert/strict'; import {readFileSync} from 'node:fs'; const report=JSON.parse(readFileSync('.temp/sqlite-api/native-routing.json','utf8')); assert.equal(report.numPassedTests,1); assert.equal(report.numFailedTests,0)"
+      - name: Real persisted WAL commit before application acknowledgement
+        run: >-
+          python3 packages/apack-ears/bench/sqlite/lost-ack.py
+          --output .temp/sqlite-api/lost-ack
+      - name: Error returned after real WAL sync then killed without connection cleanup
+        run: >-
+          python3 packages/apack-ears/bench/sqlite/lost-ack.py --return-sync-error
+          --output .temp/sqlite-api/sync-error-no-close
+      - name: Integration subprocess and build-input ownership
+        run: >-
+          npm test -w @app/repo-checks -- tests/subprocess-inventory.spec.ts tests/chain-inputs.spec.ts --maxWorkers 2
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-api/subprocess-inventory.json
+          2>&1 | tee .temp/sqlite-api/subprocess-inventory.log
+      - name: Typecheck candidate source and contract tests
+        run: |
+          npm run typecheck -w @apackdev/ears
+          node_modules/.bin/oxlint packages/apack-ears/src/sqlite/database.ts \
+            packages/apack-ears/tests/sqlite/relation-audit.spec.ts native/vectors/distance-kernel.mjs -D correctness
+      - name: Real native worker read error refuses publication and permits retry
+        run: |
+          set -euo pipefail
+          mkdir -p .temp/sqlite-api/worker-read-fault
+          cc -shared -fPIC -O2 -Wall -Wextra -Werror packages/apack-ears/bench/sqlite/worker-read-fault.c \
+            -o .temp/sqlite-api/worker-read-fault/worker-read-fault.so
+          native_extension=$(node --import tsx --input-type=module -e "import {resolveNativeVectorExtension} from './packages/apack-ears/src/sqlite/native-extension.ts'; console.log(resolveNativeVectorExtension())")
+          for phase in header embedding-page; do
+            EARS_VEC1_EXTENSION="$native_extension" node --import tsx scripts/bounded.ts scenario env \
+              LD_PRELOAD="$PWD/.temp/sqlite-api/worker-read-fault/worker-read-fault.so" \
+              node --experimental-strip-types packages/apack-ears/bench/sqlite/worker-read-fault.mjs \
+              ".temp/sqlite-api/worker-read-fault/$phase.json" "$phase"
+          done
+      - name: Actual history-open policy after a metadata-page read fault
+        run: |
+          node --import tsx scripts/bounded.ts scenario env \
+            LD_PRELOAD="$PWD/.temp/sqlite-api/worker-read-fault/worker-read-fault.so" \
+            node --import tsx packages/apack-ears/bench/sqlite/history-read-fault.mjs \
+            .temp/sqlite-api/worker-read-fault/history.json
+      - name: History refusal and quarantine publication contracts
+        run: >-
+          npm test -w @apackdev/host -- tests/database/storage.spec.ts
+          tests/database/quarantine-publication.spec.ts --maxWorkers 2
+          --reporter=default --reporter=json --outputFile=../../.temp/sqlite-api/history-policy.json
+      - name: Native adapter readiness observes builder status
+        run: >-
+          npm test -w @apackdev/ears -- tests/lmdb/index-readiness.spec.ts
+          --maxWorkers 2 --reporter=default --reporter=json
+          --outputFile=../../.temp/sqlite-api/native-index-readiness.json
+      - name: Hit projection regressions reject the previous execution and dependency paths
+        run: node --import tsx .github/scripts/ears-hit-projection-control.mjs
+      - name: Scoped pack readiness and lifecycle contracts
+        run: >-
+          npm test -w @apackdev/host -- tests/packs/registration.spec.ts
+          tests/packs/runtime/lifecycle.spec.ts tests/packs/runtime/reload.spec.ts
+          --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.temp/sqlite-api/pack-readiness.json
+          2>&1 | tee .temp/sqlite-api/pack-readiness.log
+      - name: Focused shared graph, observation and search contracts on both backends
+        run: |
+          set -o pipefail
+          files=(tests/no-module-state.spec.ts tests/watch-causes.spec.ts
+                 tests/engine/relations.spec.ts tests/engine/writes.spec.ts tests/engine/graph-similarity.spec.ts
+                 tests/engine/sqlite-operations.spec.ts tests/sqlite/graph-execution.spec.ts
+                 tests/sqlite/query-cost.spec.ts
+                 tests/sqlite/elmdb-conversion.spec.ts
+                 tests/engine/vector.spec.ts
+                 tests/engine/observation.spec.ts tests/engine/search-relevance.spec.ts
+                 tests/engine/watch.spec.ts tests/engine/model-based.spec.ts
+                 tests/sqlite/index-builds.spec.ts
+                 tests/sqlite/schema-validation.spec.ts
+                 tests/sqlite/values.spec.ts
+                 tests/sqlite/vector-execution.spec.ts
+                 tests/sqlite/vector-candidates.spec.ts
+                 tests/sqlite/text-scope.spec.ts
+                 tests/sqlite/hybrid-highlights.spec.ts
+                 tests/sqlite/relation-identity.spec.ts
+                 tests/sqlite/relation-audit.spec.ts
+                 tests/sqlite/read-tracking.spec.ts
+                 tests/sqlite/commit-outcomes.spec.ts
+                 tests/engine/search.spec.ts
+                 tests/sqlite/logical-export.spec.ts
+                 tests/sqlite/logical-restore.spec.ts
+                 tests/engine/search-languages.spec.ts
+                 tests/engine/real-search-relevance.spec.ts)
+          failed=0
+          for backend in elmdb sqlite; do
+            if ! EARS_EVALUATION_BACKEND="$backend" npm test -w @apackdev/ears -- "${files[@]}" --maxWorkers 2 --reporter=default --reporter=json --outputFile="../../.temp/sqlite-api/$backend-contracts.json" 2>&1 | tee ".temp/sqlite-api/$backend-contracts.log"; then
+              failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Require real backend model and relation key witnesses
+        id: relation_witnesses
+        if: ${{ !cancelled() }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const summary=[];
+          const packReadiness=JSON.parse(readFileSync('.temp/sqlite-api/pack-readiness.json','utf8'));
+          assert.equal(packReadiness.numFailedTests,0,'Pack readiness/admission contracts must pass before model qualification');
+          const packCases=packReadiness.testResults.flatMap(file=>file.assertionResults);
+          for(const name of ['installed runtime acceptance restores files and preserves generated settings authority after binding refusal',
+            'installed runtime acceptance restores files and preserves generated settings authority after schema refusal',
+            'installed runtime acceptance refuses registration inside a real write unit without losing staged writes (elmdb/1)',
+            'installed runtime acceptance refuses registration inside a real write unit without losing staged writes (sqlite/1)']) {
+            const found=packCases.filter(test=>test.fullName===name);
+            assert.equal(found.length,1,`Missing or duplicate pack admission witness: ${name}`);
+            assert.equal(found[0].status,'passed',name);
+          }
+          const shared=[
+            'runs the model against the selected real backend and independent empty stores',
+            'links treats null optional relation info as omitted, preserving an existing keyed value',
+            'links keeps keyed bytes, lists and own map fields distinct, and refuses scalar keyed info atomically',
+            'links a keyed kind joins two ends by one edge per value of its key, a field the info lacks being null',
+            'links uses string-keyed Maps as relation info and preserves distinct nested map keys',
+            'links refuses invalid relation info values before changing an edge or its commit identity',
+            'attribute writes stores string-keyed Map attributes as own-field objects and refuses invalid nested maps atomically',
+          ];
+          for(const backend of ['elmdb','sqlite']) {
+            const report=JSON.parse(readFileSync(`.temp/sqlite-api/${backend}-contracts.json`,'utf8'));
+            const cases=report.testResults.flatMap(file=>file.assertionResults);
+            if(backend==='sqlite') {
+              const files=report.testResults.filter(file=>file.name.replaceAll('\\','/').endsWith('/tests/sqlite/query-cost.spec.ts'));
+              assert.equal(files.length,1,'The full query-cost file must execute once');
+              const costs=files[0].assertionResults;
+              assert(costs.length>=28&&new Set(costs.map(test=>test.fullName)).size===costs.length,'All unique cost cases must execute');
+              for(const test of costs)assert.equal(test.status,'passed',test.fullName);
+              for(const name of ['SQLite ordering work uses keyed sort-value reads for a single type (inline)',
+                'SQLite ordering work uses keyed sort-value reads for a single type (overflow)',
+                'SQLite ordering work uses a traversed single type without leaking a seed type into mixed or untyped ordering'])
+                assert.equal(costs.filter(test=>test.fullName===name).length,1,`Missing cost witness: ${name}`);
+            }
+            const required=[...shared,...(backend==='sqlite'?[
+              'yielding value-index admission admits a healthy type despite an unrelated failed retained index while global readiness still refuses',
+              'yielding value-index admission rejects scoped readiness when its admitted generation is retired instead of accepting its replacement',
+              'yielding value-index admission keeps closed and open-unit refusals even for an empty readiness scope',
+              "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('null')",
+              "SQLite commit outcome handling refuses malformed commit metadata without overwriting it ('numeric text')",
+              'SQLite commit outcome handling commits the last representable identity then refuses further writes without data or watch changes',
+              'SQLite commit outcome handling rolls back schema when the commit identity is exhausted',
+              'SQLite commit outcome handling rolls back bulkLoad when the commit identity is exhausted',
+              'SQLite commit outcome handling admits the last schema revision then refuses declaration and rebuild without rounding it',
+              'restored logical stores audits unchecked duplicate edge identities and invalid keyed info without repairing them',
+              'native text pipeline scopes uses posting estimates without reevaluating the candidate prefix and still scopes actual matches',
+              'hybrid winner highlights formats only final lexical winners while preserving global fusion scores, list highlights and scoped mixed-type answers',
+              'hybrid winner highlights keeps deferred text details in the ranking snapshot when an independent writer commits between phases',
+              'SQLite relation identity work stops at a matching key and releases its cursor before mutation, refusal and exhaustion',
+              'SQLite relation audit grouping groups distinct keys on disk and compares only colliding fingerprints without changing source data',
+              'SQLite relation audit grouping checks existing equality after forced fingerprint collisions instead of inventing duplicates',
+              'SQLite relation audit grouping closes and removes a failed private identity spool while preserving the original error and writable source',
+              'SQLite relation audit grouping buckets persisted key values consistently with existing equality and skips nonreflexive decoded keys',
+              'SQLite authoritative attribute layout projects a single-field page in one SQL call and patches a scalar without reading or encoding its large neighbors',
+              'SQLite authoritative attribute layout projects each lossless kind with ordered duplicates, absent rows and fresh composite ownership',
+              'SQLite authoritative attribute layout reopens existing layouts read-only and diagnoses missing or duplicate authoritative values',
+              'SQLite structural schema admission accepts the empty maintained-rank map serialized by the current native schema',
+              "SQLite structural schema admission refuses 'named rank index' before changing data, layouts, indexes or revision",
+              'SQLite graph execution batches a width-16 frontier and closes an early-return cursor before the next write',
+              'SQLite graph execution batches a width-256 frontier and closes an early-return cursor before the next write',
+              ...['obsolete relation unique','duplicate relation key','invalid relation key name','non-map relation key'].map(name=>`SQLite structural schema admission refuses '${name}' before changing data, layouts, indexes or revision`),
+            ]:[])];
+            for(const name of required) {
+              const found=cases.filter(test=>test.fullName===name);
+              assert.equal(found.length,1,`${backend}: missing or duplicated witness: ${name}`);
+              assert.equal(found[0].status,'passed',`${backend}: ${name}`);
+            }
+            const model=report.testResults.filter(file=>file.name.replaceAll('\\','/').endsWith('/tests/engine/model-based.spec.ts')).flatMap(file=>file.assertionResults);
+            assert(model.length>=3,`${backend}: model cases must execute`);
+            for(const test of model)assert.equal(test.status,'passed',`${backend}: ${test.fullName}`);
+            summary.push({backend,required,modelCases:model.map(test=>test.fullName),passed:true});
+          }
+          writeFileSync('.temp/sqlite-api/relation-model-witnesses.json',JSON.stringify(summary,null,2)+'\n');
+          JS
+      - name: Record the trusted native vector CPU backend
+        if: ${{ !cancelled() && steps.relation_witnesses.outcome == 'success' }}
+        run: node native/vectors/runtime-info.mjs .temp/sqlite-api/vector-runtime-info.json
+      - name: High-multiplicity audit resources from the built package
+        id: audit_resources
+        if: ${{ !cancelled() && steps.relation_witnesses.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          docker build -t ears-audit-runtime - <<'DOCKER'
+          FROM ubuntu:24.04
+          RUN apt-get update && apt-get install -y --no-install-recommends python3 git libstdc++6 && rm -rf /var/lib/apt/lists/*
+          DOCKER
+          docker image inspect ears-audit-runtime --format '{{.Id}}' > .temp/sqlite-api/audit-image.txt
+          audit_node_binary=$(command -v node)
+          docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+            --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
+            -e GITHUB_SHA="$GITHUB_SHA" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+            -v "$audit_node_binary:/runtime/node:ro" -v "$GITHUB_WORKSPACE/.temp/sqlite-api:/results" \
+            ears-audit-runtime /runtime/node --experimental-strip-types \
+            packages/apack-ears/bench/sqlite/relation-audit-resources.mjs /results/relation-audit-resources.json \
+            2>&1 | tee .temp/sqlite-api/relation-audit-resources.log
+      - name: Chunk-skew vector resources from the built package
+        if: ${{ !cancelled() && steps.audit_resources.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          vector_node_binary=$(command -v node)
+          for chunks in 1 1024 16384; do
+            docker run --rm --network none --cpus 2 --memory 6g --memory-swap 6g --cap-drop ALL \
+              --user "$(id -u):$(id -g)" --workdir /workspace -e PATH=/runtime:/usr/bin:/bin \
+              -e GITHUB_SHA="$GITHUB_SHA" -v "$GITHUB_WORKSPACE:/workspace:ro" \
+              -v "$vector_node_binary:/runtime/node:ro" -v "$GITHUB_WORKSPACE/.temp/sqlite-api:/results" \
+              ears-audit-runtime /runtime/node --expose-gc --experimental-strip-types \
+              packages/apack-ears/bench/sqlite/vector-owner-resources.mjs "$chunks" "/results/vector-owner-$chunks.json" \
+              2>&1 | tee ".temp/sqlite-api/vector-owner-$chunks.log"
+          done
+      - name: Require all declared real-content relevance judgments
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const fixture=JSON.parse(readFileSync('packages/apack-ears/tests/fixtures/real-search-relevance.json','utf8'));
+          for(const backend of ['elmdb','sqlite']) {
+            const report=JSON.parse(readFileSync(`.temp/sqlite-api/${backend}-contracts.json`,'utf8'));
+            const cases=report.testResults.flatMap(file=>file.name.replaceAll('\\','/').endsWith('/tests/engine/real-search-relevance.spec.ts')?file.assertionResults:[]);
+            assert.equal(cases.length,fixture.cases.length);
+            for(const expected of fixture.cases) assert(cases.some(test=>test.fullName.endsWith(expected.name)&&test.status==='passed'),`${backend}: ${expected.name}`);
+          }
+          JS
+      - name: Build matching producer for copied-profile conversion regression
+        if: ${{ !cancelled() }}
+        working-directory: vendor/elmdb
+        run: cargo build --locked --release -p elmdb-cli
+      - name: Copied-profile conversion and host reopen regression
+        if: ${{ !cancelled() }}
+        env:
+          EARS_TEST_SOURCE: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          node scripts/with-source.mjs node --import tsx tests/scripts/test-sqlite-profile-conversion.ts \
+            vendor/elmdb/target/release/elmdb .temp/sqlite-api/profile-conversion.json \
+            2>&1 | tee .temp/sqlite-api/profile-conversion.log
+      - name: Preserve generated reports for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-api-${{ github.run_id }}
+          path: |
+            .temp/sqlite-api
+            packages/apack-ears/etc
+          if-no-files-found: error
+          retention-days: 14
   check:
-    runs-on: macos-26
+    if: ${{ inputs.suite != 'sqlite' && inputs.suite != 'sqlite-admission' && inputs.suite != 'sqlite-bench' && inputs.suite != 'sqlite-watch' && inputs.suite != 'sqlite-admission-watch' && inputs.suite != 'sqlite-wal' && inputs.suite != 'sqlite-cold' && inputs.suite != 'sqlite-model-windows' && inputs.suite != 'sqlite-api' && inputs.suite != 'sqlite-corpus' && inputs.suite != 'sqlite-relevance' && inputs.suite != 'sqlite-graph-wasm' && inputs.suite != 'sqlite-vector-dispatch' && inputs.suite != 'activation-profile' && inputs.suite != 'windows-durability' && inputs.suite != 'installed-platform' }}
+    runs-on: ${{ inputs.suite == 'host-windows' && 'windows-latest' || 'macos-26' }}
     # Includes the cold builds, fork producer, app suites and bounded source-dev scenario.
     timeout-minutes: 45
     env:
       APACK_CHAIN_CORES: 2
+      APACK_E2E_REPEAT: ${{ inputs.repeat_each }}
+      APACK_STORAGE_FORMAT: ${{ inputs.storage_format || 'elmdb/1' }}
     defaults:
       run:
         shell: bash
@@ -46,12 +1050,30 @@ jobs:
           cache: npm
       - name: Record source
         run: git rev-parse HEAD
+      - name: Prepare app-flow evidence
+        if: ${{ inputs.suite == 'sqlite-app-flows' }}
+        run: |
+          mkdir -p .apack/performance/sqlite-evaluation
+          git rev-parse HEAD > .apack/performance/sqlite-evaluation/source.txt
+      - name: Validate storage selection
+        run: |
+          case "$APACK_STORAGE_FORMAT" in
+            elmdb/1|sqlite/1) printf 'Isolated app storage: %s\n' "$APACK_STORAGE_FORMAT" ;;
+            *) echo 'Expected elmdb/1 or sqlite/1'; exit 1 ;;
+          esac
+      - name: Validate repetition count
+        run: |
+          repeat_pattern='^([1-9]|1[0-9]|20)$'
+          if [[ ! "$APACK_E2E_REPEAT" =~ $repeat_pattern ]]; then
+            echo 'repeat_each must be an integer from 1 to 20'; exit 1
+          fi
       - uses: ./.github/actions/elmdb
       - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
       - name: Build shipped pack
+        if: ${{ inputs.suite != 'host-windows' && !startsWith(inputs.suite, 'installed') }}
         env:
           APACK_ACCEPTANCE_SUITE: ${{ inputs.suite }}
         run: |
@@ -63,10 +1085,192 @@ jobs:
             npm run build:default-setup
           fi
       - name: Build app runtime
-        if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' }}
+        if: ${{ inputs.suite != 'build' && inputs.suite != 'integration' && inputs.suite != 'host-windows' && !startsWith(inputs.suite, 'installed') }}
         id: runtime
         # The renderer leg's heap ceiling is declared on the leg (RUNTIME_BUILD_LEGS).
         run: npm run build:runtime -- --cores 2
+      - name: Verify app performance storage provenance and types
+        if: ${{ inputs.suite == 'sqlite-app-flows' || inputs.suite == 'sqlite-startup' }}
+        run: |
+          npm run typecheck:scripts
+          node_modules/.bin/tsc -p tests --noEmit --incremental false
+          npm test -w @app/repo-checks -- tests/performance-qualification.spec.ts --maxWorkers 2
+      - name: Existing real application performance scenarios on both stores
+        if: ${{ inputs.suite == 'sqlite-app-flows' }}
+        run: |
+          set -euo pipefail
+          export APACK_PERFORMANCE_MODE=lightweight APACK_PERFORMANCE_TRIALS=20
+          export APACK_PERFORMANCE_MACHINE_ID="github-app-flows-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          unset APACK_HOST_EXECUTABLE E2E_DATA_DIR APACK_PERFORMANCE_COMPARE_MODE APACK_PERFORMANCE_GATE
+          for scenario in thread-open search streaming; do
+            for storage in elmdb/1 sqlite/1; do
+              name="${storage%%/*}-$scenario"
+              export APACK_STORAGE_FORMAT="$storage" APACK_PERFORMANCE_SCENARIO="$scenario"
+              export APACK_PERFORMANCE_RUN_OUTPUT="$GITHUB_WORKSPACE/.apack/performance/sqlite-evaluation/$name"
+              export PLAYWRIGHT_JSON_OUTPUT_NAME="$GITHUB_WORKSPACE/.apack/tests/results/app-flows-$name.json"
+              node scripts/with-source.mjs node_modules/.bin/playwright test --config tests/performance/playwright.config.ts --workers 1 --reporter=line,json
+              node scripts/with-source.mjs node --import tsx --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { writeFileSync } from 'node:fs';
+          import { readPerformanceRun } from '@apackdev/testing/performance';
+          const run = readPerformanceRun(process.env.APACK_PERFORMANCE_RUN_OUTPUT, 20);
+          assert.equal(run.manifest.runtime.storageFormat, process.env.APACK_STORAGE_FORMAT);
+          assert.equal(run.scenario, process.env.APACK_PERFORMANCE_SCENARIO);
+          assert.equal(run.manifest.source.dirty, false);
+          assert.equal(run.manifest.native.dirty, false);
+          writeFileSync(process.env.APACK_PERFORMANCE_RUN_OUTPUT + '/admission.json', JSON.stringify({ completed: true,
+            scope: 'Single warm process per backend/scenario on one macOS runner; not independent-device variance, corpus recall or the 2 CPU Linux budget gate',
+            source: run.manifest.source.revision, storageFormat: run.manifest.runtime.storageFormat,
+            scenario: run.scenario, summary: run.summary, machine: run.manifest.machine }, null, 2) + '\n');
+          JS
+            done
+          done
+      - name: Existing populated startup controller on both actual stores
+        if: ${{ inputs.suite == 'sqlite-startup' }}
+        env:
+          APACK_PERFORMANCE_MODE: ${{ inputs.sqlite_startup_mode }}
+        run: |
+          set -euo pipefail
+          export APACK_PERFORMANCE_TRIALS=20
+          export APACK_PERFORMANCE_MACHINE_ID="github-startup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          unset APACK_HOST_EXECUTABLE E2E_DATA_DIR APACK_PERFORMANCE_COMPARE_MODE APACK_PERFORMANCE_GATE
+          # Qualify both orderings explicitly; the selected store runs its whole cohort first.
+          if [[ "$APACK_STORAGE_FORMAT" == sqlite/1 ]]; then
+            storage_order=(sqlite/1 elmdb/1)
+          else
+            storage_order=(elmdb/1 sqlite/1)
+          fi
+          export APACK_STARTUP_STORAGE_ORDER="${storage_order[*]}"
+          for storage in "${storage_order[@]}"; do
+            export APACK_STORAGE_FORMAT="$storage" APACK_PERFORMANCE_SCENARIO=populated-startup
+            export APACK_PERFORMANCE_RUN_OUTPUT="$GITHUB_WORKSPACE/.apack/performance/sqlite-evaluation/${storage%%/*}-populated-startup"
+            node scripts/with-source.mjs node --import tsx tests/performance/startup-run.ts
+            node scripts/with-source.mjs node --import tsx --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { writeFileSync } from 'node:fs';
+          import { readPerformanceRun } from '@apackdev/testing/performance';
+          const run = readPerformanceRun(process.env.APACK_PERFORMANCE_RUN_OUTPUT, 20);
+          assert.equal(run.manifest.runtime.storageFormat, process.env.APACK_STORAGE_FORMAT);
+          assert.equal(run.scenario, 'populated-startup');
+          assert.equal(run.manifest.mode, process.env.APACK_PERFORMANCE_MODE);
+          assert.equal(run.manifest.source.dirty, false); assert.equal(run.manifest.native.dirty, false);
+          writeFileSync(process.env.APACK_PERFORMANCE_RUN_OUTPUT + '/admission.json', JSON.stringify({ completed: true,
+            scope: 'Fresh processes from closed copied populated profiles; warm filesystem, fixed recorded cohort order, one macOS runner; not cold disk, independent-device variance or the Linux foreground gate',
+            comparisonOrder: process.env.APACK_STARTUP_STORAGE_ORDER.split(' '),
+            source: run.manifest.source.revision, storageFormat: run.manifest.runtime.storageFormat,
+            scenario: run.scenario, mode: run.manifest.mode,
+            recording: 'Detailed CPU/allocation captures diagnose observed work; their timings do not substitute for lightweight latency acceptance',
+            summary: run.summary, machine: run.manifest.machine }, null, 2) + '\n');
+          JS
+          done
+      - name: Preserve every app-flow performance outcome
+        if: ${{ always() && (inputs.suite == 'sqlite-app-flows' || inputs.suite == 'sqlite-startup') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-sqlite-app-flows-${{ github.run_id }}
+          include-hidden-files: true
+          path: |
+            .apack/performance/sqlite-evaluation
+            .apack/tests/results/app-flows-*.json
+          if-no-files-found: error
+      - name: Build unsigned installed Preview
+        if: ${{ startsWith(inputs.suite, 'installed') }}
+        run: |
+          mkdir -p .apack/installed-evidence
+          version="$(node -p 'require("./package.json").version.split("-")[0]')"
+          npm run build:preview -- --version "$version" | tee .apack/installed-evidence/installed-build.log
+      - name: Typecheck installed app contracts
+        if: ${{ startsWith(inputs.suite, 'installed') }}
+        run: node node_modules/typescript/bin/tsc -p tests --noEmit | tee .apack/installed-evidence/typecheck.log
+      - name: Packaged native runtime
+        if: ${{ startsWith(inputs.suite, 'installed') }}
+        run: |
+          apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
+          if (( ${#apps[@]} != 1 )) || [[ ! -d "${apps[0]}" ]]; then
+            echo 'Expected one unpacked Preview app'; exit 1
+          fi
+          node build/prod/smoke-native.mjs "${apps[0]}" | tee .apack/installed-evidence/installed-native.log
+      - name: Sign installed Preview and verify native provenance
+        if: ${{ inputs.suite == 'installed-signed' }}
+        env:
+          APACK_TEST_CERTIFICATE: ${{ secrets.certificate || secrets.MAC_CERTIFICATE_P12_BASE64 }}
+          APACK_TEST_CERTIFICATE_PASSWORD: ${{ secrets.certificate_password || secrets.MAC_CERTIFICATE_PASSWORD }}
+        run: |
+          test -n "$APACK_TEST_CERTIFICATE"
+          umask 077
+          keychain="$RUNNER_TEMP/apack-installed-signing.keychain-db"
+          certificate="$RUNNER_TEMP/apack-installed-signing.p12"
+          password=$(openssl rand -hex 24)
+          echo "::add-mask::$password"
+          trap 'rm -f "$certificate"' EXIT
+          printf '%s' "$APACK_TEST_CERTIFICATE" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 1200 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -P "$APACK_TEST_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          export APACK_TEST_SIGNING_KEYCHAIN="$keychain"
+          node --input-type=module <<'JS' | tee .apack/installed-evidence/installed-signing.log
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import assert from 'node:assert/strict';
+          import { execFileSync, spawnSync } from 'node:child_process';
+          import { signMacApplication } from './scripts/lib/native-signing.mjs';
+          const apps=fs.readdirSync('dist/preview',{withFileTypes:true}).filter(d=>d.isDirectory()&&d.name.startsWith('mac-'))
+            .flatMap(d=>fs.readdirSync(path.join('dist/preview',d.name)).filter(n=>n.endsWith('.app')).map(n=>path.resolve('dist/preview',d.name,n)));
+          assert.equal(apps.length,1);
+          const app=apps[0],keychain=process.env.APACK_TEST_SIGNING_KEYCHAIN;
+          const search=execFileSync('security',['list-keychains','-d','user'],{encoding:'utf8'})
+            .trim().split('\n').map(n=>n.trim().replace(/^"|"$/g,'')).filter(Boolean);
+          execFileSync('security',['list-keychains','-d','user','-s',keychain,...search]);
+          const identities=execFileSync('security',['find-identity','-v','-p','codesigning',keychain],{encoding:'utf8'});
+          const matches=[...identities.matchAll(/\b([A-F0-9]{40}) "Developer ID Application:[^"\n]+"/g)];
+          assert.equal(matches.length,1,'Expected one Developer ID Application identity');
+          const entitlements=path.resolve('build/resources/entitlements.mac.plist');
+          await signMacApplication({app,identity:matches[0][1],identityValidation:false,keychain,platform:'darwin',
+            strictVerify:true,preAutoEntitlements:false,preEmbedProvisioningProfile:false,
+            optionsForFile:()=>({entitlements,hardenedRuntime:true,timestamp:'none'})});
+          execFileSync('codesign',['--verify','--deep','--strict',app],{stdio:'inherit'});
+          const executable=path.join(app,'Contents/MacOS',fs.readdirSync(path.join(app,'Contents/MacOS'))[0]);
+          const details=spawnSync('codesign',['--display','--verbose=4',executable],{encoding:'utf8'});
+          assert.equal(details.status,0);assert.match(details.stderr,/flags=.*\bruntime\b/);
+          assert.match(details.stderr,/TeamIdentifier=[A-Z0-9]{10}\b/);console.log(details.stderr);
+          JS
+          apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
+          node build/prod/smoke-native.mjs "${apps[0]}" | tee .apack/installed-evidence/installed-signed-native.log
+      - name: Installed SQLite app lifecycle
+        if: ${{ startsWith(inputs.suite, 'installed') }}
+        env:
+          APACK_STORAGE_FORMAT: sqlite/1
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/installed-evidence/installed-app.json
+        run: |
+          apps=(dist/preview/mac-*/*.app/Contents/Resources/app)
+          executables=("${apps[0]}"/../../MacOS/*)
+          if (( ${#executables[@]} != 1 )) || [[ ! -x "${executables[0]}" ]]; then
+            echo 'Expected one packaged Preview executable'; exit 1
+          fi
+          unset APACK_HOST_ROOT
+          export APACK_HOST_EXECUTABLE="${executables[0]}"
+          node scripts/with-source.mjs node_modules/.bin/playwright test tests/e2e/smoke tests/e2e/app-integration/sqlite-storage.spec.ts --workers 1 --reporter=line,json
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const report=JSON.parse(fs.readFileSync(process.env.PLAYWRIGHT_JSON_OUTPUT_NAME,'utf8'));
+          const specs=suites=>suites.flatMap(s=>[...(s.specs??[]),...specs(s.suites??[])]);
+          const witness=specs(report.suites).find(s=>s.title==='packaged SQLite stores hold their model claims across the real API process');
+          assert(witness?.ok&&witness.tests.every(t=>t.results.some(r=>r.status==='passed')),'Actual packaged SQLite witness must execute');
+          assert(report.stats.expected>=6&&report.stats.unexpected===0&&report.stats.skipped===0&&report.stats.flaky===0,'Installed app checks must pass without skips or retries');
+          fs.writeFileSync('.apack/installed-evidence/verification.json',JSON.stringify({stats:report.stats,sqliteWitness:witness.title},null,2)+'\n');
+          NODE
+      - name: Host contract dependencies
+        if: ${{ inputs.suite == 'host-windows' }}
+        run: npm run packages:build
+      - name: Focused Windows ownership and recovery
+        if: ${{ inputs.suite == 'host-windows' }}
+        env:
+          EARS_EVALUATION_BACKEND: sqlite
+        run: |
+          node -e "require('node:fs').mkdirSync('.apack/tests/results',{recursive:true})"
+          npm test -w @apackdev/host -- tests/database/write-lock.spec.ts tests/backup/recovery.spec.ts --maxWorkers 2 --reporter=default --reporter=json --outputFile=../../.apack/tests/results/host-windows.json
       - name: Runtime smoke
         if: ${{ inputs.suite == 'packaged' }}
         run: npm run test:smoke
@@ -78,7 +1282,7 @@ jobs:
         run: npm run test:packaged-authoring:app
       - name: Build fixture contracts
         id: preparation
-        if: ${{ inputs.suite == 'all' || inputs.suite == 'external' || inputs.suite == 'cli' || inputs.suite == 'integration' }}
+        if: ${{ inputs.suite == 'all' || inputs.suite == 'external' || inputs.suite == 'bundled-ui' || inputs.suite == 'cli' || inputs.suite == 'integration' }}
         run: npm run test:external-pack:contract
       - name: Selected integration files
         if: ${{ inputs.suite == 'integration' }}
@@ -107,25 +1311,44 @@ jobs:
       - name: Prepare external default fork
         if: ${{ inputs.suite == 'all' || inputs.suite == 'external' }}
         run: npm run test:external-pack:fork
-      - name: External pack app suite including step services and settings ownership
-        if: ${{ inputs.suite == 'all' || inputs.suite == 'external' }}
-        working-directory: tests/packs/external-pack
+      - name: Selected external pack app suite
+        if: ${{ inputs.suite == 'all' || inputs.suite == 'external' || inputs.suite == 'bundled-ui' }}
+        working-directory: ${{ inputs.suite == 'bundled-ui' && 'tests/packs/bundled-ui-pack' || 'tests/packs/external-pack' }}
         env:
           APACK_E2E_GREP: ${{ inputs.test }}
         run: |
-          args=(--host "$GITHUB_WORKSPACE" --prebuilt)
+          args=(--host "$GITHUB_WORKSPACE" --prebuilt --trace retain-on-failure --repeat-each "$APACK_E2E_REPEAT")
           if [[ -n "$APACK_E2E_GREP" ]]; then args+=(--grep "$APACK_E2E_GREP"); fi
           ../../../node_modules/.bin/apack pack test "${args[@]}"
+      - name: Main renderer discovery excludes popouts
+        if: ${{ inputs.suite == 'all' || inputs.suite == 'app' }}
+        run: |
+          mkdir -p .apack/qualification
+          npm run typecheck -w @apackdev/testing
+          npm test -w @apackdev/testing -- tests/application-window.spec.ts --maxWorkers 2 \
+            --reporter=default --reporter=json --outputFile=../../.apack/qualification/window-discovery.json
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('.apack/qualification/window-discovery.json', 'utf8'));
+          assert.equal(report.numPassedTests, 10); assert.equal(report.numFailedTests, 0); assert.equal(report.numPendingTests, 0);
+          assert.equal(report.testResults.length, 1);
+          assert(report.testResults[0].name.replaceAll('\\', '/').endsWith('/tests/application-window.spec.ts'));
+          JS
+      - name: Source app test types and settings harness lint
+        if: ${{ inputs.suite == 'app' }}
+        run: |
+          node_modules/.bin/oxlint tests/e2e/ui/host-settings.spec.ts -D correctness
+          node_modules/.bin/tsc -p tests --noEmit --incremental false
       - name: App suites including settings recovery
         if: ${{ !cancelled() && (inputs.suite == 'all' || inputs.suite == 'app') && steps.runtime.outcome == 'success' }}
         env:
           APACK_E2E_GREP: ${{ inputs.test }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/.apack/tests/results/source-app.json
         run: |
-          if [[ -n "$APACK_E2E_GREP" ]]; then
-            npm run test:e2e -- --grep "$APACK_E2E_GREP"
-          else
-            npm run test:e2e
-          fi
+          args=(--repeat-each "$APACK_E2E_REPEAT")
+          if [[ -n "$APACK_E2E_GREP" ]]; then args+=(--grep "$APACK_E2E_GREP"); fi
+          npm run test:e2e -- "${args[@]}" --reporter=line,json
       - name: Retain app suites before the CLI scenario
         if: always()
         uses: actions/upload-artifact@v4
@@ -134,6 +1357,8 @@ jobs:
           include-hidden-files: true
           path: |
             .apack/tests/results/
+            .apack/installed-evidence/
+            .apack/qualification/
             tests/packs/*/.apack/tests/results/
             tests/packs/*/dist/build-inputs.json
       - name: Compiler queue lifecycle
@@ -154,5 +1379,12 @@ jobs:
           include-hidden-files: true
           path: |
             .apack/tests/results/
+            .apack/installed-evidence/
+            .apack/qualification/
             tests/packs/*/.apack/tests/results/
             tests/packs/*/dist/build-inputs.json
+      - name: Remove installed signing keychain
+        if: ${{ always() && inputs.suite == 'installed-signed' }}
+        run: |
+          security delete-keychain "$RUNNER_TEMP/apack-installed-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/apack-installed-signing.p12"

@@ -1,0 +1,15 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/vector.spec.ts -t ranks own embeddings in a unit --maxWorkers=1 --reporter=default --reporter=json --outputFile=/results/native-own-unit.json
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/engine/vector.spec.ts (18 tests | 17 skipped) 22ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 17 skipped (18)
+   Start at  00:50:19
+   Duration  494ms (transform 250ms, setup 13ms, collect 337ms, tests 22ms, environment 0ms, prepare 42ms)
+
+JSON report written to /results/native-own-unit.json

@@ -1,0 +1,22 @@
+{
+  "run": 41229932727,
+  "source": "058f8d537c",
+  "overall": "failure",
+  "backends": {
+    "elmdb": {
+      "literalLanguageCases": 8,
+      "allLanguageCasesPassed": true,
+      "numTotalTests": 116,
+      "numPassedTests": 115,
+      "numFailedTests": 1
+    },
+    "sqlite": {
+      "literalLanguageCases": 8,
+      "allLanguageCasesPassed": true,
+      "numTotalTests": 116,
+      "numPassedTests": 115,
+      "numFailedTests": 1
+    }
+  },
+  "remainingFailure": "Unchanged generate-entries overview top-five relevance judgment"
+}

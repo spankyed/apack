@@ -1,0 +1,46 @@
+{
+  "sourceBase": "3cccc4dfa9441b834afc325fddd24f1fb1d06c09",
+  "engine": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+  "inputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "0821b6f212f3362ab226a824db2b4cb5cf13230a19743e405bb551f20fcf94fe",
+    "packages/apack-ears/etc/sqlite.api.md": "bae1c35241cacf16ed9415e3b11a41dc18eeb877528cf36b9eb337c44e24ed89",
+    "packages/apack-ears/src/sqlite/database.ts": "ff1b4f91fb3d3950437ea1fba11255f1520d50b0b691f9e2ce6e5dd2fc6d63d5",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "0a3dd26502483b647bb2927e3b3da3b2756d6c106efacfcff61ab9b46e4f048b",
+    "packages/apack-ears/src/sqlite/index.ts": "e851a06b52b32d9b5b79094d3e4712bfcef010da3c1964d2d2f4c3ee20b059db",
+    "packages/apack-ears/src/sqlite/vector-candidates.ts": "671ec986f28cee31e2788df109999d6fae4c01c16d7eb500d694bbd74f347939",
+    "packages/apack-ears/src/sqlite/vector-index.ts": "b05c879dab22be00e486480a1fe038a9169cc8b56409b98298ed62d249954476",
+    "packages/apack-ears/src/sqlite/vector-models.ts": "2be67a61275954458a2ec58170ac27a204f8aaf5e49054669786a41e24f50b12",
+    "packages/apack-ears/tests/sqlite/vector-index.spec.ts": "411c89d8ce242267738944cf50b1cf36e21e754b98caed7330c937509fd3dd5b",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "a9e08b2b07ed144adab1756d02417cf328074528e95a36150fce596c2ed39948"
+  },
+  "nativeBindingSha256": "ff3da5ced5d87b6361cac5f4f3b508a5c7a70ae9be84834d5f23ffa7b0011947",
+  "nativeExtensionSha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d",
+  "image": "sha256:0146a4490634fe153ec35c63e7075a4b3e31b1d1a2996d29c77506c5d07b6507",
+  "limits": {
+    "full": {
+      "cpus": 2,
+      "memoryGiB": 6,
+      "swapGiB": 0
+    },
+    "focused": {
+      "cpus": 0.5,
+      "memoryMiB": 768,
+      "swapMiB": 0
+    }
+  },
+  "results": "657 EARS, 18 host and 7 API cases; EARS/host/API types; current package builds; API reports including LF-normalized recheck; boundaries/lint; five focused cases and three negative controls",
+  "postTestEdits": "Generated report line endings, CI expected counts and strengthened index assertions; all 10 index cases, EARS types and lint rechecked. Runtime inputs identical.",
+  "sourceArchive": {
+    "commit": "3cccc4dfa9441b834afc325fddd24f1fb1d06c09",
+    "sha256": "b0e8b2ec4a7232df91b6059a75123d9b7fdb04bc0965cb22734eb0a879850706"
+  },
+  "engineArchive": {
+    "commit": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+    "sha256": "84b9721c6a59441e8b7862e996e6b8a889e0d1b497c177621771e95b9fb02695"
+  },
+  "followup": {
+    "file": "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+    "earlierFullSuiteSha256": "34a1b06968eea1bb768149f07b843755bc10b6933af015529792c6946fdeb71b",
+    "reason": "Strengthen existing-embedding update during refresh; all 10 native index cases, EARS types and changed-test lint pass afterward"
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "source": "45180293a3248ea7ec364672fb294ed1f322fc9c",
+  "nativePassed": 75,
+  "nativeFailed": 0,
+  "nativeSkipped": 0,
+  "growth": [
+    {
+      "rows": 1000,
+      "prefix": {
+        "prefix": {
+          "firstMs": 1.9940780000000586,
+          "warmP50Ms": 2.1905819999999494,
+          "warmMaxMs": 3.0760549999999967
+        },
+        "prefixTypo": {
+          "firstMs": 2.5609629999999015,
+          "warmP50Ms": 2.7989259999999376,
+          "warmMaxMs": 5.332137999999986
+        },
+        "prefixMaxToken": {
+          "firstMs": 8.04035399999998,
+          "warmP50Ms": 8.147564999999986,
+          "warmMaxMs": 8.535905000000184
+        },
+        "prefixLiteralNoFuzzy": {
+          "firstMs": 0.4570499999999811,
+          "warmP50Ms": 0.1562530000001061,
+          "warmMaxMs": 0.27850499999999556
+        },
+        "prefixTypoNoFuzzy": {
+          "firstMs": 0.23642100000006394,
+          "warmP50Ms": 0.12108499999999367,
+          "warmMaxMs": 0.23829599999999118
+        }
+      },
+      "maxHeartbeatMs": 10.195206000000098,
+      "broad": {
+        "firstMs": 5.306096000000025,
+        "warmMaxMs": 10.370314000000008
+      },
+      "peakRssKiB": 123032
+    },
+    {
+      "rows": 10000,
+      "prefix": {
+        "prefix": {
+          "firstMs": 2.49350400000003,
+          "warmP50Ms": 2.7712590000001,
+          "warmMaxMs": 2.938594999999623
+        },
+        "prefixTypo": {
+          "firstMs": 3.3334350000000086,
+          "warmP50Ms": 3.550688999999693,
+          "warmMaxMs": 4.212075999999797
+        },
+        "prefixMaxToken": {
+          "firstMs": 10.238644000000022,
+          "warmP50Ms": 10.448732000000291,
+          "warmMaxMs": 11.89542399999982
+        },
+        "prefixLiteralNoFuzzy": {
+          "firstMs": 0.3035060000001977,
+          "warmP50Ms": 0.15546100000028673,
+          "warmMaxMs": 0.46642500000007203
+        },
+        "prefixTypoNoFuzzy": {
+          "firstMs": 0.11454400000002352,
+          "warmP50Ms": 0.10946000000012646,
+          "warmMaxMs": 0.12075200000026598
+        }
+      },
+      "maxHeartbeatMs": 30.739870000000337,
+      "broad": {
+        "firstMs": 19.813485000000128,
+        "warmMaxMs": 19.94786299999987
+      },
+      "peakRssKiB": 135336
+    },
+    {
+      "rows": 100000,
+      "prefix": {
+        "prefix": {
+          "firstMs": 3.209391999997024,
+          "warmP50Ms": 2.9702630000028876,
+          "warmMaxMs": 3.189642000001186
+        },
+        "prefixTypo": {
+          "firstMs": 3.938614000002417,
+          "warmP50Ms": 3.719193000000814,
+          "warmMaxMs": 4.21795099999872
+        },
+        "prefixMaxToken": {
+          "firstMs": 10.941949000000022,
+          "warmP50Ms": 11.193287000001874,
+          "warmMaxMs": 12.56797799999913
+        },
+        "prefixLiteralNoFuzzy": {
+          "firstMs": 0.2707139999984065,
+          "warmP50Ms": 0.15217000000120606,
+          "warmMaxMs": 0.18746199999804958
+        },
+        "prefixTypoNoFuzzy": {
+          "firstMs": 0.10937700000067707,
+          "warmP50Ms": 0.11346000000048662,
+          "warmMaxMs": 0.3855069999990519
+        }
+      },
+      "maxHeartbeatMs": 329.4821300000003,
+      "broad": {
+        "firstMs": 184.43105899999864,
+        "warmMaxMs": 197.25737500000105
+      },
+      "peakRssKiB": 237392
+    }
+  ],
+  "unresolved": "Original full-run seven30sec timeouts remain. Full14-case heartbeat reaches329ms; broad common-word search remains a responsiveness problem. Diagnostic usesOFF fixture ingestion, first+12warm calls, notOS-cold or FULL-write/app qualification."
+}

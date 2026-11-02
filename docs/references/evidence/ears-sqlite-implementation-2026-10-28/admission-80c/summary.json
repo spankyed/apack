@@ -1,0 +1,182 @@
+[
+  {
+    "cohort": "value-off",
+    "cpuModels": [
+      "AMD EPYC 9V74 80-Core Processor"
+    ],
+    "passed": true,
+    "records": [
+      {
+        "size": 10000,
+        "trial": 1,
+        "passed": true,
+        "heartbeatP99Ms": 5.445472000000336
+      },
+      {
+        "size": 100000,
+        "trial": 1,
+        "passed": true,
+        "heartbeatP99Ms": 5.58935399999973
+      },
+      {
+        "size": 100000,
+        "trial": 2,
+        "passed": true,
+        "heartbeatP99Ms": 5.650963000000047
+      },
+      {
+        "size": 10000,
+        "trial": 2,
+        "passed": true,
+        "heartbeatP99Ms": 4.903321999999889
+      },
+      {
+        "size": 10000,
+        "trial": 3,
+        "passed": true,
+        "heartbeatP99Ms": 4.63837199999989
+      },
+      {
+        "size": 100000,
+        "trial": 3,
+        "passed": true,
+        "heartbeatP99Ms": 5.850489000004018
+      }
+    ]
+  },
+  {
+    "cohort": "value-full",
+    "cpuModels": [
+      "AMD EPYC 9V45 96-Core Processor"
+    ],
+    "passed": false,
+    "records": [
+      {
+        "size": 10000,
+        "trial": 1,
+        "passed": true,
+        "heartbeatP99Ms": 3.372594000000163
+      },
+      {
+        "size": 100000,
+        "trial": 1,
+        "passed": true,
+        "heartbeatP99Ms": 14.800011999999697
+      },
+      {
+        "size": 100000,
+        "trial": 2,
+        "passed": false,
+        "heartbeatP99Ms": 16.392478000001574
+      },
+      {
+        "size": 10000,
+        "trial": 2,
+        "passed": true,
+        "heartbeatP99Ms": 4.38425200000006
+      },
+      {
+        "size": 10000,
+        "trial": 3,
+        "passed": true,
+        "heartbeatP99Ms": 3.8514999999999873
+      },
+      {
+        "size": 100000,
+        "trial": 3,
+        "passed": true,
+        "heartbeatP99Ms": 15.472540999999183
+      }
+    ]
+  },
+  {
+    "cohort": "search-off",
+    "cpuModels": [
+      "AMD EPYC 7763 64-Core Processor"
+    ],
+    "passed": true,
+    "records": [
+      {
+        "size": 10000,
+        "trial": 1,
+        "passed": true,
+        "heartbeatP99Ms": 8.416776000000027
+      },
+      {
+        "size": 100000,
+        "trial": 1,
+        "passed": true,
+        "heartbeatP99Ms": 10.922027000000526
+      },
+      {
+        "size": 100000,
+        "trial": 2,
+        "passed": true,
+        "heartbeatP99Ms": 10.804286999999022
+      },
+      {
+        "size": 10000,
+        "trial": 2,
+        "passed": true,
+        "heartbeatP99Ms": 8.377251000000342
+      },
+      {
+        "size": 10000,
+        "trial": 3,
+        "passed": true,
+        "heartbeatP99Ms": 8.111918000000514
+      },
+      {
+        "size": 100000,
+        "trial": 3,
+        "passed": true,
+        "heartbeatP99Ms": 10.328448999998727
+      }
+    ]
+  },
+  {
+    "cohort": "search-full",
+    "cpuModels": [
+      "AMD EPYC 7763 64-Core Processor"
+    ],
+    "passed": true,
+    "records": [
+      {
+        "size": 10000,
+        "trial": 1,
+        "passed": true,
+        "heartbeatP99Ms": 11.946003999999903
+      },
+      {
+        "size": 100000,
+        "trial": 1,
+        "passed": true,
+        "heartbeatP99Ms": 12.034473000006983
+      },
+      {
+        "size": 100000,
+        "trial": 2,
+        "passed": true,
+        "heartbeatP99Ms": 12.071383000002243
+      },
+      {
+        "size": 10000,
+        "trial": 2,
+        "passed": true,
+        "heartbeatP99Ms": 10.352092000000084
+      },
+      {
+        "size": 10000,
+        "trial": 3,
+        "passed": true,
+        "heartbeatP99Ms": 10.03852599999982
+      },
+      {
+        "size": 100000,
+        "trial": 3,
+        "passed": true,
+        "heartbeatP99Ms": 12.419111999999586
+      }
+    ]
+  }
+]

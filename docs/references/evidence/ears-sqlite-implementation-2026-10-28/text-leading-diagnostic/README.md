@@ -1,0 +1,5 @@
+# Rejected opening-text ranking diagnostics
+
+Scratch execution uses the actual `SqliteText.search` implementation through Python SQLite 3.53.0 FTS5, on the frozen public 214-section/25-judgment fixture. The baseline reproduces the packaged 24/25 result and the same five top-ranked IDs for the failed generated-metadata judgment. All original queries, options, expected IDs, top-five depth and requested highlight checks remain unchanged. Scratch databases are removed.
+
+Two general alternatives were checked: additional FTS columns containing a word-complete opening prefix of at most 256 UTF-16 units with BM25 column weights one/two, and an additional short opening-passage document per longer field. Each remains 24/25, failing the same judgment. These are retrieval diagnostics, not benchmark timings or packaged-driver qualification; no ranking/index/schema change is promoted. The output contains only frozen-fixture IDs, scores and pass/failure judgments. No special-case query, row boost or acceptance change follows from this negative evidence.

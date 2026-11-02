@@ -1,0 +1,10 @@
+import pathlib,subprocess,os
+r=pathlib.Path('/metrics');o=pathlib.Path('/results')
+for name,args in [
+ ('packages-build',['npm','run','packages:build']),
+ ('build-inputs',['npm','test','-w','@app/repo-checks','--','tests/chain-inputs.spec.ts','tests/doc-links.spec.ts']),
+ ('lint',['npm','run','lint:check']),
+ ('specifiers',['npm','run','check:specifiers']),
+ ('publish-types',['npm','run','typecheck','-w','@app/publish-checks']),
+]:
+ p=subprocess.run(args,cwd=r,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT);(o/(name+'.txt')).write_text(p.stdout);assert p.returncode==0,(name,p.stdout)

@@ -1,0 +1,68 @@
+
+> apack@0.3.14 build:default-setup
+> npm run packages:ensure && npm run build -w @app/default-setup
+
+
+> apack@0.3.14 packages:ensure
+> tsx scripts/ensure-packages-built.ts
+
+
+> @app/default-setup@0.1.0 build
+> apack pack build
+
+
+> apack@0.3.14 packages:ensure
+> tsx scripts/ensure-packages-built.ts
+
+Generated:
+  src/__generated__/entity-destinations.json
+  src/__generated__/event-contracts.json
+  src/__generated__/pack-entry.ts
+  src/__generated__/pack-entry-fe.ts
+  src/__generated__/ears.ts
+  src/__generated__/ref.ts
+  src/__generated__/paths.ts
+  src/__generated__/settings.ts
+  src/__generated__/settings-fe.ts
+  src/__generated__/fe.ts
+  src/__generated__/system-specs.ts
+  src/__generated__/events.ts
+  src/__generated__/types.ts
+  src/__generated__/services.ts
+  src/__generated__/runtime-services.ts
+  src/__generated__/repository.ts
+  src/__generated__/repositories.ts
+  src/__generated__/pack-types.ts
+  src/__generated__/references.ts
+  src/__generated__/appliers.ts
+  src/__generated__/content-runtime.ts
+  src/__generated__/flow-helpers.ts
+  src/__generated__/step-types.ts
+  src/__generated__/steps-build.ts
+Building pack: Default Setup v0.1.0
+Compiling pack: default-setup
+  actions: 70
+  prompts: 6
+  flows: 5
+  notes: 1
+  commands: 4
+
+Build output:
+  actions: 70
+  prompts: 6
+  flows: 5
+  notes: 1
+  commands: 4
+
+Note: 2 entities have no shape declared, so their fields read as unknown values: SearchIndex, IndexedDoc
+  step build: dist/build/steps.build.mjs
+  content runtime: dist/build/content-runtime.mjs
+  dsl defs: dist/defs/monaco/action-defs.d.ts
+  dsl defs: dist/defs/monaco/prompt-defs.d.ts
+  dsl defs: dist/defs/monaco/database-defs.d.ts
+  runtime: dist/runtime/index.cjs
+[plugin tailwind-inject] Sourcemap is likely to be incorrect: a plugin (tailwind-inject) was used to transform files, but didn't generate a sourcemap for the transformation. Consult the plugin documentation for help
+  fe: dist/runtime/fe.js
+  fe styles: dist/runtime/fe.css
+
+Output: dist/

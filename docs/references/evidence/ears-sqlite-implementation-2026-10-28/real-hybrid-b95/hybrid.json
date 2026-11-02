@@ -1,0 +1,716 @@
+{
+  "protocol": "ears-private-real-hybrid/1",
+  "completed": true,
+  "qualification": false,
+  "source": "b95b0ed195c985e028457eca0546f352ec099b26",
+  "manifestSha256": "b66eb948b8d53d42fd7d538f9f0af75d858e5b6c96ddbcf4296719438fc0eae8",
+  "size": 1000,
+  "queries": 100,
+  "scope": "First 1000 paired rows; exact fusion correctness and timings, not relevance judgments or resource qualification",
+  "containsPayload": false,
+  "samples": [
+    {
+      "query": 0,
+      "ms": 7.905475000000024,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 1,
+      "ms": 7.4133600000000115,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 2,
+      "ms": 7.615125000000262,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 3,
+      "ms": 7.287906000000021,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 4,
+      "ms": 5.940020000000004,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 5,
+      "ms": 5.712266,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 6,
+      "ms": 7.0407069999996565,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 7,
+      "ms": 5.714600000000246,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 8,
+      "ms": 5.6800459999999475,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 9,
+      "ms": 5.629722000000129,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 10,
+      "ms": 7.552928999999949,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 11,
+      "ms": 5.595908999999665,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 12,
+      "ms": 7.756879000000026,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 13,
+      "ms": 6.832279000000199,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 14,
+      "ms": 5.647745999999643,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 15,
+      "ms": 7.315458000000035,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 16,
+      "ms": 5.5552639999996245,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 17,
+      "ms": 5.726603000000068,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 18,
+      "ms": 5.860941999999795,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 19,
+      "ms": 6.876091000000088,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 20,
+      "ms": 7.453944999999749,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 21,
+      "ms": 5.93205399999988,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 22,
+      "ms": 8.798265999999785,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 23,
+      "ms": 5.573667000000114,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 24,
+      "ms": 7.321859000000131,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 25,
+      "ms": 5.8471770000001015,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 26,
+      "ms": 5.788747000000058,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 27,
+      "ms": 8.080030999999963,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 28,
+      "ms": 6.7228650000001835,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 29,
+      "ms": 6.869558000000325,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 30,
+      "ms": 6.044272999999976,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 31,
+      "ms": 6.154168000000027,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 32,
+      "ms": 5.777998000000025,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 33,
+      "ms": 5.529125000000022,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 34,
+      "ms": 6.167652999999973,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 35,
+      "ms": 5.95012799999995,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 36,
+      "ms": 6.273670000000038,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 37,
+      "ms": 6.743343999999979,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 38,
+      "ms": 6.166460999999799,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 39,
+      "ms": 7.158186000000114,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 40,
+      "ms": 5.785270999999739,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 41,
+      "ms": 6.937544999999773,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 42,
+      "ms": 5.679826000000048,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 43,
+      "ms": 6.657954999999674,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 44,
+      "ms": 7.50109300000031,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 45,
+      "ms": 5.76781899999969,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 46,
+      "ms": 5.859901000000264,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 47,
+      "ms": 5.96388399999978,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 48,
+      "ms": 5.7049820000002,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 49,
+      "ms": 5.532430999999633,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 50,
+      "ms": 5.69102600000042,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 51,
+      "ms": 6.1598479999997835,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 52,
+      "ms": 5.839843000000201,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 53,
+      "ms": 5.302693999999974,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 54,
+      "ms": 5.496052999999847,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 55,
+      "ms": 5.608874000000014,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 56,
+      "ms": 5.9855539999998655,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 57,
+      "ms": 6.861863999999969,
+      "textMatches": 1,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 58,
+      "ms": 8.887793000000329,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 59,
+      "ms": 6.823061999999936,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 60,
+      "ms": 6.941001000000142,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 61,
+      "ms": 7.605066000000079,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 62,
+      "ms": 5.573468000000048,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 63,
+      "ms": 5.534474999999929,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 64,
+      "ms": 5.533764000000247,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 65,
+      "ms": 10.783128000000033,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 66,
+      "ms": 5.2857420000000275,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 67,
+      "ms": 5.5533299999997325,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 68,
+      "ms": 7.290981999999985,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 69,
+      "ms": 5.6419049999999515,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 70,
+      "ms": 5.448205000000144,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 71,
+      "ms": 5.766265999999632,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 72,
+      "ms": 8.109324000000015,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 73,
+      "ms": 5.660960000000159,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 74,
+      "ms": 5.589226000000053,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 75,
+      "ms": 5.546175999999832,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 76,
+      "ms": 5.532230000000254,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 77,
+      "ms": 5.748513000000003,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 78,
+      "ms": 5.586821999999756,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 79,
+      "ms": 5.272537000000284,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 80,
+      "ms": 5.833259999999882,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 81,
+      "ms": 5.869498000000021,
+      "textMatches": 6,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 82,
+      "ms": 5.2112230000002455,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 83,
+      "ms": 9.021600999999919,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 84,
+      "ms": 5.455876999999873,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 85,
+      "ms": 5.801180000000386,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 86,
+      "ms": 5.501523000000361,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 87,
+      "ms": 5.736319999999978,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 88,
+      "ms": 5.750425999999607,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 89,
+      "ms": 7.075750999999855,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 90,
+      "ms": 5.593343999999888,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 91,
+      "ms": 6.3024820000000545,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 92,
+      "ms": 5.7340250000002015,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 93,
+      "ms": 5.92984000000024,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 94,
+      "ms": 5.637296000000333,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 95,
+      "ms": 5.747189999999591,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 96,
+      "ms": 5.703699000000142,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 97,
+      "ms": 6.392320000000382,
+      "textMatches": 1,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 98,
+      "ms": 5.582494000000224,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    },
+    {
+      "query": 99,
+      "ms": 5.926222999999936,
+      "textMatches": 0,
+      "vectorMatches": 1000,
+      "returned": 10
+    }
+  ],
+  "loadMs": 758.55386,
+  "sqlite": "3.53.4",
+  "synchronous": 2
+}

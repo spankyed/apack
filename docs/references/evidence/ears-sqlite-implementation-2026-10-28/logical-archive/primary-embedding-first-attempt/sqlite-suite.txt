@@ -1,0 +1,214 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/search-recovery.spec.ts (39 tests | 1 failed) 4299ms
+   ✓ SQLite missing search storage recovery > rebuilds damaged postings in fresh generations without changing primary commits 176ms
+   ✓ SQLite missing search storage recovery > audits private reconstructed contents without repairing the incumbent 218ms
+   ✓ SQLite missing search storage recovery > detects missing external-content postings even when stored documents are unchanged 126ms
+   ✓ SQLite missing search storage recovery > reports undecodable primary values outside every search input 71ms
+   ✓ SQLite missing search storage recovery > counts all orphan primary values while retaining at most 100 issue messages 63ms
+   ✓ SQLite missing search storage recovery > reports malformed stored embeddings instead of accepting identical corrupted copies 56ms
+   ✓ SQLite missing search storage recovery > reports an identity counter that could reuse existing primary sequences 58ms
+   ✓ SQLite missing search storage recovery > detects stale list membership independently of the copied acceleration table 282ms
+   ✓ SQLite missing search storage recovery > proves absent value fields ready offline while preserving backfill of present fields 44ms
+   ✓ SQLite missing search storage recovery > does not certify an absent field when its authoritative primary row is missing 43ms
+   ✓ SQLite missing search storage recovery > rolls membership reconstruction back if later index admission fails 45ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed before its commit  335ms
+   ✓ SQLite missing search storage recovery > retains atomic membership repair when killed after its commit 287ms
+   ✓ SQLite missing search storage recovery > removes failed audit scratch and releases write ownership after a snapshot failure 43ms
+   ✓ SQLite missing search storage recovery > preserves the audit failure together with snapshot close failure and still removes scratch 78ms
+   ✓ SQLite missing search storage recovery > refuses rebuild on read-only, open-unit and stopped owners without changing the catalog 53ms
+   ✓ SQLite missing search storage recovery > rolls back failed rebuild admission and keeps current generations usable 53ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram table in a private background generation 135ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram documents in a private background generation 141ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram owner index in a private background generation 149ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ai in a private background generation 96ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger ad in a private background generation 93ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram trigger au in a private background generation 94ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text table in a private background generation 100ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text documents in a private background generation 99ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text owner index in a private background generation 100ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text metadata in a private background generation 109ms
+   × SQLite missing search storage recovery > refuses read-only and reconstructs vector chunks in a private background generation 91ms
+     → expected +0 to be 2 // Object.is equality
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs pending vector index in a private background generation 99ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector reuse index in a private background generation 102ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs vector retirement index in a private background generation 99ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text retirement index in a private background generation 98ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs trigram shadow index in a private background generation 101ms
+   ✓ SQLite missing search storage recovery > refuses read-only and reconstructs text shadow content in a private background generation 129ms
+   ✓ SQLite missing search storage recovery > rebuilds stale external-content postings after a missing update trigger 64ms
+   ✓ SQLite missing search storage recovery > rolls back partial postings on a background repair failure, refuses incomplete reads and retries cleanly 76ms
+   ✓ SQLite missing search storage recovery > preserves repair and rollback errors, stops scheduling and discards the transaction on close 72ms
+   ✓ SQLite missing search storage recovery > opens healthy storage while another handle owns a write unit and reads only its committed state 62ms
+   ✓ SQLite missing search storage recovery > pages only affected search inputs and leaves a healthy reopen free of hydration 156ms
+ ✓ tests/sqlite/search-builds.spec.ts (19 tests) 2381ms
+   ✓ shared background search generations > recovers a search cursor committed by a process killed before readiness  312ms
+   ✓ shared background search generations > lets background-only work exit but keeps an explicit readiness wait alive until complete  519ms
+ ✓ tests/sqlite/text-limits.spec.ts (16 tests) 1011ms
+ ✓ tests/engine/search.spec.ts (11 tests) 664ms
+ ✓ tests/engine/model-based.spec.ts (2 tests) 22796ms
+   ✓ refuses, holds and answers what the model does  4602ms
+   ✓ keeps every watch at what its read answers afresh, after every write, whatever wrote  18193ms
+ ✓ tests/engine/watch.spec.ts (25 tests) 1949ms
+ ✓ tests/engine/watch-schedule.spec.ts (12 tests) 706ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 2626ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  377ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  364ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  373ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  362ms
+ ✓ tests/engine/sqlite-operations.spec.ts (18 tests) 2697ms
+   ✓ SQLite operational feasibility > replaces logical values when the source and destination have different physical field slots  308ms
+ ✓ tests/engine/writes.spec.ts (61 tests) 3075ms
+ ✓ tests/engine/transact.spec.ts (46 tests) 1993ms
+ ✓ tests/engine/relations.spec.ts (21 tests) 1030ms
+ ✓ tests/sqlite/text-documents.spec.ts (10 tests) 1105ms
+   ✓ source-string FTS documents > bounds native owner masks without truncating either the masked or fallback answer  564ms
+ ✓ tests/sqlite/query-cost.spec.ts (18 tests) 928ms
+ ✓ tests/sqlite/index-builds.spec.ts (9 tests) 824ms
+ ✓ tests/sqlite/trigrams.spec.ts (7 tests) 570ms
+ ✓ tests/sqlite/text-typos.spec.ts (20 tests) 1111ms
+ ✓ tests/sqlite/values.spec.ts (10 tests) 309ms
+ ✓ tests/sqlite/schema-validation.spec.ts (49 tests) 1997ms
+ ✓ tests/sqlite/embeddings.spec.ts (8 tests) 532ms
+ ✓ tests/sqlite/logical-export.spec.ts (4 tests) 351ms
+ ✓ tests/sqlite/commit-outcomes.spec.ts (8 tests) 514ms
+ ✓ tests/sqlite/logical-stage.spec.ts (7 tests) 1090ms
+ ✓ tests/engine/calls.spec.ts (9 tests) 487ms
+ ✓ tests/sqlite/index.spec.ts (3 tests) 372ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 152ms
+ ✓ tests/engine/vector.spec.ts (17 tests) 862ms
+ ✓ tests/sqlite/regex.spec.ts (11 tests) 441ms
+ ✓ tests/sqlite/logical-format.spec.ts (13 tests) 15ms
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (4 tests) 1083ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  366ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  329ms
+ ✓ tests/engine/query-values.spec.ts (5 tests) 283ms
+ ✓ tests/engines.spec.ts (4 tests) 285ms
+ ✓ tests/engine/storage-port.spec.ts (3 tests) 195ms
+ ✓ tests/vocabulary.spec.ts (7 tests) 139ms
+ ✓ tests/engine/maintenance.spec.ts (5 tests) 326ms
+ ✓ tests/sqlite/transaction-failures.spec.ts (4 tests) 272ms
+ ✓ tests/sqlite/statement-cache.spec.ts (6 tests) 453ms
+ ✓ tests/sqlite/wal-readers.spec.ts (1 test) 132ms
+ ✓ tests/sqlite/schema-admission.spec.ts (2 tests) 163ms
+ ✓ tests/engine/bulk-load.spec.ts (1 test) 114ms
+ ✓ tests/storage-types.spec.ts (1 test) 1ms
+ ✓ tests/engine/search-relevance.spec.ts (32 tests) 146ms
+ ❯ tests/sqlite/source-node.spec.ts (1 test | 1 failed) 228ms
+   × opens the app-only storage entry with plain Node source conditions and owned regex assets 228ms
+     → (node:1353) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:internal/modules/typescript:67
+        throw new ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX(error.message);
+              ^
+
+SyntaxError [ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX]:   x TypeScript parameter property is not supported in strip-only mode
+    ,-[20:1]
+ 17 |   if (!nonzero) fail('Invalid Float32 cosine embedding');
+ 18 | }
+ 19 | export class SqliteEmbeddings {
+ 20 |   constructor(private readonly db: SqliteDatabase) {}
+    :                                ^^^^^^^^^^^^^^^^^^
+ 21 |   initialize(): void {
+ 22 |     // Pre-adoption candidates with generation-owned bytes require explicit export using their original code.
+ 23 |     // Refuse before creating anything; absence must never silently turn stored primary vectors into pending work.
+    `----
+
+    at parseTypeScript (node:internal/modules/typescript:67:15)
+    at processTypeScriptCode (node:internal/modules/typescript:129:42)
+    at stripTypeScriptModuleTypes (node:internal/modules/typescript:196:22)
+    at ModuleLoader.<anonymous> (node:internal/modules/esm/translators:551:16)
+    at #translate (node:internal/modules/esm/loader:534:12)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:581:27) {
+  code: 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX'
+}
+
+Node.js v23.11.1
+: expected 1 to be +0 // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/search-recovery.spec.ts > SQLite missing search storage recovery > refuses read-only and reconstructs vector chunks in a private background generation
+AssertionError: expected +0 to be 2 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 0[39m
+
+ ❯ tests/sqlite/search-recovery.spec.ts:334:48
+    332|     expect(e.query('Row').search('databse').ids()).toEqual([]);
+    333|     if (name(text, tri) === 'chunks') {
+    334|       expect(e.pendingEmbeddings('Row').count).toBe(2);
+       |                                                ^
+    335|     } else {
+    336|       expect(e.pendingEmbeddings('Row').count).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/sqlite/source-node.spec.ts > opens the app-only storage entry with plain Node source conditions and owned regex assets
+AssertionError: (node:1353) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:internal/modules/typescript:67
+        throw new ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX(error.message);
+              ^
+
+SyntaxError [ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX]:   x TypeScript parameter property is not supported in strip-only mode
+    ,-[20:1]
+ 17 |   if (!nonzero) fail('Invalid Float32 cosine embedding');
+ 18 | }
+ 19 | export class SqliteEmbeddings {
+ 20 |   constructor(private readonly db: SqliteDatabase) {}
+    :                                ^^^^^^^^^^^^^^^^^^
+ 21 |   initialize(): void {
+ 22 |     // Pre-adoption candidates with generation-owned bytes require explicit export using their original code.
+ 23 |     // Refuse before creating anything; absence must never silently turn stored primary vectors into pending work.
+    `----
+
+    at parseTypeScript (node:internal/modules/typescript:67:15)
+    at processTypeScriptCode (node:internal/modules/typescript:129:42)
+    at stripTypeScriptModuleTypes (node:internal/modules/typescript:196:22)
+    at ModuleLoader.<anonymous> (node:internal/modules/esm/translators:551:16)
+    at #translate (node:internal/modules/esm/loader:534:12)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:581:27) {
+  code: 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX'
+}
+
+Node.js v23.11.1
+: expected 1 to be +0 // Object.is equality
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+ ❯ tests/sqlite/source-node.spec.ts:19:38
+     17|     encoding: 'utf8', timeout: 15000,
+     18|   });
+     19|   expect(child.status, child.stderr).toBe(0);
+       |                                      ^
+     20|   expect(child.stdout).toBe('source-storage-ok');
+     21| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed | 41 passed (43)
+      Tests  2 failed | 576 passed (578)
+   Start at  13:42:00
+   Duration  68.60s (transform 614ms, setup 65ms, collect 3.32s, tests 60.71s, environment 4ms, prepare 1.57s)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run

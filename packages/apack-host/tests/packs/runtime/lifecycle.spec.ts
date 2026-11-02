@@ -11,6 +11,11 @@ import * as os from 'node:os';
 import type { SurfaceDefinition } from '@apackdev/sdk/fe';
 
 import { resetTestData } from '@apackdev/sdk/testing';
+import { _bindEars } from '@apackdev/sdk/ears';
+import { DatabaseSync } from 'node:sqlite';
+import { databaseStorage, openDatabaseStore } from '../../../src/database/index.ts';
+import { openDatabase as openSqlite } from '@apackdev/ears/sqlite';
+import { createEarsEngine, type EarsDatabase } from '@apackdev/ears';
 import { registry } from './test-host.ts';
 import { appliedContent, appState } from '../../../src/app-state/index.ts';
 
@@ -65,6 +70,72 @@ function writeManifest(dir: string, manifest: Record<string, unknown>) {
 }
 
 describe('installed runtime acceptance', () => {
+  it.each([false, true])('awaits index admission before starting an accepted pack (build failure: %s)', async fails => {
+    const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
+    const { activatePack } = await import('../../../src/packs/runtime/lifecycle.ts');
+    let finish!: () => void, refuse!: (error: Error) => void;
+    const ready = new Promise<void>((resolve, reject) => { finish = resolve; refuse = reject; });
+    const isolated = createNativePackTestRegistry({ indexesReady: () => ready });
+    const id = 'index-admission-pack', source = path.join(tmpDir, 'admission-source'), marker = path.join(tmpDir, 'initialized');
+    writeManifest(source, { id, name: id, version: '1.0.0', lifecycle: { onInit: 'init.ts#onInit' } });
+    writeBuild(source, id, '{}, lifecycle: { onInit() { require("node:fs").writeFileSync(' + JSON.stringify(marker) + ', "initialized"); } }');
+    const installed = await installPackFromLocal(source, packsDir());
+    const bus = { send: vi.fn() };
+    const readiness = vi.spyOn(isolated, 'indexesReady');
+    const started = activatePack(isolated, id, bus as never);
+    expect(readiness).toHaveBeenCalledWith(id);
+    expect(isolated.getPackRegistration(id)).not.toBeNull();
+    expect(fs.existsSync(marker)).toBe(false);
+    expect(bus.send).not.toHaveBeenCalled();
+    if (fails) refuse(new Error('index build failed')); else finish();
+    expect(await started).toBe(!fails);
+    expect(fs.existsSync(marker)).toBe(!fails);
+    expect(fs.existsSync(installed.dir)).toBe(true);
+    if (fails) {
+      expect(isolated.getPackRegistration(id)).toBeNull();
+      expect(isolated.loadProblem(id)).toContain('index build failed');
+    } else isolated.unregisterPack(id);
+  });
+
+  it('activates an installed pack against real SQLite despite an unrelated failed retained index', async () => {
+    const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
+    const { activatePack } = await import('../../../src/packs/runtime/lifecycle.ts');
+    const isolated = createNativePackTestRegistry();
+    isolated.registerPack({ id: 'retained-pack', ears: { entities: { Retained: 'Retained' }, relKinds: {}, roles: {} } });
+    const { database, engine } = openDatabaseStore({
+      path: path.join(tmpDir, 'sqlite-store'), storageFormat: 'sqlite/1', schema: isolated,
+    });
+    const previous = _bindEars(engine);
+    try {
+      engine.create('Retained', { id: 'Retained-1', slug: 'still-readable' });
+      isolated.unregisterPack('retained-pack');
+      engine.admin.declare({ types: { Retained: { required: [], indexes: ['slug'] } }, relations: {}, roles: [] });
+      const sequence = engine.lastCommit();
+      // Inject a valid persisted derived-failure state through an independent SQLite connection.
+      // Canonical data/schema/commit identity stay intact; the EARS regression covers the real backfill fault.
+      const fault = new DatabaseSync(path.join(database.path, 'data.sqlite3'));
+      try {
+        expect(fault.prepare("UPDATE index_builds SET state='failed',error='retained backfill failure' WHERE type='Retained' AND kind='value' AND name='slug'").run().changes).toBe(1);
+      } finally { fault.close(); }
+      expect(engine.lastCommit()).toBe(sequence);
+      await expect(database.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+      const id = 'healthy-live-pack', source = path.join(tmpDir, 'healthy-source'), marker = path.join(tmpDir, 'healthy-initialized');
+      writeManifest(source, { id, name: id, version: '1.0.0', lifecycle: { onInit: 'init.ts#onInit' } });
+      writeBuild(source, id, '{}, lifecycle: { onInit() { const ids = require("@apackdev/sdk/ears").untypedQuery("Retained").ids(); require("node:fs").writeFileSync(' + JSON.stringify(marker) + ', JSON.stringify(ids)); } }');
+      await installPackFromLocal(source, packsDir());
+      const bus = { send: vi.fn() };
+      expect(await activatePack(isolated, id, bus as never), isolated.loadProblem(id)).toBe(true);
+      expect(JSON.parse(fs.readFileSync(marker, 'utf8'))).toEqual(['Retained-1']);
+      expect(isolated.getPackRegistration(id)).not.toBeNull();
+      expect(isolated.loadProblem(id)).toBeUndefined();
+      expect(engine.query('Retained').where('slug', 'still-readable').ids()).toEqual(['Retained-1']);
+      await expect(database.indexesReady()).rejects.toMatchObject({ code: 'INDEX_FAILED' });
+    } finally {
+      _bindEars(previous);
+      database.close();
+    }
+  });
+
   it.each([false, true])('restarts or stops both old and new system ids after acceptance (init failure: %s)', async fails => {
     const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
     const id = 'systems-pack';
@@ -82,7 +153,7 @@ describe('installed runtime acceptance', () => {
     const shutdown = vi.fn();
     isolated.registerShutdownHook(shutdown, id);
     const bus = { send: vi.fn() };
-    let start!: () => boolean;
+    let start!: () => Promise<boolean>;
     try {
       writeManifest(source, { id, name: id, version: '2.0.0', features: feature('replacement'),
         ...(fails && { lifecycle: { onInit: 'init.ts#onInit' } }),
@@ -94,7 +165,7 @@ describe('installed runtime acceptance', () => {
         expect(bus.send).not.toHaveBeenCalled();
       } });
       expect(isolated.getPackRuntime(id)?.registrationId).not.toBe(previousRevision);
-      expect(start()).toBe(!fails);
+      expect(await start()).toBe(!fails);
       expect(shutdown).toHaveBeenCalledOnce();
       expect(bus.send.mock.calls.map(([event]) => event.type)).toEqual([
         fails ? 'TEARDOWN_PACK' : 'RELOAD_PACK', 'PACK_CHANGED',
@@ -108,7 +179,105 @@ describe('installed runtime acceptance', () => {
     }
   });
 
-  it('restores files and preserves generated settings authority after late binding refusal', async () => {
+  it.each(['elmdb/1', 'sqlite/1'])('refuses registration inside a real write unit without losing staged writes (%s)', format => {
+    const isolated = createNativePackTestRegistry();
+    isolated.registerPack({ id: 'unit-owner', ears: { entities: { UnitProbe: 'UnitProbe' }, relKinds: {}, roles: {} } });
+    const { database, engine } = openDatabaseStore({ path: path.join(tmpDir, 'unit-store'), storageFormat: format, schema: isolated });
+    const unit = database.begin();
+    try {
+      unit.write({ ops: [{ op: 'create', type: 'UnitProbe', id: 'UnitProbe-held', fields: { label: 'staged' } }] });
+      const before = database.sequence;
+      expect(() => isolated.registerPack({ id: 'refused-unit-pack', ears: { entities: { RefusedProbe: 'RefusedProbe' }, relKinds: {}, roles: {} } })).toThrow(expect.objectContaining({ code: 'UNIT_OPEN' }));
+      expect(unit.isOpen).toBe(true);
+      expect(database.sequence).toBe(before);
+      expect(isolated.getPackRegistration('refused-unit-pack')).toBeNull();
+      unit.commit();
+      expect(engine.query('UnitProbe').ids()).toEqual(['UnitProbe-held']);
+      expect(database.sequence).toBeGreaterThan(before);
+    } finally {
+      if (unit.isOpen) unit.abort();
+      database.close();
+    }
+  });
+
+  it.each(['NOT_DURABLE', 'COMMIT_UNKNOWN'])('keeps accepted replacement files and refuses startup after schema %s', async code => {
+    const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
+    const id = 'outcome-pack', source = path.join(tmpDir, 'outcome-source'), marker = path.join(tmpDir, 'outcome-initialized');
+    writeManifest(source, { id, name: id, version: '1.0.0' }); writeBuild(source, id);
+    const installed = await installPackFromLocal(source, packsDir());
+    const isolated = createNativePackTestRegistry();
+    const { database } = openDatabaseStore({ path: path.join(tmpDir, 'outcome-store'), storageFormat: 'sqlite/1', schema: isolated });
+    const loaded = loadSingleExternalPack(isolated, installed.dir);
+    if ('problem' in loaded) { database.close(); throw new Error(loaded.problem); }
+    isolated.registerPack(loaded.registration, loaded.origin);
+    const previous = isolated.getPackRuntime(id)?.registrationId;
+    const failure = Object.assign(new Error('schema outcome ' + code), { code });
+    const declare = database.setSchema.bind(database);
+    // Host outcome routing only: EARS owns real COMMIT/sync/quarantine fault qualification.
+    const admission = vi.spyOn(database, 'setSchema').mockImplementationOnce(schema => {
+      if (code === 'NOT_DURABLE') declare(schema);
+      throw failure;
+    });
+    try {
+      writeManifest(source, { id, name: id, version: '2.0.0', lifecycle: { onInit: 'init.ts#onInit' } });
+      writeBuild(source, id, '{}, lifecycle: { onInit() { require("node:fs").writeFileSync(' + JSON.stringify(marker) + ', "started"); } }');
+      const bus = { send: vi.fn() };
+      let start!: () => Promise<boolean>;
+      await installPackFromLocal(source, packsDir(), { accept: candidate => { start = acceptInstalledPack(isolated, candidate.id, bus as never); } });
+      expect(readPackBuild(installed.dir).integrity.version).toBe('2.0.0');
+      expect(isolated.getPackRuntime(id)?.registrationId).not.toBe(previous);
+      await expect(isolated.indexesReady(id)).rejects.toBe(failure);
+      expect(await start()).toBe(false);
+      expect(fs.existsSync(marker)).toBe(false);
+      expect(isolated.getPackRegistration(id)).toBeNull();
+      expect(isolated.loadProblem(id)).toContain(code);
+      expect(readPackBuild(installed.dir).integrity.version).toBe('2.0.0');
+    } finally {
+      admission.mockRestore();
+      database.close();
+      if (isolated.getPackRegistration(id)) isolated.unregisterPack(id);
+    }
+  });
+
+  it.each([['elmdb/1', false], ['elmdb/1', true], ['sqlite/1', false], ['sqlite/1', true]] as const)('closes a refused second schema owner and preserves cleanup errors (%s, close failure: %s)', async (format, closeFails) => {
+    const isolated = createNativePackTestRegistry();
+    const storage = databaseStorage(format), open = storage.open.bind(storage), acquired: EarsDatabase[] = [];
+    let failClose = closeFails;
+    const cleanup = new Error('provisional close failed');
+    const opening = vi.spyOn(storage, 'open').mockImplementation(options => {
+      const db = open(options); acquired.push(db);
+      if (closeFails && acquired.length === 2) {
+        const close = db.close.bind(db);
+        db.close = () => { if (failClose) { failClose = false; throw cleanup; } close(); };
+      }
+      return db;
+    });
+    try {
+      const first = openDatabaseStore({ path: path.join(tmpDir, 'first-owner'), storageFormat: format, schema: isolated });
+      let error: unknown;
+      try { openDatabaseStore({ path: path.join(tmpDir, 'second-owner'), storageFormat: format, schema: isolated }); }
+      catch (caught) { error = caught; }
+      expect(error).toMatchObject({ code: 'DATABASE_BOUND' });
+      expect(acquired).toHaveLength(2);
+      expect(acquired[0]!.isOpen).toBe(true); expect(acquired[1]!.isOpen).toBe(closeFails);
+      if (closeFails) {
+        expect(error).toMatchObject({ databaseConnectionUnclosed: true, cause: expect.objectContaining({ code: 'DATABASE_BOUND' }),
+          errors: [expect.objectContaining({ code: 'DATABASE_BOUND' }), cleanup] });
+        acquired[1]!.close();
+      }
+      first.database.close();
+      await expect(isolated.indexesReady()).rejects.toMatchObject({ code: 'CLOSED' });
+      const next = openDatabaseStore({ path: path.join(tmpDir, 'second-owner'), storageFormat: format, schema: isolated });
+      expect(next.database.isOpen).toBe(true);
+      await expect(isolated.indexesReady()).resolves.toBeUndefined();
+    } finally {
+      failClose = false;
+      try { for (const db of acquired) db.close(); }
+      finally { opening.mockRestore(); }
+    }
+  });
+
+  it.each(['binding', 'schema'])('restores files and preserves generated settings authority after %s refusal', async refusal => {
     const { installPackFromLocal } = await import('../../../src/packs/installer.ts');
     const id = 'binding-pack';
     const source = path.join(tmpDir, 'source');
@@ -129,6 +298,7 @@ describe('installed runtime acceptance', () => {
       },
     };
     const isolated = createNativePackTestRegistry({ settingsForPack: () => settings });
+    const { database } = openDatabaseStore({ path: path.join(tmpDir, 'admission-store'), storageFormat: 'sqlite/1', schema: isolated });
     const generated = _createPackServices();
     const handle = generated.settingsHandle({ kind: 'app' });
     const registration = { ...loaded.registration, bindServices: generated.bindServices };
@@ -139,10 +309,21 @@ describe('installed runtime acceptance', () => {
     const bus = { send: vi.fn() };
     try {
       writeManifest(source, { id, name: id, version: '2.0.0' });
-      writeBuild(source, id, '{}, bindServices() { throw new Error("late binding refused"); }');
-      await expect(installPackFromLocal(source, packsDir(), { accept: candidate => {
+      writeBuild(source, id, refusal === 'binding'
+        ? '{}, bindServices() { throw new Error("late binding refused"); }'
+        : '{}, bindServices() { return () => {}; }');
+      if (refusal === 'schema') {
+        // A real peer commits another declaration, making this store's handle stale.
+        // Its next schema admission must refuse before replacing runtime authority.
+        const peer = openSqlite({ path: database.path });
+        try { createEarsEngine({ database: peer }).admin.declare({ types: { PeerMarker: { required: [] } }, relations: {}, roles: [] }); }
+        finally { peer.close(); }
+      }
+      const update = installPackFromLocal(source, packsDir(), { accept: candidate => {
         acceptInstalledPack(isolated, candidate.id, bus as never);
-      } })).rejects.toThrow('late binding refused');
+      } });
+      if (refusal === 'schema') await expect(update).rejects.toMatchObject({ code: 'SCHEMA_CHANGED' });
+      else await expect(update).rejects.toThrow('late binding refused');
       expect(readPackBuild(installed.dir)).toEqual(previousBuild);
       const restored = loadSingleExternalPack(registry, installed.dir);
       expect(restored).not.toHaveProperty('problem');
@@ -157,6 +338,9 @@ describe('installed runtime acceptance', () => {
       expect(bus.send).not.toHaveBeenCalled();
       expect(isolated.loadProblem(id)).toBeUndefined();
     } finally {
+      database.close();
+      // Join any incorrectly scheduled retirement even when this regression fails.
+      for (const [event] of bus.send.mock.calls) event.afterStop?.();
       if (isolated.getPackRegistration(id)) isolated.unregisterPack(id);
     }
     expect(listeners.size).toBe(0);
@@ -270,7 +454,7 @@ describe('activating and tearing down a pack at runtime', () => {
     writeManifest(source, { id: PACK_ID, name: 'Failing Init', version: '1.0.0', lifecycle: { onInit: 'hooks.ts#onInit', onShutdown: 'hooks.ts#onShutdown' } });
     writeBuild(source, PACK_ID, "{}, lifecycle: { onInit() { throw new Error('init refused'); }, onShutdown() { globalThis.activatePackRuns.push('shutdown'); } }");
     await installPackFromLocal(source, packsDir());
-    expect(activatePack(registry, PACK_ID, bus as never)).toBe(false);
+    expect(await activatePack(registry, PACK_ID, bus as never)).toBe(false);
     expect(registry.getPackRegistration(PACK_ID)).toBeNull();
     expect(registry.loadProblem(PACK_ID)).toContain('init refused');
     expect(registry.settingsCatalog().dependencies).toHaveProperty(PACK_ID);
@@ -283,7 +467,7 @@ describe('activating and tearing down a pack at runtime', () => {
     await install();
     const { activatePack } = await import('../../../src/packs/runtime/lifecycle.ts');
 
-    expect(activatePack(registry, PACK_ID, bus as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, bus as never)).toBe(true);
 
     expect(bus.send.mock.calls.map(([event]) => event.type)).toEqual(['PACK_CHANGED', 'ACTIVATE_PACK']);
     expect(bus.send).toHaveBeenCalledWith({ type: 'PACK_CHANGED', packId: PACK_ID });
@@ -293,14 +477,14 @@ describe('activating and tearing down a pack at runtime', () => {
     await install();
     const { activatePack, teardownPack } = await import('../../../src/packs/runtime/lifecycle.ts');
 
-    expect(activatePack(registry, PACK_ID, bus as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, bus as never)).toBe(true);
     expect(runs).toEqual(['migration', 'apply']);
     expect(appState.get()).toMatchObject({ packVersions: { [PACK_ID]: '1.0.0' } });
     expect(appliedContent.get(PACK_ID).revision).toEqual(expect.any(String));
 
     // Disabled, then enabled again
     teardownPack(registry, PACK_ID, bus as never);
-    expect(activatePack(registry, PACK_ID, bus as never)).toBe(true);
+    expect(await activatePack(registry, PACK_ID, bus as never)).toBe(true);
     expect(runs).toEqual(['migration', 'apply']);
   });
 
@@ -308,7 +492,7 @@ describe('activating and tearing down a pack at runtime', () => {
     await install();
     const { activatePack, teardownPack } = await import('../../../src/packs/runtime/lifecycle.ts');
     const { importCompiledContent } = await import('@apackdev/sdk/utils');
-    activatePack(registry, PACK_ID, bus as never);
+    await activatePack(registry, PACK_ID, bus as never);
     const compiledDir = path.join(tmpDir, 'compiled-content');
     fs.mkdirSync(compiledDir);
     fs.writeFileSync(path.join(compiledDir, 'content.json'), JSON.stringify({ version: 1, packId: PACK_ID, entries: [] }));

@@ -1,0 +1,27 @@
+[
+  {
+    "label": "native-956",
+    "args": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "elmdb-node"
+    ],
+    "exitCode": 0,
+    "seconds": 63.15434072999051
+  },
+  {
+    "label": "ear-package",
+    "args": [
+      "npm",
+      "run",
+      "build:package",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 1,
+    "seconds": 2.6283666719973553
+  }
+]

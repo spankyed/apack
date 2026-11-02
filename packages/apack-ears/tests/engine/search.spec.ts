@@ -35,6 +35,36 @@ describe('search', () => {
     expect(e.query('Thread').search('release').ids()).toEqual([thread]);
   });
 
+  it('keeps search eligibility behind limits, trash, graph prefixes and transactional changes', () => {
+    const e = engine();
+    const a = e.create('Message', { text: 'needle', category: 'selected' }).id();
+    const b = e.create('Message', { text: 'needle needle', category: 'selected' }).id();
+    e.create('Message', { text: 'needle', category: 'other' });
+    const trashed = e.create('Message', { text: 'needle', category: 'selected' }).trash().id();
+    const scoped = () => e.query('Message').where('category', 'selected').limit(1).search('needle', { fuzzy: false }).ids();
+    expect(scoped()).toEqual([a]);
+    expect(e.query.ids([b, a]).limit(1).search('needle', { fuzzy: false }).ids()).toEqual([b]);
+    expect(e.query.trashed('Message').where('category', 'selected').search('needle', { fuzzy: false }).ids()).toEqual([trashed]);
+    const root = e.create('Thread', { title: 'root' }).link('in', a).link('in', b).id();
+    expect(e.query.ids(root).out('in', 'Message').limit(1).search('needle', { fuzzy: false }).ids()).toEqual([a]);
+    expect(() => e.transact(() => {
+      e.write(a).set('category', 'other');
+      expect(scoped()).toEqual([b]);
+      throw Error('rollback scoped search');
+    })).toThrow('rollback scoped search');
+    expect(scoped()).toEqual([a]);
+  });
+
+  it('searches global and filtered sets containing types without a text index', () => {
+    const e = engine();
+    const found = e.create('Message', { text: 'needle', category: 'selected' }).id();
+    e.create('Plain', { text: 'needle', category: 'selected' });
+    expect(e.query.all().search('needle', { fuzzy: false }).ids()).toEqual([found]);
+    expect(e.query(['Message', 'Plain']).where('category', 'selected').search('needle', { fuzzy: false }).ids()).toEqual([found]);
+    expect(e.query('Plain').where('category', 'selected').search('needle').ids()).toEqual([]);
+    expect(() => e.query('Plain').search('needle').ids()).toThrow(expect.objectContaining({ code: 'UNKNOWN_INDEX' }));
+  });
+
   it('weighs a field, restricts to fields and ranks newer first with recency', () => {
     const e = engine();
     // Documents of one length at their weights, so the weight is what differs
@@ -44,6 +74,21 @@ describe('search', () => {
     expect(e.query('Message').search('ada', { fields: ['text'] }).ids()).toEqual([inText]);
     expect(e.query('Message').search('ada', { fields: ['text', 'sender'], recency: { field: 'at', halfLife: 10_000, now: 100_000 } }).first())
       .toBe(inSender);
+  });
+
+  it('decays numeric and Date times before paging, and ignores nonpositive half-lives', () => {
+    const e = engine();
+    for (const clock of ['number', 'date']) {
+      const text = 'timeline ' + clock;
+      const old = e.create('Message', { text, at: clock === 'date' ? new Date(1000) : 1000 }).id();
+      const recent = e.create('Message', { text, at: clock === 'date' ? new Date(99000) : 99000 }).id();
+      const base = e.query('Message').search(text, { fuzzy: false }).hits();
+      expect(base.map(hit => hit.id)).toEqual([old, recent]);
+      expect(e.query('Message').search(text, { fuzzy: false, recency: { field: 'at', halfLife: 10000, now: 100000 } }).limit(1).ids())
+        .toEqual([recent]);
+      for (const halfLife of [0, -10000]) expect(e.query('Message').search(text, { fuzzy: false, recency: { field: 'at', halfLife, now: 100000 } }).hits())
+        .toEqual(base);
+    }
   });
 
   it('pages after the last id of a page', () => {

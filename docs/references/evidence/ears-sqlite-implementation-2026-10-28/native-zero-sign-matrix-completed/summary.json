@@ -1,0 +1,1275 @@
+{
+  "source": "a9c9340df74f90b85434e8ddafa9742bd6867cbf",
+  "protocol": "ears-current-elmdb-resumed-real-matrix/2-known-zero-sign-loss",
+  "size": 99900,
+  "resumeEmbedMs": 4551833.097120999,
+  "updateMs": 269581.426953,
+  "canonical": [
+    {
+      "phase": "checkpoint",
+      "embeddings": 72000,
+      "entities": 99900,
+      "zeroSignChanges": 3,
+      "canonicalBytesPassed": false,
+      "loads": 171901,
+      "ms": 12024.748368999994
+    },
+    {
+      "phase": "initial",
+      "embeddings": 99900,
+      "entities": 99900,
+      "zeroSignChanges": 4,
+      "canonicalBytesPassed": false,
+      "loads": 199801,
+      "ms": 24264.452502999455
+    },
+    {
+      "phase": "updated",
+      "embeddings": 99900,
+      "entities": 99900,
+      "zeroSignChanges": 4,
+      "canonicalBytesPassed": false,
+      "loads": 199801,
+      "ms": 19807.42582600005
+    }
+  ],
+  "queryGatesPassed": false,
+  "canonicalBytesPassed": false,
+  "frozenGatesPassed": false,
+  "maxRssKiB": 1780328,
+  "incumbentMainSha256After": "0fe282f82d18121c62f2828867099dedac26be67d30327b65f30b851ab5a1d00",
+  "queryCount": 7200,
+  "canonicalZeroSignFailures": [
+    {
+      "phase": "checkpoint",
+      "id": "Row-002260",
+      "component": 1404,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "checkpoint",
+      "id": "Row-018320",
+      "component": 1437,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "checkpoint",
+      "id": "Row-065821",
+      "component": 788,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "initial",
+      "id": "Row-002260",
+      "component": 1404,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "initial",
+      "id": "Row-018320",
+      "component": 1437,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "initial",
+      "id": "Row-065821",
+      "component": 788,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "initial",
+      "id": "Row-085255",
+      "component": 554,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "updated",
+      "id": "Row-002260",
+      "component": 1404,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "updated",
+      "id": "Row-018320",
+      "component": 1437,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "updated",
+      "id": "Row-065821",
+      "component": 788,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    },
+    {
+      "phase": "updated",
+      "id": "Row-085255",
+      "component": 554,
+      "expectedBits": "80000000",
+      "actualBits": "0"
+    }
+  ],
+  "cohorts": [
+    {
+      "phase": "initial",
+      "size": 1000,
+      "scopePercent": 100,
+      "eligible": 988,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": true,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 2.289179999381304,
+            "p95": 2.6985580008476973,
+            "p99": 3.722814000211656
+          },
+          "heartbeatMs": {
+            "p99": 4.698117000050843
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 2.280096000060439,
+            "p95": 2.484765000641346,
+            "p99": 3.666687000542879
+          },
+          "heartbeatMs": {
+            "p99": 4.4291150001809
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 2.3080550003796816,
+            "p95": 2.570597999729216,
+            "p99": 4.046273000538349
+          },
+          "heartbeatMs": {
+            "p99": 7.092214000411332
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 2.3141390001401305,
+            "p95": 2.5035139992833138,
+            "p99": 2.6570150004699826
+          },
+          "heartbeatMs": {
+            "p99": 3.2711079996079206
+          }
+        }
+      ]
+    },
+    {
+      "phase": "initial",
+      "size": 1000,
+      "scopePercent": 10,
+      "eligible": 99,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.2220489997416735,
+            "p95": 1.446259000338614,
+            "p99": 1.5639669997617602
+          },
+          "heartbeatMs": {
+            "p99": 2.7039379999041557
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.1895479997619987,
+            "p95": 1.3730499995872378,
+            "p99": 1.9606359992176294
+          },
+          "heartbeatMs": {
+            "p99": 3.4610670004040003
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.1627560006454587,
+            "p95": 1.390549000352621,
+            "p99": 2.6729739997535944
+          },
+          "heartbeatMs": {
+            "p99": 3.0646479995921254
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.1851320005953312,
+            "p95": 1.3804660001769662,
+            "p99": 1.487007999792695
+          },
+          "heartbeatMs": {
+            "p99": 2.479020000435412
+          }
+        }
+      ]
+    },
+    {
+      "phase": "initial",
+      "size": 1000,
+      "scopePercent": 1,
+      "eligible": 9,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.020630999468267,
+            "p95": 1.2266739998012781,
+            "p99": 1.6629259996116161
+          },
+          "heartbeatMs": {
+            "p99": 2.6215209998190403
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.0407139994204044,
+            "p95": 1.237881999462843,
+            "p99": 2.307637999765575
+          },
+          "heartbeatMs": {
+            "p99": 2.833479999564588
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.1100069992244244,
+            "p95": 1.419133000075817,
+            "p99": 1.7755519999191165
+          },
+          "heartbeatMs": {
+            "p99": 5.075619000010192
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.0358809996396303,
+            "p95": 1.1715069999918342,
+            "p99": 1.2925899997353554
+          },
+          "heartbeatMs": {
+            "p99": 1.7864329991862178
+          }
+        }
+      ]
+    },
+    {
+      "phase": "initial",
+      "size": 10000,
+      "scopePercent": 100,
+      "eligible": 9886,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.997,
+          "latencyMs": {
+            "p50": 28.982374999672174,
+            "p95": 36.81271199975163,
+            "p99": 41.91953399963677
+          },
+          "heartbeatMs": {
+            "p99": 42.33325000014156
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.997,
+          "latencyMs": {
+            "p50": 29.087251000106335,
+            "p95": 32.0950600001961,
+            "p99": 34.934493999928236
+          },
+          "heartbeatMs": {
+            "p99": 35.40375200007111
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.997,
+          "latencyMs": {
+            "p50": 28.682248999364674,
+            "p95": 34.62086599972099,
+            "p99": 38.765599000267684
+          },
+          "heartbeatMs": {
+            "p99": 39.19877399969846
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.997,
+          "latencyMs": {
+            "p50": 28.639457000419497,
+            "p95": 34.55182499997318,
+            "p99": 36.58187699969858
+          },
+          "heartbeatMs": {
+            "p99": 37.07042800076306
+          }
+        }
+      ]
+    },
+    {
+      "phase": "initial",
+      "size": 10000,
+      "scopePercent": 10,
+      "eligible": 989,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 10.69006200041622,
+            "p95": 11.946194000542164,
+            "p99": 13.217784999869764
+          },
+          "heartbeatMs": {
+            "p99": 13.893002000637352
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 10.931437999941409,
+            "p95": 14.427084000781178,
+            "p99": 15.707674000412226
+          },
+          "heartbeatMs": {
+            "p99": 16.22455700021237
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 10.870354000478983,
+            "p95": 13.739287000149488,
+            "p99": 20.659327999688685
+          },
+          "heartbeatMs": {
+            "p99": 21.25587800052017
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 10.768895000219345,
+            "p95": 11.940693999640644,
+            "p99": 18.086021000519395
+          },
+          "heartbeatMs": {
+            "p99": 18.544945999979973
+          }
+        }
+      ]
+    },
+    {
+      "phase": "initial",
+      "size": 10000,
+      "scopePercent": 1,
+      "eligible": 98,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 8.980426999740303,
+            "p95": 9.785973000340164,
+            "p99": 10.91485400032252
+          },
+          "heartbeatMs": {
+            "p99": 11.40794700011611
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 8.994093999266624,
+            "p95": 9.99222500063479,
+            "p99": 11.340065000578761
+          },
+          "heartbeatMs": {
+            "p99": 11.83869899995625
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 8.947885000146925,
+            "p95": 10.05318299960345,
+            "p99": 11.75360899977386
+          },
+          "heartbeatMs": {
+            "p99": 12.271827000193298
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 9.049761000089347,
+            "p95": 9.625179999507964,
+            "p99": 11.498025000095367
+          },
+          "heartbeatMs": {
+            "p99": 11.975991000421345
+          }
+        }
+      ]
+    },
+    {
+      "phase": "initial",
+      "size": 99900,
+      "scopePercent": 100,
+      "eligible": 98770,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.987,
+          "latencyMs": {
+            "p50": 6.242285999469459,
+            "p95": 7.946920999325812,
+            "p99": 10.04847399983555
+          },
+          "heartbeatMs": {
+            "p99": 10.850151999853551
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.987,
+          "latencyMs": {
+            "p50": 5.738575000315905,
+            "p95": 6.7587469993159175,
+            "p99": 7.250251000747085
+          },
+          "heartbeatMs": {
+            "p99": 8.752222999930382
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.987,
+          "latencyMs": {
+            "p50": 5.821700000204146,
+            "p95": 6.7935800002887845,
+            "p99": 8.996551999822259
+          },
+          "heartbeatMs": {
+            "p99": 9.608436000533402
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.987,
+          "latencyMs": {
+            "p50": 6.629955000244081,
+            "p95": 8.059380000457168,
+            "p99": 12.38848799932748
+          },
+          "heartbeatMs": {
+            "p99": 12.898246999830008
+          }
+        }
+      ]
+    },
+    {
+      "phase": "initial",
+      "size": 99900,
+      "scopePercent": 10,
+      "eligible": 9878,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9980000000000001,
+          "latencyMs": {
+            "p50": 30.80488600023091,
+            "p95": 34.903784999623895,
+            "p99": 42.170909999869764
+          },
+          "heartbeatMs": {
+            "p99": 43.05233800038695
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9980000000000001,
+          "latencyMs": {
+            "p50": 30.754386000335217,
+            "p95": 35.403328999876976,
+            "p99": 37.93942700047046
+          },
+          "heartbeatMs": {
+            "p99": 38.61497899983078
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9980000000000001,
+          "latencyMs": {
+            "p50": 31.365306000225246,
+            "p95": 50.00974600017071,
+            "p99": 85.88616200070828
+          },
+          "heartbeatMs": {
+            "p99": 85.64774999953806
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9980000000000001,
+          "latencyMs": {
+            "p50": 30.303633000701666,
+            "p95": 36.814379000104964,
+            "p99": 41.798407999798656
+          },
+          "heartbeatMs": {
+            "p99": 42.23116599954665
+          }
+        }
+      ]
+    },
+    {
+      "phase": "initial",
+      "size": 99900,
+      "scopePercent": 1,
+      "eligible": 987,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 3.6741039995104074,
+            "p95": 4.4464840004220605,
+            "p99": 5.847742000594735
+          },
+          "heartbeatMs": {
+            "p99": 6.640211000107229
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 3.862646999768913,
+            "p95": 4.423983999527991,
+            "p99": 6.080160000361502
+          },
+          "heartbeatMs": {
+            "p99": 6.53908499982208
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 4.088647999800742,
+            "p95": 4.827151999808848,
+            "p99": 8.047213000245392
+          },
+          "heartbeatMs": {
+            "p99": 8.51047100033611
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 3.8941059997305274,
+            "p95": 4.533150999806821,
+            "p99": 6.766664000228047
+          },
+          "heartbeatMs": {
+            "p99": 7.618882999755442
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 1000,
+      "scopePercent": 100,
+      "eligible": 988,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": true,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 2.400930999778211,
+            "p95": 3.635773000307381,
+            "p99": 8.687428999692202
+          },
+          "heartbeatMs": {
+            "p99": 9.742692000232637
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 2.3963480005040765,
+            "p95": 3.1156860003247857,
+            "p99": 7.646922000683844
+          },
+          "heartbeatMs": {
+            "p99": 11.962539000436664
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 2.3553479993715882,
+            "p95": 3.2568540005013347,
+            "p99": 5.792369000613689
+          },
+          "heartbeatMs": {
+            "p99": 7.388926999643445
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 2.336723000742495,
+            "p95": 2.813017999753356,
+            "p99": 5.689952000044286
+          },
+          "heartbeatMs": {
+            "p99": 13.09167099930346
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 1000,
+      "scopePercent": 10,
+      "eligible": 99,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.3019239995628595,
+            "p95": 1.7401769999414682,
+            "p99": 3.1982279997318983
+          },
+          "heartbeatMs": {
+            "p99": 6.11962699983269
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.29400800075382,
+            "p95": 2.023928999900818,
+            "p99": 6.341164999641478
+          },
+          "heartbeatMs": {
+            "p99": 10.898574000224471
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.35421699937433,
+            "p95": 1.6263859998434782,
+            "p99": 3.33706200029701
+          },
+          "heartbeatMs": {
+            "p99": 8.288808000274003
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.46359199937433,
+            "p95": 1.986429000273347,
+            "p99": 2.2231799997389317
+          },
+          "heartbeatMs": {
+            "p99": 4.518034000881016
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 1000,
+      "scopePercent": 1,
+      "eligible": 9,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.1908820001408458,
+            "p95": 2.463264999911189,
+            "p99": 4.315067999996245
+          },
+          "heartbeatMs": {
+            "p99": 5.461498999968171
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.1272569997236133,
+            "p95": 1.5218850001692772,
+            "p99": 2.302806000225246
+          },
+          "heartbeatMs": {
+            "p99": 5.0781629998236895
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.1269659996032715,
+            "p95": 1.2542160004377365,
+            "p99": 1.5189680000767112
+          },
+          "heartbeatMs": {
+            "p99": 2.2971450006589293
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 1.1542570004239678,
+            "p95": 1.3929249998182058,
+            "p99": 1.9124290002509952
+          },
+          "heartbeatMs": {
+            "p99": 3.444486000575125
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 10000,
+      "scopePercent": 100,
+      "eligible": 9886,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.997,
+          "latencyMs": {
+            "p50": 31.270069000311196,
+            "p95": 55.180634000338614,
+            "p99": 118.4046090003103
+          },
+          "heartbeatMs": {
+            "p99": 117.48777700029314
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.997,
+          "latencyMs": {
+            "p50": 30.80273300036788,
+            "p95": 40.219998999498785,
+            "p99": 47.23871000017971
+          },
+          "heartbeatMs": {
+            "p99": 47.5031340001151
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.997,
+          "latencyMs": {
+            "p50": 29.728684999980032,
+            "p95": 34.66617299988866,
+            "p99": 36.96881299931556
+          },
+          "heartbeatMs": {
+            "p99": 37.44340499956161
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.997,
+          "latencyMs": {
+            "p50": 32.54461900051683,
+            "p95": 44.48552600014955,
+            "p99": 64.32306599989533
+          },
+          "heartbeatMs": {
+            "p99": 64.81570000015199
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 10000,
+      "scopePercent": 10,
+      "eligible": 989,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 11.242611999623477,
+            "p95": 15.371720000170171,
+            "p99": 31.210652000270784
+          },
+          "heartbeatMs": {
+            "p99": 36.49110800027847
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 11.200902000069618,
+            "p95": 13.908586000092328,
+            "p99": 17.166939000599086
+          },
+          "heartbeatMs": {
+            "p99": 22.263852999545634
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 11.180820000357926,
+            "p95": 14.32879799976945,
+            "p99": 21.114548000507057
+          },
+          "heartbeatMs": {
+            "p99": 21.566514999605715
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 11.49694599956274,
+            "p95": 15.514971000142395,
+            "p99": 25.296199000440538
+          },
+          "heartbeatMs": {
+            "p99": 29.761773999780416
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 10000,
+      "scopePercent": 1,
+      "eligible": 98,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 9.674267999827862,
+            "p95": 14.921426000073552,
+            "p99": 19.02140999957919
+          },
+          "heartbeatMs": {
+            "p99": 22.386227999813855
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 10.618524000048637,
+            "p95": 22.470305999740958,
+            "p99": 27.020500999875367
+          },
+          "heartbeatMs": {
+            "p99": 29.224561999551952
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 10.72144200000912,
+            "p95": 23.814481999725103,
+            "p99": 31.014067000709474
+          },
+          "heartbeatMs": {
+            "p99": 42.66993799991906
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 11.332612000405788,
+            "p95": 38.7788660004735,
+            "p99": 48.834637000225484
+          },
+          "heartbeatMs": {
+            "p99": 50.76148799993098
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 99900,
+      "scopePercent": 100,
+      "eligible": 98770,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9860000000000001,
+          "latencyMs": {
+            "p50": 10.889568000100553,
+            "p95": 38.10727799963206,
+            "p99": 45.304281999357045
+          },
+          "heartbeatMs": {
+            "p99": 49.562563999556005
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9860000000000001,
+          "latencyMs": {
+            "p50": 9.296183000318706,
+            "p95": 17.516274999827147,
+            "p99": 27.5410039993003
+          },
+          "heartbeatMs": {
+            "p99": 32.392081999219954
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9860000000000001,
+          "latencyMs": {
+            "p50": 8.373552000150084,
+            "p95": 24.493277000263333,
+            "p99": 41.0124629996717
+          },
+          "heartbeatMs": {
+            "p99": 42.95398099999875
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9860000000000001,
+          "latencyMs": {
+            "p50": 8.37084399908781,
+            "p95": 27.76450499985367,
+            "p99": 46.807165999896824
+          },
+          "heartbeatMs": {
+            "p99": 59.019413999281824
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 99900,
+      "scopePercent": 10,
+      "eligible": 9878,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9960000000000001,
+          "latencyMs": {
+            "p50": 57.853233999572694,
+            "p95": 127.68550099991262,
+            "p99": 163.67051599919796
+          },
+          "heartbeatMs": {
+            "p99": 164.15006700064987
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9960000000000001,
+          "latencyMs": {
+            "p50": 95.73301099985838,
+            "p95": 261.21791400015354,
+            "p99": 356.5620880005881
+          },
+          "heartbeatMs": {
+            "p99": 357.1593899996951
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9960000000000001,
+          "latencyMs": {
+            "p50": 82.06163500063121,
+            "p95": 322.05729100015014,
+            "p99": 487.35252599976957
+          },
+          "heartbeatMs": {
+            "p99": 567.17456900049
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 0.9960000000000001,
+          "latencyMs": {
+            "p50": 63.786437000148,
+            "p95": 131.79798499960452,
+            "p99": 181.0215400001034
+          },
+          "heartbeatMs": {
+            "p99": 198.1299860002473
+          }
+        }
+      ]
+    },
+    {
+      "phase": "updated",
+      "size": 99900,
+      "scopePercent": 1,
+      "eligible": 987,
+      "passes": [
+        {
+          "pass": 0,
+          "timed": false,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 6.287246999330819,
+            "p95": 28.67301100026816,
+            "p99": 73.36066400073469
+          },
+          "heartbeatMs": {
+            "p99": 75.76918500009924
+          }
+        },
+        {
+          "pass": 1,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 5.32336699962616,
+            "p95": 9.368892000056803,
+            "p99": 13.606959000229836
+          },
+          "heartbeatMs": {
+            "p99": 17.04990299977362
+          }
+        },
+        {
+          "pass": 2,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 5.651242999359965,
+            "p95": 13.127748000435531,
+            "p99": 16.994688999839127
+          },
+          "heartbeatMs": {
+            "p99": 23.321483999490738
+          }
+        },
+        {
+          "pass": 3,
+          "timed": true,
+          "connectionReopenedFirstPass": false,
+          "meanRecall": 1,
+          "latencyMs": {
+            "p50": 5.56216000020504,
+            "p95": 13.196873999200761,
+            "p99": 22.151011999696493
+          },
+          "heartbeatMs": {
+            "p99": 28.388640000484884
+          }
+        }
+      ]
+    }
+  ]
+}

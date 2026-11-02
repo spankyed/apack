@@ -1,0 +1,8 @@
+{
+  "nativeCommit": "8ab7088f9a583202f9ccc766381a31e39d19851f",
+  "testedPatchSha256": "a6c663442b58e3d04e436ecb485f823813fe4ab8ae6f6d2a23d3e863dc50a91d",
+  "implementationExcludingCommentLinesSha256": "649b31b99b6dde59f5e05748b2072a2cbe01f90487c7dc93d8b425be2f1efac1",
+  "onlyPostTestRustChange": "move existing nearest rustdoc from pending helper back to nearest",
+  "regressionFileIdentical": true,
+  "exactCommitPlatformCi": "https://github.com/spankyed/elmdb/actions/runs/40982141666"
+}

@@ -2,9 +2,10 @@ import { dbBackupVerify, verifyBackup, VERIFY_USAGE } from './backup-verify';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { findRunningApp, holdDatabaseWriteLock, openRunHistory } from '@apackdev/host/database';
-import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
+import { databaseBackupStore, exportDatabase, publishBackupDirectory } from '@apackdev/host/backup';
 import { readHostCompatibility } from '@apackdev/host/packs';
-import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { openTarget, parseDbArgs, realDestination, TARGET_USAGE, withDatabase, type DbIo } from './target';
 
 export const BACKUP_USAGE = [
   'Usage: apack db backup --out <dir> [options]', VERIFY_USAGE, '',
@@ -12,12 +13,6 @@ export const BACKUP_USAGE = [
   'The destination must not exist. Installed packs and secrets are not included.',
   '', '  --out <dir>            New backup directory (required)', TARGET_USAGE,
 ].join('\n');
-
-/** Resolve symlinks even when the final path does not exist yet. */
-function realDestination(file: string): string {
-  if (fs.existsSync(file)) return fs.realpathSync(file);
-  return path.join(realDestination(path.dirname(file)), path.basename(file));
-}
 
 export async function dbBackup(args: string[], io: DbIo): Promise<void> {
   if (args[0] === 'verify') return dbBackupVerify(args.slice(1), io);
@@ -30,8 +25,8 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
   }
   if (fs.existsSync(destination)) throw new Error(`Backup destination already exists: ${destination}`);
   const lock = holdDatabaseWriteLock(target.userDataDir, 'apack db backup');
-  let stage: string | undefined;
-  let reserved = false;
+  let stage: string | undefined, published = false;
+  const failures: unknown[] = [];
   try {
     if (findRunningApp(target)) throw new Error('Quit the app before taking a full offline backup.');
     const db = await openTarget(target, { write: false, command: 'backup' }, io);
@@ -39,7 +34,7 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       stage = fs.mkdtempSync(path.join(path.dirname(destination), '.apack-backup-'));
       // A data dir the app never ran a flow in has no run history yet
-      const runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistory(db.paths.runHistory, { readOnly: true }) : undefined;
+      const runHistory = fs.existsSync(db.paths.runHistory) ? openRunHistory(db.paths.runHistory, { readOnly: true, storageFormat: db.database.format }) : undefined;
       let backup: string;
       try {
         backup = await exportDatabase({ lmdb: databaseBackupStore(db.database), ...(runHistory && { runHistory: databaseBackupStore(runHistory.database) }) }, stage, {
@@ -52,17 +47,23 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
       }
       verifyBackup(backup);
       fs.chmodSync(backup, 0o700);
-      // Exclusive reservation prevents overwriting a destination created while the snapshot was copied.
-      fs.mkdirSync(destination);
-      reserved = true;
-      fs.renameSync(backup, destination);
-      reserved = false;
+      publishBackupDirectory(backup, destination);
+      published = true;
     });
     io.out(destination);
-  } finally {
-    try {
-      if (reserved) fs.rmdirSync(destination);
-      if (stage) fs.rmSync(stage, { recursive: true, force: true });
-    } finally { lock.release(); }
+  } catch (error) { failures.push(error); }
+  try { if (stage) fs.rmSync(stage, { recursive: true, force: true }); }
+  catch (error) { failures.push(error); }
+  try { lock.release(); }
+  catch (error) { failures.push(error); }
+  if (failures.length === 1 && !published) throw failures[0];
+  if (failures.length) {
+    const original = failures[0] as { code?: unknown; destinationPath?: unknown } | null | undefined;
+    // Preserve uncertain publication metadata even when owned staging or lock cleanup also fails.
+    throw Object.assign(new AggregateError(failures, `Backup to ${destination} failed: ${failures.map(errorMessage).join('\n  Also failed: ')}${published ? `\n  Published backup retained at ${destination}` : ''}`, { cause: failures[0] }), {
+      ...(typeof original?.code === 'string' && { code: original.code }),
+      ...(typeof original?.destinationPath === 'string' && { destinationPath: original.destinationPath }),
+      ...(published ? { publishedPath: destination } : {}),
+    });
   }
 }

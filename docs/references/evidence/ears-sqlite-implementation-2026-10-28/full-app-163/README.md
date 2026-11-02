@@ -1,0 +1,5 @@
+# Complete source-app qualification after scoped readiness
+
+[Run 41326301171](https://github.com/spankyed/apack/actions/runs/41326301171) passes the complete source-app suite on `16378a24db8463584dbe9fd4a1eb1a4d6c57ca48`, explicitly configured for isolated SQLite. All 33 expected cases pass once with retry zero; one installed-package-only ownership case is excluded. There are no unexpected results/flakes. The selected case identities/statuses match the earlier a56 suite exactly. Types, builds, app recovery/settings and actual Electron lifecycle complete. This is functional qualification, not latency/resource certification or current installed/signing acceptance.
+
+`receipt.json` derives only names/statuses/attempts/durations and original report SHA-256; it omits profiles, config, stdout/stderr and traces. This source includes scoped readiness and the reviewed generated API report, but predates the real retained-failure host fixture and dependency-owner race correction. Those remain independently required.

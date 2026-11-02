@@ -1,0 +1,215 @@
+[
+  {
+    "name": "host-shutdown",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/host",
+      "packages/apack-host/tests/database-close.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/host.json"
+    ],
+    "exitCode": 0,
+    "seconds": 2.0083295489894226
+  },
+  {
+    "name": "api-shutdown",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@app/api",
+      "packages/api/tests/transport/shutdown.spec.ts",
+      "packages/api/tests/transport/dev-reload-access.spec.ts",
+      "packages/api/tests/source-layout.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/api.json"
+    ],
+    "exitCode": 0,
+    "seconds": 3.262659186992096
+  },
+  {
+    "name": "reject-early-exit",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@app/api",
+      "packages/api/tests/transport/shutdown.spec.ts",
+      "packages/api/tests/transport/dev-reload-access.spec.ts",
+      "packages/api/tests/source-layout.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "-t",
+      "awaits database drain before exiting",
+      "--outputFile=/results/early-exit.json"
+    ],
+    "exitCode": 1,
+    "seconds": 2.957946022012038
+  },
+  {
+    "name": "reject-drain-writes",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "-t",
+      "enforces one owner and drains workers",
+      "--outputFile=/results/drain-writes.json"
+    ],
+    "exitCode": 1,
+    "seconds": 1.509835662000114
+  },
+  {
+    "name": "all-ears",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/all-ears.json"
+    ],
+    "exitCode": 0,
+    "seconds": 52.48749897998641
+  },
+  {
+    "name": "types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.9053638039913494
+  },
+  {
+    "name": "boundaries",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.661804177972954
+  },
+  {
+    "name": "host-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:host"
+    ],
+    "exitCode": 0,
+    "seconds": 9.519554812985007
+  },
+  {
+    "name": "api-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:api"
+    ],
+    "exitCode": 0,
+    "seconds": 19.371786094008712
+  },
+  {
+    "name": "package-build",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 28.113394199986942
+  },
+  {
+    "name": "api-update",
+    "args": [
+      "npm",
+      "run",
+      "api:update",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.6100554679869674
+  },
+  {
+    "name": "api-check",
+    "args": [
+      "npm",
+      "run",
+      "api:check",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.5281569700164255
+  },
+  {
+    "name": "lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/sqlite/database.ts",
+      "packages/apack-ears/src/sqlite/index-builds.ts",
+      "packages/apack-ears/src/sqlite/search.ts",
+      "packages/apack-ears/src/sqlite/vector-admission.ts",
+      "packages/apack-ears/src/sqlite/vector-index.ts",
+      "packages/apack-ears/src/sqlite/vector-models.ts",
+      "packages/apack-ears/src/sqlite/vector-policy.ts",
+      "packages/apack-ears/src/sqlite/vector-training.ts",
+      "packages/apack-ears/src/sqlite/vectors.ts",
+      "packages/apack-ears/tests/sqlite/vector-index.spec.ts",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "scripts/linux-runner.ts",
+      "packages/apack-ears/src/sqlite/vector-cursor.ts",
+      "packages/apack-ears/tests/sqlite/logical-snapshot.spec.ts",
+      "packages/apack-ears/src/sqlite/audit.ts",
+      "packages/apack-ears/src/sqlite/index.ts",
+      "packages/apack-ears/src/sqlite/logical-export.ts",
+      "packages/apack-ears/src/sqlite/vector-candidates.ts",
+      "packages/apack-ears/src/database.ts",
+      "packages/apack-host/src/database/index.ts",
+      "packages/api/src/transport/websocket.ts",
+      "packages/apack-host/src/database/close.ts",
+      "packages/apack-host/tests/database-close.spec.ts",
+      "packages/api/tests/transport/shutdown.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.03501437298837118
+  }
+]

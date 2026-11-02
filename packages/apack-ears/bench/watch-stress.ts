@@ -1,5 +1,5 @@
 // What watches cost under a writer that commits as fast as it runs, in the built engine:
-// `npm run bench:watch -w @apackdev/ears [-- <seconds> [none]]`, `none` running the writer with no view open. A writer sets a field of one of the first open tasks on
+// `npm run bench:watch -w @apackdev/ears [-- <seconds> [views|none] [elmdb|sqlite] [default|durable]]`, `none` running the writer with no view open. A writer sets a field of one of the first open tasks on
 // every turn of the event loop, into a hot table of 20,000 tasks, while three views are open over it: one row, the
 // indexed `where` with a `limit` of 50, and every open task ordered (about 6,700 rows). It prints one JSON line:
 // each view's runs a second and time a run, the share of a core the process used, the event loop's delay, and how
@@ -9,18 +9,30 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { loadedNativeBindings, startHeartbeat } from './sqlite/load-metrics.ts';
 import type { EARS as EarsTypes } from '../src/index.ts';
 
 type Id = EarsTypes.EntityId;
 // Specifiers held in variables, so the typecheck (which runs before any build) reads the types from source
 const DIST = '../dist/index.js';
-const DIST_LMDB = '../dist/lmdb/index.js';
+const BACKEND = process.argv[4] ?? 'elmdb';
+const ACKNOWLEDGMENT = process.argv[5] ?? 'default';
+const SCHEMA_MODE = process.argv[6] ?? 'stable';
+if (!['stable', 'admission'].includes(SCHEMA_MODE)) throw new Error('Expected stable or admission schema mode');
+if (!['elmdb', 'sqlite'].includes(BACKEND)) throw new Error('Expected elmdb or sqlite backend');
+if (!['default', 'durable'].includes(ACKNOWLEDGMENT)) throw new Error('Expected default or durable acknowledgment');
+const DIST_DATABASE = BACKEND === 'sqlite' ? '../dist/sqlite/index.js' : '../dist/lmdb/index.js';
 const { createEarsEngine } = await import(DIST) as typeof import('../src/index.ts');
-const { openDatabase } = await import(DIST_LMDB) as typeof import('../src/lmdb/index.ts');
+const { openDatabase } = await import(DIST_DATABASE) as typeof import('../src/lmdb/index.ts');
 
 const SECONDS = Number(process.argv[2] ?? 5);
-const NO_VIEWS = process.argv[3] === 'none';
-const TASKS = 20_000;
+const VIEW_MODE = process.argv[3] ?? 'views';
+if (!['views', 'none'].includes(VIEW_MODE)) throw new Error('Expected views or none');
+const NO_VIEWS = VIEW_MODE === 'none';
+if (SCHEMA_MODE === 'admission' && NO_VIEWS) throw new Error('Admission comparison requires live views');
+const TASKS = Number(process.env.EARS_WATCH_TASKS ?? 20_000);
+if (!Number.isFinite(SECONDS) || SECONDS <= 0 || !Number.isSafeInteger(TASKS) || TASKS < 120)
+  throw new Error('Expected positive seconds and at least 120 tasks');
 const STATUSES = ['open', 'done', 'blocked'];
 /** The writer touches one of these: open tasks among the first page, so every write changes the page */
 const HOT = 40;
@@ -41,6 +53,7 @@ try {
       engine.admin.bulkLoadAttr(id, 'rank', i);
     });
   });
+  await database.indexesReady();
   const hot = ids.filter((_, i) => i % 3 === 0).slice(0, HOT);
 
   /** Commit sequence → when it committed; a view's latency is from there to the first delivery at or past it */
@@ -83,30 +96,70 @@ try {
   await engine.admin.watchesSettled();
 
   const delay = monitorEventLoopDelay({ resolution: 1 });
+  const heartbeat = startHeartbeat(1);
   measuring = true;
   delay.enable();
   const cpu = process.cpuUsage();
   const started = performance.now();
   let commits = 0;
+  let writingFinished = false;
+  let admission: { startedAfterMutation: number; startOffsetMs: number; heartbeatDelaysMs: number[]; declarationMs?: number;
+    readyAfterMs?: number; foregroundWritesWhilePending?: number; readyDuringWriting?: boolean; lookupVerified?: boolean } | undefined;
+  let admissionReady: Promise<void> | undefined;
+  let admissionFailure: unknown;
+  const acknowledgmentMs: number[] = [];
   await new Promise<void>((resolve) => {
     const step = () => {
       if (performance.now() - started >= SECONDS * 1000) {
         resolve();
         return;
       }
-      engine.write(hot[commits % HOT]!).set('rank', -commits);
+      const before = engine.lastCommit(), at = performance.now();
+      const write = () => engine.write(hot[commits % HOT]!).set('rank', -commits - 1);
+      if (ACKNOWLEDGMENT === 'durable') engine.transact(write, { durable: true });
+      else write();
+      if (engine.lastCommit() <= before) throw new Error('Benchmark iteration did not commit a mutation');
+      acknowledgmentMs.push(performance.now() - at);
       committedAt.set(engine.lastCommit(), performance.now());
       commits++;
+      if (SCHEMA_MODE === 'admission' && commits === 500) {
+        const admittingAt = performance.now();
+        const admissionPulse = startHeartbeat(1);
+        admission = { startedAfterMutation: commits, startOffsetMs: admittingAt - started, heartbeatDelaysMs: admissionPulse.delaysMs };
+        // Use ordinary live declaration, not a private builder: both engines must keep their
+        // existing status index and admit rank while foreground durable units/views continue.
+        try { engine.admin.setSchema({ types: { Task: { required: [], indexes: ['status', 'rank'] } }, relations: {}, roles: [] }); }
+        catch (error) { admissionPulse.stop(); throw error; }
+        admission.declarationMs = performance.now() - admittingAt;
+        admissionReady = database.indexesReady(['Task']).then(() => {
+          admissionPulse.stop();
+          admission!.readyAfterMs = performance.now() - admittingAt;
+          admission!.foregroundWritesWhilePending = commits - admission!.startedAfterMutation;
+          admission!.readyDuringWriting = !writingFinished;
+        }, error => { admissionPulse.stop(); admissionFailure = error; });
+      }
       setImmediate(step);
     };
     setImmediate(step);
   });
   const writing = performance.now() - started;
+  writingFinished = true;
+  if (SCHEMA_MODE === 'admission' && !admissionReady) throw new Error('The declared admission phase never started');
+  if (admissionReady) await admissionReady;
+  if (admissionFailure) throw admissionFailure;
   await engine.admin.watchesSettled();
   const settledMs = performance.now() - started - writing;
   delay.disable();
+  heartbeat.stop();
   const used = process.cpuUsage(cpu);
   measuring = false;
+
+  if (admission) {
+    const expected = hot[(commits - 1) % HOT]!;
+    if (JSON.stringify(engine.query('Task').where('rank', -commits).ids()) !== JSON.stringify([expected]))
+      throw new Error('The admitted rank lookup missed the latest foreground mutation');
+    admission.lookupVerified = true;
+  }
 
   // Every view's last delivery is what its read answers now: a view converges
   const converged = NO_VIEWS || (Object.keys(views) as Name[]).every((name) => JSON.stringify(stats[name].last) === JSON.stringify(views[name]()));
@@ -118,7 +171,21 @@ try {
   const seconds = writing / 1000;
   console.log(JSON.stringify({
     date: new Date().toISOString(),
-    conditions: `${os.cpus()[0]?.model ?? os.arch()}, ${os.cpus().length} cores, load ${os.loadavg().map((l) => l.toFixed(1)).join('/')}, node ${process.version}, ${TASKS} tasks, ${SECONDS}s writer, syncs as the app's`,
+    backend: BACKEND,
+    execution: 'built-package',
+    taskCount: TASKS,
+    requestedSeconds: SECONDS,
+    viewMode: VIEW_MODE,
+    schemaMode: SCHEMA_MODE,
+    ...(admission && { admission, schemaAcknowledgment: 'Ordinary declaration follows each backend default; foreground mutations use the selected acknowledgment policy' }),
+    nativeBindings: loadedNativeBindings(),
+    heartbeatDelaysMs: heartbeat.delaysMs,
+    acknowledgment: ACKNOWLEDGMENT,
+    durabilityComparison: ACKNOWLEDGMENT === 'durable' ? 'Each mutation uses a durable unit on both backends'
+      : 'Backend defaults differ: elmdb group sync versus SQLite FULL per commit; not matched durable acknowledgments',
+    acknowledgmentMs: { p50: percentile(acknowledgmentMs, 50), p95: percentile(acknowledgmentMs, 95), p99: percentile(acknowledgmentMs, 99) },
+    processMemory: { end: process.memoryUsage(), wholeProcessMaxRssKiB: process.resourceUsage().maxRSS },
+    conditions: `${os.cpus()[0]?.model ?? os.arch()}, ${os.cpus().length} cores, load ${os.loadavg().map((l) => l.toFixed(1)).join('/')}, node ${process.version}, ${TASKS} tasks, ${SECONDS}s writer, syncs enabled, acknowledgment ${ACKNOWLEDGMENT}`,
     commitsPerSecond: Math.round(commits / seconds),
     coreShare: Number(((used.user + used.system) / 1000 / (writing + settledMs)).toFixed(2)),
     eventLoopDelayMs: { p50: Number((delay.percentile(50) / 1e6).toFixed(2)), p99: Number((delay.percentile(99) / 1e6).toFixed(2)), max: Number((delay.max / 1e6).toFixed(2)) },

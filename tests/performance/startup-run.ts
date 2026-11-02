@@ -15,7 +15,7 @@ const output = process.env.APACK_PERFORMANCE_RUN_OUTPUT ? path.resolve(process.e
   : path.join(root, '.apack/performance', `populated-startup-${mode}${comparison ? `-vs-${comparison}` : ''}-${Date.now()}`);
 mkdirSync(output, { recursive: true });
 const work = mkdtempSync(path.join(tmpdir(), 'apack-startup-qualification-'));
-const seed = path.join(work, 'seed');
+const seed = path.join(work, 'apack-e2e-startup-seed');
 const seedReport = path.join(output, 'seed.json');
 let journal: ReturnType<typeof createPerformanceScenarioRun> | undefined;
 const invocations: Record<PerformanceVariant, PerformanceInvocation[]> = { A: [], B: [] };
@@ -64,7 +64,7 @@ try {
   save();
   for (const entry of schedule) {
     await waitForPerformanceTrial(entry);
-    const profile = path.join(work, `profile-${entry.ordinal}`);
+    const profile = path.join(work, `apack-e2e-startup-profile-${entry.ordinal}`);
     cpSync(seed, profile, { recursive: true });
     try { journal.begin(entry); await run('populated-startup', profile, entry); }
     finally { rmSync(profile, { recursive: true, force: true }); }

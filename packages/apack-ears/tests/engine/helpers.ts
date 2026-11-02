@@ -30,7 +30,7 @@ export function committing(): { wrap: (database: EarsDatabase) => EarsDatabase; 
   const wrap = (database: EarsDatabase): EarsDatabase => new Proxy(database, {
     get(target, key) {
       if (key === 'write') {
-        return (batch: Uint8Array, durable?: boolean) => {
+        return (batch: Parameters<EarsDatabase['write']>[0], durable?: boolean) => {
           const answer = target.write(batch, durable);
           commits++;
           return answer;

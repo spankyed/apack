@@ -1,0 +1,17 @@
+# Matched built-package benchmark protocol — 2026-11-01
+
+The `sqlite-bench` dispatch in app-acceptance.yml runs independent OFF/FULL jobs, each with three sequential fresh processes per backend. Order alternates SQLite/elmdb, elmdb/SQLite, SQLite/elmdb. Both use the same built EARS facade, fixture and Node 23.11.1 with cgroup-enforced 2 CPU/6 GiB/no swap. Only the selected backend imports its runtime. Native binding hashes, compiled JS/Wasm hashes, exact source/native pins, raw rounds, resource/memory and file-size outputs are retained. Fixture setup, diagnostics and provenance hashing are outside timed tasks; post-GC process memory, rusage and file sizes are sampled before the SQLite-only diagnostic pass and provenance hashing. Peak RSS includes fixture/setup/task history, so it is not engine-only memory. OFF and FULL are separate policies, not interchangeable durability claims.
+
+The original prepared harness imported source through tsx and loaded both adapters. Before any new comparison, it now imports only shipped package JS and uses Node's type stripping solely for the harness. Source-run reports are refused. This corrects measurement methodology; no performance result is claimed yet. The fixture remains synthetic (10k messages, 1k sine-generated 256D vectors, 64 large-body rows and 16-chunk streaming), not real ANN recall, actual app latency or filesystem/power-loss qualification. Three trials establish limited within-run dispersion, not production variance.
+
+From repo root, `python3 docs/references/evidence/ears-sqlite-implementation-2026-10-28/benchmark-protocol-20261101/runner-controls.py` exercises the actual runner through controlled child-process results without any native workload. Both six-process alternation cohorts pass. Timeout, process failure, invalid JSON, nonfinite/missing timing, missing native bindings, wrong durability, source execution, mismatched native pin and reused output are refused; partial failure output and existing sentinels survive. Shell syntax and YAML OFF/FULL matrix parse controls also pass. These controls do not prove actual native build/execution or benchmark outcomes; matching CI remains required after focused contracts converge.
+
+Remeasurement additionally records available Linux CPU model names. The original 470 receipt records architecture/kernel but not CPU model, so a cross-run absolute timing delta alone cannot isolate the code change from runner hardware. Compare within-run matched backend ratios and preserve this limitation; fewer driver calls are independently testable but do not prove a latency improvement.
+
+The later admission setup exposed an obsolete --trials 0 metadata caller after the backend
+runner began requiring positive trials. Shared runtime_provenance.py now captures metadata
+without executing trials or creating acceptance matrices. Admission explicitly records source
+execution and metadataOnly; matched backend trials still require built-package execution and
+positive counts. Updated pure controls retain all prior negative cases, refuse zero trials,
+and verify that admission metadata creates no backend workload/matrix. Actual native capture
+and the full admission workload still require disposable CI.

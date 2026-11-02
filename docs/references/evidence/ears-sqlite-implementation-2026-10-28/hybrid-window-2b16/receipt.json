@@ -1,0 +1,17 @@
+[
+  {
+    "file": "hybrid-1000.json",
+    "bytes": 182788,
+    "sha256": "8ccb45b0b01e187c902f84c925324c0d3d67e5d4306c75e6fe7219bfb010d34e"
+  },
+  {
+    "file": "hybrid-10000.json",
+    "bytes": 187133,
+    "sha256": "9799cbf3a5d4ee9bceebfa1ae6acd3169ec0c80b19370e0824b71743a246c266"
+  },
+  {
+    "file": "hybrid-99900.json",
+    "bytes": 187271,
+    "sha256": "13309ecf893bc04043e0771a4c762589c302df129b8f2ee1431b29e2f38e6a5b"
+  }
+]

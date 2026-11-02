@@ -1,0 +1,39 @@
+
+ RUN  v3.2.7 /electron/packages/repo-checks
+
+ ❯ tests/repo-check-boundary.spec.ts (3 tests | 1 failed) 1398ms
+   ✓ a spec about the repo's tooling lives in @app/repo-checks > has none anywhere else  1253ms
+   × a spec about the repo's tooling lives in @app/repo-checks > holds nothing else 136ms
+     → this package is for specs whose subject is a repo script or the repo's own layout; these are neither — move them, or add them to LAYOUT_CHECKS with what repo-wide property they check: expected [ Array(1) ] to deeply equal []
+   ✓ a spec about the repo's tooling lives in @app/repo-checks > lists no layout check that has stopped applying 8ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/repo-check-boundary.spec.ts > a spec about the repo's tooling lives in @app/repo-checks > holds nothing else
+AssertionError: this package is for specs whose subject is a repo script or the repo's own layout; these are neither — move them, or add them to LAYOUT_CHECKS with what repo-wide property they check: expected [ Array(1) ] to deeply equal []
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [][39m
+[31m+ [[39m
+[31m+   "packages/repo-checks/tests/native-signing.spec.ts",[39m
+[31m+ ][39m
+
+ ❯ tests/repo-check-boundary.spec.ts:115:102
+    113|     expect(here.filter((file) => !namesARepoScript(file)),
+    114|       'this package is for specs whose subject is a repo script or the…
+    115|       + 'neither — move them, or add them to LAYOUT_CHECKS with what r…
+       |                                                                                                      ^
+    116|   });
+    117|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  14:14:00
+   Duration  1.94s (transform 116ms, setup 13ms, collect 405ms, tests 1.40s, environment 0ms, prepare 38ms)
+
+JSON report written to /results/old-placement.json

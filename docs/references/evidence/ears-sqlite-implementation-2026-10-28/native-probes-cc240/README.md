@@ -1,0 +1,9 @@
+# Sampled native probe-count tradeoff
+
+[Run 41246957158](https://github.com/spankyed/apack/actions/runs/41246957158), source `cc24040e5c2775619b96ab7c7cb704d802d05016`, completes the ordinary adaptive-policy 1,800-case matrix and a separate 540-case sampled nprobe comparison. The main matrix passes all mean recall targets, minimum K=64 0.96015625, and size-specific query p95 targets. Every 99.9k heartbeat group still fails 16ms. Main timings precede the parameter diagnostic.
+
+The comparison keeps models, snapshots and candidate budgets fixed, rotates nprobe 8/16/32 order and checks independent Float64 truth at K=10/40/64. Each group has only ten queries per family, not 100. Lower counts fail multiple sampled recall targets. At 99.9k/10%/held-out, K=40 recall is 0.7925/0.875/0.975 and p95 is 59.28/61.92/68.55ms. At 99.9k/all-live/held-out, K=10 is 0.93/0.97/0.99 at 11.70/14.12/20.38ms. This does not support a global lower-probe policy. Production remains at 32.
+
+Some K=64 groups show nonmonotonic recall and latency. The recipe proves native calls were attempted, but does not record whether their page supplied enough owners or the query subsequently used BQ/exact fallback. These timings and recalls therefore describe the whole query under the requested probe setting, not pure native execution. A subsequent recipe adds returned-page/cap counts and an explicit BQ-fallback witness for future runs. Do not attribute those anomalies to native recall alone, or promote a selective policy from ten cases.
+
+The run verifies 2 CPU/6 GiB/no swap and removal of database/acquisition scratch. Numeric samples and summaries contain no corpus text, source IDs, vectors or model weights. This source predates current-master weighted integration; broad app/resource, variance and final-source acceptance remain open.

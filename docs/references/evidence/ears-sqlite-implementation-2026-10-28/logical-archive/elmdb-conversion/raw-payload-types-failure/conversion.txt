@@ -1,0 +1,15 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/elmdb-conversion.spec.ts (6 tests) 3064ms
+   ✓ explicit elmdb dump conversion > reopens an audited store, retains typed values, trash/order/relations/counters and leaves input unchanged  1617ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late truncated failure  349ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late trailing failure  379ms
+   ✓ explicit elmdb dump conversion > removes owned staging on late count failure  347ms
+   ✓ explicit elmdb dump conversion > refuses precision loss and malformed loads rather than silently changing primary data  356ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  15:43:29
+   Duration  3.50s (transform 232ms, setup 12ms, collect 314ms, tests 3.06s, environment 0ms, prepare 38ms)
+

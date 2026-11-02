@@ -1,0 +1,114 @@
+{
+  "protocol": "ears-keyword-fts-diagnostic/1",
+  "sqliteVersion": "3.51.0",
+  "fixtureSha256": "29d79b6060b21ca68d3bb5dd491cc2e3cfff36a11c2f10b28d6df62c9acc3527",
+  "query": "generate-entries",
+  "scope": "Python SQLite FTS-only; excludes EARS aliases, query adaptation, weighted entity aggregation and production-driver qualification",
+  "results": [
+    {
+      "rank": 1,
+      "name": "extensions / Extensions \u2014 Steps, Artifacts, Blocks & FE Extension Points / Steps / Flow helpers",
+      "field": "body",
+      "score": 4.546747448198014,
+      "characters": 1204,
+      "expectedOverview": false
+    },
+    {
+      "rank": 2,
+      "name": "extensions / Extensions \u2014 Steps, Artifacts, Blocks & FE Extension Points / Steps / Types (types.ts)",
+      "field": "body",
+      "score": 4.457409365430579,
+      "characters": 483,
+      "expectedOverview": false
+    },
+    {
+      "rank": 3,
+      "name": "services-and-data / Services, EARS & Migrations / Services / Manifest",
+      "field": "body",
+      "score": 3.733001005599822,
+      "characters": 900,
+      "expectedOverview": false
+    },
+    {
+      "rank": 4,
+      "name": "services-and-data / Services, EARS & Migrations / Services / Writing a service",
+      "field": "body",
+      "score": 3.3274264839320455,
+      "characters": 967,
+      "expectedOverview": false
+    },
+    {
+      "rank": 5,
+      "name": "services-and-data / Services, EARS & Migrations / Services / Generated aggregation",
+      "field": "body",
+      "score": 2.9714766986466463,
+      "characters": 1457,
+      "expectedOverview": false
+    },
+    {
+      "rank": 6,
+      "name": "services-and-data / Services, EARS & Migrations / EARS (Entity-Attribute-Relation Store) / Declaring entities",
+      "field": "body",
+      "score": 2.8040557870907046,
+      "characters": 1507,
+      "expectedOverview": false
+    },
+    {
+      "rank": 7,
+      "name": "cli / CLI Reference / Commands / Code generation",
+      "field": "body",
+      "score": 2.6544944970369846,
+      "characters": 1669,
+      "expectedOverview": false
+    },
+    {
+      "rank": 8,
+      "name": "cli / CLI Reference / Commands / Scaffolding",
+      "field": "body",
+      "score": 2.454586070520116,
+      "characters": 6280,
+      "expectedOverview": false
+    },
+    {
+      "rank": 9,
+      "name": "architecture / Architecture / Generated files",
+      "field": "body",
+      "score": 1.4912381464876412,
+      "characters": 4183,
+      "expectedOverview": true
+    },
+    {
+      "rank": 10,
+      "name": "architecture / Architecture / Build-time dependency resolution",
+      "field": "body",
+      "score": 1.3954186882920783,
+      "characters": 4547,
+      "expectedOverview": false
+    },
+    {
+      "rank": 11,
+      "name": "content / Content / Flows / Flow helpers",
+      "field": "body",
+      "score": 1.1630674333267381,
+      "characters": 5604,
+      "expectedOverview": false
+    },
+    {
+      "rank": 12,
+      "name": "testing / Testing a pack / Setup",
+      "field": "body",
+      "score": 0.9855313795120454,
+      "characters": 6775,
+      "expectedOverview": false
+    },
+    {
+      "rank": 13,
+      "name": "cli / CLI Reference / Commands / Validation",
+      "field": "body",
+      "score": 0.7598321386440682,
+      "characters": 9007,
+      "expectedOverview": false
+    }
+  ],
+  "qualified": false
+}

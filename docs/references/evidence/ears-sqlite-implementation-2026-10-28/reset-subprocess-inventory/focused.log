@@ -1,0 +1,14 @@
+
+ RUN  v3.2.7 /electron/packages/repo-checks
+
+ ✓ tests/subprocess-inventory.spec.ts (14 tests) 2690ms
+   ✓ a subprocess in the integration pool is one that has to be > names every spawn the pool makes, and how many  925ms
+   ✓ a subprocess in the integration pool is one that has to be > lists no exception that has stopped applying  384ms
+   ✓ a subprocess in the integration pool is one that has to be > fails when a file that spawns is dropped from the population  1306ms
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  20:45:19
+   Duration  6.30s (transform 719ms, setup 12ms, collect 3.11s, tests 2.69s, environment 0ms, prepare 185ms)
+
+JSON report written to /results/focused.json

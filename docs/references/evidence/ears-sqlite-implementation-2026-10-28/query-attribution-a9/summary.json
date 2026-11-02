@@ -1,0 +1,62 @@
+{
+  "sqlite": [
+    {
+      "size": 1000,
+      "percent": 10,
+      "queries": 3,
+      "meanWallMs": 9.238928666666652,
+      "meanProcessCpuMs": 9.706333333333333
+    },
+    {
+      "size": 10000,
+      "percent": 1,
+      "queries": 3,
+      "meanWallMs": 3.7089383333335113,
+      "meanProcessCpuMs": 4.483
+    },
+    {
+      "size": 99900,
+      "percent": 100,
+      "queries": 3,
+      "meanWallMs": 24.85811666666662,
+      "meanProcessCpuMs": 24.880000000000003
+    },
+    {
+      "size": 99900,
+      "percent": 10,
+      "queries": 3,
+      "meanWallMs": 57.63182133333339,
+      "meanProcessCpuMs": 57.644
+    }
+  ],
+  "native": [
+    {
+      "size": 1000,
+      "percent": 10,
+      "queries": 3,
+      "meanWallMs": 1.4282856666667005,
+      "meanProcessCpuMs": 2.377
+    },
+    {
+      "size": 10000,
+      "percent": 1,
+      "queries": 3,
+      "meanWallMs": 8.51502166666675,
+      "meanProcessCpuMs": 8.539333333333333
+    },
+    {
+      "size": 99900,
+      "percent": 100,
+      "queries": 3,
+      "meanWallMs": 12.893464000000677,
+      "meanProcessCpuMs": 12.917333333333334
+    },
+    {
+      "size": 99900,
+      "percent": 10,
+      "queries": 3,
+      "meanWallMs": 37.83608166666696,
+      "meanProcessCpuMs": 39.41666666666667
+    }
+  ]
+}

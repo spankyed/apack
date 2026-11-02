@@ -1,0 +1,21 @@
+
+ RUN  v3.2.7 /electron/packages/apack-cli
+
+ ✓ tests/commands/sqlite-profile.spec.ts (11 tests) 6088ms
+   ✓ queries and writes the named SQLite profile through normal CLI commands  861ms
+   ✓ backs up, verifies, reads history and restores both stores using the named target  1906ms
+   ✓ refuses reset before changing SQLite primary data while history is open (readOnly=false)  435ms
+   ✓ refuses reset before changing SQLite primary data while history is open (readOnly=true)  476ms
+   ✓ resets a SQLite profile whose history is absent while retaining primary handle exclusion  410ms
+   ✓ permits a SQLite reset dry run while history is held without deleting primary data  372ms
+   ✓ refuses a backup destination raced by a file without replacing it  411ms
+   ✓ refuses a backup destination raced by a empty directory without replacing it  511ms
+   ✓ refuses a backup destination raced by a populated directory without replacing it  385ms
+   ✓ refuses a backup destination raced by a dangling symlink without replacing it  318ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  20:31:06
+   Duration  14.59s (transform 4.39s, setup 20ms, collect 7.11s, tests 6.09s, environment 0ms, prepare 113ms)
+
+JSON report written to /results/focused.json

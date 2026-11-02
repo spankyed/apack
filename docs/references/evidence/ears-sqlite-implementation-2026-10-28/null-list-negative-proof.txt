@@ -1,0 +1,62 @@
+
+ RUN  v3.2.7 /Users/spankyed/Develop/Projects/apack/monorepo-worktrees.noindex/sqlite-evaluation/packages/apack-ears
+
+ ❯ tests/engine/query-values.spec.ts (2 tests | 2 failed) 160ms
+   × value comparisons with declared index=false > keeps null/missing/list membership and scalar types consistent 143ms
+     → expected [ 'Row-0badaf5d6addc7dd0679', …(1) ] to deeply equal [ 'Row-0badaf5d6addc7dd0679', …(3) ]
+   × value comparisons with declared index=true > keeps null/missing/list membership and scalar types consistent 11ms
+     → expected [ 'Row-e400067a63267fa3d9a4', …(1) ] to deeply equal [ 'Row-e400067a63267fa3d9a4', …(3) ]
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/query-values.spec.ts > value comparisons with declared index=false > keeps null/missing/list membership and scalar types consistent
+AssertionError: expected [ 'Row-0badaf5d6addc7dd0679', …(1) ] to deeply equal [ 'Row-0badaf5d6addc7dd0679', …(3) ]
+
+- Expected
++ Received
+
+  [
+    "Row-0badaf5d6addc7dd0679",
+    "Row-994002651a8d77809d4d",
+-   "Row-56dd2364140948502de0",
+-   "Row-190c97473e082efd9c4c",
+  ]
+
+ ❯ tests/engine/query-values.spec.ts:17:54
+     15|     const ids=new Map(values.map(([name,fields])=>[name,e.create('Row'…
+     16|     const named=(names:string[])=>names.map(n=>ids.get(n)!);
+     17|     expect(e.query('Row').where('value',null).ids()).toEqual(named(['m…
+       |                                                      ^
+     18|     expect(e.query('Row').where('value',false).ids()).toEqual(named(['…
+     19|     expect(e.query('Row').where('value',0).ids()).toEqual(named(['zero…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/engine/query-values.spec.ts > value comparisons with declared index=true > keeps null/missing/list membership and scalar types consistent
+AssertionError: expected [ 'Row-e400067a63267fa3d9a4', …(1) ] to deeply equal [ 'Row-e400067a63267fa3d9a4', …(3) ]
+
+- Expected
++ Received
+
+  [
+    "Row-e400067a63267fa3d9a4",
+    "Row-a3498904887539baf596",
+-   "Row-de657fdc35959f7343f7",
+-   "Row-f9f4f965283c5daeeb3f",
+  ]
+
+ ❯ tests/engine/query-values.spec.ts:17:54
+     15|     const ids=new Map(values.map(([name,fields])=>[name,e.create('Row'…
+     16|     const named=(names:string[])=>names.map(n=>ids.get(n)!);
+     17|     expect(e.query('Row').where('value',null).ids()).toEqual(named(['m…
+       |                                                      ^
+     18|     expect(e.query('Row').where('value',false).ids()).toEqual(named(['…
+     19|     expect(e.query('Row').where('value',0).ids()).toEqual(named(['zero…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  00:31:30
+   Duration  538ms (transform 133ms, setup 13ms, collect 205ms, tests 160ms, environment 0ms, prepare 48ms)

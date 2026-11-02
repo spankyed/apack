@@ -1,0 +1,96 @@
+{
+  "n": 100000,
+  "indexKind": "value",
+  "node": "v23.11.1",
+  "platform": "linux",
+  "arch": "x64",
+  "syncs": true,
+  "sqlite": "3.53.4",
+  "admissionMs": 3.2244730000002164,
+  "buildMs": 20216.747188,
+  "gcMs": 18424.721379999995,
+  "writes": 6252,
+  "operationMs": {
+    "count": 6252,
+    "p50": 0.6686810000028345,
+    "p95": 0.9670900000055553,
+    "p99": 1.9032320000005711,
+    "max": 7.958241000000271
+  },
+  "lookupMs": {
+    "count": 6252,
+    "p50": 2.0766359999979613,
+    "p95": 2.4582399999999325,
+    "p99": 2.977351000001363,
+    "max": 3.960901999998896
+  },
+  "turnWaitMs": {
+    "count": 6252,
+    "p50": 1.5373660000004747,
+    "p95": 4.320924999999988,
+    "p99": 8.045244000000821,
+    "max": 12.141879999999219
+  },
+  "heartbeatDelayMs": {
+    "count": 3302,
+    "p50": 2.619631000001391,
+    "p95": 9.347771000000648,
+    "p99": 11.09450900000229,
+    "max": 18.376925999999003
+  },
+  "maxObservedBytes": 110691728,
+  "maxObservedWal": 4457872,
+  "budgets": {
+    "admissionMs": {
+      "actual": 3.2244730000002164,
+      "limit": 100
+    },
+    "operationP99Ms": {
+      "actual": 1.9032320000005711,
+      "limit": 16
+    },
+    "lookupP99Ms": {
+      "actual": 2.977351000001363,
+      "limit": 16
+    },
+    "turnWaitP99Ms": {
+      "actual": 8.045244000000821,
+      "limit": 16
+    },
+    "heartbeatDelayP99Ms": {
+      "actual": 11.09450900000229,
+      "limit": 16
+    },
+    "maxObservedWalBytes": {
+      "actual": 4457872,
+      "limit": 16777216
+    },
+    "maxObservedFilesBytes": {
+      "actual": 110691728,
+      "limit": 207498016
+    }
+  },
+  "passed": true,
+  "scope": "synthetic same-connection value-index admission with foreground reads/writes and 53 watches; not complete app or durability qualification",
+  "qualification": false,
+  "gcEvents": 74,
+  "gcDurationMs": 32.94478199980222,
+  "maxGcDurationMs": 0.8987019999767654,
+  "cpuThrottleDelta": {
+    "nr_throttled": 0,
+    "throttled_usec": 0
+  },
+  "profileSamples": 36400,
+  "background": {
+    "build": {
+      "count": 3126,
+      "maxMs": 6.837374000002455
+    },
+    "gc": {
+      "count": 3127,
+      "maxMs": 10.631253000006836
+    }
+  },
+  "source": "df0bb4ce5ed4d6137e6c6a3080a4ae462a8997db",
+  "run": 41252485895
+}

@@ -1,0 +1,177 @@
+{
+  "source": "790acc5a33802e49e4405e8eb87bb025fad4ceca",
+  "platform": "Linux x64",
+  "ears": {
+    "numPassedTests": 930,
+    "numFailedTests": 1,
+    "numPendingTests": 0
+  },
+  "nativeAdapterReadiness": [
+    {
+      "name": "waits for the native builder without blocking foreground turns and releases its timer",
+      "status": "passed"
+    },
+    {
+      "name": "scopes readiness and failures to the requested type",
+      "status": "passed"
+    },
+    {
+      "name": "rejects superseded scoped declarations even if changed back before the timer runs",
+      "status": "passed"
+    },
+    {
+      "name": "keeps a scoped wait through an unrelated type declaration",
+      "status": "passed"
+    },
+    {
+      "name": "settles pending waits when reset changes ownership",
+      "status": "passed"
+    },
+    {
+      "name": "settles pending waits when replaceWith changes ownership",
+      "status": "passed"
+    },
+    {
+      "name": "settles pending waits when close changes ownership",
+      "status": "passed"
+    },
+    {
+      "name": "refuses open units, closed handles and unfinished read-only builds",
+      "status": "passed"
+    }
+  ],
+  "otherCounts": {
+    "host.json": {
+      "sha256": "994ba36acb13e9f646a591aacfa766715e903bb16bbd7f963c5c3b2d2fc1924b",
+      "numPassedTests": 312,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "host-crash.json": {
+      "sha256": "f914af0f323d55db9354496a5a628b888594d8f3a2aab104d05055c37ad29424",
+      "numPassedTests": 12,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "sdk-all-sqlite.json": {
+      "sha256": "e5bb2c1701126dc83b8ab986465480367114e1168c76f943d9c80722ab1efc47",
+      "numPassedTests": 1330,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "cli-maintenance.json": {
+      "sha256": "f3e9344d71565b253a4f58ddb481f34a2b34898b9325b31b0583100ba798f12f",
+      "numPassedTests": 41,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "package-build-coverage.json": {
+      "sha256": "6424dd04a9ebd8f627b13baf7770d09ad49cf88e6e2969f60df27f965b1dd41e",
+      "numPassedTests": 78,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    },
+    "api-startup.json": {
+      "sha256": "3d8cab6469ec131d71d3bf602434f1e9f9f1042db8a93dffa3da9f3b7a18aa96",
+      "numPassedTests": 7,
+      "numFailedTests": 0,
+      "numPendingTests": 0
+    }
+  },
+  "macOS": {
+    "ears": {
+      "numPassedTests": 930,
+      "numFailedTests": 1,
+      "numPendingTests": 0
+    },
+    "hostPassed": 312,
+    "hostRecoveryPassed": 12,
+    "nativeAdapterReadiness": [
+      {
+        "name": "waits for the native builder without blocking foreground turns and releases its timer",
+        "status": "passed"
+      },
+      {
+        "name": "scopes readiness and failures to the requested type",
+        "status": "passed"
+      },
+      {
+        "name": "rejects superseded scoped declarations even if changed back before the timer runs",
+        "status": "passed"
+      },
+      {
+        "name": "keeps a scoped wait through an unrelated type declaration",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when reset changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when replaceWith changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when close changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "refuses open units, closed handles and unfinished read-only builds",
+        "status": "passed"
+      }
+    ]
+  },
+  "Windows": {
+    "ears": {
+      "numPassedTests": 926,
+      "numFailedTests": 1,
+      "numPendingTests": 4
+    },
+    "nativeAdapterReadiness": [
+      {
+        "name": "waits for the native builder without blocking foreground turns and releases its timer",
+        "status": "passed"
+      },
+      {
+        "name": "scopes readiness and failures to the requested type",
+        "status": "passed"
+      },
+      {
+        "name": "rejects superseded scoped declarations even if changed back before the timer runs",
+        "status": "passed"
+      },
+      {
+        "name": "keeps a scoped wait through an unrelated type declaration",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when reset changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when replaceWith changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "settles pending waits when close changes ownership",
+        "status": "passed"
+      },
+      {
+        "name": "refuses open units, closed handles and unfinished read-only builds",
+        "status": "passed"
+      }
+    ],
+    "otherCounts": {
+      "host.json": {
+        "numPassedTests": 309,
+        "numFailedTests": 0,
+        "numPendingTests": 6
+      },
+      "host-crash.json": {
+        "numPassedTests": 2,
+        "numFailedTests": 0,
+        "numPendingTests": 10
+      }
+    }
+  }
+}

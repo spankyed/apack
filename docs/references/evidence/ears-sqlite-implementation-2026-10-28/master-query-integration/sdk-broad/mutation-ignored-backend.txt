@@ -1,0 +1,45 @@
+
+> @apackdev/sdk@0.1.0 test
+> vitest run tests/testing/database-backend.spec.ts --maxWorkers=2
+
+
+ RUN  v3.2.7 /metrics/packages/apack-sdk
+
+ ❯ tests/testing/database-backend.spec.ts (2 tests | 2 failed) 27ms
+   × selected SDK test database backend > opens app on the selected real backend 18ms
+     → expected 'elmdb/1' to be 'sqlite/1' // Object.is equality
+   × selected SDK test database backend > opens history on the selected real backend 9ms
+     → expected 'elmdb/1' to be 'sqlite/1' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/testing/database-backend.spec.ts > selected SDK test database backend > opens app on the selected real backend
+ FAIL  tests/testing/database-backend.spec.ts > selected SDK test database backend > opens history on the selected real backend
+AssertionError: expected 'elmdb/1' to be 'sqlite/1' // Object.is equality
+
+Expected: [32m"[7msqlite[27m/1"[39m
+Received: [31m"[7melmdb[27m/1"[39m
+
+ ❯ tests/testing/database-backend.spec.ts:9:35
+      7|     it(`opens ${name} on the selected real backend`,()=>{
+      8|       const {database}=open();
+      9|       try{expect(database.format).toBe(expected);expect(database.isOpe…
+       |                                   ^
+     10|       finally{database.close();}
+     11|     });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  23:57:32
+   Duration  642ms (transform 357ms, setup 12ms, collect 487ms, tests 27ms, environment 0ms, prepare 37ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-sdk
+npm error workspace @apackdev/sdk@0.1.0
+npm error location /metrics/packages/apack-sdk
+npm error command failed
+npm error command sh -c vitest run tests/testing/database-backend.spec.ts --maxWorkers=2

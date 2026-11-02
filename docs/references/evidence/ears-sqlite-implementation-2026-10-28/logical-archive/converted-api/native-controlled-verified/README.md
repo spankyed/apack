@@ -1,0 +1,1 @@
+4cafaec5d66ce8d63ef6ee1bf5f8f7215221c4cd: real native API control and two converted SQLite API boots/live updates, typed/history/settings/media/source preservation, successful canonical output-parent alias, five builds, actual starter/API builds and lint/import checks pass. Source is derived directly from the exact Git archive header.

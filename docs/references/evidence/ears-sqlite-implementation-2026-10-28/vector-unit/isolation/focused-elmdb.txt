@@ -1,0 +1,65 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/vector.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/engine/vector.spec.ts (17 tests | 1 failed) 137ms
+   ✓ vector search > refuses zero cosine embeddings and queries without changing pending work 25ms
+   ✓ vector search > refuses negative zero cosine embeddings and queries without changing pending work 7ms
+   ✓ vector search > refuses Float32 underflow to zero cosine embeddings and queries without changing pending work 5ms
+   ✓ vector search > refuses positive Float32 overflow cosine embeddings and queries without changing pending work 4ms
+   ✓ vector search > refuses negative Float32 overflow cosine embeddings and queries without changing pending work 8ms
+   ✓ vector search > refuses NaN cosine embeddings and queries without changing pending work 4ms
+   ✓ vector search > refuses infinity cosine embeddings and queries without changing pending work 4ms
+   ✓ vector search > refuses wrong dimensions cosine embeddings and queries without changing pending work 5ms
+   ✓ vector search > refuses another model or invalid vector before answering an obsolete chunk stale 5ms
+   ✓ vector search > rolls back the whole embedding batch and publishes no watch result on invalid input 29ms
+   ✓ vector search > holds a written entity pending until its vectors are stored, and again when its text changes 5ms
+   ✓ vector search > refuses a vector whose chunk changed since it was pending, leaving the chunk pending under its new text 6ms
+   ✓ vector search > counts a vector for an entity deleted since it was pending as stale, and stores the rest of the batch 4ms
+   ✓ vector search > ranks the nearest first, combines with the steps before it, and finds more like an entity 5ms
+   × vector search > ranks own embeddings in a unit and restores them across nested and outer rollback 9ms
+     → outer unit sees its embedding replacement: expected [ 'Note-mvthax7u338cmvj8ov2om' ] to deeply equal [ 'Note-mvthax7u2pw8p6nu5v2ax' ]
+   ✓ vector search > merges the text and vector rankings on a fixed corpus: what both find ranks above what one finds first 5ms
+   ✓ vector search > refuses the vector steps on a type with no vector index, and names the types holding one 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/engine/vector.spec.ts > vector search > ranks own embeddings in a unit and restores them across nested and outer rollback
+AssertionError: outer unit sees its embedding replacement: expected [ 'Note-mvthax7u338cmvj8ov2om' ] to deeply equal [ 'Note-mvthax7u2pw8p6nu5v2ax' ]
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "Note-mvthax7u2pw8p6nu5v2ax",[39m
+[31m+   "Note-mvthax7u338cmvj8ov2om",[39m
+[2m  ][22m
+
+ ❯ tests/engine/vector.spec.ts:143:70
+    141|     try { e.transact(() => {
+    142|       e.embed([{ ...firstChunk, model, vector: [0, 0, 1] }, { ...secon…
+    143|       expect(nearest(), 'outer unit sees its embedding replacement').t…
+       |                                                                      ^
+    144|       try { e.transact(() => {
+    145|         e.embed([{ ...firstChunk, model, vector: [1, 0, 0] }, { ...sec…
+ ❯ Object.transact src/database.ts:293:15
+ ❯ tests/engine/vector.spec.ts:141:13
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  11:47:24
+   Duration  582ms (transform 228ms, setup 12ms, collect 313ms, tests 137ms, environment 0ms, prepare 38ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/engine/vector.spec.ts

@@ -11,6 +11,7 @@ import {
 } from '@apackdev/testing/performance';
 import type { PerformanceWindow } from './window.ts';
 import { installViewCompletion } from './view-completion.ts';
+import { performanceStorageFormat } from './storage-identity.ts';
 
 type ScenarioResult = {
   completed: boolean;
@@ -37,9 +38,12 @@ export async function createWarmScenario<F extends { identity: PerformanceManife
   mkdirSync(output, { recursive: true });
   const { app, appPage, electronApp } = target;
   await appPage.evaluate(installViewCompletion);
+  if (process.env.E2E_DATA_DIR) throw Error('Performance qualification owns disposable app profiles');
+  const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'));
+  const storageFormat = performanceStorageFormat(userData, process.env.APACK_STORAGE_FORMAT ?? 'elmdb/1');
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
   const manifest = performanceIdentity({ fixture: fixture.identity, mode, warmups: 5, cache: 'warm-process',
-    runtime: { ...runtime, performancePolicy: performanceExecutionPolicy(comparison),
+    runtime: { ...runtime, storageFormat, performancePolicy: performanceExecutionPolicy(comparison),
       ...(scenario === 'thread-open' && { threadReadiness: 'full-bodies-and-user-truncation-v1' }) } });
   const journal = createPerformanceScenarioRun(output, manifest, measured, comparison);
   const directory = mkdtempSync(path.join(tmpdir(), 'apack-performance-fixture-'));

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '@apackdev/sdk/logger';
+import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { resolveAppEnvironment, getAppVersion } from '@apackdev/sdk/env';
 import { packSystemIds, type PackRegistry } from '../registry.ts';
 import { installShippedPacks } from '../installer.ts';
@@ -46,6 +47,19 @@ async function reloadPack(
   // Candidate refusal leaves the incumbent's accepted resources untouched.
   fresh.register(!!previous);
 
+  try {
+    await registry.indexesReady(packId);
+  } catch (error) {
+    // Registration is already accepted. Keep its files, but do not start actors on incomplete indexes.
+    registry.runShutdownHooksForKey(packId);
+    try { registry.unregisterPack(packId); }
+    catch (cleanupError) { logger.error(`Cleaning up failed reload of ${packId}:`, cleanupError as Error); }
+    backendActor.send({ type: 'TEARDOWN_PACK', packId, systemIds: [...new Set([...oldSystemIds, ...fresh.newSystemIds])] });
+    backendActor.send({ type: 'PACK_CHANGED', packId });
+    registry.recordLoadProblem(packId, `index readiness failed: ${errorMessage(error)}`);
+    throw error;
+  }
+
   registry.runShutdownHooksForKey(packId);
   if (fresh.onShutdown) {
     registry.registerShutdownHook(fresh.onShutdown, packId);
@@ -90,7 +104,7 @@ export async function reloadPackById(
   // Refresh app-managed copies when the shipped source changes; user-owned forks stay in place.
   // Acceptance couples filesystem/record rollback with registration before post-publication startup.
   const shippedDir = process.env.SHIPPED_PACKS_DIR;
-  let startInstalled: (() => boolean) | undefined;
+  let startInstalled: (() => Promise<boolean>) | undefined;
   if (shippedDir) {
     for (const result of await installShippedPacks(shippedDir, packsDir, {
       installedPacksFile: resolveAppEnvironment().installedPacksFile,
@@ -116,7 +130,7 @@ export async function reloadPackById(
   }
 
   if (startInstalled) {
-    if (!startInstalled()) throw new Error(`Accepted ${packId}, but ${registry.loadProblem(packId)}`);
+    if (!await startInstalled()) throw new Error(`Accepted ${packId}, but ${registry.loadProblem(packId)}`);
     return;
   }
 

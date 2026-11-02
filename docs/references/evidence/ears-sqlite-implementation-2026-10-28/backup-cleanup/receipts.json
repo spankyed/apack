@@ -1,0 +1,104 @@
+[
+  {
+    "file": "qualification.json.gz",
+    "originalBytes": 1854,
+    "originalSha256": "ff172fd5dfe515cbc41ee75e15590348f9d33b7d95058f515a452a26183ffe38",
+    "storedSha256": "0058927a7d2744445a4ad58b28bbef8e97e1bbb9386ae5f29a3bf1e102d1a478"
+  },
+  {
+    "file": "fixed-final.json.gz",
+    "originalBytes": 9955,
+    "originalSha256": "9eb1c57a93ecab3df831390c92fd4e9a5a3f64d72cc93d2cd82cb274387517c8",
+    "storedSha256": "e14236ef1303156fe620ebd33cc84e13ecf09acbe3818ea9e47e07f5823460cd"
+  },
+  {
+    "file": "lint.log.gz",
+    "originalBytes": 89,
+    "originalSha256": "c1159e1e5d02e296932b5e5bd891d903144c9e27320e6a3c88c0d109508d3ed8",
+    "storedSha256": "72ec91153fee9cb7cbeefadcfbf0a60454a748ab377c5f4653b3bdf1fe1a361f"
+  },
+  {
+    "file": "fixed.log.gz",
+    "originalBytes": 2430,
+    "originalSha256": "dc0bd914b050555b6b99394bdda4a19365e4c4c80a246b533b922e1dde84673c",
+    "storedSha256": "bfa19a7f17c7ab4b0dbaa2bdd956b020e8ee31d321c3c8a15a765418477f914d"
+  },
+  {
+    "file": "baseline-final.json.gz",
+    "originalBytes": 6259,
+    "originalSha256": "b2153b3462ec7aa3ff81bb986779aa98bef0ec839efcc5abf7112b8d01ee2a0f",
+    "storedSha256": "44537c3c49073cc43726d224bbdaf7e47cf69d5ce531ea6c1023acbd8f0cfe5c"
+  },
+  {
+    "file": "fixed.json.gz",
+    "originalBytes": 9677,
+    "originalSha256": "30be833f2a0347063602547488d215123e3275afdb8c016a50f77cfb3be87e86",
+    "storedSha256": "0c807a16c1403f17c4e662a64d0a7bf503bf96e7017a580763f8052218ea60cd"
+  },
+  {
+    "file": "verifier-controls.log.gz",
+    "originalBytes": 40,
+    "originalSha256": "c461b99f6fa76156ad853ffe3222d5afbbba86a30fd25718a72cf98ce14bcbce",
+    "storedSha256": "97727d47142a9777457bf29269913d761366edc5f42efb14c4002088c3583f74"
+  },
+  {
+    "file": "backup-cleanup-verifier-controls.json.gz",
+    "originalBytes": 2667,
+    "originalSha256": "0394ddedf8f69c0d4a71dacd49f23c9838b8445e88d09faa26bf45e16aa9a360",
+    "storedSha256": "d8a370f04045323230999946beb14ea2b6d72c268788a2e476caf89d05c3969d"
+  },
+  {
+    "file": "baseline.log.gz",
+    "originalBytes": 3689,
+    "originalSha256": "a88c2c66b79a7466c02edc280fded230b8286b6361c6d96681212390c3f057ed",
+    "storedSha256": "03c7d3fb38522467437ea63d92f33c3847f6f5cf6e164a95624662d36bf225bb"
+  },
+  {
+    "file": "baseline.json.gz",
+    "originalBytes": 5427,
+    "originalSha256": "ccccbc2ff599a71c8cdbc370d51fbad9c9a34df597f2f86aa7825ce9a662a649",
+    "storedSha256": "d3744a7caf52751b304b26ea5bd403a2d819aa8b962f9417b29fc3749256d51e"
+  },
+  {
+    "file": "lint-final.log.gz",
+    "originalBytes": 89,
+    "originalSha256": "e18351e5fc41ffb07949928d9ff70289d4b662ef3d597df250c7fdbab0cf5203",
+    "storedSha256": "8fe8713d3946ce9070bd73ffb9ac5e92dd5fe3da461eb56c2ab2b9ecf4b8e606"
+  },
+  {
+    "file": "baseline-final.log.gz",
+    "originalBytes": 5471,
+    "originalSha256": "9b10d4f37af0ae443593370682139f74649b91437786537c53386d5ec0af753b",
+    "storedSha256": "63bc9cd3bbb91e710c8eaed5d9661a1cf60ff8fecd10c1c6737c4a87fb256327"
+  },
+  {
+    "file": "fixed-final.log.gz",
+    "originalBytes": 2324,
+    "originalSha256": "a3c482f3bc1e42b3397db0497d3cf6019518bdf2402bdabd361a87cdb9275036",
+    "storedSha256": "c0121cd75ebf9622827106bed5834b82bba48124d219b90d36b0e00c4885ca83"
+  },
+  {
+    "file": "verifier-syntax.log.gz",
+    "originalBytes": 0,
+    "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "storedSha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+  },
+  {
+    "file": "qualification.py.gz",
+    "originalBytes": 2035,
+    "originalSha256": "ca6ae7e74ff0935a97f40bae26aa5dff112c367c5ac1999469b4fa3e10e1f18e",
+    "storedSha256": "f67a8ab831710c8342144d86fcb72a6afef53c1b4d50ccc8eab6705a17a74ee1"
+  },
+  {
+    "file": "verifier-controls.cjs.gz",
+    "originalBytes": 2699,
+    "originalSha256": "018445c22932504511624412ddee515837ab898c87857dc93be41cf827ff2a22",
+    "storedSha256": "00621d5e4b02a4111466a9196e2ef5c47526d615f6b6000f048d25debe50da21"
+  },
+  {
+    "file": "original-backup.ts.gz",
+    "originalBytes": 3278,
+    "originalSha256": "72b107cd75041ed7844ff62750c767ea168fccccd04997515dc801c0968f3f3e",
+    "storedSha256": "44448c2df957fb6712b778ccaa4a0b0d92e476c9f03014c8bea8181a20177da8"
+  }
+]

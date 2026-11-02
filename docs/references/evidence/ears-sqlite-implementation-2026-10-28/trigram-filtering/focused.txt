@@ -1,0 +1,25 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/engine/search.spec.ts tests/sqlite/trigrams.spec.ts tests/sqlite/regex.spec.ts tests/engine/queries.spec.ts tests/sqlite/query-cost.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/engine/queries.spec.ts (27 tests) 7278ms
+   ✓ starts > a type, types, ids, and every entity  2232ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  524ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  903ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  726ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  1061ms
+ ✓ tests/sqlite/query-cost.spec.ts (18 tests) 1839ms
+ ✓ tests/sqlite/trigrams.spec.ts (7 tests) 812ms
+   ✓ SQLite exact trigram filtering > uses FTS5 for a selective literal, preserves duplicates and avoids whole-row hydration  307ms
+ ✓ tests/engine/search.spec.ts (10 tests) 1606ms
+   ✓ search > ranks matches, most relevant first, and combines with the steps around it  915ms
+ ✓ tests/sqlite/regex.spec.ts (11 tests) 543ms
+
+ Test Files  5 passed (5)
+      Tests  73 passed (73)
+   Start at  16:35:41
+   Duration  13.68s (transform 324ms, setup 27ms, collect 683ms, tests 12.08s, environment 1ms, prepare 312ms)
+

@@ -1,0 +1,10 @@
+{
+  "base": "12b9464644bb5c0ae4326999b6b2bc6f32cb0c7f",
+  "changedFiles": [
+    ".github/workflows/strict-chain.yml",
+    "docs/goals/goal-ears-sqlite.md",
+    ".github/workflows/ears-sqlite.yml",
+    ".github/scripts/ears-sqlite-platform.mjs"
+  ],
+  "sha256": "b40fc27a6a98c0ca553c2e4159cf556012b973e82ae86a917f93a186b949aabb"
+}

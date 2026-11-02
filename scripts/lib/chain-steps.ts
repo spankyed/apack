@@ -422,6 +422,8 @@ export const WORKSPACE_PARTS = [
   // `templates` is the CLI's scaffold: pack code the specifier rules read and the CLI's own suite renders,
   // so a change to one has to invalidate the steps that read the workspace
   'src', 'tests', 'scripts', 'bin', 'etc', 'templates', 'index.js',
+  // Package-owned runtime assets (including EARS regex/WASM) are reads even when loaded via createRequire.
+  'vendor',
   // `bench` is in `@apackdev/ears`' tsconfig `include`, so its typecheck compiles the benchmark and has to
   // re-run when it moves. Only that workspace has one; the dep-file gate is what noticed
   'bench',
@@ -431,7 +433,7 @@ export const WORKSPACE_PARTS = [
   'package.json', 'tsconfig.json', 'tsconfig.package.json',
   // The two vitest configs from `CONFIG_BY_HALF`, which is where that naming is declared
   ...Object.values(CONFIG_BY_HALF), 'vite.config.ts', 'vite.config.js',
-  'eslint.config.ts', 'postcss.config.cjs', 'tailwind.config.ts', 'tsdown.config.ts', 'env.d.ts',
+  'eslint.config.ts', 'postcss.config.cjs', 'tailwind.config.ts', 'tsdown.config.ts', 'tsup.config.ts', 'env.d.ts',
 ];
 const workspace = (pkg: string): string[] => WORKSPACE_PARTS.map((part) => `packages/${pkg}/${part}`);
 
@@ -465,7 +467,11 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
   'build/prod/verify-node-modules.mjs', 'build/prod/smoke-native.mjs',
   'packages/apack-cli/bin',
   'packages/apack-ears/bench/ears.bench.ts', 'packages/api/tsup.config.ts',
-  'packages/dev-mode.js', 'packages/entry-point.mjs'];
+  'packages/dev-mode.js', 'packages/entry-point.mjs',
+  // Owned vector-extension build/test source is also read by repository-wide lint and guards.
+  'native/vectors', 'native/graphs/build.mjs', 'native/graphs/probe.mjs',
+  'native/graphs/Cargo.toml', 'native/graphs/Cargo.lock', 'native/graphs/.cargo/config.toml',
+  'native/graphs/rust-toolchain.toml', 'native/graphs/src/lib.rs'];
 
 /**
  * `packages:ensure` builds the publishable packages, so its inputs are theirs — taken from `BUILD_UNITS`
@@ -638,6 +644,8 @@ const FIXTURE_TEST_OUTPUT = FIXTURE_PACKS.flatMap((name) => [`tests/packs/${name
  * Without it the pool skips the project while the thing it checks moves — see `EVERY_SOURCE`.
  */
 export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: true; inputs?: readonly string[]; integrationInputs?: readonly string[] }> = {
+  // SQLite native/portable-core specs read ordinary dist/publish assets from package production.
+  'apack-ears': { packages: true },
   // `pretest: ensure-packages-built`, `@apackdev/testing`'s bundle, and its own compiled content under `dist/`
   'default-setup': { packages: true, pack: true },
   // `pretest: ensure-packages-built`; it packs and installs the published packages, and `dependency-runtime`
@@ -650,7 +658,7 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   'apack-host': { packages: true, pack: true },
   // Boots the app runtime, which loads the built-in pack: `dist/runtime/index.cjs` and `settings.content.json`.
   // The runtime also imports root package metadata for the app version.
-  api: { pack: true, inputs: ['package.json'] },
+  api: { pack: true, inputs: ['package.json', 'build/build-metadata.ts'] },
   // `pretest: ensure-packages-built`; `published-sdk-peers` reads the built `dist` and skips without it.
   // `repo`: six of its specs ask git what the repo holds — the chain's input coverage, spec placement,
   // the lint's scope, the import rules — so every one of them is about files this package does not own

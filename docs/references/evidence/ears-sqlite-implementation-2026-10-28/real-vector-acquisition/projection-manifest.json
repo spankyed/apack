@@ -1,0 +1,76 @@
+{
+  "protocol": "ears-public-real-vectors/1",
+  "repository": "https://huggingface.co/datasets/Qdrant/dbpedia-entities-openai3-text-embedding-3-small-1536-100K",
+  "revision": "0d5fd00fbc5a9c0c836d70cd409f7e461255e572",
+  "field": "text-embedding-3-small-1536-embedding",
+  "dimensions": 1536,
+  "dtype": "<f4",
+  "querySelection": "sourceOrdinal % 1000 == 0; held out from corpus",
+  "batchRows": 64,
+  "tools": {
+    "python": "3.12.16",
+    "numpy": "2.5.4",
+    "pyarrow": "26.0.0"
+  },
+  "recipeSha256": "7cccd240593f2463d795d16c3b027e500a734e07e307e9277bf4fe2749a3a8f5",
+  "privatePayloadOnly": true,
+  "attribution": "Published by Qdrant; DBpedia-derived entity embeddings. No dataset payload or source text is redistributed by this recipe.",
+  "licenseNote": "The pinned Qdrant card declares no license. This private research acquisition is not permission to redistribute the corpus.",
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "peakOwnedPayloadBytes": 1035444688,
+  "shards": [
+    {
+      "path": "data/train-00000-of-00004.parquet",
+      "bytes": 412654848,
+      "sha256": "30d3ef775f4a68c1ce3c9214ced4245a24b66b107eec82e3ad427fdda2d91cc8",
+      "rows": 25000
+    },
+    {
+      "path": "data/train-00001-of-00004.parquet",
+      "bytes": 412629827,
+      "sha256": "03dd0c3c9919d1df87fc247208a162d94e9581c2a19270baf25e1a373b3e3f33",
+      "rows": 25000
+    },
+    {
+      "path": "data/train-00002-of-00004.parquet",
+      "bytes": 412663807,
+      "sha256": "10adb6ed005ac8e4a52211e19116b919555887521ab664dab1cbb5fec4111a3a",
+      "rows": 25000
+    },
+    {
+      "path": "data/train-00003-of-00004.parquet",
+      "bytes": 412703035,
+      "sha256": "53ef785b78f0c69d02c6f6c32bf193d5fa859cb361be73b3c190b115411cdc4b",
+      "rows": 25000
+    }
+  ],
+  "sourceRows": 100000,
+  "uniqueSourceIds": 100000,
+  "maxRssKiB": 351624,
+  "counts": {
+    "corpus": 99900,
+    "queries": 100
+  },
+  "files": {
+    "corpus.f32": {
+      "bytes": 613785600,
+      "sha256": "07483f2744b8c71fa788884f0f3b268403fd36e4e2303c585e390c973a53ad7f"
+    },
+    "queries-ids.jsonl": {
+      "bytes": 8018,
+      "sha256": "78c72404a494de0239c8e7d5b3aa0cc6393a8b4fc01ec5572355c92421d0d141"
+    },
+    "queries.f32": {
+      "bytes": 614400,
+      "sha256": "89322f980622e74f4942db843017216e363d5a2ac5bb446c622b8fdecf9d35a9"
+    },
+    "corpus-ids.jsonl": {
+      "bytes": 8343427,
+      "sha256": "94494d8b24feea74d496e4e622572f55b182c170c1900213f1e77e562116b792"
+    }
+  }
+}

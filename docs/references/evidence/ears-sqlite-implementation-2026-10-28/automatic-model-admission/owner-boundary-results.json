@@ -1,0 +1,54 @@
+[
+  {
+    "label": "reject-low-owner-floor",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "-t",
+      "requires enough live distinct owners",
+      "--outputFile=/results/low-owner-floor.json"
+    ],
+    "exitCode": 1,
+    "seconds": 1.9136640230135527
+  },
+  {
+    "label": "final-model-boundaries",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/final-model-boundaries.json"
+    ],
+    "exitCode": 0,
+    "seconds": 11.649469280993799
+  },
+  {
+    "label": "final-boundary-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 1.7320424409990665
+  }
+]

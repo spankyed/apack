@@ -1,0 +1,140 @@
+{
+  "source": "3c1d7ff85966589129eeeaab9455e6a827f86c60",
+  "qualification": "Small staged CLI with workspace dependencies; not installed/signed CLI, Electron, power loss or large-profile resource acceptance",
+  "node": "v23.11.1",
+  "cli": {
+    "path": "D:\\a\\apack\\apack\\packages\\apack-cli\\dist\\package\\bin\\apack.mjs",
+    "sha256": "41e5328611236b8c1b830f07434fff905e857d1c0dbb6b8070e98fe2512bb049"
+  },
+  "bundle": {
+    "path": "D:\\a\\apack\\apack\\packages\\apack-cli\\dist\\package\\dist\\cli.js",
+    "sha256": "c49ab78e00d9cf2bc65f206b4be9a18d0d22d59ebab429a5037b09bae1eca069"
+  },
+  "entries": {
+    "@apackdev/ears": "file:///D:/a/apack/apack/packages/apack-ears/dist/index.js",
+    "@apackdev/ears/sqlite": "file:///D:/a/apack/apack/packages/apack-ears/dist/sqlite/index.js",
+    "@apackdev/sdk/utils": "file:///D:/a/apack/apack/packages/apack-sdk/dist/utils/index.js"
+  },
+  "calls": [
+    {
+      "args": [
+        "--help"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "Usage: apack db <command> [options]\n\nThe app's database, read and changed while apack is closed. Commands that change it refuse while apack runs\non the data dir; reads warn that it is running, and read what it has committed.\n\nCommands:\n  query <code>          Run read-only query code (the Database console's)\n  exec <code>           Run transaction code\n  repl [--write]        Run console code line by line\n  script <file>         Run a script file against the database (it imports what it likes)\n  inspect [<id>]        An entity's relations, or relation counts per entity type\n  runs [--run <id>]     The flow runs in the run history, or one run's whole tree\n  backup --out <dir>    Full database and media backup to a new directory\n  backup verify <dir>   Check backup readability and completeness\n  recover               Inspect interrupted imports; explicitly restore retained incumbents\n  rebuild [--force]     Rebuild SQLite candidate derived indexes from primary data\n  audit [--json]        Inspect SQLite candidate primary values and derived indexes\n  export --out <dir>    Each entity type's entities to a file\n  dump --primary <file> Lossless SQLite logical archives (--runs may also be named)\n  load --primary <file> Validate logical archives; --force replaces selected stores\n  import <backup-dir>   Replace the database with a backup (lists the change; --force makes it)\n  reset                 Delete all data, as Reset Database does (lists it; --force deletes)\n  clear-settings        Destroy the Settings rows, so defaults come back (lists them; --force destroys)\n\nEvery command takes one of these; a command that changes the database says which data dir it means, and a command\nthat only reads takes the production app's data without being told:\n  --data-dir <path>      A data dir, a copy of the user's for example\n  --profile <name>       Built-in or custom stored profile\n  --schema-from <path>   Packs to read entity types from, for a data dir that publishes none: a snapshot,\n                         a pack directory, or a directory of them (an app, a checkout)\n\napack db <command> --help shows a command's options.\n",
+      "stderr": "",
+      "ms": 1959.6873
+    },
+    {
+      "args": [
+        "dump",
+        "--data-dir",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile",
+        "--primary",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\primary.ears",
+        "--runs",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\runs.ears"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "primary: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\primary.ears\nruns: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\runs.ears\n",
+      "stderr": "Database: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile (offline)\nWarning: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile has no packs installed in C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile\\apack\\packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\n",
+      "ms": 2273.3683
+    },
+    {
+      "args": [
+        "load",
+        "--data-dir",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile",
+        "--primary",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\primary.ears",
+        "--runs",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\runs.ears"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "Validated logical archives: primary, runs. Media is preserved.\nDry run: nothing was changed. Run again with --force to replace selected stores.\n",
+      "stderr": "Database: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile (offline)\nWarning: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile has no packs installed in C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile\\apack\\packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\nTypes absent from installed packs: Row (1)\n",
+      "ms": 3600.169399999999
+    },
+    {
+      "args": [
+        "load",
+        "--data-dir",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile",
+        "--primary",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\primary.ears",
+        "--runs",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\truncated.ears",
+        "--force"
+      ],
+      "expected": 1,
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "Database: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile (offline)\nWarning: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile has no packs installed in C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile\\apack\\packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\nTruncated logical archive\n",
+      "ms": 2949.1300999999985
+    },
+    {
+      "args": [
+        "load",
+        "--data-dir",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile",
+        "--primary",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\primary.ears",
+        "--runs",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\runs.ears",
+        "--force"
+      ],
+      "expected": 0,
+      "status": 0,
+      "signal": null,
+      "stdout": "Validated logical archives: primary, runs. Media is preserved.\nLoaded logical archives.\n",
+      "stderr": "Database: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile (offline)\nWarning: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile has no packs installed in C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile\\apack\\packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.\nNote: no installed pack declares these entity types, which the data holds anyway: Row (1).\n  A query may name them here, and so may a write — but no installed pack checks what it writes, so name their pack with --schema-from before changing them.\nThe backup holds entities of types no installed pack declares\nImported lmdb\nImported runHistory\nImport completed\n",
+      "ms": 3716.2125000000015
+    },
+    {
+      "args": [
+        "dump",
+        "--data-dir",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\profile",
+        "--primary",
+        "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\primary.ears"
+      ],
+      "expected": 1,
+      "status": 1,
+      "signal": null,
+      "stdout": "",
+      "stderr": "Archive target exists: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\ears-built-logical-cli-QgpS2x\\primary.ears\n",
+      "ms": 1713.7818000000007
+    }
+  ],
+  "checks": [
+    "built dump both stores",
+    "built dry run preserves both commits and values",
+    "built late input refusal preserves both stores",
+    "built populated restore preserves bytes, embeddings and monotonic commit",
+    "built overwrite refusal preserves both archives"
+  ],
+  "regexAssets": [
+    {
+      "path": "D:\\a\\apack\\apack\\packages\\apack-ears\\vendor\\rregex\\rregex.cjs",
+      "sha256": "5a8b72e18f1f25df12ec19499168be74caaa4a2476c6c098283887b5718d3e1a"
+    },
+    {
+      "path": "D:\\a\\apack\\apack\\packages\\apack-ears\\vendor\\rregex\\rregex_bg.wasm",
+      "sha256": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525"
+    }
+  ],
+  "sqlite": {
+    "version": "3.53.4"
+  },
+  "archiveHashes": {
+    "primary": "bce5a2a38eedaa0e056e9b0811c2974ba811769593725ed963423b75a0a794a6",
+    "runs": "59b0e1dd6adf7919e88cf998947357e731351e0467555db4416800682b485c8b"
+  }
+}

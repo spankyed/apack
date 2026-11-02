@@ -1,0 +1,21 @@
+{
+  "base": "844e0f6184978565b126b2cccf08ad082c291350",
+  "overlay": {
+    ".github/scripts/ears-sqlite-platform.mjs": "6d5ab1afc52632640205e79c58436c34a24c044d0c5e252650f0efe5609a2311",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "f00c073293e6c7e237a7b6df076591cb1a883853469fe449c575c653fdfad890",
+    "packages/apack-ears/src/sqlite/database.ts": "cf75fb3b69f18b2600f8ad5d89920a37a404c7c739a51bcba6d2ebf3119cbdc5",
+    "packages/apack-ears/src/sqlite/vector-models.ts": "a724a1add850123353db0702c8800673fba05ef66ed093a174f695355681367b",
+    "packages/apack-ears/src/sqlite/vector-training.ts": "52b0501bbf7a00cb8e79271b11d4eea04692361e85f06756689059cf35706081",
+    "packages/apack-ears/src/sqlite/vectors.ts": "eb95a89a11bb73d9a8546d7554e40b0787dd259b70eb7fc7f31e58f7ea710c53",
+    "packages/apack-ears/src/sqlite/vector-admission.ts": "0e7abb93f079641b5d6a65c42b4dda60e3472740cd2c70521b697f70fdd8c7b6",
+    "packages/apack-ears/src/sqlite/vector-policy.ts": "095f6cb6d2f4a6da3b4dc6267917e42d121769fa65b847c2bee5b0b08b79e2da",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "18734bf3811bcef9bbcb1ebc64df1cdc2df40acf5fc3be1280e74c53f341168b"
+  },
+  "limits": {
+    "cpu.max": "200000 100000",
+    "memory.max": "6442450944",
+    "memory.swap.max": "0"
+  },
+  "extensionSha256": "360c068120fbd25bb947d08ab2908d8981122da84ace8aeba218cd15c90b403d",
+  "metadata": "synthetic Git metadata for source classification; private copied dependencies, no shared writable outputs"
+}

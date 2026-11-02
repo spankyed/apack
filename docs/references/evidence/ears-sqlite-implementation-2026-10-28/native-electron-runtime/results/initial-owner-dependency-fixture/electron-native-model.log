@@ -1,0 +1,15 @@
+file:///electron/packages/apack-ears/dist/sqlite/schema-validation.js:1
+import { Ajv } from 'ajv';
+         ^^^
+SyntaxError: Named export 'Ajv' not found. The requested module 'ajv' is a CommonJS module, which may not support all module.exports as named exports.
+CommonJS modules can always be imported via the default export, for example using:
+
+import pkg from 'ajv';
+const { Ajv } = pkg;
+
+    at ModuleJob._instantiate (node:internal/modules/esm/module_job:220:21)
+    at async ModuleJob.run (node:internal/modules/esm/module_job:321:5)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:644:26)
+    at async file:///probe.mjs:8:60
+
+Node.js v22.17.1

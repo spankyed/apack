@@ -1,0 +1,15 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/search-recovery.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/search-recovery.spec.ts (29 tests) 5105ms
+   ✓ SQLite missing search storage recovery > rebuilds damaged postings in fresh generations without changing primary commits  2467ms
+
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+   Start at  12:16:53
+   Duration  5.50s (transform 192ms, setup 12ms, collect 261ms, tests 5.10s, environment 0ms, prepare 39ms)
+

@@ -1,3 +1,5 @@
+import { engineSchemaOf, type DatabaseSchemaOwner } from '../database/schema.ts';
+import { createLogger } from '@apackdev/sdk/logger';
 import type { AppMigrationTarget, PackMigrationTarget } from '../migrations/index.ts';
 import { captureData } from './captured-data.ts';
 import type { StepBackendBinding } from '@apackdev/sdk/steps';
@@ -214,9 +216,14 @@ export interface PackRegistry extends PackRegistryView {
   unregisterPack(packId: string): void;
   /**
    * Hears a pack registering, being replaced or unregistering, once the change has committed: what its code is now
-   * is what `getPackRegistration` answers by then. Returns the unsubscribe.
+   * is what `getPackRegistration` answers by then. Observer failures are reported, not installation refusals.
+   * Returns the unsubscribe.
    */
   onRegistrationChanged(listener: (packId: string) => void): () => void;
+  /** Bind one writable schema owner before executable publication; replace it only after close. */
+  bindDatabaseSchema(owner: DatabaseSchemaOwner): void;
+  /** Wait for declared indexes before lifecycle hooks, migrations or actors read them. */
+  indexesReady(packId?: string): Promise<void>;
   /**
    * Notes why an installed pack isn't running: the loader skipped it, or its registration was refused. The Packs
    * view shows it in place of the pack's enabled state. Cleared when the pack registers or is torn down.
@@ -369,6 +376,8 @@ function buildContributionTables(packs: Iterable<AdmittedPackContributions>) {
 
 /** A new, empty registry */
 export interface PackRegistryOptions {
+  /** Readiness for declaration-only fixtures; a bound writable store supplies its own readiness. */
+  indexesReady?: (types?: readonly string[]) => Promise<void>;
   /** Native data is admitted before executable registration and survives runtime unload. */
   nativeDeclarations?: readonly import('@apackdev/sdk/framework').NativePackDeclaration[];
   /**
@@ -385,7 +394,7 @@ export interface PackRegistryOptions {
   serviceOverrides?: ReadonlyMap<string, unknown>;
 }
 
-export function createPackRegistry({ installedPacksDir, appPackSourcesDir, settingsForPack, serviceOverrides, nativeDeclarations = [] }: PackRegistryOptions = {}): PackRegistry {
+export function createPackRegistry({ indexesReady = () => Promise.resolve(), installedPacksDir, appPackSourcesDir, settingsForPack, serviceOverrides, nativeDeclarations = [] }: PackRegistryOptions = {}): PackRegistry {
   let registrations = new Map<string, PackRegistration>();
   /** Where each registered pack came from. Same keys as `registrations`, so it comes and goes with them */
   let origins = new Map<string, PackOrigin>();
@@ -405,6 +414,14 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     try { return operation(); }
     finally { changing = false; }
   }
+  const logger = createLogger('pack-registry');
+  let schemaOwner: DatabaseSchemaOwner | undefined;
+  const schemaFailures = new Map<string, unknown>();
+  function checkDatabaseOwner(owner = schemaOwner): void {
+    if (!owner) return;
+    if (!owner.isOpen) throw Object.assign(new Error('The database schema owner is closed'), { code: 'CLOSED' });
+    owner.assertUsable();
+  }
   const registrationListeners = new Set<(packId: string) => void>();
   /**
    * `operation`, then every listener told `packId` once the registry takes changes again — when it committed, which
@@ -415,7 +432,13 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     try {
       return mutate(operation);
     } finally {
-      if (revision !== before) for (const listener of registrationListeners) listener(packId);
+      if (revision !== before) for (const listener of registrationListeners) {
+        try { listener(packId); }
+        catch (error) {
+          try { logger.error(`Pack ${packId} registration observer failed`, error instanceof Error ? error : new Error(String(error))); }
+          catch { /* Publication is complete; reporting failure cannot turn it into refusal. */ }
+        }
+      }
     }
   }
   const shutdownHooks = createShutdownHooks();
@@ -651,6 +674,11 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     const repository = firstTaken(Object.keys(registration.repositories ?? {}), (reg) => reg.repositories, replacing ? registration.id : undefined);
     if (repository) throw new Error(`Repository collision: "${repository.key}" — pack "${registration.id}" vs "${repository.holder}"`);
 
+    const nextRegistrations = new Map(registrations).set(registration.id, registration);
+    const nextOrigins = new Map(origins);
+    if (origin) nextOrigins.set(registration.id, origin);
+    else nextOrigins.delete(registration.id);
+    let schemaFailure: unknown;
     let binding: ReturnType<typeof createPackServiceBinding> | undefined;
     const candidate = new Map(admitted);
     const native = origin ? undefined : catalog.getSnapshot().native.find(pack => pack.id === registration.id);
@@ -692,21 +720,34 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
           },
         });
       }
+      if (schemaOwner) {
+        // A pre-existing quarantine is a refusal of this admission, not a new uncertain COMMIT.
+        checkDatabaseOwner(schemaOwner);
+        try {
+          schemaOwner.declare(schemaForRegistrations(nextRegistrations.values()));
+        } catch (error) {
+          const code = (error as { code?: unknown })?.code;
+          if (code !== 'NOT_DURABLE' && code !== 'COMMIT_UNKNOWN') throw error;
+          // The declaration may already be installed. Keep accepted files/runtime identity, but
+          // surface the original outcome at readiness before any new hooks or actors start.
+          schemaFailure = error;
+        }
+      }
     } catch (error) {
       const failures = binding?.dispose() ?? [];
-      if (failures.length) throw new AggregateError([error, ...failures.map(message => new Error(message))], 'Pack admission and provisional cleanup failed');
+      if (failures.length) throw Object.assign(new AggregateError([error, ...failures.map(message => new Error(message))], 'Pack admission and provisional cleanup failed', { cause: error }), { code: (error as { code?: unknown })?.code });
       throw error;
     }
     const previousBinding = bindings.get(registration.id);
-    registrations = new Map(registrations).set(registration.id, registration);
-    origins = new Map(origins);
-    if (origin) origins.set(registration.id, origin);
-    else origins.delete(registration.id);
+    registrations = nextRegistrations;
+    origins = nextOrigins;
     admitted = candidate;
     tables = nextTables;
     if (binding) { bindings.set(registration.id, binding); binding.activate(); }
     else bindings.delete(registration.id);
     loadProblems.delete(registration.id);
+    if (schemaFailure !== undefined) schemaFailures.set(registration.id, schemaFailure);
+    else schemaFailures.delete(registration.id);
     changed();
     if (!previousBinding) return [];
     if (!replacement) return previousBinding.dispose();
@@ -729,6 +770,7 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
       bindings.delete(packId);
       registrations = new Map(registrations);
       registrations.delete(packId);
+      schemaFailures.delete(packId);
       origins = new Map(origins);
       origins.delete(packId);
       admitted = candidate;
@@ -776,30 +818,55 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
 
   const eventValidationMap = derived(buildEventValidationMap);
   const surfaceEventValidationMap = derived(buildSurfaceEventValidationMap);
-  const entityTypes = derived((): ReadonlySet<string> => new Set<string>([
-    ...RESERVED_ENTITIES,
-    ...[...registrations.values()].flatMap((reg) => Object.values(reg.ears?.entities ?? {})),
-  ]));
-  const relationKinds = derived((): ReadonlySet<string> => new Set<string>([
-    ...Object.values(SDK_REL_KINDS),
-    ...[...registrations.values()].flatMap((reg) => Object.values(reg.ears?.relKinds ?? {})),
-  ]));
-  const roles = derived((): ReadonlySet<string> => new Set<string>([
-    ...Object.values(SDK_ROLES),
-    ...[...registrations.values()].flatMap((reg) => Object.values(reg.ears?.roles ?? {})),
-  ]));
-  const rowRules = derived((): ReadonlyMap<string, RowRules> => new Map<string, RowRules>([
-    ...Object.entries(SDK_ROW_RULES),
-    ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.rowRules ?? {})),
-  ]));
-  const relationRules = derived((): ReadonlyMap<string, RelationRules> => new Map<string, RelationRules>([
-    ...Object.entries(SDK_RELATION_RULES),
-    ...[...registrations.values()].flatMap((reg) => Object.entries(reg.ears?.relationRules ?? {})),
-  ]));
+  function declarationsOf(entries: Iterable<PackRegistration>) {
+    const packs = [...entries];
+    return {
+      types: new Set<string>([...RESERVED_ENTITIES, ...packs.flatMap(reg => Object.values(reg.ears?.entities ?? {}))]),
+      kinds: new Set<string>([...Object.values(SDK_REL_KINDS), ...packs.flatMap(reg => Object.values(reg.ears?.relKinds ?? {}))]),
+      roles: new Set<string>([...Object.values(SDK_ROLES), ...packs.flatMap(reg => Object.values(reg.ears?.roles ?? {}))]),
+      rowRules: new Map<string, RowRules>([...Object.entries(SDK_ROW_RULES), ...packs.flatMap(reg => Object.entries(reg.ears?.rowRules ?? {}))]),
+      relationRules: new Map<string, RelationRules>([...Object.entries(SDK_RELATION_RULES), ...packs.flatMap(reg => Object.entries(reg.ears?.relationRules ?? {}))]),
+    };
+  }
+  function schemaForRegistrations(entries: Iterable<PackRegistration>) {
+    const prospective = declarationsOf(entries);
+    return engineSchemaOf({
+      getRegisteredEntityTypes: () => prospective.types,
+      getRegisteredRelationKinds: () => prospective.kinds,
+      getRegisteredRoles: () => prospective.roles,
+      getRowRules: type => prospective.rowRules.get(type),
+      getRelationRules: kind => prospective.relationRules.get(kind),
+    });
+  }
+  const declarations = derived(() => declarationsOf(registrations.values()));
+  const entityTypes = () => declarations().types;
+  const relationKinds = () => declarations().kinds;
+  const roles = () => declarations().roles;
+  const rowRules = () => declarations().rowRules;
+  const relationRules = () => declarations().relationRules;
   // Each prefix's entity type, from those same rules, so a pack's codes come and go with it
   const shortCodeTypes = derived(() => _shortCodeTypes([...rowRules()]));
   const services = derived((): Record<string, unknown> =>
     Object.fromEntries([...admitted.values()].flatMap(pack => [...pack.services])));
+
+  function indexReadinessScope(packId: string) {
+    const snapshot = catalog.getSnapshot();
+    const native = new Map(snapshot.native.map(pack => [pack.id, pack]));
+    const installed = new Map(snapshot.packs.map(pack => [pack.snapshot.manifest.id, pack.snapshot.manifest]));
+    const types = new Set<string>(RESERVED_ENTITIES);
+    const owners = new Map<string, { binding: AdmittedPackContributions | undefined; declaration: unknown }>();
+    const pending = [packId];
+    while (pending.length) {
+      const id = pending.pop()!;
+      if (owners.has(id)) continue;
+      const registration = registrations.get(id);
+      const declaration = native.get(id) ?? installed.get(id);
+      owners.set(id, { binding: admitted.get(id), declaration });
+      for (const type of Object.values(registration?.ears?.entities ?? (declaration ? _packEntityTypes(declaration) : {}))) types.add(type);
+      pending.push(...Object.keys(registration?.dependencies ?? declaration?.dependencies ?? {}));
+    }
+    return { types, owners };
+  }
 
   return {
     catalog,
@@ -811,6 +878,32 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     }),
     registerContentRuntime,
     unregisterPack,
+    bindDatabaseSchema(owner) {
+      if (schemaOwner?.isOpen) throw Object.assign(new Error('The registry already owns a writable database'), { code: 'DATABASE_BOUND' });
+      checkDatabaseOwner(owner);
+      owner.declare(schemaForRegistrations(registrations.values()));
+      schemaOwner = owner;
+      schemaFailures.clear();
+    },
+    async indexesReady(packId) {
+      checkDatabaseOwner();
+      if (packId === undefined) {
+        if (schemaFailures.size) throw schemaFailures.values().next().value;
+        return schemaOwner ? schemaOwner.indexesReady() : indexesReady();
+      }
+      if (!registrations.has(packId)) throw new Error(`Pack "${packId}" is not registered`);
+      const scope = indexReadinessScope(packId);
+      for (const id of scope.owners.keys()) if (schemaFailures.has(id)) throw schemaFailures.get(id);
+      await (schemaOwner ? schemaOwner.indexesReady([...scope.types]) : indexesReady([...scope.types]));
+      const current = indexReadinessScope(packId);
+      // A dependency can add types while an older type scope waits (or after an immediate ready result).
+      // Compare only these owners: unrelated catalog changes must not invalidate a healthy activation.
+      if (!isDeepStrictEqual(scope.types, current.types) || scope.owners.size !== current.owners.size
+        || [...scope.owners].some(([id, owner]) => {
+          const next = current.owners.get(id);
+          return !next || next.binding !== owner.binding || !isDeepStrictEqual(next.declaration, owner.declaration);
+        })) throw Object.assign(new Error(`Pack "${packId}" or its dependencies changed during index readiness`), { code: 'CANCELLED' });
+    },
     onRegistrationChanged(listener) {
       registrationListeners.add(listener);
       return () => { registrationListeners.delete(listener); };

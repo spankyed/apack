@@ -1,0 +1,37 @@
+import pathlib,subprocess,os,json,hashlib,shutil,time
+r=pathlib.Path('/metrics');o=pathlib.Path('/results')
+files=list((r/'packages/apack-ears/src').rglob('*.ts'))+list((r/'packages/apack-host/src').rglob('*.ts'))+list((r/'packages/apack-host/tests/backup').glob('*.ts'))
+(o/'source-sha256.json').write_text(json.dumps({str(p.relative_to(r)):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},indent=2)+'\n')
+def run(name,args,timeout=120,env=None,expected=0):
+ start=time.monotonic();p=subprocess.run(args,cwd=r,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,timeout=timeout,env=os.environ|(env or {}))
+ (o/(name+'.txt')).write_text(p.stdout);print(name,p.returncode,round(time.monotonic()-start,3),flush=True)
+ assert (p.returncode==0 if expected==0 else p.returncode!=0),p.stdout[-12000:]
+ return p
+run('packages-build',['npm','run','packages:build'])
+run('ears-types',['npm','run','typecheck','-w','@apackdev/ears'])
+args=['npm','test','-w','@apackdev/host','--','tests/backup/storage.spec.ts','tests/backup/import.spec.ts','tests/backup/import-transaction.spec.ts','tests/database/open-app-database.spec.ts']
+run('host-storage',args)
+p=r/'packages/apack-host/src/backup/index.ts';original=p.read_text();before="if (source.format !== expected) throw new Error(`Cannot import ${name} in ${source.format} into ${expected}; convert an explicit copy first`);"
+assert before in original
+try:
+ p.write_text(original.replace(before,''))
+ run('negative-format-preflight',['npm','test','-w','@apackdev/host','--','tests/backup/storage.spec.ts','-t','before validat'],expected=1)
+finally:p.write_text(original)
+p=r/'packages/apack-host/src/database/storage.ts';original=p.read_text();assert "code: 'STORAGE_MISMATCH'" in original
+try:
+ p.write_text(original.replace("code: 'STORAGE_MISMATCH'","code: 'WRONG_FORMAT'"))
+ run('negative-salvage-mismatch',['npm','test','-w','@apackdev/host','--','tests/backup/storage.spec.ts','-t','does not move'],expected=1)
+finally:p.write_text(original)
+run('host-storage-restored',args)
+run('sqlite',['npm','test','-w','@apackdev/ears','--','--reporter=json','--outputFile=/results/sqlite.json'],env={'EARS_EVALUATION_BACKEND':'sqlite'})
+run('native',['npm','test','-w','@apackdev/ears','--','--reporter=json','--outputFile=/results/native.json'],env={'EARS_EVALUATION_BACKEND':'elmdb'})
+for name in ['sqlite','native']:
+ v=json.loads((o/(name+'.json')).read_text());print(name,v['numPassedTests'],v['numFailedTests'],flush=True)
+for workspace,name in [('@apackdev/ears','ears'),('@apackdev/sdk','sdk')]:
+ run('api-update-'+name,['npm','run','api:update','-w',workspace])
+ out=o/('api-'+name);out.mkdir(exist_ok=True)
+ for p in (r/'packages'/('apack-'+name)/'etc').glob('*.api.md'):shutil.copyfile(p,out/p.name)
+ run('api-check-'+name,['npm','run','api:check','-w',workspace])
+for workspace,name in [('@apackdev/host','host'),('@apackdev/sdk','sdk'),('@apackdev/cli','cli')]:
+ run('typecheck-'+name,['npm','run','typecheck','-w',workspace])
+run('specifiers',['npm','run','check:specifiers'])

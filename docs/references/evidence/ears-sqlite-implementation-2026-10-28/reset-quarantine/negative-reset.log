@@ -1,0 +1,53 @@
+
+ RUN  v3.2.7 /electron/packages/apack-cli
+
+ ❯ tests/commands/sqlite-profile.spec.ts (7 tests | 2 failed | 5 skipped) 1200ms
+   ↓ queries and writes the named SQLite profile through normal CLI commands
+   ↓ backs up, verifies, reads history and restores both stores using the named target
+   ↓ refuses default candidate storage during argument parsing before commands can take a write lock
+   × refuses reset before changing SQLite primary data while history is open (readOnly=false) 798ms
+     → promise resolved "{ …(2) }" instead of rejecting
+   × refuses reset before changing SQLite primary data while history is open (readOnly=true) 401ms
+     → promise resolved "{ …(2) }" instead of rejecting
+   ↓ resets a SQLite profile whose history is absent while retaining primary handle exclusion
+   ↓ permits a SQLite reset dry run while history is held without deleting primary data
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/commands/sqlite-profile.spec.ts > refuses reset before changing SQLite primary data while history is open (readOnly=false)
+ FAIL  tests/commands/sqlite-profile.spec.ts > refuses reset before changing SQLite primary data while history is open (readOnly=true)
+AssertionError: promise resolved "{ …(2) }" instead of rejecting
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- Error {[39m
+[32m-   "message": "rejected promise",[39m
+[31m+ {[39m
+[31m+   "err": "Database: /tmp/apack-cli-sqlite-iGzLz0/profile (offline)[39m
+[31m+ Warning: /tmp/apack-cli-sqlite-iGzLz0/profile has no packs installed in /tmp/apack-cli-sqlite-iGzLz0/profile/apack/packs, so only apack's own entity types are known. Rows still load and are reachable by id, but a query that starts from a pack's entity type cannot be written. Name a snapshot with --schema-from to read them.",[39m
+[31m+   "out": "Deleting the database (/tmp/apack-cli-sqlite-iGzLz0/profile/apack/ears-db):[39m
+[31m+   Prompt: 1[39m
+[31m+ Deleting the run history (/tmp/apack-cli-sqlite-iGzLz0/profile/apack/run-history)[39m
+[31m+ Keeping 0 stored API key(s) (--keep-keys)[39m
+[31m+[39m
+[31m+ Reset. apack creates its default data on its next start.",[39m
+[2m  }[22m
+
+ ❯ tests/commands/sqlite-profile.spec.ts:65:83
+     63|   const f = fixture(), held = openRunHistory(f.paths.runHistory, { rea…
+     64|   try {
+     65|     await expect(command(['reset', '--force', '--keep-keys', '--data-d…
+       |                                                                                   ^
+     66|     expect(JSON.parse((await command(['query', '--data-dir', f.dir, '-…
+     67|     expect(fs.existsSync(f.paths.runHistory)).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 skipped (7)
+   Start at  19:55:58
+   Duration  8.82s (transform 3.25s, setup 88ms, collect 6.42s, tests 1.20s, environment 0ms, prepare 103ms)
+
+JSON report written to /results/negative-reset.json

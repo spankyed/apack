@@ -1,0 +1,9 @@
+# Scoped logical readiness checkpoint
+
+[Focused run 41324900434](https://github.com/spankyed/apack/actions/runs/41324900434), source `64447ffb6041219f856f3f4126b1d42420f94055`, completes with 91 host passes/no skips, SQLite 424 passes/one retained keyword failure/no skips, and native 262 passes/one retained keyword failure/162 SQLite-only exclusions. All nineteen commit-outcome cases and three new mandatory readiness cases pass. The real SQLite isolation case injects one backfill failure without altering primary data, admits a healthy type, and still requires own/global waits to refuse. Replacement cancels a pending scoped generation wait; closed/open-unit refusals survive empty scopes. Registry transitive ownership and actual activation/reload forwarding/wait/failure checks pass.
+
+Matching package/API generation and EARS source/test typechecks plus targeted lint pass. The generated one-line API change is preserved in `reports.patch` and applied verbatim to the candidate; it introduces the optional readiness type scope. This run generated that change, so its API patch is deliberately nonempty. Final strict qualification must verify the committed report.
+
+Mandatory model/relation/readiness witnesses, real WAL acknowledgement controls, six built-package audit resource trials and five copied-profile conversion groups pass. The retained keyword failure keeps the workflow red and skips its separate relevance step. Resource repetition is not full app/latency certification. Frozen keyword judgments and budgets are unchanged.
+
+Four explicit original test/witness reports are compressed unchanged; `sha256.json` hashes their decompressed bytes. No database/corpus payload, profiles or private traces are retained. The later added admitted-inactive-dependency/fatal-owner assertions and old-global-behavior mutation control still require their own run; this checkpoint does not claim them.

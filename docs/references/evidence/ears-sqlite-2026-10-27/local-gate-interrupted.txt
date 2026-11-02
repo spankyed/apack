@@ -1,0 +1,69 @@
+
+> apack@0.3.14 chain
+> tsx scripts/chain.ts --no-native --cores 1
+
+test:native not run: --no-native
+     ok     packages:ensure                  0.8s  never cached — scripts/lib/chain-steps.ts:852
+ cached     api:check
+ cached     packages:check
+     ok     build:default-setup             78.7s  not built (no packages/default-setup/dist,
+                                                   packages/default-setup/src/__generated__)
+     ok     facade:check                     4.8s  no stamp — no valid successful input/output
+                                                   record
+     ok     test:external-pack:contract     69.6s  not built (no tests/packs/bundled-ui-pack/dist,
+                                                   tests/packs/bundled-ui-pack/src/__generated__,
+                                                   tests/packs/external-pack/dist,
+                                                   tests/packs/external-pack/src/__generated__)
+                                             1.0s  memo flow > stores the memo a memo.requested eve…
+                                             0.3s  memo reminder flow > adds the memo on each sched…
+     ok     test:external-pack:fork         88.5s  not built (no
+                                                   node_modules/.cache/apack-fixtures/default-fork)
+     ok     typecheck:renderer              11.7s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:api                    4.3s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:ears                   1.6s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:sdk                    1.4s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:host                   1.7s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:ui                     2.2s  no stamp — no valid successful input/output
+                                                   record
+     ok     check:specifiers                 7.4s  no stamp — no valid successful input/output
+                                                   record
+     ok     exports:check                    1.3s  no stamp — no valid successful input/output
+                                                   record
+     ok     schema:check                     1.3s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:scripts               12.4s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:cli                    8.4s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:pack                  12.6s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:main                   3.0s  no stamp — no valid successful input/output
+                                                   record
+     ok     typecheck:preload                2.9s  no stamp — no valid successful input/output
+                                                   record
+     ok     check:tiers                      0.8s  no stamp — no valid successful input/output
+                                                   record
+     ok     lint:check                       6.3s  no stamp — no valid successful input/output
+                                                   record
+     ok     test:unit:host                 438.5s  no stamp — no valid successful input/output
+                                                   record
+                                             7.3s  refuses an unresponsive frontend freshness check…
+                                             6.8s  reuses a verified compiler, refreshes changed or…
+                                             4.5s  force-stops a compiler that ignores cancellation…
+                                             4.5s  drains an interrupted frontend startup before re…
+                                             4.4s  keeps the most recently used entries when a capt…
+                                           224.4s  fast half, 506 file(s) this run measured, 154.6s of import and setup around them
+                                           379.0s  work/cores against a 42.2s floor — work-bound: the larger of the two, which is not a prediction of the wall
+                                            59.5s  of the step's 438.5s is neither figure — contention and start-up, which nothing here measures
+                                             3.3x  apack-cli/tests/build/pack-builder.spec.ts, apack-cli/tests/build/compiler-installation.spec.ts, apack-sdk/tests/build/generate-entries/compiles.spec.ts at 41.2s + 37.0s + 19.3s against 6.2s — out of line with its half, so a candidate for splitting
+                                                5  of 18 @slow: marker(s) sit in a package with no second half, so no spec they guard can move without a new vitest config
+                                            42.2s  apack-cli/tests/build/pack-builder.spec.ts  @slow: one pack builder taken through 25 real builds: reuse, refusal and recovery
+                                            38.0s  apack-cli/tests/build/compiler-installation.spec.ts  @slow: each case copies the selected Node runtime and a compiler into an installation and runs it
+                                            20.1s  apack-sdk/tests/build/generate-entries/compiles.spec.ts  @slow: three cases each build a TypeScript program, which is the subject rather than a detail
+                                             6.2s  apack-ears/tests/engine/model-based.spec.ts
+                                             6.0s  api/tests/runtime/app-reset.spec.ts, 2.3s of it tests

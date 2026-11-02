@@ -1,0 +1,114 @@
+{
+  "source": "4e391f93587ef13faaa8adf166998b34b7623038",
+  "qualification": false,
+  "scope": "Native extension compatibility on tiny fixtures; no EARS integration, corpus recall, training/admission or latency qualification",
+  "node": "v23.11.1",
+  "platform": "linux",
+  "arch": "arm64",
+  "upstream": {
+    "repository": "https://github.com/sqlite/sqlite",
+    "commit": "814fd8ef4d42d6567f1613a66f556c8194764d06",
+    "path": "ext/vec1/vec1.c",
+    "sha256": "b341c15fe10e41a9b96981ff3a9c217ea0774b4e04932b5acf3dac1320aeceb1",
+    "commitDate": "2026-10-27T15:11:21Z",
+    "purpose": "private compatibility/performance diagnostic; not an adopted dependency"
+  },
+  "extension": {
+    "path": "/metrics/vec1.so",
+    "sha256": "2fd22bc6d242afe2b2cb6a5c7ec281caf769a2683452c701adc707521961df65"
+  },
+  "modes": [
+    {
+      "mode": "none",
+      "passed": [
+        "metadata and dynamic owner IN filtering before K",
+        "own update/delete, nested savepoint, rollback and reader isolation",
+        "own insert and rollback",
+        "held reader snapshot and later committed visibility",
+        "read-only compacted backup and reopen"
+      ],
+      "sqlite": "3.53.4",
+      "version": "version 0.8 (NEON, multi-threaded)",
+      "loadedNative": [
+        {
+          "path": "/seed/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+          "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+        },
+        {
+          "path": "/metrics/vec1.so",
+          "sha256": "2fd22bc6d242afe2b2cb6a5c7ec281caf769a2683452c701adc707521961df65"
+        }
+      ]
+    },
+    {
+      "mode": "flat",
+      "passed": [
+        "metadata and dynamic owner IN filtering before K",
+        "own update/delete, nested savepoint, rollback and reader isolation",
+        "own insert and rollback",
+        "held reader snapshot and later committed visibility",
+        "read-only compacted backup and reopen"
+      ],
+      "sqlite": "3.53.4",
+      "version": "version 0.8 (NEON, multi-threaded)",
+      "loadedNative": [
+        {
+          "path": "/seed/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+          "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+        },
+        {
+          "path": "/metrics/vec1.so",
+          "sha256": "2fd22bc6d242afe2b2cb6a5c7ec281caf769a2683452c701adc707521961df65"
+        }
+      ]
+    },
+    {
+      "mode": "ivf-none",
+      "passed": [
+        "metadata and dynamic owner IN filtering before K",
+        "own update/delete, nested savepoint, rollback and reader isolation",
+        "own insert and rollback",
+        "held reader snapshot and later committed visibility",
+        "read-only compacted backup and reopen"
+      ],
+      "sqlite": "3.53.4",
+      "version": "version 0.8 (NEON, multi-threaded)",
+      "loadedNative": [
+        {
+          "path": "/seed/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+          "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+        },
+        {
+          "path": "/metrics/vec1.so",
+          "sha256": "2fd22bc6d242afe2b2cb6a5c7ec281caf769a2683452c701adc707521961df65"
+        }
+      ],
+      "trainingMs": 0.3306259999999952,
+      "modelBytes": 152
+    },
+    {
+      "mode": "ivf-bq",
+      "passed": [
+        "metadata and dynamic owner IN filtering before K",
+        "own update/delete, nested savepoint, rollback and reader isolation",
+        "own insert and rollback",
+        "held reader snapshot and later committed visibility",
+        "read-only compacted backup and reopen"
+      ],
+      "sqlite": "3.53.4",
+      "version": "version 0.8 (NEON, multi-threaded)",
+      "loadedNative": [
+        {
+          "path": "/seed/node_modules/better-sqlite3/prebuilds/linux-arm64.node",
+          "sha256": "8ba771f284dfd9430e3ef8e2ffc373ed7cc5a92fc7c4c0c7baf39dd672863485"
+        },
+        {
+          "path": "/metrics/vec1.so",
+          "sha256": "2fd22bc6d242afe2b2cb6a5c7ec281caf769a2683452c701adc707521961df65"
+        }
+      ],
+      "trainingMs": 0.32287600000000793,
+      "modelBytes": 152
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
 import { performanceIdentity, manifestSchema } from '@apackdev/testing/performance';
 import { searchFixture } from './fixture.ts';
+import { performanceStorageFormat } from './storage-identity.ts';
 import type { PerformanceWindow } from './window.ts';
 
 // Preparation only. The controller owns E2E_DATA_DIR and waits for this process to close before copying it.
@@ -33,11 +34,25 @@ test('prepare a populated startup profile outside measurement', async ({ app, ap
       const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
       return Object.values(context.messageContents).some(message => message.text?.startsWith("You're all setup!"));
     })).toBe(true);
-    await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
-    await expect.poll(() => appPage.evaluate(() => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
-      return Object.keys(context.threadMap).filter(id => id.startsWith('Thread-search-')).length;
-    })).toBe(fixture.data.threads.length);
+    // Seed ingestion is setup, outside startup timing. Use the same page-completion wait as
+    // the existing search/import scenarios; a five-second assertion poll can close the app mid-import.
+    const importStarted = performance.now();
+    let importCompleted = false;
+    try {
+      await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
+      await appPage.waitForFunction(expected => {
+        const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
+        return Object.keys(context.threadMap).filter(id => id.startsWith('Thread-search-')).length === expected;
+      }, fixture.data.threads.length);
+      importCompleted = true;
+    } finally {
+      writeFileSync(path.join(path.dirname(process.env.APACK_PERFORMANCE_SEED_REPORT), 'preparation.json'), JSON.stringify({
+        source: process.env.GITHUB_SHA, storageFormat: process.env.APACK_STORAGE_FORMAT,
+        phase: 'seed-import', expectedThreads: fixture.data.threads.length,
+        importCompleted, importMs: performance.now() - importStarted,
+        scope: 'Seed preparation outside measured startup; not an ingestion latency or foreground-budget pass',
+      }, null, 2));
+    }
     await appPage.evaluate(() => (window as unknown as PerformanceWindow).applicationState.send({
       type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId: 'Thread-search-11' }],
     }));
@@ -46,9 +61,11 @@ test('prepare a populated startup profile outside measurement', async ({ app, ap
       return context.currentThread?.id === 'Thread-search-11' && context.chatMessageIds.length === 50;
     })).toBe(true);
     writeFileSync(process.env.APACK_PERFORMANCE_SEED_REPORT, JSON.stringify(fixture.identity, null, 2));
+    const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'));
+    const storageFormat = performanceStorageFormat(userData, process.env.APACK_STORAGE_FORMAT ?? 'elmdb/1');
     const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
     const manifest = performanceIdentity({ fixture: fixture.identity, mode: manifestSchema.shape.mode.parse(process.env.APACK_PERFORMANCE_MODE ?? 'lightweight'),
-      cache: 'fresh-process-warm-filesystem', warmups: 5, runtime: { ...runtime, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' } });
+      cache: 'fresh-process-warm-filesystem', warmups: 5, runtime: { ...runtime, storageFormat, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' } });
     writeFileSync(`${process.env.APACK_PERFORMANCE_SEED_REPORT}.manifest.json`, JSON.stringify(manifest, null, 2));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

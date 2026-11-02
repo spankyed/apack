@@ -1,0 +1,333 @@
+{
+  "run": 41231483821,
+  "job": 124626441170,
+  "source": "e45d03d82f",
+  "platform": "macOS arm64",
+  "overall": "failure",
+  "rawReportSha256": "fe9451283c63c9254fc3582ef17f6294ca0ebf721823b2251c950cdef238c5ab",
+  "counts": {
+    "numTotalTests": 845,
+    "numPassedTests": 844,
+    "numFailedTests": 1,
+    "numPendingTests": 0
+  },
+  "crossTypeLikeWatchPassed": true,
+  "remainingFailure": "Unchanged generate-entries overview top-five relevance judgment",
+  "files": {
+    "engines.spec.ts": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "no-module-state.spec.ts": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "storage-types.spec.ts": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "vocabulary.spec.ts": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "watch-causes.spec.ts": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "bulk-load.spec.ts": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "calls.spec.ts": {
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    "graph-similarity.spec.ts": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "maintenance.spec.ts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "model-based.spec.ts": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "observation.spec.ts": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "queries.spec.ts": {
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0
+    },
+    "query-values.spec.ts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "real-search-relevance.spec.ts": {
+      "passed": 24,
+      "failed": 1,
+      "skipped": 0
+    },
+    "relations.spec.ts": {
+      "passed": 33,
+      "failed": 0,
+      "skipped": 0
+    },
+    "search-languages.spec.ts": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    "search-relevance.spec.ts": {
+      "passed": 36,
+      "failed": 0,
+      "skipped": 0
+    },
+    "search.spec.ts": {
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    "sqlite-operations.spec.ts": {
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    "storage-port.spec.ts": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "transact.spec.ts": {
+      "passed": 46,
+      "failed": 0,
+      "skipped": 0
+    },
+    "vector.spec.ts": {
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    "watch-schedule.spec.ts": {
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    "watch.spec.ts": {
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    "writes.spec.ts": {
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0
+    },
+    "commit-outcomes.spec.ts": {
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    "community-core.spec.ts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "database-identity.spec.ts": {
+      "passed": 19,
+      "failed": 0,
+      "skipped": 0
+    },
+    "elmdb-conversion.spec.ts": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "embeddings.spec.ts": {
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    "file-ownership.spec.ts": {
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0
+    },
+    "graph-algorithms.spec.ts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "graph-execution.spec.ts": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "index-builds.spec.ts": {
+      "passed": 9,
+      "failed": 0,
+      "skipped": 0
+    },
+    "index.spec.ts": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "logical-export.spec.ts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "logical-format.spec.ts": {
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0
+    },
+    "logical-restore.spec.ts": {
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    },
+    "logical-snapshot.spec.ts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "logical-stage.spec.ts": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "native-extension.spec.ts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "query-cost.spec.ts": {
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "regex.spec.ts": {
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0
+    },
+    "schema-admission.spec.ts": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0
+    },
+    "schema-validation.spec.ts": {
+      "passed": 49,
+      "failed": 0,
+      "skipped": 0
+    },
+    "search-builds.spec.ts": {
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    "search-recovery.spec.ts": {
+      "passed": 40,
+      "failed": 0,
+      "skipped": 0
+    },
+    "source-node.spec.ts": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "statement-cache.spec.ts": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    "text-documents.spec.ts": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    "text-limits.spec.ts": {
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    "text-typos.spec.ts": {
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0
+    },
+    "transaction-failures.spec.ts": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "trigrams.spec.ts": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "values.spec.ts": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    "vector-audit.spec.ts": {
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0
+    },
+    "vector-execution.spec.ts": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    },
+    "vector-index.spec.ts": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0
+    },
+    "vector-models.spec.ts": {
+      "passed": 36,
+      "failed": 0,
+      "skipped": 0
+    },
+    "vector-owner.spec.ts": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "vector-training.spec.ts": {
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0
+    },
+    "wal-readers.spec.ts": {
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    "watch-lifecycle.spec.ts": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0
+    }
+  }
+}

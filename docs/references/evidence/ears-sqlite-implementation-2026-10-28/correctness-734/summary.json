@@ -1,0 +1,141 @@
+{
+  "run": 41231033451,
+  "source": "7347dbdfc067625b99bbfe64b15402689bbbe99d",
+  "overall": "failure",
+  "backends": {
+    "elmdb": {
+      "counts": {
+        "numTotalTests": 155,
+        "numPassedTests": 135,
+        "numFailedTests": 1,
+        "numPendingTests": 19
+      },
+      "files": {
+        "no-module-state.spec.ts": {
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        "watch-causes.spec.ts": {
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0
+        },
+        "graph-similarity.spec.ts": {
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        "observation.spec.ts": {
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        "real-search-relevance.spec.ts": {
+          "passed": 24,
+          "failed": 1,
+          "skipped": 0
+        },
+        "relations.spec.ts": {
+          "passed": 33,
+          "failed": 0,
+          "skipped": 0
+        },
+        "search-languages.spec.ts": {
+          "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        "search-relevance.spec.ts": {
+          "passed": 36,
+          "failed": 0,
+          "skipped": 0
+        },
+        "vector.spec.ts": {
+          "passed": 20,
+          "failed": 0,
+          "skipped": 0
+        },
+        "logical-export.spec.ts": {
+          "passed": 0,
+          "failed": 0,
+          "skipped": 5
+        },
+        "logical-restore.spec.ts": {
+          "passed": 0,
+          "failed": 0,
+          "skipped": 14
+        }
+      },
+      "rawReportSha256": "19bec5549d9b58d5e1d48443159438a943dcc6ca571bb572e953baa566ae4a53"
+    },
+    "sqlite": {
+      "counts": {
+        "numTotalTests": 155,
+        "numPassedTests": 154,
+        "numFailedTests": 1,
+        "numPendingTests": 0
+      },
+      "files": {
+        "no-module-state.spec.ts": {
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        "watch-causes.spec.ts": {
+          "passed": 3,
+          "failed": 0,
+          "skipped": 0
+        },
+        "graph-similarity.spec.ts": {
+          "passed": 2,
+          "failed": 0,
+          "skipped": 0
+        },
+        "observation.spec.ts": {
+          "passed": 7,
+          "failed": 0,
+          "skipped": 0
+        },
+        "real-search-relevance.spec.ts": {
+          "passed": 24,
+          "failed": 1,
+          "skipped": 0
+        },
+        "relations.spec.ts": {
+          "passed": 33,
+          "failed": 0,
+          "skipped": 0
+        },
+        "search-languages.spec.ts": {
+          "passed": 8,
+          "failed": 0,
+          "skipped": 0
+        },
+        "search-relevance.spec.ts": {
+          "passed": 36,
+          "failed": 0,
+          "skipped": 0
+        },
+        "vector.spec.ts": {
+          "passed": 20,
+          "failed": 0,
+          "skipped": 0
+        },
+        "logical-export.spec.ts": {
+          "passed": 5,
+          "failed": 0,
+          "skipped": 0
+        },
+        "logical-restore.spec.ts": {
+          "passed": 14,
+          "failed": 0,
+          "skipped": 0
+        }
+      },
+      "rawReportSha256": "bdbda86170dbf028a63951b09615bcf2097af184d794d8e7490a412768fa6a84"
+    }
+  },
+  "remainingFailure": "Unchanged generated-files overview relevance judgment",
+  "limits": "Predates cross-type like and bounded hybrid window; intentional SQLite-only archive skips on elmdb"
+}

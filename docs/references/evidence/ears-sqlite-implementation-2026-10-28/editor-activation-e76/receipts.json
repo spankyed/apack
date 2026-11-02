@@ -1,0 +1,42 @@
+[
+  {
+    "file": "app-2.log.gz",
+    "sha256": "b26b7a188cabda7944cf98de9a03412997a8e4c7d40448d6fb2214357cef94f8",
+    "storedSha256": "9d2427b397380dd73bdc62f40f8dd166a6d40f5c8a79431f0e319c3fb0a8a322"
+  },
+  {
+    "file": "app-0.log.gz",
+    "sha256": "c96d2af14b4a876e4643630a00da2c99d52aecb47dc04233e6644d5a084c93a5",
+    "storedSha256": "bdd675d21f8befdad4bd65a6eeb5c30a0bc51fa591df41cd5b4f1d1cad19eff6"
+  },
+  {
+    "file": "app-1.log.gz",
+    "sha256": "9388049373e5992fdf6d31fd6a587bf1286d4bc8e5ae7f3f6f3c3a562d4734b3",
+    "storedSha256": "32e32f19b96a1c04815deb75417360781d5fc685b2253d051b2c3fad0dcdbbab"
+  },
+  {
+    "file": "source-app.json.gz",
+    "sha256": "b512e7882fbb6eb91b1da25e1e7f643873d4982de9c8c91e0070310ea932ab64",
+    "storedSha256": "100ac281768bc9c7c92bc41c42d76918832be4d8009ae72002a05684333ba16a"
+  },
+  {
+    "file": "ears-editor-e76-41155440320.log.gz",
+    "sha256": "d0cdb5b18ce1d23faf45b1f41e1e65898ee7b0dc2e13ced2a35083f745c8a3b1",
+    "storedSha256": "efd6ece0651e98c417df770f04381c227e6deff8178e3b2643119d84d703471f"
+  },
+  {
+    "file": "ears-editor-e76-41155440320-current.json.gz",
+    "sha256": "aef98cca09d530102ce0b0de40c665f6b884a34d396f411ba5a44697d1ffc32b",
+    "storedSha256": "07023a7df85288d4b22b2cc760b5948eae264a8df89042e86a2e3e9ba1511d05"
+  },
+  {
+    "file": "ears-editor-e76-activation.json.gz",
+    "sha256": "0d771668953fe67b68d5990e17dbaffdbc0a1eb4736d72c16c773333fe539e63",
+    "storedSha256": "5ad23078835d035794d579dfed441ae4d981a718519157a09bbe557dec39d006"
+  },
+  {
+    "file": "test.trace.gz",
+    "sha256": "2162133c056f4ed8bd4d49c4019ec6adfbbf59923d9c51d47f0530268a477339",
+    "storedSha256": "b1fcaf41c40da83a479a4a3ee0f56c4e0e881a8f577f73f47b018608a32a8fe7"
+  }
+]

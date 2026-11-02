@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/search-recovery.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/search-recovery.spec.ts (25 tests) 2284ms
+
+ Test Files  1 passed (1)
+      Tests  25 passed (25)
+   Start at  11:57:03
+   Duration  2.74s (transform 244ms, setup 14ms, collect 323ms, tests 2.28s, environment 0ms, prepare 42ms)
+

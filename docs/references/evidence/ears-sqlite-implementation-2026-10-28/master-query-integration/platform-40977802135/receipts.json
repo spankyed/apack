@@ -1,0 +1,86 @@
+[
+  {
+    "artifact": "ears-sqlite-Linux-X64-40977802135",
+    "file": "verification.json",
+    "retained": "Linux-X64-verification.json",
+    "originalSha256": "775a023e8a129557999922bec585579c84d3b991331b629e438d76509288d810",
+    "retainedSha256": "775a023e8a129557999922bec585579c84d3b991331b629e438d76509288d810"
+  },
+  {
+    "artifact": "ears-sqlite-Linux-X64-40977802135",
+    "file": "runtime.json",
+    "retained": "Linux-X64-runtime.json",
+    "originalSha256": "81c854aa3e0a7d5e04efd6be5ca77eabe5db6cecd8c9103f70e1240aac1cf0ac",
+    "retainedSha256": "81c854aa3e0a7d5e04efd6be5ca77eabe5db6cecd8c9103f70e1240aac1cf0ac"
+  },
+  {
+    "artifact": "ears-sqlite-Linux-X64-40977802135",
+    "file": "sdk-backend.json",
+    "retained": "Linux-X64-sdk-backend.json",
+    "originalSha256": "6cdf83f83f268b7c23c273489c55244e0a50e1c0c5c416a6c50020ff32b550b3",
+    "retainedSha256": "8f0c3d64cadd4a008c86e614c7010f872d2a6c7ab2db74c8cc710a5af0539d41"
+  },
+  {
+    "artifact": "ears-sqlite-Linux-X64-40977802135",
+    "file": "query-work.json",
+    "retained": "Linux-X64-query-work.json",
+    "originalSha256": "e7c59a968c14a4ac5775d509b8bab555ecc1c099f02d8f0178a86bc76bb0816e",
+    "retainedSha256": "505e30b8ccbfba743fdbd662e12d6b625aa235286b699769f58be4d368dcbc36"
+  },
+  {
+    "artifact": "ears-sqlite-Windows-X64-40977802135",
+    "file": "verification.json",
+    "retained": "Windows-X64-verification.json",
+    "originalSha256": "73532ef98ca2b25d83f31345a55870e641c092b3d989207c872a460e5b59f436",
+    "retainedSha256": "73532ef98ca2b25d83f31345a55870e641c092b3d989207c872a460e5b59f436"
+  },
+  {
+    "artifact": "ears-sqlite-Windows-X64-40977802135",
+    "file": "runtime.json",
+    "retained": "Windows-X64-runtime.json",
+    "originalSha256": "376945a934f796159bbd831ea2a9218006485b5b06d911f0a4f540e773b27507",
+    "retainedSha256": "376945a934f796159bbd831ea2a9218006485b5b06d911f0a4f540e773b27507"
+  },
+  {
+    "artifact": "ears-sqlite-Windows-X64-40977802135",
+    "file": "sdk-backend.json",
+    "retained": "Windows-X64-sdk-backend.json",
+    "originalSha256": "0ccc8a08913069a18f3da95d91bd6d18a648f65c5e101191c7e700f08ab1e545",
+    "retainedSha256": "51fe858b97ab40bfeeee7d0e787db077c8419d201605ef8fac7a5f403ec4a55e"
+  },
+  {
+    "artifact": "ears-sqlite-Windows-X64-40977802135",
+    "file": "query-work.json",
+    "retained": "Windows-X64-query-work.json",
+    "originalSha256": "847bf7f01076a7f8480a576db39b25d8eef37225c193c1cbc66af2e49fddbf95",
+    "retainedSha256": "db00b31cc0fa1c6d25bef213495b2e60cb79f5221cb0b0dd4ab7c447e0eecf5d"
+  },
+  {
+    "artifact": "ears-sqlite-macOS-ARM64-40977802135",
+    "file": "verification.json",
+    "retained": "macOS-ARM64-verification.json",
+    "originalSha256": "5df3389d40d236629d37048664a0eb8ef4908e4fec7b80f01b2c79a2a1a596ba",
+    "retainedSha256": "5df3389d40d236629d37048664a0eb8ef4908e4fec7b80f01b2c79a2a1a596ba"
+  },
+  {
+    "artifact": "ears-sqlite-macOS-ARM64-40977802135",
+    "file": "runtime.json",
+    "retained": "macOS-ARM64-runtime.json",
+    "originalSha256": "ecab801fb68202cbf639bdb983c7f3e9a88a24096940a8e7b21ffde0c1573bb2",
+    "retainedSha256": "ecab801fb68202cbf639bdb983c7f3e9a88a24096940a8e7b21ffde0c1573bb2"
+  },
+  {
+    "artifact": "ears-sqlite-macOS-ARM64-40977802135",
+    "file": "sdk-backend.json",
+    "retained": "macOS-ARM64-sdk-backend.json",
+    "originalSha256": "57c9aaf7179d00e5cb141b9e174bfe182ebef0c83ae8c14418e2cf706158c7cf",
+    "retainedSha256": "f925c1b1c2c2da00d35226348128e052cf15705ecffceddb6df2a6a6c9a3c07f"
+  },
+  {
+    "artifact": "ears-sqlite-macOS-ARM64-40977802135",
+    "file": "query-work.json",
+    "retained": "macOS-ARM64-query-work.json",
+    "originalSha256": "9e6051d8b1f5860b3be3fc28f3176ca9f9dc90c2543a3387b5a48b20082e5718",
+    "retainedSha256": "98b9d0cbeccb92eb952b97c3c49d2a74df835c76669c61fbfc1da3d1b822fd87"
+  }
+]

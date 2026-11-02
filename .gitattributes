@@ -1,0 +1,10 @@
+# Controlled runtime and provenance files must retain their exact bytes on every checkout.
+packages/apack-ears/vendor/rregex/** -text
+# Patch context retains upstream whitespace as part of its pinned source identity.
+native/vectors/*.patch -text -whitespace
+
+# Pinned upstream source is hashed before patching/compilation.
+native/vectors/upstream.c -text -whitespace
+
+# The portable graph source identity is identical on Windows and POSIX checkouts.
+native/graphs/** text eol=lf

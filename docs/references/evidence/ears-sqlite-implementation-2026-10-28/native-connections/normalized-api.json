@@ -1,0 +1,13 @@
+{
+  "generatedSha256": "016e3343a95bbb549a6020c72c34ce610656ba9dd6ca49c51b0da35bb3923779",
+  "normalizedSha256": "59dcc01087fcec306f3ddba7eafc22cdde126adcc0ce9d17d4c5abed6a637df3",
+  "transformation": "CRLF to LF only, preserving repository sqlite.api.md line endings",
+  "args": [
+    "npm",
+    "run",
+    "api:check",
+    "-w",
+    "@apackdev/ears"
+  ],
+  "exitCode": 0
+}

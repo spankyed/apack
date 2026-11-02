@@ -1,11 +1,12 @@
 // apack db, offline, against temp data dirs: each command's output and changes, the refusals while an app runs on the
 // data dir, and the dry runs of the commands that replace or delete data
 import * as fs from 'node:fs';
+import mutableFs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { Readable } from 'node:stream';
 import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEarsEngine, type EARS } from '@apackdev/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
@@ -962,6 +963,100 @@ describe('apack db reset', () => {
     const after = await ok(['query', 'return query.withTrashed.all().ids()', '--data-dir', dir, '-o', 'json']);
     expect(JSON.parse(after.out)).toEqual([]);
     expect((await ok(['reset', '--data-dir', dir])).out).toContain('Would delete 0 stored API key(s)');
+  });
+
+  it.each([false, true])('refuses an open history handle before deleting primary data or keys (readOnly=%s)', async readOnly => {
+    const dir = await appDataDir(), secrets = await withKey(dir), paths = _appDataPaths(dir);
+    const held = runHistoryAt(paths.runHistory, { readOnly });
+    const before = fs.readFileSync(secrets);
+    try {
+      expect((await run(['reset', '--force', '--data-dir', dir])).error?.message).toMatch(/Close apps and tools/);
+      expect(fs.readFileSync(secrets)).toEqual(before);
+      expect(fs.existsSync(paths.runHistory)).toBe(true);
+      expect((await ok(['query', 'return query.withTrashed("Note").count()', '--data-dir', dir])).out).toBe('2');
+    } finally { held.close(); }
+    await ok(['reset', '--force', '--data-dir', dir]);
+    expect(fs.existsSync(paths.runHistory)).toBe(false);
+  });
+
+  it('resets primary data when history is absent without excluding its own primary handle', async () => {
+    const dir = await appDataDir(), paths = _appDataPaths(dir); fs.rmSync(paths.runHistory, { recursive: true });
+    await ok(['reset', '--force', '--data-dir', dir]);
+    expect((await ok(['query', 'return query.withTrashed("Note").count()', '--data-dir', dir])).out).toBe('0');
+    expect(fs.existsSync(paths.runHistory)).toBe(false);
+  });
+
+  it('keeps new managed history opens excluded until deletion finishes', async () => {
+    const dir = await appDataDir(), paths = _appDataPaths(dir), remove = fs.rmSync;
+    let checked = false;
+    const spy = vi.spyOn(mutableFs, 'rmSync').mockImplementation((file, options) => {
+      if (file === paths.runHistory) {
+        checked = true;
+        expect(() => { const unexpected = runHistoryAt(paths.runHistory, { readOnly: true }); unexpected.close(); }).toThrow('Wait for import recovery');
+      }
+      return remove(file, options);
+    });
+    syncBuiltinESMExports();
+    try { await ok(['reset', '--force', '--data-dir', dir]); expect(checked).toBe(true); }
+    finally { spy.mockRestore(); syncBuiltinESMExports(); }
+    runHistoryAt(paths.runHistory).close();
+  });
+
+  it('releases history exclusion after deletion fails, leaving history available for retry', async () => {
+    const dir = await appDataDir(), paths = _appDataPaths(dir), remove = fs.rmSync;
+    const failure = Object.assign(new Error('injected history deletion failure'), { code: 'EACCES' });
+    const spy = vi.spyOn(mutableFs, 'rmSync').mockImplementation((file, options) => {
+      if (file === paths.runHistory) throw failure;
+      return remove(file, options);
+    });
+    syncBuiltinESMExports();
+    try { expect((await run(['reset', '--force', '--data-dir', dir])).error).toBe(failure); }
+    finally { spy.mockRestore(); syncBuiltinESMExports(); }
+    expect(fs.existsSync(path.join(path.dirname(paths.runHistory), 'db-recovery.lock'))).toBe(false);
+    runHistoryAt(paths.runHistory, { readOnly: true }).close();
+    await ok(['reset', '--force', '--data-dir', dir]);
+  });
+
+  it('can resume a reset killed after primary clear and before history deletion', async () => {
+    const dir = await appDataDir(), paths = _appDataPaths(dir), hook = path.join(dir, 'pause-reset.cjs');
+    fs.writeFileSync(hook, `
+      const fs = require('node:fs'), remove = fs.rmSync;
+      fs.rmSync = function(file, ...args) {
+        if (file === ${JSON.stringify(paths.runHistory)}) {
+          process.send({ boundary: 'history-delete' });
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
+        }
+        return remove.call(this, file, ...args);
+      };
+      require('node:module').syncBuiltinESMExports();
+    `);
+    const cli = path.resolve(import.meta.dirname, '..', '..', 'bin', 'apack.mjs');
+    const child = spawn(process.execPath, ['--require', hook, cli, 'db', 'reset', '--force', '--data-dir', dir],
+      { stdio: ['ignore', 'pipe', 'pipe', 'ipc'] });
+    let detail = ''; child.stdout!.on('data', chunk => { detail += chunk; }); child.stderr!.on('data', chunk => { detail += chunk; });
+    const closed = new Promise<void>(resolve => child.once('close', () => resolve()));
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`Reset did not reach history deletion: ${detail}`)), 30_000);
+        const fail = (error: Error) => { clearTimeout(timer); reject(error); };
+        child.once('error', fail);
+        child.once('exit', () => fail(new Error(`Reset exited before its deletion boundary: ${detail}`)));
+        child.on('message', message => {
+          if ((message as { boundary?: string }).boundary === 'history-delete') { clearTimeout(timer); resolve(); }
+        });
+      });
+      expect(fs.existsSync(path.join(path.dirname(paths.runHistory), 'db-recovery.lock'))).toBe(true);
+      child.kill('SIGKILL'); await closed;
+      expect(fs.existsSync(paths.runHistory)).toBe(true);
+      const surviving = runHistoryAt(paths.runHistory, { readOnly: true });
+      try { expect(surviving.get('RunNode-1')).toMatchObject({ id: 'RunNode-1', label: 'Root' });
+        expect(surviving.get('RunNode-2')).toMatchObject({ id: 'RunNode-2', label: 'go' }); }
+      finally { surviving.close(); }
+      expect((await ok(['query', 'return query.withTrashed("Note").count()', '--data-dir', dir])).out).toBe('0');
+      await ok(['reset', '--force', '--data-dir', dir]);
+      expect(fs.existsSync(paths.runHistory)).toBe(false);
+      expect(fs.existsSync(path.join(path.dirname(paths.runHistory), 'db-recovery.lock'))).toBe(false);
+    } finally { child.kill('SIGKILL'); await closed; }
   });
 
   // The keys are the half no backup holds, so wiping the data doesn't have to take them

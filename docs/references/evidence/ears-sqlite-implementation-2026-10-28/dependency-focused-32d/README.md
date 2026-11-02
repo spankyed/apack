@@ -1,0 +1,5 @@
+# Focused dependency-graph diagnosis at 32d88574da
+
+[Run 41254213388](https://github.com/spankyed/apack/actions/runs/41254213388) selects only `packages/apack-cli/tests/build/dependency-graph.integration.spec.ts` on source `32d88574daf67267ae11b165c8563ac7c7a3d1f0`. All five original assertions execute and pass without skips or retry, under the unchanged 240-second setup deadline. Required fixture contracts also execute: 39 passes across 11 files.
+
+The four setup builds take 29.540, 20.012, 27.903 and 24.442 seconds, totaling 101.897 seconds. The earlier strict shard's same four phases total 241.873 seconds and time out, skipping its five assertions. No compiler, input, assertion or deadline change was made to obtain this focused result. It establishes that the isolated fixture works, not why the concurrent shard was slower. CPU/I/O/GC contention is not individually attributed. Required full-gate concurrency coverage remains unqualified; do not relabel the failed strict run as passing or restart broad validation merely to diagnose this case.

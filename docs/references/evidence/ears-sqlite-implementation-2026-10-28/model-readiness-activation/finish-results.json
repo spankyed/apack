@@ -1,0 +1,131 @@
+[
+  {
+    "label": "git-init",
+    "args": [
+      "git",
+      "init",
+      "-q"
+    ],
+    "exitCode": 0,
+    "seconds": 0.010984253021888435
+  },
+  {
+    "label": "git-stage",
+    "args": [
+      "git",
+      "add",
+      "-A"
+    ],
+    "exitCode": 0,
+    "seconds": 2.6715230120171327
+  },
+  {
+    "label": "git-snapshot",
+    "args": [
+      "git",
+      "-c",
+      "user.name=SQLite qualification",
+      "-c",
+      "user.email=qualification@localhost",
+      "commit",
+      "-qm",
+      "Pinned integration plus readiness activation overlay"
+    ],
+    "exitCode": 0,
+    "seconds": 0.14042678297846578
+  },
+  {
+    "label": "api-startup-typed",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@app/api",
+      "packages/api/tests/runtime/sqlite-profile.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/api-startup-typed.json"
+    ],
+    "exitCode": 0,
+    "seconds": 6.890905445005046
+  },
+  {
+    "label": "api-types-fixed",
+    "args": [
+      "npm",
+      "run",
+      "typecheck:api"
+    ],
+    "exitCode": 0,
+    "seconds": 9.909598297002958
+  },
+  {
+    "label": "api-reports",
+    "args": [
+      "npm",
+      "run",
+      "api:update",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 6.476482457015663
+  },
+  {
+    "label": "api-report-check",
+    "args": [
+      "npm",
+      "run",
+      "api:check",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.554473376017995
+  },
+  {
+    "label": "boundaries",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.8810377290064935
+  },
+  {
+    "label": "changed-lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/database.ts",
+      "packages/apack-ears/src/sqlite/database.ts",
+      "packages/apack-ears/src/sqlite/index-builds.ts",
+      "packages/apack-ears/src/sqlite/index.ts",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "packages/apack-host/src/database/index.ts",
+      "packages/apack-host/src/database/storage.ts",
+      "packages/apack-host/tests/database/storage.spec.ts",
+      "packages/api/src/runtime/index.ts",
+      "packages/api/tests/runtime/sqlite-profile.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.08100720701622777
+  },
+  {
+    "label": "platform-syntax",
+    "args": [
+      "node",
+      "--check",
+      ".github/scripts/ears-sqlite-platform.mjs"
+    ],
+    "exitCode": 0,
+    "seconds": 0.020760668005095795
+  }
+]

@@ -1,0 +1,290 @@
+{
+  "scope": "10k-row in-memory catalog-only SQLite control with sparse stable sequences; Python binding, not EARS/better-sqlite3/production performance qualification",
+  "sqlite": "3.51.0",
+  "groups": [
+    {
+      "shape": "numeric",
+      "rows": 10000,
+      "catalogBytes": {
+        "rowid": 1032192,
+        "sequence-rowid": 897024
+      },
+      "insertMs": {
+        "rowid": 22.438958,
+        "sequence-rowid": 21.589916000000002
+      },
+      "queries": {
+        "point-catalog": {
+          "plans": {
+            "rowid": [
+              "SCAN seed VIRTUAL TABLE INDEX 1:",
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ],
+            "sequence-rowid": [
+              "SCAN seed VIRTUAL TABLE INDEX 1:",
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 32,
+            "sequence-rowid": 32
+          },
+          "samplesUs": {
+            "rowid": [
+              3.9632909999999937,
+              3.7480000000000016,
+              3.738749999999999
+            ],
+            "sequence-rowid": [
+              3.7717079999999985,
+              3.7368330000000087,
+              3.796542
+            ]
+          },
+          "rows": 1
+        },
+        "owner-to-id": {
+          "plans": {
+            "rowid": [
+              "SEARCH entities USING INDEX sqlite_autoindex_entities_2 (seq=?)",
+              "LIST SUBQUERY 1",
+              "SCAN json_each VIRTUAL TABLE INDEX 1:",
+              "CREATE BLOOM FILTER"
+            ],
+            "sequence-rowid": [
+              "SEARCH entities USING INTEGER PRIMARY KEY (rowid=?)",
+              "LIST SUBQUERY 1",
+              "SCAN json_each VIRTUAL TABLE INDEX 1:",
+              "CREATE BLOOM FILTER"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 13021,
+            "sequence-rowid": 12020
+          },
+          "samplesUs": {
+            "rowid": [
+              672.9125000000003,
+              699.6374999999999,
+              678.9000000000017
+            ],
+            "sequence-rowid": [
+              555.0582999999998,
+              562.0041999999992,
+              559.0541999999975
+            ]
+          },
+          "rows": 1000
+        },
+        "live-page-50": {
+          "plans": {
+            "rowid": [
+              "SEARCH entities USING INDEX entity_type (type=? AND trashed=?)"
+            ],
+            "sequence-rowid": [
+              "SEARCH entities USING INDEX entity_type (type=? AND trashed=?)"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 310,
+            "sequence-rowid": 310
+          },
+          "samplesUs": {
+            "rowid": [
+              12.100830000000007,
+              12.065410000000053,
+              12.223749999999978
+            ],
+            "sequence-rowid": [
+              17.875830000000093,
+              17.921250000000054,
+              17.91958999999982
+            ]
+          },
+          "rows": 50
+        },
+        "scoped-owner-1000": {
+          "plans": {
+            "rowid": [
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "LIST SUBQUERY 1",
+              "SCAN j VIRTUAL TABLE INDEX 1:",
+              "SEARCH p USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "CREATE BLOOM FILTER",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ],
+            "sequence-rowid": [
+              "SEARCH e USING COVERING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "LIST SUBQUERY 1",
+              "SCAN j VIRTUAL TABLE INDEX 1:",
+              "SEARCH p USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "CREATE BLOOM FILTER",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 23481,
+            "sequence-rowid": 22571
+          },
+          "samplesUs": {
+            "rowid": [
+              1152.1082999999987,
+              1151.4708000000014,
+              1165.049999999998
+            ],
+            "sequence-rowid": [
+              975.9041999999996,
+              980.3040999999985,
+              978.1708000000001
+            ]
+          },
+          "rows": 909
+        }
+      }
+    },
+    {
+      "shape": "hash-suffix",
+      "rows": 10000,
+      "catalogBytes": {
+        "rowid": 1372160,
+        "sequence-rowid": 1236992
+      },
+      "insertMs": {
+        "rowid": 23.780749999999962,
+        "sequence-rowid": 22.652709000000048
+      },
+      "queries": {
+        "point-catalog": {
+          "plans": {
+            "rowid": [
+              "SCAN seed VIRTUAL TABLE INDEX 1:",
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ],
+            "sequence-rowid": [
+              "SCAN seed VIRTUAL TABLE INDEX 1:",
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 32,
+            "sequence-rowid": 32
+          },
+          "samplesUs": {
+            "rowid": [
+              3.9072079999999954,
+              3.8338749999999866,
+              3.8514590000000015
+            ],
+            "sequence-rowid": [
+              3.8293329999999903,
+              3.8200000000000456,
+              3.8157500000000066
+            ]
+          },
+          "rows": 1
+        },
+        "owner-to-id": {
+          "plans": {
+            "rowid": [
+              "SEARCH entities USING INDEX sqlite_autoindex_entities_2 (seq=?)",
+              "LIST SUBQUERY 1",
+              "SCAN json_each VIRTUAL TABLE INDEX 1:",
+              "CREATE BLOOM FILTER"
+            ],
+            "sequence-rowid": [
+              "SEARCH entities USING INTEGER PRIMARY KEY (rowid=?)",
+              "LIST SUBQUERY 1",
+              "SCAN json_each VIRTUAL TABLE INDEX 1:",
+              "CREATE BLOOM FILTER"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 13021,
+            "sequence-rowid": 12020
+          },
+          "samplesUs": {
+            "rowid": [
+              667.1042000000016,
+              670.737499999996,
+              680.7999999999981
+            ],
+            "sequence-rowid": [
+              554.7124999999986,
+              554.1291000000003,
+              558.3416999999979
+            ]
+          },
+          "rows": 1000
+        },
+        "live-page-50": {
+          "plans": {
+            "rowid": [
+              "SEARCH entities USING INDEX entity_type (type=? AND trashed=?)"
+            ],
+            "sequence-rowid": [
+              "SEARCH entities USING INDEX entity_type (type=? AND trashed=?)"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 310,
+            "sequence-rowid": 310
+          },
+          "samplesUs": {
+            "rowid": [
+              12.008330000000123,
+              12.076659999999961,
+              11.993339999999964
+            ],
+            "sequence-rowid": [
+              17.703749999999907,
+              17.829169999999948,
+              17.693750000000176
+            ]
+          },
+          "rows": 50
+        },
+        "scoped-owner-1000": {
+          "plans": {
+            "rowid": [
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "LIST SUBQUERY 1",
+              "SCAN j VIRTUAL TABLE INDEX 1:",
+              "SEARCH p USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "CREATE BLOOM FILTER",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ],
+            "sequence-rowid": [
+              "SEARCH e USING COVERING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "LIST SUBQUERY 1",
+              "SCAN j VIRTUAL TABLE INDEX 1:",
+              "SEARCH p USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "CREATE BLOOM FILTER",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 23481,
+            "sequence-rowid": 22571
+          },
+          "samplesUs": {
+            "rowid": [
+              1422.4165999999982,
+              1412.6499999999985,
+              1413.0291000000018
+            ],
+            "sequence-rowid": [
+              1231.1917000000005,
+              1223.8375000000024,
+              1227.1957999999918
+            ]
+          },
+          "rows": 909
+        }
+      }
+    }
+  ]
+}

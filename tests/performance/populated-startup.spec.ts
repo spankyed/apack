@@ -5,6 +5,7 @@ import { createNodePerformanceController } from '@apackdev/host/diagnostics/node
 import type { RecordingMode } from '@apackdev/host/diagnostics';
 import { manifestSchema, performanceIdentity, attachRendererProcessIdentity, trialSchema } from '@apackdev/testing/performance';
 import { searchFixture } from './fixture.ts';
+import { performanceStorageFormat } from './storage-identity.ts';
 import type { PerformanceWindow } from './window.ts';
 
 const mode = (process.env.APACK_PERFORMANCE_MODE ?? 'lightweight') as RecordingMode;
@@ -107,8 +108,10 @@ test('start a populated profile through admission to its initial usable thread v
     reports.complete &&= reports.renderer.complete;
   }
   // Provenance hashing is outside launch-to-view readiness and every resource recording.
+  const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'));
+  const storageFormat = performanceStorageFormat(userData, process.env.APACK_STORAGE_FORMAT ?? 'elmdb/1');
   const runtime = await electronApp.evaluate(() => ({ electron: process.versions.electron, chromium: process.versions.chrome, appNode: process.versions.node, appV8: process.versions.v8 }));
-  const manifest = performanceIdentity({ fixture, mode, runtime: { ...runtime, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' }, cache: 'fresh-process-warm-filesystem', warmups: 5 });
+  const manifest = performanceIdentity({ fixture, mode, runtime: { ...runtime, storageFormat, performancePolicy: process.env.APACK_PERFORMANCE_EXECUTION_POLICY ?? 'single-scenario-v1' }, cache: 'fresh-process-warm-filesystem', warmups: 5 });
   writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
   const backend = reports.backend;
   if (correct && mode !== 'disabled' && !backend?.observations.some(value => JSON.parse(value).name === 'app.index.admission')) {

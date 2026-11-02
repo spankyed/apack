@@ -1,0 +1,181 @@
+{
+  "run": "https://github.com/spankyed/apack/actions/runs/40891758576",
+  "source": "31c6c751b5ae7f3206a6a2948bf4c44d36a24e0e",
+  "scope": "Built Node EARS/host logical archives and existing maintenance; not new CLI dump/load, installed/signed apps or filesystem certification",
+  "platforms": [
+    {
+      "name": "Linux-X64",
+      "verification": {
+        "source": "31c6c751b5ae7f3206a6a2948bf4c44d36a24e0e",
+        "earsPassed": 596,
+        "sqliteCasesPassed": 287,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 10,
+        "logicalHostSkipped": [],
+        "hostPassed": 131,
+        "recoveryCasesPassed": 34
+      },
+      "reports": {
+        "ears.json": {
+          "sha256": "dccdbd49dcf189b9d817cece0dc67d51ba6d9ca9a9ce52ae875c664ed90d15a9",
+          "passed": 596,
+          "skipped": []
+        },
+        "host.json": {
+          "sha256": "246a854c789515f1e0ae3a41dea99c94e71aade3d8ec481d4c6f6a0222f59cb9",
+          "passed": 131,
+          "skipped": []
+        },
+        "cli-maintenance.json": {
+          "sha256": "7b7ff0222c3296dda64913da7da2e49a9cee14faaaecaccfb7f22947a92b4bf7",
+          "passed": 9,
+          "skipped": []
+        }
+      }
+    },
+    {
+      "name": "Windows-X64",
+      "verification": {
+        "source": "31c6c751b5ae7f3206a6a2948bf4c44d36a24e0e",
+        "earsPassed": 595,
+        "sqliteCasesPassed": 286,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 9,
+        "logicalHostSkipped": [
+          {
+            "name": "reports a published but unsynchronized directory truthfully and retains its complete archive",
+            "status": "skipped"
+          }
+        ],
+        "hostPassed": 118,
+        "recoveryCasesPassed": 33
+      },
+      "reports": {
+        "ears.json": {
+          "sha256": "0dcc98a44afa1fc141d5738caf23f23cc6d9166e0da63ca998931fa995ef8a9f",
+          "passed": 595,
+          "skipped": [
+            {
+              "name": "yielding value-index admission resumes a committed batch cursor after a real killed process",
+              "status": "skipped"
+            }
+          ]
+        },
+        "host.json": {
+          "sha256": "81e524df5021cc0c099a3e9f6dff84c4b727411028fdfb7b0a1dcc47103452b2",
+          "passed": 118,
+          "skipped": [
+            {
+              "name": "refuses before replacement when syncing the recovery copy fails",
+              "status": "skipped"
+            },
+            {
+              "name": "refuses before replacement when syncing the recovery parent fails",
+              "status": "skipped"
+            },
+            {
+              "name": "reports a published but unsynchronized directory truthfully and retains its complete archive",
+              "status": "skipped"
+            },
+            {
+              "name": "recovers elmdb/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+              "status": "skipped"
+            },
+            {
+              "name": "recovers elmdb/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+              "status": "skipped"
+            },
+            {
+              "name": "recovers elmdb/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+              "status": "skipped"
+            },
+            {
+              "name": "recovers elmdb/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+              "status": "skipped"
+            },
+            {
+              "name": "recovers sqlite/1 after SIGKILL at move (alias=false) without exposing a partially restored profile",
+              "status": "skipped"
+            },
+            {
+              "name": "recovers sqlite/1 after SIGKILL at move (alias=true) without exposing a partially restored profile",
+              "status": "skipped"
+            },
+            {
+              "name": "recovers sqlite/1 after SIGKILL at publish (alias=false) without exposing a partially restored profile",
+              "status": "skipped"
+            },
+            {
+              "name": "recovers sqlite/1 after SIGKILL at publish (alias=true) without exposing a partially restored profile",
+              "status": "skipped"
+            },
+            {
+              "name": "refuses a separate live reader and reclaims its claim after SIGKILL",
+              "status": "skipped"
+            },
+            {
+              "name": "refuses a managed open without writable metadata while direct read-only snapshots remain available",
+              "status": "skipped"
+            },
+            {
+              "name": "the database write lock releases the lock when the tool is interrupted with POSIX SIGINT",
+              "status": "skipped"
+            },
+            {
+              "name": "the database write lock releases the lock when the tool is interrupted with POSIX SIGTERM",
+              "status": "skipped"
+            },
+            {
+              "name": "the database write lock releases the lock when the tool is interrupted with POSIX SIGHUP",
+              "status": "skipped"
+            }
+          ]
+        },
+        "cli-maintenance.json": {
+          "sha256": "328564c17a4f10d0f86148f0b53c60f6841979c89006f5366a362b59586a5fa6",
+          "passed": 9,
+          "skipped": []
+        }
+      }
+    },
+    {
+      "name": "macOS-ARM64",
+      "verification": {
+        "source": "31c6c751b5ae7f3206a6a2948bf4c44d36a24e0e",
+        "earsPassed": 596,
+        "sqliteCasesPassed": 287,
+        "selectedTextPassed": 16,
+        "selectedTextTotal": 16,
+        "maintenanceCasesPassed": 9,
+        "logicalSnapshotCasesPassed": 5,
+        "logicalHostCasesPassed": 10,
+        "logicalHostSkipped": [],
+        "hostPassed": 131,
+        "recoveryCasesPassed": 34
+      },
+      "reports": {
+        "ears.json": {
+          "sha256": "d5220cdd74ba2387f85fc64f2c2ae7faa65e8cbacc602076893578033fd1fa8c",
+          "passed": 596,
+          "skipped": []
+        },
+        "host.json": {
+          "sha256": "8e3d02ef663e7fac4d2007b80d3132d38306357773167353a78f34b0fa68b69a",
+          "passed": 131,
+          "skipped": []
+        },
+        "cli-maintenance.json": {
+          "sha256": "3f07b7fe7d0ad5c34aaefcabaee5eb0c8e28baf038a860910cda596325a4a508",
+          "passed": 9,
+          "skipped": []
+        }
+      }
+    }
+  ]
+}

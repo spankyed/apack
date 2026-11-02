@@ -1,0 +1,39 @@
+[
+  {
+    "label": "packages-build",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 46.63693893299205
+  },
+  {
+    "label": "default-setup-build",
+    "args": [
+      "npm",
+      "run",
+      "build:default-setup"
+    ],
+    "exitCode": 0,
+    "seconds": 119.38870236600633
+  },
+  {
+    "label": "query-sqlite",
+    "args": [
+      "npm",
+      "test",
+      "-w",
+      "@app/default-setup",
+      "--",
+      "tests/features/threads/be/query-work.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/query-sqlite.json"
+    ],
+    "exitCode": 1,
+    "seconds": 4.398232684994582
+  }
+]

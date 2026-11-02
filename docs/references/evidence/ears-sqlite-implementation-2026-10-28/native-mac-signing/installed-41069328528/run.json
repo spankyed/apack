@@ -1,0 +1,19 @@
+{
+  "conclusion": "success",
+  "headSha": "2558de0d9d8910c611fcaa179c5dadf666b4fbff",
+  "jobs": [
+    {
+      "conclusion": "success",
+      "databaseId": 124110323723,
+      "name": "check",
+      "status": "completed"
+    },
+    {
+      "conclusion": "skipped",
+      "databaseId": 124110325975,
+      "name": "sqlite",
+      "status": "completed"
+    }
+  ],
+  "status": "completed"
+}

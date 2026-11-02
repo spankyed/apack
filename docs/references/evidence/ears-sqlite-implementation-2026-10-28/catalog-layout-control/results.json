@@ -1,0 +1,224 @@
+{
+  "scope": "10k-row in-memory catalog-only SQLite control; Python binding, not EARS/better-sqlite3/production performance qualification",
+  "sqlite": "3.51.0",
+  "groups": [
+    {
+      "shape": "numeric",
+      "rows": 10000,
+      "catalogBytes": {
+        "rowid": 1028096,
+        "without-rowid": 1118208
+      },
+      "insertMs": {
+        "rowid": 23.191375,
+        "without-rowid": 23.273624999999992
+      },
+      "queries": {
+        "point-catalog": {
+          "plans": {
+            "rowid": [
+              "SCAN seed VIRTUAL TABLE INDEX 1:",
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ],
+            "without-rowid": [
+              "SCAN seed VIRTUAL TABLE INDEX 1:",
+              "SEARCH e USING PRIMARY KEY (id=?)",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 32,
+            "without-rowid": 30
+          },
+          "samplesUs": {
+            "rowid": [
+              4.1080000000000005,
+              3.8857080000000015,
+              3.876792000000004
+            ],
+            "without-rowid": [
+              3.685707999999996,
+              3.599999999999992,
+              3.641041999999997
+            ]
+          },
+          "rows": 1
+        },
+        "live-page-50": {
+          "plans": {
+            "rowid": [
+              "SEARCH entities USING INDEX entity_type (type=? AND trashed=?)"
+            ],
+            "without-rowid": [
+              "SEARCH entities USING COVERING INDEX entity_type (type=? AND trashed=?)"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 310,
+            "without-rowid": 259
+          },
+          "samplesUs": {
+            "rowid": [
+              12.50457999999996,
+              12.809170000000066,
+              12.742079999999989
+            ],
+            "without-rowid": [
+              11.060830000000076,
+              11.635410000000041,
+              11.213750000000077
+            ]
+          },
+          "rows": 50
+        },
+        "scoped-owner-1000": {
+          "plans": {
+            "rowid": [
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "LIST SUBQUERY 1",
+              "SCAN j VIRTUAL TABLE INDEX 1:",
+              "SEARCH p USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "CREATE BLOOM FILTER",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ],
+            "without-rowid": [
+              "SEARCH e USING PRIMARY KEY (id=?)",
+              "LIST SUBQUERY 1",
+              "SCAN j VIRTUAL TABLE INDEX 1:",
+              "SEARCH p USING PRIMARY KEY (id=?)",
+              "CREATE BLOOM FILTER",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 23481,
+            "without-rowid": 21570
+          },
+          "samplesUs": {
+            "rowid": [
+              1207.7540999999997,
+              1170.5624999999998,
+              1217.770800000001
+            ],
+            "without-rowid": [
+              823.6667000000003,
+              812.7125000000012,
+              863.5874999999987
+            ]
+          },
+          "rows": 909
+        }
+      }
+    },
+    {
+      "shape": "hash-suffix",
+      "rows": 10000,
+      "catalogBytes": {
+        "rowid": 1368064,
+        "without-rowid": 2043904
+      },
+      "insertMs": {
+        "rowid": 24.226749999999992,
+        "without-rowid": 26.232625000000038
+      },
+      "queries": {
+        "point-catalog": {
+          "plans": {
+            "rowid": [
+              "SCAN seed VIRTUAL TABLE INDEX 1:",
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ],
+            "without-rowid": [
+              "SCAN seed VIRTUAL TABLE INDEX 1:",
+              "SEARCH e USING PRIMARY KEY (id=?)",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 32,
+            "without-rowid": 30
+          },
+          "samplesUs": {
+            "rowid": [
+              4.0679999999999605,
+              3.918209000000006,
+              3.904958000000014
+            ],
+            "without-rowid": [
+              3.6432499999999868,
+              3.621083000000025,
+              3.613708999999965
+            ]
+          },
+          "rows": 1
+        },
+        "live-page-50": {
+          "plans": {
+            "rowid": [
+              "SEARCH entities USING INDEX entity_type (type=? AND trashed=?)"
+            ],
+            "without-rowid": [
+              "SEARCH entities USING COVERING INDEX entity_type (type=? AND trashed=?)"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 310,
+            "without-rowid": 259
+          },
+          "samplesUs": {
+            "rowid": [
+              12.564580000000158,
+              12.5183299999998,
+              12.409159999999808
+            ],
+            "without-rowid": [
+              11.126670000000114,
+              10.863340000000221,
+              11.002079999999914
+            ]
+          },
+          "rows": 50
+        },
+        "scoped-owner-1000": {
+          "plans": {
+            "rowid": [
+              "SEARCH e USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "LIST SUBQUERY 1",
+              "SCAN j VIRTUAL TABLE INDEX 1:",
+              "SEARCH p USING INDEX sqlite_autoindex_entities_1 (id=?)",
+              "CREATE BLOOM FILTER",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ],
+            "without-rowid": [
+              "SEARCH e USING PRIMARY KEY (id=?)",
+              "LIST SUBQUERY 1",
+              "SCAN j VIRTUAL TABLE INDEX 1:",
+              "SEARCH p USING PRIMARY KEY (id=?)",
+              "CREATE BLOOM FILTER",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          },
+          "vmInstructions": {
+            "rowid": 23481,
+            "without-rowid": 21570
+          },
+          "samplesUs": {
+            "rowid": [
+              1478.6540999999986,
+              1466.1208000000038,
+              1443.1417000000001
+            ],
+            "without-rowid": [
+              1119.504099999996,
+              1118.9332999999967,
+              1126.7499999999986
+            ]
+          },
+          "rows": 909
+        }
+      }
+    }
+  ]
+}

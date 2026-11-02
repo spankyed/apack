@@ -1,0 +1,7 @@
+# Combined-runtime Linux, macOS and Windows qualification
+
+Completed platform jobs in [strict run 41351404379](https://github.com/spankyed/apack/actions/runs/41351404379), source `5cde3fc26de94a4e6bc2e5910e425aaa2190b735`, master `461f7bf2cb`, elmdb `f496470`. The producer passes; strict consumers are separate still-pending/live gates at collection. This source includes projected-hit batch hydration and row-dependency fixes plus corrected real source-reversion controls. It predates later CI-only worker-read/startup recipes; no production code changes are introduced by those recipes.
+
+Linux/macOS each pass 922 EARS cases with only the retained keyword relevance failure and zero exclusions, 312 host cases and 12 crash/recovery cases. Windows passes 918 EARS cases/the same failure/four FIFO exclusions, 309 host cases/six documented exclusions and two crash/recovery cases/ten POSIX exclusions. All 29 query-cost cases and the new graph-hit projected-field watch regression pass on all three platforms.
+
+Original EARS, host, crash/recovery and platform-verification reports are gzip-preserved with decompressed SHA-256. The derived receipt records actual counts and exact named witnesses. Logs, source databases, profiles, native builds and duplicate artifacts are omitted. The complete-contract verifier remains red because the original keyword judgment is still required. Platform passes do not establish complete strict, installed/signing, representative performance/fault or adoption acceptance.

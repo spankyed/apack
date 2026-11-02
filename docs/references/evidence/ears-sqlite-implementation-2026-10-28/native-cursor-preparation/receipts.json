@@ -1,0 +1,32 @@
+[
+  {
+    "file": "all-ears.json.gz",
+    "sha256": "93a486d6b8b2d7d7ec92849a779fe53dd1d6805732a3bdb7c3bdb28ebdb89fca",
+    "originalSha256": "86538e11309930429d5b4a3926c9a25e63c73225bc2239c64f0e98c0eb146214"
+  },
+  {
+    "file": "all-ears.log.gz",
+    "sha256": "64d2b1a181d771b282d3b268e76cd7d11d3270e71407ccdec28d61c11544b674",
+    "originalSha256": "f106c38dc3cfffd12e8df0d35947a5104b4da32392c8a569b21ab97be82b937e"
+  },
+  {
+    "file": "rejected.json.gz",
+    "sha256": "cbbc645475d2e7a321e6944087dfe9d7be7548c68786dfab802bea1820ba4b14",
+    "originalSha256": "aebea8e7b62fa450febdde62b893a7fb97ca98650a68d7d9190838d9c7300efd"
+  },
+  {
+    "file": "reject-missing-empty-preparation.log.gz",
+    "sha256": "b4261022d73b6446b2933a41bd52d341120856c00152272ad2e120f578194ce4",
+    "originalSha256": "dab9fc1db19b72921e8253d493d80527778f43ab4f13fbf683a7e9c182943473"
+  },
+  {
+    "file": "types.log.gz",
+    "sha256": "8152527b8960a753e59df6463d95112a77465daa3aaad8fc6bd9ce7fbbbe9917",
+    "originalSha256": "19bd69153985aa16ce465b28337fbb5d621dd78c6c68bd80b65bdccf2b790174"
+  },
+  {
+    "file": "lint.log.gz",
+    "sha256": "9df8988440bc922a6a7904b3f313d04af1c2d091c00ccf587737679e1af88ea1",
+    "originalSha256": "7ac67c8f149cfa4761b7f84c17f334da2f53b94df9bc7ea368cc3272df609f21"
+  }
+]

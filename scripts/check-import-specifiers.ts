@@ -444,25 +444,25 @@ export function findUnimportedDependencies(root = repoRoot, runtimeOnly = RUNTIM
 }
 
 /**
- * Who may load the database (docs/goals/goal-package-boundaries.md, Decision 3): only `@apackdev/ears/lmdb` imports
- * `elmdb`. `dirs` may not import what `forbidden` matches; `except` is a directory inside them that may.
+ * Who may load native storage: only the backend-specific EARS entries load their native database packages. `dirs` may not import what `forbidden` matches; `except` is a directory inside them that may.
  */
-export const ELMDB_RULES: { dirs: string[]; except?: string; forbidden?: RegExp; rule?: PackRuleKey }[] = [
-  // The host and the API open the database through @apackdev/ears/lmdb
+export const DATABASE_RULES: { dirs: string[]; except?: string; forbidden?: RegExp; rule?: PackRuleKey }[] = [
+  // The host and API open storage through a backend-specific EARS entry.
   {
     dirs: ['packages/apack-host/src', 'packages/apack-host/tests', 'packages/apack-host/scripts', 'packages/api/src', 'packages/api/tests', 'packages/api/scripts'],
-    forbidden: /^elmdb(?:\/|$)/,
+    forbidden: /^(?:elmdb|better-sqlite3|sqlite-vec)(?:\/|$)/,
   },
   // The engine's root never loads the database: its port to one is structural (`database.ts`)
-  { dirs: ['packages/apack-ears/src'], except: 'packages/apack-ears/src/lmdb', forbidden: /^(?:elmdb(?:\/|$)|(?:\.\.?\/)+(?:[\w.-]+\/)*lmdb(?:\/|$))/ },
+  { dirs: ['packages/apack-ears/src'], except: 'packages/apack-ears/src/lmdb', forbidden: /^(?:elmdb(?:\/|$)|@apackdev\/ears\/lmdb(?:\/|$)|(?:\.\.?\/)+(?:[\w.-]+\/)*lmdb(?:\/|$))/ },
+  { dirs: ['packages/apack-ears/src'], except: 'packages/apack-ears/src/sqlite', forbidden: /^(?:(?:better-sqlite3|sqlite-vec)(?:\/|$)|@apackdev\/ears\/sqlite(?:\/|$)|(?:\.\.?\/)+(?:[\w.-]+\/)*sqlite(?:\/|$))/ },
   // Packs and their tests don't use the app's database. Named rather than spelled: this population is a pack's, so
-  // the rule is `@apackdev/cli`'s, the one `apack pack build` already runs for every pack. The two above are the host's
+  // the rule is `@apackdev/cli`'s, the one `apack pack build` already runs for every pack. The rules above are the host's
   // and the engine's own trees, which no pack rule can have, so they keep a pattern here.
-  { dirs: PACK_CODE_DIRS, rule: 'elmdb-imports' },
+  { dirs: PACK_CODE_DIRS, rule: 'database-imports' },
 ];
 
-/** `file:line: specifier` for each import of elmdb or `@apackdev/ears/lmdb` where `rules` forbid it */
-export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[] {
+/** Native storage imports forbidden by the app/pack and backend-entry boundaries. */
+export function findDatabaseImports(rules = DATABASE_RULES, root = repoRoot): string[] {
   return rules.flatMap(({ dirs, except, forbidden, rule }) => {
     if (rule) return packRule(rule, dirs, root);
     const allowed = except && path.join(root, except) + path.sep;
@@ -765,9 +765,9 @@ const RULE_LIST = [
     rule: 'Every workspace dependency a manifest declares is one that package imports, or is named in RUNTIME_ONLY_DEPS with what it is for instead — because workspaceDeps reads those manifests to build cache keys',
   },
   {
-    id: 'findElmdbImports',
-    repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
-    find: findElmdbImports,
+    id: 'findDatabaseImports',
+    repoOnly: { kind: 'covered', by: 'database-imports', note: "What is left here is the API, the host and the engine's own root" },
+    find: findDatabaseImports,
     rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
   },
   {

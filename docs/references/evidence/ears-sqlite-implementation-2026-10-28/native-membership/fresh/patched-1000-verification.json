@@ -1,0 +1,270 @@
+{
+  "protocol": "ears-fresh-vector-verification/1",
+  "source": "1860dd2eb141fc1d3f3b8b5d3e7b0a7a5f2fe332",
+  "size": 1000,
+  "evidenceValid": true,
+  "queryGatesPassed": true,
+  "admissionHeartbeatP99Ms": 12.19622100000015,
+  "admissionHeartbeatPassed": true,
+  "productionAcceptance": false,
+  "cohorts": [
+    {
+      "size": 1000,
+      "phase": "initial",
+      "scopePercent": 100,
+      "passes": [
+        {
+          "pass": 0,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 6.072851000000355,
+          "heartbeatP99Ms": 7.4581419999999525,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 1,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 6.251355000000331,
+          "heartbeatP99Ms": 12.351306999999906,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 2,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 6.028391999999712,
+          "heartbeatP99Ms": 6.718879000000015,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 3,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 6.006766999999854,
+          "heartbeatP99Ms": 6.844965000000229,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "phase": "initial",
+      "scopePercent": 10,
+      "passes": [
+        {
+          "pass": 0,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 1.352230999999847,
+          "heartbeatP99Ms": 2.164512000000286,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 1,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 1.5136090000005424,
+          "heartbeatP99Ms": 2.2080540000006295,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 2,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 1.4057739999998375,
+          "heartbeatP99Ms": 2.051676999999472,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 3,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 1.4410250000000815,
+          "heartbeatP99Ms": 2.189470000000256,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "phase": "initial",
+      "scopePercent": 1,
+      "passes": [
+        {
+          "pass": 0,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 0.8279310000007172,
+          "heartbeatP99Ms": 1.3135389999997642,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 1,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 0.8063469999997324,
+          "heartbeatP99Ms": 1.2935800000004747,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 2,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 0.7992629999998826,
+          "heartbeatP99Ms": 1.3318300000000818,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 3,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 0.7817629999999554,
+          "heartbeatP99Ms": 1.5214169999999285,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "phase": "updated",
+      "scopePercent": 100,
+      "passes": [
+        {
+          "pass": 0,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 6.054476999999679,
+          "heartbeatP99Ms": 6.7542130000001634,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 1,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 6.017726000000039,
+          "heartbeatP99Ms": 6.88000699999975,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 2,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 6.053101999999853,
+          "heartbeatP99Ms": 7.9506079999991925,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 3,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 6.1504359999999,
+          "heartbeatP99Ms": 6.9200070000006235,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "phase": "updated",
+      "scopePercent": 10,
+      "passes": [
+        {
+          "pass": 0,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 1.318688999999722,
+          "heartbeatP99Ms": 1.8451310000000376,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 1,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 1.3737729999993462,
+          "heartbeatP99Ms": 2.1199280000000726,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 2,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 1.3386049999990064,
+          "heartbeatP99Ms": 1.8376729999999952,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 3,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 1.26581299999998,
+          "heartbeatP99Ms": 2.2741380000006757,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        }
+      ]
+    },
+    {
+      "size": 1000,
+      "phase": "updated",
+      "scopePercent": 1,
+      "passes": [
+        {
+          "pass": 0,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 0.7453450000011799,
+          "heartbeatP99Ms": 1.2008289999994304,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 1,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 0.7368870000009338,
+          "heartbeatP99Ms": 1.289122000000134,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 2,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 0.7797630000004574,
+          "heartbeatP99Ms": 1.2972050000007584,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        },
+        {
+          "pass": 3,
+          "meanRecall": 1.0,
+          "latencyP95Ms": 0.7565130000002682,
+          "heartbeatP99Ms": 1.2903299999998126,
+          "recallPassed": true,
+          "heartbeatPassed": true,
+          "latencyPassed": true
+        }
+      ]
+    }
+  ]
+}

@@ -2,12 +2,14 @@
 // changed, after the writing code has returned, never inside a write. The guarantee that matters most — a watch never
 // misses a change, whatever writes it — is the model-based harness's (model-based.spec.ts); these cases are the
 // contract's edges, each with a reading of how many times a read ran where that is the point.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { engine, type Id } from './helpers.ts';
 import type { EngineUnderTest } from './engine-under-test.ts';
 import { createConnection, runCommitted, type Commit, type EarsDatabase } from '../../src/database.ts';
 
 let e: EngineUnderTest;
+const stops: Array<() => void> = [];
+afterEach(() => { for (const stop of stops.splice(0)) stop(); });
 beforeEach(() => { e = engine(); });
 
 /** A watch that keeps what it was handed, and counts how many times its read ran */
@@ -19,6 +21,7 @@ function watched<T>(read: () => T) {
     next: (value, commit) => { seen.push({ value, commit }); },
     error: (error) => { errors.push(error); },
   });
+  stops.push(() => watching.stop());
   return { seen, errors, runs: () => runs, last: () => seen.at(-1)?.value, stop: () => watching.stop() };
 }
 
@@ -27,6 +30,107 @@ const settled = () => e.admin.watchesSettled();
 const titles = () => e.query('Task').ids().map((id) => e.getAttr(id, 'title'));
 
 describe('watch', () => {
+  it('keeps explicit-ID filters and ordering scoped while tracking selected fields and missing IDs', async () => {
+    const a = e.create('Task', { title: 'selected', status: 'open', rank: 2 }).id();
+    const future = 'Task-future' as Id;
+    const w = watched(() => e.query.ids([a, future]).where('status', 'open').orderBy('rank').pick(['title']));
+    await settled();
+    e.create('Task', { title: 'unrelated task', status: 'open', rank: 0 });
+    e.create('Person', { title: 'unrelated person', status: 'open', rank: -1 });
+    await settled();
+    expect(w.runs()).toBe(1);
+    e.create('Task', { id: future, title: 'appeared', status: 'open', rank: 1 });
+    await settled();
+    expect(w.last()).toEqual([{ id: future, title: 'appeared' }, { id: a, title: 'selected' }]);
+    e.write(a).set('rank', 0);
+    await settled();
+    expect(w.last()?.map(row => row.id)).toEqual([a, future]);
+    e.write(a).set('status', 'closed');
+    await settled();
+    expect(w.last()).toEqual([{ id: future, title: 'appeared' }]);
+  });
+
+  it('does not queue type-scoped ordering for another type’s fields or membership', async () => {
+    const a = e.create('Task', { title: 'selected', rank: 2 }).id();
+    const w = watched(() => e.query('Task').orderBy('rank').ids());
+    await settled();
+    const other = e.create('Person', { rank: 0 }).id();
+    e.write(other).set('rank', -1);
+    await settled();
+    expect(w.runs()).toBe(1);
+    const b = e.create('Task', { title: 'new member', rank: 1 }).id();
+    await settled();
+    expect(w.last()).toEqual([b, a]);
+    e.write(a).set('rank', 0);
+    await settled();
+    expect(w.last()).toEqual([a, b]);
+  });
+
+  it('keeps fixed-endpoint link filters independent of unrelated entity births', async () => {
+    const root = e.create('Project', { title: 'root' }).id();
+    const child = e.create('Task', { title: 'child' }).id();
+    const w = watched(() => e.query('Task').linkedWith(root).ids());
+    await settled();
+    e.create('Person', { title: 'unrelated' });
+    await settled();
+    expect(w.runs()).toBe(1);
+    e.write(root).link('contains', child);
+    await settled();
+    expect(w.last()).toEqual([child]);
+  });
+
+  it('tracks typed one-hop target membership and fields after leaving an explicit-ID start', async () => {
+    const root = e.create('Project', { title: 'root' }).id();
+    const child = e.create('Task', { title: 'child', status: 'open', rank: 1 }).id();
+    e.write(root).link('contains', child);
+    e.write(child).trash();
+    const w = watched(() => e.query.ids(root).out('contains', 'Task').where('status', 'open').orderBy('rank').ids());
+    await settled();
+    e.create('Person', { status: 'open', rank: 0 });
+    await settled();
+    expect(w.runs()).toBe(1);
+    expect(w.last()).toEqual([]);
+    e.write(child).restore();
+    await settled();
+    expect(w.last()).toEqual([child]);
+    e.write(child).set('status', 'closed');
+    await settled();
+    expect(w.last()).toEqual([]);
+  });
+
+  it('retains untyped and deep intermediate membership dependencies', async () => {
+    const root = e.create('Project', { title: 'root' }).id();
+    const middle = e.create('Person', { title: 'middle' }).id();
+    const leaf = e.create('Task', { title: 'leaf' }).id();
+    e.write(root).link('contains', middle);
+    e.write(middle).link('contains', leaf);
+    e.write(middle).trash();
+    const shallow = watched(() => e.query.ids(root).out('contains').ids());
+    const deep = watched(() => e.query.ids(root).descendants('contains', 'Task').ids());
+    await settled();
+    expect(shallow.last()).toEqual([]); expect(deep.last()).toEqual([]);
+    e.write(middle).restore();
+    await settled();
+    expect(shallow.last()).toEqual([middle]); expect(deep.last()).toEqual([leaf]);
+  });
+
+  it('refreshes graph-ranked hit projections when only a returned field changes', async () => {
+    const a = e.create('Task', { title: 'source' }).id();
+    const b = e.create('Task', { title: 'destination' }).id();
+    e.write(a).link('refs', b);
+    const w = watched(() => e.query('Task').rank('refs').limit(1).hits({ fields: ['title'] }));
+    await settled();
+    expect(w.last()?.map(hit => hit.row)).toEqual([{ id: b, title: 'destination' }]);
+    const score = w.last()![0]!.score;
+    e.write(b).set('title', 'renamed destination');
+    await settled();
+    expect(w.errors).toEqual([]);
+    expect(w.last()?.map(hit => hit.row), 'Projected hit rows must refresh after a row-only commit')
+      .toEqual([{ id: b, title: 'renamed destination' }]);
+    expect(w.last()![0]!.score).toBe(score);
+    expect(w.seen.at(-1)!.commit).toBe(e.lastCommit());
+  });
+
   it('delivers the first result after the call returns, not during it', async () => {
     e.create('Task', { title: 'one' });
     const w = watched(() => titles());

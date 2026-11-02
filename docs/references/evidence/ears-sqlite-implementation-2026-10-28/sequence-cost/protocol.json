@@ -1,0 +1,14 @@
+{
+  "order": [
+    "prefix",
+    "sequence",
+    "sequence",
+    "prefix"
+  ],
+  "fixtureSha256": "663bfbfd3c8c71d986aeb8156c0f9e3b80a25b59b60d3def51894aa5387e986e",
+  "controlChanges": "only identical new benchmark fixture copied in; implementation source stays pinned",
+  "cpus": 2,
+  "memoryGiB": 6,
+  "deadlineSeconds": 180,
+  "automaticRetries": false
+}

@@ -1,0 +1,25 @@
+
+> @app/default-setup@0.1.0 pretest
+> tsx ../../scripts/ensure-packages-built.ts
+
+
+> @app/default-setup@0.1.0 test
+> vitest run tests/features/threads/be/query-work.spec.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=/results/pack-elmdb.json
+
+
+ RUN  v3.2.7 /metrics/packages/default-setup
+
+stdout | tests/features/threads/be/query-work.spec.ts > what a view costs as the data grows > reads as much at ×1: the chat page, the list, both searches
+[notes] Bootstrapped REFERENCES relations for 60 notes
+
+stdout | tests/features/threads/be/query-work.spec.ts > what a view costs as the data grows > reads as much at ×2: the chat page, the list, both searches
+[notes] Bootstrapped REFERENCES relations for 120 notes
+
+ ✓ |@app/default-setup:backend| tests/features/threads/be/query-work.spec.ts (4 tests) 446ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  23:53:16
+   Duration  3.30s (transform 1.12s, setup 2.69s, collect 9ms, tests 446ms, environment 0ms, prepare 45ms)
+
+JSON report written to /results/pack-elmdb.json

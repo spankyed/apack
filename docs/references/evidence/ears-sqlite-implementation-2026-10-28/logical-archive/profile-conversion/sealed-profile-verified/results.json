@@ -1,0 +1,126 @@
+[
+  {
+    "label": "dependencies",
+    "exitCode": 0,
+    "seconds": 1.86213958299777
+  },
+  {
+    "label": "packages-build",
+    "exitCode": 0,
+    "seconds": 27.851876219996484
+  },
+  {
+    "label": "conversion",
+    "args": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--root",
+      "packages/apack-ears",
+      "--config",
+      "/metrics/packages/apack-ears/vitest.config.ts",
+      "tests/sqlite/elmdb-conversion.spec.ts",
+      "--maxWorkers",
+      "2"
+    ],
+    "exitCode": 0,
+    "seconds": 2.6761457700049505
+  },
+  {
+    "label": "ears-types",
+    "args": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "packages/apack-ears/tsconfig.json"
+    ],
+    "exitCode": 0,
+    "seconds": 3.121345958003076
+  },
+  {
+    "label": "lint",
+    "args": [
+      "npm",
+      "run",
+      "lint:check"
+    ],
+    "exitCode": 0,
+    "seconds": 2.639952326004277
+  },
+  {
+    "label": "specifiers",
+    "args": [
+      "npm",
+      "run",
+      "check:specifiers"
+    ],
+    "exitCode": 0,
+    "seconds": 5.531601501003024
+  },
+  {
+    "label": "scripts-types",
+    "args": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "-p",
+      "scripts/tsconfig.json"
+    ],
+    "exitCode": 0,
+    "seconds": 5.6261591219954425
+  },
+  {
+    "label": "profile-probe-types",
+    "args": [
+      "node",
+      "node_modules/typescript/bin/tsc",
+      "--noEmit",
+      "--target",
+      "ES2022",
+      "--module",
+      "nodenext",
+      "--moduleResolution",
+      "nodenext",
+      "--skipLibCheck",
+      "--strict",
+      "--types",
+      "node",
+      "--allowImportingTsExtensions",
+      "--customConditions",
+      "@apackdev/source",
+      "tests/scripts/test-sqlite-profile-conversion.ts"
+    ],
+    "exitCode": 0,
+    "seconds": 4.499389693010016
+  },
+  {
+    "label": "profile-conversion",
+    "args": [
+      "node",
+      "--conditions=@apackdev/source",
+      "--import",
+      "tsx",
+      "tests/scripts/test-sqlite-profile-conversion.ts",
+      "/native-target/release/elmdb",
+      "/results/profile-conversion.json"
+    ],
+    "exitCode": 0,
+    "seconds": 2.7561884289898444
+  },
+  {
+    "label": "host-locks",
+    "args": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--root",
+      "packages/apack-host",
+      "--config",
+      "/metrics/packages/apack-host/vitest.config.ts",
+      "tests/database/write-lock.spec.ts",
+      "--maxWorkers",
+      "2"
+    ],
+    "exitCode": 0,
+    "seconds": 3.056725886010099
+  }
+]

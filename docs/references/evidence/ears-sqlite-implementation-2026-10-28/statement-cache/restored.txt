@@ -1,0 +1,22 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/statement-cache.spec.ts tests/sqlite/schema-validation.spec.ts tests/sqlite/query-cost.spec.ts tests/sqlite/watch-lifecycle.spec.ts tests/no-module-state.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/statement-cache.spec.ts (6 tests) 632ms
+   ✓ SQLite statement cache resource policy > evicts old query shapes while retaining frequently reused statements  359ms
+ ✓ tests/sqlite/schema-validation.spec.ts (49 tests) 1536ms
+ ✓ tests/sqlite/watch-lifecycle.spec.ts (4 tests) 1371ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (caller)  323ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (observer)  429ms
+   ✓ SQLite watch ownership > owns only explicit settlement waits (unawaited)  513ms
+ ✓ tests/sqlite/query-cost.spec.ts (18 tests) 788ms
+ ✓ tests/no-module-state.spec.ts (2 tests) 118ms
+
+ Test Files  5 passed (5)
+      Tests  79 passed (79)
+   Start at  14:34:59
+   Duration  5.76s (transform 240ms, setup 19ms, collect 753ms, tests 4.44s, environment 0ms, prepare 189ms)
+

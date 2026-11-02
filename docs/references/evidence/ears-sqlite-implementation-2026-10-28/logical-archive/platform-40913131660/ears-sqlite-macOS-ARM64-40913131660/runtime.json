@@ -1,0 +1,43 @@
+{
+  "source": "ab148afb550245d80cc2f11e5e4c604d6a4315ae",
+  "entries": {
+    "@apackdev/ears": "file:///Users/runner/work/apack/apack/packages/apack-ears/dist/index.js",
+    "@apackdev/ears/sqlite": "file:///Users/runner/work/apack/apack/packages/apack-ears/dist/sqlite/index.js"
+  },
+  "node": "v23.11.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "release": "25.6.0",
+  "cpus": 3,
+  "enginePin": "6ab2f69fa13289ed4f02952253c58b4d41922c98",
+  "sqlite": "3.53.4",
+  "nativeBindings": [
+    {
+      "path": "/Users/runner/work/apack/apack/node_modules/@msgpackr-extract/msgpackr-extract-darwin-arm64/node.napi.glibc.node",
+      "sha256": "bfa99d95d3f342972b006a66328aff1a6935c0da460c5134dc92ed79fbbc5ab4"
+    },
+    {
+      "path": "/Users/runner/work/apack/apack/node_modules/better-sqlite3/prebuilds/darwin-arm64.node",
+      "sha256": "98e0e8acd01c632fe5615243e1296af0372826f8783b18fc31c506f73c47459c"
+    },
+    {
+      "path": "/Users/runner/work/apack/apack/node_modules/sqlite-vec-darwin-arm64/vec0.dylib",
+      "sha256": "193e480c50b59a55977d166f4aaf0e1bc8832d6963516e5950f39e4d2ce0b793"
+    }
+  ],
+  "extension": {
+    "path": "/Users/runner/work/apack/apack/node_modules/sqlite-vec-darwin-arm64/vec0.dylib",
+    "sha256": "193e480c50b59a55977d166f4aaf0e1bc8832d6963516e5950f39e4d2ce0b793"
+  },
+  "regexAssets": [
+    {
+      "path": "/Users/runner/work/apack/apack/packages/apack-ears/vendor/rregex/rregex.cjs",
+      "sha256": "5a8b72e18f1f25df12ec19499168be74caaa4a2476c6c098283887b5718d3e1a"
+    },
+    {
+      "path": "/Users/runner/work/apack/apack/packages/apack-ears/vendor/rregex/rregex_bg.wasm",
+      "sha256": "7d9c896b2ad5d5e8ed462c890ee8bea5dee795ba6fce71eb6a4e6163d0c55525"
+    }
+  ],
+  "qualification": "Built Node packages, FTS/recency/regex/vec and read-only backup; no recall, packaging or durability claim"
+}

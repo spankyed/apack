@@ -1,0 +1,12 @@
+
+ RUN  v3.2.7 /electron/packages/apack-ears
+
+ ✓ tests/engine/relations.spec.ts (29 tests) 296ms
+ ✓ tests/engine/queries.spec.ts (27 tests) 504ms
+
+ Test Files  2 passed (2)
+      Tests  56 passed (56)
+   Start at  19:24:00
+   Duration  1.08s (transform 339ms, setup 26ms, collect 872ms, tests 800ms, environment 0ms, prepare 87ms)
+
+JSON report written to /results/focused-elmdb.json

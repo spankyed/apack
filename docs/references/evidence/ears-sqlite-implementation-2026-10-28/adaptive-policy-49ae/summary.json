@@ -1,0 +1,336 @@
+{
+  "run": 41245527874,
+  "source": "49ae64f22361f6cde058ed5163574330f6dfb906",
+  "reports": [
+    {
+      "size": 1000,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "nativeCandidateFloor": null,
+      "nativeOwnerTargets": {
+        "through32": 256,
+        "through40": 1024,
+        "through64": 2048
+      },
+      "fallbackOwnerTarget": 256,
+      "nativeModel": null,
+      "modelMode": "managed",
+      "oracleSha256": "fb6934dbe11bc626713c37a9b8aed8f57fd4ab1e3d1176a219b807e39c1d45b5",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "maxRssKiB": 316160,
+      "completed": true,
+      "databaseScratchRemoved": true,
+      "rawSha256": "f049d4c0187b9d2692b38fdbc2a49f579b069042ea058a63df77941d5a6b7279",
+      "ownerProjection": []
+    },
+    {
+      "size": 10000,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "nativeCandidateFloor": null,
+      "nativeOwnerTargets": {
+        "through32": 256,
+        "through40": 1024,
+        "through64": 2048
+      },
+      "fallbackOwnerTarget": 256,
+      "nativeModel": {
+        "state": "ready",
+        "samples": 10000,
+        "model_sha256": "b4e3ed53c737b894eac4d59f5b1e5c03f403b251f555c0085869a17c83198ca9",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "modelMode": "managed",
+      "oracleSha256": "fb6934dbe11bc626713c37a9b8aed8f57fd4ab1e3d1176a219b807e39c1d45b5",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "maxRssKiB": 481088,
+      "completed": true,
+      "databaseScratchRemoved": true,
+      "rawSha256": "68be6a0b866f9399be24d89662882ea0ad1bc12394e67a7343ab07d824e8b1eb",
+      "ownerProjection": [
+        {
+          "cohort": "all-live",
+          "limit": 256,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 256,
+              "ownerMs": 2.7820750000028056,
+              "rowidMs": 1.8898110000009183,
+              "mappingMs": 0.6277229999977862
+            },
+            {
+              "trial": 1,
+              "returned": 256,
+              "ownerMs": 2.491595999999845,
+              "rowidMs": 1.7993339999957243,
+              "mappingMs": 0.5243719999998575
+            },
+            {
+              "trial": 2,
+              "returned": 256,
+              "ownerMs": 2.3548330000048736,
+              "rowidMs": 1.7431799999976647,
+              "mappingMs": 0.3425950000018929
+            }
+          ]
+        },
+        {
+          "cohort": "all-live",
+          "limit": 1024,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 1024,
+              "ownerMs": 4.9237429999993765,
+              "rowidMs": 2.012499000004027,
+              "mappingMs": 1.5335210000048392
+            },
+            {
+              "trial": 1,
+              "returned": 1024,
+              "ownerMs": 4.566210000004503,
+              "rowidMs": 1.9603320000023814,
+              "mappingMs": 1.2448260000019218
+            },
+            {
+              "trial": 2,
+              "returned": 1024,
+              "ownerMs": 4.453260999995109,
+              "rowidMs": 1.9653610000023036,
+              "mappingMs": 1.3443509999997332
+            }
+          ]
+        },
+        {
+          "cohort": "all-live",
+          "limit": 2048,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 2048,
+              "ownerMs": 9.67167999999947,
+              "rowidMs": 2.4295810000039637,
+              "mappingMs": 4.191836999998486
+            },
+            {
+              "trial": 1,
+              "returned": 2048,
+              "ownerMs": 8.290580999993836,
+              "rowidMs": 2.3195080000004964,
+              "mappingMs": 2.8137929999938933
+            },
+            {
+              "trial": 2,
+              "returned": 2048,
+              "ownerMs": 7.847479999996722,
+              "rowidMs": 2.261460999994597,
+              "mappingMs": 2.8092849999957252
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "size": 99900,
+      "limits": {
+        "cpu.max": "200000 100000",
+        "memory.max": "6442450944",
+        "memory.swap.max": "0"
+      },
+      "nativeCandidateFloor": null,
+      "nativeOwnerTargets": {
+        "through32": 256,
+        "through40": 1024,
+        "through64": 2048
+      },
+      "fallbackOwnerTarget": 256,
+      "nativeModel": {
+        "state": "ready",
+        "samples": 20000,
+        "model_sha256": "eccfdb9580848365f21644ebfbd4c320fcf01b5d37fd21302967a9fbc53df8c0",
+        "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138"
+      },
+      "modelMode": "managed",
+      "oracleSha256": "fb6934dbe11bc626713c37a9b8aed8f57fd4ab1e3d1176a219b807e39c1d45b5",
+      "oracleRecipeSha256": "b8294d62a893910f55ed2b66d60354b27f8a957b0df187de5122fdbfa9336592",
+      "maxRssKiB": 1517516,
+      "completed": true,
+      "databaseScratchRemoved": true,
+      "rawSha256": "3b5c5ce8149f76a4173838160008ff77077622f586ae9f1adee38e24fda6d627",
+      "ownerProjection": [
+        {
+          "cohort": "all-live",
+          "limit": 256,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 256,
+              "ownerMs": 12.986580999975558,
+              "rowidMs": 11.000729999970645,
+              "mappingMs": 1.1670529999537393
+            },
+            {
+              "trial": 1,
+              "returned": 256,
+              "ownerMs": 11.52060300001176,
+              "rowidMs": 10.567006000026595,
+              "mappingMs": 0.8116240000235848
+            },
+            {
+              "trial": 2,
+              "returned": 256,
+              "ownerMs": 11.474448000022676,
+              "rowidMs": 10.214523000002373,
+              "mappingMs": 0.9398720000172034
+            }
+          ]
+        },
+        {
+          "cohort": "all-live",
+          "limit": 1024,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 1024,
+              "ownerMs": 15.800826999999117,
+              "rowidMs": 10.988186999980826,
+              "mappingMs": 4.274253000039607
+            },
+            {
+              "trial": 1,
+              "returned": 1024,
+              "ownerMs": 14.548705999972299,
+              "rowidMs": 10.888441999966744,
+              "mappingMs": 2.6046380000188947
+            },
+            {
+              "trial": 2,
+              "returned": 1024,
+              "ownerMs": 14.307489000028,
+              "rowidMs": 10.71398900001077,
+              "mappingMs": 2.9288990000495687
+            }
+          ]
+        },
+        {
+          "cohort": "all-live",
+          "limit": 2048,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 2048,
+              "ownerMs": 21.48260799999116,
+              "rowidMs": 11.682553999999072,
+              "mappingMs": 7.320708999992348
+            },
+            {
+              "trial": 1,
+              "returned": 2048,
+              "ownerMs": 19.15237900003558,
+              "rowidMs": 11.678025000030175,
+              "mappingMs": 5.224935000005644
+            },
+            {
+              "trial": 2,
+              "returned": 2048,
+              "ownerMs": 19.042626000009477,
+              "rowidMs": 11.876212999981362,
+              "mappingMs": 5.649410999962129
+            }
+          ]
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "limit": 256,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 256,
+              "ownerMs": 29.24565799999982,
+              "rowidMs": 27.521552000020165,
+              "mappingMs": 1.0706050000153482
+            },
+            {
+              "trial": 1,
+              "returned": 256,
+              "ownerMs": 27.39533799997298,
+              "rowidMs": 26.67906000005314,
+              "mappingMs": 0.7604000000283122
+            },
+            {
+              "trial": 2,
+              "returned": 256,
+              "ownerMs": 27.492838000005577,
+              "rowidMs": 26.490270000009332,
+              "mappingMs": 0.7861670000129379
+            }
+          ]
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "limit": 1024,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 1024,
+              "ownerMs": 31.937366000027396,
+              "rowidMs": 26.982041999988724,
+              "mappingMs": 3.8778980000060983
+            },
+            {
+              "trial": 1,
+              "returned": 1024,
+              "ownerMs": 30.76687699998729,
+              "rowidMs": 26.351863999967463,
+              "mappingMs": 2.220735999988392
+            },
+            {
+              "trial": 2,
+              "returned": 1024,
+              "ownerMs": 30.398104000021704,
+              "rowidMs": 26.223174999991897,
+              "mappingMs": 2.5671280000242405
+            }
+          ]
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "limit": 2048,
+          "samples": [
+            {
+              "trial": 0,
+              "returned": 2048,
+              "ownerMs": 36.4848050000146,
+              "rowidMs": 27.25289399997564,
+              "mappingMs": 6.538098000048194
+            },
+            {
+              "trial": 1,
+              "returned": 2048,
+              "ownerMs": 39.12806500005536,
+              "rowidMs": 26.808248999994248,
+              "mappingMs": 4.660818999982439
+            },
+            {
+              "trial": 2,
+              "returned": 2048,
+              "ownerMs": 34.51176799996756,
+              "rowidMs": 27.1398540000082,
+              "mappingMs": 4.849858999950811
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "acquisitionCleanup": {
+    "privateScratchRemoved": true
+  }
+}

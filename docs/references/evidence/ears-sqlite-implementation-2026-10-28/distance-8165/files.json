@@ -1,0 +1,22 @@
+{
+  "distance-kernel.json": {
+    "sha256": "c74e10eb7669747ce5ffbb7adbe79278ea2dc389b083bc0e5112c664eb3295af",
+    "bytes": 125232
+  },
+  "runtime.json": {
+    "sha256": "8d25719c22764acc3533d3a2b610b44b3f419010eafb80b420421fffe2c29ecb",
+    "bytes": 674
+  },
+  "kernel-image.json": {
+    "sha256": "092af6f9a35b1dbcf88487ffc5c03a3d89e864a00c99e977c46b6394ec2fff6d",
+    "bytes": 83
+  },
+  "generic-training.json": {
+    "sha256": "56adc51091997ef544d02aceb84bdf4e9ac2a3d4263a2e6cd4c03c097edb92fe",
+    "bytes": 3946
+  },
+  "dispatch-training.json": {
+    "sha256": "83ab44b850d43fb39fe0ac91f19d3aea6b58a7745f811fb50bcd82cf4bd75b4a",
+    "bytes": 3936
+  }
+}

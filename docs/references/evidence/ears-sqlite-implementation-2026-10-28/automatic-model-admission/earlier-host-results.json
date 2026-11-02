@@ -1,0 +1,110 @@
+[
+  {
+    "label": "ears-auto-types",
+    "args": [
+      "npm",
+      "run",
+      "typecheck",
+      "-w",
+      "@apackdev/ears"
+    ],
+    "exitCode": 0,
+    "seconds": 3.239741283003241
+  },
+  {
+    "label": "reject-disabled-admission",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "-t",
+      "automatically admits an eligible committed generation",
+      "--outputFile=/results/disabled.json"
+    ],
+    "exitCode": 1,
+    "seconds": 3.0237550110032316
+  },
+  {
+    "label": "all-ears-auto",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/ears",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/all-ears-auto.json"
+    ],
+    "exitCode": 0,
+    "seconds": 146.28152472499642
+  },
+  {
+    "label": "auto-source-lint",
+    "args": [
+      "node",
+      "node_modules/oxlint/bin/oxlint",
+      "packages/apack-ears/src/sqlite/database.ts",
+      "packages/apack-ears/src/sqlite/vector-admission.ts",
+      "packages/apack-ears/src/sqlite/vector-policy.ts",
+      "packages/apack-ears/src/sqlite/vector-models.ts",
+      "packages/apack-ears/src/sqlite/vector-training.ts",
+      "packages/apack-ears/src/sqlite/vectors.ts",
+      "packages/apack-ears/src/sqlite/index-builds.ts",
+      "packages/apack-ears/tests/sqlite/vector-models.spec.ts",
+      "-D",
+      "correctness"
+    ],
+    "exitCode": 0,
+    "seconds": 0.07678176902118139
+  },
+  {
+    "label": "matching-packages-build",
+    "args": [
+      "npm",
+      "run",
+      "packages:build"
+    ],
+    "exitCode": 0,
+    "seconds": 43.20133329401142
+  },
+  {
+    "label": "affected-host-storage",
+    "args": [
+      "node",
+      "scripts/with-source.mjs",
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--project",
+      "@apackdev/host",
+      "packages/apack-host/tests/backup/recovery.spec.ts",
+      "packages/apack-host/tests/backup/recovery-crash.spec.ts",
+      "packages/apack-host/tests/backup/import.spec.ts",
+      "packages/apack-host/tests/backup/import-transaction.spec.ts",
+      "packages/apack-host/tests/backup/logical.spec.ts",
+      "packages/apack-host/tests/backup/logical-crash.spec.ts",
+      "packages/apack-host/tests/backup/storage.spec.ts",
+      "packages/apack-host/tests/database/storage.spec.ts",
+      "packages/apack-host/tests/database/open-app-database.spec.ts",
+      "packages/apack-host/tests/database/write-lock.spec.ts",
+      "--maxWorkers=2",
+      "--reporter=default",
+      "--reporter=json",
+      "--outputFile=/results/host-auto.json"
+    ],
+    "exitCode": 1,
+    "seconds": 136.5454116059991
+  }
+]

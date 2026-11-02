@@ -114,3 +114,29 @@ export class WatchCauses {
     return causes && Object.freeze({ sequences: Object.freeze([...causes.sequences]), dropped: causes.dropped });
   }
 }
+
+// Native adapters own byte accounting; structured backends do not invent wire bytes.
+type OperationTransportObserver = Pick<ReturnType<typeof createOperationObservation>, 'request' | 'response'>;
+export const operationTransport: unique symbol = Symbol.for('@apackdev/ears/operation-transport');
+export interface OperationTransport {
+  request(bytes: Uint8Array): Uint8Array;
+  response(bytes: Uint8Array): Uint8Array;
+  withObserver<T>(observer: OperationTransportObserver, operation: () => T): T;
+}
+export function createOperationTransport(): OperationTransport {
+  let current: OperationTransportObserver | undefined;
+  return {
+    request(bytes) { return current?.request(bytes) ?? bytes; },
+    response(bytes) { return current?.response(bytes) ?? bytes; },
+    withObserver(observer, operation) {
+      const previous = current;
+      current = observer;
+      try { return operation(); }
+      finally { current = previous; }
+    },
+  };
+}
+export function withOperationTransport<T>(owner: object, observer: OperationTransportObserver, operation: () => T): T {
+  const transport = (owner as { readonly [operationTransport]?: OperationTransport })[operationTransport];
+  return transport ? transport.withObserver(observer, operation) : operation();
+}

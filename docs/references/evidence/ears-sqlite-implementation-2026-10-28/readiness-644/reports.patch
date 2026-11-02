@@ -1,0 +1,13 @@
+diff --git a/packages/apack-ears/etc/index.api.md b/packages/apack-ears/etc/index.api.md
+index 13c95bd..a109bb8 100644
+--- a/packages/apack-ears/etc/index.api.md
++++ b/packages/apack-ears/etc/index.api.md
+@@ -205,7 +205,7 @@ export interface EarsDatabase {
+     // (undocumented)
+     durable(): Promise<void>;
+     readonly format: string;
+-    indexesReady(): Promise<void>;
++    indexesReady(types?: readonly string[]): Promise<void>;
+     // (undocumented)
+     readonly isOpen: boolean;
+     onIndexesChanged?(listener: (changes: Changes) => void): () => void;

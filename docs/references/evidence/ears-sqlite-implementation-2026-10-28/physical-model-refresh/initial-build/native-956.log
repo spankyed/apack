@@ -1,0 +1,4 @@
+    Updating crates.io index
+   Compiling elmdb-node v0.0.0 (/metrics/vendor/elmdb/crates/elmdb-node)
+   Compiling elmdb v0.0.0 (/metrics/vendor/elmdb/crates/elmdb)
+    Finished `release` profile [optimized] target(s) in 1m 03s

@@ -1,0 +1,428 @@
+[
+  {
+    "path": "owner-projection/host.json",
+    "originalSha256": "9f63d509eeb954aa1c1a16e28d112f3600c6f29358ca6b54659fa68f7c12e4f0",
+    "retainedSha256": "ee7fb464c7a961c894e2edb9c2af37ce56cc2c5c5724aeec15442852bbd61916",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "owner-projection/fresh-diagnose.txt",
+    "originalSha256": "730e259f690a12da0feb7ac1f1bd36feaa74fa1a27ca1ec11c81fefa10f42ac8",
+    "retainedSha256": "730e259f690a12da0feb7ac1f1bd36feaa74fa1a27ca1ec11c81fefa10f42ac8",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/native-admission.txt",
+    "originalSha256": "cb4ea6183eec061703454696b329100dc0d195cdf2cf956cc88853482e79fda6",
+    "retainedSha256": "cb4ea6183eec061703454696b329100dc0d195cdf2cf956cc88853482e79fda6",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/diagnose.json",
+    "originalSha256": "78ce9df673c2aeb89125f1e27f87d596a3d0bdc55f1f4d60dd7faa5dbe334fa0",
+    "retainedSha256": "39ac014c02aff2455338660169588588ef498a9995dcc08b7843b162253e282d",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "owner-projection/ears-all.txt",
+    "originalSha256": "1ab06f287cffb79419f5dd00f90f08326d376045a036eb6afcabaa50498232df",
+    "retainedSha256": "1ab06f287cffb79419f5dd00f90f08326d376045a036eb6afcabaa50498232df",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/source.json",
+    "originalSha256": "1c02b9385934ef08d9442ddc32b221c59fcbe12bf22f58df6ab4c84f054d6659",
+    "retainedSha256": "7252ce778a5c944c1da9f1925834cc1f175061430633babca2c83d80eb2ef5e1",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "owner-projection/mutation-shared-ack-order.txt",
+    "originalSha256": "21c4b78fb8507141afec77e43917466fd75ae54c1fceedbfcd6023aece53f1ca",
+    "retainedSha256": "21c4b78fb8507141afec77e43917466fd75ae54c1fceedbfcd6023aece53f1ca",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/permission-preflight.json",
+    "originalSha256": "c7f508699e967d844d2fb9c2b0b93fc92fb9c68662e2dbcab2d9d387cd435970",
+    "retainedSha256": "d78dafc71815abf491d1512b218a089786b3a11a7c790e67b1844e1ce36fa8be",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "owner-projection/native-admission.json",
+    "originalSha256": "a7ca342f3e3b6b409e38e4f4d47bd7cb3c6401fb625a224fd09f5797f6d49452",
+    "retainedSha256": "6acdbe19d6dcd48f7aa6fedf1607849e2958071c102e3c7e546fa998f87701d5",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "owner-projection/mutation-stale-attempt.txt",
+    "originalSha256": "9570aaaf62956dc8bab7a851d9fbff08aabcaccd995753d4685a64efc6723c12",
+    "retainedSha256": "9570aaaf62956dc8bab7a851d9fbff08aabcaccd995753d4685a64efc6723c12",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/mutation-cursor-plan.txt",
+    "originalSha256": "554821186183472b51ec641934dc463adf4822ec56802e6fe297ccb07ba584d1",
+    "retainedSha256": "554821186183472b51ec641934dc463adf4822ec56802e6fe297ccb07ba584d1",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/limits.json",
+    "originalSha256": "9c8df415719ac60f3cc4209405142f02f0bf22fae733c5c41cef4991968fca1c",
+    "retainedSha256": "cd6391e78268a987ab84ec126084e9467ac640a3f0d5e1f23d062713414db065",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "owner-projection/results.json",
+    "originalSha256": "2ae12106f7a3e1c92f20177b415c31dbfdf92e823af2fc76f2c9ce2f1bfda742",
+    "retainedSha256": "18abafc8831debcf8da615bdcbd3dae2360cd44836f8fda255d935efcce3c930",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "owner-projection/mutation-stale-result.txt",
+    "originalSha256": "7b04866443e3a16529b86c8da95f5d5bff76a42cfe16eacb37568ba8b4bb9d45",
+    "retainedSha256": "7b04866443e3a16529b86c8da95f5d5bff76a42cfe16eacb37568ba8b4bb9d45",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/dependencies.txt",
+    "originalSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "retainedSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/native-provenance.json",
+    "originalSha256": "c650120c79ccf86c85b6158600cb77a4e80ba8ae754204ed71fad01179c32ff5",
+    "retainedSha256": "5afcf8808d17a2e8edfe7e7fe86b96c2c4a1fdd93872bc176e8d899c745fadc8",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "owner-projection/lint.txt",
+    "originalSha256": "c37d0475dbfd559beef873fccc070dd3ff0422d56edbf828f7aff345e72118cc",
+    "retainedSha256": "c37d0475dbfd559beef873fccc070dd3ff0422d56edbf828f7aff345e72118cc",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/ears-api.txt",
+    "originalSha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "retainedSha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/compile-original.txt",
+    "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "retainedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/host-storage.txt",
+    "originalSha256": "7cd2c00dce75f0da6836e2bcede628830f5f15289e452db44406986b3d3188e3",
+    "retainedSha256": "7cd2c00dce75f0da6836e2bcede628830f5f15289e452db44406986b3d3188e3",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/specifiers.txt",
+    "originalSha256": "8c0ee2506a655436db74df17e7321a3f1d20d5cbae7d799ffc4a951537965907",
+    "retainedSha256": "8c0ee2506a655436db74df17e7321a3f1d20d5cbae7d799ffc4a951537965907",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/ears-types.txt",
+    "originalSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9",
+    "retainedSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/packages-build.txt",
+    "originalSha256": "1994536907b2743c9adc83a59a99f82784e202080cc06df1bf030ab29c3cf56f",
+    "retainedSha256": "1994536907b2743c9adc83a59a99f82784e202080cc06df1bf030ab29c3cf56f",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "owner-projection/ears.json",
+    "originalSha256": "e7e167ff7ef957c48c045a9a8b50ae043bf5a761aba13486c47716bb5b75c6e1",
+    "retainedSha256": "0884b98f106495adaa387c87ace93339f9fa042829871646ac6450653ffc5d79",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "initial-scope-failure/native-admission.txt",
+    "originalSha256": "333917f1a9ebf597a1aafdb6ae69e793854fa77d63d675770dfea8831c3c77f3",
+    "retainedSha256": "333917f1a9ebf597a1aafdb6ae69e793854fa77d63d675770dfea8831c3c77f3",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "initial-scope-failure/source.json",
+    "originalSha256": "fd9addccef7c811d3aa88b65b2bc61dbdf41fe0566e6be1a43c85b1516b52275",
+    "retainedSha256": "22ac7423ed30c5b611b59b1e82ed25017074bb2e218c1270405a6434acb9b400",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "initial-scope-failure/permission-preflight.json",
+    "originalSha256": "c7f508699e967d844d2fb9c2b0b93fc92fb9c68662e2dbcab2d9d387cd435970",
+    "retainedSha256": "d78dafc71815abf491d1512b218a089786b3a11a7c790e67b1844e1ce36fa8be",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "initial-scope-failure/native-admission.json",
+    "originalSha256": "09186ad14a52435cdb0303ea30c77d179a3cc7ea7650a6f8cfa65f1cd9e52423",
+    "retainedSha256": "b1c68f25737d9f757a3c11d208e8aad808547bf7305a1979a7aea928fb092fba",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "initial-scope-failure/limits.json",
+    "originalSha256": "9c8df415719ac60f3cc4209405142f02f0bf22fae733c5c41cef4991968fca1c",
+    "retainedSha256": "cd6391e78268a987ab84ec126084e9467ac640a3f0d5e1f23d062713414db065",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "initial-scope-failure/results.json",
+    "originalSha256": "4d9798617067784d4ad5090a0a3d622ad06ff88ab11cc9f10ded05f2a7020dc8",
+    "retainedSha256": "27892257874040ddc225be2f77b604041f5c1593007656b5db5b26e11719820f",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "initial-scope-failure/dependencies.txt",
+    "originalSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "retainedSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "initial-scope-failure/native-provenance.json",
+    "originalSha256": "c650120c79ccf86c85b6158600cb77a4e80ba8ae754204ed71fad01179c32ff5",
+    "retainedSha256": "5afcf8808d17a2e8edfe7e7fe86b96c2c4a1fdd93872bc176e8d899c745fadc8",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "initial-scope-failure/compile-original.txt",
+    "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "retainedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "initial-scope-failure/ears-types.txt",
+    "originalSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9",
+    "retainedSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "initial-scope-failure/packages-build.txt",
+    "originalSha256": "3cb199f1c6b790e9b2c924580b21a5461e38c441884b2dba87b0bbacc8de1b07",
+    "retainedSha256": "3cb199f1c6b790e9b2c924580b21a5461e38c441884b2dba87b0bbacc8de1b07",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/host.json",
+    "originalSha256": "054c0464f6009a69ed3f52ee58bcaeae1d7cc9a6423dd361aa4c65fba84acbe7",
+    "retainedSha256": "8955c086394214f08ea18a40430a7240b9d2c01ddc91bb8d3be135fbd8347d87",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "shared-scope/fresh-diagnose.txt",
+    "originalSha256": "d1e9a2acfcb3b096119c807ee6bf3029c78e672f321556678eedfb03aa01b1d6",
+    "retainedSha256": "d1e9a2acfcb3b096119c807ee6bf3029c78e672f321556678eedfb03aa01b1d6",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/native-admission.txt",
+    "originalSha256": "5ae2db2ce5dd0c9cdf2a66c4568609e328c4f83dfbf8e84752622d32838dcfb9",
+    "retainedSha256": "5ae2db2ce5dd0c9cdf2a66c4568609e328c4f83dfbf8e84752622d32838dcfb9",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/diagnose.json",
+    "originalSha256": "777f22a6e0f8059d6d7209db3ee855999819cb182bbc5901e613bc35d1c98a32",
+    "retainedSha256": "4beb5827d2ec074a775c21a2e4513d9ba619b4573c5bd0ab80538bc55c1037d6",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "shared-scope/ears-all.txt",
+    "originalSha256": "5246cbef65eeab48731d91becd53e8f5efa31ae0a58df6255f6e3310a8fd78a5",
+    "retainedSha256": "5246cbef65eeab48731d91becd53e8f5efa31ae0a58df6255f6e3310a8fd78a5",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/source.json",
+    "originalSha256": "751c070a4a658b77917708b9bdfeb2aac794a74903fe05c1f68c742f87074e79",
+    "retainedSha256": "a5d018817aca6cfe49714e924abc2905c14bd261a7f12a63a44614099ea54ac3",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "shared-scope/mutation-shared-ack-order.txt",
+    "originalSha256": "900e66731d7878ee66f11448f598459cd237ffe141b70e5c8195e044a7052dd4",
+    "retainedSha256": "900e66731d7878ee66f11448f598459cd237ffe141b70e5c8195e044a7052dd4",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/permission-preflight.json",
+    "originalSha256": "c7f508699e967d844d2fb9c2b0b93fc92fb9c68662e2dbcab2d9d387cd435970",
+    "retainedSha256": "d78dafc71815abf491d1512b218a089786b3a11a7c790e67b1844e1ce36fa8be",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "shared-scope/native-admission.json",
+    "originalSha256": "f58064010ed1ca0d97825cf4be29c281a213653288dbe256930b90790678c7fe",
+    "retainedSha256": "6be3811dfbc39b30ef0880f28f76f068d95945f59c83bdebda3022b7d0cc820d",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "shared-scope/mutation-stale-attempt.txt",
+    "originalSha256": "24ff7bfc0334bb622ba5abb7e47d46403cbc439c80a0197ead65e7f384d1d4d3",
+    "retainedSha256": "24ff7bfc0334bb622ba5abb7e47d46403cbc439c80a0197ead65e7f384d1d4d3",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/mutation-cursor-plan.txt",
+    "originalSha256": "6333566030015a8865b3d5128927b75b4c4efe43abd7f12c6405cab4ea1b633c",
+    "retainedSha256": "6333566030015a8865b3d5128927b75b4c4efe43abd7f12c6405cab4ea1b633c",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/limits.json",
+    "originalSha256": "9c8df415719ac60f3cc4209405142f02f0bf22fae733c5c41cef4991968fca1c",
+    "retainedSha256": "cd6391e78268a987ab84ec126084e9467ac640a3f0d5e1f23d062713414db065",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "shared-scope/results.json",
+    "originalSha256": "2d1d6446ce3f1490fe2e312da564b7902a99f9e25c13a71f227dca01211b1419",
+    "retainedSha256": "08eaee41045eb479c8081c7c00409576b88ea1151afb6656931b5f6d8a4bf9c1",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "shared-scope/mutation-stale-result.txt",
+    "originalSha256": "e6b2f62a066e638b2b6c1f52df7ca3c4a2803e74776f3a6672e3a0a3c6e50aab",
+    "retainedSha256": "e6b2f62a066e638b2b6c1f52df7ca3c4a2803e74776f3a6672e3a0a3c6e50aab",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/dependencies.txt",
+    "originalSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "retainedSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/native-provenance.json",
+    "originalSha256": "c650120c79ccf86c85b6158600cb77a4e80ba8ae754204ed71fad01179c32ff5",
+    "retainedSha256": "5afcf8808d17a2e8edfe7e7fe86b96c2c4a1fdd93872bc176e8d899c745fadc8",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "shared-scope/lint.txt",
+    "originalSha256": "0bcd0b0a0fde74bf2cc8ac234562f29ab71a1b128f7526ac40801b84a1c74d47",
+    "retainedSha256": "0bcd0b0a0fde74bf2cc8ac234562f29ab71a1b128f7526ac40801b84a1c74d47",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/ears-api.txt",
+    "originalSha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "retainedSha256": "6fc6e3aed600998624a338b149362a6c517043a1cd6aca50dbb1c701876200c2",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/compile-original.txt",
+    "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "retainedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/host-storage.txt",
+    "originalSha256": "3fb047770be7abec5c5bc2d9160c37f46ac1553702b3352356e563e1535ef012",
+    "retainedSha256": "3fb047770be7abec5c5bc2d9160c37f46ac1553702b3352356e563e1535ef012",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/specifiers.txt",
+    "originalSha256": "8c0ee2506a655436db74df17e7321a3f1d20d5cbae7d799ffc4a951537965907",
+    "retainedSha256": "8c0ee2506a655436db74df17e7321a3f1d20d5cbae7d799ffc4a951537965907",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/ears-types.txt",
+    "originalSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9",
+    "retainedSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/packages-build.txt",
+    "originalSha256": "4a0f258d74a2f19f1afa773757f58212875d78546649309f1e5c6236106d0c2a",
+    "retainedSha256": "4a0f258d74a2f19f1afa773757f58212875d78546649309f1e5c6236106d0c2a",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "shared-scope/ears.json",
+    "originalSha256": "907d835808956aec97ba192f0d2bed0f2bf8edebbe3971427fd894fbaf72e8df",
+    "retainedSha256": "5ff4e55af31fe50fe81ac7c451548152c7e962fcb0264651760d43fcd4250cf2",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "scope-control/native-admission.txt",
+    "originalSha256": "c464a9a87be9fbb8b9f956812932897acaaa4f9704a6ead966234bcd7dea59af",
+    "retainedSha256": "c464a9a87be9fbb8b9f956812932897acaaa4f9704a6ead966234bcd7dea59af",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "scope-control/source.json",
+    "originalSha256": "751c070a4a658b77917708b9bdfeb2aac794a74903fe05c1f68c742f87074e79",
+    "retainedSha256": "a5d018817aca6cfe49714e924abc2905c14bd261a7f12a63a44614099ea54ac3",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "scope-control/permission-preflight.json",
+    "originalSha256": "c7f508699e967d844d2fb9c2b0b93fc92fb9c68662e2dbcab2d9d387cd435970",
+    "retainedSha256": "d78dafc71815abf491d1512b218a089786b3a11a7c790e67b1844e1ce36fa8be",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "scope-control/native-admission.json",
+    "originalSha256": "126f3f9d5d8fe600f92e7b0e76d85126520ce73c2b2aefa3d17904e2d72cab6a",
+    "retainedSha256": "dca98237683e5ea6a23683099939c5e23d618ed9657d93098b15839ec7023c20",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "scope-control/limits.json",
+    "originalSha256": "9c8df415719ac60f3cc4209405142f02f0bf22fae733c5c41cef4991968fca1c",
+    "retainedSha256": "cd6391e78268a987ab84ec126084e9467ac640a3f0d5e1f23d062713414db065",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "scope-control/results.json",
+    "originalSha256": "a81a0afe7eea5340c07d53c7c1d9cb863a0549f3fb58dbfe48159e354a7b7e8a",
+    "retainedSha256": "7ec19d0d120a9082a34be76cc29278e8ce715d5d991f81ae72b9a8129215f559",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "scope-control/dependencies.txt",
+    "originalSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "retainedSha256": "af4d2c71fe60164207ca41356b12d73d5165ec1aad264817b4245224e72b2bb7",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "scope-control/native-provenance.json",
+    "originalSha256": "c650120c79ccf86c85b6158600cb77a4e80ba8ae754204ed71fad01179c32ff5",
+    "retainedSha256": "5afcf8808d17a2e8edfe7e7fe86b96c2c4a1fdd93872bc176e8d899c745fadc8",
+    "jsonFormattingNormalized": true
+  },
+  {
+    "path": "scope-control/mutation-duplicate-scope.txt",
+    "originalSha256": "83911a43ea42f8493952eb3b27fc99c2ac89ce5b8e8e5ffaf639fe94dd3a949a",
+    "retainedSha256": "83911a43ea42f8493952eb3b27fc99c2ac89ce5b8e8e5ffaf639fe94dd3a949a",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "scope-control/compile-original.txt",
+    "originalSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "retainedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "scope-control/ears-types.txt",
+    "originalSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9",
+    "retainedSha256": "5caf8b5a43bc5a7b64403b13c88db119f18d7abd414ba3cf1028cba5bdf6e0f9",
+    "jsonFormattingNormalized": false
+  },
+  {
+    "path": "scope-control/packages-build.txt",
+    "originalSha256": "4dd7da753e90e91a4c81d75479fee1624183041582f16a1dc2aa3d6afe811608",
+    "retainedSha256": "4dd7da753e90e91a4c81d75479fee1624183041582f16a1dc2aa3d6afe811608",
+    "jsonFormattingNormalized": false
+  }
+]

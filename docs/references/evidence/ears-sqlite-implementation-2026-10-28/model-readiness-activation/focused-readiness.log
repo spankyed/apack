@@ -1,0 +1,17 @@
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/vector-models.spec.ts (23 tests | 17 skipped) 2774ms
+   ✓ durable native model admission > recovers abandoned attempts only after claiming managed model ownership  889ms
+   ✓ durable native model admission > releases a failed managed startup claim and preserves its original recovery error  387ms
+   ✓ durable native model admission > refuses native ownership on a read-only connection without creating a service  400ms
+   ✓ durable native model admission > keeps logical readiness usable while optional native work is pending or failed  309ms
+   ✓ durable native model admission > settles logical backfill independently when a native waiter is cancelled by stopping its owner  396ms
+   ✓ durable native model admission > does not misreport a committed primary write when a background readiness probe fails  390ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed | 17 skipped (23)
+   Start at  09:19:12
+   Duration  4.81s (transform 1.14s, setup 12ms, collect 1.60s, tests 2.77s, environment 0ms, prepare 196ms)
+
+JSON report written to /results/focused-readiness.json

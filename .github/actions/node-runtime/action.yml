@@ -1,0 +1,43 @@
+name: Node runtime
+description: Restore an exact Node toolchain before setup-node and retain it immediately for later jobs
+inputs:
+  node-version:
+    description: Exact Node version, including major, minor and patch
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Restore Node toolchain
+      id: toolchain
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.tool_cache }}/node/${{ inputs.node-version }}
+        key: node-toolchain-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.node-version }}
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+    # Ordinary EARS package production now builds its pinned SQLite extension offline.
+    - name: Prepare Windows native package compiler
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+      with:
+        arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+    # A later bash step prepends Git's usr/bin, whose link.exe is unrelated to MSVC. Once the
+    # developer environment is active, rustc must receive the absolute Microsoft linker path.
+    - name: Pin Windows Rust linker
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $linker = Join-Path $env:VCToolsInstallDir "bin/Host$($env:VSCMD_ARG_HOST_ARCH)/$($env:VSCMD_ARG_TGT_ARCH)/link.exe"
+        if (-not (Test-Path -LiteralPath $linker -PathType Leaf)) { throw "Microsoft linker not found: $linker" }
+        $target = if ($env:VSCMD_ARG_TGT_ARCH -eq 'arm64') { 'AARCH64' } else { 'X86_64' }
+        "CARGO_TARGET_$($target)_PC_WINDOWS_MSVC_LINKER=$linker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+    # The complete version directory includes the architecture's .complete marker. Save before tests so a later
+    # test failure cannot discard a successful download, and consumers can restore the producer's exact runtime.
+    - name: Retain Node toolchain
+      if: steps.toolchain.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.tool_cache }}/node/${{ inputs.node-version }}
+        key: ${{ steps.toolchain.outputs.cache-primary-key }}

@@ -1,0 +1,59 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/regex.spec.ts -t does not relabel
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ❯ tests/sqlite/regex.spec.ts (11 tests | 1 failed | 10 skipped) 13ms
+   ↓ SQLite Rust regex bridge > loads the exact controlled runtime assets
+   ↓ SQLite Rust regex bridge > compiles Rust syntax with Unicode, inline flags and class intersection
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: x(?=y)
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: (a)\1
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: (
+   ↓ SQLite Rust regex bridge > retains the pattern and cause in syntax/size refusal: a{100000000}
+   ↓ SQLite Rust regex bridge > frees the owned allocation once and refuses using a closed pattern
+   × SQLite Rust regex bridge > does not relabel a WASM runtime failure as an invalid pattern 12ms
+     → expected a thrown error to be RuntimeError: regex parse error: syntheti…
+   ↓ SQLite Rust regex bridge > keeps WASM allocation stable through varied explicitly closed patterns
+   ↓ SQLite Rust regex bridge > imports and constructs a compiler without loading the WASM runtime
+   ↓ SQLite Rust regex bridge > preserves missing-asset errors instead of reporting a pattern refusal
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/sqlite/regex.spec.ts > SQLite Rust regex bridge > does not relabel a WASM runtime failure as an invalid pattern
+AssertionError: expected a thrown error to be RuntimeError: regex parse error: syntheti…
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- RuntimeError {[39m
+[32m-   "message": "regex parse error: synthetic runtime failure",[39m
+[31m+ Error {[39m
+[31m+   "message": "matching \"valid\": regex parse error: synthetic runtime failure",[39m
+[31m+   "code": "PATTERN_INVALID",[39m
+[2m  }[22m
+
+ ❯ tests/sqlite/regex.spec.ts:55:60
+     53|     try {
+     54|       b.RRegex = class { constructor() { throw failure; } free() {} };
+     55|       expect(() => createRegexCompiler().compile('valid')).toThrow(fai…
+       |                                                            ^
+     56|     } finally { b.RRegex = original; }
+     57|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 10 skipped (11)
+   Start at  15:13:59
+   Duration  217ms (transform 47ms, setup 17ms, collect 38ms, tests 13ms, environment 0ms, prepare 50ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /metrics/packages/apack-ears
+npm error workspace @apackdev/ears@0.1.0
+npm error location /metrics/packages/apack-ears
+npm error command failed
+npm error command sh -c vitest run tests/sqlite/regex.spec.ts -t 'does not relabel'

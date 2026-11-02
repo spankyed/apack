@@ -1,0 +1,33 @@
+name: Windows directory API observations
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node-runtime
+        with:
+          node-version: 23.11.1
+      - name: Observe owned directory operations
+        shell: pwsh
+        run: ./tests/scripts/probe-windows-directory-durability.ps1 -Output .apack/tests/results/windows-directory/report.json
+      - name: Observe standard Node directory descriptors
+        run: node tests/scripts/_support/windows-directory-node.mjs .apack/tests/results/windows-directory/node.json
+      - name: Observe directory barriers without administrator access
+        shell: pwsh
+        run: ./tests/scripts/probe-windows-restricted-directory.ps1 -Output .apack/tests/results/windows-directory/restricted.json
+      - name: Preserve observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ears-windows-directory-${{ github.run_id }}
+          path: .apack/tests/results/windows-directory
+          if-no-files-found: error
+          retention-days: 14

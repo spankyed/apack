@@ -1,0 +1,14 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/regex.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/sqlite/regex.spec.ts (11 tests) 476ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  15:26:20
+   Duration  654ms (transform 43ms, setup 15ms, collect 32ms, tests 476ms, environment 0ms, prepare 48ms)
+

@@ -1,0 +1,94 @@
+{
+  "run": 41244923954,
+  "source": "f1911bd0ddc056f996a890ad312e0f60f82bae46",
+  "reports": {
+    "native-routing.json": {
+      "passed": 1,
+      "failed": 0,
+      "pending": 35,
+      "rawSha256": "c2efd5c3cf88a5448560a2e78cb22a347d39960e4cfeea97164ab6fa7de8eebc",
+      "failures": []
+    },
+    "sqlite-contracts.json": {
+      "passed": 222,
+      "failed": 1,
+      "pending": 0,
+      "rawSha256": "f271dfa377b36e9ea7c01dd4e19bfb5c89c39963a890efc56cd1007b33033065",
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    "elmdb-contracts.json": {
+      "passed": 188,
+      "failed": 1,
+      "pending": 34,
+      "rawSha256": "ec7564fa354ee21b4f28bfd86a4ac1d21fb2cea98ea1ecfd67f29783d9b2bca2",
+      "failures": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    "lost-ack/report.json": {
+      "completed": true,
+      "rawSha256": "5c4f6ad97eab8f5bbf908d3786cc54f0f727bad2016bff8d3afb16d6170794b4",
+      "operations": [
+        {
+          "operation": "write",
+          "passed": true
+        },
+        {
+          "operation": "unit",
+          "passed": true
+        },
+        {
+          "operation": "bulkLoad",
+          "passed": true
+        },
+        {
+          "operation": "schema",
+          "passed": true
+        },
+        {
+          "operation": "disabled-control",
+          "passed": true
+        }
+      ]
+    },
+    "sync-error-no-close/report.json": {
+      "completed": true,
+      "rawSha256": "263c73866db89d9b783b4715b2105370601741963c96d0d44159efd6643ec3ce",
+      "operations": [
+        {
+          "operation": "write",
+          "passed": true,
+          "errorCode": "COMMIT_UNKNOWN",
+          "readFenced": true
+        },
+        {
+          "operation": "unit",
+          "passed": true,
+          "errorCode": "COMMIT_UNKNOWN",
+          "readFenced": true
+        },
+        {
+          "operation": "bulkLoad",
+          "passed": true,
+          "errorCode": "COMMIT_UNKNOWN",
+          "readFenced": true
+        },
+        {
+          "operation": "schema",
+          "passed": true,
+          "errorCode": "COMMIT_UNKNOWN",
+          "readFenced": true
+        },
+        {
+          "operation": "disabled-control",
+          "passed": true
+        }
+      ]
+    }
+  },
+  "generatedApiPatches": {
+    "reports.patch": 0
+  }
+}

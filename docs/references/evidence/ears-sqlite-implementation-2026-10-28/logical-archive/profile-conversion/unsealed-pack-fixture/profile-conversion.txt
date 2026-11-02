@@ -1,0 +1,15 @@
+/metrics/packages/apack-host/src/database/schema.ts:100
+    if (!entry.build) throw new Error(`Pack "${entry.id}" declarations in ${entry.dir}: ${entry.problem}`);
+                            ^
+
+
+Error: Pack "materialized" declarations in /tmp/ears-profile-conversion-SleTHT/both-converted/.profile-incomplete/apack/packs/materialized: types/snapshot.json is missing or unreadable, so nothing says which apack built it: rebuild it with the apack CLI that matches this apack
+    at <anonymous> (/metrics/packages/apack-host/src/database/schema.ts:100:29)
+    at Array.map (<anonymous>)
+    at installedManifests (/metrics/packages/apack-host/src/database/schema.ts:99:85)
+    at readInstalledSchema (/metrics/packages/apack-host/src/database/schema.ts:209:21)
+    at openAppDatabase (/metrics/packages/apack-host/src/database/open.ts:124:18)
+    at convertSqliteProfile (/metrics/scripts/convert-sqlite-profile.ts:90:23)
+    at async <anonymous> (/metrics/tests/scripts/test-sqlite-profile-conversion.ts:58:18)
+
+Node.js v23.11.1

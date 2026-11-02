@@ -76,9 +76,10 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: 'vue-tsc, which needs the Vue language service that ts.createProgram is not; its two plain tsc spawns became the in-process typecheckPack' },
   'packages/apack-cli/tests/commands/app-install.integration.spec.ts': { calls: 1,
     why: 'macOS ditto creates real release-style ZIPs so installation verifies native extraction, executable permissions and bundle symlinks' },
-  'packages/apack-cli/tests/commands/db.integration.spec.ts': { calls: 3,
+  'packages/apack-cli/tests/commands/db.integration.spec.ts': { calls: 4,
     why: 'the CLI\'s db command against a data dir: it opens LMDB and exits, and neither survives being run in the worker; '
-      + 'and a process holding the database open to write, as a running app does, which one process can\'t be to itself' },
+      + 'and a process holding the database open to write, as a running app does, which one process can\'t be to itself; '
+      + 'reset is killed after primary clear and before history deletion to prove real process-death lock reclamation and retry without killing the test worker' },
   'packages/apack-cli/tests/commands/release.integration.spec.ts': { calls: 1,
     why: 'git, in a throwaway repository' },
   'packages/apack-cli/tests/_support/run-command.ts': { calls: 1,
@@ -87,6 +88,10 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: 'a nested `vitest run`: the harness under test is what launches a run, so it cannot be the run that is launching it' },
   'packages/apack-cli/tests/harness/harness-setup.integration.spec.ts': { calls: 1,
     why: 'a nested `vitest run`, for the same reason — and the one whose spawner reaches the binary through a variable' },
+  'packages/apack-host/tests/backup/logical-crash.integration.spec.ts': { calls: 1,
+    why: 'A child is killed immediately before or after archive publication; only actual process death proves complete exclusive publication and safe retry without killing the test worker' },
+  'packages/apack-host/tests/backup/recovery-crash.integration.spec.ts': { calls: 2,
+    why: 'One child executes import, inspection and interrupted offline restoration; a separate live reader/writer proves cross-process exclusion and claim reclamation after SIGKILL. The test worker must survive each death to inspect the retained incumbent' },
   'packages/publish-checks/tests/published-exports.integration.spec.ts': { calls: 1,
     why: 'CONSUMER_MATRIX compiles a consumer with each supported TypeScript, and the subprocess is the fidelity: running the 5.7 floor in-process would put two typescript instances in one process' },
   'packages/publish-checks/tests/published-sdk-types.integration.spec.ts': { calls: 2,

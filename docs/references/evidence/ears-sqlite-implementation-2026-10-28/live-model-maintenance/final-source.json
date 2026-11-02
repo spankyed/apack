@@ -1,0 +1,37 @@
+{
+  "base": "95515e64637878681a33bea300ab4a0dae2b2e4c",
+  "nativePin": "95615ed8d493f9a7c2789eaf1f4c847ae375eb32",
+  "validatedRuntimeInputs": {
+    "packages/apack-ears/src/sqlite/database.ts": "8164de849f6cce38b7ab4ad0d3b7965802135281d9fc8a8251fb1c7f13b55b97",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "c5b11dbdec44aa489004f53f46074e35d9d339b13364bd3fffd737a3e65ee68d",
+    "packages/apack-ears/src/sqlite/index.ts": "d6e5c0b05ed86cd97f387c3070d75f6401500936d2da9b9de9a3ebfb67d70768",
+    "packages/apack-ears/src/sqlite/vector-index.ts": "ac8b90d2631be0301106ff1d3aee21144d444e980e5c4bc40c7e4d285e1c803d",
+    "packages/apack-ears/src/sqlite/vector-models.ts": "e7306b644316981812c175a969340fdcf92ae8412d84d92300f5ebb309a231f0",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "c4892fe0e17ace6b930fb8b7bf57d3a1431998bb671a04bbf26fd474de273df2",
+    "packages/apack-host/src/backup/index.ts": "2cb5180c3f178964586a0b62c778c9049a53746346f1665ac6239ef63acea059",
+    "packages/apack-host/src/database/storage.ts": "4009206a86adb86505998b9a8ed5a3cb5af265d3f3ae590b04495e4a039f2949",
+    "packages/apack-host/src/services/app-data.ts": "97cd1c7a3ec941ffcf02541eaaaef8b297489119abd995289f9f2478f47aac55",
+    "packages/apack-host/tests/backup/import-transaction.spec.ts": "0c7ecc7cd8446385e11a1cb9bcabe8170f658ee2307d9e59f981ad7cb5f178be",
+    "packages/apack-host/tests/backup/storage.spec.ts": "cab2b8c4f204e94ea0cfbe7a22624af520b7de644d226facd7d7cc5bd4139443"
+  },
+  "finalInputs": {
+    ".github/scripts/ears-sqlite-platform.mjs": "2eeaf9f166ab2ab55611dd96cdd2a98455a67a99622e1bc93e7cd3d075fa8ba9",
+    "docs/plans/ears-sqlite-storage.md": "a9f2f26beb6c4e13ff57ffaaedf54f5ba6cc4aeb40f0737c2cf076a97ea2c6b1",
+    "docs/references/evidence/ears-sqlite-implementation-2026-10-28/physical-model-refresh/README.md": "2e229b0ac016c8aa80029cbf9aea780bf9a088f5a8a51eb3feda3836ae42e7b7",
+    "packages/apack-ears/CLAUDE.md": "0017fe510ebe5e6de0132dc0e714848be12e0eaf4101b93a9550595c8f771cd5",
+    "packages/apack-ears/etc/sqlite.api.md": "aa6c47e5dce28cd9bc43beed66c485513718e458d7eadb66926fbdb83196286a",
+    "packages/apack-ears/src/sqlite/database.ts": "8164de849f6cce38b7ab4ad0d3b7965802135281d9fc8a8251fb1c7f13b55b97",
+    "packages/apack-ears/src/sqlite/index-builds.ts": "c5b11dbdec44aa489004f53f46074e35d9d339b13364bd3fffd737a3e65ee68d",
+    "packages/apack-ears/src/sqlite/index.ts": "d6e5c0b05ed86cd97f387c3070d75f6401500936d2da9b9de9a3ebfb67d70768",
+    "packages/apack-ears/src/sqlite/vector-index.ts": "ac8b90d2631be0301106ff1d3aee21144d444e980e5c4bc40c7e4d285e1c803d",
+    "packages/apack-ears/src/sqlite/vector-models.ts": "e7306b644316981812c175a969340fdcf92ae8412d84d92300f5ebb309a231f0",
+    "packages/apack-ears/tests/sqlite/vector-models.spec.ts": "c4892fe0e17ace6b930fb8b7bf57d3a1431998bb671a04bbf26fd474de273df2",
+    "packages/apack-host/CLAUDE.md": "572bb39acde3ca8be10e4d3bef698089877fa615e1d28763bbc3fa75e1917bf4",
+    "packages/apack-host/src/backup/index.ts": "2cb5180c3f178964586a0b62c778c9049a53746346f1665ac6239ef63acea059",
+    "packages/apack-host/src/database/storage.ts": "4009206a86adb86505998b9a8ed5a3cb5af265d3f3ae590b04495e4a039f2949",
+    "packages/apack-host/src/services/app-data.ts": "97cd1c7a3ec941ffcf02541eaaaef8b297489119abd995289f9f2478f47aac55",
+    "packages/apack-host/tests/backup/import-transaction.spec.ts": "0c7ecc7cd8446385e11a1cb9bcabe8170f658ee2307d9e59f981ad7cb5f178be",
+    "packages/apack-host/tests/backup/storage.spec.ts": "cab2b8c4f204e94ea0cfbe7a22624af520b7de644d226facd7d7cc5bd4139443"
+  },
+  "normalizedReportCheckExitCode": 0
+}

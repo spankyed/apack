@@ -1,0 +1,23 @@
+
+> @apackdev/ears@0.1.0 test
+> vitest run tests/sqlite/query-cost.spec.ts tests/engine/queries.spec.ts tests/engine/query-values.spec.ts
+
+
+ RUN  v3.2.7 /metrics/packages/apack-ears
+
+ ✓ tests/engine/queries.spec.ts (27 tests) 8266ms
+   ✓ declared indexes > a where on a declared field reads its index; on any other, it filters the rows and finds the same matches  1397ms
+   ✓ declared indexes > warns once per call site, and not for a type small enough to walk  2177ms
+   ✓ declared indexes > keeps a declared index through writes, trash and a unit that throws  989ms
+   ✓ declared indexes > finds a long string, which no index holds, and stores no infinite number  1577ms
+ ✓ tests/sqlite/query-cost.spec.ts (16 tests) 3083ms
+   ✓ SQLite ordering work > orders rank without loading unrelated bodies or issuing per-entity SQL  318ms
+   ✓ SQLite ordering work > orders sortText without loading unrelated bodies or issuing per-entity SQL  537ms
+   ✓ SQLite ordering work > falls back to decoder date clipping for fractional stored timestamps  392ms
+ ✓ tests/engine/query-values.spec.ts (5 tests) 700ms
+
+ Test Files  3 passed (3)
+      Tests  48 passed (48)
+   Start at  13:38:07
+   Duration  13.97s (transform 548ms, setup 45ms, collect 1.08s, tests 12.05s, environment 0ms, prepare 421ms)
+

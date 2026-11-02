@@ -1,0 +1,34 @@
+[
+  {
+    "label": "compile",
+    "args": [
+      "cc",
+      "-O3",
+      "-DNDEBUG",
+      "-Werror=implicit-function-declaration",
+      "-shared",
+      "-fPIC",
+      "-I/seed/node_modules/better-sqlite3/deps/sqlite3",
+      "/assets/vec1.c",
+      "-lm",
+      "-o",
+      "/metrics/vec1.so"
+    ],
+    "exitCode": 0,
+    "seconds": 2.585853020005743
+  },
+  {
+    "label": "compat",
+    "args": [
+      "node",
+      "--import",
+      "tsx",
+      "packages/apack-ears/bench/sqlite/vec1-compat.mjs",
+      "/metrics/vec1.so",
+      "/assets/vec1-source.json",
+      "/results/compat.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.5249599579983624
+  }
+]
