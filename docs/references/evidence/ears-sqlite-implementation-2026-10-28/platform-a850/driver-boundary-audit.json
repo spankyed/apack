@@ -1,0 +1,51 @@
+{
+  "source": "a8500818f6",
+  "sourceHashes": {
+    "packages/apack-ears/src/sqlite/database.ts": "4e8a908221e106fc85ca59bd422739b38e6787162697aad8cf321eeae2e65867",
+    "packages/apack-ears/src/sqlite/vector-training.ts": "52b0501bbf7a00cb8e79271b11d4eea04692361e85f06756689059cf35706081",
+    "packages/apack-ears/src/sqlite/file-ownership.ts": "d855fd76e422b3f5096bda1dc390d071e3c31edf712fd3cedeebb23182807f90",
+    "packages/apack-ears/src/sqlite/format.ts": "3fe30e4defae9759880ee2f4c0fde0b3180cb10cb0619ac9ac7eb99aee69a0c0",
+    "packages/apack-ears/src/sqlite/vector-owner.ts": "d18558d19e29a8da7bdb538f3156da40c4806078488896ebb7a1f8725c1af1ed"
+  },
+  "scope": "Supported app/worker driver composition and source review, not a generic duplicate-SQLite detector or untrusted-plugin security boundary.",
+  "inventories": [
+    {
+      "platform": "linux",
+      "source": "ddc52ade721fc2b569c425e26737ab66896acdad",
+      "nativeAddons": 6,
+      "observedBetterSqliteAddonCount": 1,
+      "observedDriver": {
+        "file": "node_modules/better-sqlite3/prebuilds/linux-x64.node",
+        "sha256": "6fd4292c6c5f352436cd85c9e1cb286978efa43c20ae350973f83414ced9991d"
+      },
+      "originalReportSha256": "57696642f9ae0715610dc3273b9b30b61daa7e7230f6e674279b16fb3d26f451"
+    },
+    {
+      "platform": "windows",
+      "source": "ddc52ade721fc2b569c425e26737ab66896acdad",
+      "nativeAddons": 6,
+      "observedBetterSqliteAddonCount": 1,
+      "observedDriver": {
+        "file": "node_modules\\better-sqlite3\\prebuilds\\win32-x64.node",
+        "sha256": "e21e5efd71fba66578e95b62554d9028064a80dafd7221bf8a8ef155de8d240a"
+      },
+      "originalReportSha256": "862feebe6d122d96fbe9f47c944dfe3f55530c1189ec9d843de8a5524114360a"
+    },
+    {
+      "platform": "macos-signed",
+      "source": "f6d938d190da827c2cf13c716264cfe05d71f081",
+      "nativeAddons": 6,
+      "observedBetterSqliteAddonCount": 1,
+      "observedDriver": {
+        "file": "node_modules/better-sqlite3/prebuilds/darwin-arm64.node",
+        "sha256": "2b2fb1b9a27c9b1a498a3d21de8e19d16acbb8c4711bf86dd2a64a4f6ef65763"
+      }
+    }
+  ],
+  "workerModuleSelection": "Parent resolves its own better-sqlite3 package module and supplies that trusted module path to the worker; database metadata does not select a SQLite core.",
+  "formatInspection": "Existing writable targets are inspected through another connection to the same imported NativeDatabase; readDatabaseFormat uses SQL PRAGMAs and metadata. Namespace checks use lstat, not raw descriptor open/read/close on a live database.",
+  "modelOwnerScope": "Persistent .native-model-owner.lock serializes native model/maintenance services, not arbitrary bindings or all foreground connections.",
+  "unsupportedTopology": "Independent SQLite library binaries must not open the same file in one process. Raw external reads/open-close of a live SQLite file must not bypass SQLite bookkeeping. Independent SQL tooling should use a separate process and matching locking/filesystem assumptions.",
+  "upstreamReference": "https://sqlite.org/howtocorrupt.html#multiple_copies_of_sqlite_linked_into_the_same_application",
+  "futureSupport": "If arbitrary duplicate-driver/plugin access becomes a requirement, first add and fault-qualify a real process-wide coordination/refusal design. The current inventory is observation, not enforcement against arbitrary additional native modules."
+}

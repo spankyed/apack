@@ -206,6 +206,10 @@ compile, download or choose executable locations from database metadata. Vector/
 mismatches refuse; do not generalize that runtime-hash claim to the regex module loader. Explicit internal fallback fixtures are not evidence that app opens may silently
 ignore a missing native asset.
 
+The [supported-driver boundary audit](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-a850/driver-boundary-audit.json) makes a required ownership assumption explicit. App handles and the training worker use the same packaged better-sqlite3 module; the parent resolves the worker's module path, rather than reading it from database metadata. The observed packaged inventories contain one better-sqlite3 addon each. This is supported-composition evidence, not a generic detector for every SQLite core embedded in arbitrary additional native modules.
+
+[SQLite's own locking guidance](https://sqlite.org/howtocorrupt.html#multiple_copies_of_sqlite_linked_into_the_same_application) warns that independent SQLite library copies accessing the same file in one process can defeat POSIX lock bookkeeping. Raw descriptor open/read/close of a live file can have the same problem. This candidate's existing-format probe uses the same NativeDatabase driver, and namespace inspection uses lstat. The persistent native-model owner lock governs model/maintenance service ownership; it does not enforce global SQLite binding uniqueness. Direct same-process access through another SQLite binary is unsupported. If plugin/duplicate-driver access is required later, add a real refusal/coordination design and fault tests before supporting it; using a separate process for independent SQL tooling preserves the normal SQLite locking boundary. No new runtime safety guarantee is claimed by this source audit.
+
 An upgrade checkpoint should pin the dependency/source changes, inspect the generated provenance
 and notices, run focused correctness/negative controls, then close the named final platform,
 installed/signing, app lifecycle, recovery and resource gates. Native libraries signed during
