@@ -228,8 +228,10 @@ The [current commit-outcome audit](../references/evidence/ears-sqlite-implementa
 independently verifies 23 named refusal/rollback/ambiguity tests on each OS and eight actual
 FULL WAL-sync/process-death cases across write, unit, bulk-load and schema paths. Both disabled-
 injector controls pass. In the four post-sync EIO-return cases, COMMIT_UNKNOWN fences the handle
-before death and fresh reopen observes the commit. Every recorded source hash matches current
-files. This closes the named source/evidence cross-check; it does not certify physical power
+before death and fresh reopen observes the commit. The recorded source hashes match the audit
+receipt's c9898f31 tip; later database.ts text-admission changes mean that whole-file claim is historical.
+Current-code operational/API run 41487611128 is queued to refresh actual fault evidence. This closes
+the dated source/evidence cross-check; it does not certify physical power
 loss or every storage-error regime. No new classification bug was identified.
 
 The adoption decision must account for this whole ownership surface. SQLite removes LMDB page,
