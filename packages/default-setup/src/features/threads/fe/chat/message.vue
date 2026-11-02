@@ -128,9 +128,8 @@
 
       <!-- Bubble (visual styling + overflow constraint) -->
       <div
-        ref="bubbleRef"
         :class="[
-          'rounded-xl px-4 py-3 transition-all duration-200 overflow-hidden relative',
+          'rounded-xl transition-all duration-200 overflow-hidden relative',
           isUser
             ? 'bg-neutral-800/80 text-neutral-100 border border-neutral-700/50'
             : ' text-neutral-100 border border-neutral-700/60',
@@ -140,7 +139,7 @@
         ]"
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
-        <div ref="bubbleContentRef">
+        <div ref="bubbleContentRef" class="px-4 py-3">
         <!-- Attachments: files then images, horizontal scroll -->
         <div v-if="message.references?.files?.length || message.references?.images?.length"
           class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin">
@@ -273,7 +272,6 @@ const canFork = computed(() => {
 })
 
 // Long user message truncation
-const bubbleRef = ref<HTMLElement | null>(null)
 const bubbleContentRef = ref<HTMLElement | null>(null)
 const userExpanded = ref(false)
 const isTruncated = ref(false)
@@ -281,12 +279,12 @@ const MAX_USER_MSG_HEIGHT = 200
 
 // Observe natural content rather than the bubble whose height truncation changes.
 // Measurement runs after layout, including rich-text transactions outside Vue's render cycle.
-watch([bubbleRef, bubbleContentRef, isUser], ([bubble, content, user], _prev, onCleanup) => {
-  if (!bubble || !content || !user) return
-  const observer = new ResizeObserver(() => {
-    isTruncated.value = bubble.scrollHeight > MAX_USER_MSG_HEIGHT
+watch([bubbleContentRef, isUser], ([content, user], _prev, onCleanup) => {
+  if (!content || !user) return
+  const observer = new ResizeObserver(([entry]) => {
+    isTruncated.value = Math.round(entry.borderBoxSize[0].blockSize) > MAX_USER_MSG_HEIGHT
   })
-  observer.observe(content)
+  observer.observe(content, { box: 'border-box' })
   onCleanup(() => observer.disconnect())
 }, { flush: 'post' })
 
