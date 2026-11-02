@@ -278,23 +278,22 @@ Original header/page/history fault phases still pass. No ordinary native artifac
 API changed. This serves the phase-6 selected active-worker resource-failure requirement; it is
 not OS/cgroup OOM, arbitrary/mid-kmeans failure, total-memory bounds or physical power-loss proof.
 
-Next finite checkpoint: an independent ordinary managed corpus repetition, mapped to phase 4/7
-model variance and original recall/query-latency budgets. Use `sqlite-corpus`, managed models,
-packaged generic native backend and production candidate policy, with the existing pinned paired
-corpus, 2 CPUs/6 GiB/no swap and unchanged validators. Compare all 1,800 queries and 18 groups
-with the original b989 receipt, recording corpus/artifact/model/machine identities, admission,
-query distributions, canonical recall, resource samples, reopen checks and cleanup. Preserve
-16 ms heartbeat misses with the approved degradation disposition. Closing checks require actual
-CI reports, original-byte hashes, validator outcomes and a source/policy-aware comparison;
-independent runner/model variation permits observed repeatability, not a causal speedup claim.
-This does not replace the unmet keyword judgment or broader remaining acceptance work.
+The independent ordinary managed corpus repetition is now complete in its recorded scope.
+The [original reports and reproducible comparison](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-94cf/README.md)
+verify all 1,800 queries/18 groups, minimum mean recall 0.95203125 against 0.95 and all original
+query-p95 limits. Eight heartbeat groups retain the accepted degradation. Sealed payload/native/
+Node/policy identities match b989; model hashes differ, and oracle report hashes also differ.
+This provides a second observed model/run result, not controlled causality or general variance
+certification. Load/admission, resource snapshots, three reopens per size, 29 safeguards and
+private cleanup are recorded. The frozen keyword judgment and broader acceptance remain open.
 
 Current validation handles and results:
 
 - [Independent ordinary managed corpus repetition 41413055256](https://github.com/spankyed/apack/actions/runs/41413055256)
-  is queued/in progress at `94cf2eeac6`. Packaged/managed/production inputs are explicit; no diagnostic override.
-  Its corpus outcome remains unqualified until actual reports are verified. The separate relevance job
-  succeeds: [verified original receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-94cf/README.md)
+  is terminal success at `94cf2eeac6`. Packaged/managed/production inputs are explicit; no diagnostic override.
+  [Verified corpus reports](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-94cf/README.md)
+  retain passing recall/query-p95, accepted heartbeat misses and independently trained model outcomes.
+  The separate relevance job succeeds: [verified original receipts](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-94cf/README.md)
   repeat hybrid 25/25 on each backend and keyword 24/25 in all four backend/stemming groups.
   Fixture/vector/model identities match b989; both validators reproduce original summaries byte-for-byte.
 
@@ -319,7 +318,7 @@ Current validation handles and results:
   probes pass actual packaged Electron/native/API execution and four preview contracts per OS.
   Source/native/provenance and original reports are retained. No local build, signing or compiler run.
 - [Corrected-source app flows and UI controls 41401869473](https://github.com/spankyed/apack/actions/runs/41401869473)
-  at `275b6fac3d` succeed, with the independently checked receipt above. The earlier validation handles, including the stronger allocation/WAL checkpoint, are terminal; the independent corpus repetition above is active. Strict still retains the unwaived keyword failure.
+  at `275b6fac3d` succeed, with the independently checked receipt above. All validation handles, including the stronger allocation/WAL checkpoint and independent corpus repetition, are terminal. Strict still retains the unwaived keyword failure.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   [Attempt 2](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) reruns only integration-1 on the same source and passes all 242 tests/31 files. All other job outcomes remain retained; root keyword failures still keep the overall workflow red.

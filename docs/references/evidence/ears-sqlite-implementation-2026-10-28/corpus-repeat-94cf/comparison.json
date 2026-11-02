@@ -1,0 +1,1952 @@
+{
+  "protocol": "ears-independent-corpus-repeat-comparison/1",
+  "qualification": false,
+  "sources": [
+    "b9896d520504ce37cfe38f1571474dd920ff527b",
+    "94cf2eeac6208c6022865b5d7e5bf513935a6080"
+  ],
+  "validatorSha256": "28ef1a673ccc17eaa47c2fb95a8139be897150fd6e937a44b1b034cea32bd274",
+  "scope": "Observed independent model/run repetition; source, runner, scheduling and model differences preclude causal speedup attribution",
+  "heartbeatDisposition": "Original 16 ms misses remain failures with accepted synchronous responsiveness degradation",
+  "corpusPayloadIdentityMatched": true,
+  "cohorts": [
+    {
+      "size": 1000,
+      "originalReportSha256": [
+        "81c8777fc6bf2cff7e8fcf886e4cc1943bd611415af77405b8be1e31c5344ae6",
+        "1e7ebc60acdbbd08462c5a3c6c742c227000b2fefb58aa06ae4142af8493c2d5"
+      ],
+      "baseline": {
+        "runId": "41382184193",
+        "cpuModels": [
+          "AMD EPYC 7763 64-Core Processor"
+        ],
+        "node": "v23.11.1",
+        "nodeSha256": "29427c49702b6da00e600c759e40575d72653e3fa962e6bd204a14619e98ea1c",
+        "sqlite": "3.53.4",
+        "nativeVectorRuntime": "version 0.8 (Scalar, multi-threaded)",
+        "nativeModel": null,
+        "oracleSha256": "d8840819c4ce155e7b9981612dbac77bb993fd7e29954ae686acb52028640e71",
+        "loadMs": 734.971783,
+        "resourceSnapshots": {
+          "afterAdmission": {
+            "memory": {
+              "rss": 195100672,
+              "heapTotal": 61997056,
+              "heapUsed": 32401824,
+              "external": 11444194,
+              "arrayBuffers": 8899381
+            },
+            "usage": {
+              "userCPUTime": 2053840,
+              "systemCPUTime": 445411,
+              "maxRSS": 190528,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 45983,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 69848,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 13312,
+              "involuntaryContextSwitches": 1002
+            },
+            "files": {
+              "mainBytes": 10768384,
+              "walBytes": 4779232,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 15580384
+            }
+          },
+          "afterQueriesAndReferences": {
+            "memory": {
+              "rss": 191840256,
+              "heapTotal": 71122944,
+              "heapUsed": 44751032,
+              "external": 11982885,
+              "arrayBuffers": 9438032
+            },
+            "usage": {
+              "userCPUTime": 8168477,
+              "systemCPUTime": 1308566,
+              "maxRSS": 201312,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 51533,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 75888,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 14144,
+              "involuntaryContextSwitches": 1074
+            },
+            "files": {
+              "mainBytes": 10768384,
+              "walBytes": 4779232,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 15580384
+            }
+          },
+          "afterDiagnostics": {
+            "memory": {
+              "rss": 191352832,
+              "heapTotal": 68939776,
+              "heapUsed": 24974384,
+              "external": 12714586,
+              "arrayBuffers": 10169733
+            },
+            "usage": {
+              "userCPUTime": 8300639,
+              "systemCPUTime": 1420005,
+              "maxRSS": 309800,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 83647,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 76352,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 14197,
+              "involuntaryContextSwitches": 1082
+            },
+            "files": {
+              "mainBytes": 10768384,
+              "walBytes": 4779232,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 15580384
+            }
+          }
+        }
+      },
+      "repeat": {
+        "runId": "41413055256",
+        "cpuModels": [
+          "AMD EPYC 7763 64-Core Processor"
+        ],
+        "node": "v23.11.1",
+        "nodeSha256": "29427c49702b6da00e600c759e40575d72653e3fa962e6bd204a14619e98ea1c",
+        "sqlite": "3.53.4",
+        "nativeVectorRuntime": "version 0.8 (Scalar, multi-threaded)",
+        "nativeModel": null,
+        "oracleSha256": "c536fb923f85f079e497c08ca4744c3e497216859cc5994fa9b42c03e63efca7",
+        "loadMs": 769.4836340000002,
+        "resourceSnapshots": {
+          "afterAdmission": {
+            "memory": {
+              "rss": 183001088,
+              "heapTotal": 62521344,
+              "heapUsed": 32647800,
+              "external": 11575290,
+              "arrayBuffers": 9030477
+            },
+            "usage": {
+              "userCPUTime": 2152049,
+              "systemCPUTime": 427780,
+              "maxRSS": 178712,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 43141,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 69848,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 12880,
+              "involuntaryContextSwitches": 302
+            },
+            "files": {
+              "mainBytes": 10768384,
+              "walBytes": 4779232,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 15580384
+            }
+          },
+          "afterQueriesAndReferences": {
+            "memory": {
+              "rss": 198389760,
+              "heapTotal": 70860800,
+              "heapUsed": 44741032,
+              "external": 12114235,
+              "arrayBuffers": 9569382
+            },
+            "usage": {
+              "userCPUTime": 8739832,
+              "systemCPUTime": 1426665,
+              "maxRSS": 205700,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 55940,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 75888,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 13665,
+              "involuntaryContextSwitches": 381
+            },
+            "files": {
+              "mainBytes": 10768384,
+              "walBytes": 4779232,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 15580384
+            }
+          },
+          "afterDiagnostics": {
+            "memory": {
+              "rss": 200654848,
+              "heapTotal": 68677632,
+              "heapUsed": 24976728,
+              "external": 12714586,
+              "arrayBuffers": 10169733
+            },
+            "usage": {
+              "userCPUTime": 8873298,
+              "systemCPUTime": 1542832,
+              "maxRSS": 318796,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 87203,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 76352,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 13733,
+              "involuntaryContextSwitches": 385
+            },
+            "files": {
+              "mainBytes": 10768384,
+              "walBytes": 4779232,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 15580384
+            }
+          }
+        }
+      },
+      "admissionMs": [
+        15.30545200000006,
+        16.220056999999997
+      ],
+      "reopenPasses": [
+        3,
+        3
+      ],
+      "groups": [
+        {
+          "cohort": "all-live",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 1000,
+            "cohort": "all-live",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 5.742973000000347,
+            "p95Ms": 6.649937000000136,
+            "p99Ms": 7.649064999999609,
+            "maxMs": 7.824411999999938,
+            "heartbeatP99Ms": 6.664393000000018,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 1000,
+            "cohort": "all-live",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 6.272108000000117,
+            "p95Ms": 6.962212000000363,
+            "p99Ms": 7.212226999999984,
+            "maxMs": 7.385709999999563,
+            "heartbeatP99Ms": 6.236253000000033,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 1.046959091492178,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "all-live",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 1000,
+            "cohort": "all-live",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 4.760366000000431,
+            "p95Ms": 5.362290999999914,
+            "p99Ms": 7.397013999999672,
+            "maxMs": 7.632483999999749,
+            "heartbeatP99Ms": 6.413814999999886,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 1000,
+            "cohort": "all-live",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 5.232285000000047,
+            "p95Ms": 6.097874000000047,
+            "p99Ms": 8.39968699999963,
+            "maxMs": 8.605258999999933,
+            "heartbeatP99Ms": 7.422820000000229,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 1.1371770013973777,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-1-percent",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 1000,
+            "cohort": "candidate-1-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 0.9032080000015412,
+            "p95Ms": 1.9107209999983752,
+            "p99Ms": 2.4027399999995396,
+            "maxMs": 2.5283739999995305,
+            "heartbeatP99Ms": 1.5362089999998716,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 1000,
+            "cohort": "candidate-1-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 0.9435560000001715,
+            "p95Ms": 1.956148999999641,
+            "p99Ms": 2.5993450000005396,
+            "maxMs": 2.630403999999544,
+            "heartbeatP99Ms": 1.638387999999395,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 1.0237753183229286,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-1-percent",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 1000,
+            "cohort": "candidate-1-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 0.7900869999994029,
+            "p95Ms": 1.2105630000005476,
+            "p99Ms": 1.6060010000001057,
+            "maxMs": 1.6968399999987014,
+            "heartbeatP99Ms": 0.7130010000000766,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 1000,
+            "cohort": "candidate-1-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 0.828722000000198,
+            "p95Ms": 1.1828800000002957,
+            "p99Ms": 1.5998259999996662,
+            "maxMs": 1.8826719999997295,
+            "heartbeatP99Ms": 0.8977610000001732,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 0.9771321277783648,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 1000,
+            "cohort": "candidate-10-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 2.560565000000679,
+            "p95Ms": 2.9226910000006683,
+            "p99Ms": 3.450068000000101,
+            "maxMs": 3.7450380000000223,
+            "heartbeatP99Ms": 2.464976000000206,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 1000,
+            "cohort": "candidate-10-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 2.6820800000004965,
+            "p95Ms": 3.452293000001191,
+            "p99Ms": 4.100839000000633,
+            "maxMs": 4.10109999999986,
+            "heartbeatP99Ms": 3.114704999999958,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 1.181203555216888,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 1000,
+            "cohort": "candidate-10-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 1.408491999999569,
+            "p95Ms": 1.8126069999998435,
+            "p99Ms": 2.0181219999994937,
+            "maxMs": 2.202444999999898,
+            "heartbeatP99Ms": 1.032598999999209,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 1000,
+            "cohort": "candidate-10-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 1.4808039999998073,
+            "p95Ms": 1.8981409999996686,
+            "p99Ms": 2.012272999999368,
+            "maxMs": 2.346585000000232,
+            "heartbeatP99Ms": 1.0281230000000505,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": null,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": null,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 1.0471883866717013,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "size": 10000,
+      "originalReportSha256": [
+        "9ee989c732e18fae72100fd51c5e2eaaeab38c558993a61d4f56340d3904dd51",
+        "88070aa9408214f91008a73220a37644862fcc838a31f7652ec517e48a585d21"
+      ],
+      "baseline": {
+        "runId": "41382184193",
+        "cpuModels": [
+          "AMD EPYC 7763 64-Core Processor"
+        ],
+        "node": "v23.11.1",
+        "nodeSha256": "29427c49702b6da00e600c759e40575d72653e3fa962e6bd204a14619e98ea1c",
+        "sqlite": "3.53.4",
+        "nativeVectorRuntime": "version 0.8 (Scalar, multi-threaded)",
+        "nativeModel": {
+          "state": "ready",
+          "samples": 10000,
+          "model_sha256": "4d87c17f2dac86bf58b17addf9e7ab0585e4abf79db7db06cd3aa78cec721a02",
+          "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+          "native_version": "version 0.8 (Scalar, multi-threaded)",
+          "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+        },
+        "oracleSha256": "d8840819c4ce155e7b9981612dbac77bb993fd7e29954ae686acb52028640e71",
+        "loadMs": 6544.033861,
+        "resourceSnapshots": {
+          "afterAdmission": {
+            "memory": {
+              "rss": 374665216,
+              "heapTotal": 35295232,
+              "heapUsed": 28864128,
+              "external": 69317015,
+              "arrayBuffers": 66777536
+            },
+            "usage": {
+              "userCPUTime": 17225505,
+              "systemCPUTime": 2228054,
+              "maxRSS": 436988,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 138664,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 1417864,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 35359,
+              "involuntaryContextSwitches": 536
+            },
+            "files": {
+              "mainBytes": 193011712,
+              "walBytes": 4783352,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 197827832
+            }
+          },
+          "afterQueriesAndReferences": {
+            "memory": {
+              "rss": 386297856,
+              "heapTotal": 75694080,
+              "heapUsed": 40013056,
+              "external": 65875828,
+              "arrayBuffers": 63336309
+            },
+            "usage": {
+              "userCPUTime": 46161337,
+              "systemCPUTime": 8073392,
+              "maxRSS": 436988,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 217277,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 1433904,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 37209,
+              "involuntaryContextSwitches": 800
+            },
+            "files": {
+              "mainBytes": 193011712,
+              "walBytes": 4783352,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 197827832
+            }
+          },
+          "afterDiagnostics": {
+            "memory": {
+              "rss": 384348160,
+              "heapTotal": 73658368,
+              "heapUsed": 33986336,
+              "external": 68011396,
+              "arrayBuffers": 65471877
+            },
+            "usage": {
+              "userCPUTime": 48386400,
+              "systemCPUTime": 8647739,
+              "maxRSS": 498516,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 247965,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 1434800,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 37351,
+              "involuntaryContextSwitches": 827
+            },
+            "files": {
+              "mainBytes": 193011712,
+              "walBytes": 4783352,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 197827832
+            }
+          }
+        }
+      },
+      "repeat": {
+        "runId": "41413055256",
+        "cpuModels": [
+          "AMD EPYC 7763 64-Core Processor"
+        ],
+        "node": "v23.11.1",
+        "nodeSha256": "29427c49702b6da00e600c759e40575d72653e3fa962e6bd204a14619e98ea1c",
+        "sqlite": "3.53.4",
+        "nativeVectorRuntime": "version 0.8 (Scalar, multi-threaded)",
+        "nativeModel": {
+          "state": "ready",
+          "samples": 10000,
+          "model_sha256": "ef64ea3b7456e975019768b724ac8240df76d6ff5dbb40ea2cc24e45d2706ea7",
+          "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+          "native_version": "version 0.8 (Scalar, multi-threaded)",
+          "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+        },
+        "oracleSha256": "c536fb923f85f079e497c08ca4744c3e497216859cc5994fa9b42c03e63efca7",
+        "loadMs": 7001.969475,
+        "resourceSnapshots": {
+          "afterAdmission": {
+            "memory": {
+              "rss": 281522176,
+              "heapTotal": 34885632,
+              "heapUsed": 28892856,
+              "external": 68210146,
+              "arrayBuffers": 65670667
+            },
+            "usage": {
+              "userCPUTime": 20244458,
+              "systemCPUTime": 2420807,
+              "maxRSS": 417028,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 142222,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 1428864,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 37976,
+              "involuntaryContextSwitches": 408
+            },
+            "files": {
+              "mainBytes": 193347584,
+              "walBytes": 4709192,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 198089544
+            }
+          },
+          "afterQueriesAndReferences": {
+            "memory": {
+              "rss": 323579904,
+              "heapTotal": 75554816,
+              "heapUsed": 40104456,
+              "external": 65942408,
+              "arrayBuffers": 63402889
+            },
+            "usage": {
+              "userCPUTime": 50775769,
+              "systemCPUTime": 8644157,
+              "maxRSS": 417028,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 230995,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 1447632,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 39961,
+              "involuntaryContextSwitches": 724
+            },
+            "files": {
+              "mainBytes": 193347584,
+              "walBytes": 4709192,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 198089544
+            }
+          },
+          "afterDiagnostics": {
+            "memory": {
+              "rss": 322211840,
+              "heapTotal": 72871936,
+              "heapUsed": 33992696,
+              "external": 68019588,
+              "arrayBuffers": 65480069
+            },
+            "usage": {
+              "userCPUTime": 53254075,
+              "systemCPUTime": 9320843,
+              "maxRSS": 437652,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 261964,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 1448640,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 40095,
+              "involuntaryContextSwitches": 757
+            },
+            "files": {
+              "mainBytes": 193347584,
+              "walBytes": 4709192,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 198089544
+            }
+          }
+        }
+      },
+      "admissionMs": [
+        10472.582286,
+        13060.422236
+      ],
+      "reopenPasses": [
+        3,
+        3
+      ],
+      "groups": [
+        {
+          "cohort": "all-live",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 10000,
+            "cohort": "all-live",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 16.398385000000417,
+            "p95Ms": 20.80377800000133,
+            "p99Ms": 22.721461999994062,
+            "maxMs": 30.48043200000393,
+            "heartbeatP99Ms": 21.75673800000368,
+            "meanFullRankingOverlapAt10": 0.9830000000000001,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.982,
+              "40": 0.9717499999999998,
+              "64": 0.96375
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "repeat": {
+            "size": 10000,
+            "cohort": "all-live",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 17.2274000000034,
+            "p95Ms": 21.109192999996594,
+            "p99Ms": 24.954807000001892,
+            "maxMs": 32.26341500000126,
+            "heartbeatP99Ms": 23.986296000002767,
+            "meanFullRankingOverlapAt10": 0.9860000000000003,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9860000000000003,
+              "40": 0.9727499999999999,
+              "64": 0.96625
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "p95Ratio": 1.0146807469294878,
+          "meanRecallDelta": {
+            "10": 0.004000000000000337,
+            "40": 0.001000000000000112,
+            "64": 0.0025000000000000577
+          }
+        },
+        {
+          "cohort": "all-live",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 10000,
+            "cohort": "all-live",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 14.244238999999652,
+            "p95Ms": 18.47219099999711,
+            "p99Ms": 21.115559999998368,
+            "maxMs": 23.91331899999932,
+            "heartbeatP99Ms": 20.161196000000928,
+            "meanFullRankingOverlapAt10": 0.9810000000000001,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9770000000000002,
+              "40": 0.9687499999999997,
+              "64": 0.9590625
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "repeat": {
+            "size": 10000,
+            "cohort": "all-live",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 15.311596999999892,
+            "p95Ms": 19.904853000000003,
+            "p99Ms": 23.916705999999976,
+            "maxMs": 26.133230999999796,
+            "heartbeatP99Ms": 22.949377000000823,
+            "meanFullRankingOverlapAt10": 0.982,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.977,
+              "40": 0.9715,
+              "64": 0.963125
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "p95Ratio": 1.0775577731955628,
+          "meanRecallDelta": {
+            "10": -2.220446049250313e-16,
+            "40": 0.0027500000000003633,
+            "64": 0.004062499999999969
+          }
+        },
+        {
+          "cohort": "candidate-1-percent",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 10000,
+            "cohort": "candidate-1-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 3.30721099999937,
+            "p95Ms": 5.55136499999935,
+            "p99Ms": 6.347712999995565,
+            "maxMs": 8.43876000000455,
+            "heartbeatP99Ms": 5.413705999999365,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 10000,
+            "cohort": "candidate-1-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 3.470776999994996,
+            "p95Ms": 5.9748060000056284,
+            "p99Ms": 6.653148000004876,
+            "maxMs": 9.138501999994332,
+            "heartbeatP99Ms": 5.747543999998015,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 1.0762769156786354,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-1-percent",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 10000,
+            "cohort": "candidate-1-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 1.6368690000017523,
+            "p95Ms": 2.6907589999973425,
+            "p99Ms": 3.4472120000064024,
+            "maxMs": 3.7280269999973825,
+            "heartbeatP99Ms": 2.460977999995521,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 10000,
+            "cohort": "candidate-1-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 1.7337359999946784,
+            "p95Ms": 3.0202290000015637,
+            "p99Ms": 3.6194739999991725,
+            "maxMs": 4.153015999996569,
+            "heartbeatP99Ms": 2.6337299999941024,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 1.122445005295735,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 10000,
+            "cohort": "candidate-10-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 10.630435999999463,
+            "p95Ms": 12.937257000005047,
+            "p99Ms": 14.994211000004725,
+            "maxMs": 16.875686999999743,
+            "heartbeatP99Ms": 14.022013000001607,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 10000,
+            "cohort": "candidate-10-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 11.175050999998348,
+            "p95Ms": 13.880655000000843,
+            "p99Ms": 14.866319000000658,
+            "maxMs": 17.898911000003864,
+            "heartbeatP99Ms": 13.889902999995684,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 1.0729210218205782,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 10000,
+            "cohort": "candidate-10-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 8.510825000004843,
+            "p95Ms": 10.606841000000713,
+            "p99Ms": 11.187768000003416,
+            "maxMs": 11.36868599999434,
+            "heartbeatP99Ms": 10.21508900000481,
+            "meanFullRankingOverlapAt10": 0.9990000000000001,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "repeat": {
+            "size": 10000,
+            "cohort": "candidate-10-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 8.525270000005548,
+            "p95Ms": 10.380943000003754,
+            "p99Ms": 11.179079000001366,
+            "maxMs": 11.314960999996401,
+            "heartbeatP99Ms": 10.202390999998897,
+            "meanFullRankingOverlapAt10": 0.9990000000000001,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 100,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": true
+          },
+          "p95Ratio": 0.9787026127763258,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "size": 99900,
+      "originalReportSha256": [
+        "975170491cd0975523023917fc2fad0a11031caa74001b3185edf179a34affce",
+        "1dcd42d5a81e9031014bb06b0fd2b38501bd8cecc478c0f31d12416a437c42bb"
+      ],
+      "baseline": {
+        "runId": "41382184193",
+        "cpuModels": [
+          "AMD EPYC 7763 64-Core Processor"
+        ],
+        "node": "v23.11.1",
+        "nodeSha256": "29427c49702b6da00e600c759e40575d72653e3fa962e6bd204a14619e98ea1c",
+        "sqlite": "3.53.4",
+        "nativeVectorRuntime": "version 0.8 (Scalar, multi-threaded)",
+        "nativeModel": {
+          "state": "ready",
+          "samples": 20000,
+          "model_sha256": "1e5b60174f954f267be95e612d378fbadec836e8176dac57f949cc752844105e",
+          "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+          "native_version": "version 0.8 (Scalar, multi-threaded)",
+          "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+        },
+        "oracleSha256": "d8840819c4ce155e7b9981612dbac77bb993fd7e29954ae686acb52028640e71",
+        "loadMs": 68964.624418,
+        "resourceSnapshots": {
+          "afterAdmission": {
+            "memory": {
+              "rss": 937926656,
+              "heapTotal": 131522560,
+              "heapUsed": 128413224,
+              "external": 618733414,
+              "arrayBuffers": 615800695
+            },
+            "usage": {
+              "userCPUTime": 93848740,
+              "systemCPUTime": 17587068,
+              "maxRSS": 1417352,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 387205,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 15000392,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 227412,
+              "involuntaryContextSwitches": 1070
+            },
+            "files": {
+              "mainBytes": 1930940416,
+              "walBytes": 8260632,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 1939233816
+            }
+          },
+          "afterQueriesAndReferences": {
+            "memory": {
+              "rss": 1478221824,
+              "heapTotal": 623493120,
+              "heapUsed": 590057440,
+              "external": 618623181,
+              "arrayBuffers": 616083662
+            },
+            "usage": {
+              "userCPUTime": 298970869,
+              "systemCPUTime": 82812393,
+              "maxRSS": 1557904,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 2193005,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 15034088,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 243401,
+              "involuntaryContextSwitches": 5098
+            },
+            "files": {
+              "mainBytes": 1930940416,
+              "walBytes": 8260632,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 1939233816
+            }
+          },
+          "afterDiagnostics": {
+            "memory": {
+              "rss": 1559015424,
+              "heapTotal": 472694784,
+              "heapUsed": 133119408,
+              "external": 745064838,
+              "arrayBuffers": 617835910
+            },
+            "usage": {
+              "userCPUTime": 311737430,
+              "systemCPUTime": 85065214,
+              "maxRSS": 1571764,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 2225885,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 15035720,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 243674,
+              "involuntaryContextSwitches": 5202
+            },
+            "files": {
+              "mainBytes": 1930940416,
+              "walBytes": 8260632,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 1939233816
+            }
+          }
+        }
+      },
+      "repeat": {
+        "runId": "41413055256",
+        "cpuModels": [
+          "AMD EPYC 7763 64-Core Processor"
+        ],
+        "node": "v23.11.1",
+        "nodeSha256": "29427c49702b6da00e600c759e40575d72653e3fa962e6bd204a14619e98ea1c",
+        "sqlite": "3.53.4",
+        "nativeVectorRuntime": "version 0.8 (Scalar, multi-threaded)",
+        "nativeModel": {
+          "state": "ready",
+          "samples": 20000,
+          "model_sha256": "13a207b424e629a6996816f969bbe66b4ae8e28784d5e3642c5418021bfa5386",
+          "extension_sha256": "93e2fe6c3752a4ca75e2d733f137bc683ffa8f806ac53fdde2b85cb9f09c3138",
+          "native_version": "version 0.8 (Scalar, multi-threaded)",
+          "worker_sha256": "3ed2b89dc00663869eb8c959a2ba98f453141d992de8742c17f049ef4908b8c0"
+        },
+        "oracleSha256": "c536fb923f85f079e497c08ca4744c3e497216859cc5994fa9b42c03e63efca7",
+        "loadMs": 75112.130231,
+        "resourceSnapshots": {
+          "afterAdmission": {
+            "memory": {
+              "rss": 938037248,
+              "heapTotal": 132124672,
+              "heapUsed": 128762072,
+              "external": 618768602,
+              "arrayBuffers": 615835883
+            },
+            "usage": {
+              "userCPUTime": 101043255,
+              "systemCPUTime": 19345000,
+              "maxRSS": 1467128,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 406068,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 15110144,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 233043,
+              "involuntaryContextSwitches": 1089
+            },
+            "files": {
+              "mainBytes": 1931042816,
+              "walBytes": 8260632,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 1939336216
+            }
+          },
+          "afterQueriesAndReferences": {
+            "memory": {
+              "rss": 1404243968,
+              "heapTotal": 215261184,
+              "heapUsed": 155462896,
+              "external": 618885784,
+              "arrayBuffers": 616346265
+            },
+            "usage": {
+              "userCPUTime": 331039770,
+              "systemCPUTime": 90429163,
+              "maxRSS": 1523220,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 2561931,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 15145488,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 251204,
+              "involuntaryContextSwitches": 5835
+            },
+            "files": {
+              "mainBytes": 1931042816,
+              "walBytes": 8260632,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 1939336216
+            }
+          },
+          "afterDiagnostics": {
+            "memory": {
+              "rss": 1407545344,
+              "heapTotal": 187834368,
+              "heapUsed": 133169472,
+              "external": 620356996,
+              "arrayBuffers": 617817477
+            },
+            "usage": {
+              "userCPUTime": 345551078,
+              "systemCPUTime": 92721828,
+              "maxRSS": 1523220,
+              "sharedMemorySize": 0,
+              "unsharedDataSize": 0,
+              "unsharedStackSize": 0,
+              "minorPageFault": 2594035,
+              "majorPageFault": 0,
+              "swappedOut": 0,
+              "fsRead": 0,
+              "fsWrite": 15147184,
+              "ipcSent": 0,
+              "ipcReceived": 0,
+              "signalsCount": 0,
+              "voluntaryContextSwitches": 251527,
+              "involuntaryContextSwitches": 5950
+            },
+            "files": {
+              "mainBytes": 1931042816,
+              "walBytes": 8260632,
+              "shmBytes": 32768,
+              "otherBytes": 0,
+              "totalBytes": 1939336216
+            }
+          }
+        }
+      },
+      "admissionMs": [
+        42518.4225,
+        46557.81841199999
+      ],
+      "reopenPasses": [
+        3,
+        3
+      ],
+      "groups": [
+        {
+          "cohort": "all-live",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 99900,
+            "cohort": "all-live",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 33.102570999995805,
+            "p95Ms": 69.27424300002167,
+            "p99Ms": 90.68317599996226,
+            "maxMs": 215.08176799997455,
+            "heartbeatP99Ms": 89.73201600002358,
+            "meanFullRankingOverlapAt10": 0.9890000000000002,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9840000000000003,
+              "40": 0.9847499999999999,
+              "64": 0.98484375
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "repeat": {
+            "size": 99900,
+            "cohort": "all-live",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 34.66107199998805,
+            "p95Ms": 72.8001580000273,
+            "p99Ms": 102.69609500002116,
+            "maxMs": 241.54540100001032,
+            "heartbeatP99Ms": 101.74659900000552,
+            "meanFullRankingOverlapAt10": 0.9930000000000001,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9870000000000002,
+              "40": 0.9817500000000001,
+              "64": 0.98109375
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "p95Ratio": 1.0508979217572183,
+          "meanRecallDelta": {
+            "10": 0.0029999999999998916,
+            "40": -0.0029999999999997806,
+            "64": -0.003750000000000031
+          }
+        },
+        {
+          "cohort": "all-live",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 99900,
+            "cohort": "all-live",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 30.663570000004256,
+            "p95Ms": 57.02473999999347,
+            "p99Ms": 82.47867900002166,
+            "maxMs": 89.37338100001216,
+            "heartbeatP99Ms": 81.555331999989,
+            "meanFullRankingOverlapAt10": 0.9720000000000002,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9840000000000002,
+              "40": 0.9787499999999999,
+              "64": 0.983125
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "repeat": {
+            "size": 99900,
+            "cohort": "all-live",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 31.042542999988655,
+            "p95Ms": 61.2936430000118,
+            "p99Ms": 85.65437199998996,
+            "maxMs": 95.73576199999661,
+            "heartbeatP99Ms": 84.72388199999114,
+            "meanFullRankingOverlapAt10": 0.9710000000000002,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9770000000000002,
+              "40": 0.9752500000000002,
+              "64": 0.9775
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "p95Ratio": 1.0748605429857079,
+          "meanRecallDelta": {
+            "10": -0.007000000000000006,
+            "40": -0.0034999999999997256,
+            "64": -0.005624999999999991
+          }
+        },
+        {
+          "cohort": "candidate-1-percent",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 99900,
+            "cohort": "candidate-1-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 11.921822000003885,
+            "p95Ms": 15.73511900001904,
+            "p99Ms": 21.46227399999043,
+            "maxMs": 43.08871400001226,
+            "heartbeatP99Ms": 20.48022700002184,
+            "meanFullRankingOverlapAt10": 0.9990000000000001,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "repeat": {
+            "size": 99900,
+            "cohort": "candidate-1-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 13.095460000040475,
+            "p95Ms": 18.05757500004256,
+            "p99Ms": 24.305623000022024,
+            "maxMs": 49.1429150000331,
+            "heartbeatP99Ms": 23.327814000018407,
+            "meanFullRankingOverlapAt10": 0.9990000000000001,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "p95Ratio": 1.1475969771833763,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-1-percent",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 99900,
+            "cohort": "candidate-1-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 11.306200999999419,
+            "p95Ms": 18.308678999950644,
+            "p99Ms": 22.20557300001383,
+            "maxMs": 23.158502999984194,
+            "heartbeatP99Ms": 21.236269000044558,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "repeat": {
+            "size": 99900,
+            "cohort": "candidate-1-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 13.203152999980375,
+            "p95Ms": 20.960928999993484,
+            "p99Ms": 22.71462399995653,
+            "maxMs": 23.625929000030737,
+            "heartbeatP99Ms": 21.747314999985974,
+            "meanFullRankingOverlapAt10": 1.0,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 1.0,
+              "40": 1.0,
+              "64": 1.0
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "p95Ratio": 1.1448629909372485,
+          "meanRecallDelta": {
+            "10": 0.0,
+            "40": 0.0,
+            "64": 0.0
+          }
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "family": "corpus-lexical-control",
+          "baseline": {
+            "size": 99900,
+            "cohort": "candidate-10-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 67.30412300000899,
+            "p95Ms": 93.80440200003795,
+            "p99Ms": 108.6051650000154,
+            "maxMs": 119.26697200001217,
+            "heartbeatP99Ms": 107.63660399999935,
+            "meanFullRankingOverlapAt10": 0.9800000000000004,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9760000000000004,
+              "40": 0.9614999999999999,
+              "64": 0.95671875
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "repeat": {
+            "size": 99900,
+            "cohort": "candidate-10-percent",
+            "family": "corpus-lexical-control",
+            "samples": 100,
+            "p50Ms": 80.4346310000401,
+            "p95Ms": 107.87719800003106,
+            "p99Ms": 135.85345400002552,
+            "maxMs": 138.6698210000177,
+            "heartbeatP99Ms": 134.90157400001772,
+            "meanFullRankingOverlapAt10": 0.9860000000000002,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9810000000000002,
+              "40": 0.9670000000000001,
+              "64": 0.9603125
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "p95Ratio": 1.1500227675881076,
+          "meanRecallDelta": {
+            "10": 0.004999999999999782,
+            "40": 0.005500000000000171,
+            "64": 0.003593750000000062
+          }
+        },
+        {
+          "cohort": "candidate-10-percent",
+          "family": "held-out-title",
+          "baseline": {
+            "size": 99900,
+            "cohort": "candidate-10-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 65.96140500000911,
+            "p95Ms": 91.77045700000599,
+            "p99Ms": 99.60905300005106,
+            "maxMs": 111.44392300001346,
+            "heartbeatP99Ms": 98.64372799999546,
+            "meanFullRankingOverlapAt10": 0.9840000000000001,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9780000000000002,
+              "40": 0.9684999999999997,
+              "64": 0.9590625
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "repeat": {
+            "size": 99900,
+            "cohort": "candidate-10-percent",
+            "family": "held-out-title",
+            "samples": 100,
+            "p50Ms": 80.05726199998753,
+            "p95Ms": 105.59106899995822,
+            "p99Ms": 114.53599499998381,
+            "maxMs": 130.06501100002788,
+            "heartbeatP99Ms": 113.5764199999976,
+            "meanFullRankingOverlapAt10": 0.983,
+            "modelMode": "managed",
+            "nativeCandidateFloor": null,
+            "matchedMeanVectorRecall": null,
+            "matchedVectorP95Ms": null,
+            "vectorRecallReference": "independent-float64-canonical-f32",
+            "meanVectorRecall": {
+              "10": 0.9790000000000001,
+              "40": 0.9627499999999997,
+              "64": 0.95203125
+            },
+            "vectorRecallTarget": 0.95,
+            "latencyDiagnosticLimitMs": 200,
+            "heartbeatDiagnosticLimitMs": 16,
+            "latencyWithinDiagnosticLimit": true,
+            "heartbeatWithinDiagnosticLimit": false
+          },
+          "p95Ratio": 1.1505997948768123,
+          "meanRecallDelta": {
+            "10": 0.0009999999999998899,
+            "40": -0.005750000000000033,
+            "64": -0.007031250000000044
+          }
+        }
+      ]
+    }
+  ],
+  "runtimeSourceDifferences": [
+    "packages/apack-ears/src/sqlite/query.ts"
+  ],
+  "queryExecutionsVerified": 3600,
+  "completed": true
+}
