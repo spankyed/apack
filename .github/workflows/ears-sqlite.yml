@@ -72,6 +72,9 @@ jobs:
           2>&1 | tee .temp/sqlite-platform/sdk-backend.log
       - name: Build shipped pack for SQLite repository contracts
         run: npm run build:default-setup
+      - name: Explicit query dependencies and real thread-view invalidation
+        if: runner.os == 'Linux'
+        run: node --import tsx .github/scripts/ears-query-watch-scope-control.mjs
       - name: Complete SDK contracts on SQLite with built content runtime
         if: runner.os == 'Linux'
         env:

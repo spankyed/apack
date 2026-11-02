@@ -37,7 +37,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
     plan.start.from === "types" ? plan.start.types : Object.keys(schema.types);
   for (const type of types) {
     db.definition(type);
-    db.trackRange(`members:${type}`);
+    if (plan.start.from !== 'ids') db.trackRange(`members:${type}`);
   }
   let multipleGroups = plan.start.from === 'types' && plan.start.types.length > 1;
   if (plan.start.from === "ids") {
@@ -71,9 +71,12 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
     sql = `SELECT value id,0 major,key ord FROM json_each(?)`;
     parameters = [JSON.stringify(ids)];
   };
+  // Filters and ordering cannot introduce an ID outside this start; expanding traversals retire the bound.
+  let boundedIds: readonly string[] | undefined = plan.start.from === 'ids' ? plan.start.ids : undefined;
   const trackField = (field: string) => {
-    for (const t of types) db.trackRange(`fieldType:${t}:${field}`);
-    db.trackRange(`fieldAny:${field}`);
+    if (boundedIds) for (const id of boundedIds) db.trackKey(`field:${id}:${field}`);
+    else if (specificTypes) for (const type of types) db.trackRange(`fieldType:${type}:${field}`);
+    else db.trackRange(`fieldAny:${field}`);
   };
   const filter = (condition: string, args: any[] = []) => {
     sql = `SELECT p.* FROM (${sql}) p JOIN entities e ON e.id=p.id WHERE ${condition}`;
@@ -169,7 +172,6 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
       case "linkedFrom":
       case "unlinkedTo":
       case "unlinkedFrom": {
-        db.trackRange('membersAny');
         const outward = step.step.endsWith("To"),
           negative = step.step.startsWith("unlinked");
         const kind = step.step === "linkedWith" ? undefined : step.kind;
@@ -197,7 +199,10 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
           }
         }
         const needsFar = step.step !== "linkedWith" && other === undefined;
-        if (needsFar) conditions.push(`${reachable("far")}`, `far.id!=e.id`);
+        if (needsFar) {
+          db.trackRange('membersAny');
+          conditions.push(`${reachable("far")}`, `far.id!=e.id`);
+        }
         const far =
           step.step === "linkedWith"
             ? "CASE WHEN r.source=e.id THEN r.target ELSE r.source END"
@@ -226,8 +231,10 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         }
         for (const t of step.types ?? []) db.definition(t);
         specificTypes = step.types !== undefined;
-        // An intermediate type can change reachability even when the final output is type-restricted.
-        db.trackRange('membersAny');
+        boundedIds = undefined;
+        // One hop reads only admitted target types; deep paths may cross other intermediate types.
+        if (!deep && step.types) for (const type of step.types) db.trackRange(`members:${type}`);
+        else db.trackRange('membersAny');
         if (!deep) {
           // Keep the whole adjacency selection in SQL. Deduplicate by first encounter, preserving source order
           // and relation insertion order, rather than doing one binding call for each source entity.
@@ -276,6 +283,7 @@ function executeScopedQuery(db: SqliteDatabase, plan: QueryPlan, countVisits: bo
         break;
       }
       case 'pathTo': {
+        boundedIds = undefined;
         for (const kind of step.kinds) { db.relationDefinition(kind); db.trackRange(`kind:${kind}`); }
         db.trackRange('membersAny'); db.trackKey(`exists:${step.to}`);
         const seeds = idsNow(), seen = new Set(seeds), parents = new Map<string, string>();

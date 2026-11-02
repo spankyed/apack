@@ -1,0 +1,23 @@
+{
+  "run": 41385303835,
+  "source": "c5d6f3ea66e61840a8d69a22e2174fc790c3be75",
+  "stage": "independent remaining checks: test:unit:pack",
+  "testSummary": {
+    "passed": 988,
+    "failed": 1,
+    "excluded": 2
+  },
+  "fileStates": {
+    "passed": 147,
+    "skipped": 1,
+    "failed": 1
+  },
+  "failedCase": "the threads views give a new message to the open thread's page, and end a deleted thread's page, tab and detail with null",
+  "assertion": {
+    "metric": "sum of watch skipped counts after an unrelated thread and an expected artifact update",
+    "expected": 0,
+    "actual": 3
+  },
+  "originalStepLogSha256": "d7cf869afcbf1fe99dce1908bea4728fe8b3d5e46f21237c70b33b404dac38ce",
+  "laterSelectedStages": "not executed after this pack-unit failure"
+}

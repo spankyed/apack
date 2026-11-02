@@ -239,6 +239,18 @@ if (mode === 'verify') {
     sqliteProfileCasesPassed: reset.filter(test => test.status === 'passed').length,
     managedPublicationCasesPassed: publication.filter(test => test.status === 'passed').length,
     hostPassed: host.numPassedTests, privateFileCasesPassed: privateFiles.length, recoveryCasesPassed: passedIn(host, /\/backup\/recovery\.spec\.ts$/) };
+  if (platform() === 'linux') {
+    const queryScope = report('watch-scope/verification.json');
+    assert.equal(queryScope.source, source);
+    assert.equal(queryScope.completed, true);
+    assert.equal(queryScope.originalSha256, queryScope.restoredSha256);
+    for (const backend of ['elmdb', 'sqlite']) {
+      assert.equal(queryScope.core[backend].required.length, 5);
+      assert(queryScope.core[backend].passed >= 5 && queryScope.threads[backend].passed >= 1);
+    }
+    assert.equal(queryScope.negative.failed.length, 4);
+    result.queryScopeControl = queryScope;
+  }
   save('verification.json', result);
   assert.equal(result.sdkBackendCasesPassed,2,'Both SDK fixture stores must use SQLite');
   assert.equal(sdkBackend.numFailedTests,0);

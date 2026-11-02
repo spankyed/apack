@@ -198,6 +198,16 @@ approved disposition, not passes. No async search API is being implemented. Keyw
 remains 24/25 on both backends; English hybrid is 25/25. The separate keyword disposition question is
 pending; no waiver or answer is assumed. Other requirements below remain intact.
 
+**Current blocking finding:** the newly exercised pack-unit stage reveals a real watch invalidation
+regression at c5d6f3ea66: 988 passes, one failure and two exclusions. Creating an unrelated thread
+queues three open-thread views that should remain untouched. [Original failure evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/pack-scope-c5d-failure/README.md)
+is preserved. The corrective query patch limits membership/field dependencies to explicit IDs or
+admitted types, removes unread far-membership dependencies for fixed relation endpoints, and retains
+untyped/deep intermediate reachability tracking. Five shared guards and the real thread-view case
+require disposable qualification; syntax checks alone do not close this defect. The Linux platform
+control tests both backends, reverts only the CI query source to the pinned old implementation to
+require four precise failures, then restores it byte-for-byte before subsequent checks.
+
 Latest demonstrated results:
 
 - [Ordinary managed corpus at b9896d5205](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b989/README.md):
@@ -238,7 +248,10 @@ Latest demonstrated results:
 
 Live check: integrated strict/platform run
 [41385303835](https://github.com/spankyed/apack/actions/runs/41385303835) at `c5d6f3ea66` is running.
-Its producer passes; all five consumers are active on verified producer outputs. All three platform
+Its producer passes. Integration-2 passes 580 cases with one exclusion; native-2 passes 47 with
+26 exclusions. Integration-1/native-1 remain active. App/rest fails at the retained keyword gate,
+its independent SQLite witness passes, then the new remaining stage fails at the thread-view
+pack-unit guard described above; later selected authoring/app stages remain unexecuted. All three platform
 jobs are terminal with only the frozen keyword failure. Linux/macOS EARS 930, host 313 and host
 process-death recovery 12 pass; Windows EARS 926, host 310 and applicable recovery two pass with
 four/six/ten original exclusions. All eight native-readiness cases, 735 membership comparisons,
@@ -250,6 +263,11 @@ run `41382184193` is also terminal success, with diagnostic responsiveness misse
 cancel/restart for an observation timeout. Preserve minimized final strict receipts, then reconcile
 every remaining requirement and finish the completion report. No new heavyweight run is needed
 without a changed input, failed check or unresolved concern.
+
+A separate actual-SQLite external-pack app run, `41388294349` at `bb35e86c7f`, is active. Strict
+app checks retain production-default composition, so that explicit selected-profile run qualifies
+the candidate pack flow separately; its source precedes the dependency patch. Do not displace an
+occupied pending app-workflow slot.
 
 The strict audit identified a concrete gap: the retained keyword failure stops app/rest before
 pack-unit, packaged-authoring, external-pack app and smoke stages complete. The current workflow

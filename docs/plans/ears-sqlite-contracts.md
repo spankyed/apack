@@ -14,6 +14,12 @@ implementation of the complete app-facing API; the evidence does not establish a
 The candidate remains isolated in draft PR #286. This recommendation does not close unresolved gates
 or authorize closing the PR, merging, migrating profiles or removing either implementation.
 
+**New failed contract:** [The independent pack-unit stage](../references/evidence/ears-sqlite-implementation-2026-10-28/pack-scope-c5d-failure/README.md)
+finds three unnecessary thread-view reruns after an unrelated thread is created (988 other pack tests
+pass). The query dependency correction and five shared guards are authored but unqualified. The
+responsiveness exception does not waive this existing watch/observability contract. Current full
+acceptance is contradicted until the actual thread-view case and positive/negative controls pass.
+
 | Area | Demonstrated result and disposition |
 | --- | --- |
 | Functional app lifecycle | [Latest complete source-app replay](../references/evidence/ears-sqlite-implementation-2026-10-28/full-app-26c/README.md): 33 eligible passes, one packaged-only exclusion, zero failures/flakes, no retries. Ten main-window discovery cases and testing-workspace typecheck pass; the unit artifact is retained outside Playwright cleanup. Previous navigation and cleanup failures remain in the evidence history. |
