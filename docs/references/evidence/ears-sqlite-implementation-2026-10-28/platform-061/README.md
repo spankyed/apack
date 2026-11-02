@@ -13,3 +13,9 @@ All eight actual native-readiness cases, 735 membership comparisons and nine nat
 Fifteen original EARS/host/recovery/CLI/numeric verification reports are compressed unchanged with decompressed SHA-256. Verifier reports are written before the unchanged keyword refusal and are not complete acceptance passes. Each actual job log confirms that exact final relevance assertion; its hash is retained without publishing the raw log. The remaining selected-text/recovery predicate after that assertion is independently checked against the original report. Negative controls remain their intended counterfactual failures. Raw logs, configuration, profiles, source corpus payload and traces are omitted.
 
 Integrated strict run 41391989615 is terminal: full pack/remaining stages now pass, while keyword and the integration-1 timeout remain failures; its separate strict-061-consumers receipt owns those results. Explicit SQLite packaged-authoring run 41392105607 succeeds on this source, with its separate packaged-061 receipt. This platform receipt does not substitute for those scopes. It also does not replace separately recorded full source-app, packaged native or private signed-macOS results. Production remains on elmdb.
+
+The [snapshot/worker audit](snapshot-worker-audit.json) independently extracts one passing
+independent-writer hybrid snapshot case and all nine passing worker ownership cases on each OS
+(30 executions, no failures or exclusions). Git comparison confirms the entire candidate source
+and SQLite tests remain unchanged at the recorded audit tip. This closes stale pending notes
+for those named checks; it does not qualify the separate allocation probe or broader performance.

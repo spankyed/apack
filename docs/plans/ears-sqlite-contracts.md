@@ -316,9 +316,11 @@ new value becomes visible after the read. It adds no production fault hook.
 The new actual-driver witness compares original component ranks/canonical highlights,
 checks mixed-type limited scopes and vector-only/absent results, and observes that every
 returned highlighted row belongs to a final lexical winner. The [8ee Linux type/API/actual-driver check](../references/evidence/ears-sqlite-implementation-2026-10-28/hybrid-highlights-8ee/README.md)
-passes the original formatting/score/metadata witness; the additional independent-writer
-witness and fresh corpus/final integration checks remain required. The recorded paired
-corpus/strict checkpoints predate this runtime and establish no performance improvement.
+passes the original formatting/score/metadata witness. The independent-writer snapshot test
+also passes on all three platforms in the [current-source audit](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-061/snapshot-worker-audit.json);
+all candidate runtime and SQLite test sources remain unchanged since that qualification.
+The current corpus and strict results are recorded above; these correctness checks establish
+no isolated formatting-performance improvement.
 
 ### Native CPU backend investigation
 
@@ -358,7 +360,8 @@ build change independently rather than promoting SIMD from compiler flags or one
 writes commit, observes WAL/truncation refusal, then checks release after worker exit,
 under both OFF/FULL modes and both artifacts. It extends actual worker malformed-input,
 cancellation and ownership tests; no production fault hook is added. Both artifacts pass all nine named training cases with no skips on Linux. The later
-test-only SQL-interface correction still needs corrected-source qualification. This does not
+test-only SQL-interface correction is qualified by all nine worker ownership cases on each
+of the three current platforms in the [source-verified audit](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-061/snapshot-worker-audit.json). This does not
 replace sustained-load, busy-writer, storage-I/O or power-loss evidence.
 
 Before any promotion, qualify actual unsupported-CPU fallback execution, all native-worker
