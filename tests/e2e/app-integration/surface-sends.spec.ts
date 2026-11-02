@@ -106,6 +106,9 @@ test("the code system's file watcher and terminal output reach the code surface"
       .map((event) => (event.data as { data: string }).data).join(''), { timeout: 15_000 }).toContain('e2e-marker-42');
   } finally {
     await sendToSystem(appPage, 'code', { type: 'terminal.CLOSE_TERMINAL', terminalId });
+    // The close request precedes PTY exit; keep its working directory until the exit is observed.
+    await expect.poll(async () => (await received(appPage, 'code', 'terminal.CLOSED'))
+      .some((event) => (event.data as { terminalId: string }).terminalId === terminalId), { timeout: 15_000 }).toBe(true);
   }
 });
 
