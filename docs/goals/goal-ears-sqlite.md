@@ -256,6 +256,14 @@ Latest demonstrated results:
 
 Current validation handles and results:
 
+- Final-runtime packaged qualification at `d795901191` (program identical to cd8; documentation-only descendants):
+  [signed macOS 41399250308](https://github.com/spankyed/apack/actions/runs/41399250308) is active;
+  [Windows/Linux installed probes 41399303818](https://github.com/spankyed/apack/actions/runs/41399303818)
+  are pending behind it in the same app-workflow concurrency group. macOS reached checkout before adding
+  the one pending run; no existing run was displaced. These requalify installed execution after the
+  query dependency correction, rather than repeating heavy checks for documentation changes alone.
+  Require actual signed native loading/six lifecycle cases and both real packaged Electron probe results;
+  preserve source/native/provenance, failures and exclusions. No signing or full build runs locally.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   Attempt 2 reruns only integration-1 on the same source; it is active. All other job outcomes remain retained.

@@ -31,6 +31,11 @@ does not waive an existing watch/observability contract.
 | Recovery and disk | [Actual transient EIO](../references/evidence/ears-sqlite-implementation-2026-10-28/history-ae9/README.md) now refuses ambiguous CORRUPT without quarantining intact history. Worker fault/retry and process-death fixtures preserve their stated invariants. [Controlled retained-reader checkpoint](../references/evidence/ears-sqlite-implementation-2026-10-28/wal-c471/README.md) shows 765 MB logical main/WAL/shared-memory overlap, not an instantaneous peak bound. No physical power-loss or arbitrary-filesystem certification is claimed. |
 | Maintenance burden | SQLite supplies transactions, page recovery and FTS execution, but this candidate still owns schema/value semantics, invalidation, live admission, native-vector lifecycle, backup coordination and a patched extension. The implementation and below invariant/dependency review do not demonstrate lower total maintenance cost than elmdb. |
 
+The latest query dependency correction postdates the earlier installed receipts. Final-runtime signed
+macOS run 41399250308 and Windows/Linux probe run 41399303818 now qualify that changed input on
+`d795901191`; they are active/pending, not passing evidence yet. Earlier signed/packaged outcomes retain
+their original source and are not silently promoted to this runtime.
+
 The completion audit must still reconcile exact final source, remaining
 search quality/coverage, required resource/fault regimes and the failed full integration shard. Only foreground
 responsiveness has an approved degradation disposition. Measurements and historical failures remain
