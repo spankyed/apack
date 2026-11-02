@@ -218,7 +218,7 @@ observation times out. Platform coverage is reusable and invoked by strict; it h
 trigger. One prespecified independent managed-model repeat is now live:
 [41508326544](https://github.com/spankyed/apack/actions/runs/41508326544), source
 `67ae01a3340c8df7dafb96f43aaa66a7bbc1e060` (documentation-only descendant of 93ed).
-Corpus job 125493285029 and relevance job 125493284803 were verified live after dispatch.
+Corpus job 125493285029 remains live. Relevance job 125493284803 is TERMINAL SUCCESS: both SQLite keyword modes 25/25, hybrid 25/25 per backend, 125 contracts and four effective old-source controls. Both pure validators reproduce original summaries byte-for-byte; [repeat relevance evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/relevance-repeat-67ae/README.md) is preserved.
 Both active/pending app-workflow lists were empty immediately before dispatch. This repeat closes
 the unresolved fresh-model variance check after the former 32-probe policy passed several models
 before missing recall. Retain this single repeat's result either way; a miss requires diagnosis/fix,
