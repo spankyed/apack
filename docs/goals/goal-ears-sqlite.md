@@ -264,6 +264,16 @@ metadata are retained without private profiles/traces/configuration. Script/test
 provenance checks pass. This qualifies the named UI flows and controls, not broad provider/model
 usefulness or every resource/fault regime; no responsiveness gate is relabelled as passing.
 
+The next finite operational checkpoint covers a native worker allocation refusal (unqualified until CI):
+the test-only Linux/glibc preload matches the ordinary extension's actual `vec1TrainFinal` symbol
+range, worker thread and model-sized allocation, then returns one ENOMEM. Require observed
+SQLITE_NOMEM, unchanged canonical bytes/commit, no model publication, released read snapshot,
+512-sample retry/model hash, foreground reuse and scratch cleanup. The ordinary native artifact
+and application API are unchanged. Existing read-EIO phases must still pass. Closing checks: JS,
+workflow/shell syntax locally; C build and actual fault/retry only in disposable `sqlite-api` CI.
+This serves the existing phase-6 active-worker resource-failure requirement. It is not OS/cgroup
+OOM, arbitrary/mid-kmeans failure, total-memory bounds or physical power-loss qualification.
+
 Current validation handles and results:
 
 - Final database-runtime packaged qualification at `d795901191` (program identical to cd8):

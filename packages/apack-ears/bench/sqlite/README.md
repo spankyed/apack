@@ -724,3 +724,21 @@ This diagnostic does not measure whole-app startup, cold executable/module cache
 physical-device caches, many-device variance, search/recall or final adoption. The
 existing fresh-process application startup remains labelled warm-filesystem. Original
 recall/query-latency/resource requirements remain unchanged; foreground misses retain the accepted synchronous degradation disposition. [All eighty fresh-process trials](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/cold-27/README.md) now pass actual main-file residency, answer/count, native-provenance and cleanup checks on one Linux host. Those results do not establish whole-app/device cold start or a universal engine ranking.
+
+
+## Worker native allocation refusal
+
+The `sqlite-api` workflow also compiles the test-only `worker-model-allocation-fault.c` preload
+on Linux x64/glibc and runs `worker-read-fault.mjs <new-report> model-allocation`. The ordinary
+vec1 artifact is not rebuilt or patched: `nm` supplies its actual `vec1TrainFinal` function range.
+The preload requires a worker-thread stack frame in that range, matching loaded extension and
+an allocation sized for the pinned 128-dimensional/64-centroid BQ model (plus SQLite bookkeeping).
+It returns ENOMEM once and retains a numeric witness. Require SQLITE_NOMEM, unchanged canonical
+bytes/logical commit, no publication, released reader/checkpoint, successful drained 512-sample retry,
+verified model hash, foreground reuse and cleanup. Native/preload/symbol/compiled hashes are retained.
+
+This fixture is prepared but unqualified until actual disposable CI. It exercises allocation-error
+handling at this selected native aggregate/model-sized allocation; it does not exhaust OS/cgroup
+memory, inject every allocation or mid-kmeans failure, prove a process-memory bound, or alter any
+production hook, resource policy or timeout. Existing header/canonical-page EIO phases keep their
+separate protocol and exact error assertions.

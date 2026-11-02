@@ -819,6 +819,16 @@ jobs:
               node --experimental-strip-types packages/apack-ears/bench/sqlite/worker-read-fault.mjs \
               ".temp/sqlite-api/worker-read-fault/$phase.json" "$phase"
           done
+      - name: Native worker model allocation failure preserves data and permits retry
+        run: |
+          set -euo pipefail
+          cc -shared -fPIC -O2 -Wall -Wextra -Werror packages/apack-ears/bench/sqlite/worker-model-allocation-fault.c \
+            -ldl -o .temp/sqlite-api/worker-read-fault/worker-model-allocation-fault.so
+          native_extension=$(node --import tsx --input-type=module -e "import {resolveNativeVectorExtension} from './packages/apack-ears/src/sqlite/native-extension.ts'; console.log(resolveNativeVectorExtension())")
+          EARS_VEC1_EXTENSION="$native_extension" node --import tsx scripts/bounded.ts scenario env \
+            LD_PRELOAD="$PWD/.temp/sqlite-api/worker-read-fault/worker-model-allocation-fault.so" \
+            node --experimental-strip-types packages/apack-ears/bench/sqlite/worker-read-fault.mjs \
+            .temp/sqlite-api/worker-read-fault/model-allocation.json model-allocation
       - name: Actual history-open policy after a metadata-page read fault
         run: |
           node --import tsx scripts/bounded.ts scenario env \
