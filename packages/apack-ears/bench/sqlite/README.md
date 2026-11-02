@@ -737,7 +737,12 @@ It returns ENOMEM once and retains a numeric witness. Require SQLITE_NOMEM, unch
 bytes/logical commit, no publication, released reader/checkpoint, successful drained 512-sample retry,
 verified model hash, foreground reuse and cleanup. Native/preload/symbol/compiled hashes are retained.
 
-This fixture is prepared but unqualified until actual disposable CI. It exercises allocation-error
+The [first CI receipt](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/allocation-517/README.md)
+proves the selected allocation refusal and retry. Its empty-WAL checkpoint is insufficient to prove
+reader release. Protocol v2 holds the actual worker until a foreground commit produces a WAL whose
+reclamation is busy; after refusal it requires successful truncation to zero bytes. That one foreground
+commit is explicitly accounted for, with canonical embeddings unchanged. V2 awaits disposable CI.
+This exercises allocation-error
 handling at this selected native aggregate/model-sized allocation; it does not exhaust OS/cgroup
 memory, inject every allocation or mid-kmeans failure, prove a process-memory bound, or alter any
 production hook, resource policy or timeout. Existing header/canonical-page EIO phases keep their

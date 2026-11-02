@@ -31,9 +31,10 @@ void *malloc(size_t size) {
   const char *arm = getenv("EARS_WORKER_ALLOC_ARM");
   const char *event = getenv("EARS_WORKER_ALLOC_EVENT");
   const char *extension = getenv("EARS_WORKER_ALLOC_EXTENSION");
+  const char *release = getenv("EARS_WORKER_ALLOC_RELEASE");
   const char *begin = getenv("EARS_WORKER_ALLOC_BEGIN");
   const char *end = getenv("EARS_WORKER_ALLOC_END");
-  if (arm && event && extension && begin && end && !access(arm, F_OK)) {
+  if (arm && event && extension && release && begin && end && !access(arm, F_OK)) {
     uintptr_t first = (uintptr_t)strtoull(begin, NULL, 16);
     uintptr_t last = (uintptr_t)strtoull(end, NULL, 16);
     void *frames[32];
@@ -56,6 +57,17 @@ void *malloc(size_t size) {
       if (length < 0 || (size_t)length >= sizeof(record) ||
           write(output, record, (size_t)length) != length || syscall(SYS_fsync, output)) _exit(92);
       close(output);
+      // Publish readiness only after the complete witness is written. Keep the read
+      // transaction alive until the controller has observed a populated WAL pin.
+      char ready[4096];
+      int ready_length = snprintf(ready, sizeof(ready), "%s.ready", event);
+      if (ready_length < 0 || (size_t)ready_length >= sizeof(ready)) _exit(94);
+      int flag = open(ready, O_WRONLY | O_CREAT | O_EXCL, 0600);
+      if (flag < 0) _exit(94);
+      close(flag);
+      int waits = 0;
+      while (access(release, F_OK) && waits++ < 10000) usleep(1000);
+      if (access(release, F_OK)) _exit(93);
       inspecting = 0;
       errno = ENOMEM;
       return NULL;

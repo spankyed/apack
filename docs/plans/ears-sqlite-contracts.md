@@ -435,6 +435,11 @@ This decision does not authorize adoption or waive correctness, recall, keyword 
 accounting or recovery requirements. Finish functional validation and the completion report with a
 clear separation between demonstrated results, accepted degradation and remaining limitations.
 
+The [selected native allocation-failure receipt](../references/evidence/ears-sqlite-implementation-2026-10-28/allocation-517/README.md)
+proves SQLITE_NOMEM, canonical preservation and a 512-sample retry. Its empty-WAL checkpoint
+does not independently establish reader release. The follow-up probe requires a populated WAL
+to remain pinned by the held worker and become reclaimable after refusal; that proof awaits CI.
+
 ### Deferred app-search execution proposal (not selected)
 
 This records an alternative that the user did not select; it authorizes no implementation.

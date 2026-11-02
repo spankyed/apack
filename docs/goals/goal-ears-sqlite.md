@@ -264,7 +264,7 @@ metadata are retained without private profiles/traces/configuration. Script/test
 provenance checks pass. This qualifies the named UI flows and controls, not broad provider/model
 usefulness or every resource/fault regime; no responsiveness gate is relabelled as passing.
 
-The next finite operational checkpoint covers a native worker allocation refusal (unqualified until CI):
+The next finite operational checkpoint strengthens the native worker allocation refusal with a populated-WAL reader-release witness (unqualified until CI):
 the test-only Linux/glibc preload matches the ordinary extension's actual `vec1TrainFinal` symbol
 range, worker thread and model-sized allocation, then returns one ENOMEM. Require observed
 SQLITE_NOMEM, unchanged canonical bytes/commit, no model publication, released read snapshot,
@@ -277,9 +277,13 @@ OOM, arbitrary/mid-kmeans failure, total-memory bounds or physical power-loss qu
 Current validation handles and results:
 
 - [Native allocation/refusal and existing API fault checks 41408228347](https://github.com/spankyed/apack/actions/runs/41408228347)
-  at `517bd80dc5` are queued/running; this qualifies the finite operational checkpoint above.
-  The new allocation fixture is not passing evidence yet. Preserve the original header/page/history
-  phases and any retained keyword failures; no production/native artifact was changed.
+  at `517bd80dc5` are terminal. The allocation, header/page and history fault steps pass; the
+  shared-suite step retains only the known keyword failures (SQLite 459 passes, elmdb 268 passes).
+  [Original allocation evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/allocation-517/README.md)
+  proves SQLITE_NOMEM, preservation and retry. Its empty-WAL checkpoint does not independently
+  prove reader release. Protocol v2 holds the actual native worker, commits one foreground row,
+  requires populated WAL reclamation to be busy before refusal and successful afterward, and
+  accounts for that foreground commit separately. No production/native artifact was changed.
 - Final database-runtime packaged qualification at `d795901191` (program identical to cd8):
   [signed macOS 41399250308](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795-signed/README.md) and
   [Windows/Linux 41399303818](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795/README.md) succeed.
@@ -287,7 +291,7 @@ Current validation handles and results:
   probes pass actual packaged Electron/native/API execution and four preview contracts per OS.
   Source/native/provenance and original reports are retained. No local build, signing or compiler run.
 - [Corrected-source app flows and UI controls 41401869473](https://github.com/spankyed/apack/actions/runs/41401869473)
-  at `275b6fac3d` succeed, with the independently checked receipt above. All earlier validation handles are terminal; the new allocation/API checkpoint above remains pending. Strict still retains the unwaived keyword failure.
+  at `275b6fac3d` succeed, with the independently checked receipt above. All recorded validation handles are terminal; the stronger allocation/WAL checkpoint awaits a new CI run. Strict still retains the unwaived keyword failure.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   [Attempt 2](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) reruns only integration-1 on the same source and passes all 242 tests/31 files. All other job outcomes remain retained; root keyword failures still keep the overall workflow red.
