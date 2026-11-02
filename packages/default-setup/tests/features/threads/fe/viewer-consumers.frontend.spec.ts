@@ -71,7 +71,8 @@ it('renders input props only with the current block declaration and drops a disa
 
 it('keeps a message body mounted when its aside is expanded and collapsed', async () => {
   const f = fixture();
-  const message = { id: 'Message-viewer', sender: 'assistant', text: 'Body', autoHide: true, asideText: 'Summary' } as MessageEntity;
+  const message: MessageEntity = { id: 'Message-viewer', entityType: 'Message', timestamp: 0, createdAt: 0,
+    sender: 'assistant', text: 'Body', autoHide: true, asideText: 'Summary' };
   app = createApp({ render: () => h(ChatMessage, { message }, {
     default: () => h('p', { 'data-body': '' }, 'Body'),
   }) });
