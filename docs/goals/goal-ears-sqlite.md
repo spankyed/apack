@@ -202,10 +202,16 @@ expected answer or top-five threshold. The [compound correction](../references/e
 passes 93 search contracts and both old-source controls; SQLite English keyword is 25/25, but
 unstemmed case 6 is still rank 12. English-stemmed elmdb's distinct failure is typo case 20.
 
-The current next correction uses native FTS field weighting for a bounded leading-text prefix:
+The current next correction uses separately normalized native FTS passages for a bounded leading-text prefix:
 at most 256 UTF-16 units, cut at whitespace to avoid invented partial words, weighted 3 beside
-full body/identifier aliases. It applies to every indexed source string, not a named query/document,
-and performs no JavaScript reranking or vocabulary scan. A derived text revision creates new
+a full-source fallback. Long strings add at most one complete-token prefix passage, each with
+its own FTS length normalization; SQL takes the best passage score per entity/clause. It applies
+to every source string without a query/document special case or JS reranking/vocabulary scan.
+Derived text revision 2 replaces the earlier leading-column layout: that [hard-gate attempt](../references/evidence/ears-sqlite-implementation-2026-10-28/lead-column-a9/README.md)
+still ranked the required overview seventh because it shared full-row length normalization.
+The cap and declared weight remain unchanged; the passage weight now multiplies its native
+score rather than weighting frequency within one column. This is not a controlled single-factor
+normalization experiment. A derived text revision creates new
 generations on writable reopen. Read-only obsolete generations refuse with INDEX_BUILDING and
 an explicit writable-rebuild instruction. Audit includes leading text; primary values and logical
 commit identity remain unchanged during derived regeneration.
@@ -321,10 +327,10 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 Current validation handles and results:
 
 - [Bounded leading-text ranking and original keyword hard gate 41469187700](https://github.com/spankyed/apack/actions/runs/41469187700)
-  is active at `a9e415aad4`. This changes FTS layout/revision, scoring, audit and read-only rebuild
-  handling. Require both SQLite 25/25 keyword groups, original frozen shared cases, ordinary
-  contracts, migration/audit/truncation checks and three old-source assertion failures/restoration.
-  No passing result is inferred from the previous compound-only run.
+  is terminal failure at `a9e415aad4`: original unstemmed keyword remains 24/25, case 6 rank 7;
+  English SQLite is 25/25. [Original reports](../references/evidence/ears-sqlite-implementation-2026-10-28/lead-column-a9/README.md)
+  preserve the hard failure. Safety/contracts/counterfactual/inference stages were skipped afterward.
+  The next source revision uses independent bounded-passage normalization, with unchanged cap/weight.
 
 - [Compound/Unicode correction and pinned old-source control 41464298033](https://github.com/spankyed/apack/actions/runs/41464298033)
   is terminal success at `cf5d7b4800`. [Verified reports](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)

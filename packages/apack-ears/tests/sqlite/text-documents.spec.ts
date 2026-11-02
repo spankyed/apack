@@ -40,7 +40,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     const { db, e } = open();
     e.create('Row', { id: 'Row-boundary', body: 'x '.repeat(125) + 'suffixword' });
     const job = db.indexBuilds.jobs().find(job => job.kind === 'text')!;
-    const lead = db.get(`SELECT lead FROM ${searchTable(job)} WHERE entity_id=?`, ['Row-boundary'])!.lead;
+    const lead = db.get(`SELECT body FROM ${searchTable(job)} WHERE entity_id=? AND portion=1`, ['Row-boundary'])!.body;
     expect(lead.length).toBeLessThanOrEqual(TEXT_LEAD_MAX_UNITS);
     expect(e.query('Row').search('suffix', { fuzzy: false }).ids()).toEqual([]);
     expect(e.query('Row').search('"x suffixword"', { fuzzy: false }).ids()).toEqual(['Row-boundary']);
@@ -48,14 +48,15 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
 
   it('audits and rebuilds leading-text damage from authoritative fields', async () => {
     const { db, e } = open();
-    e.create('Row', { id: 'Row-one', body: 'needle context' });
+    const body = 'needle context ' + 'background '.repeat(60);
+    e.create('Row', { id: 'Row-one', body });
     await db.indexesReady();
     const job = db.indexBuilds.jobs().find(job => job.kind === 'text')!, sequence = db.sequence;
-    db.run(`UPDATE ${searchTable(job)} SET lead=?`, ['unrelated']);
+    db.run(`UPDATE ${searchTable(job)} SET body=? WHERE portion=1`, ['unrelated']);
     const damaged = await auditSqliteDatabase(db);
     expect(damaged.ok).toBe(false);
     expect(damaged.issues.some(issue => issue.includes("derived text contents differ"))).toBe(true);
-    expect(e.getRow('Row-one')?.body).toBe('needle context');
+    expect(e.getRow('Row-one')?.body).toBe(body);
     db.rebuildIndexes(); await db.indexesReady();
     expect(db.sequence).toBe(sequence);
     expect((await auditSqliteDatabase(db)).ok).toBe(true);
@@ -72,8 +73,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     db.sql.exec(`CREATE VIRTUAL TABLE ${legacy} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,
       tokenize='unicode61 remove_diacritics 2');
       INSERT INTO ${legacy}(rowid,entity_id,field,element,body,aliases,owner)
-        SELECT rowid,entity_id,field,element,body,aliases,owner FROM ${current};
-      CREATE TABLE ${legacy}_docs AS SELECT * FROM ${current}_docs;
+        SELECT rowid,entity_id,field,element,body,aliases,owner FROM ${current} WHERE portion=0;
+      CREATE TABLE ${legacy}_docs AS SELECT id,entity_id,field,element FROM ${current}_docs WHERE portion=0;
       CREATE UNIQUE INDEX ${legacy}_docs_entity ON ${legacy}_docs(entity_id,field,element);
       DROP TABLE ${current}; DROP TABLE ${current}_docs;`);
     db.run('UPDATE index_builds SET definition=? WHERE generation=?', [JSON.stringify(definition), job.generation]);

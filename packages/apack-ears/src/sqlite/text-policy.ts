@@ -1,6 +1,6 @@
 // Bump the derived revision whenever text storage or analysis changes, so writable opens
 // replace old generations rather than silently reusing incompatible postings.
-export const SQLITE_TEXT_REVISION = 1;
+export const SQLITE_TEXT_REVISION = 2;
 export const TEXT_LEAD_MAX_UNITS = 256;
 export const TEXT_LEAD_WEIGHT = 3;
 

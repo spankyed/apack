@@ -1,0 +1,7 @@
+# Leading column: improvement without a passing keyword gate
+
+[Run 41469187700](https://github.com/spankyed/apack/actions/runs/41469187700), source `a9e415aad4f5cc95f3447c0d4a10b0523d237967`, fails the original keyword hard gate. SQLite unstemmed usefulness is 24/25, solely case 6; the required overview moves from rank 12 to rank 7. English SQLite remains 25/25. The query, target and top-five threshold remain unchanged. Limited/full-prefix agreement passes.
+
+The leading-column design still normalizes against the entire FTS row's length, including the long full source. The next revision places the same bounded prefix in a separate native document, using the unchanged 256-unit cap and weight 3, so it owns a short passage's length normalization. The full source remains indexed for complete phrase and field semantics. The weight now multiplies a passage score alongside the declared field weight; the earlier value weighted column frequency inside BM25. This is a ranking-model change, not an isolated normalization experiment. The constants are retained rather than tuned to one document.
+
+The EARS package producer succeeds; the hard keyword assertion then fails. Search contracts, old-source controls, upgrade/audit tests and inference were not executed, so no safety or full-acceptance claim follows from this run. Two original numeric reports are gzip-preserved with decompressed SHA-256; the minimized receipt retains the original job metadata hash without logs or corpus payloads.

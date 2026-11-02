@@ -9,8 +9,12 @@ benchmark/failed-suite evidence retains its original source and native artifact.
 
 ## Experiment completion report (qualification in progress)
 
-Current source adds a bounded leading-text FTS field (256 UTF-16 units ending at whitespace,
-native weight 3), with versioned derived generations and audit/rebuild/read-only upgrade checks.
+Current source adds a separately normalized native FTS prefix passage for long strings (256
+UTF-16 units ending at whitespace, weight 3), keeping the full source and taking the best
+passage score per entity/clause. Derived revision 2, audit/rebuild and read-only upgrade guards
+cover the layout. The [prior leading-column attempt](../references/evidence/ears-sqlite-implementation-2026-10-28/lead-column-a9/README.md)
+improved the required overview to seventh place but failed the unchanged hard gate; it shared
+full-row length normalization. The cap and weight are unchanged in this passage correction.
 This is a general ranking correction under qualification, not a passing 25/25 claim. The frozen
 query, expected answer and threshold are unchanged. The previous [compound correction](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
 passes 93 contracts and old-source controls, and English SQLite keyword is 25/25; its original
