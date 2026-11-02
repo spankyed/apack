@@ -10,7 +10,9 @@ benchmark/failed-suite evidence retains its original source and native artifact.
 ## Experiment completion report (qualification in progress)
 
 Current runtime correction `eed73e4071` separates unquoted compound terms from explicit phrases.
-Its [CI qualification](https://github.com/spankyed/apack/actions/runs/41462773196) is active;
+Its first CI run passes 92 selected search contracts but stops before relevance because the old
+commit is absent from the shallow checkout. The [corrected qualification](https://github.com/spankyed/apack/actions/runs/41464298033)
+includes an exact commit fetch and the subsequent ASCII-only/Unicode preservation guard; it is active;
 25/25 remains unproven. The frozen query/expected answer/threshold are unchanged. This shipped
 query-compiler change invalidates broad current-source applicability of the earlier input-equivalence
 audit; previous corpus/integration/installed reports remain evidence only for their recorded source.

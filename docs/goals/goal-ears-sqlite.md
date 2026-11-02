@@ -306,6 +306,10 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 
 Current validation handles and results:
 
+- [Compound/Unicode correction and pinned old-source control 41464298033](https://github.com/spankyed/apack/actions/runs/41464298033)
+  is active at `cf5d7b4800`. This includes the ASCII-only splitter, private-use/accent coverage,
+  exact historical commit fetch, existing search contracts and unchanged frozen judgments.
+
 - [Compound-query fix and original relevance qualification 41462773196](https://github.com/spankyed/apack/actions/runs/41462773196)
   is terminal failure at `eed73e4071`: typecheck and all 92 selected search contracts pass,
   including both new compound regressions. The counterfactual never ran: its historical commit
@@ -346,7 +350,7 @@ Current validation handles and results:
   probes pass actual packaged Electron/native/API execution and four preview contracts per OS.
   Source/native/provenance and original reports are retained. No local build, signing or compiler run.
 - [Corrected-source app flows and UI controls 41401869473](https://github.com/spankyed/apack/actions/runs/41401869473)
-  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier handles, including the original keyword diagnostics, are terminal; the compound-fix qualification above is active. Strict still retains the unwaived keyword failure.
+  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier handles, including the original keyword diagnostics, are terminal; the corrected compound/Unicode qualification above is active. Strict still retains the unwaived keyword failure.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   [Attempt 2](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) reruns only integration-1 on the same source and passes all 242 tests/31 files. All other job outcomes remain retained; root keyword failures still keep the overall workflow red.
