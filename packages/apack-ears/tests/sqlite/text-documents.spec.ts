@@ -52,7 +52,9 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     e.create('Row', { id: 'Row-one', body });
     await db.indexesReady();
     const job = db.indexBuilds.jobs().find(job => job.kind === 'text')!, sequence = db.sequence;
-    db.run(`UPDATE ${searchTable(job)} SET body=? WHERE portion=1`, ['unrelated']);
+    db.run(`UPDATE ${searchTable(job)}_docs SET body=? WHERE portion=1`, ['unrelated']);
+    // Make postings internally consistent with damaged derived content; primary reconstruction must still refuse it.
+    db.run(`INSERT INTO ${searchTable(job)}(${searchTable(job)}) VALUES('rebuild')`);
     const damaged = await auditSqliteDatabase(db);
     expect(damaged.ok).toBe(false);
     expect(damaged.issues.some(issue => issue.includes("derived text contents differ"))).toBe(true);
@@ -105,7 +107,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
       INSERT INTO ${legacy}(rowid,entity_id,field,element,body,aliases,owner,portion)
         SELECT rowid,entity_id,field,element,body,aliases,owner,portion FROM ${current};
       CREATE TABLE ${legacy}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL,portion INTEGER NOT NULL);
-      INSERT INTO ${legacy}_docs SELECT * FROM ${current}_docs;
+      INSERT INTO ${legacy}_docs SELECT id,entity_id,field,element,portion FROM ${current}_docs;
       CREATE UNIQUE INDEX ${legacy}_docs_entity ON ${legacy}_docs(entity_id,field,element,portion);
       DROP TABLE ${current}_literal; DROP TABLE ${current}; DROP TABLE ${current}_docs;`);
     db.run('UPDATE index_builds SET definition=? WHERE generation=?', [JSON.stringify(definition), job.generation]);

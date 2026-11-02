@@ -4,7 +4,7 @@ import type { SqliteDatabase } from './database.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
 import { searchTable, type SqliteIndexJob } from './index-builds.ts';
 import type { SqliteSearchStructure } from './search-structures.ts';
-import { hasLiteralText, textLead, TEXT_LEAD_WEIGHT } from './text-policy.ts';
+import { hasLiteralText, hasSharedText, textLead, TEXT_LEAD_WEIGHT } from './text-policy.ts';
 
 type Data = Record<string, any>;
 interface Clause { match: string; fields: number[]; negative: boolean }
@@ -83,7 +83,7 @@ export class SqliteText {
     const table = searchTable(job);
     return { types: [job.type], indexes: [job], objects: [['table', table],
       ['table', table + '_docs'], ['index', table + '_docs_entity'],
-      ...['data', 'idx', 'content', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const),
+      ...['data', 'idx', ...(!hasSharedText(job.definition) ? ['content'] : []), 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const),
       ...(hasLiteralText(job.definition) ? [['table', table + '_literal'] as const,
         ...['data', 'idx', 'docsize', 'config'].map(suffix => ['table', table + '_literal_' + suffix] as const)] : [])],
       reset: `DROP TABLE IF EXISTS ${table}_literal; DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;` };
@@ -91,17 +91,21 @@ export class SqliteText {
   ensure(job: SqliteIndexJob): void {
     const table = searchTable(job), index = job.definition;
     if (index.stem && index.stem !== 'en') throw Object.assign(new Error('SQLite text indexes support English stemming only'), { code: 'UNSUPPORTED' });
-    this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,portion UNINDEXED,
-      tokenize='${index.stem ? 'porter ' : ''}unicode61 remove_diacritics 2');
-      CREATE TABLE IF NOT EXISTS ${table}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL,portion INTEGER NOT NULL);
-      CREATE UNIQUE INDEX IF NOT EXISTS ${table}_docs_entity ON ${table}_docs(entity_id,field,element,portion);`);
+    // Ordinary shared content also lets native integrity-check scan the source: SQLite's
+    // FTS5_STMT_SCAN uses SQLITE_PREPARE_NO_VTAB and cannot audit a virtual content source.
+    this.db.sql.exec(`CREATE TABLE IF NOT EXISTS ${table}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,
+      field INTEGER NOT NULL,element INTEGER NOT NULL,portion INTEGER NOT NULL,body TEXT NOT NULL,aliases TEXT NOT NULL,owner TEXT NOT NULL);
+      CREATE UNIQUE INDEX IF NOT EXISTS ${table}_docs_entity ON ${table}_docs(entity_id,field,element,portion);
+      CREATE VIRTUAL TABLE IF NOT EXISTS ${table} USING fts5(entity_id UNINDEXED,field UNINDEXED,element UNINDEXED,body,aliases,owner,portion UNINDEXED,
+      content='${table}_docs',content_rowid='id',tokenize='${index.stem ? 'porter ' : ''}unicode61 remove_diacritics 2');`);
     if (hasLiteralText(index)) this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_literal
-      USING fts5(body,aliases,owner,content='${table}',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');`);
+      USING fts5(body,aliases,owner,content='${table}_docs',content_rowid='id',tokenize='unicode61 remove_diacritics 2');`);
   }
   clear(job: SqliteIndexJob): void {
     const table = searchTable(job);
     if (hasLiteralText(job.definition)) this.db.run(`INSERT INTO ${table}_literal(${table}_literal) VALUES('delete-all')`);
-    this.db.sql.exec(`DELETE FROM ${table}; DELETE FROM ${table}_docs;`);
+    this.db.run(`INSERT INTO ${table}(${table}) VALUES('delete-all')`);
+    this.db.run(`DELETE FROM ${table}_docs`);
   }
   private removeLiteral(job: SqliteIndexJob, selection: string, args: unknown[]): void {
     if (!hasLiteralText(job.definition)) return;
@@ -150,12 +154,13 @@ export class SqliteText {
         // A separate passage owns its own native length normalization. Keeping the full source
         // preserves phrase boundaries; every additional passage is a complete-token prefix of it.
         for (const part of portions) {
-          const id = this.db.run(`INSERT INTO ${table}_docs(entity_id,field,element,portion) VALUES (?,?,?,?)`,
-            [row.id, doc.field, doc.element, part.portion]).lastInsertRowid;
+          const aliases = identifierParts(part.body).text, owner = 'e' + seq;
+          const id = this.db.run(`INSERT INTO ${table}_docs(entity_id,field,element,portion,body,aliases,owner) VALUES (?,?,?,?,?,?,?)`,
+            [row.id, doc.field, doc.element, part.portion, part.body, aliases, owner]).lastInsertRowid;
           this.db.run(`INSERT INTO ${table}(rowid,entity_id,field,element,body,aliases,owner,portion) VALUES (?,?,?,?,?,?,?,?)`,
-            [id, row.id, doc.field, doc.element, part.body, identifierParts(part.body).text, 'e' + seq, part.portion]);
+            [id, row.id, doc.field, doc.element, part.body, aliases, owner, part.portion]);
           if (hasLiteralText(job.definition)) this.db.run(`INSERT INTO ${table}_literal(rowid,body,aliases,owner) VALUES (?,?,?,?)`,
-            [id, part.body, identifierParts(part.body).text, 'e' + seq]);
+            [id, part.body, aliases, owner]);
         }
       }
     }

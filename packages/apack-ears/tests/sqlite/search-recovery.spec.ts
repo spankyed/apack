@@ -86,7 +86,7 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('SQLite missing
     db.run(`DELETE FROM ${text} WHERE rowid IN (SELECT rowid FROM ${text} WHERE ${text} MATCH ?)`, ['needle']);
     const damaged = await auditSqliteDatabase(db);
     expect(damaged.ok).toBe(false);
-    expect(damaged.issues.some(issue => issue.includes('derived text contents differ'))).toBe(true);
+    expect(damaged.issues.some(issue => issue.includes('text posting integrity failed'))).toBe(true);
     expect(e.query('Row').search('needle', { fuzzy: false }).ids()).toEqual([]);
     expect(e.lastCommit()).toBe(before);
     expect(e.getAttr('Row-one', 'title')).toBe('alpha needle');
