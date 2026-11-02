@@ -209,6 +209,7 @@ const isOnboarding = shell.isOnboarding;
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
 const messagesById = computed(() => new Map<string, MessageEntity>(visibleMessages.value.map(message => [message.id, message])));
+const chatMessageCount = useSelector(actor, state => state.context.chatMessageIds.length);
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
 // The message to bring into view, while the thread shown is its own
 const focusMessageId = useSelector(actor, ({ context }) =>
@@ -217,6 +218,7 @@ const style = useCssModule();
 
 // Scroll preservation for prepending older messages
 const savedScrollHeight = ref(0);
+const savedScrollTop = ref(0);
 const isPrependPending = ref(false);
 
 // Asks only when the machine takes the ask (`loadMoreMessages`): one it dropped would leave the page already loading,
@@ -224,7 +226,10 @@ const isPrependPending = ref(false);
 function requestLoadMore() {
   if (messagePagination.value.isLoading || !messagePagination.value.hasMore) return;
   const el = messagesContainer.value;
-  if (el) savedScrollHeight.value = el.scrollHeight;
+  if (el) {
+    savedScrollHeight.value = el.scrollHeight;
+    savedScrollTop.value = el.scrollTop;
+  }
   isPrependPending.value = true;
   actor.send({ type: 'LOAD_MORE_MESSAGES' });
 }
@@ -562,7 +567,7 @@ function showFocusedMessage(messages: MessageEntity[]): boolean {
   if (!focused) return false
   const el = messagesContainer.value?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(focused)}"]`)
   if (el) {
-    el.scrollIntoView({ block: 'center' })
+    scrollPositioning.position(() => el.scrollIntoView({ block: 'center' }))
     el.classList.add(style.focused)
     setTimeout(() => el.classList.remove(style.focused), 1600)
     actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
@@ -579,32 +584,36 @@ function showFocusedMessage(messages: MessageEntity[]): boolean {
 watch(focusMessageId, async (focused) => {
   if (!focused) return
   await nextTick()
+  if (messagePagination.value.isLoading || allMessages.value.length < chatMessageCount.value) return
   showFocusedMessage(allMessages.value)
 })
 
 let renderedMessageCount = 0
 function onMessagesRendered() {
   const newMsgs = allMessages.value
+  if (messagePagination.value.isLoading || newMsgs.length < chatMessageCount.value) return
   const previousCount = renderedMessageCount
   renderedMessageCount = newMsgs.length
-
-  // Handle scroll preservation for prepended older messages
-  if (isPrependPending.value) {
-    isPrependPending.value = false
-    const el = messagesContainer.value
-    if (el) el.scrollTop += (el.scrollHeight - savedScrollHeight.value)
-    return
-  }
 
   const threadChanged = currentThread.value?.id !== prevThreadId.value
   if (threadChanged) {
     prevThreadId.value = currentThread.value?.id
     showInlineDashboard.value = false
+    isPrependPending.value = false
+  }
+
+  // Handle scroll preservation for prepended older messages
+  if (isPrependPending.value) {
+    isPrependPending.value = false
+    const el = messagesContainer.value
+    if (el) scrollPositioning.position(() => {
+      el.scrollTop = savedScrollTop.value + el.scrollHeight - savedScrollHeight.value
+    })
+    return
   }
 
   // A message opened from the panel's search is brought into view in place of a load's scroll
   if (showFocusedMessage(newMsgs)) {
-    scrollPositioning.position(() => {})
     return
   }
 

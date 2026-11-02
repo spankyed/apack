@@ -140,6 +140,7 @@
         ]"
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
+        <div ref="bubbleContentRef">
         <!-- Attachments: files then images, horizontal scroll -->
         <div v-if="message.references?.files?.length || message.references?.images?.length"
           class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin">
@@ -184,6 +185,7 @@
           <span class="w-1.5 h-1.5 bg-neutral-500 rounded-full animate-pulse" style="animation-delay: 400ms"></span>
         </div>
 
+        </div>
         <!-- Truncation overlay for long user messages -->
         <div v-if="isUser && isTruncated && !userExpanded"
           class="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-neutral-800 via-neutral-800/90 to-transparent flex items-end justify-center pb-2 pointer-events-none">
@@ -212,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUpdated, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { MessageEntity } from '#generated/types.ts'
 import { Undo2, GitFork, Copy, FileCode2, ChevronsUpDown, ChevronDown, ChevronUp, X, RotateCcw } from 'lucide-vue-next'
 import InteractionContainer from './interactions/InteractionContainer.vue'
@@ -272,26 +274,21 @@ const canFork = computed(() => {
 
 // Long user message truncation
 const bubbleRef = ref<HTMLElement | null>(null)
+const bubbleContentRef = ref<HTMLElement | null>(null)
 const userExpanded = ref(false)
 const isTruncated = ref(false)
 const MAX_USER_MSG_HEIGHT = 200
 
-function checkTruncation() {
-  if (bubbleRef.value && isUser.value) {
-    isTruncated.value = bubbleRef.value.scrollHeight > MAX_USER_MSG_HEIGHT
-  }
-}
-
-// Rich-text transactions can change the body after Vue's render has completed.
-watch(bubbleRef, (el, _prev, onCleanup) => {
-  if (!el || !isUser.value) return
-  const observer = new ResizeObserver(checkTruncation)
-  observer.observe(el)
-  checkTruncation()
+// Observe natural content rather than the bubble whose height truncation changes.
+// Measurement runs after layout, including rich-text transactions outside Vue's render cycle.
+watch([bubbleRef, bubbleContentRef, isUser], ([bubble, content, user], _prev, onCleanup) => {
+  if (!bubble || !content || !user) return
+  const observer = new ResizeObserver(() => {
+    isTruncated.value = bubble.scrollHeight > MAX_USER_MSG_HEIGHT
+  })
+  observer.observe(content)
   onCleanup(() => observer.disconnect())
-}, { immediate: true })
-
-onUpdated(checkTruncation)
+}, { flush: 'post' })
 
 const revertMenuItems = [
   {

@@ -543,12 +543,12 @@
   color: rgb(134 239 172);
 }
 
-.tiptap-wrapper :is(.ProseMirror, .tiptap-body)[contenteditable="true"] .reference-pill.ProseMirror-selectednode {
+.tiptap-wrapper .ProseMirror[contenteditable="true"] .reference-pill.ProseMirror-selectednode {
   outline: none;
   box-shadow: 0 0 0 2px rgb(96 165 250);
 }
 
-.tiptap-wrapper :is(.ProseMirror, .tiptap-body)[contenteditable="false"] .reference-pill.ProseMirror-selectednode {
+.tiptap-wrapper :is(.ProseMirror[contenteditable="false"], .tiptap-body) .reference-pill.ProseMirror-selectednode {
   outline: none;
   box-shadow: none;
 }
