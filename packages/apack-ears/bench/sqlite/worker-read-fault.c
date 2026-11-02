@@ -11,13 +11,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-// Test-only Linux preload. Match one owned database descriptor, exclude the foreground thread,
+// Test-only Linux preload. Match one owned database descriptor, select the worker thread by default,
 // and retain a syscall witness before returning an actual EIO to SQLite's native read path.
 static int fired;
 static unsigned long successful_reads;
 static ssize_t read_at(int fd, void *buffer, size_t size, off64_t offset) {
   const char *target=getenv("EARS_WORKER_READ_FILE"), *arm=getenv("EARS_WORKER_READ_ARM"), *event=getenv("EARS_WORKER_READ_EVENT");
-  if (target && arm && event && syscall(SYS_gettid)!=(long)getpid() && !access(arm,F_OK)) {
+  if (target && arm && event && !access(arm,F_OK)) {
+    int on_main_thread=syscall(SYS_gettid)==(long)getpid();
+    const char *thread=getenv("EARS_WORKER_READ_THREAD");
+    int selected_main=thread && !strcmp(thread,"main");
+    if (on_main_thread!=selected_main) return syscall(SYS_pread64,fd,buffer,size,offset);
     char descriptor[64], actual[4096];
     snprintf(descriptor,sizeof(descriptor),"/proc/self/fd/%d",fd);
     ssize_t count=readlink(descriptor,actual,sizeof(actual)-1);
@@ -30,7 +34,7 @@ static ssize_t read_at(int fd, void *buffer, size_t size, off64_t offset) {
           int out=open(event,O_WRONLY|O_CREAT|O_EXCL,0600);
           if (out<0) _exit(91);
           char record[512];
-          int length=snprintf(record,sizeof(record),"{\"syscall\":\"pread\",\"targetMatched\":true,\"mainThread\":false,\"offset\":%lld,\"requestedBytes\":%zu,\"errno\":%d,\"targetOffset\":%lld,\"successfulMatchedReads\":%lu}\n",(long long)offset,size,EIO,(long long)target_offset,__sync_fetch_and_add(&successful_reads,0));
+          int length=snprintf(record,sizeof(record),"{\"syscall\":\"pread\",\"targetMatched\":true,\"mainThread\":%s,\"offset\":%lld,\"requestedBytes\":%zu,\"errno\":%d,\"targetOffset\":%lld,\"successfulMatchedReads\":%lu}\n",on_main_thread ? "true" : "false",(long long)offset,size,EIO,(long long)target_offset,__sync_fetch_and_add(&successful_reads,0));
           if (write(out,record,(size_t)length)!=length || syscall(SYS_fsync,out)) _exit(92);
           close(out); errno=EIO; return -1;
         }

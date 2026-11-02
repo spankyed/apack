@@ -817,6 +817,12 @@ jobs:
               node --experimental-strip-types packages/apack-ears/bench/sqlite/worker-read-fault.mjs \
               ".temp/sqlite-api/worker-read-fault/$phase.json" "$phase"
           done
+      - name: Actual history-open policy after a metadata-page read fault
+        run: |
+          node --import tsx scripts/bounded.ts scenario env \
+            LD_PRELOAD="$PWD/.temp/sqlite-api/worker-read-fault/worker-read-fault.so" \
+            node --experimental-strip-types packages/apack-ears/bench/sqlite/history-read-fault.mjs \
+            .temp/sqlite-api/worker-read-fault/history.json
       - name: Native adapter readiness observes builder status
         run: >-
           npm test -w @apackdev/ears -- tests/lmdb/index-readiness.spec.ts
