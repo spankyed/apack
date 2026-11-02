@@ -698,7 +698,8 @@ executing them. An absent declaration uses the existing editor viewer; a failing
 shows an error instead of silently falling back. Contribution changes rebuild affected viewers.
 
 Copying selected chat text uses the existing Markdown serializer on demand, including contributed
-node serializers; the temporary editor is released after the copy. No editor is retained per message.
+node serializers and the current accepted contributions' clipboard hooks; the temporary editor is
+released after the copy. No editor is retained per message.
 
 Open editors follow accepted contribution changes. Popup/predicate-only updates preserve the editor
 and undo history. Extension changes replace its executable editor after retiring the previous popups;

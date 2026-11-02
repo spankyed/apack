@@ -1,6 +1,6 @@
 # Editor construction and read-only chat rendering
 
-Status: implementation complete; final qualification in progress. Base: master `461f7bf2cb`; #309 is merged.
+Status: complete. Base: master `461f7bf2cb`; #309 is merged. Delivered in PRs #310 and #311; no automatic merge.
 
 ## Delivery
 
@@ -66,8 +66,8 @@ cost: minified parser frames still require attribution. Raw profiles remain in o
 `apack-linux-work-220c5d355e10`, under
 `.apack/performance/optimization-baseline-54007b7094/detailed-thread-open/thread-open/B/`.
 
-No small runtime cache candidate was justified. The dedicated renderer prototype passed the
-latency/allocation thresholds; final-source qualification is tracked below. No work was cancelled.
+No small runtime cache candidate was justified. The dedicated renderer passed the measured
+latency/allocation thresholds; the final outcome is recorded below. No work was cancelled.
 
 ## Renderer design
 
@@ -93,48 +93,28 @@ parser is cached across messages. Extract existing application Markdown rules fi
 the viewer and migrate built-ins together. No small cache candidate is justified merely by the
 upstream option-getter allocation profile; avoid modifying or forking Tiptap internals.
 
-## Final qualification checkpoint
+## Outcome
 
-Source `150d30378c` adds real Markdown clipboard parity. Selection diagnostics exposed two missing
-reference boundary markers; the baseline also copies Markdown rather than browser plain text.
-The viewer now uses the existing serializer only on copy, in a temporary detached editor that is
-always destroyed. Rendering still constructs no editor/schema/state/view. Focused UI tests cover
-full rich, partial marked, code and reference copies; all 42 UI cases and UI type checking pass.
+The supported path avoids fifty editor/schema/state/view constructions per thread opening. Measured
+plain readiness improved 53.11%, rich readiness 49.41%, sampled renderer allocations 67.23%; streaming
+median was 0.99% lower. The final standard overhead confirmation passed at +0.60%, with the preceding
++5.38% foregrounded failure retained. Different container identities are not pooled. These are warmed
+synthetic actions with the stated work/correctness budgets, not certification of every workload.
 
-Strict run `41346844647` stopped at a stale generated manifest schema; regenerating it added only
-the new read-only adapter declaration. The schema check now passes. Final browser parity and the
-complete acceptance sequence run under `editor-renderer-final-copy-v2`; no prototype percentage
-certifies this source. Required final strict CI follows the stable browser result.
+Final review fixed Markdown copy and semantic HTML, current contribution serializers after replacement,
+reference boundary markers, callback capture, cleanup and renderer DOM lifetime. Copy uses the public
+ProseMirror clipboard API in a temporary detached editor; opening/streaming never execute that path.
+The final code passed exact real-browser selected-text/Markdown-clipboard/code/reference parity and content
+replacement/empty/truncation/resize checks. All 43 UI cases and relevant admission/code-generation/
+coordination suites, type checks and lint passed.
 
-## Delivery checkpoint — 2026-11-01
+[Final strict CI 41359402815](https://github.com/spankyed/apack/actions/runs/41359402815) passed all
+six required jobs on final runtime commit `64ac6c9cc3e6aca976eddbc02f56188a7f42fb52`. No running
+job was cancelled; GitHub superseded one obsolete, unstarted request with no jobs/results. Later
+changes only archive this plan and record evidence; they require no repeated build or broad checks.
 
-Implementation is pushed in PR #311; attribution is the independent documentation PR #310.
-Final application source at `d7e63c7678` passed plain/rich latency, sampled allocation, streaming and
-exact browser selection/Markdown clipboard comparisons. Later code changes are a test lint fix and
-benchmark foregrounding (`b7b7af330f`), with no change to application rendering. The final standard
-recording-overhead confirmation passed at +0.60%; the preceding +5.38% foregrounded result remains
-a failed qualification, separately retained. Cross-container runs are not pooled.
-
-[Final evidence](../references/evidence/read-only-chat-renderer-2026-11-01.md) records exact metrics,
-all rejected/failed attempts, limits and reproduction commands. No speculative recorder optimization
-was retained: its measured saving was insignificant. The focused API boot probe passed without a
-runtime fix after one app-startup failure.
-
-All local required checks are complete. Strict run `41351118556` has passed producer, app and both
-integration jobs; native shards are still running. Final-code strict run `41352291011` is queued
-behind it; no jobs were cancelled. Next: inspect/fix any material CI failures, wait for all six final
-jobs, record final review/checks, archive this plan and mark #311 ready. No automatic merge.
-
-Final review found and fixed stale copy serializers after a contribution replacement that leaves
-read-only callbacks unchanged. The regression reproduces the retired Markdown delimiter before the
-fix and the new delimiter afterward, preserving DOM identity. Copy reads the accepted registry on
-demand; this one-line copy-only change does not execute in opening/streaming, whose measurements
-are reused. All 43 UI cases, UI type checking and repository lint pass. Strict CI must cover this
-last fix; existing jobs remain uncancelled.
-
-The final clipboard API audit replaced an undocumented storage serializer lookup with the public
-ProseMirror `serializeForClipboard` method. Existing copy tests also verify contributed clipboard
-hooks and exclude viewer controls from HTML. All 43 UI cases, type checks and lint pass. This remains
-copy-only; the final real-browser behavior check is rerun on that handler, with opening/streaming
-measurements reused. Delay further strict dispatch until the existing pending run starts, preserving
-all queued jobs, then run the final source through strict acceptance.
+The original opportunity, every failed/rejected attempt, exact source/build provenance, limitations
+and reproduction commands are in the [qualification evidence](../../references/evidence/read-only-chat-renderer-2026-11-01.md)
+and [attribution PR #310](https://github.com/spankyed/apack/pull/310). No data migration or native source
+change was needed. Unknown contributions retain the old viewer. No insignificant recorder optimization
+was retained. Reviewable implementation: [PR #311](https://github.com/spankyed/apack/pull/311).

@@ -43,8 +43,8 @@ caught stale serializer bindings when an extension changes but its read-only ada
 now reads the current accepted registry rather than the DOM-rendering dependency snapshot. A real
 clipboard regression fails with the retired serializer and passes with its replacement, while the
 rendered DOM stays identical. This changes only the copy event path; opening/streaming do not execute
-it. Their valid qualifications are reused. The helper uses ProseMirror's public `serializeForClipboard` API, preserving configured clipboard
-hooks and semantic HTML instead of reading an undocumented Markdown serializer field. Full/partial
+it. Their valid qualifications are reused. The helper uses ProseMirror's public
+`serializeForClipboard` API, preserving configured clipboard hooks and semantic HTML instead of reading an undocumented Markdown serializer field. Full/partial
 copy coverage includes a contributed clipboard hook and excludes viewer controls from copied HTML.
 Rendering owns no editor.
 
@@ -54,7 +54,11 @@ including error paths. Unrelated editing-only changes preserve DOM and selection
 
 All 43 UI cases pass, as do the 45 frontend-admission and 45 code-generation cases. The additional
 foregrounding cases cover both gated and ungated execution; fifteen performance coordination cases,
-relevant type checks and repository lint pass. Strict CI for the final code is [run 41352291011](https://github.com/spankyed/apack/actions/runs/41352291011), queued behind the earlier strict run. Results will be recorded on completion.
+relevant type checks and repository lint pass. Final [strict CI 41359402815](https://github.com/spankyed/apack/actions/runs/41359402815)
+passed all six jobs on runtime commit `64ac6c9cc3e6aca976eddbc02f56188a7f42fb52`: producer,
+both integration shards, both native shards and app/rest. Earlier CI caught a stale generated manifest
+schema and a redundant spread in a test; both were fixed. Running jobs were allowed to finish; one
+obsolete pending request was superseded before it had any jobs or results.
 
 ## Recording-overhead investigation
 
@@ -91,10 +95,15 @@ successfully. No runtime startup change or weakened timeout was made.
 
 Production measurements: clean candidate `d7e63c7678795f2734b80741577905b7bf58b465` versus clean
 baseline `02bc0c50d744a81870fce956f740693f094b4a5e`. The baseline is master `461f7bf2cb` plus only
-the shared corpus/readiness harness. Subsequent changes are a test lint fix, benchmark foregrounding and a copy-only registry lookup fix;
-the measured opening/streaming rendering path is unchanged. Final overhead source: `b7b7af330f933384f8f3288bc4f4687f0ba0dd8d`.
+the shared corpus/readiness harness (cherry-picks `e588e846fccb54714ae801d14030ebb31cab5244` and
+`5e3f4c0700824a1dc624bfd2ad48153615f47b61`). Subsequent changes are a test lint fix, benchmark
+foregrounding and the copy-only registry/public-API fixes; the measured opening/streaming rendering
+path is unchanged. Final overhead source: `b7b7af330f933384f8f3288bc4f4687f0ba0dd8d`.
+The final clipboard handler at `64ac6c9cc3e6aca976eddbc02f56188a7f42fb52` was rechecked in the
+real browser against the exact retained baseline result, including expansion, content replacement,
+empty messages, truncation and resizing. That check passed; its timings are not used as qualification.
 
-All runs use native pin `f496470679a7bd9764398108b20f62a73333c701`, binary SHA-256
+Linux measurement and browser runs use native pin `f496470679a7bd9764398108b20f62a73333c701`, binary SHA-256
 `176e439110468bf2855b836a50d5a0ce7e7c0cdbfd43215eeef2b202546cc463`. Linux arm64, Electron
 37.2.4 / Chromium 138.0.7204.157, Node 23.11.1 driver. The maintained runner enforces two CPUs,
 6 GiB RAM, no additional swap and 256 MiB shared memory. Dependencies, fixture identities, source
@@ -103,7 +112,8 @@ cleanliness and build hashes are retained in each comparison manifest.
 Evidence is in owned volume `apack-linux-work-2bd9183070f1`, beneath
 `/work/.apack/performance/editor-renderer-final-copy-v2/`:
 
-- `baseline-browser.json`, `candidate-browser.json`: exact browser parity and behavior results.
+- `baseline-browser.json`, `candidate-browser.json`: initial exact browser parity and behavior results.
+- `public-clipboard-64ac6c9/`: final-handler browser parity, behavior checks and raw run.
 - `plain-latency/thread-open/comparison.json`, `rich-latency/thread-open/comparison.json`.
 - `allocation-profiles/thread-open/{A,B}/trial-*.renderer.heapprofile`: raw allocation samples.
 - `streaming/streaming/comparison.json`.
@@ -115,15 +125,38 @@ Evidence is in owned volume `apack-linux-work-2bd9183070f1`, beneath
 - `recording-overhead-confirmation/thread-open/comparison.json`: final standard run, +0.60%.
 
 The independent baseline and owned diagnostics remain under `.apack/performance/` and `.apack/`
-in the isolated worktree `/private/tmp/apack-performance-optimization.noindex`. Reproduce with the
-maintained Linux runner, frozen native checkout, and independent installed/built baseline:
+in the isolated worktree `/private/tmp/apack-performance-optimization.noindex`. For reproduction,
+use the maintained Linux runner and frozen native checkout with two independent installed/built
+application roots. Reproduce the recorded latency/allocation/streaming comparison with candidate
+`d7e63c7678` and baseline `02bc0c50d7` (or master `461f7bf2cb` plus the two shared harness commits
+above). The retained preparation script is `.apack/qualify-editor-renderer.sh`; inspect its historical
+fixed output paths before using it, and preserve the recorded baseline.
+
+For a **new** comparison, put the identical current performance harness in both checkouts, committing
+baseline harness changes separately from its unchanged application. Current manifests include
+`interactiveWindow=focused-v1`; the historical baseline does not. Comparing current HEAD to that
+unmodified old harness must refuse the metadata mismatch. Do not alter provenance checks or
+historical identities to force comparability.
+
+Inside the maintained runner, set `BASELINE` and `CANDIDATE` to the independently prepared roots:
 
 ```sh
+: "${BASELINE:?Set the independently prepared baseline root}"
+: "${CANDIDATE:?Set the matching candidate root}"
+OUTPUT="$(mktemp -d /work/.apack/performance/editor-renderer-repro.XXXXXX)"
+cd "$CANDIDATE"
 xvfb-run -a node scripts/with-source.mjs tsx scripts/compare-performance-revisions.ts \
-  --baseline "$BASELINE" --candidate /work --scenario thread-open --mode disabled \
+  --baseline "$BASELINE" --candidate "$CANDIDATE" --scenario thread-open --mode disabled \
   --trials 20 --output "$OUTPUT/plain"
 # Repeat with APACK_PERFORMANCE_CORPUS=rich, then --mode detailed for separate allocation profiles.
 # Use --scenario streaming --mode disabled for the streaming regression guard.
+```
+
+Reproduce the final recording-overhead qualification from final runtime commit `64ac6c9cc3` or later,
+which retains foregrounding, using a fresh output directory:
+
+```sh
+OUTPUT="$(mktemp -d /work/.apack/performance/editor-overhead-repro.XXXXXX)"
 xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts \
   --scenario thread-open --mode disabled --compare lightweight --trials 20 \
   --output "$OUTPUT/overhead"
@@ -132,4 +165,4 @@ xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts \
 These are warmed synthetic app actions, not certification of every device, workload or filesystem.
 Copy latency is not measured. Unsupported contributions keep the former construction cost. No data
 migration or native source change is required. Earlier import timeout and local runtime stall are
-retained in the logs; neither required a weakened guard or cancelled job.
+retained in the logs; neither required a weakened guard or cancellation of running work.
