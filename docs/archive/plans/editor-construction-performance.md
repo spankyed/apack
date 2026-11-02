@@ -117,7 +117,7 @@ job was cancelled; GitHub superseded one obsolete, unstarted request with no job
 changes only archive this plan and record evidence; they require no repeated build or broad checks.
 
 The original opportunity, every failed/rejected attempt, exact source/build provenance, limitations
-and reproduction commands are in the [qualification evidence](../../references/evidence/read-only-chat-renderer-2026-11-01.md)
+and reproduction commands are in the [qualification evidence](../references/evidence/read-only-chat-renderer-2026-11-01.md)
 and [attribution PR #310](https://github.com/spankyed/apack/pull/310). No data migration or native source
 change was needed. Unknown contributions retain the old viewer. No insignificant recorder optimization
 was retained. Reviewable implementation: [PR #311](https://github.com/spankyed/apack/pull/311).

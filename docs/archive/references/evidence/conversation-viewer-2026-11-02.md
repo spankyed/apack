@@ -1,5 +1,7 @@
 # Conversation viewer qualification — 2026-11-02
 
+Archived qualification evidence. Results apply to the recorded revisions.
+
 ## Implementation and acceptance
 
 Conversation message bodies share one read-only Tiptap editor, its schema and its view. Identified
@@ -137,7 +139,7 @@ The required final code gate targets `cf55bed96c`:
 All six required jobs passed: producers, app-and-rest, native-1, native-2, integration-1 and
 integration-2. Subsequent changes only finalize and archive documentation; the repository guide
 requires no code rebuild or repeated gate for those edits. The completed
-[implementation plan](../../archive/plans/conversation-viewer.md) records delivery.
+[implementation plan](../../plans/conversation-viewer.md) records delivery.
 
 The final source review checked document/cache publication, capture-error recovery, contribution
 lifetime, unchanged selection/row identity, stable content DOM, clipboard ownership and scroll

@@ -1,7 +1,7 @@
 # Read-only chat renderer qualification — 2026-11-01
 
 > Superseded: this records the independent renderer removed during review. Its measurements do not
-> qualify the replacement. Replacement: [one conversation viewer](../../archive/plans/conversation-viewer.md).
+> qualify the replacement. Replacement: [one conversation viewer](../../plans/conversation-viewer.md).
 
 Supported chat messages now render Markdown directly instead of constructing fifty Tiptap editors
 when opening a thread. Editable inputs and documents retain their editor. Unknown contributions
