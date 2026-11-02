@@ -1,0 +1,96 @@
+{
+  "run": 41483924153,
+  "source": "a8500818f6d580dd061fd6bfdb6dffb735da2137",
+  "scope": "Four completed strict consumers only; app-and-rest remains live. File counts are not inferred individual test counts.",
+  "consumers": [
+    {
+      "name": "native-1",
+      "job": 125425066885,
+      "conclusion": "success",
+      "repositoryFilesCompleted": 9,
+      "repositoryFileStates": {
+        "passed": 8,
+        "skipped": 1
+      },
+      "nestedFixtureFiles": 0,
+      "nestedFixtureFileStates": {},
+      "originalProgressSha256": [
+        "735d8bb03dfc81796e8cf7d6b46999f34e95e6eada9b585bdad43ec9ea828df3"
+      ],
+      "originalJobMetadataSha256": "4fc1a3f326c980887e72dce66de7c814b497c8bd88b43f37663e4158dd464de8",
+      "originalChainLogSha256": "3b04aba45ca322e408b573e6f9072b50540b3ed49e8d981572b7b0fe703bf1ae",
+      "originalJobLogSha256": "7a94006433792e10ae7a0b6f3dd26973d3d51db3c30f9752bf1dacf865d5d740"
+    },
+    {
+      "name": "native-2",
+      "job": 125425066966,
+      "conclusion": "success",
+      "repositoryFilesCompleted": 8,
+      "repositoryFileStates": {
+        "skipped": 1,
+        "passed": 7
+      },
+      "nestedFixtureFiles": 0,
+      "nestedFixtureFileStates": {},
+      "originalProgressSha256": [
+        "972591fd250e43c88a79d983c41eb9cc03509171cfb0e468960103a33221d3be"
+      ],
+      "originalJobMetadataSha256": "7a6fa57222044f5e7cc05d352cc61a73859c33dbe39db9ba5bb96fbd95152d3f",
+      "originalChainLogSha256": "50a743dab6435f88c8e8331e6b52760f041d4cd48bfb625c07a138795a084577",
+      "originalJobLogSha256": "93066688b52714ebe44fb6e58cb109e4901512b7e0a776abfba3fa2cba08d8e2"
+    },
+    {
+      "name": "integration-1",
+      "job": 125425067019,
+      "conclusion": "success",
+      "repositoryFilesCompleted": 31,
+      "repositoryFileStates": {
+        "passed": 31
+      },
+      "nestedFixtureFiles": 4,
+      "nestedFixtureFileStates": {
+        "passed": 4
+      },
+      "originalProgressSha256": [
+        "31171712aa71c1c979edf08c4484b94b2e79539449de1b3572a8e82b9b64db04",
+        "986965f3f626720f6fe266260afc94ed191d4ef1f041795a8e4ddcd8e90758bd",
+        "a5a1fd30dabf29f9d95f387958d1f2d80981c30f09ddb1094b56b2c1865d923b"
+      ],
+      "originalJobMetadataSha256": "6ee0fa60fafe4d2500af6ec756ea194c270fb34d3d078fb48a0f6ac801bbb96d",
+      "originalChainLogSha256": "7d653a347262c10b74f4dfa481c99d76c83d35b622faa7a3cfe4e26f8fba5510",
+      "originalJobLogSha256": "0a811d14883721144ebd59262e59215c4272797c7b5f3d4b10fdf8d33b92112f",
+      "previouslyTimedOutFile": {
+        "file": "packages/apack-cli/tests/build/dependency-inputs.integration.spec.ts",
+        "state": "passed",
+        "fileDurationMs": 158562.818458,
+        "unchangedTestDeadlineMs": 200000
+      }
+    },
+    {
+      "name": "integration-2",
+      "job": 125425067289,
+      "conclusion": "success",
+      "repositoryFilesCompleted": 31,
+      "repositoryFileStates": {
+        "passed": 31
+      },
+      "nestedFixtureFiles": 0,
+      "nestedFixtureFileStates": {},
+      "originalProgressSha256": [
+        "6a12cfc7e87bae95da63d0ad1d4891489afab8375779de2c283106786679f6cd"
+      ],
+      "originalJobMetadataSha256": "6fa2b9da2cb23443c0f216c05954dc28a6d25af40c95d168e17874b4be1d2884",
+      "originalChainLogSha256": "c79be860c7b53c9deca5f9c111372fce04d1aecafa7f7092c6233f2340db7fd2",
+      "originalJobLogSha256": "780770015936a67c79065aaf94f4c0ac9838036919b882f10f28e6625f7ad37f"
+    }
+  ],
+  "unchangedDeadlineFixture": {
+    "file": "packages/apack-cli/tests/build/dependency-inputs.integration.spec.ts",
+    "sha256": "774dbacd05ce576766540bf70cfa82a08fb8ee163ab2bf9f7d60f8924cd5fe65",
+    "byteIdenticalAt": [
+      "06106d18dd",
+      "a8500818f6"
+    ],
+    "deadlineExpression": "3 * 60_000 + 20_000"
+  }
+}
