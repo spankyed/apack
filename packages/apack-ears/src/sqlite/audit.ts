@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { validateEmbeddingBytes } from './embeddings.ts';
 import { auditNativeVectors } from './vector-audit.ts';
 import { SqliteDatabase } from './database.ts';
+import { hasLiteralText } from './text-policy.ts';
 import { searchTable, type SqliteIndexJob } from './index-builds.ts';
 
 export interface SqliteAuditReport {
@@ -205,7 +206,11 @@ export async function auditSqliteDatabase(source: SqliteDatabase): Promise<Sqlit
       incumbent.indexBuilds.stop();
       for (const job of jobs) if (job.kind === 'text' || job.kind === 'trigram') {
         const table = searchTable(job);
-        try { incumbent.run(`INSERT INTO ${table}(${table},rank) VALUES('integrity-check',1)`); }
+        try {
+          incumbent.run(`INSERT INTO ${table}(${table},rank) VALUES('integrity-check',1)`);
+          if (job.kind === 'text' && hasLiteralText(job.definition))
+            incumbent.run(`INSERT INTO ${table}_literal(${table}_literal,rank) VALUES('integrity-check',1)`);
+        }
         catch (error) {
           if ((error as { code?: string })?.code !== 'SQLITE_CORRUPT_VTAB') throw error;
           issue(`${job.type}.${job.name}: ${job.kind} posting integrity failed`);

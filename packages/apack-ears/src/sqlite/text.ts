@@ -4,7 +4,7 @@ import type { SqliteDatabase } from './database.ts';
 import type { SqliteEntityScope } from './query-scope.ts';
 import { searchTable, type SqliteIndexJob } from './index-builds.ts';
 import type { SqliteSearchStructure } from './search-structures.ts';
-import { textLead, TEXT_LEAD_WEIGHT } from './text-policy.ts';
+import { hasLiteralText, textLead, TEXT_LEAD_WEIGHT } from './text-policy.ts';
 
 type Data = Record<string, any>;
 interface Clause { match: string; fields: number[]; negative: boolean }
@@ -83,8 +83,10 @@ export class SqliteText {
     const table = searchTable(job);
     return { types: [job.type], indexes: [job], objects: [['table', table],
       ['table', table + '_docs'], ['index', table + '_docs_entity'],
-      ...['data', 'idx', 'content', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const)],
-      reset: `DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;` };
+      ...['data', 'idx', 'content', 'docsize', 'config'].map(suffix => ['table', table + '_' + suffix] as const),
+      ...(hasLiteralText(job.definition) ? [['table', table + '_literal'] as const,
+        ...['data', 'idx', 'docsize', 'config'].map(suffix => ['table', table + '_literal_' + suffix] as const)] : [])],
+      reset: `DROP TABLE IF EXISTS ${table}_literal; DROP TABLE IF EXISTS ${table}; DROP TABLE IF EXISTS ${table}_docs;` };
   }
   ensure(job: SqliteIndexJob): void {
     const table = searchTable(job), index = job.definition;
@@ -93,10 +95,25 @@ export class SqliteText {
       tokenize='${index.stem ? 'porter ' : ''}unicode61 remove_diacritics 2');
       CREATE TABLE IF NOT EXISTS ${table}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL,portion INTEGER NOT NULL);
       CREATE UNIQUE INDEX IF NOT EXISTS ${table}_docs_entity ON ${table}_docs(entity_id,field,element,portion);`);
+    if (hasLiteralText(index)) this.db.sql.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS ${table}_literal
+      USING fts5(body,aliases,owner,content='${table}',content_rowid='rowid',tokenize='unicode61 remove_diacritics 2');`);
+  }
+  clear(job: SqliteIndexJob): void {
+    const table = searchTable(job);
+    if (hasLiteralText(job.definition)) this.db.run(`INSERT INTO ${table}_literal(${table}_literal) VALUES('delete-all')`);
+    this.db.sql.exec(`DELETE FROM ${table}; DELETE FROM ${table}_docs;`);
+  }
+  private removeLiteral(job: SqliteIndexJob, selection: string, args: unknown[]): void {
+    if (!hasLiteralText(job.definition)) return;
+    const table = searchTable(job);
+    // External content must remain available until its postings have been removed.
+    this.db.run(`INSERT INTO ${table}_literal(${table}_literal,rowid,body,aliases,owner)
+      SELECT 'delete',rowid,body,aliases,owner FROM ${table} WHERE rowid IN (${selection})`, args);
   }
   remove(job: SqliteIndexJob, id: string, field?: number): void {
     const table = searchTable(job), where = 'entity_id=?' + (field === undefined ? '' : ' AND field=?');
     const args = field === undefined ? [id] : [id, field];
+    this.removeLiteral(job, `SELECT id FROM ${table}_docs WHERE ${where}`, args);
     this.db.run(`DELETE FROM ${table} WHERE rowid IN (SELECT id FROM ${table}_docs WHERE ${where})`, args);
     this.db.run(`DELETE FROM ${table}_docs WHERE ${where}`, args);
   }
@@ -137,6 +154,8 @@ export class SqliteText {
             [row.id, doc.field, doc.element, part.portion]).lastInsertRowid;
           this.db.run(`INSERT INTO ${table}(rowid,entity_id,field,element,body,aliases,owner,portion) VALUES (?,?,?,?,?,?,?,?)`,
             [id, row.id, doc.field, doc.element, part.body, identifierParts(part.body).text, 'e' + seq, part.portion]);
+          if (hasLiteralText(job.definition)) this.db.run(`INSERT INTO ${table}_literal(rowid,body,aliases,owner) VALUES (?,?,?,?)`,
+            [id, part.body, identifierParts(part.body).text, 'e' + seq]);
         }
       }
     }
@@ -145,6 +164,7 @@ export class SqliteText {
   }
   collect(job: SqliteIndexJob, limit: number): boolean {
     const table = searchTable(job);
+    this.removeLiteral(job, `SELECT id FROM ${table}_docs ORDER BY id LIMIT ?`, [limit]);
     this.db.run(`DELETE FROM ${table} WHERE rowid IN (SELECT id FROM ${table}_docs ORDER BY id LIMIT ?)`, [limit]);
     return Number(this.db.run(`DELETE FROM ${table}_docs WHERE id IN (SELECT id FROM ${table}_docs ORDER BY id LIMIT ?)`, [limit]).changes) < limit;
   }
@@ -157,6 +177,7 @@ export class SqliteText {
     const nativeLimit = recency && !nativeRecency ? undefined : limit;
     const tokens = query.match(/-?(?:[^\s:"]+:)?(?:"[^"]+"|\S+)/g) ?? [];
     if (!tokens.length) return [];
+    const literals: Array<{ match: string; fields: number[] }> = [];
     const clauses: Clause[] = [], groups: number[][] = [[]], positiveTokens: number[][] = [], negativeTokens: number[][] = [];
     for (const [position, rawToken] of tokens.entries()) {
       if (rawToken === 'OR') { if (groups.at(-1)!.length) groups.push([]); continue; }
@@ -168,8 +189,13 @@ export class SqliteText {
       // ASCII separators in ordinary identifiers do not impose phrase adjacency. Keep non-ASCII
       // text intact for unicode61: JS Unicode categories differ from its pinned tokenizer rules.
       const parts = phrase ? [raw] : raw.split(/[\x00-\x2f\x3a-\x40\x5b-\x60\x7b-\x7f]+/).filter(Boolean);
-      const selected = (field === undefined ? fields : [field]).filter(f => !options.fields?.length || options.fields.includes(f))
+      const selected = (field === undefined ? fields : [field]).filter(f => options.fields === undefined || options.fields.includes(f))
         .map(f => fields.indexOf(f)).filter(i => i >= 0);
+      if (!negative && !phrase && parts.length > 1 && job.definition.stem === 'en') {
+        const suffix = options.prefix && position === tokens.length - 1 ? '*' : '';
+        literals.push({ match: `(body : ${quote(raw)}${suffix} OR aliases : ${quote(identifierParts(raw).text || raw)}${suffix})`,
+          fields: selected.filter(i => Number(job.definition.fields[fields[i]!].weight ?? 1) > 0) });
+      }
       const tokenClauses: number[] = [];
       for (const [part, text] of parts.entries()) {
         const normalized = fold(text); if (!normalized) continue;
@@ -250,19 +276,30 @@ export class SqliteText {
         `matches AS MATERIALIZED (${clauses.map((_, i) => `SELECT * FROM c${i}`).join(' UNION ALL ')}),
          clause_scores AS (SELECT clause,id,max(score) score,min(owner) owner,min(seq) seq FROM matches WHERE negative=0 GROUP BY clause,id),
          accepted AS (SELECT id,sum(score) score,min(owner) owner,min(seq) seq FROM clause_scores GROUP BY id HAVING (${condition}) ${excluded ? `AND id NOT IN (SELECT id FROM matches WHERE negative=1 GROUP BY id HAVING ${excluded})` : ''})`;
+      // Literal compound mentions take precedence over Porter-only matches. BM25 remains
+      // monotonic inside each tier; decay still applies afterward. Membership is unchanged.
+      const literalTable = table + '_literal';
+      const priority = literals.length ? `, literal_matches AS (${literals.map((literal, i) => {
+        args.push(literal.match);
+        return `SELECT DISTINCT ${i} token,d.entity_id id FROM ${literalTable} l
+          JOIN ${table}_docs d ON d.id=l.rowid WHERE ${literalTable} MATCH ?
+          AND d.field IN (${literal.fields.join(',')}) AND d.entity_id IN (SELECT id FROM accepted)`;
+      }).join(' UNION ')}), prioritized AS (SELECT a.id,a.owner,a.seq,
+        (SELECT count(*) FROM literal_matches l WHERE l.id=a.id)+a.score/(1+a.score) score FROM accepted a)` : '';
+      const prioritized = literals.length ? 'prioritized' : 'accepted';
       const decayed = nativeRecency ? `, decayed AS (
         SELECT a.id,a.owner,a.seq,a.score base_score,
           a.score * coalesce((SELECT CASE WHEN r.kind IN ('num','zero','date') THEN pow(0.5,max(0,? - r.value)/?) ELSE 1 END
             FROM (${this.db.fieldSource(recency.field, [job.type])}) r WHERE r.id=a.id),1) score
-        FROM accepted a)` : '';
+        FROM ${prioritized} a)` : '';
       if (nativeRecency) args.push(now, recency.halfLife);
       // Stable JS decay ties previously retained the base-score order, then entity insertion order.
-      const scored = nativeRecency ? 'decayed' : 'accepted';
+      const scored = nativeRecency ? 'decayed' : prioritized;
       const order = `a.score DESC,${nativeRecency ? 'a.base_score DESC,' : ''}a.seq`;
       const ranked = nativeLimit === undefined ? '' : `, ranked AS MATERIALIZED
         (SELECT a.* FROM ${scored} a ORDER BY ${order} LIMIT ?)`;
       if (nativeLimit !== undefined) args.push(nativeLimit);
-      return this.db.all(`WITH ${ctes.join(',')}, ${combined}${decayed}${ranked}
+      return this.db.all(`WITH ${ctes.join(',')}, ${combined}${priority}${decayed}${ranked}
         SELECT a.id,a.score,a.owner${details ? ',m.field,m.element,m.body,m.aliases,m.hbody,m.halias' : ''} FROM ${nativeLimit === undefined ? scored : 'ranked'} a
         ${details ? `JOIN ${source} m ON m.id=a.id AND m.negative=0` : ''}
         ORDER BY ${order}${details ? ',m.docid,m.clause' : ''}`, args);

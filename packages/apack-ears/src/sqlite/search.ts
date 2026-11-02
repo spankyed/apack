@@ -193,7 +193,7 @@ export class SqliteSearch {
         definition.indexes ?? {}
       ) as Array<[string, Data]>)
         if (index.kind === "text")
-          this.db.sql.exec(`DELETE FROM ${this.table(type, name, index)}; DELETE FROM ${this.table(type, name, index)}_docs;`);
+          this.texts.clear(this.db.indexBuilds.index(type, 'text', name));
     this.db.sql.exec("DELETE FROM text_meta; DELETE FROM chunks; DELETE FROM embedding_values;");
   }
   pending(type: string, limit: number) {

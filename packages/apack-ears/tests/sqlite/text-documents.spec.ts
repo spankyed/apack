@@ -118,6 +118,42 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     expect(e.query('Row').search('"generate-entries"', { fuzzy: false }).ids()).toEqual([]);
   });
 
+  it('prefers literal compounds over stem-only matches and maintains their postings', async () => {
+    const { db, e } = open();
+    e.admin.setSchema({ ...schema, types: { Row: { required: [], search: { fields: { name: 3, body: 1 }, stem: 'en' } } } });
+    e.create('Row', { id: 'Row-stem', name: 'Generated entries', modified: 10000 });
+    e.create('Row', { id: 'Row-literal', body: 'background '.repeat(1000) + 'generate-entries', modified: 0 });
+    const ids = () => e.query('Row').search('generate-entries', { fuzzy: false }).ids();
+    expect(ids()).toEqual(['Row-literal', 'Row-stem']);
+    expect(e.query('Row').search('generate-entries', { fuzzy: false,
+      recency: { field: 'modified', halfLife: 1, now: 10000 } }).ids()[0]).toBe('Row-stem');
+    expect(e.query('Row').search('generate-entries', { fuzzy: false, fields: [] }).ids()).toEqual([]);
+    await db.indexesReady();
+    expect((await auditSqliteDatabase(db)).ok).toBe(true);
+    e.write('Row-literal').set('body', 'Generated entries');
+    expect(ids()[0]).toBe('Row-stem');
+    e.write('Row-literal').destroy();
+    expect(ids()).toEqual(['Row-stem']);
+    expect((await auditSqliteDatabase(db)).ok).toBe(true);
+  });
+
+  it('detects missing literal postings and reconstructs them without changing primary values', async () => {
+    const { db, e } = open();
+    e.admin.setSchema({ ...schema, types: { Row: { required: [], search: { fields: { body: 1 }, stem: 'en' } } } });
+    e.create('Row', { id: 'Row-one', body: 'generate-entries' });
+    await db.indexesReady();
+    const job = db.indexBuilds.index('Row', 'text', 'search');
+    const table = searchTable(job) + '_literal', sequence = db.sequence;
+    db.run(`INSERT INTO ${table}(${table}) VALUES('delete-all')`);
+    const damaged = await auditSqliteDatabase(db);
+    expect(damaged.ok).toBe(false);
+    expect(damaged.issues.some(issue => issue.includes('posting integrity failed'))).toBe(true);
+    db.rebuildIndexes(); await db.indexesReady();
+    expect(db.sequence).toBe(sequence);
+    expect(e.getRow('Row-one')?.body).toBe('generate-entries');
+    expect((await auditSqliteDatabase(db)).ok).toBe(true);
+  });
+
   it('preserves native Unicode token characters when separating ASCII identifiers', () => {
     const { e } = open();
     e.create('Row', { id: 'Row-private', name: '\ue000key', body: 'suffix' });

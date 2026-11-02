@@ -555,3 +555,9 @@ before repeated workload measurement. Its child trees use the maintained bounded
 The new metadata gate rejects twelve missing/skipped/duplicate/replaced witness controls against
 the original passing report. Source-mutation execution and remeasurement remain unproven; no
 speedup is inferred from reducing one scan. Final platform/app qualification remains separate.
+
+### Keyword correction continuation: literal compounds
+
+Run [41473096670](https://github.com/spankyed/apack/actions/runs/41473096670) is terminal failure: SQLite unstemmed now passes 25/25, English 24/25 (case 6 rank 13). No fixture or acceptance threshold changed. Contracts and inference were skipped by the hard gate; earlier receipts do not qualify this runtime. Preserved evidence: `docs/references/evidence/ears-sqlite-implementation-2026-10-28/passages-373/`.
+
+The current implementation adds an external-content unstemmed FTS companion for English indexes: stored bodies are shared, native postings distinguish literal unquoted compounds from stem-only matches. Literal compound coverage precedes BM25 within each tier; recency applies afterward. Matching, explicit phrase membership, scope and winner-only highlights retain their existing execution. Text storage revision 3 triggers writable generation replacement; retirement remains version-aware. Index deletion/reset, native semantic integrity checks and regressions accompany the change. This revision remains unqualified until CI runs the original hard gate and all following checks. Foreground responsiveness misses remain explicitly accepted degradations; the keyword gate is not waived.
