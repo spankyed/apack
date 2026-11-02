@@ -22,10 +22,18 @@ npm run test:linux -- npm test -w @apackdev/ears
 
 SQLite uses pinned `better-sqlite3` 13.0.3 and `sqlite-vec` 0.1.9 from the normal workspace lockfile. The adapter
 lives in `src/sqlite/` and its app-only entry is `@apackdev/ears/sqlite`; this directory now holds harnesses rather
-than another implementation. Packaged Electron/native loading still needs qualification.
-Ordinary tests select elmdb and skip SQLite-only cases. Targeted driver checks have run on macOS arm64 and
-Linux; this is not Electron/Windows qualification. The current validation count and exact source pin live in the goal and retained evidence;
-full app, operational and packaging qualification remains open.
+than another implementation. [Packaged Linux/Windows native/API probes](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/installed-eb/README.md)
+pass on actual Electron, and the [complete source-app replay](../../../../docs/references/evidence/ears-sqlite-implementation-2026-10-28/full-app-672/README.md)
+passes 33 eligible cases once with one packaged-only exclusion. These receipts identify exact source and
+runtime scope; they do not establish notarized distribution or complete adoption acceptance.
+Ordinary tests select elmdb and skip SQLite-only cases. The goal and retained evidence own current-source
+qualification, exclusions and remaining requirements.
+
+The user explicitly retains synchronous app search and accepts foreground responsiveness degradation
+for experimental completion. Keep the original heartbeat samples and failures visible; this disposition
+does not change query-p95, recall, correctness or resource requirements, nor turn a failed measurement
+into a pass. The [completion assessment](../../../../docs/plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
+records the decision and remaining limitations.
 
 From the repository root, run one expensive task at a time:
 
