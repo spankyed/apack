@@ -192,10 +192,10 @@ draft PR [#286](https://github.com/spankyed/apack/pull/286). Integrated master r
 elmdb pin is `f496470679a7bd9764398108b20f62a73333c701`. Production stays on elmdb. No merge,
 release, adoption or daily-profile migration is authorized. Compiler/full validation remains disposable.
 
-The [current input-equivalence audit](../references/evidence/ears-sqlite-implementation-2026-10-28/final-runtime-inputs/README.md)
-confirms no shipped source/dependency/native/build-script changes from integrated source 061.
-Changed executable test/workflow inputs match their later qualified blobs; this does not waive
-keyword failures or broaden the original validation scopes.
+The [pre-keyword input-equivalence audit](../references/evidence/ears-sqlite-implementation-2026-10-28/final-runtime-inputs/README.md)
+remains dated evidence for its recorded tip. The new compound-query correction changes shipped
+runtime input `src/sqlite/text.ts`; earlier integration/corpus/installed results retain their original
+source and do not qualify this changed execution. Requalify the affected search and app behavior.
 
 Current checkpoint: fix the original keyword judgment, with no relevance waiver. The
 [exact diagnostic receipt](../references/evidence/ears-sqlite-implementation-2026-10-28/keyword-diagnostic-456/README.md)
@@ -302,6 +302,11 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 
 Current validation handles and results:
 
+- [Compound-query fix and original relevance qualification 41462773196](https://github.com/spankyed/apack/actions/runs/41462773196)
+  is active at `eed73e4071`. It requires source/test typecheck, existing search contracts, both new
+  regressions, exact old-source failures/restoration and the unchanged frozen relevance diagnostics.
+  Local YAML/shell syntax and diff checks pass; no native/local compiler validation was run.
+
 - [Original keyword ranking diagnostics 41460757710](https://github.com/spankyed/apack/actions/runs/41460757710)
   is terminal success at `4566270bf78e8d9290c92ff46f197e4fbdbeca25`. The frozen fixture is unchanged.
   Numeric failure diagnostics compare limited/unlimited ranks, scores and highlight positions on
@@ -336,7 +341,7 @@ Current validation handles and results:
   probes pass actual packaged Electron/native/API execution and four preview contracts per OS.
   Source/native/provenance and original reports are retained. No local build, signing or compiler run.
 - [Corrected-source app flows and UI controls 41401869473](https://github.com/spankyed/apack/actions/runs/41401869473)
-  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier validation handles, including the allocation/WAL checkpoint and independent corpus repetition, are terminal; the keyword diagnostic run above is active. Strict still retains the unwaived keyword failure.
+  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier handles, including the original keyword diagnostics, are terminal; the compound-fix qualification above is active. Strict still retains the unwaived keyword failure.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   [Attempt 2](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) reruns only integration-1 on the same source and passes all 242 tests/31 files. All other job outcomes remain retained; root keyword failures still keep the overall workflow red.
