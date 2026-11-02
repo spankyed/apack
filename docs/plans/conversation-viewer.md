@@ -17,7 +17,8 @@ the sole pack contract. The earlier renderer's evidence is historical and does n
   insertions and removals; preserve unchanged node views and mapped selections. Reconcile thread switches
   using the conversation component's key. Reject duplicate identities before changing the document.
 - Reuse the contributed-editor owner for extension replacement and teardown. Schema replacement must
-  retain document data or report refusal. Parsing errors must retire a capturing editor safely.
+  retain document data or report refusal. Keep transaction-capture callbacks nonthrowing so parsing
+  failures cannot leave the editor in capture mode; report refusal without publishing a partial conversation.
 - Adapt the existing command decoration to message boundaries. Clipboard, references, links and code
   remain owned by their existing extensions. Disable editing-only trailing paragraphs in viewers.
 

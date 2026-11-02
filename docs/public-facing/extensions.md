@@ -662,6 +662,12 @@ recognizes the beginning of an independently authored message should inspect the
 while continuing to support ordinary editor documents. Message actions and attachments remain Vue
 UI outside each message's ProseMirror content DOM.
 
+`ConversationViewer` (`@apackdev/ui/components/tiptap/ConversationViewer`) takes messages with
+`id` and Markdown `text`. Its default slot receives the message `id` and a `content` component.
+Render that component exactly once inside the message chrome and keep it mounted when collapsing
+a message, using `v-show` for visibility. ProseMirror owns that content DOM. The `rendered` event
+fires after the current message node views are mounted; use it for scroll positioning.
+
 `extensions.textEditor` declares named editor groups. Each group names its extensions,
 popups and optional suggestion predicate without importing executable code:
 
