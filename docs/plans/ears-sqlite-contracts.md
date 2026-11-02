@@ -50,6 +50,8 @@ backup coordination and a patched extension. It supplies mature transaction/FTS 
 candidate has not demonstrated lower total maintenance cost or a general performance win. The detailed
 invariant, algorithmic and dependency reviews below explain these ownership and recovery constraints.
 
+The [candidate implementation reference](../references/ears-sqlite-candidate.md) describes current storage, selection, readiness, search, durability and maintenance behavior. This matrix retains acceptance ownership and source-pinned evidence.
+
 ## Ownership and acceptance
 
 Paths in the test column are relative to `packages/apack-ears/tests/` unless prefixed otherwise.

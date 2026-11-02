@@ -39,6 +39,8 @@ For this host's shared external OrbStack data location, safe relocation and veri
 For recording contracts and the maintained diagnosis/comparison workflow, see
 [application performance recording](references/application-performance.md).
 
+The [EARS SQLite candidate reference](references/ears-sqlite-candidate.md) describes the isolated candidate's current contract. Its linked goal and assessment own qualification and adoption; production remains elmdb.
+
 ## Document lifecycle
 
 Keep current decisions and requirements in place. When a decision changes, reconcile the affected

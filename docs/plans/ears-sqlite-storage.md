@@ -486,7 +486,7 @@ The active goal owns qualification of this correction; full-bucket probing does 
 Duplicate-chunk expansion grows the native page up to 4096 chunks until that target is supplied;
 all returned distinct owners are retained, then every current canonical chunk for those owners is
 reranked with stable entity-sequence ties. Too few native owners retain the ordinary owner-level fallback.
-Small scopes (at most 4096 eligible chunks), K above 64 and unsupported dimensions remain exact.
+Small scopes (at most 4096 eligible chunks), K above 64, dimensions below 128 and dimensions not divisible by eight remain exact. Native training additionally stops at 4096 dimensions; wider aligned dimensions can use the ordinary BQ fallback.
 The native page cap does not bound canonical reranking work: one selected owner may have many chunks.
 Phase-4/7 resource qualification must cover that skew as well as one-chunk-per-owner corpora.
 [The current managed corpus](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-b99/README.md)
