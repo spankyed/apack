@@ -134,7 +134,10 @@ All six strict jobs passed on the earlier `054467ae45` checkpoint:
 [earlier strict CI](https://github.com/spankyed/apack/actions/runs/41490081660).
 The required final code gate targets `cf55bed96c`:
 [final strict CI](https://github.com/spankyed/apack/actions/runs/41499186813).
-Its final status is pending at this documentation checkpoint; the PR stays draft until it passes.
+All six required jobs passed: producers, app-and-rest, native-1, native-2, integration-1 and
+integration-2. Subsequent changes only finalize and archive documentation; the repository guide
+requires no code rebuild or repeated gate for those edits. The completed
+[implementation plan](../../archive/plans/conversation-viewer.md) records delivery.
 
 The final source review checked document/cache publication, capture-error recovery, contribution
 lifetime, unchanged selection/row identity, stable content DOM, clipboard ownership and scroll
