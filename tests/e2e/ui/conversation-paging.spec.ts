@@ -30,6 +30,11 @@ async function open(app: AppDriver, page: Page, threadId: string, fixtureIndex =
   await app.sendEvent({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId }] });
   await page.waitForFunction(id => (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.id === id, threadId);
   await expectRows(page, 50, 50, fixtureIndex);
+  // A viewport baseline taken during the message's entrance translation is not a reading position.
+  await page.evaluate(async () => {
+    await Promise.all(Array.from(document.querySelectorAll('[data-message-id]'))
+      .flatMap(row => row.getAnimations()).map(animation => animation.finished));
+  });
   await frames(page);
 }
 
@@ -53,7 +58,7 @@ function measureAnchor(row: Element, scrollToTop: boolean) {
   const rect = row.getBoundingClientRect();
   return { id: row.getAttribute('data-message-id')!, top: rect.top, height: rect.height,
     scrollTop: container.scrollTop, scrollHeight: container.scrollHeight, clientHeight: container.clientHeight,
-    containerTop: container.getBoundingClientRect().top, fonts: document.fonts.status };
+    containerTop: container.getBoundingClientRect().top, fonts: document.fonts.status, transform: getComputedStyle(row).transform };
 }
 
 async function restoreAnchor(page: Page, anchor: ReturnType<typeof measureAnchor>, info: TestInfo) {
