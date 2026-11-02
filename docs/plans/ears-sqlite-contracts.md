@@ -414,6 +414,8 @@ numeric/recall semantics, and requalify unsupported CPUs, ordinary packages and 
 
 ### Backup/import scope audit
 
+The [post-text-layout backup audit](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-c28-lint-fixture/backup-contract-audit.json) independently verifies those same 27 storage and ten logical-archive cases at `c28f067c96` on Linux, macOS and Windows: 111 passing executions, zero exclusions in these files. Original host-report hashes match archived bytes. Both fixtures are byte-identical at 06106d18dd, c28f067c96 and the current a8500818f6 code tip. This qualifies these concrete host/storage paths with revision-4 text content; the parent strict/platform run remains failed for its separately recorded lint/obsolete damage target, and later app/installed validation is not inferred.
+
 The current [platform-061 original host reports](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-061/README.md), source `06106d18dd`, independently show 27/27 `backup/storage.spec.ts` and 10/10 `backup/logical.spec.ts` passes on each OS, with no exclusions in those files. The former has ten native and ten explicitly selected SQLite variants plus seven cross-format/native-service/cleanup cases. Source inspection confirms real database factories, populated stores and read-only reopening of retained recovery copies. Generic `import-transaction.spec.ts` ordering tests and the original native-only `import.spec.ts` are not substituted for SQLite execution.
 
 | Required boundary | Actual storage fixture assertion |

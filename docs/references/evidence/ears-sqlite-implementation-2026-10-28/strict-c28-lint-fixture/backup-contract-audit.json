@@ -1,0 +1,206 @@
+{
+  "run": 41481255377,
+  "source": "c28f067c96ffc8bbf1f3ff01a7fb158ed37b71e8",
+  "scope": "Actual shared-format storage coordination and explicitly SQLite logical archive contracts only; not overall platform/strict success",
+  "fixtureSource": [
+    {
+      "path": "packages/apack-host/tests/backup/storage.spec.ts",
+      "sha256": "216afd3ff1bafe90bdeeb352696d2f05537085362567d5582da732c2c370b39e",
+      "unchangedAcross": [
+        "06106d18dd",
+        "c28f067c96ffc8bbf1f3ff01a7fb158ed37b71e8",
+        "a8500818f6"
+      ]
+    },
+    {
+      "path": "packages/apack-host/tests/backup/logical.spec.ts",
+      "sha256": "ce853198aedcf216846b2797d49b3347646b7fcd1209be303f6a386342517e8f",
+      "unchangedAcross": [
+        "06106d18dd",
+        "c28f067c96ffc8bbf1f3ff01a7fb158ed37b71e8",
+        "a8500818f6"
+      ]
+    }
+  ],
+  "platforms": [
+    {
+      "platform": "linux",
+      "originalHostReportSha256": "fd4fe955bbf46d33f31b8272bf6a5284ce9b9dcf8fc34d07f709e3da702c2f7c",
+      "files": [
+        {
+          "file": "backup/storage.spec.ts",
+          "passed": 27,
+          "failed": 0,
+          "excluded": 0,
+          "cases": [
+            "Host backup storage elmdb/1 opens real primary/run-history backups and uses the files even when metadata claims another format",
+            "Host backup storage elmdb/1 restores both populated stores and media when application acceptance refuses",
+            "Host backup storage elmdb/1 restores the primary when replacing the second store refuses",
+            "Host backup storage elmdb/1 restores a replacement which committed before reporting NOT_DURABLE",
+            "Host backup storage elmdb/1 keeps readable incumbent copies when replacement and restoration both fail",
+            "Host backup storage elmdb/1 refuses cross-format import before validation, replacement or media changes",
+            "Host backup storage elmdb/1 checks the second store format before validating or replacing the primary",
+            "Host backup storage elmdb/1 imports through the actual appData service and refreshes the accepted settings",
+            "Host backup storage elmdb/1 refuses invalid settings through appData before replacing either live store",
+            "Host backup storage elmdb/1 refuses ambiguous physical files regardless of backup metadata",
+            "Host backup storage sqlite/1 opens real primary/run-history backups and uses the files even when metadata claims another format",
+            "Host backup storage sqlite/1 restores both populated stores and media when application acceptance refuses",
+            "Host backup storage sqlite/1 restores the primary when replacing the second store refuses",
+            "Host backup storage sqlite/1 restores a replacement which committed before reporting NOT_DURABLE",
+            "Host backup storage sqlite/1 keeps readable incumbent copies when replacement and restoration both fail",
+            "Host backup storage sqlite/1 refuses cross-format import before validation, replacement or media changes",
+            "Host backup storage sqlite/1 checks the second store format before validating or replacing the primary",
+            "Host backup storage sqlite/1 imports through the actual appData service and refreshes the accepted settings",
+            "Host backup storage sqlite/1 refuses invalid settings through appData before replacing either live store",
+            "Host backup storage sqlite/1 refuses ambiguous physical files regardless of backup metadata",
+            "does not create an elmdb database over a SQLite host directory",
+            "does not move a elmdb/1 run history aside when the other backend is selected",
+            "does not move a sqlite/1 run history aside when the other backend is selected",
+            "coordinates real native services through populated SQLite import and success",
+            "coordinates real native services through populated SQLite import and acceptance",
+            "coordinates real native services through populated SQLite import and media",
+            "closes managed app stores without announcing success when settings cleanup fails after import"
+          ]
+        },
+        {
+          "file": "backup/logical.spec.ts",
+          "passed": 10,
+          "failed": 0,
+          "excluded": 0,
+          "cases": [
+            "exclusively publishes a complete private archive readable through the app-only staging API",
+            "preserves an existing output and a racing output without replacing either",
+            "cleans refused publication and leaves no final artifact on an unsupported filesystem operation",
+            "reports a published but unsynchronized directory truthfully and retains its complete archive",
+            "replaces a populated store through the existing coordinator and preserves separately owned media",
+            "validates all selected stores before replacing either, then imports primary and run history together",
+            "restores the incumbent when acceptance refuses a logical import",
+            "retains the ordinary recovery journal after an uncertain logical replacement",
+            "imports only run history without replacing or advancing the primary database",
+            "fully validates preview archives and primary acceptance without touching either live store"
+          ]
+        }
+      ]
+    },
+    {
+      "platform": "macos",
+      "originalHostReportSha256": "6634d04467e85f7fccd5047b2d5499251b4ab9511921642665310a9ba249b7e3",
+      "files": [
+        {
+          "file": "backup/storage.spec.ts",
+          "passed": 27,
+          "failed": 0,
+          "excluded": 0,
+          "cases": [
+            "Host backup storage elmdb/1 opens real primary/run-history backups and uses the files even when metadata claims another format",
+            "Host backup storage elmdb/1 restores both populated stores and media when application acceptance refuses",
+            "Host backup storage elmdb/1 restores the primary when replacing the second store refuses",
+            "Host backup storage elmdb/1 restores a replacement which committed before reporting NOT_DURABLE",
+            "Host backup storage elmdb/1 keeps readable incumbent copies when replacement and restoration both fail",
+            "Host backup storage elmdb/1 refuses cross-format import before validation, replacement or media changes",
+            "Host backup storage elmdb/1 checks the second store format before validating or replacing the primary",
+            "Host backup storage elmdb/1 imports through the actual appData service and refreshes the accepted settings",
+            "Host backup storage elmdb/1 refuses invalid settings through appData before replacing either live store",
+            "Host backup storage elmdb/1 refuses ambiguous physical files regardless of backup metadata",
+            "Host backup storage sqlite/1 opens real primary/run-history backups and uses the files even when metadata claims another format",
+            "Host backup storage sqlite/1 restores both populated stores and media when application acceptance refuses",
+            "Host backup storage sqlite/1 restores the primary when replacing the second store refuses",
+            "Host backup storage sqlite/1 restores a replacement which committed before reporting NOT_DURABLE",
+            "Host backup storage sqlite/1 keeps readable incumbent copies when replacement and restoration both fail",
+            "Host backup storage sqlite/1 refuses cross-format import before validation, replacement or media changes",
+            "Host backup storage sqlite/1 checks the second store format before validating or replacing the primary",
+            "Host backup storage sqlite/1 imports through the actual appData service and refreshes the accepted settings",
+            "Host backup storage sqlite/1 refuses invalid settings through appData before replacing either live store",
+            "Host backup storage sqlite/1 refuses ambiguous physical files regardless of backup metadata",
+            "does not create an elmdb database over a SQLite host directory",
+            "does not move a elmdb/1 run history aside when the other backend is selected",
+            "does not move a sqlite/1 run history aside when the other backend is selected",
+            "coordinates real native services through populated SQLite import and success",
+            "coordinates real native services through populated SQLite import and acceptance",
+            "coordinates real native services through populated SQLite import and media",
+            "closes managed app stores without announcing success when settings cleanup fails after import"
+          ]
+        },
+        {
+          "file": "backup/logical.spec.ts",
+          "passed": 10,
+          "failed": 0,
+          "excluded": 0,
+          "cases": [
+            "exclusively publishes a complete private archive readable through the app-only staging API",
+            "preserves an existing output and a racing output without replacing either",
+            "cleans refused publication and leaves no final artifact on an unsupported filesystem operation",
+            "reports a published but unsynchronized directory truthfully and retains its complete archive",
+            "replaces a populated store through the existing coordinator and preserves separately owned media",
+            "validates all selected stores before replacing either, then imports primary and run history together",
+            "restores the incumbent when acceptance refuses a logical import",
+            "retains the ordinary recovery journal after an uncertain logical replacement",
+            "imports only run history without replacing or advancing the primary database",
+            "fully validates preview archives and primary acceptance without touching either live store"
+          ]
+        }
+      ]
+    },
+    {
+      "platform": "windows",
+      "originalHostReportSha256": "8dcbafef917c8f12a2dad4d4117c70fda49598a039a1dd8992c56e06c7fcd14d",
+      "files": [
+        {
+          "file": "backup/storage.spec.ts",
+          "passed": 27,
+          "failed": 0,
+          "excluded": 0,
+          "cases": [
+            "Host backup storage elmdb/1 opens real primary/run-history backups and uses the files even when metadata claims another format",
+            "Host backup storage elmdb/1 restores both populated stores and media when application acceptance refuses",
+            "Host backup storage elmdb/1 restores the primary when replacing the second store refuses",
+            "Host backup storage elmdb/1 restores a replacement which committed before reporting NOT_DURABLE",
+            "Host backup storage elmdb/1 keeps readable incumbent copies when replacement and restoration both fail",
+            "Host backup storage elmdb/1 refuses cross-format import before validation, replacement or media changes",
+            "Host backup storage elmdb/1 checks the second store format before validating or replacing the primary",
+            "Host backup storage elmdb/1 imports through the actual appData service and refreshes the accepted settings",
+            "Host backup storage elmdb/1 refuses invalid settings through appData before replacing either live store",
+            "Host backup storage elmdb/1 refuses ambiguous physical files regardless of backup metadata",
+            "Host backup storage sqlite/1 opens real primary/run-history backups and uses the files even when metadata claims another format",
+            "Host backup storage sqlite/1 restores both populated stores and media when application acceptance refuses",
+            "Host backup storage sqlite/1 restores the primary when replacing the second store refuses",
+            "Host backup storage sqlite/1 restores a replacement which committed before reporting NOT_DURABLE",
+            "Host backup storage sqlite/1 keeps readable incumbent copies when replacement and restoration both fail",
+            "Host backup storage sqlite/1 refuses cross-format import before validation, replacement or media changes",
+            "Host backup storage sqlite/1 checks the second store format before validating or replacing the primary",
+            "Host backup storage sqlite/1 imports through the actual appData service and refreshes the accepted settings",
+            "Host backup storage sqlite/1 refuses invalid settings through appData before replacing either live store",
+            "Host backup storage sqlite/1 refuses ambiguous physical files regardless of backup metadata",
+            "does not create an elmdb database over a SQLite host directory",
+            "does not move a elmdb/1 run history aside when the other backend is selected",
+            "does not move a sqlite/1 run history aside when the other backend is selected",
+            "coordinates real native services through populated SQLite import and success",
+            "coordinates real native services through populated SQLite import and acceptance",
+            "coordinates real native services through populated SQLite import and media",
+            "closes managed app stores without announcing success when settings cleanup fails after import"
+          ]
+        },
+        {
+          "file": "backup/logical.spec.ts",
+          "passed": 10,
+          "failed": 0,
+          "excluded": 0,
+          "cases": [
+            "exclusively publishes a complete private archive readable through the app-only staging API",
+            "preserves an existing output and a racing output without replacing either",
+            "cleans refused publication and leaves no final artifact on an unsupported filesystem operation",
+            "reports a published but unsynchronized directory truthfully and retains its complete archive",
+            "replaces a populated store through the existing coordinator and preserves separately owned media",
+            "validates all selected stores before replacing either, then imports primary and run history together",
+            "restores the incumbent when acceptance refuses a logical import",
+            "retains the ordinary recovery journal after an uncertain logical replacement",
+            "imports only run history without replacing or advancing the primary database",
+            "fully validates preview archives and primary acceptance without touching either live store"
+          ]
+        }
+      ]
+    }
+  ],
+  "passedCaseExecutions": 111,
+  "databaseFactories": "storage.spec.ts storesAt opens real host primary/run-history stores per describe.each([ELMDB,SQLITE]); logical.spec.ts directly imports SQLite open/stage APIs. Populated incumbent and real media files are asserted. No backend aliases."
+}
