@@ -1,4 +1,4 @@
-import { threadFixture, richThreadFixture } from './fixture.ts';
+import { threadFixture, richThreadFixture } from '../fixtures/conversations.ts';
 import { createWarmScenario } from './scenario.ts';
 import type { PerformanceWindow } from './window.ts';
 

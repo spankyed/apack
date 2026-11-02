@@ -145,3 +145,57 @@ The final source review checked document/cache publication, capture-error recove
 lifetime, unchanged selection/row identity, stable content DOM, clipboard ownership and scroll
 coordination. No further material code defect was identified. The incomplete first host broad run is
 not counted as a pass; the final strict gate supplies broad acceptance.
+
+
+## Paging-check follow-up — 2026-11-02
+
+A matching-pin reproduction of the original supplemental sequence reproduced the missing-button
+failure. After cross-thread search focus, automatic paging grew the limit from 50 to 100; all 100
+bodies rendered, `hasMore` became false and the manual button correctly disappeared. The check had
+incorrectly coupled search/automatic paging to a later manual click. Its original failure is retained,
+not relabeled a pass. The corrected supplemental check leaves manual paging to independent cases.
+
+Initial independent checks reported 7.8125/9.8125-pixel anchor displacement, but their baseline was
+captured during the message's 10-pixel entrance translation. That did not establish a runtime defect.
+The experimental visible-anchor change in `08b9ad0aee` was withdrawn in `47de0ce597`; production
+`chat.vue` is identical to merged baseline `8fc5719cfb`. Earlier claims that the height-delta algorithm
+was proved incorrect are withdrawn. Failed and experimental runs remain in the archive.
+
+The maintained [paging UI spec](../../../../tests/e2e/ui/conversation-paging.spec.ts) separates manual
+paging, automatic paging and cross-thread search focus. It waits for actual entrance animations to
+finish before measuring a reading position. Row readiness is observed in the renderer rather than
+through repeated external polling and tracing snapshots. The original five-second completion limit,
+three-pixel anchor bound, complete ordered unique bodies and fully visible search target remain intact.
+The focus case covers both an initially loaded target and an older target after paging completes.
+Failures retain an Electron browser trace, screenshot, actor state and anchor geometry.
+
+All three cases pass against unchanged production code in `paging-renderer-readiness-v1/run.log`
+and again after the fixture-boundary correction in `paging-final-verification-v1/browser.log`.
+The prior `paging-settled-baseline-v1` manual case timed out at row readiness (its failure snapshot
+already contained all 100 rows); it is retained as a failure, not anchor-defect evidence. Moving the
+unchanged readiness predicate into the renderer removes the coarse external observation interval.
+Browser checks use the maintained disk-backed Linux runner with two CPUs, 6 GiB memory and native
+source exactly matching pin `e5ecfec8894c0f32d243c7d5b18245b35b018fdc`.
+
+The corrected supplemental rich-content, native clipboard, replacement, collapse and focus check
+also passes against unchanged production code (`paging-original-rich-v1/run.log`). UI-test TypeScript
+and the repository chain's `typecheck:scripts` and `lint:check` pass. The earlier CI job found that the
+UI spec's import from the performance harness violated the repo-check boundary. Pure fixture data now
+lives in `tests/fixtures/conversations.ts`, byte-for-byte unchanged; all callers import that shared file.
+The UI spec declares only the actor fields it observes, with no performance-controller dependency.
+The focused repo-boundary spec passes all three checks.
+
+The fix-forward is [PR #312](https://github.com/spankyed/apack/pull/312), containing tests and evidence
+only. [Earlier strict CI](https://github.com/spankyed/apack/actions/runs/41533371482) targets the withdrawn
+runtime candidate `08b9ad0aee`; it does not certify this final revision. These correctness checks do not
+requalify historical performance measurements.
+
+The final accepted check logs are `paging-final-verification-v1/{boundary,checks,browser}.log` and
+`paging-original-rich-v1/run.log`. Original failures, withdrawn experiments, final checks and exact
+probe sources are retained in volume `apack-linux-work-2bd9183070f1` under `/work/.apack/performance/`
+and independently copied to the owning worktree as
+`.apack/performance/conversation-paging-2026-11-02-settled.tar.gz`. Container and host SHA-256:
+
+```text
+a43dbc37d7c98e2dec15389d822dd85787c690585d08c3e0a7573c50ad70139b
+```
