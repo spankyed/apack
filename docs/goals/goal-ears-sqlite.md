@@ -298,6 +298,11 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 
 Current validation handles and results:
 
+- [Original keyword ranking diagnostics 41460757710](https://github.com/spankyed/apack/actions/runs/41460757710)
+  is in progress at `4566270bf78e8d9290c92ff46f197e4fbdbeca25`. The frozen fixture is unchanged.
+  Numeric failure diagnostics compare limited/unlimited ranks, scores and highlight positions on
+  both backends and both stemming modes; no query, target or top-five threshold was relaxed.
+
 - [Independent ordinary managed corpus repetition 41413055256](https://github.com/spankyed/apack/actions/runs/41413055256)
   is terminal success at `94cf2eeac6`. Packaged/managed/production inputs are explicit; no diagnostic override.
   [Verified corpus reports](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-94cf/README.md)
@@ -327,7 +332,7 @@ Current validation handles and results:
   probes pass actual packaged Electron/native/API execution and four preview contracts per OS.
   Source/native/provenance and original reports are retained. No local build, signing or compiler run.
 - [Corrected-source app flows and UI controls 41401869473](https://github.com/spankyed/apack/actions/runs/41401869473)
-  at `275b6fac3d` succeed, with the independently checked receipt above. All validation handles, including the stronger allocation/WAL checkpoint and independent corpus repetition, are terminal. Strict still retains the unwaived keyword failure.
+  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier validation handles, including the allocation/WAL checkpoint and independent corpus repetition, are terminal; the keyword diagnostic run above is active. Strict still retains the unwaived keyword failure.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   [Attempt 2](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) reruns only integration-1 on the same source and passes all 242 tests/31 files. All other job outcomes remain retained; root keyword failures still keep the overall workflow red.
