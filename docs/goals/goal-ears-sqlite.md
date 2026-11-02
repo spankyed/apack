@@ -197,19 +197,20 @@ confirms no shipped source/dependency/native/build-script changes from integrate
 Changed executable test/workflow inputs match their later qualified blobs; this does not waive
 keyword failures or broaden the original validation scopes.
 
-Current decision checkpoint: all recorded CI handles are terminal and the candidate/report are
-committed in draft PR #286. A user disposition has been requested: conclude a non-adoption
-experiment with keyword 24/25 and the documented qualification gaps retained, or continue full
-production-readiness qualification. No answer is assumed. The goal remains active under its
-original acceptance criteria; no gate, PR closure, merge or adoption is authorized by this request.
-The [completion report](../plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
-contains the concrete recommendation and evidence for that decision. No CI run is awaiting collection.
+Current checkpoint: the user explicitly resumed full goal work and directed fixing the 24/25
+keyword result. No relevance waiver is requested or assumed. Keep the frozen query, top-five
+threshold and expected answer unchanged. First collect actual unlimited versus limited rankings,
+relevant rank, score and match-position diagnostics on both backends under both existing stemming
+configurations. This is diagnostic evidence, not a ranking fix or a performance measurement.
+Then correct the demonstrated cause and require the original shared judgments/search contracts,
+meaningful old-code controls and relevant corpus/app checks on the changed runtime. Native/compiler
+validation stays in disposable CI; all previous evidence remains source-pinned history.
 
 The user explicitly retains synchronous app search and accepts foreground responsiveness degradation
 for completion of this experiment. Preserve original heartbeat misses as measured failures with an
 approved disposition, not passes. No async search API is being implemented. Keyword-only usefulness
-remains 24/25 on both backends; English hybrid is 25/25. The separate keyword disposition question is
-pending; no waiver or answer is assumed. Other requirements below remain intact.
+remains 24/25 on both backends; English hybrid is 25/25. The user requires fixing the original keyword judgment; it remains required. Other requirements
+below remain intact.
 
 **Watch correction:** the newly exercised pack-unit stage at c5d6f3ea66 exposed three unnecessary
 open-thread view reruns (988 passes, one failure, two exclusions). [Original failure evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/pack-scope-c5d-failure/README.md)

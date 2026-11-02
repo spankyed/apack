@@ -48,6 +48,24 @@ for (const backend of ['elmdb', 'sqlite']) for (const stem of ['none', 'en']) {
       }
       group.cases.push({ ordinal, returned: hits.length, matchedRelevant: !!relevant,
         highlightExpected: !!test.highlight, highlightPassed, ms: performance.now() - at });
+      if (!relevant) {
+        const all = e.query('Document').search(test.query, test.options).hits({ highlights: true });
+        const documents = new Map(fixture.documents.map(document => [document.id, document]));
+        group.cases.at(-1).rankingDiagnostic = {
+          limitedMatchesFullPrefix: hits.every((hit, i) => all[i]?.id === hit.id),
+          totalMatches: all.length,
+          relevantRanks: all.flatMap((hit, i) => test.relevant.includes(hit.id) ? [i + 1] : []),
+          // Numeric diagnostics only: no document identities, query text or source bodies.
+          ranked: all.map((hit, i) => {
+            const document = documents.get(hit.id);
+            return { rank: i + 1, relevant: test.relevant.includes(hit.id), score: hit.score,
+              nameChars: document.name.length, bodyChars: document.body.length,
+              nameMatches: hit.highlights?.name?.length ?? 0,
+              bodyMatches: hit.highlights?.body?.length ?? 0,
+              firstBodyMatch: hit.highlights?.body?.[0]?.[1] ?? null };
+          }),
+        };
+      }
       save();
     }
     group.completed = true;
