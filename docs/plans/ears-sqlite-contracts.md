@@ -17,8 +17,7 @@ or authorize closing the PR, merging, migrating profiles or removing either impl
 **Watch finding and correction:** [The independent pack-unit stage](../references/evidence/ears-sqlite-implementation-2026-10-28/pack-scope-c5d-failure/README.md)
 exposed three unnecessary thread-view reruns after an unrelated thread is created. [Correction cd8](../references/evidence/ears-sqlite-implementation-2026-10-28/watch-scope-cd8/README.md)
 passes 31 watch and six real thread-view cases on each backend; all four precision guards fail against
-the actual old module, followed by verified source restoration. Linux/macOS complete EARS have 935
-passes and only keyword failure. The focused defect is closed; full corrected-source pack/authoring
+the actual old module, followed by verified source restoration. [Corrected three-platform EARS](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-cd8/README.md) have 935 Linux/macOS passes and 931 Windows passes, only keyword failure and original Windows exclusions. The focused defect is closed; full corrected-source pack/authoring
 qualification is still pending in runs 41391989615 and 41392105607. The responsiveness disposition
 does not waive an existing watch/observability contract.
 

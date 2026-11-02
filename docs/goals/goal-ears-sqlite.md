@@ -204,8 +204,9 @@ is preserved. Correction `cd8b413fa8` scopes ID/type/typed-hop dependencies and 
 reachability. [Its actual Linux control](../references/evidence/ears-sqlite-implementation-2026-10-28/watch-scope-cd8/README.md)
 passes all 31 watch and six real thread-view cases on each backend, including the original metric
 case. Four precision guards fail against the exact old c5d6f3ea66 module; both source blob hashes
-and byte-for-byte restoration verify. Linux/macOS complete EARS now pass 935 cases with only the
-retained keyword failure. This closes the demonstrated defect at focused scope; all 991 pack units
+and byte-for-byte restoration verify. [Corrected three-platform EARS](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-cd8/README.md)
+now pass 935 cases on Linux/macOS and 931 on Windows, retaining only keyword failure and the four
+original Windows exclusions. This closes the demonstrated defect at focused scope; all 991 pack units
 and the remaining authoring/app stages still require corrected-source integrated qualification.
 
 Latest demonstrated results:
@@ -249,13 +250,13 @@ Latest demonstrated results:
 Live checks on corrected program source:
 
 - Platform/control run [41390395444](https://github.com/spankyed/apack/actions/runs/41390395444)
-  at `cd8b413fa8`: Linux/macOS complete with only keyword failure; Windows remains active. The
-  focused dependency control passes with original numeric reports retained above.
+  at `cd8b413fa8`: all three platforms are terminal with only keyword failure and original OS
+  exclusions. The focused dependency control passes with original numeric reports retained above.
 - Integrated strict run [41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
-  at `06106d18dd` is pending behind platform workflow concurrency; it must execute the full pack
+  at `06106d18dd` is active; it must execute the full pack
   pool and previously unexecuted remaining stages. This source differs from cd8 only in documentation.
 - Explicit SQLite packaged-authoring run [41392105607](https://github.com/spankyed/apack/actions/runs/41392105607)
-  at `06106d18dd` is pending behind the active app workflow. Preserve the occupied pending slot.
+  at `06106d18dd` is active with an explicit SQLite profile. Preserve any occupied pending slot.
 
 Previous integrated run `41385303835` at c5d6f3ea66 is terminal: producer and all four integration/native
 consumers pass; host retains keyword failure and the independent SQLite witness passes; pack units
