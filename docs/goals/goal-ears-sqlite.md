@@ -244,7 +244,7 @@ Latest demonstrated results:
   [Matching three-platform results](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-061/README.md) retain only keyword failure and
   original Windows exclusions. [Actual history EIO refusal/preservation](../references/evidence/ears-sqlite-implementation-2026-10-28/history-ae9/README.md)
   separately proves intact-incumbent refusal/reopen; routing tests alone do not prove syscall outcomes.
-- [Packaged Linux/Windows](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-eb/README.md)
+- [Packaged Linux/Windows at d795901191](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795/README.md)
   pass native/API probes. [Signed macOS at d795901191](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795-signed/README.md)
   passes strict signing, post-sign native smoke and all six installed cases without exclusions/retries.
   Cleanup is observed at command/step scope; no notarized distribution claim.
@@ -266,14 +266,14 @@ This maps to phase 5/search UI failure contracts; it introduces no asynchronous 
 
 Current validation handles and results:
 
-- Final-runtime packaged qualification at `d795901191` (program identical to cd8; documentation-only descendants):
-  [signed macOS 41399250308](https://github.com/spankyed/apack/actions/runs/41399250308) succeeds: [six installed cases, strict signing, post-sign native smoke and cleanup step](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795-signed/README.md);
-  [Windows/Linux installed probes 41399303818](https://github.com/spankyed/apack/actions/runs/41399303818)
-  are now active on both OSes after it completed in the same app-workflow concurrency group. macOS reached checkout before adding
-  the one pending run; no existing run was displaced. These requalify installed execution after the
-  query dependency correction, rather than repeating heavy checks for documentation changes alone.
-  Require actual signed native loading/six lifecycle cases and both real packaged Electron probe results;
-  preserve source/native/provenance, failures and exclusions. No signing or full build runs locally.
+- Final database-runtime packaged qualification at `d795901191` (program identical to cd8):
+  [signed macOS 41399250308](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795-signed/README.md) and
+  [Windows/Linux 41399303818](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-d795/README.md) succeed.
+  macOS passes strict signing, post-sign native smoke and six installed lifecycle cases; both x64
+  probes pass actual packaged Electron/native/API execution and four preview contracts per OS.
+  Source/native/provenance and original reports are retained. No local build, signing or compiler run.
+- [Corrected-source app flows and UI controls 41401869473](https://github.com/spankyed/apack/actions/runs/41401869473)
+  at `275b6fac3d` are active. This executes the checkpoint above; it is not passing evidence yet.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   Attempt 2 reruns only integration-1 on the same source; it is active. All other job outcomes remain retained.

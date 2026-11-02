@@ -1,0 +1,39 @@
+{
+  "run": 41399303818,
+  "source": "d795901191375520dd30b6383ab7c5e35c06daaa",
+  "scope": "Unsigned unpacked Preview native/API probes on Linux/Windows x64; no renderer/installer/signing/distribution or physical power-loss claim. Original qualification:false retained.",
+  "platforms": [
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "completed": true,
+      "previewPassed": 4,
+      "previewFailed": 0,
+      "previewExcluded": 0,
+      "nativeAddons": 6,
+      "electron": "37.2.4",
+      "node": "22.17.1",
+      "sqlite": "3.53.4",
+      "driver": "13.0.3",
+      "leiden": "0.8.1",
+      "originalJobMetadataSha256": "35e95ef541ea10198095f7be13aeebd19345567aca057776fadf43a22b2b48b3",
+      "originalBuildLogSha256": "ab129cbd314efabbd22a9e6acd82870e081581ae485e1e9b4491a486e614efe1"
+    },
+    {
+      "platform": "win32",
+      "arch": "x64",
+      "completed": true,
+      "previewPassed": 4,
+      "previewFailed": 0,
+      "previewExcluded": 0,
+      "nativeAddons": 6,
+      "electron": "37.2.4",
+      "node": "22.17.1",
+      "sqlite": "3.53.4",
+      "driver": "13.0.3",
+      "leiden": "0.8.1",
+      "originalJobMetadataSha256": "8b461526aaadab9b2438d6669b9a2ebff049d5735e27a990deaf028ed0a5175d",
+      "originalBuildLogSha256": "c01618f32802401f6e70a471fee4e5b8746f560c245fa9e888877e1a5fbf08a6"
+    }
+  ]
+}
