@@ -9,17 +9,11 @@ benchmark/failed-suite evidence retains its original source and native artifact.
 
 ## Experiment completion report (qualification in progress)
 
-Current source adds a separately normalized native FTS prefix passage for long strings (256
-UTF-16 units ending at whitespace, weight 3), keeping the full source and taking the best
-passage score per entity/clause. Derived revision 2, audit/rebuild and read-only upgrade guards
-cover the layout. The [prior leading-column attempt](../references/evidence/ears-sqlite-implementation-2026-10-28/lead-column-a9/README.md)
-improved the required overview to seventh place but failed the unchanged hard gate; it shared
-full-row length normalization. The cap and weight are unchanged in this passage correction.
-This is a general ranking correction under qualification, not a passing 25/25 claim. The frozen
-query, expected answer and threshold are unchanged. The previous [compound correction](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
-passes 93 contracts and old-source controls, and English SQLite keyword is 25/25; its original
-unstemmed gate remains 24/25. The new source must pass both configurations and affected checks.
-Earlier corpus/integration/installed reports remain source-pinned history after these changes.
+The original SQLite keyword gate now passes **25/25 in both unstemmed and English configurations**, verified at `34ced96b43` by [run 41478710010](https://github.com/spankyed/apack/actions/runs/41478710010). The query, fixture, expected answer and top-five threshold are unchanged. [Preserved numeric evidence and failed-contract disposition](../references/evidence/ears-sqlite-implementation-2026-10-28/literal-34/README.md): EARS builds/typechecks; 122 selected contracts pass and three new English audit cases fail. No full-acceptance claim follows; counterfactuals and inference were skipped.
+
+Current runtime `7ffa2a7ca5` corrects that verified audit limitation by storing each indexed source string once in an ordinary document table. Primary native FTS and the English unstemmed companion share it, allowing native external-content integrity checking. Text revision 4 replaces older generations on writable reopen; obsolete read-only opens refuse. Queries retain separately normalized bounded leading passages (256 UTF-16 units, whitespace boundary, weight 3) beside complete source strings. English positive unquoted compounds prefer literal compound coverage, then monotonic BM25 within each tier; recency applies afterward. Stem-only matches remain eligible. Explicit empty field selection searches no fields.
+
+[Focused run 41480349250](https://github.com/spankyed/apack/actions/runs/41480349250) is qualifying this correction, including ranking, lifecycle, clear/reuse, both real-layout upgrade paths, corruption/rebuild and four assertion failures against the exact old source. Strict 41479016465 and corpus 41479389479 were cancelled as superseded by the known audit correction, without acceptance claims. Earlier corpus/integration/installed receipts retain their original runtime scope. Full affected-source qualification remains required; only foreground responsiveness has an approved degradation disposition.
 
 **Recommendation: retain elmdb in production.** The SQLite candidate demonstrates a feasible
 implementation of the complete app-facing API; the evidence does not establish a net adoption benefit.
