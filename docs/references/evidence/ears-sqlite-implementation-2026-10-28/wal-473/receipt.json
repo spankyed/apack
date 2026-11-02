@@ -1,0 +1,114 @@
+{
+  "source": "4738d9bab59e2d686c77c7ab2ae9a87e4ed683eb",
+  "qualification": false,
+  "records": [
+    {
+      "mode": "released",
+      "regime": "burst",
+      "commits": 512,
+      "elapsedMs": 531.196001,
+      "writeP95Ms": 1.216162000000054,
+      "heartbeatP99Ms": 6.0782500000000255,
+      "heartbeatWithinLimit": true,
+      "busyRefusalMs": 0.6472840000000133,
+      "checkpointWhileReader": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      },
+      "checkpointAfterRelease": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      },
+      "sampledPostCommitLogicalPeakBytes": 37630056,
+      "sampledPostCommitAllocatedPeakBytes": 37638144,
+      "sampledWalPeakBytes": 4231272,
+      "heartbeatMaxMs": 11.924397999999997,
+      "maxRssKiBAtEndOfWrites": 152260,
+      "reopenVerified": true,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "retained",
+      "regime": "burst",
+      "commits": 512,
+      "elapsedMs": 652.077351,
+      "writeP95Ms": 1.46587999999997,
+      "heartbeatP99Ms": 1.6853479999999763,
+      "heartbeatWithinLimit": true,
+      "busyRefusalMs": 0.5777140000000145,
+      "checkpointWhileReader": {
+        "busy": 1,
+        "log": 14525,
+        "checkpointed": 0
+      },
+      "checkpointAfterRelease": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      },
+      "sampledPostCommitLogicalPeakBytes": 60166616,
+      "sampledPostCommitAllocatedPeakBytes": 60170240,
+      "sampledWalPeakBytes": 59843032,
+      "heartbeatMaxMs": 6.6704919999999674,
+      "maxRssKiBAtEndOfWrites": 151920,
+      "reopenVerified": true,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "released",
+      "regime": "sustained",
+      "commits": 4096,
+      "elapsedMs": 119999.59707799999,
+      "writeP95Ms": 1.5496469999925466,
+      "heartbeatP99Ms": 1.148580999999922,
+      "heartbeatWithinLimit": true,
+      "busyRefusalMs": 0.4971630000072764,
+      "checkpointWhileReader": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      },
+      "checkpointAfterRelease": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      },
+      "sampledPostCommitLogicalPeakBytes": 273506504,
+      "sampledPostCommitAllocatedPeakBytes": 273514496,
+      "sampledWalPeakBytes": 4247752,
+      "heartbeatMaxMs": 22.761899000004632,
+      "maxRssKiBAtEndOfWrites": 201500,
+      "reopenVerified": true,
+      "scratchRemoved": true
+    },
+    {
+      "mode": "retained",
+      "regime": "sustained",
+      "commits": 4096,
+      "elapsedMs": 120001.31552199999,
+      "writeP95Ms": 4.343859000000521,
+      "heartbeatP99Ms": 3.9191379999974743,
+      "heartbeatWithinLimit": true,
+      "busyRefusalMs": 0.631626000002143,
+      "checkpointWhileReader": {
+        "busy": 1,
+        "log": 119621,
+        "checkpointed": 0
+      },
+      "checkpointAfterRelease": {
+        "busy": 0,
+        "log": 0,
+        "checkpointed": 0
+      },
+      "sampledPostCommitLogicalPeakBytes": 494014104,
+      "sampledPostCommitAllocatedPeakBytes": 494018560,
+      "sampledWalPeakBytes": 492838552,
+      "heartbeatMaxMs": 25.763684000005014,
+      "maxRssKiBAtEndOfWrites": 215004,
+      "reopenVerified": true,
+      "scratchRemoved": true
+    }
+  ]
+}
