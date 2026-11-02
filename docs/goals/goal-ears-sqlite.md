@@ -199,22 +199,25 @@ old-source assertion controls and hybrid 25/25 on both engines. Native keyword r
 recorded 24/25 comparison. Complete source-app lifecycle passes 33 cases and ten discovery cases;
 its one packaged-only exclusion passes in signed macOS.
 
-The same final a850-code corpus run fails mean recall@64 in one 99,900-document cohort:
+The preceding final a850-code corpus run failed mean recall@64 in one 99,900-document cohort:
 0.94890625 against 0.95. Query-p95 limits pass; previous passing models do not override the miss.
 Correction `93ed37e67f` probes all 64 trained native buckets instead of 32, preserving owner/chunk
 caps and exact canonical reranking. No stored format, transaction outcome or API changes.
 
-Next deliverable: qualify that correction, then finish the requirement-by-requirement adoption report.
-Inspect these existing handles; do not restart merely because observation times out:
+[Full managed corpus/relevance 41503539981](https://github.com/spankyed/apack/actions/runs/41503539981)
+is now TERMINAL SUCCESS at `93ed37e67f`: 1,800 queries/18 groups meet unchanged recall/query-p95
+limits, minimum mean recall 0.988. All 29 safeguards, three reopens per size, full pairing and cleanup
+pass. Eight 16 ms heartbeat misses retain accepted degradation. The pure validator independently
+reproduces all gate outcomes; five summary means differ only by floating-point rounding, with all
+other fields identical. [Original reports and matched same-model probe diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-93ed/README.md).
 
-- [Managed full corpus/relevance 41503539981](https://github.com/spankyed/apack/actions/runs/41503539981):
-  production policy, packaged native backend, original recall/query-latency targets, 2 CPU/6 GiB/no swap.
-- [Whole strict/platform 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216):
-  producer, all three OSes, both native/integration shards and app/rest. Verify actual reports and final guards.
-
-Both handles were verified live after dispatch; relevance job 125476893507 has since succeeded, with independent summary reproduction and minimized reports preserved. Corpus job 125476892995 and all four initial strict/platform jobs were last verified live. Platform coverage is a reusable workflow invoked by
-strict; it has no manual-dispatch trigger. Keep the single app-workflow queue intact. Compiler/native,
-full and runtime checks remain disposable; local work is source review, metadata and pure evidence validation.
+Next deliverable: inspect [whole strict/platform 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216),
+then finish the requirement-by-requirement adoption report. Producer job 125476904574 and platform
+jobs 125476905128/125476905599/125476905761 were last verified live. Require actual reports and final
+guards for all three OSes, both native/integration shards and app/rest. Do not restart merely because
+observation times out. Platform coverage is reusable and invoked by strict; it has no manual-dispatch
+trigger. No app workflow is currently queued by this session. Compiler/native, full and runtime
+checks remain disposable; local work is source review, metadata and pure evidence validation.
 
 The [adoption assessment](../plans/ears-sqlite-contracts.md#current-adoption-assessment) maps all seven
 phases and source-pinned evidence, including a850 whole strict/platform, operational faults, signed
