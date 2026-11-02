@@ -104,7 +104,8 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
       tokenize='porter unicode61 remove_diacritics 2');
       INSERT INTO ${legacy}(rowid,entity_id,field,element,body,aliases,owner,portion)
         SELECT rowid,entity_id,field,element,body,aliases,owner,portion FROM ${current};
-      CREATE TABLE ${legacy}_docs AS SELECT * FROM ${current}_docs;
+      CREATE TABLE ${legacy}_docs(id INTEGER PRIMARY KEY,entity_id TEXT NOT NULL,field INTEGER NOT NULL,element INTEGER NOT NULL,portion INTEGER NOT NULL);
+      INSERT INTO ${legacy}_docs SELECT * FROM ${current}_docs;
       CREATE UNIQUE INDEX ${legacy}_docs_entity ON ${legacy}_docs(entity_id,field,element,portion);
       DROP TABLE ${current}_literal; DROP TABLE ${current}; DROP TABLE ${current}_docs;`);
     db.run('UPDATE index_builds SET definition=? WHERE generation=?', [JSON.stringify(definition), job.generation]);
@@ -164,6 +165,11 @@ describe.runIf(process.env.EARS_EVALUATION_BACKEND === 'sqlite')('source-string 
     expect(ids()[0]).toBe('Row-stem');
     e.write('Row-literal').destroy();
     expect(ids()).toEqual(['Row-stem']);
+    expect((await auditSqliteDatabase(db)).ok).toBe(true);
+    e.admin.clear();
+    expect(ids()).toEqual([]);
+    e.create('Row', { id: 'Row-fresh', body: 'generate-entries' });
+    expect(ids()).toEqual(['Row-fresh']);
     expect((await auditSqliteDatabase(db)).ok).toBe(true);
   });
 
