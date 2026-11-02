@@ -1,0 +1,56 @@
+[
+  {
+    "source": "f6d938d190da827c2cf13c716264cfe05d71f081",
+    "dimensions": 1536,
+    "owners": 4608,
+    "skewOwnerChunks": 1,
+    "limits": {
+      "cpu.max": "200000 100000",
+      "memory.max": "6442450944",
+      "memory.swap.max": "0"
+    },
+    "modelMode": "fallback",
+    "synchronous": 0,
+    "queryP95Ms": 11.733366000000387,
+    "heartbeatP99Ms": 11.19152000000031,
+    "heartbeatWithinLimit": true,
+    "scratchRemoved": true,
+    "originalReportSha256": "f85a3bb8c5a10d89e8bb500e31dc74f1ae90bc5667768e9673d3eadb126e861a"
+  },
+  {
+    "source": "f6d938d190da827c2cf13c716264cfe05d71f081",
+    "dimensions": 1536,
+    "owners": 4608,
+    "skewOwnerChunks": 1024,
+    "limits": {
+      "cpu.max": "200000 100000",
+      "memory.max": "6442450944",
+      "memory.swap.max": "0"
+    },
+    "modelMode": "fallback",
+    "synchronous": 0,
+    "queryP95Ms": 16.445310999999947,
+    "heartbeatP99Ms": 15.721215999999913,
+    "heartbeatWithinLimit": true,
+    "scratchRemoved": true,
+    "originalReportSha256": "5c61585ed55fb7477952481a470e0701be6d8419745d9e6e5182a6b25a0b1e64"
+  },
+  {
+    "source": "f6d938d190da827c2cf13c716264cfe05d71f081",
+    "dimensions": 1536,
+    "owners": 4608,
+    "skewOwnerChunks": 16384,
+    "limits": {
+      "cpu.max": "200000 100000",
+      "memory.max": "6442450944",
+      "memory.swap.max": "0"
+    },
+    "modelMode": "fallback",
+    "synchronous": 0,
+    "queryP95Ms": 124.86790699999983,
+    "heartbeatP99Ms": 137.6577269999998,
+    "heartbeatWithinLimit": false,
+    "scratchRemoved": true,
+    "originalReportSha256": "24a6b137a29020fbfad85ffa8d11cc7c2f65a9b9f820504f2d364f15d73ec680"
+  }
+]
