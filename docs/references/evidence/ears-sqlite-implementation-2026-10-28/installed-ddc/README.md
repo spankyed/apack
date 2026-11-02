@@ -1,0 +1,5 @@
+# Audited text-layout candidate in packaged Preview
+
+[Run 41481703814](https://github.com/spankyed/apack/actions/runs/41481703814), source `ddc52ade721fc2b569c425e26737ab66896acdad`, completes Linux x64 successfully. The actual unpacked unsigned Electron/native/API probe passes, including SQLite FTS, ownership, worker admission/query, read-only reopen, regex and native asset provenance. All four Preview build contracts pass without failures/exclusions. Original runtime/test reports and minimized job provenance are retained under `linux/`; SHA256SUMS refers to decompressed bytes.
+
+The source contains revision-4 ordinary shared text content and the passing keyword/audit implementation. It predates the statically equivalent delimiter-lint correction and obsolete recovery-fixture correction at a8500818f6. It is not represented as executing that later source. The original report retains qualification:false and its explicit unsigned/unpacked scope: no renderer, interactive installer, signature, notarization, distribution or physical power-loss claim. Windows remains active; signed macOS has deliberately not been queued while this run is active.
