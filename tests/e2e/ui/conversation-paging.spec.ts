@@ -26,10 +26,10 @@ async function prepare(app: AppDriver, page: Page, name: string) {
   return threads.map(thread => thread.id);
 }
 
-async function open(app: AppDriver, page: Page, threadId: string) {
+async function open(app: AppDriver, page: Page, threadId: string, fixtureIndex = 0) {
   await app.sendEvent({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId }] });
   await page.waitForFunction(id => (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.id === id, threadId);
-  await expectRows(page, 50, 50);
+  await expectRows(page, 50, 50, fixtureIndex);
   await frames(page);
 }
 
@@ -37,12 +37,12 @@ async function frames(page: Page) {
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 }
 
-async function expectRows(page: Page, first: number, count: number) {
+async function expectRows(page: Page, first: number, count: number, fixtureIndex = 0) {
   await expect.poll(() => rows(page).evaluateAll(elements => elements.map(row => {
     const text = row.querySelector('.tiptap-body')?.textContent ?? '';
-    const index = Number(text.match(/Fixture thread \d+ message (\d+)\./)?.[1]);
-    return text.includes(`/${index}.`) && row.getClientRects().length ? index : -1;
-  }))).toEqual(Array.from({ length: count }, (_, index) => first + index));
+    const match = text.match(/Fixture thread (\d+) message (\d+)\./);
+    return match && text.includes(`Rich end ${match[1]}/${match[2]}.`) && row.getClientRects().length ? `${match[1]}/${match[2]}` : 'incomplete';
+  }))).toEqual(Array.from({ length: count }, (_, index) => `${fixtureIndex}/${first + index}`));
   const ids = await rows(page).evaluateAll(elements => elements.map(row => row.getAttribute('data-message-id')));
   expect(new Set(ids).size).toBe(count);
 }
@@ -101,7 +101,7 @@ test('cross-thread search focus survives paging for loaded and older targets', a
   await expectRows(appPage, 0, 100);
   const oldestId = await rows(appPage).first().getAttribute('data-message-id');
   for (const messageId of [loadedId, oldestId]) {
-    await open(app, appPage, other);
+    await open(app, appPage, other, 1);
     await app.sendEvent({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_MESSAGE', threadId: thread, messageId }] });
     const target = appPage.locator(`[data-message-id="${messageId}"]`);
     await expect(target).toHaveClass(/focused/);
