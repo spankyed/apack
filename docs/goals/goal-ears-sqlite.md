@@ -197,6 +197,14 @@ confirms no shipped source/dependency/native/build-script changes from integrate
 Changed executable test/workflow inputs match their later qualified blobs; this does not waive
 keyword failures or broaden the original validation scopes.
 
+Current decision checkpoint: all recorded CI handles are terminal and the candidate/report are
+committed in draft PR #286. A user disposition has been requested: conclude a non-adoption
+experiment with keyword 24/25 and the documented qualification gaps retained, or continue full
+production-readiness qualification. No answer is assumed. The goal remains active under its
+original acceptance criteria; no gate, PR closure, merge or adoption is authorized by this request.
+The [completion report](../plans/ears-sqlite-contracts.md#experiment-completion-report-qualification-in-progress)
+contains the concrete recommendation and evidence for that decision. No CI run is awaiting collection.
+
 The user explicitly retains synchronous app search and accepts foreground responsiveness degradation
 for completion of this experiment. Preserve original heartbeat misses as measured failures with an
 approved disposition, not passes. No async search API is being implemented. Keyword-only usefulness
