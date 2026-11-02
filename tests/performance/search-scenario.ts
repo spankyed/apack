@@ -1,5 +1,5 @@
 import { expect } from '@apackdev/testing';
-import { searchFixture } from './fixture.ts';
+import { searchFixture } from '../fixtures/conversations.ts';
 import { createWarmScenario } from './scenario.ts';
 import type { PerformanceWindow } from './window.ts';
 

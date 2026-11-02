@@ -4,7 +4,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { test, expect } from '@apackdev/testing';
 import { performanceIdentity } from '@apackdev/testing/performance';
-import { searchFixture } from './fixture.ts';
+import { searchFixture } from '../fixtures/conversations.ts';
 import type { PerformanceWindow } from './window.ts';
 
 // Explicit diagnostic queries outside action timing: explain executes the native ids terminal.

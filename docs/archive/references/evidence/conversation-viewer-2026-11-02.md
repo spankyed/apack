@@ -149,39 +149,53 @@ not counted as a pass; the final strict gate supplies broad acceptance.
 
 ## Paging-check follow-up — 2026-11-02
 
-A clean, matching-pin reproduction on the merged implementation reproduced the missing-button
-failure. After search focus, the page limit grew from 50 to 100; all 100 bodies rendered,
-`hasMore` became false and the manual button correctly disappeared. The supplemental check had
-incorrectly coupled search/automatic paging to a later manual click. Its original failure remains
-retained; it is not relabeled a pass.
+A matching-pin reproduction of the original supplemental sequence reproduced the missing-button
+failure. After cross-thread search focus, automatic paging grew the limit from 50 to 100; all 100
+bodies rendered, `hasMore` became false and the manual button correctly disappeared. The check had
+incorrectly coupled search/automatic paging to a later manual click. Its original failure is retained,
+not relabeled a pass. The corrected supplemental check leaves manual paging to independent cases.
 
-Independent manual and automatic cases then exposed a separate restoration defect: the visible
-anchor moved 7.8125 and 9.8125 pixels. In the measured manual case, container position, container
-height, anchor height and loaded fonts were unchanged. Total scroll height grew 27,946 pixels,
-but the content before the anchor grew 27,938.1875 pixels. Restoring the total-height delta therefore
-overscrolled by 7.8125 pixels. Runtime correction `08b9ad0aee` instead captures the first visible
-message's screen position and restores that point through the existing positioning helper, falling
-back to the captured scroll position if the anchor is absent. Paging policy and public APIs are unchanged.
+Initial independent checks reported 7.8125/9.8125-pixel anchor displacement, but their baseline was
+captured during the message's 10-pixel entrance translation. That did not establish a runtime defect.
+The experimental visible-anchor change in `08b9ad0aee` was withdrawn in `47de0ce597`; production
+`chat.vue` is identical to merged baseline `8fc5719cfb`. Earlier claims that the height-delta algorithm
+was proved incorrect are withdrawn. Failed and experimental runs remain in the archive.
 
-The maintained [paging UI spec](../../../../tests/e2e/ui/conversation-paging.spec.ts), finalized at
-`03209c364d`, separates manual paging, automatic paging and cross-thread search focus. It checks complete,
-ordered, unique rows, the original five-second completion and three-pixel anchor bounds, and loaded/older
-search targets remaining fully visible after the next page renders. Both anchor cases fail before the
-correction. All three final cases pass; the retained rich-content, native clipboard, replacement,
-collapse and focus check also passes. UI-test TypeScript, pack Vue TypeScript and focused correctness
-lint pass. Accepted browser runs use the maintained disk-backed Linux runner with two CPUs, 6 GiB
-memory and native source exactly matching pin `e5ecfec8894c0f32d243c7d5b18245b35b018fdc`.
+The maintained [paging UI spec](../../../../tests/e2e/ui/conversation-paging.spec.ts) separates manual
+paging, automatic paging and cross-thread search focus. It waits for actual entrance animations to
+finish before measuring a reading position. Row readiness is observed in the renderer rather than
+through repeated external polling and tracing snapshots. The original five-second completion limit,
+three-pixel anchor bound, complete ordered unique bodies and fully visible search target remain intact.
+The focus case covers both an initially loaded target and an older target after paging completes.
+Failures retain an Electron browser trace, screenshot, actor state and anchor geometry.
 
-The fix-forward is [PR #312](https://github.com/spankyed/apack/pull/312).
-[Strict CI](https://github.com/spankyed/apack/actions/runs/41533371482) covers runtime correction
-`08b9ad0aee` and is pending at this evidence checkpoint; subsequent edits strengthen only UI coverage
-and record evidence. These correctness checks do not requalify the earlier performance measurements.
+All three cases pass against unchanged production code in `paging-renderer-readiness-v1/run.log`
+and again after the fixture-boundary correction in `paging-final-verification-v1/browser.log`.
+The prior `paging-settled-baseline-v1` manual case timed out at row readiness (its failure snapshot
+already contained all 100 rows); it is retained as a failure, not anchor-defect evidence. Moving the
+unchanged readiness predicate into the renderer removes the coarse external observation interval.
+Browser checks use the maintained disk-backed Linux runner with two CPUs, 6 GiB memory and native
+source exactly matching pin `e5ecfec8894c0f32d243c7d5b18245b35b018fdc`.
 
-Raw failed/passing reports, geometry, traces and exact probe sources are retained in owned volume
-`apack-linux-work-2bd9183070f1`, under `/work/.apack/performance/`, and independently copied into the
-owning worktree as `.apack/performance/conversation-paging-2026-11-02-final.tar.gz`. Its SHA-256 matches
-between container and host:
+The corrected supplemental rich-content, native clipboard, replacement, collapse and focus check
+also passes against unchanged production code (`paging-original-rich-v1/run.log`). UI-test TypeScript
+and the repository chain's `typecheck:scripts` and `lint:check` pass. The earlier CI job found that the
+UI spec's import from the performance harness violated the repo-check boundary. Pure fixture data now
+lives in `tests/fixtures/conversations.ts`, byte-for-byte unchanged; all callers import that shared file.
+The UI spec declares only the actor fields it observes, with no performance-controller dependency.
+The focused repo-boundary spec passes all three checks.
+
+The fix-forward is [PR #312](https://github.com/spankyed/apack/pull/312), containing tests and evidence
+only. [Earlier strict CI](https://github.com/spankyed/apack/actions/runs/41533371482) targets the withdrawn
+runtime candidate `08b9ad0aee`; it does not certify this final revision. These correctness checks do not
+requalify historical performance measurements.
+
+The final accepted check logs are `paging-final-verification-v1/{boundary,checks,browser}.log` and
+`paging-original-rich-v1/run.log`. Original failures, withdrawn experiments, final checks and exact
+probe sources are retained in volume `apack-linux-work-2bd9183070f1` under `/work/.apack/performance/`
+and independently copied to the owning worktree as
+`.apack/performance/conversation-paging-2026-11-02-settled.tar.gz`. Container and host SHA-256:
 
 ```text
-1db640ee87044364aa24e9f42f1f43813727920ef743e0153b69f7254acdca0f
+a43dbc37d7c98e2dec15389d822dd85787c690585d08c3e0a7573c50ad70139b
 ```

@@ -3,8 +3,20 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Page, TestInfo } from '@playwright/test';
 import { test, expect, type AppDriver } from '@apackdev/testing';
-import { richThreadFixture } from '../../performance/fixture.ts';
-import type { PerformanceWindow } from '../../performance/window.ts';
+import { richThreadFixture } from '../../fixtures/conversations.ts';
+interface PagingWindow {
+  __sendToSystem(system: string, event: Record<string, unknown>): void;
+  applicationState: {
+    system: { get(ref: string): { getSnapshot(): { context: {
+      currentThread?: { id: string };
+      threadMap: Record<string, unknown>;
+      chatMessageIds: string[];
+      chatLimit: number;
+      messagePagination: unknown;
+      focusMessage?: unknown;
+    } } } };
+  };
+}
 
 const rows = (page: Page) => page.locator('[data-message-id]');
 const older = (page: Page) => page.getByRole('button', { name: 'Load older messages', exact: true });
@@ -17,10 +29,10 @@ async function prepare(app: AppDriver, page: Page, name: string) {
     writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify({ ...fixture, threads }));
     await app.waitForSurface('default-setup/threads');
     await app.navigate('default-setup/threads');
-    await page.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
+    await page.evaluate(directory => (window as unknown as PagingWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
     await page.waitForFunction(id => {
-      const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
-      return !!(context as unknown as { threadMap: Record<string, unknown> }).threadMap[id];
+      const context = (window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
+      return !!context.threadMap[id];
     }, threads[1].id);
   } finally { rmSync(directory, { recursive: true, force: true }); }
   return threads.map(thread => thread.id);
@@ -28,7 +40,7 @@ async function prepare(app: AppDriver, page: Page, name: string) {
 
 async function open(app: AppDriver, page: Page, threadId: string, fixtureIndex = 0) {
   await app.sendEvent({ type: 'SEND_TO_SURFACE', surface: 'default-setup/threads', events: [{ type: 'OPEN_THREAD_CHAT', threadId }] });
-  await page.waitForFunction(id => (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.id === id, threadId);
+  await page.waitForFunction(id => (window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context.currentThread?.id === id, threadId);
   await expectRows(page, 50, 50, fixtureIndex);
   // A viewport baseline taken during the message's entrance translation is not a reading position.
   await page.evaluate(async () => {
@@ -43,13 +55,18 @@ async function frames(page: Page) {
 }
 
 async function expectRows(page: Page, first: number, count: number, fixtureIndex = 0) {
-  await expect.poll(() => rows(page).evaluateAll(elements => elements.map(row => {
-    const text = row.querySelector('.tiptap-body')?.textContent ?? '';
-    const match = text.match(/Fixture thread (\d+) message (\d+)\./);
-    return match && text.includes(`Rich end ${match[1]}/${match[2]}.`) && row.getClientRects().length ? `${match[1]}/${match[2]}` : 'incomplete';
-  }))).toEqual(Array.from({ length: count }, (_, index) => `${fixtureIndex}/${first + index}`));
-  const ids = await rows(page).evaluateAll(elements => elements.map(row => row.getAttribute('data-message-id')));
-  expect(new Set(ids).size).toBe(count);
+  // Observe readiness in the renderer instead of adding a tracing snapshot for every external poll.
+  await page.waitForFunction(({ first, count, fixtureIndex }) => {
+    const elements = Array.from(document.querySelectorAll('[data-message-id]'));
+    return elements.length === count
+      && new Set(elements.map(row => row.getAttribute('data-message-id'))).size === count
+      && elements.every((row, offset) => {
+        const text = row.querySelector('.tiptap-body')?.textContent ?? '';
+        const match = text.match(/Fixture thread (\d+) message (\d+)\./);
+        return match?.[1] === String(fixtureIndex) && Number(match[2]) === first + offset
+          && text.includes(`Rich end ${fixtureIndex}/${first + offset}.`) && row.getClientRects().length > 0;
+      });
+  }, { first, count, fixtureIndex }, { timeout: 5000 });
 }
 
 function measureAnchor(row: Element, scrollToTop: boolean) {
@@ -71,7 +88,6 @@ async function restoreAnchor(page: Page, anchor: ReturnType<typeof measureAnchor
   }
 }
 
-
 test.beforeEach(async ({ appPage }) => {
   await appPage.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
 });
@@ -84,12 +100,11 @@ test.afterEach(async ({ appPage }, info) => {
   await info.attach('paging-browser-trace', { path: trace, contentType: 'application/zip' });
   await info.attach('paging-window', { body: await appPage.screenshot(), contentType: 'image/png' });
   const state = await appPage.evaluate(() => {
-    const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
-    const paging = context as typeof context & { messagePagination: unknown; focusMessage: unknown };
+    const context = (window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
     const row = document.querySelector('[data-message-id]');
     const container = row?.closest<HTMLElement>('.overflow-y-auto');
     return { thread: context.currentThread?.id, ids: context.chatMessageIds, limit: context.chatLimit,
-      pagination: paging.messagePagination, focus: paging.focusMessage,
+      pagination: context.messagePagination, focus: context.focusMessage,
       scrollTop: container?.scrollTop, scrollHeight: container?.scrollHeight,
       renderedIds: Array.from(document.querySelectorAll('[data-message-id]'), row => row.getAttribute('data-message-id')) };
   });
@@ -130,7 +145,7 @@ test('cross-thread search focus survives paging for loaded and older targets', a
     const target = appPage.locator(`[data-message-id="${messageId}"]`);
     await expect(target).toHaveClass(/focused/);
     await expect(target).toBeInViewport({ ratio: 1 });
-    await appPage.waitForFunction(() => !((window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { focusMessage?: unknown }).focusMessage);
+    await appPage.waitForFunction(() => !((window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context).focusMessage);
     await frames(appPage);
     // Exercise paging at the focused position without scrolling the target away ourselves.
     await target.evaluate(row => row.closest('.overflow-y-auto')!.dispatchEvent(new Event('scroll')));

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '@apackdev/testing';
 import { performanceSchedule, streamingBacklog } from '@apackdev/testing/performance';
-import { streamingFixture } from './fixture.ts';
+import { streamingFixture } from '../fixtures/conversations.ts';
 import { createWarmScenario } from './scenario.ts';
 import type { PerformanceWindow } from './window.ts';
 

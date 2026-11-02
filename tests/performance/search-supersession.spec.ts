@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test, expect } from '@apackdev/testing';
-import { searchFixture } from './fixture.ts';
+import { searchFixture } from '../fixtures/conversations.ts';
 import type { PerformanceWindow } from './window.ts';
 
 // Controlled application counterfactual, not a latency sample. Transport callback generations have
