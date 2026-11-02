@@ -143,7 +143,7 @@ it.each([ELMDB, SQLITE])('refuses %s history quarantine while a managed reader s
   const seed = openRunHistory(directory, { storageFormat }); seed.database.close();
   const reader = openRunHistory(directory, { storageFormat, readOnly: true }); opened.push(reader.database);
   const file = path.join(directory, databaseStorage(storageFormat).dataFile), before = fs.readFileSync(file);
-  const failure = Object.assign(new Error('Injected corrupt-open diagnosis'), { code: storageFormat === SQLITE ? 'SQLITE_CORRUPT' : 'CORRUPTED' });
+  const failure = Object.assign(new Error('Injected corrupt-open diagnosis'), { code: storageFormat === SQLITE ? 'SQLITE_NOTADB' : 'CORRUPTED' });
   const spy = vi.spyOn(databaseStorage(storageFormat), 'open').mockImplementationOnce(() => { throw failure; });
   try {
     expect(() => openRunHistory(directory, { storageFormat })).toThrow('Close apps and tools using this profile');
@@ -155,7 +155,7 @@ it.each([ELMDB, SQLITE])('refuses %s history quarantine while a managed reader s
 
 
 it.each(['SQLITE_IOERR_READ', 'SQLITE_IOERR_FSYNC', 'SQLITE_CANTOPEN', 'SQLITE_PERM', 'SQLITE_FULL',
-  'SQLITE_BUSY', 'WRONG_FORMAT', 'SQLITE_CORRUPT_INDEX', 'SQLITE_CORRUPT_VTAB', 'CORRUPT', 'NATIVE_CHANGED'])
+  'SQLITE_BUSY', 'SQLITE_CORRUPT', 'WRONG_FORMAT', 'SQLITE_CORRUPT_INDEX', 'SQLITE_CORRUPT_VTAB', 'CORRUPT', 'NATIVE_CHANGED'])
 ('never treats %s as permission to replace a SQLite history directory', code => {
   const parent = root(), directory = path.join(parent, 'runs'); fs.mkdirSync(directory);
   const file = path.join(directory, 'data.sqlite3'), before = Buffer.alloc(16384, 7); fs.writeFileSync(file, before);

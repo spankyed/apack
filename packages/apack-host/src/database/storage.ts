@@ -39,7 +39,9 @@ const elmdb: DatabaseStorage = { isUnreadableOpenError: unreadableOpen('NOT_A_DA
   refuseForeignFile(options.path, 'data.sqlite3');
   return openElmdb(options);
 } };
-const sqlite: DatabaseStorage = { isUnreadableOpenError: unreadableOpen('SQLITE_NOTADB', 'SQLITE_CORRUPT'), withBackgroundPaused: withNativeModelsPaused, startBackground: startVectorModels, format: SQLITE_FORMAT, dataFile: 'data.sqlite3', rebuildIndexes: rebuildSqliteIndexes, audit: auditSqliteDatabase, exportLogicalSnapshot: exportSqliteSnapshot, stageLogicalSnapshot: stageSqliteSnapshot, open(options) {
+// A page-read EIO can surface as SQLITE_CORRUPT with intact files. Refuse ambiguous corruption;
+// only SQLite's not-a-database diagnosis permits automatic history quarantine.
+const sqlite: DatabaseStorage = { isUnreadableOpenError: unreadableOpen('SQLITE_NOTADB'), withBackgroundPaused: withNativeModelsPaused, startBackground: startVectorModels, format: SQLITE_FORMAT, dataFile: 'data.sqlite3', rebuildIndexes: rebuildSqliteIndexes, audit: auditSqliteDatabase, exportLogicalSnapshot: exportSqliteSnapshot, stageLogicalSnapshot: stageSqliteSnapshot, open(options) {
   refuseForeignFile(options.path, 'data.mdb');
   return openSqlite(options);
 } };

@@ -19,7 +19,7 @@ const directory = mkdtempSync(join(tmpdir(), 'ears-history-read-fault-')), store
 const arm = join(directory, 'armed'), event = join(directory, 'event.json');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const storage = databaseStorage('sqlite/1'), originalOpen = storage.open;
-const report = { protocol: 'ears-history-read-fault/1', source: process.env.GITHUB_SHA,
+const report = { protocol: 'ears-history-read-fault/2', source: process.env.GITHUB_SHA,
   completed: false, qualification: false, execution: 'host-source-with-built-ears-and-sdk-packages',
   scope: 'One main-thread metadata-page EIO during actual host history open; observes recovery policy, not all corruption/I/O or physical storage regimes',
   openErrors: [] };
@@ -65,7 +65,13 @@ try {
   assert.equal(inspected.engine.query('RunNode').count(), 1);
   report.incumbentReadableAfterDisarm = true;
   report.policyConcern = report.outcome === 'quarantined';
-  report.policyScope = 'A quarantined but intact/readable incumbent after a transient EIO needs disposition; diagnostic completion is not recovery-policy acceptance';
+  report.policyScope = 'A real metadata-page EIO must refuse the open without quarantine or replacement, preserving the incumbent';
+  assert.equal(report.outcome, 'refused');
+  assert.equal(report.refusal?.code, 'SQLITE_CORRUPT');
+  assert.equal(report.quarantinedCount, 0);
+  assert.equal(report.incumbentBytesUnchanged, true);
+  assert.equal(report.incumbentReadableAfterDisarm, true);
+  assert.equal(report.policyConcern, false);
   report.nativeBindings = loadedNativeBindings();
 } catch (error) { failure = error; }
 finally {

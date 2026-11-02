@@ -1,0 +1,44 @@
+{
+  "run": 41369288022,
+  "source": "c159acf6451dd3470648ac784910b8d01a8ccf5a",
+  "historyPolicyPassed": false,
+  "scope": "Real host source with matching built EARS/SDK, actual main-thread metadata-page EIO; not all storage faults",
+  "suites": [
+    {
+      "suite": "sqlite-contracts",
+      "sha256": "027efe146e987b6fc3d930cd6162c2b4f030aee2ca806fd57d9ca2506c18c66d",
+      "passed": 454,
+      "failed": 1,
+      "excluded": 0,
+      "failedCases": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    {
+      "suite": "elmdb-contracts",
+      "sha256": "b600b6c117b11cfda6823c59c7ad6985d559cfab444b6e131b76814e5b8b5543",
+      "passed": 263,
+      "failed": 1,
+      "excluded": 191,
+      "failedCases": [
+        "real repository-content search relevance 'find generated metadata ownership'"
+      ]
+    },
+    {
+      "suite": "native-index-readiness",
+      "sha256": "b41d1fa831b84d7e1abbafb5606f0759f1f1557684ab77a3c3ec9572150d9356",
+      "passed": 8,
+      "failed": 0,
+      "excluded": 0,
+      "failedCases": []
+    },
+    {
+      "suite": "pack-readiness",
+      "sha256": "cab1ec0b31d3e5c21a1a87c3df8efffad00dadb9cce32c75a9596ae35d465dad",
+      "passed": 114,
+      "failed": 0,
+      "excluded": 0,
+      "failedCases": []
+    }
+  ]
+}

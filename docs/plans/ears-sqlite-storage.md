@@ -859,8 +859,10 @@ and quarantine verifies the original directory still occupies the destination af
 
 A constructor that cannot close its native connection reports `databaseConnectionUnclosed`; its host claim
 survives until process exit. Aggregate/uncertain errors never authorize quarantine. Backend-owned classification
-recognizes SQLite's own corruption codes without treating I/O, permission, full-disk, busy or known derived-index
-failures as evidence that a whole history directory may be moved. Ordinary background owners continue to drain
+permits automatic SQLite quarantine only for SQLITE_NOTADB. SQLITE_CORRUPT refuses because an actual metadata-page
+EIO can produce that code while leaving the incumbent intact/readable; internal corruption therefore requires explicit
+inspection/recovery rather than automatic replacement. I/O, permission, full-disk, busy and derived-index failures
+also refuse without moving the history. Ordinary background owners continue to drain
 through `closeDatabases` before close or filesystem changes.
 
 [Managed publication evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/managed-publication/README.md)
