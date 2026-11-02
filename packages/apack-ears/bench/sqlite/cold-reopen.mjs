@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { cpus } from 'node:os';
 import { createEarsEngine } from '../../dist/index.js';
 import { loadedNativeBindings } from './load-metrics.ts';
 
@@ -16,7 +17,7 @@ const schema = { types: { Row: { required: [], indexes: ['group', 'rank'] } }, r
 const report = { protocol: 'ears-cold-reopen/1', source: process.env.GITHUB_SHA, backend, phase,
   completed: false, qualification: false, execution: 'built-package', n: 10000,
   scope: 'Fresh-process copied-store reopen followed by first field/page/ordered reads; only owned database file pages are controlled, not application/code/device caches',
-  node: process.version, timesMs: {} };
+  node: process.version, cpuModels: [...new Set(cpus().map(cpu => cpu.model))], timesMs: {} };
 let database, failure;
 try {
   let start = performance.now();
@@ -55,7 +56,11 @@ try {
     report.consumed = true;
   }
   report.memory = process.memoryUsage(); report.usage = process.resourceUsage();
-  report.nativeBindings = loadedNativeBindings(); assert(report.nativeBindings.length > 0);
+  const extensions = backend === 'sqlite' ? [database.nativeVectorExtension] : [];
+  if (backend === 'sqlite') assert.equal(typeof extensions[0], 'string');
+  report.nativeBindings = loadedNativeBindings(extensions); assert(report.nativeBindings.length > 0);
+  for (const extension of extensions) assert(report.nativeBindings.some(binding => binding.path === extension));
+  if (backend === 'elmdb') assert(report.nativeBindings.some(binding => binding.path.includes('/elmdb.')));
   report.runtimeSha256 = Object.fromEntries(['index.js', `${backend === 'sqlite' ? 'sqlite' : 'lmdb'}/index.js`].map(name =>
     [name, createHash('sha256').update(readFileSync(new URL('../../dist/' + name, import.meta.url))).digest('hex')]));
 } catch (error) { failure = error; }
