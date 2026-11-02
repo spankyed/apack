@@ -94,7 +94,7 @@ async function notifyRendered() {
 
 watch(editor, (value, _previous, onCleanup) => {
   if (!value) return
-  const update = createConversationDocument(value, Message.name)
+  const update = createConversationDocument(value)
   const stop = watch(() => props.messages.map(({ id, text }) => ({ id, text })), messages => {
     try {
       update(messages)

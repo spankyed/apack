@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { conversationMessageNodeName } from '../extensions.ts'
 
 export interface ConversationMessage {
   id: string
@@ -11,37 +12,35 @@ interface ParsedMessage {
   node: ProseMirrorNode
 }
 
+// captureTransaction does not reset capture after a thrown callback. Propagate errors only once it ends.
+function parseMarkdown(editor: Editor, message: ConversationMessage) {
+  let failure: { error: unknown } | undefined
+  const transaction = editor.captureTransaction(() => {
+    try {
+      if (!editor.commands.setContent(message.text, { emitUpdate: false })) throw new Error(`Message content was refused: ${message.id}`)
+    } catch (error) { failure = { error } }
+  })
+  if (failure) throw failure.error
+  if (!transaction) throw new Error(`Message content produced no document: ${message.id}`)
+  return transaction.doc.content
+}
+
 /** A cache belongs to one schema/editor lifetime. Markdown still goes through its contributed commands. */
-export function createConversationDocument(editor: Editor, nodeName: string) {
+export function createConversationDocument(editor: Editor) {
+  const messageNode = editor.schema.nodes[conversationMessageNodeName]
   let previous = new Map<string, ParsedMessage>()
 
   return (messages: readonly ConversationMessage[]) => {
     const next = new Map<string, ParsedMessage>()
-    for (const message of messages) {
-      if (next.has(message.id)) throw new Error(`Duplicate conversation message: ${message.id}`)
-      const cached = previous.get(message.id)
-      if (cached?.text === message.text) {
-        next.set(message.id, cached)
-        continue
-      }
-      // captureTransaction does not restore its capturing flag after a thrown callback.
-      // Keep the callback nonthrowing and propagate command failures after capture has ended.
-      let failure: unknown
-      let failed = false
-      const parsed = editor.captureTransaction(() => {
-        try {
-          if (!editor.commands.setContent(message.text, { emitUpdate: false })) {
-            throw new Error(`Message content was refused: ${message.id}`)
-          }
-        } catch (error) { failed = true; failure = error }
-      })
-      if (failed) throw failure
-      if (!parsed) throw new Error(`Message content produced no document: ${message.id}`)
-      const node = editor.schema.nodes[nodeName].createChecked({ id: message.id }, parsed.doc.content)
-      next.set(message.id, { text: message.text, node })
-    }
-
-    const nodes = Array.from(next.values(), entry => entry.node)
+    const nodes = messages.map(message => {
+      const { id, text } = message
+      if (next.has(id)) throw new Error(`Duplicate conversation message: ${id}`)
+      const cached = previous.get(id)
+      const entry = cached?.text === text ? cached
+        : { text, node: messageNode.createChecked({ id }, parseMarkdown(editor, message)) }
+      next.set(id, entry)
+      return entry.node
+    })
     const current = editor.state.doc
     const sameOrder = current.childCount === nodes.length
       && nodes.every((node, index) => current.child(index).type === node.type && current.child(index).attrs.id === node.attrs.id)
