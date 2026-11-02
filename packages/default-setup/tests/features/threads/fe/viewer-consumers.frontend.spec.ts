@@ -1,13 +1,13 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick, type App } from 'vue';
 import { createActor, createMachine } from 'xstate';
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
 import { SurfaceScope, type ArtifactFrontendBinding, type BlockFrontendBinding } from '@apackdev/sdk/fe';
 import type { ArtifactCatalogEntry, BlockCatalogEntry } from '@apackdev/sdk/framework';
 import ContentViewer from '#features/threads/fe/canvas/agent/content-viewer.vue';
-import InteractionContainer from '#features/threads/fe/chat/interactions/InteractionContainer.vue';
 import ChatMessage from '#features/threads/fe/chat/message.vue';
 import type { MessageEntity } from '#generated/types.ts';
+import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer';
 
 let app: App | undefined;
 afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime(); });
@@ -15,7 +15,7 @@ afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren
 function fixture() {
   const owner = { packId: 'external', origin: 'native' as const, enabled: true };
   const artifact: ArtifactCatalogEntry = { ...owner, type: 'card', declaration: { icon: 'Folder', fe: 'src/card.vue' } };
-  const block: BlockCatalogEntry = { ...owner, type: 'answer', declaration: { kind: 'input', fe: 'src/answer.vue' } };
+  const block: BlockCatalogEntry = { ...owner, type: 'approval', declaration: { kind: 'input', fe: 'src/approval.vue' } };
   const state = { artifacts: [artifact], blocks: [block] };
   const artifacts = new Map<string, ArtifactFrontendBinding>(); const blocks = new Map<string, BlockFrontendBinding>();
   const catalogListeners = new Set<() => void>(); const bindingListeners = new Set<() => void>();
@@ -25,7 +25,7 @@ function fixture() {
     catalog: { status: () => 'ready', problem: () => undefined, references: () => [], frontend: () => [], steps: () => [],
       artifacts: () => state.artifacts, blocks: () => state.blocks, events: () => [], dsl: () => [],
       subscribe(listener) { catalogListeners.add(listener); return () => { catalogListeners.delete(listener); }; } },
-    packs: { artifactBindings: () => artifacts, blockBindings: () => blocks,
+    packs: { artifactBindings: () => artifacts, blockBindings: () => blocks, textEditor: () => [],
       onChanged(listener: () => void) { bindingListeners.add(listener); return () => { bindingListeners.delete(listener); }; } } as never,
   });
   const publish = (listeners = catalogListeners) => { for (const listener of listeners) listener(); };
@@ -51,18 +51,25 @@ it('updates an already-mounted artifact list and viewer across independent decla
   expect(f.catalogListeners.size).toBe(0); expect(f.bindingListeners.size).toBe(0);
 });
 
-it('renders input props only with the current block declaration and drops a disabled component', async () => {
+it('renders current block bindings inside conversation node views and drops disabled contributions', async () => {
   const f = fixture();
-  const component = { props: ['disabled', 'response'], setup: (props: { disabled: boolean; response: { text: string } }) =>
-    () => h('div', { class: 'custom-input' }, `${props.disabled}:${props.response.text}`) };
+  const component = { props: ['disabled', 'response'], setup: (props: { disabled: boolean; response: { approved: boolean } }) =>
+    () => h('div', { class: 'custom-input' }, `${props.disabled}:${props.response.approved}`) };
+  const message: MessageEntity = { id: 'Message-block', entityType: 'Message', timestamp: 0, createdAt: 0,
+    sender: 'assistant', text: 'Body', blocks: [{ type: 'approval', props: {} }], responseTimestamp: 1,
+    blockResponse: { approved: true } };
   app = createApp({ render: () => h(SurfaceScope, { surface: 'external/threads' }, {
-    default: () => h(InteractionContainer, { blocks: [{ type: 'answer', props: {} }], messageId: 'message', isDisabled: true, response: { _source: 'answer', text: 'saved response' } }),
+    default: () => h(ConversationViewer, { messages: [message] }, {
+      default: ({ content }: { content: object }) => h(ChatMessage, { message }, { default: () => h(content) }),
+    }),
   }) });
-  app.mount(f.root); expect(f.root.querySelector('.custom-input')).toBeNull();
-  f.blocks.set('answer', { packId: 'external', declaration: f.block.declaration,
-    binding: { type: 'answer', kind: 'input', fe: { component } } });
+  app.mount(f.root);
+  await vi.waitFor(() => expect(f.root.querySelector('[data-message-id="Message-block"]')).not.toBeNull());
+  expect(f.root.querySelector('.custom-input')).toBeNull();
+  f.blocks.set('approval', { packId: 'external', declaration: f.block.declaration,
+    binding: { type: 'approval', kind: 'input', fe: { component } } });
   f.publish(f.bindingListeners); await nextTick();
-  expect(f.root.querySelector('.custom-input')?.textContent).toBe('true:saved response');
+  expect(f.root.querySelector('.custom-input')?.textContent).toBe('true:true');
   f.state.blocks = [{ ...f.block, enabled: false }]; f.publish(); await nextTick();
   expect(f.root.querySelector('.custom-input')).toBeNull();
   app.unmount(); app = undefined;
