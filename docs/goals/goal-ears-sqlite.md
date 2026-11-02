@@ -192,14 +192,16 @@ completion blocker for this experiment; record the measured misses as an accepte
 in the completion report. Do not implement async app search or describe the original budget misses
 as passes. Correctness, recovery and evidence limitations remain explicit; no adoption is authorized.
 
-**In-flight closing checks:** private signed-macOS run `41380790738` and full app/report-retention/testing-typecheck
-run `41380838479` use source `3ec277e393`. The signed run is actually building Preview; the app run is pending
-behind it, with neither cancelled or restarted. Follow-up `1d25cbf2af` makes the code-surface test observe its
-terminal.CLOSED event before directory removal. Syntax checks pass; exercise that changed cleanup in disposable
-app validation after the existing pending run starts. Preserve all original failed outcomes. Current runtime
-query execution still needs ordinary managed-corpus qualification following the projected-hit/dependency repairs;
-queue it only when the branch has no occupied pending slot. Keyword-only usefulness remains 24/25; the user has
-been asked whether to accept that separate limitation or continue ranking work. No answer is assumed.
+**Closing checks:** [Signed macOS run `41380790738`](../references/evidence/ears-sqlite-implementation-2026-10-28/installed-3ec-signed/README.md) at `3ec277e393` is terminal success:
+Preview build/typecheck, strict Developer ID/hardened-runtime signing, post-sign native probe and all six installed
+cases pass once without exclusions/retries/flakes. Cleanup reports success at command/step scope; no notarized
+distribution is claimed. Full app/report-retention/testing-typecheck run `41380838479` at the same source is
+actually running, not restarted. Ordinary managed-corpus run `41382184193` at `b9896d5205` is queued behind it
+with the packaged generic extension and production candidate policy. Follow-up `1d25cbf2af` makes the code-surface
+test observe its terminal.CLOSED event before directory removal. Syntax checks pass; qualify that changed cleanup
+in disposable app validation when the pending slot frees. Preserve every failed outcome. Keyword-only usefulness
+remains 24/25; the user has been asked whether to accept that separate limitation or continue ranking work.
+No answer is assumed.
 
 **Latest functional result:** full source-app replay `41377547775` at `672e599e7f` passed all
 33 eligible cases once, with one packaged-only exclusion, zero failures and zero flakes. Its ten
