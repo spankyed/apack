@@ -211,33 +211,35 @@ pass. Eight 16 ms heartbeat misses retain accepted degradation. The pure validat
 reproduces all gate outcomes; five summary means differ only by floating-point rounding, with all
 other fields identical. [Original reports and matched same-model probe diagnostic](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-93ed/README.md).
 
-Next deliverable: finish [strict run 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216)
-and qualify its failed integration shard. Producer and all three platform jobs pass, with original
-reports at [producer](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-producers/README.md)
-and [platform](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md).
-Integration-2 job 125488939981 passes all 31 repository files. Integration-1 job 125488939987 FAILS:
-`build-output-swap.integration.spec.ts` times out at its unchanged 200-second deadline in the refused
-replacement/facade-stamp case; seven files pass, one fails and 23 remain unexecuted. [Original failure
-and successful sibling evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-integration/README.md).
-The fixture/build/publication files match passing a850 bytes; no assertion mismatch is reported and
-no contention cause is proven. Preserve this attempt. The original attempt is now TERMINAL FAILURE: eight jobs passed, integration-1 failed. Native-1
-job 125488939807 passes nine files (eight passed/one existing skipped file); native-2 passes eight
-(seven/one). App/rest passes 7,040 host assertions/95 existing exclusions, 989 pack/two exclusions,
-authoring seven/two, external app 32, smoke five and all six explicit SQLite witnesses once with
-zero failures/exclusions/retries/flakes. Host pool is 489.9 s under unchanged 600 s. [Consumer reports
-and original attempt summary](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md).
+[Strict run 41503546216](https://github.com/spankyed/apack/actions/runs/41503546216/attempts/2)
+is now TERMINAL SUCCESS at original implementation 93ed: eight first-attempt passing jobs were
+retained and only integration-1 reran. [Full replay evidence](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-93ed-replay/README.md)
+verifies all 242 tests/31 repository files pass without exclusions; the timed-out case passes in
+146,398 ms under unchanged 200,000 ms. The new artifact is explicitly ID 13175604072; first-attempt
+13173022874 remains separately preserved. Source, producer freshness, two-core budget, assertions
+and deadlines are unchanged. No source fix or causal contention diagnosis is claimed; intermittent
+compiler-test timing remains a follow-up. [Original consumer reports](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-consumers/README.md)
+verify both native shards and app/rest: host 7,040/95 existing exclusions, pack 989/two, authoring
+seven/two, external app 32, smoke five and six once-passing SQLite witnesses; host pool 489.9 s
+stays under unchanged 600 s. [Producer](../references/evidence/ears-sqlite-implementation-2026-10-28/strict-93ed-producers/README.md)
+and [three platforms](../references/evidence/ears-sqlite-implementation-2026-10-28/platform-93ed/README.md)
+also pass. No further strict/model repeat is needed absent a new failure or relevant source change.
 
-The full original integration-1 job has been replayed ONCE, only after the original run completed:
-[run 41503546216 attempt 2](https://github.com/spankyed/apack/actions/runs/41503546216/attempts/2),
-job 125510874345, verified LIVE at original source `93ed37e67f40faee3fd25a10f3b897c15e55c858`.
-Original producer outputs/freshness checks, two-core budget, entire 31-file selection, assertions and
-200-second test deadline are unchanged. Preserve attempt-1 artifact/report hashes; select the new
-attempt's artifact explicitly to avoid merging same-name reports. A repeated failure requires
-diagnosis, not more unchanged retries until green. No source fix or causal contention claim is made.
-Inspect this same handle until terminal; polling timeout does not authorize restart.
+Final audit gap: admission/WAL/disk-budget measurements predate the ordinary shared-content text
+layout. The existing ordinary four-cohort [admission suite 41520371169](https://github.com/spankyed/apack/actions/runs/41520371169)
+is now live at docs-only descendant `5d80feae991d7bed9452034432f408f256e2706d`. Source code is still
+byte-identical to implementation 93ed. Run value/search × OFF/FULL with trace/checkpoint overrides
+false, original three fresh-process trials per size, original watches and 2 CPU/6 GiB/no-swap limits.
+Both active/pending app-workflow lists were empty before dispatch. Preserve every original budget,
+failure and actual source; only foreground responsiveness has the user's accepted degradation.
+Inspect this same run to terminal. Its results are not inferred from old measurements or corpus passes.
 
-Compiler/native, full and runtime checks remain disposable. After this full failed-shard replay
-passes, reconcile every original requirement and final source before reporting completion.
+Frozen closing checklist: inspect/preserve this current admission suite, reconcile each original phase
+and numbered acceptance item against the existing source-pinned evidence, finalize the recommendation
+and reference/public docs, repair archival links and commit closure. Do not add arbitrary universal
+provider/filesystem/device certification or repeat already-qualified gates without changed relevant
+inputs. Compiler/native/full/runtime checks remain disposable. Completion is still unproven until
+this audit closes; production stays elmdb and PR remains draft for the separate adoption decision.
 
 The prespecified independent managed-model repeat [41508326544](https://github.com/spankyed/apack/actions/runs/41508326544)
 is now TERMINAL SUCCESS at docs-only descendant `67ae01a334`: [full corpus](../references/evidence/ears-sqlite-implementation-2026-10-28/corpus-repeat-67ae/README.md)
