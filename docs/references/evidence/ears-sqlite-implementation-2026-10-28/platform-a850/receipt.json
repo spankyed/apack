@@ -93,6 +93,44 @@
           "excluded": 0
         }
       }
+    },
+    "windows": {
+      "job": 125415113103,
+      "conclusion": "success",
+      "finalGuardPassed": true,
+      "originalJobMetadataSha256": "bb30c33c2ef3371385567f49ea8093ce1c2465b7574216366fe61f7288a80ca9",
+      "contracts": {
+        "ears.json": {
+          "passed": 942,
+          "failed": 0,
+          "excluded": 4
+        },
+        "host.json": {
+          "passed": 310,
+          "failed": 0,
+          "excluded": 6
+        },
+        "host-crash.json": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 10
+        },
+        "cli-maintenance.json": {
+          "passed": 41,
+          "failed": 0,
+          "excluded": 0
+        },
+        "sdk-backend.json": {
+          "passed": 2,
+          "failed": 0,
+          "excluded": 0
+        },
+        "query-work.json": {
+          "passed": 9,
+          "failed": 0,
+          "excluded": 0
+        }
+      }
     }
   }
 }
