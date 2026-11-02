@@ -65,6 +65,7 @@ const requiredPublicationCases = [
   "never treats SQLITE_PERM as permission to replace a SQLite history directory",
   "never treats SQLITE_FULL as permission to replace a SQLite history directory",
   "never treats SQLITE_BUSY as permission to replace a SQLite history directory",
+  "never treats SQLITE_CORRUPT as permission to replace a SQLite history directory",
   "never treats WRONG_FORMAT as permission to replace a SQLite history directory",
   "never treats SQLITE_CORRUPT_INDEX as permission to replace a SQLite history directory",
   "never treats SQLITE_CORRUPT_VTAB as permission to replace a SQLite history directory",
