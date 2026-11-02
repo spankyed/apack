@@ -205,8 +205,15 @@ fails the separate transposed-identifier case 20. Do not conflate the four 24/25
 The SQLite compiler incorrectly makes unquoted punctuation-separated compounds into phrases.
 The follow-up source review narrows splitting to ASCII separators, preserving non-ASCII input
 for unicode61 rather than approximating its Unicode 6.1 rules with JS character categories.
-A private-use/decomposed-accent regression accompanies this adjustment and still needs CI;
-the terminal eed run covers the earlier compound patch, not this subsequent input change.
+The private-use/decomposed-accent adjustment and all 93 search contracts now pass at cf5,
+with both old-source compound failures verified. English SQLite keyword is 25/25; unstemmed
+ranking still fails the original metadata judgment at rank 12. Continue fixing that gate.
+A minimal two-file elmdb written-word fuzzy patch is prepared in
+`/private/tmp/ears-native-written-fuzzy.patch` against f496, with source hashes in the adjacent
+JSON and preparation recipe `/private/tmp/ears-prepare-native-keyword-patch.py`. It uses the
+existing pruned written-word dictionary and adds an exact typo regression. It is not applied,
+compiled, committed or pushed to elmdb; the shared checkout remains unchanged. This addresses
+the separately observed English-baseline typo, not the unstemmed ranking miss.
 The current fix separates their terms across fields/elements while retaining explicit phrase
 adjacency, compound exclusions, field filters and OR/any groups. New matching/highlight/stemming
 regressions and exact-old-source controls must pass in disposable CI. The frozen corpus, query,
@@ -307,8 +314,10 @@ private cleanup are recorded. The frozen keyword judgment and broader acceptance
 Current validation handles and results:
 
 - [Compound/Unicode correction and pinned old-source control 41464298033](https://github.com/spankyed/apack/actions/runs/41464298033)
-  is active at `cf5d7b4800`. This includes the ASCII-only splitter, private-use/accent coverage,
-  exact historical commit fetch, existing search contracts and unchanged frozen judgments.
+  is terminal success at `cf5d7b4800`. [Verified reports](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
+  prove 93 ordinary search passes and both exact old-source failures/restoration. SQLite English
+  keyword usefulness is 25/25; the original unstemmed gate remains 24/25 (case 6 rank 12). Hybrid
+  remains 25/25 on each backend. No original query/target/threshold changed.
 
 - [Compound-query fix and original relevance qualification 41462773196](https://github.com/spankyed/apack/actions/runs/41462773196)
   is terminal failure at `eed73e4071`: typecheck and all 92 selected search contracts pass,
@@ -350,7 +359,7 @@ Current validation handles and results:
   probes pass actual packaged Electron/native/API execution and four preview contracts per OS.
   Source/native/provenance and original reports are retained. No local build, signing or compiler run.
 - [Corrected-source app flows and UI controls 41401869473](https://github.com/spankyed/apack/actions/runs/41401869473)
-  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier handles, including the original keyword diagnostics, are terminal; the corrected compound/Unicode qualification above is active. Strict still retains the unwaived keyword failure.
+  at `275b6fac3d` succeed, with the independently checked receipt above. Earlier handles, including the original keyword diagnostics, are terminal; the corrected compound/Unicode qualification above is also terminal. Strict still retains the unwaived keyword failure.
 - [Integrated strict 41391989615](https://github.com/spankyed/apack/actions/runs/41391989615)
   at `06106d18dd`: attempt 1 is terminal failure with the exact independent successes/failures above.
   [Attempt 2](../references/evidence/ears-sqlite-implementation-2026-10-28/integration-061-replay/README.md) reruns only integration-1 on the same source and passes all 242 tests/31 files. All other job outcomes remain retained; root keyword failures still keep the overall workflow red.

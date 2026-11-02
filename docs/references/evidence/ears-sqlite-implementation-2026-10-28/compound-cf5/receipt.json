@@ -1,0 +1,53 @@
+{
+  "run": 41464298033,
+  "source": "cf5d7b4800e1b71a621c056e18c067019e8af8ed",
+  "searchContracts": {
+    "passed": 93,
+    "failed": 0,
+    "excluded": 0
+  },
+  "oldSourceControl": {
+    "commit": "0a9892907b9d69729f38d7e0f8d43b32c5fd8d74",
+    "originalReportSha256": "b66098fa39aad953e5c6dfc564ece8a41f80f695654caefb9d1e9a047cb97775",
+    "requiredFailures": [
+      "source-string FTS documents combines unquoted compound terms across fields while keeping explicit phrases adjacent",
+      "source-string FTS documents combines stemmed compound terms across weighted fields without making a phrase match"
+    ],
+    "otherTestsExcluded": 11,
+    "restoredSource": "CI step git diff --exit-code succeeds after restoration"
+  },
+  "keyword": [
+    {
+      "backend": "elmdb",
+      "stem": "none",
+      "passed": 24,
+      "failedOrdinals": [
+        6
+      ]
+    },
+    {
+      "backend": "elmdb",
+      "stem": "en",
+      "passed": 24,
+      "failedOrdinals": [
+        20
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "stem": "none",
+      "passed": 24,
+      "failedOrdinals": [
+        6
+      ]
+    },
+    {
+      "backend": "sqlite",
+      "stem": "en",
+      "passed": 25,
+      "failedOrdinals": []
+    }
+  ],
+  "originalJobMetadataSha256": "0b51c2c026aaa23b18ab80feef262d88d952fc44bbad467eca2d9654c0f7608a",
+  "scope": "Compound semantics and English candidate usefulness pass; original unstemmed keyword gate remains 24/25"
+}

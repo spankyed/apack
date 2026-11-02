@@ -12,8 +12,12 @@ benchmark/failed-suite evidence retains its original source and native artifact.
 Current runtime correction `eed73e4071` separates unquoted compound terms from explicit phrases.
 Its first CI run passes 92 selected search contracts but stops before relevance because the old
 commit is absent from the shallow checkout. The [corrected qualification](https://github.com/spankyed/apack/actions/runs/41464298033)
-includes an exact commit fetch and the subsequent ASCII-only/Unicode preservation guard; it is active;
-25/25 remains unproven. The frozen query/expected answer/threshold are unchanged. This shipped
+includes an exact commit fetch and the subsequent ASCII-only/Unicode preservation guard. Its
+[verified reports](../references/evidence/ears-sqlite-implementation-2026-10-28/compound-cf5/README.md)
+pass 93 search contracts and both required old-source failures/restoration; SQLite English keyword
+usefulness is now 25/25. Original unstemmed keyword remains 24/25, with case 6 at rank 12; the
+requested full fix is still incomplete. Both validators reproduce original hybrid/language summaries
+byte-for-byte, and hybrid remains 25/25 on both backends. The frozen query/expected answer/threshold are unchanged. This shipped
 query-compiler change invalidates broad current-source applicability of the earlier input-equivalence
 audit; previous corpus/integration/installed reports remain evidence only for their recorded source.
 The [old ranking diagnostics](../references/evidence/ears-sqlite-implementation-2026-10-28/keyword-diagnostic-456/README.md)
