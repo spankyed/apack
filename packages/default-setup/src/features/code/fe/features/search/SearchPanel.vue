@@ -5,10 +5,23 @@
       :icon="Search"
       title="Search"
     >
+      <template #actions>
+      <div class="flex items-center gap-0.5 text-xs" data-testid="search-mode">
+        <button
+          v-for="option in SEARCH_MODES"
+          :key="option.id"
+          class="px-1.5 py-0.5 rounded transition-colors"
+          :class="mode === option.id ? 'bg-neutral-700 text-neutral-100' : 'text-neutral-400 hover:bg-neutral-700/50'"
+          @click="mode = option.id"
+        >{{ option.label }}</button>
+      </div>
+      </template>
     </CodePanelHeader>
 
     <!-- Show only error if no directory selected -->
     <NoDirectoryState v-if="!baseDirectory" />
+
+    <SymbolSearch v-else-if="mode === 'symbols'" class="flex-1" />
 
     <!-- Show normal UI only when directory is selected -->
     <template v-else>
@@ -196,9 +209,13 @@ import { ChevronRight, ChevronsDownUp, Search } from 'lucide-vue-next'
 import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
 import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
+import SymbolSearch from '#features/code/fe/features/code-index/SymbolSearch.vue'
 import { panelChild } from '../children.ts';
 
 // Get actors
+const SEARCH_MODES = [{ id: 'text', label: 'Text' }, { id: 'symbols', label: 'Symbols' }] as const
+const mode = ref<(typeof SEARCH_MODES)[number]['id']>('text')
+
 const codeActor: CodeState = useSurface()
 const searchActor = panelChild(codeActor, 'search')!
 

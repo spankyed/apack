@@ -574,7 +574,14 @@
     "code": {
       "description": "Work with project files, terminals and coding agents.",
       "entities": {
-        "Terminal": { "shape": "src/features/code/be/repository/index.ts#TerminalEntity" }
+        "Terminal": { "shape": "src/features/code/be/repository/index.ts#TerminalEntity" },
+        "CodeProject": { "shape": "src/features/code/be/code-index/repository.ts#CodeProjectEntity" },
+        "CodeFile": { "shape": "src/features/code/be/code-index/repository.ts#CodeFileEntity", "indexes": ["project"] },
+        "CodeSymbol": {
+          "shape": "src/features/code/be/code-index/repository.ts#CodeSymbolEntity",
+          "indexes": ["project", "file"],
+          "search": { "fields": { "name": 1 } }
+        }
       },
       "settings": {
         "schema": {
@@ -854,8 +861,11 @@
       },
       "repositories": {
         "terminalQueries": "src/features/code/be/repository/index.ts#terminalQueries",
-        "terminalCommands": "src/features/code/be/repository/index.ts#terminalCommands"
-      }
+        "terminalCommands": "src/features/code/be/repository/index.ts#terminalCommands",
+        "codeIndexQueries": "src/features/code/be/code-index/repository.ts#codeIndexQueries",
+        "codeIndexCommands": "src/features/code/be/code-index/repository.ts#codeIndexCommands"
+      },
+      "views": "src/features/code/be/code-index/views.ts#codeIndexViews"
     },
     "notes": {
       "description": "Write, organize and export notes.",
