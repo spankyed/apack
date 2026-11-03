@@ -53,17 +53,24 @@ test('keeps an empty keyboard Client reachable and retires hidden input without 
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator('textarea.xterm-helper-textarea')
-  let theme = false, security = false, navigated = false, trusted = false
+  let theme = false, security = false, navigated = false, trusted = false, onboardingScreen = ''
+  try {
   await expect.poll(async () => {
     const current = await context(), native = current.native
-    const text = native?.output?.map((chunk: any) => chunk.text).join('') ?? ''
-    const screen = recognizeOnboardingPrompt(text, workspace)
+    // The renderer applies cursor-addressed redraws; accumulated PTY bytes are not the current screen.
+    onboardingScreen = await section.locator('.xterm-rows').innerText()
+    const screen = recognizeOnboardingPrompt(onboardingScreen, workspace)
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; await input.press('ArrowDown') }
-    else if (screen === 'workspace-trust-selected' && navigated && !trusted) { trusted = true; await input.press('Enter') }
+    else if (screen === 'workspace-trust-selected' && !trusted) { trusted = true; await input.press('Enter') }
     return native?.state?.status === 'live' && (restriction ? native.state.mainStatus === undefined : native.state.mainStatus?.includes('AppNativeMain ' + sessionId))
   }, { timeout: 25000, intervals: [250] }).toBe(true)
+  } catch (error) {
+    await writeFile(testInfo.outputPath('native-empty-client-onboarding-failure.json'), JSON.stringify({theme,security,navigated,trusted,screen:onboardingScreen,context:await context()}, null, 2)).catch(() => undefined)
+    await capture('native-empty-client-onboarding-failure.png').catch(() => undefined)
+    throw error
+  }
   await expect(card).toBeHidden()
   const main = section.getByTestId('native-main-status')
   if (restriction) await expect(main).toHaveCount(0)
