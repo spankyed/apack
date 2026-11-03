@@ -144,5 +144,6 @@
   },
   "overrides": {
     "dompurify": "^3.4.17"
-  }
+  },
+  "//minimatch": "Dependabot alert 354 (minimatch < 11.0.1, a denial of service from a crafted pattern) stays open on purpose. Every copy is a dev dependency, none ships in the app. An override can't fix it: eslint, electron-builder and dir-compare depend on versions 3 and 5, which are called in a way 11 no longer supports. It closes when those tools move."
 }
