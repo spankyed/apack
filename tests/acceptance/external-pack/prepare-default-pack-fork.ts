@@ -66,7 +66,7 @@ async function prepare(): Promise<void> {
     fs.writeFileSync(canvas, original.replace('<template>', '<template>\n  <div data-testid="fork-component">Fork component</div>'));
     const config = path.join(fork, 'tsconfig.json');
     fs.writeFileSync(config, fs.readFileSync(config, 'utf8').replace(
-      '../../../node_modules/.cache/tsbuildinfo/default-setup.tsbuildinfo', '.apack/typecheck.tsbuildinfo'));
+      '../../node_modules/.cache/tsbuildinfo/default-setup.tsbuildinfo', '.apack/typecheck.tsbuildinfo'));
     for (const [phase, args] of [['build', ['build']], ['archive', ['archive', '--out', staged]]] as const) {
       console.log(`Default fork ${phase}: starting (${DEFAULT_FORK_BUDGET_MS[phase] / 1000}s limit)`);
       const result = await boundedSpawn(process.execPath, [path.join(root, 'node_modules/.bin/apack'), 'pack', ...args], DEFAULT_FORK_BUDGET_MS[phase],
