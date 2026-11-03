@@ -299,20 +299,22 @@ it('compiles content through the captured worker and invalidates changed loader 
   fs.mkdirSync(path.dirname(preload), { recursive: true });
   const trace = path.join(root, '.apack/preload-order.jsonl');
   fs.writeFileSync(trace, '');
-  fs.writeFileSync(preload, `if (process.env.APACK_BUILD_WORKER === '1') {
+  fs.writeFileSync(preload, `const threads = require('node:worker_threads');
+  if (process.env.APACK_BUILD_WORKER === '1' || threads.getEnvironmentData('apack.compiler.thread')?.pid === process.pid) {
     if (!globalThis[Symbol.for('apack.compiler.startup')]) throw new Error('Preload has no input owner');
     if (Object.keys(require.cache).some(file => /typescript[\\/]lib/.test(file))) throw new Error('Compiler activated before preload');
   }
-  if (globalThis[Symbol.for('apack.compiler.startup')]) require('node:fs').appendFileSync(${JSON.stringify(trace)}, 'require:' + require('node:worker_threads').threadId + '\\n');
+  if (globalThis[Symbol.for('apack.compiler.startup')]) require('node:fs').appendFileSync(${JSON.stringify(trace)}, JSON.stringify({thread: threads.threadId, internal: threads.isInternalThread, event: 'require'}) + '\\n');
   globalThis.apackCachedRead = require('node:fs').readFileSync;
   globalThis.apackPayloadPath = ${JSON.stringify(payload)}; globalThis.apackPayload = globalThis.apackCachedRead(globalThis.apackPayloadPath, 'utf8');
   globalThis.apackPreloadProbe = 'PRELOADED'; globalThis.apackRequireSource = __filename;`);
   fs.writeFileSync(path.join(root, '.apack/preload-child.mjs'), `export default 'IMPORTED';`);
-  fs.writeFileSync(imported, `import value from './preload-child.mjs'; if (!globalThis.apackPreloadProbe) throw new Error('Preload order changed');
-    if (globalThis[Symbol.for('apack.compiler.startup')]) (await import('node:fs')).appendFileSync(${JSON.stringify(trace)}, 'import:0\\n');
+  fs.writeFileSync(imported, `import value from './preload-child.mjs'; import {threadId, isInternalThread} from 'node:worker_threads';
+    if (!globalThis.apackPreloadProbe) throw new Error('Preload order changed');
+    if (globalThis[Symbol.for('apack.compiler.startup')]) (await import('node:fs')).appendFileSync(${JSON.stringify(trace)}, JSON.stringify({thread: threadId, internal: isInternalThread, event: 'import'}) + '\\n');
     globalThis.apackImportProbe = value; globalThis.apackImportSource = import.meta.url;`);
-  fs.writeFileSync(loader, `import fs from 'node:fs'; const marker = fs.readFileSync(${JSON.stringify(payload)}, 'utf8');
-    if (globalThis[Symbol.for('apack.compiler.startup')]) fs.appendFileSync(${JSON.stringify(trace)}, 'loader:1\\n');
+  fs.writeFileSync(loader, `import fs from 'node:fs'; import {threadId, isInternalThread} from 'node:worker_threads'; const marker = fs.readFileSync(${JSON.stringify(payload)}, 'utf8');
+    if (globalThis[Symbol.for('apack.compiler.startup')]) fs.appendFileSync(${JSON.stringify(trace)}, JSON.stringify({thread: threadId, internal: isInternalThread, event: 'loader'}) + '\\n');
     export async function load(url, context, next) {
       const result = await next(url, context);
       return url === ${JSON.stringify(pathToFileURL(fs.realpathSync(imported)).href)}
@@ -329,7 +331,17 @@ it('compiles content through the captured worker and invalidates changed loader 
   expect(output.records[0].importSource).toBe(pathToFileURL(fs.realpathSync(imported)).href);
   expect(output.records[0].source).toBe(path.join(fs.realpathSync.native(root), 'src/compiler.tsx'));
   expect(output.records[0].origin).toBe(pathToFileURL(path.join(fs.realpathSync.native(root), 'src/compiler.tsx')).href + '?tsx-namespace=apack-build-1');
-  expect(fs.readFileSync(trace, 'utf8').trim().split('\n')).toEqual(['require:0', 'require:1', 'loader:1', 'import:0']);
+  const realms = new Map<number, { internal: boolean; events: string[] }>();
+  for (const line of fs.readFileSync(trace, 'utf8').trim().split('\n')) {
+    const entry = JSON.parse(line) as { thread: number; internal: boolean; event: string };
+    const realm = realms.get(entry.thread) ?? { internal: entry.internal, events: [] };
+    expect(realm.internal).toBe(entry.internal);
+    realm.events.push(entry.event);
+    realms.set(entry.thread, realm);
+  }
+  expect(realms.get(0)?.events).toEqual(['require', 'import']);
+  expect([...realms.values()].some(realm => realm.internal)).toBe(true);
+  for (const realm of realms.values()) expect(realm.events).toEqual(['require', realm.internal ? 'loader' : 'import']);
   const revision = readPackBuild(path.join(root, 'dist')).revision;
   fs.writeFileSync(payload, 'UPDATED');
   await builder.build({ args: ['--skip-fe'] });

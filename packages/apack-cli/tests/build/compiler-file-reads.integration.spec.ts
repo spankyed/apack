@@ -448,6 +448,15 @@ it('keeps original-parent require calls isolated across concurrent module scopes
         return (loaded.read as () => string)();
       })));
     expect(results).toEqual(['FIRST', 'SECOND']);
+    const closingLoader = createCompilerModuleLoader(first);
+    loaders.push(closingLoader);
+    const pending = withCompilerFileReads({ compilation: first, outputDirectory: path.join(root, 'dist') },
+      () => closingLoader.importModule(entry));
+    const closing = closingLoader.dispose();
+    await expect(pending).rejects.toThrow('Compiler module load outlived its build');
+    await closing;
+    const active = await withCompilerFileReads({ compilation: first }, () => loaders[0]!.importModule(entry));
+    expect(withCompilerFileReads({ compilation: first }, () => (active.read as () => string)())).toBe('FIRST');
     // Captured execution must not redirect ordinary require calls after either scope finishes.
     const { createRequire } = await import('node:module');
     expect(createRequire(path.join(root, 'package.json'))('./value.cjs')).toBe('LIVE');
