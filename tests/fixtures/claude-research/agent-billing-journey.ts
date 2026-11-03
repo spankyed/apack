@@ -8,7 +8,7 @@ import type {AppDriver} from '@apackdev/testing'
 export async function verifyAgentBilling(
  {app,appPage,electronApp}:{app:Pick<AppDriver,'navigate'|'waitForSurface'>;appPage:Page;electronApp:ElectronApplication},
  testInfo:Pick<TestInfo,'outputPath'>,
- {workspace,launcher,onboarding}:{workspace:string;launcher:string;onboarding:string},
+ {workspace,launcher,onboarding,project}:{workspace:string;launcher:string;onboarding:string;project:string},
 ){
   const nativeWindow=await electronApp.browserWindow(appPage)
   async function capture(name:string){
@@ -17,7 +17,7 @@ export async function verifyAgentBilling(
     const result=await nativeWindow.evaluate(async(window,size)=>{const image=await window.webContents.capturePage({x:0,y:0,...size});return{size:image.getSize(),png:image.toPNG().toString('base64')}},size)
     expect(result.size).toEqual(size);await writeFile(testInfo.outputPath(name),Buffer.from(result.png,'base64'))
   }
-  expect(process.env.HOME).toBe(workspace)
+  expect(process.env.HOME).toBe(workspace);expect(project).not.toBe(workspace)
   const { planScenario } = JSON.parse(await readFile(join(workspace!, 'question-preview-fixture.json'), 'utf8'))
   const { recognizeOnboardingPrompt } = await import(pathToFileURL(onboarding!).href)
   const errors: string[] = []; appPage.on('pageerror', error => errors.push(error.message))
@@ -28,7 +28,7 @@ export async function verifyAgentBilling(
   await provider.getByPlaceholder('Path override (auto-detected if empty)').fill(launcher!)
   await appPage.waitForTimeout(700)
   await app.navigate('default-setup/threads')
-  await appPage.evaluate(({ cwd, phase }) => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase }) }, { cwd: workspace!, phase: 'Edit' })
+  await appPage.evaluate(({ cwd, phase }) => { const actor = (window as any).applicationState.system.get('default-setup/threads'); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: cwd }); actor.send({ type: 'VIEW_DASHBOARD' }); actor.send({ type: 'SET_MODE', mode: 'Claude Code' }); actor.send({ type: 'SET_PHASE', phase }) }, { cwd: project, phase: 'Edit' })
   const card = appPage.locator('[data-onboarding-id="agent-chat-input"]')
   async function command(name: string, args = '') {
     const editor = card.locator('[contenteditable="true"]')
@@ -38,7 +38,7 @@ export async function verifyAgentBilling(
     await card.getByRole('button', { name: 'Send', exact: true }).click()
     await expect(editor).toHaveText('')
   }
-  await command('cc-set-dir', workspace!)
+  await command('cc-set-dir', project)
   await card.locator('[contenteditable="true"]').fill('Seed this private native interface session.')
   await card.getByRole('button', { name: 'Send', exact: true }).click()
   const context = () => appPage.evaluate(() => { const state = (window as any).applicationState.system.get('default-setup/threads').getSnapshot().context; return { threadId: state.currentThread?.id, topic: state.currentThread?.topic, phase: state.phase, sessionId: state.currentThread?.context?.claudeCode?.sessionId, turns: state.currentThread?.context?.claudeCode?.turns, claude: state.currentThread?.context?.claudeCode, messages: state.currentThread?.messages, nativeUi: Object.values(state.nativeUiViews).filter((view:any)=>view.threadId===state.currentThread?.id), native: Object.values(state.nativeTerminalViews).find((view: any) => view.threadId === state.currentThread?.id) } as any })
@@ -50,6 +50,7 @@ export async function verifyAgentBilling(
     await capture('native-agent-billing-startup-failure.png').catch(() => undefined)
     throw error
   }
+  expect((await context()).claude.cwd).toBe(project)
   const sessionId = (await context()).sessionId; expect(sessionId).toBeTruthy()
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
@@ -61,7 +62,7 @@ export async function verifyAgentBilling(
     const current = await context(), native = current.native
     // The renderer applies cursor-addressed redraws; accumulated PTY bytes are not the current screen.
     onboardingScreen = await section.locator('.xterm-rows').innerText()
-    const screen = recognizeOnboardingPrompt(onboardingScreen, workspace)
+    const screen = recognizeOnboardingPrompt(onboardingScreen, project)
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
     else if (screen === 'workspace-trust' && !navigated) { navigated = true; await input.press('ArrowDown') }
@@ -127,6 +128,6 @@ export async function verifyAgentBilling(
   await card.getByRole('button',{name:'Send',exact:true}).click()
   await expect.poll(async()=>(await context()).claude.chatState,{timeout:25000}).toBe('success')
   expect((await context()).sessionId).toBe(sessionId);expect(errors).toEqual([])
-  await writeFile(join(workspace!,'native-agent-billing-proof.json'),JSON.stringify({sessionId,taskId,boundNativePid,observation,readings,recovery,final:await context()},null,2))
+  await writeFile(join(workspace!,'native-agent-billing-proof.json'),JSON.stringify({project,sessionId,taskId,boundNativePid,observation,readings,recovery,final:await context()},null,2))
   await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:planScenario,nativeAgentBilling:true,nativeRetainedDraft:true,sameNativeOwner:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors},null,2))
 }
