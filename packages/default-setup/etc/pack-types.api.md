@@ -639,6 +639,19 @@ type CodeContext = {
     panelNavHistory: NavHistory<PanelType>;
 };
 
+interface CodeFileEntity {
+    id: EARS.EntityId;
+    entityType: EARS.Entity.CodeFile;
+    project: string;
+    path: string;
+    oid: string;
+    language: CodeLanguage;
+    test: boolean;
+    skipped?: SkipReason;
+    createdAt: number;
+    updatedAt: number;
+}
+
 /**
  * What other features ask of the code surface: which panel to show, a write to its state, and a job for one of its
  * children. The `<child>.*` events aren't in this machine's own union — it routes them to its child actors by
@@ -663,7 +676,53 @@ type CodeInboxEvent = {
     promptId: EARS.EntityId;
 };
 
+/** Where a project's index stands: what the status line shows, written while a sync runs */
+interface CodeIndexProgress {
+    state: 'error' | 'idle' | 'not-git' | 'removing' | 'syncing';
+    files: number;
+    symbols: number;
+    pending: number;
+    skipped: Partial<Record<SkipReason, number>>;
+    error?: string;
+}
+
+/** What the status line shows: a project with no row is simply off */
+interface CodeIndexStatus {
+    enabled: boolean;
+    progress: CodeIndexProgress | null;
+}
+
+type CodeLanguage = 'javascript' | 'tsx' | 'typescript' | 'vue';
+
+interface CodeProjectEntity {
+    id: EARS.EntityId;
+    entityType: EARS.Entity.CodeProject;
+    root: string;
+    enabled: boolean;
+    /** What the extractor answered when this project was last wholly in sync (`extractorStamp`) */
+    extractorStamp?: string;
+    progress: CodeIndexProgress;
+    createdAt: number;
+    updatedAt: number;
+}
+
 type CodeSettings = SettingsOf<'code'>;
+
+interface CodeSymbolEntity {
+    id: EARS.EntityId;
+    entityType: EARS.Entity.CodeSymbol;
+    project: string;
+    file: string;
+    kind: SymbolKind;
+    name: string;
+    qualifiedName: string;
+    exported: boolean;
+    signature: string;
+    signatureHash: string;
+    bodyHash: string;
+    createdAt: number;
+    updatedAt: number;
+}
 
 interface CodeSystemContext {
     baseDirectory: string | null;
@@ -1068,6 +1127,25 @@ interface DatabaseSchemaInfo {
 
 type DatabaseSettings = SettingsOf<'database'>;
 
+interface Definition {
+    kind: SymbolKind;
+    name: string;
+    /** Its name inside the file: `Thing.method`, unique with `ordinal` */
+    local: string;
+    /** Its place among the definitions of this file sharing `local`: an overload, a getter beside its setter */
+    ordinal: number;
+    exported: boolean;
+    /** Its header as written, with whitespace collapsed and at most `SIGNATURE_LIMIT` characters */
+    signature: string;
+    signatureHash: string;
+    bodyHash: string;
+    line: number;
+    column: number;
+    endLine: number;
+}
+
+type DefinitionChange = 'added' | 'body' | 'removed' | 'signature';
+
 interface DirectoryContent {
     path: string;
     files: FileInfo[];
@@ -1124,6 +1202,12 @@ declare namespace EARS {
         type Artifact = typeof Artifact;
         const Terminal = "Terminal";
         type Terminal = typeof Terminal;
+        const CodeProject = "CodeProject";
+        type CodeProject = typeof CodeProject;
+        const CodeFile = "CodeFile";
+        type CodeFile = typeof CodeFile;
+        const CodeSymbol = "CodeSymbol";
+        type CodeSymbol = typeof CodeSymbol;
         const Note = "Note";
         type Note = typeof Note;
         const BrowserTab = "BrowserTab";
@@ -1147,7 +1231,7 @@ declare namespace EARS {
         const Collection = "Collection";
         type Collection = typeof Collection;
     }
-    type Entity = Entity.Thread | Entity.Message | Entity.Artifact | Entity.Terminal | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
+    type Entity = Entity.Thread | Entity.Message | Entity.Artifact | Entity.Terminal | Entity.CodeProject | Entity.CodeFile | Entity.CodeSymbol | Entity.Note | Entity.BrowserTab | Entity.BrowserBookmark | Entity.SearchIndex | Entity.IndexedDoc | Entity.Flow | Entity.Node | Entity.Action | Entity.Prompt | Entity.Document | Entity.Collection;
     type EntityId<E extends string = string> = _apackdev_ears.EARS.EntityId<E>;
     type RelationId = _apackdev_ears.EARS.RelationId;
     namespace RelKind {
@@ -1772,7 +1856,7 @@ type IncomingBrowserEvents = {
     type: 'GET_SAVED_SESSION';
 };
 
-type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | IncomingCommitEvents | IncomingPullRequestEvents | IncomingTerminalEvents | IncomingActionsEvents | IncomingPromptsEvents | {
+type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | IncomingCommitEvents | IncomingPullRequestEvents | IncomingTerminalEvents | IncomingActionsEvents | IncomingPromptsEvents | IncomingCodeIndexEvents | {
     type: 'SET_BASE_DIRECTORY';
     path: string;
     fromUserNavigation?: boolean;
@@ -1788,6 +1872,23 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
  */
  | {
     type: 'GET_CODE_START';
+};
+
+type IncomingCodeIndexEvents = 
+/** Turns indexing of the current directory on, or off, which removes what it holds */
+{
+    type: 'codeIndex.SET_ENABLED';
+    enabled: boolean;
+}
+/** Where a symbol is now, answered with `codeIndex.LOCATED` */
+ | {
+    type: 'codeIndex.LOCATE';
+    symbol: string;
+}
+/** What a staged change or a range did per definition, answered with `codeIndex.SEMANTIC_DIFF_READY` */
+ | {
+    type: 'codeIndex.SEMANTIC_DIFF';
+    range: SemanticRange;
 };
 
 type IncomingCommitEvents = {
@@ -2973,7 +3074,7 @@ type OutgoingBrowserEvents = {
     savedBookmarks: SavedBookmark[];
 };
 
-type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | {
+type OutgoingCodeEvents = OutgoingCodeIndexEvents | OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | {
     type: 'CODE_STARTED';
     data: CodeConnectedData;
 }
@@ -2992,6 +3093,23 @@ type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | Outgoi
     success: boolean;
     error?: string;
     resolvedPath?: string;
+};
+
+type OutgoingCodeIndexEvents = {
+    type: 'codeIndex.LOCATED';
+    data: {
+        path: string;
+        line: number;
+        column: number;
+    } | null;
+} | {
+    type: 'codeIndex.SEMANTIC_DIFF_READY';
+    data: SemanticDiff;
+} | {
+    type: 'codeIndex.SEMANTIC_DIFF_FAILED';
+    data: {
+        message: string;
+    };
 };
 
 type OutgoingCommitEvents = {
@@ -3819,6 +3937,9 @@ type OwnEntityShapes = {
     'Message': MessageEntity;
     'Artifact': ArtifactEntity;
     'Terminal': TerminalEntity;
+    'CodeProject': CodeProjectEntity;
+    'CodeFile': CodeFileEntity;
+    'CodeSymbol': CodeSymbolEntity;
     'Note': NoteEntity;
     'BrowserTab': BrowserTabEntity;
     'BrowserBookmark': BrowserBookmarkEntity;
@@ -3832,6 +3953,8 @@ type OwnRepositories = {
     chatCommands: typeof chatCommands;
     terminalQueries: typeof terminalQueries;
     terminalCommands: typeof terminalCommands;
+    codeIndexQueries: typeof codeIndexQueries;
+    codeIndexCommands: typeof codeIndexCommands;
     noteQueries: typeof noteQueries;
     noteCommands: typeof noteCommands;
     browserQueries: typeof browserQueries;
@@ -4461,6 +4584,29 @@ interface SegmentRule {
     indexMode: 'combined' | 'separate';
 }
 
+interface SemanticChange {
+    path: string;
+    name: string;
+    kind: SymbolKind;
+    change: DefinitionChange;
+    signature: string;
+    /** Its line in the newer version, or the older one for a removal */
+    line: number;
+}
+
+interface SemanticDiff {
+    changes: SemanticChange[];
+    /** Changed files the extractor can't read or couldn't parse: said so a short list isn't read as a whole one */
+    unread: string[];
+}
+
+type SemanticRange = {
+    staged: true;
+} | {
+    base: string;
+    head: string;
+};
+
 /**
  * Type definitions for the Codex app-server integration.
  *
@@ -4514,9 +4660,9 @@ interface SessionViewOptions {
 type SettingScope = z.infer<typeof SettingScopeSchema>;
 
 declare const SettingScopeSchema: z.ZodEnum<{
-    user: "user";
-    project: "project";
     local: "local";
+    project: "project";
+    user: "user";
 }>;
 
 type SettingsOf<K extends keyof AvailableSettings> = AvailableSettings[K];
@@ -4533,6 +4679,8 @@ type ShortCodeOf<E extends keyof PackShapes> = PackShapes[E] extends {
 type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
+
+type SkipReason = 'not-utf8' | 'parse-error' | 'too-large';
 
 interface StashEntry {
     index: number;
@@ -4565,6 +4713,18 @@ interface SwitchNode extends NodeBase {
     nodeType: 'switch';
     conditions: Array<Condition>;
     elseLabel?: string;
+}
+
+type SymbolKind = 'class' | 'component' | 'enum' | 'function' | 'interface' | 'method' | 'namespace' | 'property' | 'type' | 'variable';
+
+/** A hit of a symbol search, as the panel lists it */
+interface SymbolResult {
+    id: EARS.EntityId;
+    name: string;
+    kind: SymbolKind;
+    signature: string;
+    path: string;
+    test: boolean;
 }
 
 type SystemContracts = {
@@ -5547,6 +5707,53 @@ declare const chatQueries: {
 declare function clearAllSchedules(): void;
 
 declare function clearHandle(key: string): void;
+
+declare const codeIndexCommands: {
+    /** Turns a project on, or marks it for removal; the sync does the rest */
+    setEnabled: (root: string, enabled: boolean) => void;
+    setProgress: (root: string, progress: CodeIndexProgress) => void;
+    setStamp: (root: string, stamp: string) => void;
+    /**
+     * One file's state in one unit, so a crash leaves it wholly before or wholly after. `definitions` is what the file
+     * holds now; a symbol whose fields didn't move writes nothing, and one that still exists is never replaced. Answers
+     * how many rows the symbols changed by.
+     */
+    applyFile: (project: string, file: {
+        path: string;
+        oid: string;
+        language: CodeLanguage;
+        skipped?: SkipReason;
+    }, definitions: readonly Definition[]) => {
+        written: number;
+        removed: number;
+        added: number;
+    };
+    /** A file that is gone, and its symbols. Answers how many symbols went */
+    removeFile: (project: string, path: string) => number;
+    removeProject: (root: string) => void;
+};
+
+declare const codeIndexQueries: {
+    project: (root: string) => CodeProjectEntity | undefined;
+    projectOf: (id: string) => CodeProjectEntity | undefined;
+    status: (root: string) => CodeIndexStatus;
+    /** The next page of a project's file rows after `after`, in id order: a project's rows are too many for one read to hold the event loop */
+    filesPage: (project: string, after: EARS.EntityId | undefined, limit: number) => ({
+        id: `${string}-${string}` & {
+            readonly __entity?: "CodeFile" | undefined;
+        };
+    } & Pick<CodeFileEntity & _apackdev_ears.BaseEntity & {
+        id: `${string}-${string}` & {
+            readonly __entity?: "CodeFile" | undefined;
+        };
+    }, "oid" | "path" | "skipped">)[];
+    fileSymbols: (file: string) => CodeSymbolEntity[];
+    symbolCount: (project: string) => number;
+    symbol: (id: EARS.EntityId) => CodeSymbolEntity | undefined;
+    file: (id: string) => CodeFileEntity | undefined;
+    /** The symbols a text finds in a project, most relevant first, with test files after the rest */
+    searchSymbols: (root: string, text: string, limit: number) => SymbolResult[];
+};
 
 /** The recent-thread limit and order the threads settings hold, read where no view is asking */
 declare function configuredRecentThreads(): {
