@@ -30,5 +30,6 @@ affected spec during development and the required chain at a stable checkpoint; 
 [repository validation](../CLAUDE.md#what-to-run-after-a-change).
 
 Generated reports, profiles and producer/consumer handoffs belong under `.apack/`, never beside source.
-Packaged authoring publishes `.apack/tests/authoring-handoff`; its author and app steps declare that
-same output/input. Keep source inputs and output declarations current when moving test code.
+Packaged authoring takes its generated-output location from `acceptance/packaged-authoring/handoff.json`.
+The shell producer/consumer and chain declarations read that same definition; the chain declares the
+metadata file as an input to both steps. Keep source inputs and output declarations current when moving test code.

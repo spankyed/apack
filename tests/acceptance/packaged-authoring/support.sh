@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 # **the work dir itself stays outside the checkout**: a pack built inside it would resolve `@apackdev/*` by
 # walking up to the workspace `node_modules`, which is the one thing this check exists to prove does not
 # happen. So the handoff is a path and a digest in the tree, and the tree the pack lives in is not.
-HANDOFF="$ROOT/.apack/tests/authoring-handoff"
+HANDOFF="$ROOT/$(node -p 'require(process.argv[1]).directory' "$(dirname "${BASH_SOURCE[0]}")/handoff.json")"
 
 # Every phase goes through here, so this is the one place that can say where the time went. This script
 # is the tail of the chain's critical path (`packages:ensure -> compile -> build:runtime -> this`), and it
