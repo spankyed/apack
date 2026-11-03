@@ -17,7 +17,7 @@ export default defineConfig({
       'packages/apack-cli/vitest.native.config.ts',
     ],
     // Half the cores, as the integration pool: these scenarios spawn compilers and watchers of their own
-    poolOptions: { threads: { maxThreads: '50%' }, forks: { maxForks: '50%' } },
+    maxWorkers: '50%',
     // One file at a time, as the platform compiler workflows run them: each scenario's compilers, Vite and
     // watchers already use the cores, so two files at once starve each other. On a 3-vCPU runner the relative
     // native-library check takes 14.4s alone (run 39553670513) and passed 60s beside the Electron build case
