@@ -291,6 +291,67 @@
           },
           "description": "Pack-level role names; generated EARS constants are their uppercase names. Do not repeat or redeclare SDK-owned roles.",
           "uniqueItems": true
+        },
+        "ranks": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z0-9]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "types": {
+                "description": "The entity types whose live entities are the graph's nodes: this pack's, a dependency's or the SDK's. Their order is the order ties keep.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z][A-Za-z0-9]*$"
+                }
+              },
+              "relations": {
+                "description": "The relation kinds whose edges between two nodes are the graph's edges: this pack's, a dependency's or the SDK's.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$"
+                }
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "out",
+                  "in",
+                  "both"
+                ],
+                "description": "Which way each edge is followed; out unless given."
+              },
+              "weights": {
+                "type": "boolean",
+                "description": "Whether an edge of a kind declared weighted counts by its weight; it does unless false."
+              },
+              "damping": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 1,
+                "description": "The probability a walker follows an edge rather than jumping to a node at random, above 0 and below 1; 0.85 unless given."
+              },
+              "tolerance": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "description": "The bound on the L1 distance between the index's scores and PageRank once its pushes are done, above 0; 1e-5 unless given. Tighter holds scores close together in their true order, looser costs a change less."
+              }
+            },
+            "required": [
+              "types",
+              "relations"
+            ],
+            "additionalProperties": false,
+            "description": "One rank index: PageRank over a graph, kept current by every commit, which query(type).ranked(name) reads."
+          },
+          "description": "Pack-level rank indexes by name, unique across every pack."
         }
       },
       "additionalProperties": false,

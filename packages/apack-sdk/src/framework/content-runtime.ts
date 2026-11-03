@@ -1,4 +1,4 @@
-import type { RelationRules, RowRules } from '@apackdev/ears';
+import type { RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
 import type { ContentWriter } from '../content/writers.ts';
 
 /** Generated content bindings used without activating a pack's systems or services. */
@@ -13,6 +13,8 @@ export interface ContentRuntime {
   rowRules?: Record<string, RowRules>;
   /** What each of the pack's relation kinds that declares a rule holds its edges to; none when absent */
   relationRules?: Record<string, RelationRules>;
+  /** The rank indexes the pack declares, by name; none when absent */
+  ranks?: Record<string, RankDeclaration>;
   repositories: Record<string, unknown>;
   contentWriters: Record<string, ContentWriter>;
 }

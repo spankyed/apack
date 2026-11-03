@@ -10,6 +10,8 @@ export interface SdkSchema extends UntypedSchema {
   names: keyof SdkEntityShapes & string;
   /** The SDK declares no weighted relation kind */
   weightedKinds: never;
+  /** The SDK declares no rank index */
+  rankIndexes: never;
 }
 
 export const sdkEntities = /*#__PURE__*/ defineEars<SdkSchema>(boundEars);

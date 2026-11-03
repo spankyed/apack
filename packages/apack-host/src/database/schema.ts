@@ -1,4 +1,4 @@
-import { _packEntityTypes, _packRelationRules, _packRelationTypes, _packRoles, _packShortCodes, _shortCodeTypes } from '@apackdev/sdk/framework';
+import { _packEntityTypes, _packRanks, _packRelationRules, _packRelationTypes, _packRoles, _packShortCodes, _shortCodeTypes } from '@apackdev/sdk/framework';
 // The EARS names and partition policy of the packs installed in a data dir, read from validated builds without
 // running pack code: what a tool opening the data dir's database needs to hydrate and query it as the app does
 import * as fs from 'node:fs';
@@ -8,7 +8,7 @@ import { parseManifest, parseSnapshot, type PackManifest } from '@apackdev/sdk/b
 import { readInstalledPacks } from '../packs/installed.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROLES, SDK_SHORT_CODES, _withSdkIndexes } from '@apackdev/sdk/types';
 import { HOST_ENTITY_TYPES } from '../app-state/index.ts';
-import type { EngineSchema, RelationRules, RowRules } from '@apackdev/ears';
+import type { EngineSchema, RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
 import { PACK_LAYOUT } from '../packs/layout.ts';
 import { readInstalledPackBuilds } from '../packs/discovery.ts';
 
@@ -28,19 +28,22 @@ export interface DatabaseSchema {
   getRowRules?(type: string): RowRules | undefined;
   /** What a relation kind's edges are held to; none when the kind declares no rule */
   getRelationRules?(kind: string): RelationRules | undefined;
+  /** The rank indexes the packs declare, by name */
+  getRankIndexes?(): Readonly<Record<string, RankDeclaration>>;
   /** Calls `listener` after the names change — the app's registry, as a pack registers — returning the unsubscribe */
   onRegistrationChanged?(listener: (packId: string) => void): () => void;
 }
 
 /**
  * The schema an engine's database is held to, from what `schema` names: each entity type with its row rules and the
- * SDK's indexes, each relation kind with its rules, and each role
+ * SDK's indexes, each relation kind with its rules, each role, and each rank index
  */
 export function engineSchemaOf(schema: DatabaseSchema): EngineSchema {
   return {
     types: Object.fromEntries([...schema.getRegisteredEntityTypes()].map((type) => [type, _withSdkIndexes(schema.getRowRules?.(type))])),
     relations: Object.fromEntries([...schema.getRegisteredRelationKinds()].map((kind) => [kind, schema.getRelationRules?.(kind) ?? {}])),
     roles: [...schema.getRegisteredRoles()],
+    ranks: schema.getRankIndexes?.() ?? {},
   };
 }
 
@@ -233,6 +236,7 @@ export function readInstalledSchema(context: SchemaContext, options: { schemaFro
   // A prefix numbers one entity type across the app, so a tool refuses two packs sharing one as the app's registry does
   const prefixes: Record<string, string> = {};
   const relationRules: Record<string, RelationRules> = { ...SDK_RELATION_RULES };
+  const rankIndexes: Record<string, RankDeclaration> = {};
   // Each prefix's owner, as a pack id and how a refusal names it; the SDK's are taken before any pack's
   const prefixOwners = new Map<string, { id: string; name: string }>(
     Object.entries(SDK_SHORT_CODES).map(([type, prefix]) => [prefix, { id: 'apack', name: `the SDK's ${type}` }]));
@@ -241,6 +245,7 @@ export function readInstalledSchema(context: SchemaContext, options: { schemaFro
     addNames(relKinds, relKindOwners, manifest.id, _packRelationTypes(manifest), 'relation kind');
     addNames(roles, roleOwners, manifest.id, _packRoles(manifest), 'role');
     Object.assign(relationRules, _packRelationRules(manifest));
+    Object.assign(rankIndexes, _packRanks(manifest));
     for (const [type, prefix] of Object.entries(_packShortCodes(manifest))) {
       const owner = prefixOwners.get(prefix);
       if (owner !== undefined && owner.id !== manifest.id) {
@@ -270,6 +275,7 @@ export function readInstalledSchema(context: SchemaContext, options: { schemaFro
     getRowRules: (type) => (SDK_ROW_RULES as Record<string, RowRules>)[type]
       ?? (prefixes[type] === undefined ? undefined : { required: [], shortCode: prefixes[type] }),
     getRelationRules: (kind) => relationRules[kind],
+    getRankIndexes: () => rankIndexes,
     entityTypeOfShortCode: shortCodeTypes,
     ...(degraded !== undefined && { degraded }),
     notes,

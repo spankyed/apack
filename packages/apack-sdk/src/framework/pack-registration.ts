@@ -6,7 +6,7 @@
  */
 
 import type { AnyStateMachine } from 'xstate';
-import type { RelationRules, RowRules } from '@apackdev/ears';
+import type { RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
 
 /** A versioned change: declared target/description with a checked executable function. */
 export interface PackMigration {
@@ -54,6 +54,8 @@ export interface PackEARS {
   rowRules?: Record<string, RowRules>;
   /** What each of the pack's relation kinds that declares a rule holds its edges to (`data.relations`); none when absent */
   relationRules?: Record<string, RelationRules>;
+  /** The rank indexes the pack declares, by name (`data.ranks`); none when absent */
+  ranks?: Record<string, RankDeclaration>;
 }
 
 /** A feature's backend system, which the app runs at the feature's ref, `<packId>/<featureId>` */

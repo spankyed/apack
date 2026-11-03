@@ -8,6 +8,7 @@ import type { AnyActorRef } from 'xstate';
 import { Ears } from '@apackdev/ears';
 import { EARS as EARS_2 } from '@apackdev/ears';
 import type { EmbedDeclaration } from '@apackdev/ears';
+import type { RankDeclaration } from '@apackdev/ears';
 import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
 import type { SearchDeclaration } from '@apackdev/ears';
@@ -686,6 +687,35 @@ export const ManifestSchema: z.ZodObject<{
             weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        ranks: z.ZodOptional<z.ZodType<Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, z.core.$ZodTypeInternals<Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>>>>;
     }, z.core.$strict>>;
     features: z.ZodOptional<z.ZodType<Record<string, {
         description: string;
@@ -1306,6 +1336,7 @@ depProvenance?: Map<string, PackProvenance>): {
     entities: Map<string, RegistryEntry>;
     relKinds: Map<string, RegistryEntry>;
     weightedKinds: Set<string>;
+    rankIndexes: Set<string>;
     roles: Map<string, RegistryEntry>;
 };
 
@@ -1488,6 +1519,35 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
             weighted?: boolean | undefined;
         }>>>>;
         roles: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        ranks: z.ZodOptional<z.ZodType<Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, z.core.$ZodTypeInternals<Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>, Record<string, {
+            types: readonly string[];
+            relations: readonly string[];
+            direction?: "in" | "out" | "both" | undefined;
+            weights?: boolean | undefined;
+            damping?: number | undefined;
+            tolerance?: number | undefined;
+        }>>>>;
     }, z.core.$strict>>;
     lifecycle: z.ZodOptional<z.ZodLazy<z.ZodObject<{
         onInit: z.ZodOptional<z.ZodString>;
@@ -1961,6 +2021,7 @@ export interface PackDataDeclarations {
         entities?: Readonly<Record<string, PackEntityDeclaration>>;
         relations?: Readonly<Record<string, PackRelationDeclaration>>;
         roles?: readonly string[];
+        ranks?: Readonly<Record<string, RankDeclaration>>;
     };
     // (undocumented)
     features?: Readonly<Record<string, object>>;
@@ -2200,6 +2261,7 @@ export const PROVENANCE_KINDS: {
     readonly relKinds: (m: ProvenanceManifest) => string[];
     readonly weightedKinds: (m: ProvenanceManifest) => string[];
     readonly roles: (m: ProvenanceManifest) => string[];
+    readonly rankIndexes: (m: ProvenanceManifest) => string[];
     readonly referenceTypes: (m: ProvenanceManifest) => string[];
     readonly referenceCategories: (m: ProvenanceManifest) => string[];
     readonly tiptapExtensions: (m: ProvenanceManifest) => string[];

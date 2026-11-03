@@ -1,5 +1,5 @@
 import { hasOwn } from '../utils/shared.ts';
-import type { EmbedDeclaration, RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
+import type { EmbedDeclaration, RankDeclaration, RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
 import type { EmbeddingModelId } from '../services/models.ts';
 
 /** One entity type's declaration: everything the manifest says about it, in its own entry */
@@ -56,6 +56,7 @@ export interface PackDataDeclarations {
     entities?: Readonly<Record<string, PackEntityDeclaration>>;
     relations?: Readonly<Record<string, PackRelationDeclaration>>;
     roles?: readonly string[];
+    ranks?: Readonly<Record<string, RankDeclaration>>;
   };
   features?: Readonly<Record<string, object>>;
 }
@@ -187,6 +188,11 @@ export function _packRelationRules(declaration: PackDataDeclarations): Record<st
     }
   }
   return rules;
+}
+
+/** @internal The rank indexes the pack declares, by name */
+export function _packRanks(declaration: PackDataDeclarations): Record<string, RankDeclaration> {
+  return { ...declaration.data?.ranks };
 }
 
 /** @internal The pack's roles as EARS constants (`entry_event` → `ENTRY_EVENT`) */

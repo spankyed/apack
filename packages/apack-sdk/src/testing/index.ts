@@ -2,7 +2,7 @@ import type { SettingsAdmin } from '../services/settings.ts';
 // The runtime a pack's unit tests run against: the EARS engine on a database in a temporary directory, without the app.
 // @apackdev/testing's harness drives it; it lives in the SDK so tests share the pack's SDK instance
 // (its query, repository and content-writer registries) instead of a copy.
-import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RelationRules, type RowRules } from '@apackdev/ears';
+import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RankDeclaration, type RelationRules, type RowRules } from '@apackdev/ears';
 import { createTemporaryDatabases } from '@apackdev/ears/lmdb';
 import { _bindEars } from '../ears/index.ts';
 import type { ContentRuntime } from '../framework/content-runtime.ts';
@@ -38,6 +38,8 @@ export interface TestRuntimeStartOptions {
   rowRules?: Readonly<Record<string, RowRules>>;
   /** What each relation kind's edges are held to, beyond the SDK's; later calls add theirs */
   relationRules?: Readonly<Record<string, RelationRules>>;
+  /** The rank indexes, by name, beyond those of earlier calls */
+  ranks?: Readonly<Record<string, RankDeclaration>>;
   /**
    * The registered packs the SDK's lookups read (the harness passes the registry it creates), under `testPacks`, which
    * tests fill directly; none by default. First call only
@@ -64,6 +66,7 @@ const relationKinds = new Set<string>(Object.values(SDK_REL_KINDS));
 const roles = new Set<string>(Object.values(SDK_ROLES));
 const rowRules = new Map<string, RowRules>(Object.entries(SDK_ROW_RULES));
 const relationRules = new Map<string, RelationRules>(Object.entries(SDK_RELATION_RULES));
+const ranks = new Map<string, RankDeclaration>();
 let started: Pick<TestRuntimeStartOptions, 'packs' | 'appVersion' | 'onboarding' | 'settings' | 'serviceOverrides'> | undefined;
 let engine: EarsEngine | undefined;
 let disposeDatabase: (() => void) | undefined;
@@ -75,6 +78,7 @@ const testSchema = (): EngineSchema => ({
   types: Object.fromEntries([...entityTypes].map((type) => [type, _withSdkIndexes(rowRules.get(type))])),
   relations: Object.fromEntries([...relationKinds].map((kind) => [kind, relationRules.get(kind) ?? {}])),
   roles: [...roles],
+  ranks: Object.fromEntries(ranks),
 });
 
 /** A new engine on a new database holding the test runtime's names, and installed */
@@ -127,6 +131,7 @@ export function startTestRuntime(options: TestRuntimeStartOptions = {}): void {
   for (const role of options.roles ?? []) roles.add(role);
   for (const [type, rules] of Object.entries(options.rowRules ?? {})) rowRules.set(type, rules);
   for (const [kind, rules] of Object.entries(options.relationRules ?? {})) relationRules.set(kind, rules);
+  for (const [name, declared] of Object.entries(options.ranks ?? {})) ranks.set(name, declared);
   if (started) {
     // The names added since are held to as the app holds them
     engine?.admin.setSchema(testSchema());
@@ -144,9 +149,17 @@ export function startTestRuntime(options: TestRuntimeStartOptions = {}): void {
   bindTestRuntime({ engine: testEngine, resetData: resetTestData, ...started });
 }
 
+/**
+ * Blocks until every index waiting to be built is built and every rank index's pushes are done: what a test of a
+ * `ranked` read calls after its writes, so the scores it reads are settled rather than within their bound
+ */
+export function waitForIndexBuilds(): void {
+  testEngine().admin.waitForIndexBuilds();
+}
+
 /** Registers a pack's content runtime: its entity types, and its repositories and content writers (in `testPacks`) */
 export function registerContentRuntime(runtime: ContentRuntime): void {
-  startTestRuntime({ entityTypes: Object.values(runtime.entities), relationKinds: Object.values(runtime.relKinds), roles: Object.values(runtime.roles), rowRules: runtime.rowRules, relationRules: runtime.relationRules });
+  startTestRuntime({ entityTypes: Object.values(runtime.entities), relationKinds: Object.values(runtime.relKinds), roles: Object.values(runtime.roles), rowRules: runtime.rowRules, ranks: runtime.ranks, relationRules: runtime.relationRules });
   for (const [name, repo] of Object.entries(runtime.repositories)) testPacks.repositories.set(name, repo);
   for (const [entity, hooks] of Object.entries(runtime.contentWriters)) testPacks.contentWriters.set(entity, hooks);
 }

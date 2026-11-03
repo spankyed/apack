@@ -13,6 +13,7 @@ import type { EventObject } from 'xstate';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
 import type { ParameterizedObject } from 'xstate';
+import type { RankDeclaration } from '@apackdev/ears';
 import type { RelationRules } from '@apackdev/ears';
 import type { RowRules } from '@apackdev/ears';
 import type { SearchDeclaration } from '@apackdev/ears';
@@ -84,6 +85,7 @@ export interface ContentRuntime {
     entities: Record<string, string>;
     // (undocumented)
     id: string;
+    ranks?: Record<string, RankDeclaration>;
     relationRules?: Record<string, RelationRules>;
     // (undocumented)
     relKinds: Record<string, string>;
@@ -397,6 +399,7 @@ export interface PackDataDeclarations {
         entities?: Readonly<Record<string, PackEntityDeclaration>>;
         relations?: Readonly<Record<string, PackRelationDeclaration>>;
         roles?: readonly string[];
+        ranks?: Readonly<Record<string, RankDeclaration>>;
     };
     // (undocumented)
     features?: Readonly<Record<string, object>>;
@@ -412,6 +415,7 @@ export function _packDeclarationProblem(expected: {
 export interface PackEARS {
     // (undocumented)
     entities: Record<string, string>;
+    ranks?: Record<string, RankDeclaration>;
     relationRules?: Record<string, RelationRules>;
     // (undocumented)
     relKinds: Record<string, string>;
@@ -504,6 +508,9 @@ export interface PackMigration {
     // (undocumented)
     up: () => void;
 }
+
+// @internal
+export function _packRanks(declaration: PackDataDeclarations): Record<string, RankDeclaration>;
 
 // @public (undocumented)
 export interface PackRegistration {

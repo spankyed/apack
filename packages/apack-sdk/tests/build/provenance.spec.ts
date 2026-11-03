@@ -65,7 +65,7 @@ describe('_mergeProvenance', () => {
   // One table entry per kind, so a new kind is a line rather than a type pair and a reader
   describe('reads every kind off a manifest', () => {
     const manifest = {
-      data: { entities: { Note: {} }, relations: { tagged: {}, cites: { weighted: true } }, roles: ['starred'] },
+      data: { entities: { Note: {} }, relations: { tagged: {}, cites: { weighted: true } }, roles: ['starred'], ranks: { noteRank: { types: ['Note'], relations: ['cites'] } } },
 
       extensions: { textEditor: { suggestions: { extensions: { mention: 'src/editor.ts#Mention' } } } },
       features: { memos: { surface: {}, references: {
@@ -78,6 +78,7 @@ describe('_mergeProvenance', () => {
       ['relKinds', { TAGGED: 'base-pack', CITES: 'base-pack' }],
       ['weightedKinds', { CITES: 'base-pack' }],
       ['roles', { STARRED: 'base-pack' }],
+      ['rankIndexes', { noteRank: 'base-pack' }],
       ['tiptapExtensions', { mention: 'base-pack' }],
       ['referenceTypes', { memo: 'base-pack' }],
       ['referenceCategories', { memos: 'base-pack' }],

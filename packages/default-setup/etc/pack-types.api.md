@@ -1180,6 +1180,9 @@ declare namespace EARS {
     /** The relation kinds declared `weighted`, whose links take a weight: its own and its dependencies' */
     const WEIGHTED_KINDS: readonly [];
     type WeightedKind = (typeof WEIGHTED_KINDS)[number];
+    /** The rank indexes `ranked` reads: its own and its dependencies' */
+    const RANK_INDEXES: readonly [];
+    type RankIndex = (typeof RANK_INDEXES)[number];
     /** Whether a kind that arrived as data (an event's field, a stored row) is one of them */
     const isRelKind: (value: unknown) => value is RelKind;
     namespace RoleKind {

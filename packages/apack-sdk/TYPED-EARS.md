@@ -64,6 +64,10 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
   [D['weightedKinds']]`, not distributed over `K`: a kind typed as a union of weighted and other kinds takes no
   weight, and one cast to `never` still takes options. `UntypedSchema`'s `weightedKinds` is `string`, so the untyped
   twins take a weight on any kind and the engine refuses one on a kind not declared weighted (`VALUE_INVALID`).
+- `ranked` takes a rank index: the generated `EARS.RankIndex` is `(typeof RANK_INDEXES)[number]`, those the pack and its
+  dependencies declare in `data.ranks` (a dependency's from its snapshot's `rankIndexes` provenance), `never` when none
+  is, and the schema's `rankIndexes` carries it to `QueryBuilder.ranked`. `UntypedSchema`'s `rankIndexes` is `string`,
+  and the engine refuses an undeclared index (`UNKNOWN_INDEX`).
 - A kind that arrives as data is narrowed with the generated `EARS.isRelKind`; the untyped twins and an engine's
   own operations take any string (`UntypedSchema`'s `relKinds` is `string`), and the engine refuses an undeclared one at runtime.
 
@@ -144,6 +148,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
    - Entity-name positions should list entity names: `query('|')`, `newId('|')`, `.out(kind, '|')`, `.ofType('|')`.
    - Relation-kind positions should list the pack's, its dependencies' and the SDK's kinds: `.out('|')`, `.link('|', id)`, `.linkedTo('|', id)`.
    - A link's options should offer `weight` for a weighted kind and not for another: `.link(kind, id, { | })`.
+   - Rank-index positions should list the pack's and its dependencies' rank indexes: `.ranked('|')`.
    - Role positions should list the pack's, its dependencies' and the SDK's roles: `.grant('|')`, `.withRole('|')`.
    - A created row should list the shape's fields and the identity it may bring, never the engine's other fields: `create(type, { | })`.
    - A typo (`where('titel')`) should produce an error that lists the valid fields.

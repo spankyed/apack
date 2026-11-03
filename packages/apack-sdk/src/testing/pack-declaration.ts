@@ -43,6 +43,7 @@ export function nativePackDeclarationFixture(fixture: PackRegistration, metadata
       })),
       relations: Object.fromEntries(Object.values(fixture.ears.relKinds ?? {}).map((kind) => [kind, fixture.ears?.relationRules?.[kind] ?? {}])),
       roles: Object.values(fixture.ears.roles ?? {}),
+      ...(fixture.ears.ranks && { ranks: fixture.ears.ranks }),
     } }),
     ...(fixture.steps !== undefined && { steps: Object.fromEntries(fixture.steps.map(step => {
       const prefix = `fixtures/steps.ts#${step.type.replace(/[^A-Za-z0-9_$]/g, '_')}`;
